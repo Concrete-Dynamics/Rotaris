@@ -228,9 +228,14 @@ empty now.
   "collides with a native tool"). The reading: a colliding name is offered under the client-side prefix `<server>_`
   that `REQ-MCP-057` already anticipates (so grants and denials written against the reported name still match),
   **only on collision**, in code-point order of the servers, so the printed name and the callable name stay one
-  (`REQ-MCP-062`). `persona.ts`, `reservedNames`. The recorded evidence (`granted_mcp`) is computed without the
+  (`REQ-MCP-062`). `persona.ts`, `reservedNames`. ~~The recorded evidence (`granted_mcp`) is computed without the
   native names (the persona resolver's surface at spawn), so a name a native tool shadows appears unprefixed there
-  and prefixed in the port; stated, not hidden.
+  and prefixed in the port; stated, not hidden.~~ *Corrected 2026-10-01:* that was true until then, and is no longer.
+  The spawn records no evidence; the recorded evidence is the port's grant (`ToolPort.grant`, drawn by the run host's
+  `grantEvidence`), written on the child's row once the port is ready, from the port's own surface — the one resolved
+  with its native names reserved and narrowed to the tools that joined the callable map. A name a native tool shadows
+  is therefore recorded under its prefixed callable name, as the port offers it, and a tool the controls withheld is
+  not recorded at all (`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
 - *The mask.* `REQ-MCP-081` says the mask "carries no character of the value … and no indication of that value's
   length"; `REQ-TOOLS-171`'s display mask (`ab****yz`) carries four characters and a length band. The rendering
   of a stored secret uses `REQ-TOOLS-171`'s **marker** `***` (`REDACTION_MARK`), which is the one of the two the
@@ -255,7 +260,10 @@ empty now.
   discovery off for every carried, launchable server (`McpHost.prepare`), and the engine's turn awaits the port's
   new optional `ready()` before it reads the listing and the prompt section (`ToolPort.ready`/`promptSection`,
   `run/turn.ts` — the one engine change beyond the ledger line). One resolution (`surfaceFor`, memoised on the
-  versions of its inputs) feeds the executors, the model's listing, the prompt section and the spawn evidence.
+  versions of its inputs) feeds the executors, the model's listing, the prompt section and ~~the spawn evidence~~ —
+  *corrected 2026-10-01:* the port's grant (`ToolPort.grant` / `grantEvidence`), recorded on a child's row once the port
+  is ready. The spawn evidence was a second resolution with no names reserved (`McpHost.evidenceFor`, removed then;
+  `docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
 
 **Found in existing code (the tally's twenty-ninth).** *ADR-0033's transport on Windows:* `spawnChild` starts a
 command by bare name; `npx` and `uvx` on Windows are `npx.cmd`/`uvx.cmd`, which `spawn` cannot start by name and —
@@ -306,3 +314,14 @@ override's wording, its absence after a relaunch, the five fates, the granted se
 the mask and the scope all read as the first execution recorded them. The steps finished in about 10 s (launch 6) and
 3 to 5 s (launch 7), against the 14 s and 19 s the offsets had reserved. **Could not show:** the loaded-host red itself
 on demand, and anything on Windows (IC-3).
+
+**The sink's severities gain `debug` — 2026-09-29, R-067 (acceptance finding A41).** "Every diagnostic is a value
+carrying its severity" held, and the severities stopped at `info`: `DiagnosticSeverity` was `info | warning | error`, and
+`McpHost.deliver` wrote `info` at `info` and everything else at `warn`. REQ-MCP-059 calls its grant count "a debug log",
+so it could only be written at `info`, which PD-MONITOR-002's default threshold keeps in every packaged build — on every
+persona's first spawn whose `mcp_tools` narrows a server. `DiagnosticSeverity` now carries `debug` (`debug(…)` in
+`packages/config/src/mcp/diagnostics.ts`, a log-only diagnostic), the grant count is built with it in
+`resolvePersonaMcp`, and the sink writes it at `debug`, so the default threshold drops it and `ROTARIS_APP_LOG_LEVEL=debug`
+restores it. No other diagnostic changed level. Pinned by "REQ-MCP-059 (A41): …" in `config/src/mcp/mcp.test.ts` and
+"REQ-MCP-059, PD-MONITOR-002 (A41): …" in `run-host/mcp.test.ts`, both red on the unrepaired code
+([note](../../defects/fixed/the-mcp-grant-count-is-logged-at-info-not-debug.md)).

@@ -4,12 +4,19 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { unpressedClicks } from './lib/capture-clicks.mjs';
+import { STEER_CLICKS, STEER_REST_CLICKS, STEER_REST_TYPE, STEER_REST_WHATS, STEER_TYPE, STEER_WHATS, steerPendingAtPause } from './lib/steer-rest.mjs';
+import { STEER_EARLY_CLICKS, STEER_EARLY_TYPE, SUBSCRIBE_HOLD_MS, steerEarlyReading } from './lib/steer-early.mjs';
 
 /**
  * The control channel's first execution in the built app (Part J step 3): a queued message consumed at the
- * iteration boundary; a steer reaching the entry role; a graceful pause and the composer's Continue; the
+ * iteration boundary; a steer reaching the entry role; a graceful pause and the composer's Continue; a steer still
+ * pending at a pause, delivered into the root's record and read by the resumed root, which carries on with its next
+ * scripted step; the
  * message-limit pause with its dialog answered "double", then the relaunch finding a session paused at the
- * limit and its dialog answered "cancel"; a user-initiated quit during a run. Every assertion reads the store.
+ * limit and its dialog answered "cancel"; a user-initiated quit during a run; a root the quit cut before its first reply
+ * in a later iteration, resumed by the relaunch's Continue at the step after the one cut. Every assertion reads the store.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -48,10 +55,10 @@ function scenario(name, agentsYaml) {
   ].join('\n'));
   return { root, workspace, local };
 }
-function launch(name, s, extra, opts = {}) {
+async function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout: 120_000, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs: 120_000, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: join(s.root, 'preferences') }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ...extra,
@@ -59,6 +66,7 @@ function launch(name, s, extra, opts = {}) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (opts.expectPng !== false && !existsSync(png)) throw new Error(`${name} produced no screenshot`);
   return log;
@@ -66,9 +74,10 @@ function launch(name, s, extra, opts = {}) {
 function open(s) { return new Database(oneDatabase(s.local), { readonly: true }); }
 /*
  * ADR-0005 (the repair of a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md, R-067): what the store
- * says WHILE the app runs. The launch blocks this thread (`spawnSync`), so a worker thread samples the store every 50 ms
- * and records each change of (status, lock holder, run starts, summary); the proof reads the record after the exit. A reading the
- * store is busy for is skipped, not guessed.
+ * says WHILE the app runs. A worker thread samples the store every 50 ms and records each change of (status, lock
+ * holder, run starts, summary); the proof reads the record after the exit. A reading the store is busy for is skipped,
+ * not guessed. It was a worker because the launch blocked this thread (`spawnSync`); the launch is `spawnBounded`'s
+ * since 2026-09-29, and the worker stays, so its sampling does not depend on this thread's event loop.
  */
 function sampleStore(local) {
   const stop = new Int32Array(new SharedArrayBuffer(4));
@@ -116,7 +125,7 @@ const s1 = scenario('queue', []);
 // The capture at 9 s sat on a knife-edge the Parts R and S merge found (2026-09-05): the launch reaches `session.start`
 // ~1.2 s in, the run needs ~8 s from there (the iteration boundary alone is ~4.2 s), and three runs landed 100 ms either
 // side. The assertion is consumption, not a budget; the capture now waits 13 s.
-launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PROMPT: 'first task', ROTARIS_CAPTURE_TYPE: 'and then this>>composer@2200', ROTARIS_CAPTURE_AFTER_MS: '13000' });
+await launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PROMPT: 'first task', ROTARIS_CAPTURE_TYPE: 'and then this>>composer@2200', ROTARIS_CAPTURE_AFTER_MS: '13000' });
 {
   const db = open(s1);
   const session = db.prepare('SELECT session_id, execution_status, iterations_completed, todo FROM sessions').get();
@@ -129,23 +138,44 @@ launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PROMPT: 
     const sent = db.prepare("SELECT body FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'message' ORDER BY seq").all(session.session_id, taskId).map((r) => JSON.parse(r.body)).find((m) => m.role === 'user');
     return sent ? sent.content.filter((c) => c.kind === 'text').map((c) => c.text).join('\n') : '';
   };
-  const sent = iterations.map((i) => ({ iteration: i.iteration, queued: i.todo_task_id === prompts[0]?.prompt_id, first: firstUser(i.root_task_id) }));
+  // REQ-CHAT-089: the queued prompt's task carries the backend's own id, so the iteration that took it up is known by that
+  // id (the `prompt_triggered` timeline entry carries the prompt's).
+  const queuedTaskId = JSON.parse(session.todo).phases.find((p) => p.name === 'Queued Prompts')?.tasks[0]?.id;
+  const sent = iterations.map((i) => ({ iteration: i.iteration, queued: i.todo_task_id === queuedTaskId, first: firstUser(i.root_task_id) }));
+  const triggered = db.prepare("SELECT metadata FROM timeline WHERE session_id = ? AND name = 'prompt_triggered'").all(session.session_id).map((r) => JSON.parse(r.metadata).prompt_id);
   db.close();
   if (session.execution_status !== 'completed' || session.iterations_completed < 2) throw new Error(`the queued run did not complete two iterations: ${JSON.stringify(session)}`);
   if (prompts.length !== 1 || prompts[0].content !== 'and then this' || prompts[0].status !== 'TRIGGERED') throw new Error(`the queued prompt was not consumed exactly once: ${JSON.stringify(prompts)}`);
   const todo = JSON.parse(session.todo);
   const phase = todo.phases.find((p) => p.name === 'Queued Prompts');
   if (!phase || phase.tasks[0].state !== 'complete') throw new Error(`the queued prompt did not become a completed task: ${session.todo}`);
+  // REQ-CHAT-040 / REQ-ORCH-071 (acceptance A28): the task is NAMED "Queued Prompt: <first 8 characters of the prompt id>"
+  // and carries the prompt text as its content.
+  if (phase.tasks[0].name !== `Queued Prompt: ${prompts[0].prompt_id.slice(0, 8)}` || phase.tasks[0].text !== 'and then this') throw new Error(`the queued prompt's task is not named "Queued Prompt: <id>" with the prompt as its content: ${JSON.stringify(phase.tasks[0])}`);
+  // REQ-CHAT-089 (the repair of a-queued-prompts-task-id-is-not-eight-hex-characters.md): every task and phase id
+  // the backend assigned is 8 lowercase hexadecimal characters — the queued prompt's task's no longer its prompt's UUID —
+  // and the prompt is still found, by the timeline entry its trigger wrote.
+  const hex = /^[0-9a-f]{8}$/;
+  const malformed = todo.phases.flatMap((p) => [p.id, ...p.tasks.map((t) => t.id)]).filter((id) => !hex.test(id));
+  if (malformed.length > 0) throw new Error(`a backend task or phase id is not 8 lowercase hexadecimal characters: ${JSON.stringify(malformed)} in ${session.todo}`);
+  if (triggered.length !== 1 || triggered[0] !== prompts[0].prompt_id) throw new Error(`the queued prompt's trigger is not on the timeline with its id: ${JSON.stringify(triggered)}`);
   const took = sent.filter((s) => s.queued);
   if (took.length !== 1 || !took[0].first.startsWith('first task') || !took[0].first.endsWith('\n\nand then this')) throw new Error(`the iteration that took the queued prompt up was not sent it: ${JSON.stringify(sent)}`);
   if (sent.some((s) => !s.queued && s.first.includes('and then this'))) throw new Error(`an iteration whose task is the launch prompt was sent the queued prompt: ${JSON.stringify(sent)}`);
-  results.queue = { iterations: session.iterations_completed, prompt: prompts[0], sent };
+  results.queue = { iterations: session.iterations_completed, prompt: prompts[0], task: phase.tasks[0], sent };
 }
 
-// 2. A steer reaches the entry role at its next step.
+// 2. A steer reaches the entry role at its next step. The schedule is `lib/steer-rest.mjs`'s steer: Steer the run waits for
+// its control and the composer's settled send, the text and the dialog's Steer follow that deadline, and a step the log
+// does not show pressed fails by name. Until 2026-10-01 the presses were fixed appointments (1900, 2300, 2600 ms) that a
+// run starting late misses, and the proof then read "the steer was not submitted and injected", a red about the proof
+// (docs/defects/fixed/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md). The second
+// step is held 5 s, so the run is still at it when the steer is submitted at the latest, and injects it at the step after.
 const s2 = scenario('steer', []);
-launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Steer the run"]@1900;;.dialog-actions .btn-primary>>Steer@2600', ROTARIS_CAPTURE_TYPE: 'go left>>no-enter@2300', ROTARIS_CAPTURE_AFTER_MS: '9000' });
+const steerLog = await launch('steer', s2, { ROTARIS_SCRIPT: 'read,wait:5000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me', ROTARIS_CAPTURE_CLICKS: STEER_CLICKS, ROTARIS_CAPTURE_TYPE: STEER_TYPE, ROTARIS_CAPTURE_AFTER_MS: '11000' });
 {
+  const unpressed = unpressedClicks(steerLog, Object.values(STEER_WHATS));
+  if (unpressed.length > 0) throw new Error(`the steer launch did not press every step on its own control: ${JSON.stringify(unpressed)} (see steer.log)`);
   const db = open(s2);
   const sid = db.prepare('SELECT session_id FROM sessions').get().session_id;
   const list = names(db, sid);
@@ -154,12 +184,38 @@ launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PRO
   results.steer = { timeline: list.filter((n) => n.startsWith('steering')) };
 }
 
+// 2b. A steer whose dialog opened while the composer's send was still settling (the repair of
+// a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md, REQ-MONITOR-137). The run is
+// drawn active before the `session.subscribe` reply settles the composer's send; a dialog opened in between had its focus
+// taken back by the composer when the reply landed, so the steer's text went into the composer behind the modal and the
+// steer was never submitted. That window is a few milliseconds wide on its own, so main holds the reply
+// (`ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS`) and the schedule is `lib/steer-early.mjs`'s: Steer the run pressed while the send
+// is unsettled, the text typed after the reply went, and the order read back from the log. The second step is held 6 s,
+// so the steer submitted during it is injected at the step after, and the root's record must hold the text typed.
+const s2b = scenario('steer-early', []);
+const steerEarlyLog = await launch('steer-early', s2b, { ROTARIS_SCRIPT: 'read,wait:6000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me early', ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS: String(SUBSCRIBE_HOLD_MS), ROTARIS_CAPTURE_CLICKS: STEER_EARLY_CLICKS, ROTARIS_CAPTURE_TYPE: STEER_EARLY_TYPE, ROTARIS_CAPTURE_AFTER_MS: '12000' });
+{
+  const wrong = steerEarlyReading(steerEarlyLog, unpressedClicks);
+  if (wrong !== null) throw new Error(`the steer-early launch did not open the dialog inside the settling send's window: ${wrong} (see steer-early.log)`);
+  const db = open(s2b);
+  const sid = db.prepare('SELECT session_id FROM sessions').get().session_id;
+  const list = names(db, sid);
+  const root = db.prepare('SELECT root_task_id FROM iterations WHERE session_id = ? ORDER BY iteration').get(sid)?.root_task_id ?? '';
+  const record = db.prepare("SELECT body FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'message' ORDER BY seq").all(sid, root).map((r) => JSON.parse(r.body));
+  db.close();
+  if (list.filter((n) => n === 'steering_submitted').length !== 1 || !list.includes('steering_injected')) throw new Error(`the steer whose dialog opened before the send settled was not submitted once and injected: ${list.join(',')} (see steer-early.log and steer-early.png)`);
+  // The text typed into the dialog is the text the root read — none of it went into the composer behind the modal.
+  const text = (m) => (m?.content ?? []).filter((c) => c.kind === 'text').map((c) => c.text).join('');
+  if (!record.some((m) => m.role === 'user' && text(m) === '[Steering prompt] go left')) throw new Error(`the root's record does not hold the steer typed into the dialog: ${JSON.stringify(record.map((m) => [m.role, text(m).slice(0, 60)]))}`);
+  results.steerEarly = { timeline: list.filter((n) => n.startsWith('steering')) };
+}
+
 // 3. A graceful pause, then the paused Continue. The pause click WAITS for the run to be pausable
 // (the `~` form) and the Continue waits for the paused strip — whose continue shows the pill's short
 // label `Continue` with `Continue run` as its accessible name (PD-ORCH-005 phase 5), so the lookup is that name.
 const s3 = scenario('pause', []);
 const pauseSamples = sampleStore(s3.local);
-launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'pause me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Pause the run"]@~8000;;.composer__strip .btn-primary[aria-label="Continue run"]@~24000', ROTARIS_CAPTURE_AFTER_MS: '26000' });
+await launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'pause me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Pause the run"]@~8000;;.composer__strip .btn-primary[aria-label="Continue run"]@~24000', ROTARIS_CAPTURE_AFTER_MS: '26000' });
 {
   const db = open(s3);
   const session = db.prepare('SELECT session_id, execution_status, stop_reason FROM sessions').get();
@@ -183,9 +239,52 @@ launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTUR
   results.pause = { status: session.execution_status, runStarts: list.filter((n) => n === 'run_start').length, lockWhileContinued: [...new Set(continued.map((x) => x.lock))], restSummary, samples };
 }
 
+// 3b. A steer still pending when the run comes to rest (the repair of a-steering-prompt-pending-at-a-rest-is-lost.md,
+// R-067, REQ-MONITOR-134 with PD-ORCH-005 clause 4). The entry role's second step is held 7 s and then asks for a read
+// (`wait:` prefixes the step after it), so the steer submitted meanwhile and the pause that follows it both land inside
+// that step: the pause lets the read finish and stops the root before the step that would have injected the steer. The
+// schedule is `lib/steer-rest.mjs`'s: the Steer waits for its control, and the Pause waits, from after the dialog's Steer,
+// for the steer dialog to close on the steer's acceptance, so the pause follows the steer (it raced it before 2026-10-01,
+// docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md), and the store must say the
+// steer was pending when the pause was asked for, or the launch exercised a plain pause and is read as such. The
+// rest delivers it into the root's record, marked injected once by the pause, and the Continue's resumed root reads it
+// as the last message of its first request, whose answer follows it in the record. That answer is the script's third
+// read: the resumed root carries on with its next step rather than its first.
+const s3b = scenario('steer-rest', []);
+const steerRestLog = await launch('steer-rest', s3b, { ROTARIS_SCRIPT: 'read,wait:7000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer then pause', ROTARIS_CAPTURE_CLICKS: STEER_REST_CLICKS, ROTARIS_CAPTURE_TYPE: STEER_REST_TYPE, ROTARIS_CAPTURE_AFTER_MS: '27000' });
+{
+  const unpressed = unpressedClicks(steerRestLog, Object.values(STEER_REST_WHATS));
+  if (unpressed.length > 0) throw new Error(`the steer-rest launch did not press every step on its own control: ${JSON.stringify(unpressed)} (see steer-rest.log)`);
+  const db = open(s3b);
+  const session = db.prepare('SELECT session_id, execution_status FROM sessions').get();
+  const sid = session.session_id;
+  const iterations = db.prepare('SELECT iteration, root_task_id, state, interruption FROM iterations WHERE session_id = ? ORDER BY iteration').all(sid);
+  const record = db.prepare("SELECT body FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'message' ORDER BY seq").all(sid, iterations[0]?.root_task_id ?? '').map((r) => JSON.parse(r.body));
+  const steering = db.prepare("SELECT name, metadata FROM timeline WHERE session_id = ? AND name LIKE 'steering%' ORDER BY ordinal").all(sid).map((r) => ({ name: r.name, ...JSON.parse(r.metadata) }));
+  const list = names(db, sid);
+  db.close();
+  const text = (m) => (m?.content ?? []).filter((c) => c.kind === 'text').map((c) => c.text).join('');
+  const at = record.findIndex((m) => m.role === 'user' && text(m) === '[Steering prompt] go left');
+  // PD-ORCH-005 (the repair of the-scripted-client-restarts-its-script-for-every-run.md): the resumed root carries on with
+  // the step after the ones its record holds — the third read — so its record holds the script's three reads exactly.
+  // Before the repair the continue's new client took the script from its first step again, and the record held the two
+  // reads before the rest and all three again after it.
+  const reads = record.filter((m) => m.role === 'assistant').flatMap((m) => m.content).filter((c) => c.kind === 'tool-call' && c.name === 'read_file').length;
+  if (!list.includes('run_pause_requested') || list.filter((n) => n === 'run_start').length < 2) throw new Error(`the pause and the continuation are not both recorded: ${list.join(',')}`);
+  const notPending = steerPendingAtPause(list);
+  if (notPending !== null) throw new Error(`the steer was not pending when the pause was asked for: ${notPending} (${list.join(',')})`);
+  if (at < 0) throw new Error(`the steer never reached the root's record: ${JSON.stringify(record.map((m) => [m.role, text(m).slice(0, 60)]))}`);
+  if (record[at - 1]?.role !== 'tool' || record[at + 1]?.role !== 'assistant') throw new Error(`the steer is not where the rest delivers it, after the read's result and before the resumed step: ${JSON.stringify(record.map((m) => m.role))}`);
+  if (reads !== 3) throw new Error(`the resumed root did not carry on from its record: it holds ${reads} reads where the script names 3`);
+  const injected = steering.filter((e) => e.name === 'steering_injected');
+  if (steering.filter((e) => e.name === 'steering_submitted').length !== 1 || injected.length !== 1 || injected[0].interruption !== 'pause') throw new Error(`the steer was not submitted once and injected once, by the pause: ${JSON.stringify(steering)}`);
+  if (session.execution_status !== 'completed' || iterations[0]?.state !== 'closed') throw new Error(`the continued run did not complete its resumed iteration: ${JSON.stringify({ session, iterations })}`);
+  results.steerRest = { steering, reads, roles: record.map((m) => m.role), iterations };
+}
+
 // 4. The message limit: paused durably with the dialog, "double" continues; a second launch finds the session paused and "cancel" resolves it.
 const s4 = scenario('limit', ['  message_limit: 1']);
-launch('limit-double', s4, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: 'limited', ROTARIS_CAPTURE_TYPE: 'one more>>composer@1500', ROTARIS_CAPTURE_PAUSE_ANSWER: 'double', ROTARIS_CAPTURE_AFTER_MS: '12000' });
+await launch('limit-double', s4, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: 'limited', ROTARIS_CAPTURE_TYPE: 'one more>>composer@1500', ROTARIS_CAPTURE_PAUSE_ANSWER: 'double', ROTARIS_CAPTURE_AFTER_MS: '12000' });
 {
   const db = open(s4);
   const session = db.prepare('SELECT session_id, execution_status, message_limit, paused_at_count, iterations_completed FROM sessions').get();
@@ -198,7 +297,7 @@ launch('limit-double', s4, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: '
   results.limitDouble = { session, pauses, resolved };
 }
 const s5 = scenario('limit-relaunch', ['  message_limit: 1']);
-launch('limit-paused', s5, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: 'limited', ROTARIS_CAPTURE_TYPE: 'one more>>composer@1500', ROTARIS_CAPTURE_AFTER_MS: '8000' });
+await launch('limit-paused', s5, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: 'limited', ROTARIS_CAPTURE_TYPE: 'one more>>composer@1500', ROTARIS_CAPTURE_AFTER_MS: '8000' });
 {
   const db = open(s5);
   const session = db.prepare('SELECT execution_status, paused_at_count, message_limit FROM sessions').get();
@@ -209,7 +308,7 @@ launch('limit-paused', s5, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: '
   // the relaunch below resumes through REQ-SESSION-047's one reap, which is the evidence that matters.
   results.limitPausedLocks = locks;
 }
-launch('limit-cancel', s5, { ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PAUSE_ANSWER: 'cancel', ROTARIS_CAPTURE_AFTER_MS: '7000' });
+await launch('limit-cancel', s5, { ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PAUSE_ANSWER: 'cancel', ROTARIS_CAPTURE_AFTER_MS: '7000' });
 {
   const db = open(s5);
   const session = db.prepare('SELECT execution_status, paused_at_count, stop_reason FROM sessions').get();
@@ -222,7 +321,7 @@ launch('limit-cancel', s5, { ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_P
 
 // 5. A user-initiated quit during a run: the run stops for shutdown, its terminal result is written, the lock is released.
 const s6 = scenario('quit', []);
-launch('quit', s6, { ROTARIS_SCRIPT: 'read,read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'quit me', ROTARIS_CAPTURE_QUIT_MS: '2200', ROTARIS_CAPTURE_AFTER_MS: '40000' }, { expectPng: false });
+await launch('quit', s6, { ROTARIS_SCRIPT: 'read,read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'quit me', ROTARIS_CAPTURE_QUIT_MS: '2200', ROTARIS_CAPTURE_AFTER_MS: '40000' }, { expectPng: false });
 {
   const db = open(s6);
   const session = db.prepare('SELECT execution_status, stop_reason FROM sessions').get();
@@ -233,6 +332,43 @@ launch('quit', s6, { ROTARIS_SCRIPT: 'read,read,read,read,read,read', ROTARIS_CA
   if (!events.includes('session.end') || !events.includes('result')) throw new Error(`the terminal pair was not written before exit: ${events.join(',')}`);
   if (locks !== 0) throw new Error('the quit left a lock behind');
   results.quit = { session, events };
+}
+
+// 6. A root resumed before its first reply in a later iteration (the repair of
+// the-scripted-client-places-a-root-resumed-before-its-first-reply-as-a-fresh-agent.md, PD-ORCH-005 clause 4). The first
+// iteration's root reads and answers; the message queued meanwhile opens a second iteration, whose root's first call is
+// held 60 s by `wait:` and is cut by the application's quit, so that iteration rests open and its root's record holds only
+// its task — nothing the scripted client wrote. The relaunch's Continue resumes that root in a new client, which reads
+// where it stood from the ledger the first launch's client left (`StandingLedger`): it takes the step after the wait, the
+// `glob`. Before the repair it was placed as a fresh agent and took the script's first step, the `read`, again.
+const s7 = scenario('quit-before-reply', []);
+const BEFORE_REPLY_SCRIPT = 'read,answer,wait:60000,glob,answer';
+await launch('quit-before-reply', s7, { ROTARIS_SCRIPT: BEFORE_REPLY_SCRIPT, ROTARIS_CAPTURE_PROMPT: 'first task', ROTARIS_CAPTURE_TYPE: 'and then this>>composer@2200', ROTARIS_CAPTURE_QUIT_MS: '22000', ROTARIS_CAPTURE_AFTER_MS: '40000' }, { expectPng: false });
+const laterRoot = (s) => {
+  const db = open(s);
+  const sid = db.prepare('SELECT session_id FROM sessions').get().session_id;
+  const session = db.prepare('SELECT execution_status, stop_reason FROM sessions').get();
+  const iterations = db.prepare('SELECT iteration, root_task_id, state, interruption FROM iterations WHERE session_id = ? ORDER BY iteration').all(sid);
+  const second = iterations.find((i) => i.iteration === 2);
+  const record = db.prepare("SELECT body FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'message' ORDER BY seq").all(sid, second?.root_task_id ?? '').map((r) => JSON.parse(r.body));
+  db.close();
+  const calls = record.filter((m) => m.role === 'assistant').flatMap((m) => m.content).filter((c) => c.kind === 'tool-call').map((c) => c.name);
+  return { session, iterations, second, record, calls };
+};
+const ledgerFile = (s) => { const out = []; const walk = (d) => { if (!existsSync(d)) return; for (const e of readdirSync(d, { withFileTypes: true })) { const p = join(d, e.name); if (e.isDirectory()) walk(p); else if (e.name === 'scripted-standing.json') out.push(p); } }; walk(s.local); return out[0] ?? null; };
+const atQuit = laterRoot(s7);
+{
+  if (atQuit.session.stop_reason !== 'application_shutdown') throw new Error(`the quit did not stop the run for shutdown: ${JSON.stringify(atQuit.session)}`);
+  if (atQuit.second === undefined || atQuit.second.state !== 'open') throw new Error(`the quit did not leave a second iteration open, so nothing was resumed before its first reply: ${JSON.stringify(atQuit.iterations)}`);
+  if (atQuit.record.some((m) => m.role === 'assistant')) throw new Error(`the second iteration's root replied before the quit, so the launch exercised a resume after a reply: ${JSON.stringify(atQuit.record.map((m) => m.role))}`);
+  if (ledgerFile(s7) === null) throw new Error('the scripted client left no standing ledger in the data directory');
+}
+await launch('resume-before-reply', s7, { ROTARIS_SCRIPT: BEFORE_REPLY_SCRIPT, ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_CLICKS: '.composer__strip .btn-primary[aria-label="Continue run"]@~14000', ROTARIS_CAPTURE_AFTER_MS: '26000' });
+{
+  const resumed = laterRoot(s7);
+  if (resumed.second?.root_task_id !== atQuit.second.root_task_id) throw new Error(`the continue did not resume the second iteration's root: ${JSON.stringify(resumed.iterations)}`);
+  if (resumed.calls[0] !== 'glob' || resumed.calls.includes('read_file')) throw new Error(`the resumed root did not carry on from the step after the one the quit cut: its calls are ${JSON.stringify(resumed.calls)}, where the script's next is glob`);
+  results.resumeBeforeReply = { atQuit: { session: atQuit.session, iterations: atQuit.iterations, roles: atQuit.record.map((m) => m.role) }, resumed: { session: resumed.session, iterations: resumed.iterations, calls: resumed.calls } };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

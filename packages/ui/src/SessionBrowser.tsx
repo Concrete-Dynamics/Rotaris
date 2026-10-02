@@ -163,11 +163,11 @@ export function SessionBrowser({ sessions, loading, error = null, onOpen, onDism
                     <td><span className="session-browser__name">{session.label}</span><span className="session-browser__detail mono">{session.detail}</span></td>
                     <td>
                       {session.status}
-                      {session.stale && <DesignTag className="tag session-browser__stale">stale</DesignTag>}
-                      {session.awaitingInput && <DesignTag className="tag">awaiting input</DesignTag>}
-                      {session.status === 'waiting' && <DesignTag className="tag tag-wait">waiting on a provider limit</DesignTag>}
+                      {session.stale && <DesignTag kind="outline" className="session-browser__stale">stale</DesignTag>}
+                      {session.awaitingInput && <DesignTag kind="neutral">awaiting input</DesignTag>}
+                      {session.status === 'waiting' && <DesignTag kind="wait">waiting on a provider limit</DesignTag>}
                       {/* REQ-SESSION-041: listed, said to be unreadable, with the parse detail; Open refused, Delete offered. */}
-                      {unreadable && <><DesignTag className="tag tag-fail session-browser__unreadable-tag">unreadable</DesignTag><span className="session-browser__unreadable mono" data-testid="session-unreadable-detail">{session.unreadable}</span></>}
+                      {unreadable && <><DesignTag kind="fail" className="session-browser__unreadable-tag">unreadable</DesignTag><span className="session-browser__unreadable mono" data-testid="session-unreadable-detail">{session.unreadable}</span></>}
                     </td>
                     {/* REQ-GIT-122: the row's `<branch or —> · <state>` text. */}
                     <td className="mono" data-testid="session-row-branch">{`${session.branch} · ${session.status}`}</td>

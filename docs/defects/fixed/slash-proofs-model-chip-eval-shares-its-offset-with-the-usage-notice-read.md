@@ -58,8 +58,8 @@ CR-terminated line (which the old pattern could not match at all), an arrow insi
 **Measured** as root under Xvfb on Linux, Node 24, after one `pnpm build`, no other Electron process on the host:
 `pnpm slash-proof --skip-build` now passes REQ-CHAT-032's chip check and the rest of the popup, colour-weight, Tab and
 usage checks, and stops at a **product** red — REQ-CHAT-027's partial shade at **4.06:1** on the ground the dock paints
-([note](../the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md), recorded, not
-repaired). A diagnostic run with every check made non-fatal (a copy, not committed) measured the rest: nine failures,
+([note](the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md), recorded, not
+repaired then; repaired 2026-09-29 under R-067). A diagnostic run with every check made non-fatal (a copy, not committed) measured the rest: nine failures,
 all that one defect (partial on three palettes, unknown on `rotaris-dim`, the ground not `--rt-bg` on three), and every
 other check passing — REQ-CHAT-029..033, REQ-CHAT-159, REQ-LIBRARY-142, REQ-CHAT-042..044, the palette launch's weights
 and distinct colours, the stored theme, the restart, and the wired launch's `/logout` and REQ-CHAT-028 rebuilds

@@ -50,8 +50,20 @@
  * already uses for a run's state, so they inherit its colour, radius and type; only the things a Tag cannot
  * know are set here — that the title-bar one does not drag the window with it, and that neither grows into
  * the row beside it at the minimum window size (REQ-SHELL-022).
+ *
+ * Live-run finding L10 (2026-09-29): the label is carried in words (REQ-SHELL-149), never cut mid-word. The
+ * ellipsis used to sit on the inline-flex box, where it never reaches the bare text node the label was, so the run
+ * header cut "Reviewing run for improvem" at 1440 px. The label is now its own element: in the run header it wraps
+ * between words and the indicator never shrinks below its longest word (`min-content`); the title bar is one fixed
+ * row, so there it elides on the label itself, where the ellipsis draws. The dot takes the tag's ink, as the run
+ * state's does.
  */
-.improvement-activity { -webkit-app-region: no-drag; flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--rt-space-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.improvement-activity { -webkit-app-region: no-drag; flex: 0 1 auto; min-width: 0; }
+.improvement-activity .status-dot { background: currentColor; }
+.improvement-activity__label { min-width: 0; }
+.improvement-activity--run-header { min-width: min-content; }
+.improvement-activity--run-header .improvement-activity__label { white-space: normal; overflow-wrap: normal; }
+.improvement-activity--title-bar .improvement-activity__label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /*
  * Stage B — the workspace chip (REQ-SHELL-033/035, REQ-WORKSPACE-016/017), drawn from the mockup's
  * own title bar (`docs/design/mockup/rotaris-ui-mockup.dc.html`, the `<!-- title bar -->` block):
@@ -165,6 +177,19 @@
 .run-header__state .status-dot { background: currentColor; }
 @media (prefers-reduced-motion: reduce) { .status-dot.is-pulsing { animation: none; } }
 .status-dot.is-pulsing[data-motion='reduced'] { animation: none; }
+/* The design StatusDot's states (`system/components/core/StatusDot.jsx` paints each from these tokens, `idle` excepted:
+   `docs/design/README.md` §4.1 resolves it to `--rt-info-500`, not a neutral grey, so REQ-SHELL-036's fifth group keeps
+   its colour). The adopted `components.css` gives `.status-dot` no colour, so the product's `StatusDot` writes its
+   state and this paints it.
+   `:where` holds the rule at `.status-dot`'s own specificity, so a surface that paints its dot otherwise — the tag's
+   ink in the run header and the improvement indicator — still does (A40, 2026-10-01). */
+.status-dot:where([data-state='run']) { background: var(--rt-run); }
+.status-dot:where([data-state='wait']) { background: var(--rt-wait); }
+.status-dot:where([data-state='done']) { background: var(--rt-done); }
+.status-dot:where([data-state='fail']) { background: var(--rt-fail); }
+.status-dot:where([data-state='ok']) { background: var(--rt-ok); }
+.status-dot:where([data-state='warn']) { background: var(--rt-warn); }
+.status-dot:where([data-state='idle']) { background: var(--rt-info-500); }
 .run-header__timing { font-size: var(--rt-text-xs, 12px); color: var(--rt-text-tertiary); min-width: 48px; }
 .run-header .run-controls { margin-left: auto; }
 /* REQ-CHAT-010: the divider is a real control — a pointer target with a keyboard tab stop, not a decorative rule. */
@@ -750,6 +775,10 @@
 .workspace > .queue { grid-area: queue; }
 .workspace > .composer__divider { grid-area: divider; }
 .agents { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px); border-right: 1px solid var(--rt-border); background: var(--rt-chrome); overflow: auto; }
+/* REQ-WORKSPACE-113: "Last run failed: {message}" carries the failed task's raw output, whose tokens can have no
+   break opportunity (a process's `[pid:date/time:ERROR:file:line]` prefix). Broken inside the column, as every other
+   surface that shows raw output here breaks it, so the sidebar never grows a sideways scroll to read the hint. */
+.agents__project .settings__hint { overflow-wrap: anywhere; }
 /* Density review 2026-09-13: the mockup draws a 40 px header BAR with a bottom hairline — title, tag and
    counts inline — not a bare kicker line. The bar escapes the panel's own padding by negative margins so
    the hairline runs the panel's full width, as the mockup's does. */
@@ -804,6 +833,10 @@
 .agent-row__persona { font-weight: var(--rt-weight-medium, 500); }
 .agent-row__task { color: var(--rt-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agent-row__meta { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); white-space: nowrap; }
+/* REQ-ORCH-089's stalled badge (the repair of a-stalled-child-is-never-shown-stalled): the design system's `tag-wait`, as the
+   mockup's agents panel qualifies a waiting row ("waiting · approval") — the run is still waiting on the agent — sized to
+   the meta line it closes; it animates nothing, as REQ-CHAT-164's stalled indicator does not. */
+.agent-row__stalled { font-size: var(--rt-text-2xs); }
 @media (prefers-reduced-motion: reduce) { .agent-row__dot--running { animation: none; } }
 
 /* Part AD — REQ-CHAT-085..091: the editable task-plan strip in the workspace sidebar. */
@@ -822,6 +855,10 @@
 .todo-task--abandoned .todo-task__glyph { color: var(--rt-danger-300); }
 .todo-task__text, .todo-phase__add { min-width: 0; border: 0; background: transparent; color: var(--rt-text); font: inherit; font-size: var(--rt-text-xs, 12px); text-align: left; cursor: pointer; padding: 3px 4px; border-radius: var(--rt-radius-sm, 4px); }
 .todo-task__text:hover, .todo-phase__add:hover { background: var(--rt-hover); }
+/* REQ-SHELL-022, "no control requires horizontal scrolling to reach": a task's text is the rename control, and a token
+   in it with no break opportunity (a path, a hash, a quoted command's `xxxx…`) ran past the plan column and gave the
+   sidebar a sideways scroll. Broken inside the column, as the Project section's hint above is. */
+.todo-task__text { overflow-wrap: anywhere; }
 .todo-task--done .todo-task__text, .todo-task--abandoned .todo-task__text { text-decoration: line-through; color: var(--rt-text-tertiary); }
 .todo-task__remove { width: 20px; height: 20px; padding: 0; border: 0; background: transparent; color: var(--rt-text-tertiary); cursor: pointer; opacity: 0; }
 .todo-task:hover .todo-task__remove, .todo-task:focus-within .todo-task__remove { opacity: 1; }
@@ -1410,6 +1447,15 @@
 .inspector__controls .inspector__note { grid-column: 1 / -1; }
 .inspector__note { font-size: var(--rt-text-2xs, 10px); }
 .inspector__tools { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
+/* Live-run finding K1 (REQ-MONITOR-052/068/069): an agent's artifact links — the mockup's inspector "Artifacts" line, a
+ * link in the accent (`.btn-link`) with the metadata beside it in the tertiary text at the small scale. */
+.inspector__artifacts { display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.artifact-groups { display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.artifact-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--rt-space-2); }
+.artifact-group__label, .artifact-link__state { color: var(--rt-text-tertiary); font-size: var(--rt-text-2xs); }
+.artifact-links { display: flex; flex-wrap: wrap; gap: var(--rt-space-1) var(--rt-space-3); min-width: 0; }
+.artifact-link { display: inline-flex; align-items: baseline; gap: var(--rt-space-1); min-width: 0; }
+.artifact-link__open { font-size: var(--rt-text-xs); overflow-wrap: anywhere; text-align: left; }
 .inspector__actions { display: flex; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
 .inspector__cascade:empty { display: none; }
 .inspector__cascade { color: var(--rt-warn); }

@@ -2,11 +2,11 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PRESENTATION_STATUSES } from '@rotaris/contracts';
 import {
-  CANCELLING_REFUSAL, CHIPS_DISABLED_STATES, CHIPS_ENABLED_STATES, clampComposerHeight, composerChipReason, composerPlaceholderFor,
+  CANCELLING_REFUSAL, CHIPS_DISABLED_STATES, CHIPS_ENABLED_STATES, clampComposerHeight, composerChipReason, composerPlaceholderFor, composerReclaimsFocus,
   COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, COMPOSER_PLACEHOLDERS, COMPOSER_WIDGET_MIN_HEIGHT, DEFAULT_REASONING, DRAFT_PUBLISH_MS,
   DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, MODELS_LOADING_LABEL, pausePendingAfter,
   PROJECT_SETUP_REFUSAL, reasoningChipLabel, runControlReason, runHeaderControlReason, RUN_STATE_LABELS, runStateOf, runTimingLabel,
-  runTimingSeconds, sendRefusal, statusStripRunItem, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk,
+  runTimingSeconds, sendRefusal, statusStripModeItem, statusStripRunItem, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk,
 } from './composer.js';
 import { STRIP_NARROW_BELOW, STRIP_TIGHT_BELOW, stripDensity, stripIconTitle } from './WorkspaceView.js';
 
@@ -34,6 +34,20 @@ describe('composer — REQ-CHAT-008: the run-state label vocabulary', () => {
     expect(runStateOf('waiting', false)).toBe('running');
     expect(runStateOf('interrupted', false)).toBe('idle');
     expect(runStateOf(null, false)).toBe('idle');
+  });
+});
+
+describe('REQ-TOOLS-184: the status strip shows the preset in force, with or without a focused session (live-run finding L7)', () => {
+  it('names the focused session\'s own mode, else the configured preset, else REQ-TOOLS-046\'s shipped default', () => {
+    // The live run of 2026-09-29: no session focused, `runtime.permission_mode: autonomous` configured, and the strip
+    // read `mode: ask`.
+    expect(statusStripModeItem(null, 'autonomous')).toBe('mode: autonomous');
+    expect(statusStripModeItem(null, 'restricted')).toBe('mode: restricted');
+    // A focused session names the preset it runs under, whatever is configured for the next run.
+    expect(statusStripModeItem('ask', 'autonomous')).toBe('mode: ask');
+    expect(statusStripModeItem('autonomous', 'restricted')).toBe('mode: autonomous');
+    // No configuration read yet (or none to read): a missing key resolves to the shipped default, `ask`.
+    expect(statusStripModeItem(null, null)).toBe('mode: ask');
   });
 });
 
@@ -245,5 +259,45 @@ describe('composer — PD-CHAT-001 revision 3: the compact strip density', () =>
   it('names control and choice on the compact tooltip, and the reason when disabled', () => {
     expect(stripIconTitle('Reasoning effort for the next run', 'Medium', null)).toBe('Reasoning effort for the next run: Medium.');
     expect(stripIconTitle('Model for the next run', 'gpt-4o', 'Run controls are unavailable while run active')).toBe('Run controls are unavailable while run active');
+  });
+});
+
+describe('composer — the focus after a submission settles (REQ-MONITOR-137, REQ-CHAT-002)', () => {
+  // Stand-ins for elements: the rule compares identities and reads nothing else of them.
+  const body = { el: 'body' };
+  const composer = { el: 'composer' };
+  const pill = { el: 'send pill' };
+  const steerField = { el: 'the steer dialog\'s field' };
+  const at = (now: object | null, atSubmit: object | null) => composerReclaimsFocus({ now, atSubmit, body, composer });
+
+  it('takes the focus back when it is nowhere, in the composer, or where the submission left it', () => {
+    expect(at(null, composer)).toBe(true);
+    expect(at(body, composer)).toBe(true);
+    expect(at(composer, composer)).toBe(true);
+    // A click on the send pill, or a Ctrl+Return from another widget (REQ-CHAT-001): nothing took the focus meanwhile.
+    expect(at(pill, pill)).toBe(true);
+    expect(at(body, pill)).toBe(true);
+  });
+
+  it('leaves the focus with a dialog that took it while the send was settling', () => {
+    // The defect: "Steer the run" was pressed after the run started and before the start's reply; the dialog's field
+    // held the focus, the composer took it back, and the steer's text was typed into the composer behind the modal.
+    expect(at(steerField, composer)).toBe(false);
+    expect(at(steerField, pill)).toBe(false);
+    expect(at(steerField, null)).toBe(false);
+  });
+
+  // The composer is stateful and vitest has no DOM, so what pins its use of the rule is its source.
+  it('WorkspaceView returns the focus through the rule after every awaited submission, never unconditionally', () => {
+    const text = readFileSync(new URL('./WorkspaceView.tsx', import.meta.url), 'utf8');
+    const body = (from: string, to: string) => { const i = text.indexOf(from); const j = text.indexOf(to, i); expect(i).toBeGreaterThan(-1); expect(j).toBeGreaterThan(i); return text.slice(i, j); };
+    const afterQueue = body('const q = await onQueue(value);', 'return;');
+    const afterSubmit = body('r = await onSubmit(value, attachments);', '\n  };');
+    const afterSlash = body("if (outcome.kind === 'executed') {", 'return;');
+    for (const settled of [afterQueue, afterSubmit, afterSlash]) {
+      expect(settled).toContain('reclaimFocus(focusAtSubmit);');
+      expect(settled).not.toContain('area.current?.focus()');
+    }
+    expect(text).toContain('if (composerReclaimsFocus({ now: document.activeElement, atSubmit: focusAtSubmit, body: document.body, composer: area.current })) area.current?.focus();');
   });
 });

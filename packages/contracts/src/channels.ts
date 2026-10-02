@@ -189,6 +189,34 @@ export type TranscriptIncrement = z.infer<typeof TranscriptIncrementSchema>;
 export const COST_QUALIFIERS = ['unknown', 'incomplete', 'configured', 'reported'] as const;
 export type CostQualifier = (typeof COST_QUALIFIERS)[number];
 
+/**
+ * REQ-MONITOR-060/061 (live-run finding K1, R-067): the run-level agent's tools. The entry role holds no `children` row, so
+ * `AgentRecord`'s grant, history and active set never reached the synthetic root; this carries them. `resolved` is the
+ * native set the live run's root port resolved — policy narrowing applied, so a coordinator's withheld write, terminal and
+ * commit tools are absent (061) — and empty when no run is live, where the persona's declared tools stand in (060).
+ * `called` is the root's history from the incremental tracker (first-call order), `active` its calls in flight.
+ */
+export const EntryToolsSchema = z.object({ resolved: z.array(z.string()), called: z.array(z.string()), active: z.array(z.string()) });
+export type EntryToolsPayload = z.infer<typeof EntryToolsSchema>;
+/**
+ * REQ-MONITOR-044/052/068/069 (live-run finding K1, R-067): one of the session's artifacts as the agent surfaces link it —
+ * its name (the slug, with the title beside it), its producer (the creating instance's canonical name, REQ-LIBRARY-093/136),
+ * its ready flag (REQ-LIBRARY-136: `succeeded` or `published`) and the instances that consumed it (`consumed_by`, the
+ * received side). Superseded artifacts are left out, as the Library's table leaves them out (REQ-LIBRARY-136).
+ */
+export const SessionArtifactLinkSchema = z.object({
+  id: z.string(), slug: z.string(), title: z.string(), status: z.string(), producer: z.string(), ready: z.boolean(), consumedBy: z.array(z.string()),
+});
+export type SessionArtifactLink = z.infer<typeof SessionArtifactLinkSchema>;
+/**
+ * PD-ORCH-005 clause 4 with OQ-97, and REQ-LIBRARY-093: one root agent of the entry role by the two names its record
+ * carries — `name`, the one its transcript rows and tool calls carry (the persona its iteration was opened with, kept by a
+ * root resumed as the entry role), and `canonical`, its canonical instance name (REQ-ORCH-044), which its publishes and
+ * reads record.
+ */
+export const EntryRootSchema = z.object({ name: z.string(), canonical: z.string() });
+export type EntryRoot = z.infer<typeof EntryRootSchema>;
+
 export const SessionRecordSchema = z.object({
   id: sessionId,
   executionStatus: z.string(),
@@ -306,6 +334,42 @@ export const SessionRecordSchema = z.object({
    * configuration states one, else REQ-MONITOR-080's default capacity.
    */
   entryContext: z.object({ used: z.number().int().nonnegative(), limit: z.number().int().nonnegative() }),
+  /** REQ-MONITOR-060/061 (live-run finding K1): the run-level agent's resolved tools, history and active calls. */
+  entryTools: EntryToolsSchema,
+  /** REQ-MONITOR-044/052/068/069 (live-run finding K1): the session's artifacts, for the agent surfaces' links. */
+  artifacts: z.array(SessionArtifactLinkSchema),
+  /**
+   * REQ-MONITOR-071, REQ-CHAT-069, REQ-MONITOR-053 and REQ-MONITOR-044 with PD-ORCH-005 clause 4 (OQ-97) and REQ-LIBRARY-093:
+   * the entry role's root agents of this session — each iteration's, each plan cycle's (recorded when it starts, store v30),
+   * each root no row records that published (a plan cycle's from before v30, OQ-106), and the live run's — each pair once, in
+   * that order. The run-level agent owns the rows and the artifacts
+   * they name, not only those of the entry persona a surface knows it by: a root resumed as the entry role keeps its own
+   * persona's name on its rows, and a root's publishes and reads record its canonical name.
+   */
+  entryRoots: z.array(EntryRootSchema),
+  /**
+   * REQ-MONITOR-057/060 with PD-ORCH-003 (the second repair of
+   * `after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`): the persona the live run's
+   * root runs as — the persona its rows carry and the one its port resolves `entryTools` for — so a surface names the
+   * run-level agent, and draws its stand-in, from the same root whose tools its chips show, from the run's start and before
+   * that root has written any row. Null for a record read with no live run; a surface then reads the transcript's latest
+   * root row (`entryRole`).
+   */
+  entryPersona: z.string().nullable(),
+  /**
+   * REQ-MONITOR-117/119/120: the entry agent's stall, as `AgentRecord.stalledSeconds` carries a child's — the seconds with
+   * no model event or token while its watch finds it stalled, else null. Null for a record read with no live run.
+   */
+  entryStalledSeconds: z.number().int().nonnegative().nullable(),
+  /**
+   * REQ-MONITOR-044/052 (the repair of `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`, acceptance
+   * A20, R-067): the run-level agent's tool-call count — the roots' calls the session's total holds (the total less every
+   * child's persisted count), plus the live root's calls that have not joined it yet, since a root's calls join the total
+   * only when its turn returns (REQ-ORCH-097's cadence, OQ-116). Null for a record read with no projection; a surface then
+   * derives it from the total. The agent's own count, not REQ-MONITOR-101's aggregate run count for the synthetic root:
+   * which of the two the run-level agent shows is OQ-159's, and this figure stays the agent's own until it is ruled.
+   */
+  entryToolCalls: z.number().int().nonnegative().nullable(),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

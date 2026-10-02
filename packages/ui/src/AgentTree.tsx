@@ -1,6 +1,8 @@
 import { useState, type KeyboardEvent } from 'react';
 import type { AgentRecord } from '@rotaris/contracts';
 import { markMotionStart } from './motion.js';
+import { stalledText } from './agents.js';
+import { Tag as DesignTag } from './design-system/index.js';
 
 /**
  * REQ-MONITOR-036..047, REQ-MONITOR-304: the delegation tree — a depth-first list of rows with box-drawing
@@ -39,6 +41,23 @@ export function treeRows(agents: readonly AgentRecord[], collapsed: ReadonlySet<
   };
   visit('', 0, []);
   return out;
+}
+
+/**
+ * REQ-MONITOR-107/110/111 (resolution item 25; the note "a waiting agent's elapsed time is not shown", R-067, OQ-124): the
+ * agent's elapsed clock advances — every agent neither ended nor `paused` that holds a spawn timestamp, so running,
+ * waiting or queued (REQ-MONITOR-064's "live (running, waiting, or queued)"). It is NOT `AgentRecord.live`: that is
+ * REQ-MONITOR-045's running-only sense, which drives the pulse and the inspector's writability and stays as it is. A
+ * `paused` agent keeps OQ-100's reading — neither live nor ended, no figure — since nothing runs for it and in
+ * REQ-CHAT-008's recovery state the busy status keeps the tick going.
+ */
+export function clockAdvances(agent: Pick<AgentRecord, 'presentationState' | 'completedAt' | 'spawnedAt'>): boolean {
+  const s = agent.presentationState;
+  return agent.completedAt === null && (s === 'running' || s === 'waiting' || s === 'queued') && !Number.isNaN(Date.parse(agent.spawnedAt));
+}
+/** REQ-MONITOR-107/111: the figure is shown — fixed once the agent ended, advancing while `clockAdvances`; else the fallback. */
+export function elapsedShown(agent: Pick<AgentRecord, 'presentationState' | 'completedAt' | 'spawnedAt'>): boolean {
+  return agent.completedAt !== null || clockAdvances(agent);
 }
 
 export function elapsedLabel(a: AgentRecord, nowIso: string | null): string {
@@ -112,7 +131,8 @@ export function AgentTree({ agents, selected, onSelect, nowIso = null }: AgentTr
               <span className="agent-row__persona">{a.persona}</span>
               <span className="agent-row__task">{a.givenName}</span>
             </span>
-            <span className="agent-row__meta mono">{a.presentationState}{a.live || a.completedAt ? ` · ${elapsedLabel(a, nowIso)}` : ''}</span>
+            {/* REQ-ORCH-089's badge: the stall watch's figure closes the meta label, as the mockup's agents panel closes a waiting row with a `tag-wait` qualifier. */}
+            <span className="agent-row__meta mono">{a.presentationState}{elapsedShown(a) ? ` · ${elapsedLabel(a, nowIso)}` : ''}{a.stalledSeconds !== null && <>{' '}<DesignTag kind="wait" className="agent-row__stalled" data-testid="agent-stalled">{stalledText(a.stalledSeconds)}</DesignTag></>}</span>
           </div>
         );
       })}

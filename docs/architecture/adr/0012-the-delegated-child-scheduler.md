@@ -283,11 +283,12 @@ one **resilience cell** (`run/ladder.ts`): its model choice, its role's fallback
 by the two routes REQ-ORCH-144 names. **The hard timeout** (`children/orchestration.ts`, `execute`): on expiry,
 when the role has a fallback not yet attempted for this child, the child is run once more on it — a fresh
 controller, a fresh timer, the same task payload — with the `child_timeout_fallback` timeline entry and warning
-issue; a second expiry, or no fallback, fails the child with the `timeout` issue and the report
+issue *(renamed 2026-10-01 to REQ-ORCH-139's words, the `fallback_model` entry and the `timeout_fallback` issue — acceptance
+A29, OQ-157)*; a second expiry, or no fallback, fails the child with the `timeout` issue and the report
 `Child timed out after <N>s`, as before. **The unresponsive model** (`run/turn.ts` `step`): while the fallback is
 untried and `llm_response_timeout` (floored at 30 s) is below the child timeout, a timer on the clock port aborts
 a call that produced no part of any kind — the backend now reports the first part through `TurnSink.started`,
-so a tool-call-only step counts as an event — and the step re-runs on the fallback (`unresponsive_model_fallback`);
+so a tool-call-only step counts as an event — and the step re-runs on the fallback (`unresponsive_model_fallback`; *`llm_unresponsive` since 2026-10-01, A29*);
 the child keeps running. **The role's fallback** is `personas.<role>.fallback_model` when stated (REQ-CONFIG-110),
 else the run-level `fallback_model` slot (REQ-CONFIG-065/067 name that slot as the retry "when a child's model
 fails to answer within the configured limits"), and never the child's own model — a slot that resolves to the
@@ -304,7 +305,9 @@ child hung on `alpha` for 10 s (unit) / 8 s (app) was retried once on `beta` and
 exactly 30 s and not at 29.999 s, and stayed unarmed when no fallback existed or the threshold was not below the
 bound. The re-prompt of REQ-ORCH-095 still follows a text-only implementer on the fallback (one more call, on
 the fallback still). Still not built from the list above: ADR-0041's artifacts, the verifier prefix,
-`REQ-CHAT-068/069`, `REQ-ORCH-030`; the stall watchdog's badge (REQ-ORCH-089) is not built either.
+`REQ-CHAT-068/069`, `REQ-ORCH-030`; the stall watchdog's badge (REQ-ORCH-089) is not built either. *(2026-09-29: the
+watchdog itself is built, and its badge still is not. See "First execution of the stall watchdog" below.)* *(2026-09-30:
+the badge is built. See "The stall callback reaches a host" below.)*
 
 ## Read back from a live run — 2026-09-12: the report's commands and edited files
 
@@ -338,6 +341,20 @@ nullable. `editedFilesFrom` takes the path of every `write_file`, `haet_edit` an
 argument name the file tools accept, and UNIONS the summariser's own list after it, so a genuine mention it
 made survives while an invented one can no longer be the only thing the field holds. No new plumbing: the
 call site already derived `toolsUsed` from the same messages.
+
+*Corrected 2026-09-30 under [R-067](../../product/requests.md#r-067), the claim above kept as it was built:* "the
+path of every … call" listed a write whatever answered it. A write a sibling's claim refused (`PD-TOOLS-006`), one
+the permission gate or a pre-tool hook refused, or a `haet_edit` whose find text matched nothing changed nothing,
+and still reached `edited_files`, the fallback's "Files touched" and, since OQ-111, the facts the pass is told never
+to deny. `editedFilesFrom` now skips a write call the record answers as refused, and the summariser's own list cannot
+name a path whose every write was so answered
+([`a-reports-edited-files-counts-refused-writes`](../../defects/fixed/a-reports-edited-files-counts-refused-writes.md)).
+A call no result answers — which the turn never leaves — is still listed. *Falsified by the repair's verification and
+kept beside its correction:* this correction first said a write call answered with any error (`isError`) was skipped,
+which took a call a rest, a stop or a crash cut off for a refusal. A call that was under way when it was cut off is
+answered with an error even when its write had landed (the turn cuts a dispatch that returned `ok` after the pause's
+tool deadline), so a call whose result is the `ran` statement of `interruptedResult` (`ranBeforeItWasCut`) is still
+listed; only a call cut before it started, or whose approval was withdrawn, is skipped with the refusals.
 
 **The bound, stated rather than hidden.** A context compression REPLACES the conversation
 (`REQ-MONITOR-084`), so a child compressed mid-task no longer carries its earliest tool calls in the
@@ -429,6 +446,9 @@ it does not decide what *exists*. The
 rendering reuses `reportBlock`, so a child inherits the same block its parent read on the resume, and the block is
 rendered at the call — a terminal child's report does not change — and remembered per task id on the same in-memory
 terms as the attachment list, so `execute` gained one argument and nothing else while `PD-ORCH-005` rewrites it.
+*(Falsified 2026-09-30 — see "First execution of a resumed child's retry payload" below: the in-memory terms held only
+while a child could not outlive the run that accepted it. `PD-ORCH-005` let it, and a resumed child's retry in a later
+run lost both the block and the attachment list. Both are now stored with the child's record, store v28.)*
 
 **What the first run showed.** Against the scripted model with the session artifact store in place, the `build`
 child's payload read (1) the workspace root, (3) the sibling-artifact index the `survey` report had become, (5) the
@@ -440,3 +460,249 @@ artifact store — the block it expected immediately after the workspace root st
 where the requirement puts it. **What it could not show:** the refusal under a real model, and an earlier iteration's
 *root* execution record, which is held in memory by the run and not in the store, so an id naming one finds no task
 and is refused as referring to nothing; an earlier iteration's children are in the store and are found.
+
+## First execution of a resumed child's retry payload — 2026-09-30: what the launch held in memory
+
+*`REQ-TOOLS-154` fixes the payload a child starts from; this record's inherited-context section above kept item (5)'s
+block, and the delegation kept item (4)'s attachment list, per task id in memory "for as long as the run lives". Since
+`PD-ORCH-005` a child outlives that run: a paused child is resumed by a later run, whose `IterationChildren` is new. The
+first execution of `REQ-ORCH-088`'s fallback retry for such a child reports here, under R-067
+(`docs/defects/fixed/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`, acceptance A25).*
+
+**What the execution found.** A case in `run/ladder.test.ts` drives it through `Sessions` over a real store and the
+session's artifact store: a `survey` child succeeds with its report stored; a `slow` child that depends on it, names it in
+`inherited_context` and attaches its report is paused mid-step; the Continue action resumes it; its hard timeout expires
+and the fallback retries it. The first payload carried REQ-ORCH-047's prior-agent context, the attached report's
+`PRIOR AGENT CONTEXT (FULL)` block and the inherited-context block. The retry's payload carried the workspace root, the
+sibling index and the task — **none of the three**, and nothing told the child or its parent. The inherited block and the
+attachments were in the old run's memory; the prior-agent context was guarded by `children.context_injected`, which the
+first run had set, so the retry's `execute` rendered none, where a retry within the first run reuses the block it
+rendered.
+
+**What was changed.** Store **v28** appends `children.attach_artifacts` (the call's references as given) and
+`children.inherited_context_block` (the block rendered at the call, since a sibling ignored then as unfinished may
+complete later and the ids alone would not say which counted). `ChildLedger.spawn` writes both; `IterationChildren`'s
+`attached` and `inherited` maps are removed, and `execute`'s `payload()` and `startingPayload` read the row. A resumed
+execution's retry renders the prior-agent context again from its dependencies' rows: the block is still given once in the
+conversation the payload starts, and never re-prefixed on a state hop (the reading is **OQ-151**). The same case, run
+against the unrepaired code,
+fails on all three blocks; repaired, the retry's payload equals the first payload exactly. `store.test.ts` pins the
+migration and the round trip.
+
+**What was not measured.** No live run: the live-run scenarios never pause a child that attached an artifact and then
+time it out on a fallback, and the case above is the whole of the evidence. The `resume` scenario, run against `katalyst`
+from this build, passed as regression evidence only: the built app migrated to v28 and resumed two paused children, which
+attached and inherited nothing and were not retried. A row written before v28 carries neither, and
+its retry in a later run carries none, as before. A dependency followed up (`PD-ORCH-005` clause 22) between the first
+payload and a later run's retry is rendered as it now reads. The row is in
+[`../first-executions.md`](../first-executions.md).
+
+## First execution of the stall watchdog — 2026-09-29: consequence 5's watchdog, and the message it makes possible
+
+*Consequence 5 names the visibility-only stall watchdog (`REQ-ORCH-089`, `REQ-MONITOR-117`) beside the hard timeout,
+reading from the `MonotonicClock` port. It was never built until now: the paragraph above records its badge as unbuilt,
+and `a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md` recorded the watchdog and
+`REQ-NOTIFY-111/112`'s recovery as unbuilt too. So its first execution reports here, under R-067.*
+
+**What was built.** `children/stall.ts`'s `StallWatch` runs once per attempt of a child's execution, beside the hard
+timer, on the clock port. It reads the threshold consequence 5 names: the role's override, else
+`runtime.child_stall_timeout`. It never cancels. REQ-NOTIFY-112's recovery reads the same watch: a child whose turn
+failed after no output for the whole window is given one corrective message and carries on. The readings, including
+what ends a silent step when the watch cancels nothing, are OQ-127.
+
+**What the execution found.** The decision held: consequence 5's premise was true, and the watchdog needed nothing but
+the clock port and the child's own events. Three things the record did not anticipate:
+- **No port carried a model event.** The model's sink reported text, reasoning, usage and the first part of a step
+  only, so a model streaming a long tool call's arguments would have read as silent. `TurnSink` gained an optional
+  `event` for every part, the one change outside the engine.
+- **Every tool call's start** had no hook either. `TurnDeps.onToolStarted` was added, since REQ-MONITOR-118 tells a
+  wait on tools from a stall only by the calls in flight.
+- **Once per child is not structural.** Within one attempt, a single corrective turn follows the first. REQ-ORCH-088's
+  fallback retry is a second attempt of the same child task, though, so the once-per-child count is state the execution
+  keeps across attempts. The ladder test that pins it fails without that state.
+
+**What was measured.** Unit cases over `FakeClock` in `stall.test.ts`. End-to-end cases through `Sessions`, six in
+`children.test.ts` and two in `ladder.test.ts`: the stall warned while the child runs, the message and the success
+that follows, no second message, the window at 29 s against 30 s, waiting on a tool call, the recovery, the fallback
+retry and the role's window. Each positive case fails with its limb reverted.
+
+**What was not measured.** No built app and no live run: the live run's `faults` scenario stalls the root's stream,
+not a child's. The badge the callback exists for is not wired to any host. The root is not watched. The row is in
+[`../first-executions.md`](../first-executions.md).
+
+**Corrected in place by the verifier's first round, 2026-09-29.** The build first wrote the `stall` issue only with
+each throttled warning, on the reasoning that an issue every 5 s would evict the session's other issues from
+REQ-SESSION-133's ring. That reasoning narrowed REQ-MONITOR-119's "every stall evaluation", whose throttle
+(REQ-MONITOR-120) bounds only "the warning itself", so it is kept here as the falsified reason: the issue is now
+written at every evaluation, and the eviction is left to a ruling in OQ-127. The same round recorded in OQ-127 that
+three of the timeline words the watch and the recovery write are outside REQ-ORCH-139's closed vocabulary.
+
+**Corrected in place by the verifier's second round, 2026-09-29.** Two claims above were narrower than they read.
+"Once per child … state the execution keeps across attempts" is true of REQ-ORCH-088's retry and false of PD-ORCH-005's
+resume, which is a new execution of the same task: a paused and continued child was given a second message. The count
+is now read, at a resumed execution's start, from the task's whole conversation record. And the silence the recovery
+reads started again only at the attempt's start, a tool result and the corrective message, so a child that waited on its
+own children past the window was blamed for the wait; every turn the run starts for the child now starts it again.
+Neither changes the decision: the watch still reads only the clock port and the child's own events. The three timeline
+words are no longer written: they are session-log lines through the run's `warn`, as OQ-76's are, the reason for
+minting them (that the log was out of reach without editing `Run.turn`) having been false. `children.test.ts` now has
+nine cases, `stall.test.ts` twelve, and `record.test.ts` one more.
+
+**Repaired in place by acceptance finding A7, 2026-09-30.** The watch's own evaluation still read the time since the
+child's last event, so a child waiting on its own children between its turns had a `stall` issue at every evaluation
+past the window, and the warning, while it worked as designed. The turn's end is now fed to the watch too
+(`betweenTurns`), and until the run starts the next turn no silence is counted. The decision stands: the watch still
+reads only the clock port and the child's own events. The reading is OQ-155's; `children.test.ts` has ten cases for the
+watch and `stall.test.ts` fourteen, each new one failing with the limb reverted. *Corrected in place the same day:* an
+execution resumed into waiting (PD-ORCH-005 clause 4) ends no turn before its wait, so the turn's end never marked it and
+the wait was still counted; `execute` now marks such an execution between turns as its watch is armed, and
+`children.test.ts` has eleven cases for the watch.
+
+## First execution of the process-wide count — 2026-09-30: the cap was one iteration's
+
+This record put the ledger in **one session's rows** and said nothing of a count across sessions; `REQ-CONFIG-094` counts
+every child on a `models:` entry "across the whole process … children belonging to any other session running in the same
+process". The run host holds every live session at once (ADR-0013), so the two disagree the moment two sessions run.
+Acceptance round 1 (finding A13) confirmed it by driving it: two sessions in one `Sessions`, one key with `max_parallel`
+1, the first session's child holding its slot — the second session's child started and ran to `succeeded` beside it
+(`packages/engine/src/children/children.test.ts`, "acceptance A13 …", red before the repair).
+
+**What changed, and what did not.** The ledger is still one iteration's rows and the held-child queue is still each
+session's (`model_slot_queue`). What the cap is judged against is now the process's count: `ModelSlots`
+(`packages/engine/src/children/model-slots.ts`, held by `Sessions`) is joined by every run for as long as it is under way,
+each run answering how many of its own children hold a slot on a key (`ChildLedger.slotsInUseHere`), and
+`ChildLedger.slotsInUse` adds the others' (`slotsHeldElsewhere`). A child's terminal state wakes every other run's
+scheduler for one pass (`onSlotFreed`), and so does a run's end — without the wake, a session whose root is waiting on its
+held child never passes again, which the case pins (it times out with the wake removed). The count is process state,
+held in memory: a slot is a live child, and no child outlives its process (REQ-ORCH-053).
+
+**Corrected in verification, the same day: a paused child keeps its place.** The paragraph above said `ModelSlots` "is
+joined by every run for as long as it is under way", each run answering for children in `starting`, `running` or
+`summarizing`. That was falsified by the branch's own verifier: a `paused` child was counted by nothing, and a run coming
+to rest left `ModelSlots`, so with `max_parallel` 1 a paused session's slot went to another session's child, and a
+Continue then resumed the paused child into `running` beside it — two slots on a key capped at 1, the defect this repair
+exists for, reached through PD-ORCH-005's pause and continue. PD-ORCH-005 clause 4 says each resumed agent "keeps the place
+in every child limit it already held", so the replacement reads it literally (**OQ-149**): a child `paused` out of
+`running` or `summarizing` (its `resume_state`) holds its slot while its session rests (`holdsModelSlot` in
+`children/ledger.ts`, which `ChildLedger.slotsInUseHere` now uses), and it is **each session**, not each run, that joins
+`ModelSlots`: `Sessions` joins a session when a run of it starts or continues, answers for it from its store (every child
+of the session that holds a slot), and lets it go only when no run of it is under way and none of its children holds a
+place. A decline (clause 6) or a cancel at rest (clause 16) gives the place up and wakes the others. Three cases beside
+the first two pin it (`children.test.ts`, "PD-ORCH-005 clause 4 / 6 / 16 …"), each red with its half of the repair
+removed. A paused session therefore holds its places until it is continued, declined or cancelled; a session paused by
+an earlier process holds none until a run of it starts in this one (OQ-149 states both).
+
+**Three edges the count leaves, recorded rather than repaired.** (1) The key is the string alone: sessions of two
+workspaces whose configurations define different entries under one key share a count, each judged against its own
+session's cap (**OQ-150**). (2) A promoted child that `startOne` refuses on `maxActive` sits `queued`, which holds no
+slot, so another session's pass in the same wake may take the slot — the edge one session already had, now across
+sessions. (3) Every `slotFree` check reads each other joined session's children from its store: one query per session
+per scheduling decision, which is nothing at today's scale.
+
+**What was not measured.** No built app or live run starts two sessions at once: the live run's scenarios are one session
+each and one endpoint is registered. `pnpm mission-proof`, whose scenario holds children behind a `max_parallel: 1` cap in
+one session, shows that path unchanged. The release order across sessions is **OQ-148**. The rows are in
+[`../first-executions.md`](../first-executions.md).
+
+## First execution of REQ-ORCH-098's teardown for a child the scheduler settles — 2026-09-30
+
+*The first execution above lists "REQ-ORCH-098's teardown entries" under the child's execution, and the cascade and the
+finalize sweep under the scheduler. A child the scheduler settles has no execution to end, so it was never torn down.
+Acceptance round 1 found it (finding A16,
+[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../../defects/fixed/a-child-that-never-started-gets-no-teardown-timeline-entries.md)),
+and its repair reports here, under R-067.*
+
+**What the execution found.** Two cases through `Sessions` over a real store: a child blocked by its dependency's failure,
+and the explicit cancel's finalize sweep over a child held on its model slot and one mid-step. On the unrepaired code
+none of the three children got a `child_end`, `child_result` or `child_conversation_closed`. The third was not in the
+note: the sweep can cancel a child whose execution is still returning, and that execution, finding its record terminal,
+writes nothing. The decision held: the teardown belongs with the settle, and the scheduler's two settles lacked it.
+
+**What was changed.** `SchedulerDeps.teardown`, called by both settles after the report is stored and before the terminal
+callbacks, the order a child's own settle keeps. `IterationChildren` answers it with `writeTeardown`, now the one writer of
+the three entries for every settle. The reading, that a child that never started is torn down as any, is **OQ-152**.
+
+**What was not measured.** No built app or live run: none reliably blocks a child or cancels one held on its slot. The
+cancel paths outside the scheduler and the execution still write no teardown, and are a note
+([`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../defects/fixed/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md),
+repaired 2026-10-01, below).
+The row is in [`../first-executions.md`](../first-executions.md).
+
+### The cancel paths outside the scheduler and the execution — 2026-10-01
+
+*The section above left five paths that settle a child `cancelled` with no teardown. Their repair reports here.*
+
+**What the execution found.** Six cases, one per path and the summarising cancel: five in `children/children.test.ts`
+through `Sessions` over a real store, and one in `run/crash.test.ts` over the crash record. All six were red on the
+unrepaired code: the user's cancel of a running child and its live descendant, of a child while it summarises, of a paused
+child and its paused descendant at rest, "continue without them", the stale-child settle and the crash record of an
+accepted cancel each wrote the report and no `child_end`, `child_result` or `child_conversation_closed`. A user's cancel of
+a running child aborts its execution, which returns later. It finds the record terminal at its settle (`settle`'s early
+return, `settleRaised`'s), so it writes no second triple. The summarising case had asserted that no `child_end` was written,
+as its evidence that the summariser wrote nothing over the cancellation. It now asserts exactly one triple, in the
+cancellation's words, after `child_user_cancelled`.
+
+**What was changed.** Each of the five paths calls `writeCancelledTeardown` after the report it stores and, where it
+writes one, after `child_user_cancelled`. Where the path tells the scheduler (`IterationChildren.cancel`), it does so
+before the terminal callbacks. The stale-child settle and the crash record run from the store alone, with no
+`IterationChildren` and no clock port. So `writeTeardown` moved to `children/ledger.ts`, beside `storeChildReport`, and
+takes its time from the writer's clock (`SessionWriter.wall`); in a run that clock is the run's own wall clock. The
+decision held: the teardown belongs with whatever settles the child. OQ-152's reading, that every terminal child is torn
+down alike, now covers every path.
+
+**What the built app showed.** `mission-proof`'s item 4 cancels `alpha` with its live descendant `sub` through the Mission
+view. It now asserts each one's own entries: `child_user_cancelled`, `child_end`, `child_result`,
+`child_conversation_closed`, once each, in that order. It passed.
+
+**What was not measured.** `part-j-proof` was run and drives no child cancel or decline. Its "cancel" launch answers the
+message-limit dialog. No live run was driven. The other four paths are pinned by the unit cases only. The row is in
+[`../first-executions.md`](../first-executions.md).
+
+## The stall callback reaches a host — 2026-09-30: the watchdog's badge, the root's watch and the steer
+
+*The first execution of the stall watchdog above left three things unbuilt: its callback reached no host, so no badge drew;
+the root was not watched; and REQ-MONITOR-135's stall-evaluation leg (ADR-0010 reading (d)) had nothing to hang on.
+Acceptance round 1 found them together (finding A6,
+[`a-stalled-child-is-never-shown-stalled.md`](../../defects/fixed/a-stalled-child-is-never-shown-stalled.md)), and their
+first execution reports here, under R-067.*
+
+**What was built.** Every evaluation hands the host the agent's silence while it is stalled, else null; it is kept beside
+the agent's tool activity and carried as `AgentRecord.stalledSeconds`, the root's as `SessionRecord.entryStalledSeconds`,
+and the record is republished whenever it changes (`ProjectionOwner.refreshRecord`). The agent trees, the Mission table,
+the persona window and the inspector draw it. `Run.turn` arms a watch for the root over its whole execution. An evaluation
+that finds a steer pending for an agent waiting on its own children wakes it to take a step. The readings are **OQ-153**.
+
+**What the execution found.** The decision held: the callback needed only a place to put the figure and a way to publish
+it, both of which the activity tracker and the projection owner already had. Three things the record did not anticipate:
+- **The root's wait on its children is not silence.** A root watched over its whole execution reads every wait on its
+  children as a stall. The watch counts nothing between the root's turns (`betweenTurns`, the mechanism another branch of
+  this round builds for a child's own wait).
+- **Within a turn, an evaluation has nothing to inject.** The step boundary already delivers a steer at the next step, and
+  nothing may join a conversation between a call and its result. What the evaluation leg adds is the agent with no next step
+  coming: one waiting on its children.
+- **A stall can end with the watch.** The live run's root answered on the retry and its turn ended before the next
+  evaluation, so its stall was never logged recovered. ~~`StallWatch.stop` now reports a stall under way as recovered.~~
+  *(Corrected 2026-09-30 by acceptance round 1's verifier: reported so, a cancelled, stopped, paused or timed-out stalled
+  agent was logged "active again after a stall", which it was not.)* `StallWatch.stop` ends a stall under way and reports
+  it recovered only when the agent was active after the evaluation that last found it stalled — a model event that is not
+  an error, or something the run gave it; the same holds at an evaluation that finds the agent between its turns.
+- **A resumed root can begin between its turns.** A root resumed into waiting (PD-ORCH-005 clause 4) takes no step until a
+  child's report; its watch, armed as its execution began, counted that wait as silence until `Run.turn` marked it between
+  turns from the start (found by acceptance round 1's verifier).
+
+**What was measured.** Four end-to-end cases through `Sessions` in `children.test.ts`: a child's figure published at 90, 95
+and 100 s and cleared; the root's warning, `stall` issue, figure and recovery; a root waiting on a working child writes no
+`stall` issue; a steer to the waiting root lands at the next evaluation, before its child ends. Three fail on the
+unrepaired engine, and the fourth fails with `betweenTurns` removed from the root. `stall.test.ts` pins the refresh a
+delivered steer makes and the recovery at `stop` — reported only after activity since the stall (the verifier's
+round added a cancelled stalled root with no recovery line and a root resumed into waiting with no `stall` issue to the
+end-to-end cases); `agent-clock.test.ts` and `agents.test.ts` the badge on each surface. The
+live run's `faults` scenario against `katalyst` (packs `2026-09-30T21-36-48-442Z` and `2026-09-30T21-42-06-872Z`) stalls
+the root's stream: the root's watch wrote its `stall` issues from 94 s, inside the product's 120 s idle bound, where before
+nothing was written until the bound fired. The second pack, built after the `stop` repair, logs the recovery 30 s later, and
+its photograph at 115 s shows the inspector following the root with `running · 1m 53s · 0 tool calls · stalled 104s`. The
+line broke between `stalled` and its figure, so the badge's text now joins them with a no-break space; that change came
+after the pack and is pinned by `agent-clock.test.ts` only.
+
+**What was not measured.** No live scenario stalls a child's stream, so a child's badge is shown by the cases alone. No live
+scenario steers an agent waiting on its children. The row is in [`../first-executions.md`](../first-executions.md).

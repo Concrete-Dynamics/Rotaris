@@ -23,7 +23,7 @@ export function isTerminalChildState(s: string): boolean {
 /**
  * REQ-MONITOR-300's table, exactly, with PD-ORCH-005's `paused`: every non-terminal state may move to it when the run
  * comes to rest, and it moves back to the state it resumes into (`RESUME_STATES`). Terminal states have no row
- * because nothing leaves them, and `paused` is not one of them: it is left again, and the two settling paths reach a
+ * because nothing leaves them but a follow-up (clause 22, `isLegalFollowUp`), and `paused` is not one of them: it is left again, and the two settling paths reach a
  * terminal state from it as from any other non-terminal state (a user who continues without the paused agents ends
  * them `cancelled`).
  */
@@ -85,6 +85,18 @@ export function resumeStateFor(from: ChildState): ResumeState | null {
 }
 export function isResumeState(s: unknown): s is ResumeState {
   return typeof s === 'string' && (RESUME_STATES as readonly string[]).includes(s);
+}
+
+/**
+ * PD-ORCH-005 clause 22 (revision 5, narrowing REQ-MONITOR-300): the one exit from a terminal state. A settled child its
+ * parent follows up by `delegate`'s `session_id` leaves its terminal state for `queued`, the state a child that has not
+ * started waits in, and from there starts as any queued child does — under REQ-ORCH-050's per-model cap and REQ-ORCH-046's
+ * active limit (OQ-131). The move is not in `CHILD_TRANSITIONS`, which keeps terminal states absorbing for every other
+ * move; it is the writer's `followUpChild` alone, and the engine decides which settled child may take it.
+ */
+export const FOLLOW_UP_STATE = 'queued' satisfies ChildState;
+export function isLegalFollowUp(from: ChildState): boolean {
+  return TERMINAL_CHILD_STATES.has(from);
 }
 
 /** The two settling paths REQ-MONITOR-300 admits from every non-terminal state, as arguments and never a bypass. */
@@ -188,8 +200,19 @@ export const AgentRecordSchema = z.object({
    * completion already counted is never counted again (REQ-MONITOR-102's per-agent metrics).
    */
   compressions: z.number().int().nonnegative(),
-  /** REQ-MONITOR-049: the granted native tool set as recorded at spawn; empty when no grant was recorded (the surface lets the persona's declared tools stand in). */
+  /**
+   * REQ-MONITOR-049 / REQ-MCP-065: the granted native tool set as the agent's tool port recorded it once ready (REQ-TOOLS-006's
+   * controls applied); empty both when no grant was recorded and when the controls left no native tool — `grantRecorded`
+   * tells the two apart.
+   */
   grantedTools: z.array(z.string()),
+  /**
+   * REQ-MONITOR-049/060: whether a grant was recorded for this agent. Only where none was do the persona's declared tools
+   * stand in for `grantedTools` on the surface; a recorded grant is shown as it is, an empty one as no native tool. Until
+   * 2026-10-01 an empty list stood for "no grant recorded", so a grant the controls left empty listed every declared tool
+   * (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
+   */
+  grantRecorded: z.boolean(),
   /** REQ-MONITOR-044/060: the distinct tool names this agent has called, in first-call order (maintained incrementally, REQ-MONITOR-038). */
   calledTools: z.array(z.string()),
   /** REQ-MONITOR-044/060: the tool calls running now, by name. */
@@ -206,6 +229,12 @@ export const AgentRecordSchema = z.object({
   mcpServers: z.array(z.object({ name: z.string(), transport: z.string(), origin: z.string(), fate: z.enum(['connected', 'dropped']), reason: z.string().optional() })),
   /** PD-ORCH-005: what left this agent `paused`; null for an agent that is not paused. */
   interruption: z.enum(INTERRUPTIONS).nullable(),
+  /**
+   * REQ-ORCH-089 / REQ-MONITOR-119/120: the seconds this agent has gone with no model event or token, as its stall watch's
+   * latest evaluation found them, while that evaluation finds it stalled; null while it is not (recovered, waiting on its
+   * tool calls, or not running). Refreshed at every evaluation, so a surface's figure advances at the watch's cadence.
+   */
+  stalledSeconds: z.number().int().nonnegative().nullable(),
 });
 export type AgentRecord = z.infer<typeof AgentRecordSchema>;
 

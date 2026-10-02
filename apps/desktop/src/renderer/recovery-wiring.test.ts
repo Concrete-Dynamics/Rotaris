@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
  */
 describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the renderer roots draw from the recovery fact', () => {
   const source = (file: string): string => readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');
-  for (const [file, session] of [['main.tsx', 'session'], ['windows.tsx', 'state.session']] as const) it(file, () => {
+  for (const [file, session] of [['main.tsx', 'session'], ['windows.tsx', 'session']] as const) it(file, () => {
     const text = source(file);
     expect(text).toContain(`const needsRecovery = useNeedsRecovery(${session}?.id ?? null, ${session}?.executionStatus ?? null);`);
     expect(text).toContain(`restingView(${session}, entry, needsRecovery)`);
@@ -60,11 +60,14 @@ describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the render
    * REQ-SHELL-038 with REQ-CHAT-008: the window's status strip names the recovery state as the run header and the Mission
    * view do (`statusStripRunItem`, pinned in `packages/ui` by composer.test.ts), from the third of main.tsx's
    * `useNeedsRecovery` calls, the one the window root makes. Handing it `false`, or naming the status without it, would
-   * read "run Running" beside a run-level agent drawn `paused` (PD-ORCH-005 clause 13, OQ-100) and fails here.
+   * read "run Running" beside a run-level agent drawn `paused` (PD-ORCH-005 clause 13, OQ-100) and fails here. Since
+   * acceptance A35 (REQ-MONITOR-127, OQ-165) the status it names is the one the window's surfaces show — the record under
+   * this window's optimistic cancels (`useShownSession`), so a confirmed run cancel reads `cancelling` there too.
    */
-  it('main.tsx names the strip\'s run item from the recovery fact', () => {
+  it('main.tsx names the strip\'s run item from the recovery fact, over the status the window shows', () => {
     const text = source('main.tsx');
-    expect(text).toContain('statusStripRunItem(session?.executionStatus ?? null, needsRecovery)');
+    expect(text).toContain('statusStripRunItem(shownStatus, needsRecovery)');
+    expect(text).toContain('const shownStatus = useShownSession()?.executionStatus ?? null;');
     expect(text).not.toMatch(/`run \$\{STATUS_LABELS/);
   });
 });

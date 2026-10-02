@@ -1,6 +1,7 @@
+import { identityOf, measureKey, sourceTextOf } from './cache.js';
 import { OVERSCAN, ROW_MIN_HEIGHT } from './constants.js';
 import { FACT_SEPARATOR, segmentFacts } from './project.js';
-import { isReasoningRow } from './Row.js';
+import { isMessageRow, isReasoningRow } from './Row.js';
 import type { DisplayRow } from './types.js';
 
 /**
@@ -14,6 +15,26 @@ import type { DisplayRow } from './types.js';
  * Until a row has genuinely completed layout, its height is an ESTIMATE. The estimate is deliberately coarse and
  * deliberately per-shape: a wrong estimate above the viewport is corrected by the anchor rule of REQ-CHAT-071 on
  * the next settle, and a wrong estimate below it is never seen.
+ *
+ * **Falsified 2026-09-29, kept beside its replacement: "a wrong estimate below the viewport is never seen" is not the
+ * whole of it.** A row appended at the tail while the pane follows is INSIDE the viewport, positioned by its estimate
+ * for the frame or two before the measurement pass reaches it, so an estimate SHORT of what the row draws is seen: the
+ * row is drawn through the row beneath it for those frames. An estimate that is long leaves a gap for the same frames
+ * instead, which draws nothing through anything.
+ *
+ * **Falsified 2026-09-30, kept beside its replacement: "the estimate may be coarse, but never short of a one-line row —
+ * and the first row of a block is drawn 12 px below … which the 30 px unit did not cover".** The block gap was one term
+ * of several the estimate did not count. Measured in the built app at a 740 px viewport, a one-line agent message
+ * INSIDE a block drew 33.4 px into 30 (its Markdown paragraph keeps an 8 px bottom margin in the row), a one-line user
+ * message 11.4 px more than its estimate at either position (its 8 px padding above and below), and every drawn line
+ * 19.44 px where the estimate counted 18 — the proof went on catching the agent message through the row beneath it
+ * after the block gap was counted. **Replacement:** `estimateBox` builds the estimate from the parts of the row's box
+ * the stylesheet draws — the row or block gap, the border, a user row's padding, a Markdown body's block margins, one
+ * `TEXT_LINE` per drawn line — and for a one-line row of every kind measured it is at or above what the row drew
+ * (`transcript.test.ts` holds the figures). A wrapped row is a prediction from an average advance, set to err long.
+ * And a row on screen is MEASURED, which is what bounds any estimate to the frames before its first measurement: a
+ * slot a scroll rebinds is observed again (`observeAgain`), where it used to keep its estimate until the next
+ * displayed change (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
  *
  * **The estimate must estimate what the row DRAWS.** A thinking row's body is the whole streamed reasoning
  * text, but under REQ-CHAT-167 (show-reasoning default OFF) a collapsed one draws only its one-line summary —
@@ -32,11 +53,46 @@ import type { DisplayRow } from './types.js';
 const TIME_COLUMN = 52;
 const ROLE_COLUMN = 112;
 const COLUMN_GAPS = 16;
-const GUTTER = TIME_COLUMN + ROLE_COLUMN + COLUMN_GAPS;
-/** Rough advances: `--rt-text-sm` body, and the `2xs` uppercase label, which is tracked and so wider per glyph. */
-const CHARACTER = 6.2;
+/**
+ * The row's own inline box, which the grid sits inside and the viewport's width therefore loses before the gutter:
+ * `.row`'s `margin: 4px 10px 0`, its `0 --rt-space-3` padding (`.row--user`'s is the same inline) and its 1 px border
+ * either side. Measured 2026-09-30: at a 740 px viewport the main column was 514 px, not the 560 the gutter alone left.
+ */
+const ROW_INLINE = 10 + 10 + 12 + 12 + 1 + 1;
+const GUTTER = TIME_COLUMN + ROLE_COLUMN + COLUMN_GAPS + ROW_INLINE;
+/**
+ * Rough advances: `--rt-text-sm` body, and the `2xs` uppercase label, which is tracked and so wider per glyph. The
+ * body's is an EFFECTIVE advance — what a drawn line holds once it breaks at a word — and is set so that a wrapped
+ * prediction errs long: the fixture's paragraphs drew 6.7 to 7.0 px a character at the prose measure (2026-09-30);
+ * the 6.2 before it predicted 13 lines of a paragraph that drew 14.
+ */
+const CHARACTER = 7.2;
 const LABEL_CHARACTER = 6.6;
-const TEXT_LINE = 18;
+/**
+ * One drawn line of `--rt-text-sm` at `--rt-leading-body` (13 px × 1.5): 19.44 px in the built app. The 18 before it
+ * was "~17 px", which put a six-line message 18.6 px short of what it drew (2026-09-30).
+ */
+const TEXT_LINE = 19.5;
+/**
+ * PD-CHAT-003's vertical rhythm: `.row--block-start` carries `--rt-space-3` (12 px) above it, and every other row
+ * `.row`'s 4 px. `ROW_MIN_HEIGHT` already covers one line inside a block (4 px, the 1 px border either side and one
+ * 19.5 px line, with 4.5 px to spare); the first row of a block is drawn this much taller.
+ */
+const BLOCK_GAP_OVER_ROW_GAP = 12 - 4;
+/** `.row--user`'s `--rt-space-2` padding above and below its body: a one-line user row drew 41.4 px inside a block. */
+const USER_PADDING = 8 + 8;
+/**
+ * REQ-CHAT-056's Markdown keeps every block's `--rt-space-2` bottom margin INSIDE the row — `.md__p`, `.md__list`,
+ * `.md__pre`, `.md__quote` and `.md__table` alike, the body being a flex item that does not let it collapse out — so a
+ * one-line agent message drew 33.4 px inside a block, 8 px over a plain one (2026-09-30). A heading (`.md__h`) adds its
+ * `--rt-space-3` above.
+ */
+const MARKDOWN_BLOCK_GAP = 8;
+const MARKDOWN_HEADING_GAP = 12;
+/** `.tool__header`'s `▸` and its `--rt-space-2` gap, which an activity line's segments wrap beside. */
+const HEADER_CHEVRON = 16;
+/** Between two `.activity__segment`s: the flex `column-gap`, the `·` and its `margin-inline-end` (`--rt-space-2` each). */
+const SEGMENT_BETWEEN = 8 + 5 + 8;
 /** `.row__body` takes a prose measure of 78 %; a diff, a table and a code fence opt out, which this does not model. */
 const PROSE_MEASURE = 0.78;
 
@@ -62,8 +118,49 @@ function wrappedLines(text: string, width: number, advance = CHARACTER): number 
   return Math.max(1, lines);
 }
 
-export function estimateHeight(d: DisplayRow, expanded = false, width = 0): number {
+/**
+ * @param blockStart whether the row starts a block (`placements`' `blockStart`), which draws it 12 px below the row
+ *   above rather than 4 px. A caller that does not know passes nothing and gets the estimate for a row inside a block.
+ */
+export function estimateHeight(d: DisplayRow, expanded = false, width = 0, blockStart = false): number {
   if (d.shape === 'trailer') return 36;
+  return estimateBox(d, expanded, width) + (blockStart ? BLOCK_GAP_OVER_ROW_GAP : 0);
+}
+
+/**
+ * The height a Markdown body draws (REQ-CHAT-056), line by line and without allocating: a blank line separates blocks
+ * and draws nothing of its own; every other line is taken as a block of its own — its drawn lines, and the bottom margin
+ * every block keeps — and a heading's top margin besides. A soft-broken paragraph is one block drawn as several here,
+ * which errs long; a code fence's lines are 12 px text counted as body lines, which errs long too.
+ */
+function markdownHeight(text: string, width: number): number {
+  let height = 0;
+  let start = 0;
+  for (;;) {
+    const brk = text.indexOf('\n', start);
+    const end = brk === -1 ? text.length : brk;
+    let blank = true;
+    for (let i = start; i < end; i += 1) { const c = text.charCodeAt(i); if (c !== 32 && c !== 9 && c !== 13) { blank = false; break; } }
+    if (!blank) {
+      const lines = width <= 0 ? 1 : Math.max(1, Math.ceil(((end - start) * CHARACTER) / width));
+      height += lines * TEXT_LINE + MARKDOWN_BLOCK_GAP + (text.charCodeAt(start) === 35 /* # */ ? MARKDOWN_HEADING_GAP : 0);
+    }
+    if (brk === -1) break;
+    start = brk + 1;
+  }
+  return height;
+}
+
+/**
+ * A non-trailer row's estimate as a row inside a block — what `estimateHeight` answers before the block gap.
+ *
+ * Each term is a part of the row's box the stylesheet draws, measured in the built app on 2026-09-30 against the
+ * estimate (`transcript.test.ts` holds the figures): the row gap and border in `ROW_MIN_HEIGHT`, a user row's padding,
+ * a Markdown body's block margins, and one `TEXT_LINE` per drawn line. For a one-line row of every kind measured the
+ * estimate is at or above what the row drew; a wrapped one is a prediction from an average advance and a line count,
+ * set to err long.
+ */
+function estimateBox(d: Exclude<DisplayRow, { shape: 'trailer' }>, expanded: boolean, width: number): number {
   const main = width > GUTTER ? width - GUTTER : 0;
   // REQ-CHAT-057's attribution shares the row's height: `.row__role` wraps inside its 112 px column rather than
   // truncating (docs/defects/role-gutter-truncation-rule-is-inert.md), so a long agent name costs a second line
@@ -72,16 +169,23 @@ export function estimateHeight(d: DisplayRow, expanded = false, width = 0): numb
   const roleLines = wrappedLines(role, ROLE_COLUMN, LABEL_CHARACTER);
   if (d.shape === 'group') {
     // PD-CHAT-004: the activity line is one line only while its segments FIT. `.activity__segments` is
-    // `flex-wrap: wrap`, so a long run draws two, three or four of them — and the constant that used to be here
-    // drew a twelve-segment run into a 36 px allocation, through the row beneath it.
-    // The summary's LENGTH, without joining the summary: the drawn text is what `Row` renders fact by fact
-    // (PD-CHAT-004 revision 3), and allocating a joined copy of it per row per paint is the cost REQ-CHAT-055's bound
-    // cannot absorb. Summing the facts gives the same figure — the segment's own text plus one separator.
-    let width = 0;
+    // `flex-wrap: wrap` of `white-space: nowrap` segments, so a segment that does not fit the rest of a line starts the
+    // next one whole — which the line is laid out here as, segment by segment: summing the characters instead
+    // predicted four lines of a sixteen-segment run that drew six (2026-09-30).
+    // The facts' LENGTH, without joining them: the drawn text is what `Row` renders fact by fact (PD-CHAT-004
+    // revision 3), and allocating a joined copy of it per row per paint is the cost REQ-CHAT-055's bound cannot absorb.
+    const room = main - HEADER_CHEVRON;
+    let lines = 1;
+    let x = 0;
     for (const segment of d.segments) {
-      for (const fact of segmentFacts(segment)) width += fact.text.length + FACT_SEPARATOR.length;
+      let characters = 0;
+      let facts = 0;
+      for (const fact of segmentFacts(segment)) { characters += fact.text.length; facts += 1; }
+      const w = (characters + (facts - 1) * FACT_SEPARATOR.length) * CHARACTER;
+      if (x > 0 && room > 0 && x + SEGMENT_BETWEEN + w > room) { lines += 1; x = w; } else x += (x > 0 ? SEGMENT_BETWEEN : 0) + w;
     }
-    const lines = Math.max(main <= 0 ? 1 : Math.max(1, Math.ceil((width * CHARACTER) / main)), roleLines);
+    if (main <= 0) lines = 1;
+    lines = Math.max(lines, roleLines);
     // The `⤷` preview line drawn while a call is in flight.
     const flight = d.inFlight === null ? 0 : 20;
     return Math.max(ROW_MIN_HEIGHT, (lines - 1) * TEXT_LINE + ROW_MIN_HEIGHT + flight);
@@ -89,13 +193,87 @@ export function estimateHeight(d: DisplayRow, expanded = false, width = 0): numb
   const row = d.row;
   // REQ-CHAT-062: a collapsed reasoning row draws exactly one summary line, whatever the hidden body holds.
   if (isReasoningRow(row) && !expanded) return Math.max(ROW_MIN_HEIGHT, (roleLines - 1) * TEXT_LINE + ROW_MIN_HEIGHT);
-  // PD-CHAT-003: a row sizes to its content — one ~17 px line per DRAWN line, no padding box. A body line is not
-  // a drawn line: one 400-character paragraph is a single `\n`-delimited line and five on screen, and counting
-  // the first was half of why a streaming message shifted every row below it twice per chunk.
-  const bodyLines = row.body === '' ? 1 : wrappedLines(row.body, Math.round(main * PROSE_MEASURE));
-  const lines = Math.max(bodyLines, roleLines);
+  const measure = Math.round(main * PROSE_MEASURE);
   const extra = (row.input !== undefined && row.input !== '' ? 1 : 0) + (row.output !== undefined && row.output !== '' ? 1 : 0);
-  return Math.max(ROW_MIN_HEIGHT, (lines - 1) * TEXT_LINE + extra * 20 + ROW_MIN_HEIGHT);
+  if (isMessageRow(row) && row.body !== '') {
+    // REQ-CHAT-056: the agent-message category draws its body as Markdown, whose blocks keep their margins.
+    const body = Math.max(markdownHeight(row.body, measure), roleLines * TEXT_LINE);
+    return Math.max(ROW_MIN_HEIGHT, body - TEXT_LINE + extra * 20 + ROW_MIN_HEIGHT);
+  }
+  // PD-CHAT-003: a row sizes to its content — one line per DRAWN line, no padding box but a user row's. A body line is
+  // not a drawn line: one 400-character paragraph is a single `\n`-delimited line and five on screen, and counting
+  // the first was half of why a streaming message shifted every row below it twice per chunk.
+  const bodyLines = row.body === '' ? 1 : wrappedLines(row.body, measure);
+  const lines = Math.max(bodyLines, roleLines);
+  return Math.max(ROW_MIN_HEIGHT, (lines - 1) * TEXT_LINE + extra * 20 + ROW_MIN_HEIGHT) + (row.kind === 'user' ? USER_PADDING : 0);
+}
+
+/**
+ * The height the pane's offset table reads for displayed row `d` at position `at` (`reuseOffsets`' `heightOf`): the
+ * measurement filed under the row's measurement key, else the last height its identity drew, else the estimate — with
+ * the row's block start read from `places` at the same position (PD-CHAT-003), because the first row of a block is
+ * drawn 8 px taller than the same row inside one and a new row is positioned by this estimate until it is measured.
+ */
+export function readHeight(
+  d: DisplayRow, at: number, width: number, expanded: ReadonlySet<string>,
+  places: readonly { readonly blockStart: boolean }[],
+  measurements: { peek(key: string): number | undefined },
+  lastByIdentity: { peek(identity: string): number | undefined },
+): number {
+  const open = expanded.has(d.key);
+  return measurements.peek(measureKey(d, width, open, null)) ?? lastByIdentity.peek(d.key) ?? estimateHeight(d, open, width, places[at]?.blockStart ?? false);
+}
+
+/**
+ * Whether the pool's slot `slot`, bound now under measurement key `key`, must be observed again for the measurement pass
+ * to receive its size (ADR-0045: heights are measured) — which it records. A `ResizeObserver` delivers a size when it CHANGES, so a slot a
+ * scroll rebinds to a row that draws the height its previous row drew delivers nothing, and the new row stays at its
+ * estimate while it is on screen; observing a node again delivers its size whatever it is. True exactly when the key
+ * differs from the one the slot was last observed under and is not the empty key of an unbound slot.
+ */
+export function observeAgain(observed: Map<number, string>, slot: number, key: string): boolean {
+  if (observed.get(slot) === key) return false;
+  observed.set(slot, key);
+  return key !== '';
+}
+
+/**
+ * The commit's measurement (ADR-0045: heights are measured), run by the pane after every commit and before the browser
+ * paints it: every bound slot whose measurement key has no measurement yet — a row first bound, or a row whose content
+ * changed — is read now (`read`, the slot's drawn height), filed under its key and under its identity, and marked in the
+ * ledger, exactly as the observer files a delivery. True when a height differs from what the identity drew last (or the
+ * identity drew nothing yet), which is when the offset table that placed the row was wrong and the pane renders again —
+ * synchronously, inside the same commit, so no frame is painted with the row positioned by a height it does not draw.
+ * A slot whose key is measured is not read, so the pass reads layout only for the rows the update bound or changed, and
+ * walks the pool's slots rather than the transcript's rows (REQ-CHAT-055).
+ *
+ * Before it, such a row was positioned by the height its identity drew last until the observer's delivery rendered, a
+ * frame or more later — and a row that GREW was drawn through the row beneath it for those frames: 21.8 px, the planted
+ * activity line turning live again in `transcript-proof`
+ * (docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md). The identity's
+ * last height still positions the row for the render that binds it — a streaming row is placed by what it drew, never by
+ * an estimate that would move every row below it twice per chunk — but that render is no longer the one painted.
+ */
+export function measureAtCommit(
+  ledger: MeasureLedger,
+  bound: Iterable<{ readonly key: string; readonly read: () => number }>,
+  measurements: { peek(key: string): number | undefined; set(key: string, value: number, sourceCharacters: number): void },
+  lastByIdentity: { peek(identity: string): number | undefined; set(identity: string, value: number, sourceCharacters: number): void },
+): boolean {
+  let begun = false;
+  let changed = false;
+  for (const slot of bound) {
+    if (slot.key === '' || measurements.peek(slot.key) !== undefined) continue;
+    const height = slot.read();
+    if (height <= 0) continue;
+    if (!begun) { beginMeasuring(ledger); begun = true; }
+    const identity = identityOf(slot.key);
+    measurements.set(slot.key, height, 0);
+    markMeasured(ledger, identity);
+    const previous = lastByIdentity.peek(identity);
+    if (previous === undefined || Math.abs(previous - height) > 0.5) { lastByIdentity.set(identity, height, 0); changed = true; }
+  }
+  return changed;
 }
 
 export interface OffsetTable {
@@ -178,8 +356,9 @@ export interface HeightTable extends OffsetTable {
  * cost microseconds at the window's bound.
  *
  * The result is the table `buildOffsets(next.display.map(heightOf))` would build, value for value, provided
- * `heightOf` reads nothing but the row, the width, the expansion set and the measurements filed under the row's
- * identity — the pane's does — and `remeasured` answers true for every identity whose measurements changed since
+ * `heightOf` reads nothing but the row, the width, the expansion set, the measurements filed under the row's
+ * identity and the row's block start — the pane's does; a row reused here has the same row object above it, so its
+ * block start is unchanged — and `remeasured` answers true for every identity whose measurements changed since
  * `previous.stamp` (`transcript.test.ts` holds it to that over seeded walks).
  */
 export function reuseOffsets(
@@ -187,7 +366,8 @@ export function reuseOffsets(
   next: { readonly display: readonly DisplayRow[]; readonly width: number; readonly expanded: ReadonlySet<string>; readonly stamp: number },
   /** Null when nothing has been re-measured since `previous` was built, which spares the lookup for every reused row. */
   remeasured: ((identity: string, since: number) => boolean) | null,
-  heightOf: (d: DisplayRow) => number,
+  /** `at` is the row's position in `next.display`: the pane reads the row's block start there (PD-CHAT-003). */
+  heightOf: (d: DisplayRow, at: number) => number,
 ): HeightTable {
   const { display, width, expanded, stamp } = next;
   const n = display.length;
@@ -202,13 +382,13 @@ export function reuseOffsets(
     for (; i < shared && display[i] === before[i]; i += 1) {
       const d = display[i]!;
       const held = previous.heights[i]!;
-      const height = remeasured !== null && remeasured(d.key, previous.stamp) ? heightOf(d) : held;
+      const height = remeasured !== null && remeasured(d.key, previous.stamp) ? heightOf(d, i) : held;
       heights[i] = height;
       if (height !== held && i < from) from = i;
     }
     if (i < from) from = i;
   }
-  for (; i < n; i += 1) heights[i] = heightOf(display[i]!);
+  for (; i < n; i += 1) heights[i] = heightOf(display[i]!, i);
   // `from` is at most the shorter of the two arrays, so `previous.offsets[from]` exists whenever `from` is above 0.
   const offsets = new Array<number>(n + 1);
   if (from === 0) offsets[0] = 0;
@@ -231,16 +411,32 @@ export function indexAt(table: OffsetTable, y: number): number {
   return lo;
 }
 
-/** The span of displayed rows a viewport needs, with the overscan margin above and below. */
+/**
+ * The span of displayed rows a viewport needs, with the overscan margin above and below.
+ *
+ * When the span with its overscan is wider than the pool, the OVERSCAN gives way first — below, then above — and only a
+ * span of visible rows wider than the pool itself is cut, from the top of the span. A viewport `H` tall can show
+ * `ceil(H / h) + 1` rows of height `h`, one partly at either edge, which is one more than ADR-0045's `ceil(H_max / unit)`
+ * counts; shedding overscan before a visible row is what keeps that row bound at `H_MAX`
+ * (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
+ */
 export function visibleRange(table: OffsetTable, scrollTop: number, viewportHeight: number, count: number, capacity: number): { first: number; last: number } {
   if (count === 0) return { first: 0, last: -1 };
   const firstVisible = indexAt(table, scrollTop);
   const lastVisible = indexAt(table, scrollTop + viewportHeight);
-  const first = Math.max(0, firstVisible - OVERSCAN);
+  let first = Math.max(0, firstVisible - OVERSCAN);
   let last = Math.min(count - 1, lastVisible + OVERSCAN);
-  // The pool is FIXED: a span wider than the pool binds what fits, starting from the top of the span. This cannot
-  // happen while the viewport is inside `H_MAX` (REQ-CHAT-057's 30 px floor bounds the span by the capacity), and
-  // is the safety rail rather than the design.
+  if (last - first + 1 > capacity) {
+    // The pool is FIXED: the overscan below gives way, then the overscan above.
+    last = Math.max(Math.min(count - 1, lastVisible), first + capacity - 1);
+    if (last - first + 1 > capacity) first = Math.min(firstVisible, last - capacity + 1);
+  }
+  // A span of visible rows wider than the pool binds what fits, starting from the top of the span. This cannot happen
+  // while the viewport is inside `H_MAX` (`SHORTEST_ROW_HEIGHT`, the shortest a row can draw, bounds the visible span by
+  // the capacity less its overscan), and is the safety rail rather than the design. **Falsified 2026-10-01, kept beside
+  // its replacement: "REQ-CHAT-057's 30 px floor bounds the span by the capacity".** PD-CHAT-003 draws rows shorter than
+  // 30 px — a one-line system notice inside a block, 23.8 px — and this rail cut the bottom of a tall viewport of them
+  // (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
   if (last - first + 1 > capacity) last = first + capacity - 1;
   return { first, last };
 }
@@ -272,14 +468,22 @@ export function restoreAnchor(display: readonly DisplayRow[], table: OffsetTable
 }
 
 /**
- * REQ-CHAT-053's four update shapes, decided by comparing the displayed keys before and after. Only a change
- * matching NONE of the four may reset the view, and such a reset must still restore by REQ-CHAT-071's anchor.
+ * REQ-CHAT-053's four update shapes, decided by comparing the displayed keys before and after — and, for the one
+ * shape keys cannot see, the content of the last row. Only a change matching NONE of the four may reset the view,
+ * and such a reset must still restore by REQ-CHAT-071's anchor.
  *
  *  - `append`  — rows added at the end and nothing else changed;
  *  - `truncate` — rows dropped from the end and nothing else changed;
  *  - `replace` — the same number of rows, replaced in place;
- *  - `extend`  — the last row extended (its key unchanged) while rows were appended after it;
+ *  - `extend`  — the last row extended (its key unchanged, its content changed) while rows were appended after it;
  *  - `other`   — anything else, which is the only case permitted to reset.
+ *
+ * **`extend` and `append` have the same keys.** A row extended in place keeps its identity (REQ-CHAT-059), so an
+ * extension with rows appended after it and a plain append differ only in whether the last row before the update
+ * drew something else after it. The first form compared keys alone, and its `extend` branch required the last key to
+ * be both the first that differed and equal on both sides, so it never answered `extend`
+ * (docs/defects/fixed/the-update-shape-never-answers-extend.md). The content is read for that ONE row only, so the
+ * cost stays that of the rows the update changed (REQ-CHAT-055).
  */
 export type UpdateShape = 'append' | 'truncate' | 'replace' | 'extend' | 'other';
 
@@ -293,12 +497,24 @@ export function updateShape(before: readonly DisplayRow[], after: readonly Displ
   while (common < shared && before[common] === after[common]) common += 1;
   while (common < shared && before[common]!.key === after[common]!.key) common += 1;
   if (common === before.length && before.length === after.length) return 'replace';
-  if (common === before.length && after.length > before.length) return 'append';
+  if (common === before.length && after.length > before.length) {
+    // Every row kept its identity and rows follow: REQ-CHAT-053's fourth shape when the last of them grew in place.
+    const last = before.length - 1;
+    return last >= 0 && changedInPlace(before[last]!, after[last]!) ? 'extend' : 'append';
+  }
   if (common === after.length && before.length > after.length) return 'truncate';
-  // The last displayed row kept its identity and grew, and rows were appended after it: REQ-CHAT-053's fourth shape.
-  const last = before.length - 1;
-  if (before.length > 0 && common === last && after.length >= before.length && before[last]!.key === after[last]!.key) return 'extend';
   return 'other';
+}
+
+/**
+ * Whether a displayed row under the same key draws something else now. The replica replaces a changed row rather than
+ * mutating it (`cache.ts`'s memo rests on the same fact), so the same object — or the same underlying row — is
+ * unchanged without reading its text; a group is rebuilt on every projection, so its text is compared.
+ */
+function changedInPlace(was: DisplayRow, now: DisplayRow): boolean {
+  if (was === now) return false;
+  if (was.shape === 'row' && now.shape === 'row' && was.row === now.row) return false;
+  return sourceTextOf(was) !== sourceTextOf(now);
 }
 
 /** REQ-CHAT-072: the count is in DISPLAYED rows, grouping-aware, and REQ-CHAT-168 fixes the wording at 0, 1 and many. */

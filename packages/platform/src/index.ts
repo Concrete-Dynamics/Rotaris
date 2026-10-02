@@ -6,6 +6,7 @@ export * from './machine-id.js';
 export * from './canonical.js';
 export * from './instance.js';
 export * from './spawn.js';
+export * from './process-group.js';
 export * from './artifact-environment.js';
 export * from './preferences.js';
 export * from './version.js';

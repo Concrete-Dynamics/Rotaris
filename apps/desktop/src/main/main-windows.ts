@@ -60,7 +60,6 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
     workspace: string,
     owner: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>,
   ) => Promise<{ readonly workspaceId: string; readonly storeFile: string } | undefined>;
-  readonly onWorkspaceClosed?: ((workspace: string) => void) | undefined;
   readonly closeGuard: (owner: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>) => Promise<boolean>;
   readonly activeRunCount: (workspaceId: string) => Promise<number | null>;
   readonly persistWorkspace: (workspace: string) => Promise<void>;
@@ -84,6 +83,11 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
    * its construction, for every main window built here: the launch's, a replacement's, an added one's, a hand-over's.
    */
   readonly postShowActivation?: (window: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>) => void;
+  /**
+   * REQ-WORKSPACE-013: the last live main window holding `workspace` has closed — a switch's outgoing window, a vetoed
+   * replacement, or one of several windows. Main cancels that workspace's initialization run here; nothing else did.
+   */
+  readonly workspaceClosed?: (workspace: string) => void;
 }
 
 interface WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TDialog> {
@@ -160,6 +164,19 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
       if (!this.dependencies.adapter.isDestroyed(record.win)) return this.#view(record);
     }
     return undefined;
+  }
+
+  /**
+   * The live main windows holding `workspace` (REQ-STARTUP-163 keeps it to one; a switch's two windows hold two roots).
+   * A message about one workspace's state goes to these and to no other window (REQ-WORKSPACE-105, PD-SHELL-001).
+   */
+  holding(workspace: string): readonly MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>[] {
+    const holders: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>[] = [];
+    for (const record of this.#records.values()) {
+      if (this.dependencies.adapter.isDestroyed(record.win) || record.workspace === '(no workspace)') continue;
+      if (this.dependencies.samePath(workspace, record.workspace)) holders.push(this.#view(record));
+    }
+    return holders;
   }
 
   ordered(): readonly MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>[] {
@@ -542,12 +559,12 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     if (!record) return;
     record.deferredOffer?.cancel();
     this.#records.delete(id);
-    this.dependencies.onWorkspaceClosed?.(record.workspace);
     const index = this.#focusOrder.indexOf(id);
     if (index >= 0) this.#focusOrder.splice(index, 1);
     this.dependencies.adapter.disposeResources(record.win, record.wcId, record.personaWindows, record.terminalWindows);
     const unshown = record.approvals.splice(0);
     if (unshown.length > 0) this.dependencies.unshownApprovals?.(unshown);
+    if (record.workspace !== '(no workspace)' && this.#windowHolding(record.workspace) === undefined) this.dependencies.workspaceClosed?.(record.workspace);
   }
 }
 

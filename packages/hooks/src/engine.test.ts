@@ -3,8 +3,31 @@ import { FakeClock } from '@rotaris/kernel';
 import type { HookEntry } from '@rotaris/config';
 import type { HookFinishPayload, HookStartPayload } from '@rotaris/contracts';
 import { HookEngine, type HookSinks } from './engine.js';
+import { buildToolPayload, serializePayload } from './payload.js';
 import type { Outcome } from './verdict.js';
 import { hook } from './hooks.test.js';
+
+/**
+ * REQ-HOOKS-139 measures its bounds under one reference condition: "a single execution thread … timing the named operation
+ * alone". One wall-clock sample on a shared host also counts every moment the scheduler gave the CPU to another process,
+ * so it measures the host's load as much as the operation. The fastest of a handful of runs is the run nearest the
+ * reference condition, and an operation genuinely over its bound is over it in every run, so the best of them is too
+ * (the repair of the-hooks-payload-bound-test-reads-one-wall-clock-sample-and-fails-under-host-load.md).
+ * The fastest run is a warm one: a cost paid only on an operation's first call, such as a lazy one-time setup, is not in
+ * it. The reference condition times the operation "excluding application start-up" with "a warm file-system cache", and
+ * a one-time setup is start-up's, not the operation's; a cost paid on every call is in every run, the fastest included.
+ */
+const BOUND_SAMPLES = 7;
+function bestOfMs<T>(samples: number, operation: () => T): { ms: number; result: T } {
+  let best = Infinity;
+  let result!: T;
+  for (let i = 0; i < samples; i += 1) {
+    const started = process.hrtime.bigint();
+    result = operation();
+    best = Math.min(best, Number(process.hrtime.bigint() - started) / 1e6);
+  }
+  return { ms: best, result };
+}
 
 /** A fake runner: the command names the outcome; `wait:<ms>` holds the fake clock's timer. */
 function harness(hooks: HookEntry[], withheld: HookEntry[] = [], planGateHeld?: () => boolean) {
@@ -133,17 +156,18 @@ describe('the HookEngine', () => {
     expect(JSON.stringify(t.events)).not.toContain('ghp_example');
     expect(JSON.stringify(t.timeline)).not.toContain('ghp_example');
   });
-  it('REQ-HOOKS-139: resolving/gating 100 entries and building a 100 KB payload stay inside their bounds', async () => {
+  it('REQ-HOOKS-139: resolving/gating 100 entries and building a 100 KB payload stay inside their bounds', () => {
     const many = Array.from({ length: 100 }, (_, i) => hook({ event: i % 2 ? 'pre_tool' : 'post_tool', index: i, matcher: i % 3 ? 'git push *' : '' }));
-    const s1 = process.hrtime.bigint();
-    const t = harness(many);
-    expect(Number(process.hrtime.bigint() - s1) / 1e6).toBeLessThan(50);
+    const configuration = bestOfMs(BOUND_SAMPLES, () => harness(many));
+    expect(configuration.ms).toBeLessThan(50);
     const big = { command: 'x'.repeat(100_000) };
-    const s2 = process.hrtime.bigint();
-    const { buildToolPayload, serializePayload } = await import('./payload.js');
-    serializePayload(buildToolPayload({ event: 'pre_tool', toolName: 'terminal', arguments: big, sessionId: 's', workspace: 'w', command: big.command }));
-    expect(Number(process.hrtime.bigint() - s2) / 1e6).toBeLessThan(10);
-    expect(t.engine.hasHooksFor('pre_tool')).toBe(true);
+    // REQ-HOOKS-139 times "the named operation alone": building and serialising the payload. The module is imported with
+    // the file, so no import's resolution is charged to the window (the repair of
+    // the-hooks-payload-bound-test-times-a-module-import-with-the-payload.md).
+    const payload = bestOfMs(BOUND_SAMPLES, () => serializePayload(buildToolPayload({ event: 'pre_tool', toolName: 'terminal', arguments: big, sessionId: 's', workspace: 'w', command: big.command })));
+    expect(payload.ms).toBeLessThan(10);
+    expect(payload.result.byteLength).toBeGreaterThan(100_000);
+    expect(configuration.result.engine.hasHooksFor('pre_tool')).toBe(true);
   });
 });
 

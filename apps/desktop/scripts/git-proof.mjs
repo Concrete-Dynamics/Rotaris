@@ -27,6 +27,8 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { restatedFacts } from './lib/restated-facts.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -56,10 +58,10 @@ const PROBES = [
   '[data-testid="git-new-worktree"]', '[data-testid="git-merge"]', '[data-testid="worktree-dialog"]', '[data-testid="start-session-dialog"]', '[data-testid="git-confirm-force"]', '[data-testid="git-failure"]',
 ];
 
-function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
+async function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -68,6 +70,7 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000)
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const probes = {};
@@ -128,7 +131,7 @@ commit('third (local only)');
 const results = {};
 
 // 1. Painted, with the divider dragged in by keyboard: click it, then Left three times (16 px each: 480 → 528).
-const painted = launch('painted', workspace, local, preferences, {
+const painted = await launch('painted', workspace, local, preferences, {
   ROTARIS_CAPTURE_VIEW: '5',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="git-divider"]@3200',
   ROTARIS_CAPTURE_KEYS: 'Left@3600;;Left@3800;;Left@4000',
@@ -155,6 +158,10 @@ const painted = launch('painted', workspace, local, preferences, {
   if (divider?.data?.['aria-valuenow'] !== '528') throw new Error(`the divider did not move by the three Left presses: aria-valuenow=${divider?.data?.['aria-valuenow'] ?? 'absent'}`);
   const read = readLine(painted.log);
   if (!read) throw new Error('no "git view: N reads in M ms" line in the log');
+  // PD-MONITOR-002, live-run finding a71-9: the line is the workspace service's, which did the reads; main does not say it again.
+  if (!/workspace service: git view: \d+ reads in \d+ ms/.test(painted.log)) throw new Error('the git view line is not the workspace service\'s');
+  const restated = restatedFacts(painted.log);
+  if (restated.length > 0) throw new Error(`a fact reached the log twice: ${restated.map((r) => `line ${r.line}, ${r.fact} (owner: ${r.owner}): ${r.text}`).join(' | ')}`);
   const stored = JSON.parse(readFileSync(join(preferences, 'preferences.json'), 'utf8'));
   if (JSON.stringify(stored['panels/git']?.sizes?.[1]) !== '528') throw new Error(`panels/git was not written as [.., 528]: ${JSON.stringify(stored['panels/git'])}`);
   results.painted = { branch: 'main', sync: text(p, '[data-testid="git-sync"]')[0], rows: r.length, history: commits.length, local: local1.length, reads: read.reads, readMs: read.ms, divider: 528, png: painted.png };
@@ -162,7 +169,7 @@ const painted = launch('painted', workspace, local, preferences, {
 
 // 2. Create a worktree through the dialog: the branch typed into the focused Branch field, the directory derived, Create.
 const derived = join(root, 'feature-proof');
-const created = launch('create', workspace, local, preferences, {
+const created = await launch('create', workspace, local, preferences, {
   ROTARIS_CAPTURE_VIEW: '5',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="git-new-worktree"]@2800;;[data-testid="worktree-create"]@4600',
   ROTARIS_CAPTURE_TYPE: 'feature/proof>>no-enter@3500',
@@ -182,7 +189,7 @@ const created = launch('create', workspace, local, preferences, {
 }
 
 // 3. An isolated session through the launch dialog; the scripted run writes NOTES.md, which must land in the worktree.
-const isolated = launch('isolated', workspace, local, preferences, {
+const isolated = await launch('isolated', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'write,answer',
   ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Write the notes.>>composer@4400',
@@ -226,7 +233,7 @@ const isolated = launch('isolated', workspace, local, preferences, {
 
 // 4. Delete the manual worktree through the two-step confirmation: a file dropped in first so Git refuses without --force.
 writeFileSync(join(derived, 'DROPPED.txt'), 'uncommitted work\n');
-const deleted = launch('delete', workspace, local, preferences, {
+const deleted = await launch('delete', workspace, local, preferences, {
   ROTARIS_CAPTURE_VIEW: '5',
   ROTARIS_CAPTURE_CLICKS: 'button[aria-label="Delete worktree feature/proof"]@2800;;[data-testid="git-confirm-delete"] .btn-danger@3600;;[data-testid="git-confirm-force"] .btn-danger@5200',
   ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '7500',
@@ -244,7 +251,7 @@ const deleted = launch('delete', workspace, local, preferences, {
 }
 
 // 5. Relaunch: the split dragged in (1) is restored from panels/git.
-const relaunch = launch('relaunch', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
+const relaunch = await launch('relaunch', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
 {
   const divider = first(relaunch.probes, '[data-testid="git-divider"]');
   if (divider?.data?.['aria-valuenow'] !== '528') throw new Error(`the stored split was not restored: aria-valuenow=${divider?.data?.['aria-valuenow'] ?? 'absent'}`);
@@ -253,13 +260,16 @@ const relaunch = launch('relaunch', workspace, local, preferences, { ROTARIS_CAP
 
 // 6. PATH without Git: the header's empty version, the notice raised in main, no dialog.
 const noGitPath = process.platform === 'win32' ? 'C:\\Windows\\System32' : '/nonexistent';
-const noGit = launch('no-git', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500', PATH: noGitPath, Path: noGitPath });
+const noGit = await launch('no-git', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500', PATH: noGitPath, Path: noGitPath });
 {
   const p = noGit.probes;
   if (text(p, '[data-testid="git-branch"]')[0] !== 'not a git repository') throw new Error(`with no git the header reads "${text(p, '[data-testid="git-branch"]')[0]}"`);
   if (text(p, '[data-testid="git-sync"]')[0] !== 'ahead —  behind —') throw new Error(`with no git the sync label reads "${text(p, '[data-testid="git-sync"]')[0]}"`);
   if (!/notice: Working without Git/.test(noGit.log)) throw new Error('the Working without Git notice was not raised');
-  if (!/git view: \d+ reads in \d+ ms \(git=false/.test(noGit.log)) throw new Error('the read did not end in the git=false state');
+  // The workspace service's line names the root ahead of the state: `git view: N reads in M ms (<root>: git=false …)`.
+  if (!/git view: \d+ reads in \d+ ms \([^\n]*git=false/.test(noGit.log)) throw new Error('the read did not end in the git=false state');
+  const restatedNoGit = restatedFacts(noGit.log);
+  if (restatedNoGit.length > 0) throw new Error(`with no git a fact reached the log twice: ${restatedNoGit.map((r) => r.text).join(' | ')}`);
   if (/Error box|dialog/i.test(noGit.log.split('\n').filter((l) => /git view/.test(l)).join('\n'))) throw new Error('a dialog was raised for a missing git');
   const headlines = text(p, '.notice__headline');
   // ADR-0049 holds ONE current notice: the first-launch provider notice, raised 800 ms after the workspace opened, may have replaced it by capture time.
@@ -270,7 +280,7 @@ const noGit = launch('no-git', workspace, local, preferences, { ROTARIS_CAPTURE_
 const plain = mkdtempSync(join(tmpdir(), 'rotaris-git-proof-plain-'));
 mkdirSync(join(plain, '.rotaris'), { recursive: true });
 writeFileSync(join(plain, '.rotaris', 'agents.yaml'), readFileSync(join(workspace, '.rotaris', 'agents.yaml'), 'utf8'));
-const notRepo = launch('not-a-repository', plain, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
+const notRepo = await launch('not-a-repository', plain, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
 {
   const p = notRepo.probes;
   if (text(p, '[data-testid="git-branch"]')[0] !== 'not a git repository') throw new Error(`for a plain folder the header reads "${text(p, '[data-testid="git-branch"]')[0]}"`);

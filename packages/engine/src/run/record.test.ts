@@ -29,6 +29,21 @@ describe('conversationOf — the decode a resume reads (PD-ORCH-005)', () => {
     // REQ-ORCH-088's retry: an empty replacement starts the conversation again.
     expect(conversationOf([row(1, 'message', user('a')), row(2, 'replacement', []), row(3, 'message', user('a again'))])).toEqual([user('a again')]);
   });
+
+  it('everRecorded: every message the record holds, the ones a compression or REQ-ORCH-088\'s restart replaced included (REQ-NOTIFY-112\'s per-task count reads it)', () => {
+    const rows = [row(1, 'message', user('a')), row(2, 'message', user('told once')), row(3, 'replacement', []), row(4, 'message', user('a again')), row(5, 'replacement', [user('summary')])];
+    const record = new ConversationRecord(undefined as unknown as SessionWriter, { agentMessagesOf: () => rows } as unknown as StoreDal, asSessionId('s'));
+    expect(record.everRecorded('t')).toEqual([user('a'), user('told once'), user('a again'), user('summary')]);
+    expect(new ConversationRecord(undefined as unknown as SessionWriter, undefined, asSessionId('s')).everRecorded('t')).toEqual([]);
+  });
+
+  it('everRecorded: a row that does not decode is skipped, so the per-task count never makes a resume stricter than `load` (REQ-NOTIFY-112, PD-ORCH-005)', () => {
+    const corrupt: AgentMessageRow = { ...row(2, 'message', null), body: '{not json' };
+    const rows = [row(1, 'message', user('told once')), corrupt, row(3, 'replacement', [user('summary')]), row(4, 'message', user('b'))];
+    const record = new ConversationRecord(undefined as unknown as SessionWriter, { agentMessagesOf: () => rows, agentConversation: () => rows.slice(2) } as unknown as StoreDal, asSessionId('s'));
+    expect(record.load('t')).toEqual([user('summary'), user('b')]);
+    expect(record.everRecorded('t')).toEqual([user('told once'), user('summary'), user('b')]);
+  });
 });
 
 describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () => {
@@ -115,7 +130,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
 
     // The iteration is recorded with its root's task id and the todo task it worked on, and closed with its outcome.
     const [iteration] = dal.iterationsOf(sid);
-    expect(iteration).toMatchObject({ iteration: 1, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: `${sid}:main:1`, state: 'closed', outcome: 'succeeded' });
+    expect(iteration).toMatchObject({ iteration: 1, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: expect.stringMatching(/^[0-9a-f]{8}$/), state: 'closed', outcome: 'succeeded' });
     const child = dal.childrenOf(sid)[0]!;
     expect(child.parent_id).toBe(iteration!.root_task_id);
 
@@ -132,16 +147,17 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
   });
 
   /** The residue a run host that died mid-`iteration` leaves: its row open, the count not yet moved, its todo task in progress. */
-  function dieIn(sid: SessionId, iteration: number, taskIdPart: string): void {
+  function dieIn(sid: SessionId, iteration: number): void {
     dal.db.prepare("UPDATE iterations SET state = 'open', outcome = NULL, closed_at = NULL WHERE session_id = ? AND iteration = ?").run(sid, iteration);
     const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
     const planner = structuredClone(stored.planner!);
-    for (const phase of planner.phases) for (const task of phase.tasks) if (task.id.endsWith(taskIdPart)) task.state = 'in_progress';
+    const own = dal.iterationsOf(sid).find((r) => r.iteration === iteration)!.todo_task_id;
+    for (const phase of planner.phases) for (const task of phase.tasks) if (task.id === own) task.state = 'in_progress';
     dal.updateSessionRun(sid, { iterations_completed: iteration - 1, todo: encodeStoredTodo({ ...stored, planner }) });
   }
   /** The same residue as a rest leaves it: the interruption recorded and the session `paused`, so the Continue action applies. */
-  function restIn(sid: SessionId, iteration: number, taskIdPart: string): void {
-    dieIn(sid, iteration, taskIdPart);
+  function restIn(sid: SessionId, iteration: number): void {
+    dieIn(sid, iteration);
     dal.setIterationInterruption(sid, iteration, 'pause');
     dal.db.prepare("UPDATE sessions SET execution_status = 'paused' WHERE session_id = ?").run(sid);
   }
@@ -152,7 +168,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     expect((await sessions.running(sid)!).status).toBe('completed');
     const root = dal.iterationsOf(sid)[0]!.root_task_id;
     const before = recorded(sid, root);
-    dieIn(sid, 1, ':main:1');
+    dieIn(sid, 1);
 
     expect(sessions.prompt(sid, 'second').ok).toBe(true);
     expect((await sessions.running(sid)!).status).toBe('completed');
@@ -175,7 +191,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     const { sessions } = sessionsWith(() => answer('Answered.'));
     const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
     expect((await sessions.running(sid)!).status).toBe('completed');
-    restIn(sid, 1, ':main:1');
+    restIn(sid, 1);
 
     expect(sessions.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
     expect((await sessions.running(sid)!).status).toBe('completed');
@@ -197,7 +213,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     expect(sessions.prompt(sid, 'SECOND').ok).toBe(true);
     await sessions.running(sid);
     const root2 = dal.iterationsOf(sid)[1]!.root_task_id;
-    dieIn(sid, 2, ':continued:2');
+    dieIn(sid, 2);
 
     expect(sessions.prompt(sid, 'THIRD').ok).toBe(true);
     expect((await sessions.running(sid)!).status).toBe('completed');
@@ -209,11 +225,12 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     expect(recorded(sid, root2).filter((m) => m.role === 'user').at(-1)).toEqual({ role: 'user', content: [{ kind: 'text', text: 'THIRD' }] });
   });
 
-  it('a continued task id steps past every id the todo holds, even one no iteration row carries (a run that died before its first iteration opened)', async () => {
+  it('a continued task id is unique among every id the todo holds, even one no iteration row carries (a run that died before its first iteration opened) and one of an earlier build\'s form', async () => {
     const { sessions } = sessionsWith(() => answer('Answered.'));
     const sid = (sessions.start(dal, 'C:/ws', 'FIRST') as { value: SessionId }).value;
     await sessions.running(sid);
-    // The residue: the continued prompt's task was appended and saved as `continued:2`, and the run died before iteration 2 opened.
+    // The residue: the continued prompt's task was appended and saved — under the id form an earlier build minted,
+    // `<session>:continued:2`, which still reads back (REQ-CHAT-089's repair) — and the run died before iteration 2 opened.
     const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
     const planner = { ...stored.planner!, phases: [...stored.planner!.phases, { name: 'Continued Prompts', tasks: [{ id: `${sid}:continued:2`, text: 'LOST', state: 'pending' as const, consecutiveRetries: 0 }] }] };
     dal.updateSessionRun(sid, { todo: encodeStoredTodo({ ...stored, planner }) });
@@ -221,7 +238,10 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     expect(sessions.prompt(sid, 'SECOND').ok).toBe(true);
     expect((await sessions.running(sid)!).status).toBe('completed');
     const tasks = decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases.flatMap((p) => p.tasks);
-    expect(tasks.map((t) => [t.id, t.text, t.state])).toEqual([[`${sid}:main:1`, 'FIRST', 'complete'], [`${sid}:continued:2`, 'LOST', 'complete'], [`${sid}:continued:3`, 'SECOND', 'complete']]);
+    expect(tasks.map((t) => [t.text, t.state])).toEqual([['FIRST', 'complete'], ['LOST', 'complete'], ['SECOND', 'complete']]);
+    expect(tasks[1]!.id).toBe(`${sid}:continued:2`);
+    for (const t of [tasks[0]!, tasks[2]!]) expect(t.id).toMatch(/^[0-9a-f]{8}$/);
+    expect(new Set(tasks.map((t) => t.id)).size).toBe(tasks.length);
   });
 
   it('REQ-GIT-051: an open iteration declined closes at that moment, so its one capture is attempted then — before this run\'s first; resumed, it is captured once, when it closes', async () => {
@@ -229,7 +249,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     const { sessions } = sessionsWith(() => answer('Answered.'), undefined, () => ({ enabled: true, capture: async (input) => { captures.push({ iteration: input.iteration, childName: input.childName }); return { outcome: 'captured', detail: '' } as never; } }));
     const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
     await sessions.running(sid);
-    restIn(sid, 1, ':main:1');
+    restIn(sid, 1);
     captures.length = 0;
     expect(sessions.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
     await sessions.running(sid);
@@ -237,7 +257,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     expect(captures[0]).toEqual({ iteration: 1, childName: '' });
     expect(captures.map((c) => c.iteration)).toEqual([1, ...dal.iterationsOf(sid).slice(1).map((r) => r.iteration)]);
 
-    restIn(sid, dal.iterationsOf(sid).length, ':main:1');
+    restIn(sid, dal.iterationsOf(sid).length);
     captures.length = 0;
     expect(sessions.prompt(sid, 'again').ok).toBe(true);
     await sessions.running(sid);
@@ -456,7 +476,8 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     dal.db.prepare("UPDATE iterations SET state = 'open', outcome = NULL, closed_at = NULL WHERE session_id = ? AND iteration = 1").run(sid);
     const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
     const planner = structuredClone(stored.planner!);
-    for (const phase of planner.phases) for (const task of phase.tasks) if (task.id.endsWith(':main:1')) task.state = 'in_progress';
+    const own = dal.iterationsOf(sid).find((r) => r.iteration === 1)!.todo_task_id;
+    for (const phase of planner.phases) for (const task of phase.tasks) if (task.id === own) task.state = 'in_progress';
     dal.updateSessionRun(sid, { iterations_completed: 0, todo: encodeStoredTodo({ ...stored, planner }) });
   }
 
@@ -569,7 +590,7 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     await new Promise((r) => setTimeout(r, 5));
     clock.advance(30_000);
     expect((await s.sessions.running(sid)!).status).toBe('completed');
-    expect(dal.timelineOf(sid).map((t) => t.name)).toContain('child_timeout_fallback');
+    expect(dal.timelineOf(sid).map((t) => t.name)).toContain('fallback_model');
     // The precondition: each agent's later request carried instructions its first did not.
     const requests = (persona: string) => s.client.requests.filter((r) => personaOf(r) === persona).map(systemOf);
     for (const persona of ['orchestrator', 'child']) {

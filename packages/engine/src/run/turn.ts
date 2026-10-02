@@ -3,17 +3,19 @@ import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel
 /** REQ-CHAT-164: ten seconds of provider silence on a call in flight. */
 const STALL_AFTER = millis(10_000);
 import { terminalRowStreamId, type ApprovalOption, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
-import type { AgentBackend, ChatMessage, ContentPart, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ContentPart, DispatchRetry, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import type { LoopSupervisor, SupervisorEscalation } from './supervisor.js';
 import { resilientStep, type StepOutcome, type TurnResilience } from './ladder.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
-import type { ModelChoice } from './resilience.js';
+import { providerIdentity, type ModelChoice } from './resilience.js';
 import { CompressionRunner, type TurnCompression } from './compression.js';
 import { Conversation, type ConversationRecorder } from './conversation.js';
 import { interruptedResult } from './interruption.js';
 import type { FingerprintCheck } from './record.js';
+import type { AgentGrant } from '../children/personas.js';
+import { duringImposedWait, type ImposedWaitPort } from '../children/stall.js';
 
 /**
  * The tool loop inside one iteration (REQ-TOOLS-180, REQ-ORCH-146's non-native case): step the model;
@@ -67,6 +69,18 @@ export interface ToolPort {
   /** The ONE resolution's listing (REQ-TOOLS-010). */
   specs(): readonly ToolSpec[];
   /**
+   * REQ-MONITOR-060/061 (live-run finding K1): the NATIVE tools that same resolution kept, in declaration order — the set
+   * the inspector shows for the agent this port serves, policy narrowing applied (an MCP tool is shown under its server).
+   * Optional because a port built without the registry (a test double) has no resolution to report.
+   */
+  resolvedTools?(): readonly string[];
+  /**
+   * REQ-MCP-065 / REQ-TOOLS-006: the grant in force once `ready()` has resolved — the native set `resolvedTools` reports and
+   * the MCP surface left after every control — or null before then. A child's row records it (`ChildLedger.recordGrant`).
+   * Optional because a test double has no resolution to report; a port without it records no grant.
+   */
+  grant?(): AgentGrant | null;
+  /**
    * ADR-0034 (Part S): a port whose surface needs discovery before its listing is complete resolves this first; the turn
    * awaits it before reading `specs()` or the prompt section, bounded by the port (REQ-MCP-053's 35 s at most).
    */
@@ -97,6 +111,13 @@ export interface ToolPort {
   cancelQuestions?(requestId: string): boolean;
   /** REQ-CHAT-097: what the whole-session update publishes for this port's conversation. */
   pendingQuestions?(): readonly QuestionPrompt[];
+  /**
+   * REQ-SESSION-094: the run has ended. Every call this port still has open is settled at once, as failed with
+   * `cutOff`, and from here nothing the port's gate would write for any call reaches the session — no settle, no
+   * `tool.finish`, no issue, no audit or timeline entry, no approvals mirror — so a call the stop's grace detached writes
+   * nothing when it returns. Idempotent. Optional because a port with no sink of its own has nothing to close.
+   */
+  close?(cutOff: string): void;
 }
 
 export interface TurnDeps {
@@ -159,6 +180,16 @@ export interface TurnDeps {
    * progress rule and the list of paths a child changed; absent means nobody is listening.
    */
   readonly onToolCompleted?: ((call: PortToolCall, result: PortToolResult) => void) | undefined;
+  /** REQ-ORCH-089: every tool call this agent dispatches, as it starts; `onToolCompleted` reports its end. The children's stall watch reads both. */
+  readonly onToolStarted?: ((call: PortToolCall) => void) | undefined;
+  /** REQ-ORCH-089: every part each model step streams, by its kind (`TurnSink.event`) — the stall watch's "model event or token". */
+  readonly onModelEvent?: ((kind: string) => void) | undefined;
+  /**
+   * OQ-173: told of each wait the run holds this agent in between its model steps — the ladder's backoff and suspended
+   * wait, and a context compression's own model call, automatic or on a rejection — so the stall watch reports a wait and
+   * not a stall; the returned release ends it. Absent means nobody is watching.
+   */
+  readonly onImposedWait?: ImposedWaitPort | undefined;
   /** PD-ORCH-005 clause 1: observes every message as it joins this agent's conversation — the conversation record. */
   readonly recorder?: ConversationRecorder | undefined;
   /**
@@ -188,12 +219,28 @@ export interface TurnOutcome {
   readonly paused?: boolean | undefined;
 }
 
+/** REQ-MONITOR-134: the message a steering prompt joins a conversation as, explicitly marked as a steering prompt. */
+export function steeringMessage(prompt: SteeringPrompt): ChatMessage {
+  return { role: 'user', content: [{ kind: 'text', text: `${STEERING_MARK}${prompt.text}` }] };
+}
+const STEERING_MARK = '[Steering prompt] ';
+
+/** Whether `message` is a steering prompt as `steeringMessage` writes it. */
+export function isSteeringMessage(message: ChatMessage | undefined): boolean {
+  return message !== undefined && message.role === 'user' && message.content.some((p) => p.kind === 'text' && p.text.startsWith(STEERING_MARK));
+}
+
+/** REQ-MONITOR-134: the prompt is marked injected — once, wherever it joined the agent's conversation. */
+export function recordSteeringInjected(writer: SessionWriter, agentName: string, prompt: SteeringPrompt, extra: Readonly<Record<string, unknown>> = {}): void {
+  writer.appendTimeline('steering_injected', 'user', `A steering prompt reached ${agentName} (${prompt.id.slice(0, 8)}).`, { prompt_id: prompt.id, agent: agentName, ...extra });
+}
+
 /** REQ-MONITOR-134: delivered as a message explicitly marked as a steering prompt; the supervisor counts it as a user instruction. */
 function injectSteering(deps: TurnDeps, conversation: Conversation): number {
   const pending = deps.steering?.() ?? [];
   for (const s of pending) {
-    conversation.push({ role: 'user', content: [{ kind: 'text', text: `[Steering prompt] ${s.text}` }] });
-    deps.writer.appendTimeline('steering_injected', 'user', `A steering prompt reached ${deps.agentName} (${s.id.slice(0, 8)}).`, { prompt_id: s.id, agent: deps.agentName });
+    conversation.push(steeringMessage(s));
+    recordSteeringInjected(deps.writer, deps.agentName, s);
     deps.supervisor?.noteUserInstruction();
   }
   return pending.length;
@@ -220,6 +267,8 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
    * than dropped with the report it belonged to.
    */
   const observeRequestUsage = (u: PricedUsage): void => {
+    // REQ-SESSION-094: a step the run gave up on and that returned after it ended counts toward nothing.
+    if (deps.detached?.() === true) return;
     usage = { input: usage.input + u.input, output: usage.output + u.output };
     deps.onRequestUsage?.(u);
   };
@@ -229,6 +278,8 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
    */
   const compression = deps.compression ? new CompressionRunner(deps.compression, { writer, clocks, warn: deps.warn, agent: deps.agentName }) : null;
   let condensed = false;
+  /** OQ-173: a compression's own model call is a wait the run imposes on this agent, not its silence. */
+  const compressing = (pass: () => Promise<boolean>): Promise<boolean> => duringImposedWait(deps.onImposedWait, 'compression', pass);
   // Part AO
   /**
    * Part AO (ADR-0060 decision 1, its second reader): this conversation is LIVE for the span of the turn, and the
@@ -271,7 +322,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
     const afterSupervision = stopsHere();
     if (afterSupervision) return afterSupervision;
     if (compression && !signal.aborted && compression.due(conv, condensed)) {
-      if (await compression.run(conv, 'automatic', condensed, signal)) condensed = true;
+      if (await compressing(() => compression.run(conv, 'automatic', condensed, signal))) condensed = true;
       const afterCompression = stopsHere();
       if (afterCompression) return afterCompression;
     }
@@ -288,12 +339,12 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
      * turn's first call is the one that carries it.
      */
     const resilience: TurnResilience | undefined = deps.resilience && compression
-      ? { ...deps.resilience, condense: async () => { const ok = await compression.run(conv, 'rejection', condensed, signal); if (ok) condensed = true; return ok; }, resumeIssue: deps.parentResume === true && steps === 1 }
+      ? { ...deps.resilience, condense: async () => { const ok = await compressing(() => compression.run(conv, 'rejection', condensed, signal)); if (ok) condensed = true; return ok; }, resumeIssue: deps.parentResume === true && steps === 1 }
       : deps.resilience;
     // PD-MONITOR-001 revision 2: the ladder prices each request at its cell's model. The bare path has no catalogue to read
     // rates from — it runs only where no resilience was configured — so it keeps a reported figure and prices nothing itself.
     const report = resilience
-      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName, onRequestUsage: observeRequestUsage }, resilience, (choice, unresponsiveMs) => step(stepDeps, choice, conv.snapshot(), specs, signal, unresponsiveMs, segment), signal)
+      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName, onRequestUsage: observeRequestUsage, imposedWait: deps.onImposedWait }, resilience, (choice, unresponsiveMs) => step(stepDeps, choice, conv.snapshot(), specs, signal, unresponsiveMs, segment), signal)
       : await (async () => { const o = await step(stepDeps, { model: deps.model, thinking: deps.thinking }, conv.snapshot(), specs, signal, null, segment); observeRequestUsage(priceRequest(o.report.usage, null)); return o.report; })();
     lastReport = report;
     if (deps.detached?.() === true) return { report: { ...report, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
@@ -354,6 +405,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       const call: PortToolCall = { callId: c.callId, name: c.name, rawArgs: c.args, persona: deps.persona, agentId: deps.agentName, agentName: deps.agentName };
       // REQ-ORCH-134 (PD-ORCH-005 clause 2): the call runs under the turn's signal and the pause's tool deadline.
       const callSignal = deps.cutCalls ? AbortSignal.any([signal, deps.cutCalls]) : signal;
+      deps.onToolStarted?.(call);
       const r = await tools.dispatch(call, callSignal);
       if (deps.detached?.() === true) return { report: { status: 'succeeded', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
       const interrupted = r.interrupted === true || callSignal.aborted;
@@ -383,6 +435,19 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
     unregister?.(); // Part AO
     conv.close(); // PD-ORCH-005: a manual pass that finishes after this turn replaces and records nothing.
   }
+}
+
+/**
+ * OQ-110 (ruled 2026-09-29, R-067): the session-log line for one retry the dispatch layer absorbed. The dispatch
+ * layer's retries (REQ-CONFIG-086's `num_retries`, default 5) come before the resilience ladder (REQ-ORCH-091/092),
+ * which takes over only when they are exhausted, so a retry absorbed there records no issue and no timeline entry —
+ * this line is the one trace it leaves, with the status the failed attempt met and the delay waited before the retry.
+ * It goes out through the run's `warn`, which the session log takes at its default WARNING level (REQ-SESSION-142).
+ */
+export function dispatchRetryLine(agentName: string, provider: string, modelId: string, r: DispatchRetry): string {
+  const met = r.status === null ? `a connection failure${r.failure === undefined ? '' : ` (${r.failure})`}` : `HTTP ${r.status}`;
+  // The provider as the ladder's own lines name it (`providerIdentity`), so the two layers' lines about one call agree.
+  return `model request retried by the dispatch layer: ${agentName} on ${provider}/${modelId} met ${met} and waited ${r.delayMs} ms before retry ${r.attempt} of ${r.of} (REQ-CONFIG-086 num_retries; the ladder of REQ-ORCH-091/092 takes over only when they are exhausted)`;
 }
 
 /**
@@ -421,7 +486,7 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
     stall.timer?.cancel();
     stall.timer = clocks.timers.after(STALL_AFTER, () => {
       const row = liveRow();
-      if (row === null) return;
+      if (row === null || deps.detached?.() === true) return;
       stalled = true;
       owner.markStalled(row, toIsoUtc(clocks.wall.instant()));
     });
@@ -448,9 +513,15 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
     writer.settleRow(reasoningIndex, reasoning, durationMs === undefined ? {} : { durationMs });
     reasoningIndex = null;
   };
+  /**
+   * REQ-SESSION-094: the run gave up on this step and has ended (`TurnDeps.detached`). Its stream is a binding into the
+   * finished session, so from here it writes and publishes nothing: no row appended, grown or settled.
+   */
+  const detached = (): boolean => deps.detached?.() === true;
   const sink = {
     started: () => { seen = true; timer?.cancel(); armStall(); },
     delta: (d: string) => {
+      if (detached()) return;
       outputArrived();
       // REQ-CHAT-163: a reasoning burst is finished the moment the answer body starts, so its row settles here
       // rather than at the end of the call - a thinking row that stayed live past its own content would keep
@@ -471,6 +542,7 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
      * REQ-CHAT-059 keys a thinking row by its START TIME, which is why `startedAt` is stamped on the append.
      */
     reasoning: (d: string) => {
+      if (detached()) return;
       outputArrived();
       reasoning += d;
       if (reasoningIndex === null) {
@@ -482,6 +554,9 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
       }
     },
     usage: () => { outputArrived(); },
+    event: (kind: string) => { deps.onModelEvent?.(kind); },
+    // OQ-110: a retry the dispatch layer absorbed is written where a person diagnosing the run reads (REQ-SESSION-142).
+    retried: (r: DispatchRetry) => { deps.warn(dispatchRetryLine(deps.agentName, providerIdentity(deps.resilience?.catalogue ?? [], choice.model), choice.model.modelId, r)); },
   };
   let report: TurnReport;
   try {
@@ -496,7 +571,9 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
   }
   // REQ-CHAT-164: "when a streamed phase completes, its animation MUST stop where it stands" - settling does that,
   // and no completion row is appended for either phase.
-  settleReasoning();
-  if (index !== null) writer.upsertMessageRow(segment, 'agent', report.text || text, true, {});
+  if (!detached()) {
+    settleReasoning();
+    if (index !== null) writer.upsertMessageRow(segment, 'agent', report.text || text, true, {});
+  }
   return { report, unresponsive: unresponsive && !signal.aborted };
 }

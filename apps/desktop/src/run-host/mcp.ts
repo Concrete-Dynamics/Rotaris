@@ -12,7 +12,7 @@ import {
 } from '@rotaris/config';
 import { errorObservation, observation, type ToolExecutor } from '@rotaris/agent-tools';
 import type { McpGrantEvidence, SessionWriter } from '@rotaris/engine';
-import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SessionConnections, ToolDiscovery, type Connected, type McpLog, type ServerDescription } from '@rotaris/mcp';
+import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SETUP_SHUTDOWN_GRACE_MS, SessionConnections, ToolDiscovery, type Connected, type McpLog, type ServerDescription } from '@rotaris/mcp';
 
 /**
  * The run host's MCP holder — ADR-0034's placement as READ on first execution: every path lives here, in the one
@@ -26,7 +26,11 @@ import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SessionConnections
  * reloads, REQ-MCP-047), the probe path, the per-session connection registries (closed at shutdown, the one place
  * the engine releases session locks today), the session override of REQ-MCP-094 (never on disk, discarded at
  * exit), the ONE diagnostic sink, and the per-persona surface memo keyed on the versions of its three inputs so the
- * spawn-time evidence and the tool port read literally one resolution (REQ-TOOLS-010, REQ-MCP-065).
+ * spawn-time evidence and the tool port read literally one resolution (REQ-TOOLS-010, REQ-MCP-065). *Falsified
+ * 2026-09-29 (live-run finding D7; the sentence is kept as written):* the key also carries the reserved names, and the
+ * evidence reserves none while the port reserves the persona's native tools, so a spawn resolves twice. The two differ
+ * only where a server tool collides with a native name and is offered under its prefix; the second resolution now
+ * writes no line the first already wrote (`announced`), which is what the doubled log lines were.
  */
 export interface McpHostDeps {
   readonly clocks: Clocks;
@@ -51,7 +55,7 @@ export interface McpHostDeps {
    * moment that step finishes" without main asking on a cadence (SR-3). Optional so the host stays
    * constructible in a test that does not care.
    */
-  readonly publishSetup?: ((workspaceRoot: string, status: McpSetupStatus) => void) | undefined;
+  readonly publishSetup?: ((status: McpSetupStatus) => void) | undefined;
 }
 
 export interface McpSessionContext {
@@ -104,6 +108,14 @@ export class McpHost {
   private configurationVersion = 0;
   private readonly sessions = new Map<string, SessionConnections>();
   private readonly surfaces = new Map<string, SurfaceMemo>();
+  /**
+   * Live-run finding D7 (R-067): what each persona's resolutions have already written, per surface key WITHOUT the
+   * reserved names. The spawn evidence resolves with none reserved and the tool port with the persona's native names, so
+   * the one spawn resolves twice; a line the first resolution wrote (the surface line, an unkeyed diagnostic such as
+   * REQ-MCP-059's grant count) is not written again by the second. A surface the reserved names changed — a collision
+   * offered under its prefix — renders a different surface line, which is written. Cleared with the memo it shadows.
+   */
+  private readonly announced = new Map<string, Set<string>>();
   private readonly preparing = new Map<string, Promise<void>>();
   private readonly mcpLog: McpLog;
 
@@ -120,7 +132,8 @@ export class McpHost {
   /** ONE sink: the scope rules, then the log and — for a user-bound warning — REQ-MCP-044's two channels. */
   deliver(d: Diagnostic, ctx: McpSessionContext | null = null): boolean {
     if (!this.sink.admit(d, ctx?.sessionId ?? '')) return false;
-    this.deps.log(`mcp: ${d.message}`, d.severity === 'info' ? 'info' : 'warn');
+    // A `debug` diagnostic is written at `debug` (REQ-MCP-059, PD-MONITOR-002; A41); it had been folded into `warn`.
+    this.deps.log(`mcp: ${d.message}`, d.severity === 'debug' ? 'debug' : d.severity === 'info' ? 'info' : 'warn');
     if (d.channels === 'user' && d.severity === 'warning') {
       this.deps.acknowledge({ kind: 'warn', title: d.message });
       ctx?.writer?.recordIssue({ kind: 'mcp_config', severity: 'warning', actor: 'orchestrator', message: d.message, metadata: { ...(d.server === undefined ? {} : { server: d.server }), ...(d.persona === undefined ? {} : { persona: d.persona }) } });
@@ -145,6 +158,7 @@ export class McpHost {
       this.configurationVersion += 1;
       this.discovery.invalidate();
       this.surfaces.clear();
+      this.announced.clear();
       this.preparing.clear();
     }
     this.sink.newLoad();
@@ -156,6 +170,7 @@ export class McpHost {
     if (enabled) this.overrides.delete(name); else this.overrides.add(name);
     this.overrideVersion += 1;
     this.surfaces.clear();
+    this.announced.clear();
     this.deps.log(`mcp: server '${name}' ${enabled ? 'enabled' : 'disabled'} for this session by the settings toggle (REQ-MCP-094; not persistent)`);
   }
   isOverridden(name: string): boolean {
@@ -208,7 +223,8 @@ export class McpHost {
 
   /** REQ-TOOLS-010 / REQ-MCP-061: the surface for a persona, memoised on the versions of its inputs; the same object feeds the prompt, the callable set and the spawn evidence. */
   surfaceFor(cfg: LoadedConfiguration, workspaceRoot: string, role: string, ctx: McpSessionContext | null, reserved: ReadonlySet<string> = new Set()): PersonaMcpSurface {
-    const key = `${workspaceRoot}|${role}|${this.configurationVersion}|${this.overrideVersion}|${this.discovery.version}|${[...reserved].sort(compareCodePoints).join(',')}`;
+    const base = `${workspaceRoot}|${role}|${this.configurationVersion}|${this.overrideVersion}|${this.discovery.version}`;
+    const key = `${base}|${[...reserved].sort(compareCodePoints).join(',')}`;
     const memo = this.surfaces.get(key);
     if (memo) return memo.surface;
     const entry = cfg.personas[role];
@@ -218,7 +234,13 @@ export class McpHost {
       sessionDisabled: this.overrides, availability: (n) => this.availabilityOf(cfg, n), reservedNames: reserved,
       discovered: (n) => { const s = cfg.mcp.servers[n]; if (!s) return null; const d = this.discovery.peek({ name: n, description: this.descriptionOf(s), workspaceRoot }); return d ? { tools: d.tools, failed: d.failed } : null; },
     });
-    for (const d of r.diagnostics) this.deliver(d, ctx);
+    let said = this.announced.get(base);
+    if (!said) { said = new Set(); this.announced.set(base, said); }
+    for (const d of r.diagnostics) {
+      if (d.key === '' && said.has(d.message)) continue;
+      if (d.key === '') said.add(d.message);
+      this.deliver(d, ctx);
+    }
     // REQ-MCP-041's detailed line, once per server per process, beside the per-persona warning.
     for (const dropped of r.value.dropped) {
       if (dropped.reason !== 'unavailable') continue;
@@ -226,20 +248,9 @@ export class McpHost {
       if (s) this.deliver({ severity: 'info', scope: 'process', key: `mcp.unavailable-detail.${dropped.name}`, channels: 'log', message: `unavailable — raw command '${s.entry.command ?? ''}', resolved '${s.resolved?.command ?? ''}' [${(s.resolved?.args ?? []).join(' ')}] was not found on PATH (REQ-MCP-041)`, server: dropped.name });
     }
     this.surfaces.set(key, { key, surface: r.value, diagnostics: r.diagnostics });
-    this.deps.log(`mcp: surface for ${role} — callable ${r.value.active.map((a) => `${a.name}[${a.tools.map((t) => t.callable).join(',')}]`).join(' ') || '(none)'}; dropped ${r.value.dropped.map((d) => `${d.name}:${d.reason}`).join(' ') || '(none)'}; section ${JSON.stringify(renderMcpSection(r.value))}`);
+    const line = `mcp: surface for ${role} — callable ${r.value.active.map((a) => `${a.name}[${a.tools.map((t) => t.callable).join(',')}]`).join(' ') || '(none)'}; dropped ${r.value.dropped.map((d) => `${d.name}:${d.reason}`).join(' ') || '(none)'}; section ${JSON.stringify(renderMcpSection(r.value))}`;
+    if (!said.has(line)) { said.add(line); this.deps.log(line); }
     return r.value;
-  }
-
-  /** REQ-MCP-065 / REQ-MCP-114: the evidence written on the child's row at spawn, from the same memoised surface. */
-  evidenceFor(cfg: LoadedConfiguration, workspaceRoot: string, role: string): McpGrantEvidence {
-    const s = this.surfaceFor(cfg, workspaceRoot, role, null);
-    return {
-      granted: Object.fromEntries(s.active.map((a) => [a.name, a.tools.map((t) => t.callable)])),
-      servers: [
-        ...s.active.map((a) => ({ name: a.name, transport: a.entry.type, origin: a.origin, fate: 'connected' as const })),
-        ...s.dropped.map((d) => ({ name: d.name, transport: d.transport, origin: d.origin ?? '', fate: 'dropped' as const, reason: d.reason })),
-      ],
-    };
   }
 
   // ---- the session's executors ----------------------------------------------------------------------------------
@@ -357,16 +368,17 @@ export class McpHost {
 
   // ---- REQ-MCP-099 / REQ-MCP-112: the code-intelligence project setup (ADR-0035, Part T) ---------------------------
 
-  private readonly setups = new Map<string, { status: McpSetupStatus; abort: AbortController | null }>();
+  private setup: { status: McpSetupStatus; abort: AbortController | null } = { status: idleSetup(), abort: null };
+  /**
+   * The setup under way, from its start until its finished status is set, with the signal its host's shutdown fires
+   * (`endSetup`). Null while no setup runs.
+   */
+  private setupRun: { readonly ended: Promise<void>; readonly shutdown: AbortController } | null = null;
 
-  private setupFor(workspaceRoot: string): { status: McpSetupStatus; abort: AbortController | null } {
-    return this.setups.get(workspaceRoot) ?? { status: idleSetup(), abort: null };
-  }
-
-  /** Part AS: the ONE place a workspace's setup is assigned, so every change reaches its own subscriber. */
-  private setSetup(workspaceRoot: string, next: { status: McpSetupStatus; abort: AbortController | null }): void {
-    this.setups.set(workspaceRoot, next);
-    this.deps.publishSetup?.(workspaceRoot, next.status);
+  /** Part AS: the ONE place `setup` is assigned, so every change reaches the push of ADR-0064 and none can be forgotten. */
+  private setSetup(next: { status: McpSetupStatus; abort: AbortController | null }): void {
+    this.setup = next;
+    this.deps.publishSetup?.(next.status);
   }
 
   /**
@@ -379,16 +391,32 @@ export class McpHost {
     return cfg.mcp.servers[CODE_INTELLIGENCE_SERVER_NAME]?.availability.available === true;
   }
 
-  setupStatus(workspaceRoot: string, cfg: LoadedConfiguration | null = null): McpSetupStatus {
-    const status = this.setupFor(workspaceRoot).status;
-    return { ...status, applicable: cfg === null ? status.applicable : this.setupApplicable(cfg) };
+  setupStatus(cfg: LoadedConfiguration | null = null): McpSetupStatus {
+    return { ...this.setup.status, applicable: cfg === null ? this.setup.status.applicable : this.setupApplicable(cfg) };
   }
 
   /** REQ-MCP-112: cancellable at any point; the step in flight is terminated (REQ-MCP-099's ask, grace, tree kill) and the rest are not attempted. */
-  cancelSetup(workspaceRoot: string): McpSetupStatus {
-    const setup = this.setupFor(workspaceRoot);
-    if (setup.abort && setup.status.state === 'running') { setup.abort.abort(); this.deps.log(`mcp setup: cancellation requested for ${workspaceRoot}`); }
-    return setup.status;
+  cancelSetup(): McpSetupStatus {
+    if (this.setup.abort && this.setup.status.state === 'running') { this.setup.abort.abort(); this.deps.log('mcp setup: cancellation requested'); }
+    return this.setup.status;
+  }
+
+  /**
+   * REQ-WORKSPACE-092/109: the run host's shutdown ends the setup under way, and returns once its step — and everything
+   * the step started — has gone. Before, `shutdown` never reached the setup: the host exited with the step still running,
+   * and at an orderly quit the step and what it had launched outlived the application (measured 2026-10-01 on the built
+   * app: both still running 5 s after it exited;
+   * `docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+   * The step is asked to terminate and force-killed after `SETUP_SHUTDOWN_GRACE_MS`, a cancellation already under way
+   * included — REQ-MCP-099's 5 s grace is not given at a close, the build's reading of OQ-172. `dispatch`'s `shutdown`
+   * calls this and awaits it before the stores close (pinned in `dispatch.test.ts` and `workspace-proof` 8f).
+   */
+  async endSetup(): Promise<void> {
+    const run = this.setupRun;
+    if (run === null) return;
+    this.deps.log('mcp setup: ended by the run host\'s shutdown');
+    run.shutdown.abort();
+    await run.ended;
   }
 
   /**
@@ -398,47 +426,51 @@ export class McpHost {
    * "not a local launch" failure and no substitute command is tried; the contains-code walk once per run.
    */
   startSetup(cfg: LoadedConfiguration, workspaceRoot: string): { ok: true; status: McpSetupStatus } | { ok: false; reason: string } {
-    if (this.setupFor(workspaceRoot).status.state === 'running') return { ok: false, reason: 'A code-intelligence setup is already running for this workspace; wait for it to finish or cancel it first.' };
+    if (this.setup.status.state === 'running') return { ok: false, reason: 'A code-intelligence setup is already running for this workspace; wait for it to finish or cancel it first.' };
     const server = cfg.mcp.servers[CODE_INTELLIGENCE_SERVER_NAME];
     const steps = (): McpSetupStep[] => CODE_INTELLIGENCE_SETUP_STEPS.map((s) => ({ id: s.id, label: s.label, status: 'pending', detail: '', elapsedMs: null }));
     const startedAt = toIsoUtc(this.deps.clocks.wall.instant());
     const applicable = this.setupApplicable(cfg);
     if (!server) {
-      this.setSetup(workspaceRoot, { status: { provisioning: provisioning(), state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no code_intelligence server is configured' })), outcome: 'unavailable', message: `No server named '${CODE_INTELLIGENCE_SERVER_NAME}' is configured, so there is no code-intelligence runtime to set this workspace up for.`, containsCode: null, invocation: '', startedAt, applicable }, abort: null });
-      return { ok: true, status: this.setupFor(workspaceRoot).status };
+      this.setSetup({ status: { provisioning: provisioning(), state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no code_intelligence server is configured' })), outcome: 'unavailable', message: `No server named '${CODE_INTELLIGENCE_SERVER_NAME}' is configured, so there is no code-intelligence runtime to set this workspace up for.`, containsCode: null, invocation: '', startedAt, applicable }, abort: null });
+      return { ok: true, status: this.setup.status };
     }
     const invocation = deriveSetupInvocation(server.entry, server.resolved);
     if (!invocation.ok) {
       this.deps.log(`mcp setup: refused — ${invocation.reason}`, 'warn');
-      this.setSetup(workspaceRoot, { status: { provisioning: provisioning(), state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no setup command could be derived' })), outcome: 'unavailable', message: `Setup is not available: ${invocation.reason}. This is not retried.`, containsCode: null, invocation: '', startedAt, applicable }, abort: null });
-      return { ok: true, status: this.setupFor(workspaceRoot).status };
+      this.setSetup({ status: { provisioning: provisioning(), state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no setup command could be derived' })), outcome: 'unavailable', message: `Setup is not available: ${invocation.reason}. This is not retried.`, containsCode: null, invocation: '', startedAt, applicable }, abort: null });
+      return { ok: true, status: this.setup.status };
     }
     const containsCode = workspaceContainsCode(workspaceRoot, cfg.files.workspace.agents);
     const markerPresent = existsSync(join(workspaceRoot, ...CODE_INTELLIGENCE_MARKER_SEGMENTS));
     const abort = new AbortController();
     const line = `${invocation.command} ${invocation.args.join(' ')}`.trim();
-    this.setSetup(workspaceRoot, { status: { provisioning: provisioning(), state: 'running', steps: steps(), outcome: null, message: '', containsCode, invocation: line, startedAt, applicable }, abort });
+    this.setSetup({ status: { provisioning: provisioning(), state: 'running', steps: steps(), outcome: null, message: '', containsCode, invocation: line, startedAt, applicable }, abort });
     this.deps.log(`mcp setup: started for ${workspaceRoot} — invocation '${line}', contains code ${containsCode}, marker ${markerPresent ? 'present' : 'absent'}`);
     const description = server.description as ServerDescription;
     const env = { ...this.deps.parentEnv, ...(description.transport === 'stdio' ? description.env : {}) };
-    void runSetupSteps({
+    const shutdown = new AbortController();
+    const ended = runSetupSteps({
       invocation, workspaceRoot, steps: CODE_INTELLIGENCE_SETUP_STEPS, creationStepId: 'create', markerPresent, containsCode, env,
       clocks: this.deps.clocks, log: this.mcpLog, signal: abort.signal,
+      shutdown: { signal: shutdown.signal, graceMs: SETUP_SHUTDOWN_GRACE_MS },
       onStep: (step, all) => {
-        const setup = this.setupFor(workspaceRoot);
-        this.setSetup(workspaceRoot, { ...setup, status: { ...setup.status, steps: all.map((s) => ({ id: s.id as McpSetupStep['id'], label: s.label, status: s.status, detail: s.detail, elapsedMs: s.elapsedMs })) } });
+        this.setSetup({ ...this.setup, status: { ...this.setup.status, steps: all.map((s) => ({ id: s.id as McpSetupStep['id'], label: s.label, status: s.status, detail: s.detail, elapsedMs: s.elapsedMs, ...(s.stopped === undefined ? {} : { stopped: s.stopped }), ...(s.skipped === undefined ? {} : { skipped: s.skipped }), ...(s.output === undefined ? {} : { output: s.output }), ...(s.startError === undefined ? {} : { startError: s.startError }) })) } });
         this.deps.log(`mcp setup: ${step.id} ${step.status}${step.detail ? ` — ${step.detail.slice(0, 200)}` : ''}${step.elapsedMs === null ? '' : ` (${step.elapsedMs.toFixed(0)} ms)`}`);
       },
     }).then((report) => {
       const message = report.outcome === 'completed'
         ? (containsCode ? 'Every step succeeded: the workspace is set up for code intelligence.' : 'The project was created; indexing and the memory store were skipped because the workspace contains no code.')
         : report.outcome === 'cancelled' ? 'The setup was cancelled; the workspace is only partly set up.' : 'A step failed, so the workspace is only partly set up.';
-      this.setSetup(workspaceRoot, { status: { ...this.setupFor(workspaceRoot).status, state: 'finished', outcome: report.outcome, message }, abort: null });
+      this.setSetup({ status: { ...this.setup.status, state: 'finished', outcome: report.outcome, message }, abort: null });
       this.deps.log(`mcp setup: ${report.outcome} — ${message}`);
     }, (cause: unknown) => {
-      this.setSetup(workspaceRoot, { status: { ...this.setupFor(workspaceRoot).status, state: 'finished', outcome: 'failed', message: `The setup stopped unexpectedly: ${String(cause instanceof Error ? cause.message : cause)}` }, abort: null });
+      this.setSetup({ status: { ...this.setup.status, state: 'finished', outcome: 'failed', message: `The setup stopped unexpectedly: ${String(cause instanceof Error ? cause.message : cause)}` }, abort: null });
     });
-    return { ok: true, status: this.setupFor(workspaceRoot).status };
+    const run = { ended, shutdown };
+    this.setupRun = run;
+    void ended.then(() => { if (this.setupRun === run) this.setupRun = null; });
+    return { ok: true, status: this.setup.status };
   }
 
   // ---- lifetime -------------------------------------------------------------------------------------------------
@@ -462,4 +494,22 @@ export class McpHost {
     const all = [...this.sessions.keys()];
     await Promise.all([...all.map((id) => this.closeSession(id)), this.discovery.closeAll()]);
   }
+}
+
+/**
+ * REQ-MCP-065 / REQ-MCP-114: the MCP evidence of an agent's grant — every server its persona carries with its fate, and under
+ * each carried server the tools the agent can call there: `granted(server, callable)` answers which survived what the surface
+ * does not know of (the plan gate, a collision with a native name). Read from the surface its tool port resolved, after the
+ * controls, so the record lists what the agent could call. Until 2026-10-01 this was `McpHost.evidenceFor`, resolved for the
+ * spawn with no names reserved and before any control
+ * (`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
+ */
+export function grantEvidence(surface: PersonaMcpSurface, granted: (server: string, callable: string) => boolean = () => true): McpGrantEvidence {
+  return {
+    granted: Object.fromEntries(surface.active.map((a) => [a.name, a.tools.map((t) => t.callable).filter((c) => granted(a.name, c))])),
+    servers: [
+      ...surface.active.map((a) => ({ name: a.name, transport: a.entry.type, origin: a.origin, fate: 'connected' as const })),
+      ...surface.dropped.map((d) => ({ name: d.name, transport: d.transport, origin: d.origin ?? '', fate: 'dropped' as const, reason: d.reason })),
+    ],
+  };
 }

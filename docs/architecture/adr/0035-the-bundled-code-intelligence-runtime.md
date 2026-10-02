@@ -296,7 +296,14 @@ runtime creates `.serena/project.yml` in the workspace root whenever it starts w
 `enabled: true` every first run left an untracked directory in the user's repository — the Git proof's isolated launch
 found the base tree dirty. The reading taken, flagged for the owner: the load's `.gitignore` amendment (REQ-CONFIG-013,
 REQ-MCP-089) keeps the marker's directory ignored beside `.rotaris/`, the name taken from the generated manifest
-(`keepScopeDirIgnored`, `packages/config/src/load.ts`); the proofs seed both. And the ≈4.5 s discovery at every process's
+(`keepScopeDirIgnored`, `packages/config/src/load.ts`); the proofs seed both. *Replaced 2026-10-01, under
+[OQ-161](../open-questions.md):* the reading was never raised as a question, and the live runs of that day measured its
+cost — the load changed a file the user tracks before any agent ran, every agent that checked its work reported a
+`.gitignore` change it had not made, and the duress run spent an unrequested child (319 s) finding out who had. The load
+now appends `.rotaris/` alone, and writes the marker's directory to the repository-local exclude file (`info/exclude` in
+the repository's common directory), which Git honours and nobody tracks, so the Git proof's base tree stays clean without
+the user's `.gitignore` changing. OQ-161 holds the owner's ruling; the proofs still seed both lines in their own
+fixtures. And the ≈4.5 s discovery at every process's
 first run (finding 6) pushed five proofs' fixed windows: Part J, resilience, fetch and mission now switch the entry off
 in their scratch configuration, config carries the cost in its window, and IC-6's packaged launch reads `session running`
 at its 9 s capture where it read `completed`. A stray `builtin/` directory in the main checkout dated from the branch
@@ -341,5 +348,99 @@ guard kill with the exit status and standard error's tail (`line-rpc-client.test
 against the built branch, as root under Xvfb on Linux, drove the token-first launch to the sentinel's exit **127** in
 192 ms with the sentinel's "not present" line in the rejection. It also found that the proof launches the token in the
 order this ADR's correction retired — `--no-sandbox` ahead of the token — so as root the proof starts the application,
-not the branch, and section 1 fails at the guard (`../../defects/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`,
+not the branch, and section 1 fails at the guard (`../../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`,
 recorded, not repaired). Not shown: section 1 passing, which waits for that note and for a tree with the bundle.
+
+**The proof on Linux as root — 2026-09-28 (R-062).** The note above was reproduced, then repaired in the proof: `branch()`
+and `exitStatus()` launch the token first and the switch between it and `--`, this ADR's corrected order, and
+`lib/launch-sites.test.ts` now fails any token launch that puts something other than the entry ahead of the token
+(`../../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`). Section 1 then
+**passed**: `tools/list` at 2,065–2,400 ms on the development entry across the three passing runs, 22 tools under a project (`list_memories` present,
+no project switching or configuration introspection), nothing on standard output before the first `{`, exit 0 on
+standard input's end, an unknown subcommand exiting the runtime's 2. The first full run went on to find a second
+harness defect. Every launch rewrote the workspace file without an `initialization:` section, so ADR-0064's background
+`code-intelligence-setup` started at each open. Section 5's click met it and was refused "already running", correctly
+(`../../defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md`). The proof's
+workspace file now records that task as skipped. Then the whole proof passed **three runs in a row** (521 s, 522 s and 521 s, as root under Xvfb, Node 24, `--skip-build`), with
+nothing else running on the host: the discovery grant of 12 and the memories block, both launch lines carrying
+`--project`, `get_symbols_overview` naming `Greeter`, `greet` and `Counter` after provisioning TypeScript 5.9.3 and
+typescript-language-server 5.1.3 through the host's proxy (the disclosure true to the runtime), the five setup launches,
+and the drift refused. **What it could not show:** the no-window check of consequence 1 is recorded as not measured
+off Windows, because its sampler is `Get-Process` and this host has no window lister. A window opened on Linux would fail
+consequence 1 as surely as one on Windows; the instrument is what is missing. The packaged half of section 1 and section 7
+need `win-unpacked`, and no Linux artifact may be produced (IC-3), so IC-7's contained run is untouched. Nothing on
+Windows was run.
+
+**The fix round, 2026-09-29.** The whole proof was run three more times, and run 2 went red in section 5's
+`setup-again`. The product was not at fault. The open's `No model provider is authenticated yet` notice, raised at
+the 800 ms slot, landed at the same instant as the capture seam's fixed-time press on the `MCP Servers` category. It
+moved the list two rows, so Settings opened on Instructions and Start was never on screen. The setup launches now wait
+for what they press. Start is pressed once it is drawn enabled, Cancel once it is drawn, and `MCP Servers` is pressed
+again at 3 s and 6 s if it is not selected
+(`../../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`). The shared seam's press stays as
+it is, and its note stays open, since nine other proofs use it
+(`../../defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). *(Reported back 2026-09-30 under R-067: the seam's press is now verified — read
+again and pressed again until the category carries `is-selected`, or logged as never selected at 5 s — and the note is
+repaired.)* With the correction
+forced (the seam pointed at Instructions), section 5 passed. The whole proof then passed three runs in a row (522 s,
+521 s, 524 s), with another agent's proofs sharing the host in two of them. In one launch the banner deflected the
+seam's press again, and the correction put Settings back. *(Corrected by the next section: that correction did not hold, and the
+three runs in a row were not what the branch does.)*
+
+**The second fix round, 2026-09-29.** The verifier ran the same build seven times (three whole, four `--steps=5`) and
+`setup-cancel` went red three times, always the same way. Start was pressed at the instant of the notice and of the
+seam's category press. The seam's press, read before the notice and delivered after it, moved Settings to a category
+above, so Cancel had left the screen when it was pressed, and the press gave up. The 3 s correction came after `create`
+had already succeeded (about 1.8 s), and there was nothing left to cancel. The product was again not at fault. The
+setup launches now leave the shared seam alone. They open Settings with the `Ctrl+7` chord, and every press, the
+category's included, waits until the notice has been drawn (`body:has([data-testid="notice"])`), so no point is read
+before the launch's one layout shift. No assertion changed
+(`../../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`, reopened and repaired again; the
+seam's note stays open). **Measured** as root under Xvfb, Node 24, `--skip-build`: four `--steps=5` runs in a row
+passed (238 to 242 s). All 20 setup launches pressed Start 31 to 123 ms after the notice, and all four `setup-cancel`
+launches pressed Cancel while `create` ran and read `Cancelled`. Then three whole runs in a row passed (529 s, 528 s, 524 s), with another agent's proofs on the host for parts of
+all three: Start 41 to 128 ms after the notice in all 15 setup launches, Cancel pressed and `Cancelled` read in each
+`setup-cancel`, the window check recorded not measured on linux, and the drift refused. **What it could not show:** anything on
+Windows; the packaged branch and section 7 (IC-3), as before.
+
+**The setup at the run host's shutdown, and what a step started (2026-10-01).** REQ-MCP-099's termination (ask, 5 s
+grace, force-kill) reached only the step itself on POSIX. `child.kill` signals one process, and the step was spawned
+without a process group, so a process the step had started outlived its cancellation. The run host's `shutdown` never
+reached the setup at all: the host exited with the step running, and the step and what it had started were orphaned.
+REQ-WORKSPACE-092 says nothing the step launched, "neither the command the step itself started nor anything descended
+from it", may still run 5 s after a cancellation or after the application closes
+(`../../defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+
+Each step now leads a process group of its own (`processGroup`), and the ask and the force-kill go to the group. The
+grace ends when no member of the group still runs; a zombie that nobody reaps does not count, because a container's pid 1
+may never reap one. The run host's `shutdown` calls `McpHost.endSetup`: the step is stopped as a cancellation is, but
+with a 2 s grace (`SETUP_SHUTDOWN_GRACE_MS`, the build's figure inside REQ-WORKSPACE-109's 5000 ms close), and that
+grace also shortens a cancellation's grace already under way. The host exits only once the step has gone. Windows keeps
+`taskkill /T`. At an orderly quit the window's close cancels the run a few milliseconds before the shutdown arrives, so
+REQ-MCP-099's 5 s cancellation grace is never given at a close: the build reads REQ-WORKSPACE-109's 5000 ms and
+REQ-WORKSPACE-092's 5 s as binding there, a conflict between the requirements raised as
+[OQ-172](../open-questions.md) (2026-10-01, on the verifier's finding).
+
+**Measured** on the built app at an orderly quit (`driver.quit()`), as root under Xvfb, Node 24, with two kinds of step.
+
+A stand-in `code_intelligence` launch held `project create` and started a descendant. On the build before, both were
+still running 5 s after the application exited, which took 169 ms. With the repair:
+
+- a step that ends on SIGTERM: both were gone, and the quit took 419 ms;
+- a step and descendant that both ignore SIGTERM: both were force-killed, and the quit took 2234 ms.
+
+The bundled runtime, quit during `index` on a 400-file Python project: its sentinel and Python process were gone 5 s
+later on the build before as well. The runtime ends itself when its pipes close, so the bundled runtime alone never
+showed the defect. With the repair the quit took 473 ms and nothing was left.
+
+Unit cases: two in `packages/mcp/src/setup.test.ts` (descendant ended with the step; shutdown grace shortening a
+cancellation's), both red on the code before; one in `apps/desktop/src/run-host/mcp.test.ts` for `endSetup`; one in
+`apps/desktop/src/run-host/dispatch.test.ts` (added on the verifier's finding) that `shutdown` ends the setup before it
+closes a store or schedules the exit, red with the call replaced by `Promise.resolve()`. `workspace-proof` scenario 8f
+(added on the same finding) quits the built app in order while a stand-in step and a process it started both ignore
+SIGTERM, and asserts the quit ends within 5000 ms through the shutdown ending the setup, with neither process running 5 s
+after the exit; on the build with the call replaced it failed (quit in 138 ms, both pids still running). `init-proof`
+passed all five scenarios with the bundle present, and `workspace-proof` passed (44 passed, 0 failed, 2 skipped; with 8f,
+46 passed, 0 failed, 2 skipped). **Not measured:** Windows; a run host killed by a signal, whose step's group still
+survives it (OQ-169); a step that exits by itself and leaves a process it started running in its group: `endSetup`
+reaches only a step still running, so at a quit nothing ends such a process (the fixed note's "Not reached").

@@ -49,14 +49,21 @@ export interface CaptureHost {
   readonly themeName: () => string;
   /** Whether the first terminal result has been presented — what `ROTARIS_CAPTURE_WAIT=result` waits on. */
   readonly resultSeen: () => boolean;
+  /** The immediate exit (`exitCleanly`): the run host is asked nothing, so a live run is left as a crash leaves it. */
   readonly exit: (code: number) => void;
+  /**
+   * The application's quit (`app.quit()`): the main windows closed through their guards, then the run host's `shutdown`,
+   * so a live run comes to rest as a quit leaves it (PD-ORCH-005 clause 3). How a capture whose wait timed out ends.
+   */
+  readonly quit: () => void;
 }
 
 /** Whatever `ask` returns for a request the capture makes on the run host's behalf. */
 export type CaptureReply = ProcessReply;
 
 /**
- * One step of a capture script: `selector>>arg@ms`, or `selector>>arg@~ms` for the waiting form.
+ * One step of a capture script: `selector>>arg@ms`, or `selector>>arg@~ms` for the waiting form, or
+ * `selector>>arg@from~ms` for the waiting form that starts waiting at `from`.
  *
  * `selector` carries whatever the step's own variable means by it — a CSS selector for a click, the
  * text for a typed step, a path for a photograph, a JSON document for a notice. `arg` is the
@@ -79,17 +86,28 @@ export interface CaptureStep {
    * 2026-09-12: 4/5 green quiet, 1/4 green under load).
    */
   readonly until: boolean;
+  /**
+   * `@from~ms`: the waiting form, but the wait STARTS at `from` — nothing before it is looked at. Present only on that
+   * form. It is for a press that must follow another step, where the selector says the other step has had its effect
+   * and could also be true before that step ran: `part-j-proof`'s steer-rest Pause, whose selector (no steer dialog
+   * open) holds from the moment the run starts, and which must wait for the dialog the Steer opened to close again.
+   * The `~ms` form pressed it as the run started, racing the Steer
+   * (`docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`).
+   */
+  readonly from?: number;
 }
 
-/** `"a@100;;b>>c@~200"` — the whole grammar, and the only place it is read. */
+/** `"a@100;;b>>c@~200;;d@150~900"` — the whole grammar, and the only place it is read. */
 export function parseSteps(raw: string | undefined): CaptureStep[] {
   return (raw ?? '').split(';;').map((s) => s.trim()).filter((s) => s !== '').map((s) => {
     const rawAt = s.slice(s.lastIndexOf('@') + 1);
-    const until = rawAt.startsWith('~');
-    const at = Number(until ? rawAt.slice(1) : rawAt);
+    const tilde = rawAt.indexOf('~');
+    const until = tilde !== -1;
+    const at = Number(until ? rawAt.slice(tilde + 1) : rawAt);
     const body = s.slice(0, s.lastIndexOf('@'));
     const sep = body.indexOf('>>');
-    return { selector: sep === -1 ? body : body.slice(0, sep), arg: sep === -1 ? null : body.slice(sep + 2), at, until };
+    const step = { selector: sep === -1 ? body : body.slice(0, sep), arg: sep === -1 ? null : body.slice(sep + 2), at, until };
+    return tilde > 0 ? { ...step, from: Number(rawAt.slice(0, tilde)) } : step;
   });
 }
 
@@ -212,10 +230,49 @@ export async function centreWhen(host: CaptureHost, finder: string, timeoutMs: n
   }
 }
 
-/** Resolves when the step's selector (and its optional exact text) matches, or at the deadline. Never throws. */
+/** The renderer expression a Settings category press reads: the named item's centre, and whether it is the selected one. */
+export function categoryProbe(label: string): string {
+  return `(() => { const b = [...document.querySelectorAll('.nav-list__item')].find((x) => x.textContent === ${JSON.stringify(label)}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, selected: b.classList.contains('is-selected') }; })()`;
+}
+
+/**
+ * Selects the Settings category named `label` by pressing it, and VERIFIES the press: the item is read again after each
+ * press and pressed again until it carries `is-selected`, or the deadline passes, which is logged rather than passed over.
+ *
+ * The seam used to read the point once and press there once. A notice banner drawn above the view between the read and
+ * the press moved the list down, and the press selected a category above the one named, with nothing in the log to say
+ * so (`code-intel-proof`'s `setup-again`, 2026-09-29: Settings opened on Instructions instead of MCP Servers;
+ * `docs/defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). A category already
+ * selected is not pressed at all. Time is read from the clock ports, like every wait in this file.
+ */
+export async function pressCategory(host: CaptureHost, label: string, timeoutMs: number): Promise<boolean> {
+  const started = host.clocks.monotonic.now();
+  let presses = 0;
+  for (;;) {
+    const item = await (host.win.webContents.executeJavaScript(categoryProbe(label)) as Promise<{ x: number; y: number; selected: boolean } | null>).catch(() => null);
+    const spent = host.clocks.monotonic.now() - started;
+    if (item?.selected === true) {
+      host.log(`capture: Settings category "${label}" selected after ${presses} ${presses === 1 ? 'press' : 'presses'} with ${Math.round(timeoutMs - spent)} ms to spare`);
+      return true;
+    }
+    if (spent >= timeoutMs) {
+      host.log(item ? `capture: Settings category "${label}" never selected within ${timeoutMs} ms (${presses} ${presses === 1 ? 'press' : 'presses'})` : `capture: no Settings category "${label}" on screen within ${timeoutMs} ms`);
+      return false;
+    }
+    if (item) { clickAt(host.win, item); presses += 1; }
+    await pause(host, item ? 150 : 50);
+  }
+}
+
+/**
+ * Resolves when the step's selector (and its optional exact text) matches, or at the deadline. Never throws. A step
+ * with `from` looks at nothing before `from`; its deadline is still `at`, counted from the same start.
+ */
 export async function settleAt(host: CaptureHost, step: CaptureStep): Promise<void> {
   if (!step.until) { await pause(host, step.at); return; }
-  const deadline = Date.now() + step.at;
+  const from = step.from ?? 0;
+  if (from > 0) await pause(host, from);
+  const deadline = Date.now() + Math.max(0, step.at - from);
   const probe = matchProbe(step.selector, step.arg);
   for (;;) {
     const hit = await host.win.webContents.executeJavaScript(probe).catch(() => false) as boolean;

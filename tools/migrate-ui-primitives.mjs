@@ -51,6 +51,8 @@ function replacement(tag, attributes) {
   if (tag === 'div' && words.has('log-panel')) return 'DesignLogPanel';
   if (tag === 'div' && words.has('card')) return 'DesignCard';
   if (tag === 'span' && words.has('status-dot')) return 'DesignStatusDot';
+  // The element only: a migrated Tag's `tag tag-<tone>` class is then refused by `pnpm lint` (check-ui-language), and the
+  // tone moves to `kind` by hand — the design Tag joins its class to the foundation it draws itself (A40).
   if (tag === 'span' && words.has('tag')) return 'DesignTag';
   return undefined;
 }

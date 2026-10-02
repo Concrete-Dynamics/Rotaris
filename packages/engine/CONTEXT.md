@@ -238,7 +238,9 @@ surface and is not a composer mode. — `REQ-MONITOR-070`, `REQ-MONITOR-137`
 _Avoid_: interrupt, injection
 
 **Queued prompt**:
-Follow-up work a user submits while an iteration is running, to be taken up afterwards. —
+Follow-up work a user submits while an iteration is running, to be taken up afterwards. At the next iteration boundary
+it becomes a todo task in the phase "Queued Prompts", named "Queued Prompt: <first 8 characters of the prompt id>" and
+carrying the prompt text as its content (`REQ-CHAT-040`, `REQ-ORCH-071`). —
 `REQ-MONITOR` §15
 
 **Compression**:
@@ -287,8 +289,9 @@ What left an agent `paused` — exactly one of `pause`, `stop`, `quit` or `crash
 iteration. A crash is recorded when the session is next repaired or continued, since nothing runs to record it at the
 time; the user's cancel of one child while the session rests records nothing of it but the cancelled agents' own calls
 the crash cut off, answered as interrupted, which no later record reaches (OQ-101). An explicit cancel is not an
-interruption: it ends its agents `cancelled`, and those are never resumed — once it is carried out; one the host died
-before carrying out leaves the store as any crash does, and is taken as crash-left (OQ-103). — `PD-ORCH-005`
+interruption: it ends its agents `cancelled`, and those are never resumed — even when the host died before carrying it
+out: it is marked on the open iteration when it is accepted, and the next repair or continue ends those agents
+`cancelled` and closes the iteration instead of recording a crash (OQ-103, ruled 2026-09-29). — `PD-ORCH-005`
 _Avoid_: stop reason (that is the run's, `REQ-MONITOR-301`), cancellation
 
 **Comes to rest** (a run):

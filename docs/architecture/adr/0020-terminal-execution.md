@@ -287,6 +287,26 @@ tool promises (the same property dot-sourcing buys on the PowerShell side). `$?`
 own status, so the exit-status expression is unchanged and consequence 1's forgery argument is untouched. The
 single-line path keeps today's wrapper byte for byte.
 
+*Reported back 2026-09-29 (R-067), from the live runs' first POSIX terminal against a model
+([`a-posix-command-that-fails-to-expand-loses-its-end-marker`](../../defects/fixed/a-posix-command-that-fails-to-expand-loses-its-end-marker.md),
+live-run finding L1): **the reading that neither path needed a guard is FALSIFIED, and kept here beside its
+replacement.** "The single-line path keeps today's wrapper byte for byte" left the command UNGUARDED:
+`printf <start>; <command>; printf <end>`. An interactive `sh` that meets an error in the line it is running
+abandons the rest of that line. The errors seen were an expansion it cannot perform (`${PIPESTATUS[0]}` under dash,
+`Bad substitution`), a syntax it lacks (`<(…)`, `Syntax error: "(" unexpected`) and an unterminated quote; a
+trailing `# note` comments the end frame out as well. The end frame then never printed, and a command that
+finished in 0.1 s read as a soft pause with exit −1 after 30 s — twice in one run, and once more under duress.
+The same abandoned line put the echoed wrapper, marker included, into what the model read
+([`a-command-sh-cannot-parse-shows-the-agent-the-wrappers-end-marker`](../../defects/fixed/a-command-sh-cannot-parse-shows-the-agent-the-wrappers-end-marker.md)).
+`eval` is no guard: an error inside a special built-in abandons the line the same way, measured under dash and
+under bash in POSIX mode. **`command eval` is the guard.** POSIX's `command` removes a special built-in's special
+properties, so the error becomes that utility's own nonzero status (2 under dash) and the shell goes on to the end
+frame — the posix twin of the PowerShell `try` above. Both paths now run the command as
+`command eval '<command>'`: a single line single-quoted, a multi-line command through the same `printf '%b'`
+carrier. The command still runs in THIS shell, so what it sets persists. The tool description now names the
+shell the host runs — `/bin/sh`, a POSIX shell that may not be bash — where it named only Windows' shell.
+Pinned by "REQ-TOOLS-097/098/179 (live-run L1): …" in `terminal.test.ts`, red on the unguarded wrapper.*
+
 **A second defect, from the same first execution, in the CLEANING rather than the wrapper.** `cleanLines`
 found the start of the captured region by looking for a row that was **exactly** the marker. The marker's row
 can carry the shell's PROMPT in front of it: the line discipline echoes what we write as soon as it arrives,
@@ -304,6 +324,177 @@ between two non-empty ones), stderr in the merged stream, the soft pause and its
 kill and session reset, `runtime.shell_command_timeout` bounding a call that names no timeout of its own, the
 background session's start/query/list/kill and its cap, and state persisting across calls. Twenty-four proofs,
 two defects.
+
+*Reported back 2026-09-29 (R-067), from the first live run's `terminal` scenario
+([`an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed`](../../defects/fixed/an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md),
+live-run finding L2): "the soft pause and its poll" held as a mechanism, and **what the poll SAID was wrong**. An empty
+poll returns at once, and its empty answer repeated the soft pause's sentence, "No output for 30 seconds", after under
+a millisecond. The model counted thirty seconds a poll and polled five times in 21.6 s. The poll now states what it
+measured on the monotonic clock: the time since the previous observation of the command, the time since the command
+last wrote anything, and that a poll does not wait. How long a poll should wait is not stated anywhere:
+[OQ-136](../open-questions.md), raised with this reading built.*
+
+*Reported back 2026-09-29 (R-067), from acceptance finding A10
+([`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output`](../../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md)):
+the wrapper assumed it was the whole of the line the shell reads, and **keystrokes can stand in front of it**. An
+agent's `is_input` or a control surface's send-keys with no Enter waits in the shell's input as a partial line under a
+command that does not read it, and the next wrapped line was appended: `xyprintf: not found`, no start marker, the
+whole screen kept — the paused call's late output and its own end frame with it — and, since L9, an empty live stream.
+On the POSIX backend a line the product submits after keystrokes left without a line end is now preceded by the line
+discipline's kill character, `^U`, which erases the partial line; the PowerShell wrapper's first statement already
+takes a prefix without losing the start marker (reasoned, not measured). What becomes of such a line is stated
+nowhere: [OQ-146](../open-questions.md) (OQ-143 on its branch), raised with this reading built. **A second reading is falsified and kept
+beside its replacement in `onData`:** "the active call's end marker, else the paused call's; a match closes both".
+~~While a call was active, the paused call's frame ahead of it was never matched, so a paused command that ended
+behind the next call never read as finished and the poll after it said "still running" with exit −1. Both frames are
+matched now, the paused one's first.~~ **That account, written by the first repair, is itself falsified** (A10's
+verification, 2026-09-30): the old form did close the paused call when the active call's frame arrived. What it got
+wrong was the status and the collection. The paused call took the **active** call's exit status, so a paused
+`sleep 3; …; false` behind an `echo` read 0; and its listener stayed attached, so when the paused line never printed a
+frame — an interrupt (`C-c`, REQ-TOOLS-098's advice) makes an interactive `sh` abandon the rest of the line — its
+poll read everything after: the later calls' marker frames and 582 of the PD-TOOLS-001 snapshot's `__rot_b64__` lines,
+which encode the shell's whole environment. The first repair's replacement, "the paused call closes
+on its own frame only", fixed the status and broke the interrupt: that call then read "still running" on every poll.
+~~Now the paused call closes on its own frame with its own status, or else on the next call's frame with none, reported
+as −1 with the reason, and what it collected ends at the next call's printed start marker; its listener goes with it.~~
+**Falsified in turn by the second verification** (2026-09-30): that listener fed the paused screen until the next
+call's END frame, and the cut at the start marker was made on that screen, so a next call longer than the screen keeps
+(`seq 1 20000`, beyond `FOREGROUND_SCREEN_LINES`) scrolled the marker off and the poll read that call's output, its
+end frame and a false `output_truncated`. And the echo of the next call's wrapper, which the line discipline writes
+onto the paused screen, lost only its first row when it wrapped: a wrapper wider than 240 columns left the command's
+text and `printf '__rot_…_e:%s\n' "$?"` in the poll on both roads — the second, a paused command ending on its own
+behind the next call, on `origin/main` too. **Now** the paused call is fed by `onData` its share of each chunk
+(`pausedShare`), which ends at its own end frame or at the next call's PRINTED start marker — which the shell writes
+only once the paused line is done — and it closes there: on its own frame with its own status, or at the marker with
+none, reported as −1 with the reason ([OQ-147](../open-questions.md), OQ-144 on its branch, raised with that reading built). Nothing after
+either boundary reaches its screen. Every row an echoed POSIX wrapper occupies is dropped from any capture
+(`withoutEchoedWrappers`), and the paused call's `until` cut takes the first row carrying the next call's start marker
+in any form. Pinned by eight "(A10)" cases in `terminal.test.ts`: the first repair's two; two red on the old
+`onData` — the paused call's own status behind the next call, and the interrupted paused call closed by the next call
+with nothing of the later calls in its poll, which is red on the first repair too; and four for the second
+verification — `C-c` then `seq 1 20000`, a 300-character next call on both roads, and two pure cases over
+`pausedShare` and the echo's removal. ~~A poll made after the `C-c` but before any next call still reads "still running"; that is
+recorded, not repaired~~ (repaired 2026-10-01, the report-back below)
+([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).*
+
+*Reported back 2026-10-01, the repair of
+[`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md):
+**the marker protocol has no frame for a line the shell abandoned, so a poll alone cannot see it end.** After `C-c` an
+interactive `sh` drops the rest of the paused line, and the next call's printed start marker was the only boundary the
+session could read; every poll before that call read −1, `soft_pause`, "The process may still be running", over a process
+that had died (dash through a real PTY, the note's scratch case: `^C`, `#`, −1, `soft_pause`). Keystrokes carrying `C-c`
+written while a command is soft-paused — the agent's `is_input`, the terminal window's interrupt or send-keys — now mark
+the paused call, and a poll of a marked call submits one no-op line of the product's own, OQ-144's handshake by another
+road, once the shell holds its terminal again (`/proc/<pid>/stat`'s `tpgid` against the shell's `pgrp`; measured under dash
+and bash: the job's group while `sleep` runs, the shell's own within 20 ms of the interrupt). Its printed start marker
+closes the paused call as a next call's does, and the poll hands it over with OQ-147's reading. A program that survived
+the interrupt and holds the terminal is written nothing. The line's echo and frames are cut from the capture and
+withheld from the live stream (`CommandRegion.withholdRowsWith`): with the withholding removed, the live tap carried
+`# printf '%s\n' '__rot_…'`. Whether the product may write that line is
+[OQ-168](../open-questions.md), raised with it built. Pinned by three "(OQ-147)" cases in `terminal.test.ts`; the first is
+red on the unrepaired code (a soft pause), and red again with the terminal window's interrupt left unmarked; the second
+is red with the terminal-holder check removed (the line went to the surviving `read`). Off Linux nothing says who holds
+the terminal and the line is submitted at the poll; PowerShell's `$null` no-op is reasoned, not measured. The live run's
+`terminal` scenario carries the interrupt now (`interrupt` in `lib/terminal-shapes.mjs`), and its first run (2026-10-01,
+the self-hosted endpoint) read the poll 1,346 ms after the model's `C-c` as −1, `execution_error`, OQ-147's reason.*
+
+*Reported back 2026-10-01, the same repair's first verification: **~~an interrupt written while a command is soft-paused —
+the agent's `is_input`, the terminal window's interrupt or send-keys — marks the paused call~~, read as covering the window's
+interrupt, covered one ordering only** (kept beside its replacement). The window's interrupt (REQ-SHELL-093) can arrive while
+the call still runs, and the shell abandons the line just the same. Unmarked, the call soft-paused over a dead process and
+every poll read "still running"; given `timeout: 8`, it waited 8,017 ms and reset the session for a process that died at
+1 s (the verifier, dash through a real PTY). Now a `C-c` written while a foreground call runs marks that call
+(`ActiveCall.onInterrupt`). The call watches for its shell holding the terminal again (`INTERRUPT_WATCH_MS`, Linux) and
+then submits the same no-op line (`submitCloser`), whose printed marker (`printsMarker`) ends it with −1, `execution_error`,
+no reset. A call that soft-pauses first carries the mark into the paused call. A poll made at once after the `C-c` waits up
+to `INTERRUPT_SETTLE_MS` for the shell before it decides. Pinned by three more "(OQ-147)" cases in `terminal.test.ts`, the
+three red before the change. Off Linux a running call writes nothing, and a timed call still runs out its cap
+([OQ-168](../open-questions.md)).*
+
+*Reported back 2026-10-01, the repair of
+[`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll`](../../defects/fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)
+(reasoned when it was recorded, measured now with a PTY double): **the soft pause handed its call over across an await.**
+`execute` removed the call's listener, awaited the emulator's write of what it held, and only then opened the paused call
+`onData` feeds, so a chunk delivered inside that write reached neither: no poll returned it, and its end frame resolved the
+call already settled, leaving the paused call "still running" until a later call closed it with no status. The paused
+call is now opened in the same turn as the pause, before the listener goes and the write is awaited. Pinned by
+"REQ-TOOLS-098/179: output and the end frame a command writes while its soft pause is handed over …" in
+`terminal.test.ts`, red on the old order in both its halves.*
+
+*Reported back 2026-10-01, the partial repair of
+[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced`](../../defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md)
+(live-run finding a71-8, [OQ-164](../open-questions.md)): **the queue of one held one paused call, and a second pause
+replaced it.** A call issued while a command is soft-paused is queued by the shell behind it. The session treated the
+paused call as the poll's alone: the new call reported only its own exit, and a soft pause of the new call disposed of
+the paused one, whose end was then never reported. Measured with dash through a real PTY: an `echo` behind a paused
+`sleep 3` waited about 1.9 s and said only "The command exited with code 0.". The session now keeps every open paused
+call in line order (`pausedAhead`, then `pausedCommand`). Each is fed its share of the stream up to its own end frame or
+the next line's printed start marker (`pausedShare`, as A10 built it), and is closed there. Every observation hands
+over, beside its own subject, each paused call that ended unreported and each still running ahead of it
+(`drainEarlier`, `ForegroundResult.earlier`). A reset under them reports the one the shell was running as ended by the
+reset. The old line "a pause nobody ever polled is replaced here" is struck in `execute` and kept beside its
+replacement. Whether such a call should wait at all is OQ-164's, not ruled. Pinned by two "(OQ-164)" cases in
+`terminal.test.ts`, both red before the change. Five A10 cases now read the hand-over from the next call and keep their
+assertions.*
+
+*Corrected 2026-10-01, before its merge, by its verification: **the line assumed that every line written after a paused
+one reaches the shell.** An interrupt (`C-c`) makes the terminal discard every line the shell has not read, so a line
+queued behind the interrupted one never runs and its start marker never prints. Three readings of the first build were
+false. Each is kept struck beside its replacement in `foreground.ts` and in [OQ-164](../open-questions.md):
+- "the next line's start marker" closes a paused call. It is now ANY later line's, whichever prints first (`pausedShare`).
+  The interrupted call had been cut at a marker that never appeared, and the next call carried its own marker, output and
+  end frame as that call's.
+- A poll after the interrupt looked for the end only of the polled call, queued behind the interrupted one. It wrote no
+  no-op line and read "still running" over a dead command, which re-opened OQ-147's defect. It now looks at every open
+  paused call, and its no-op line closes them all.
+- A queued call "carries none of the earlier command's output as its own". That held for its pause only; its poll handed
+  the earlier output over as its own. A call the shell has not started now takes nothing before its own printed start
+  marker (`unstartedShare`, `PausedCall.started`, `CommandRegion.started`).
+A line whose marker never printed when a later one did is reported as never run, with no exit code, and so is a call
+discarded while it waited (the window's interrupt, REQ-SHELL-093). Measured with dash through a real PTY: the four
+cases named in OQ-164 were red on the first build and are green on the correction.*
+
+*Corrected again 2026-10-01, before its merge, by its second verification: **the interrupt was taken to reach the
+interrupted line alone.** It discards every line queued behind that one too, but only the oldest open paused call was
+marked. A command that survives the interrupt (`trap '' INT`, a SIGINT handler) ends on its own frame, its call closes
+with its own status, and the queued call was left open and unmarked: no poll wrote the no-op line, and every poll read it
+"still running" over an idle prompt, so "its no-op line closes them all" above was still false. The interrupt now marks
+every open paused call (`noteInterrupt`, the old reading kept struck beside it). The same verification found that a queued
+call closed by the session's reset before its line ran was reported as "still running" and as having lost its shell; it is
+reported in the never-ran form now, naming the reset (`reset-before`). Both cases named in OQ-164 for this correction were
+red before it and are green on it, with dash through a real PTY.*
+
+*Reported back 2026-10-01, the repair of
+[`a-command-that-exits-the-session-shell-reads-as-a-soft-pause`](../../defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md)
+(OQ-144's sibling case): **the marker protocol also assumed that the shell outlives the command.** A command that ends
+the shell (`exit 3`, `kill -9 $$`) loses the end frame as a replacement does, because the shell that would print it is
+gone. The PTY's exit only made the session forget the PTY, so the call soft-paused after the whole window, and the next
+call ran in a fresh shell with the directory and variables gone while it reported `session_reinitialized` false. The
+shell's exit is now an event of the session (`shellExited`): a running call ends at once as an `execution_error` with no
+exit code, a soft-paused call is closed for its poll to hand over the same way, and the shell is respawned with
+PD-TOOLS-001's snapshot re-applied by the first of them to meet it, or by the next call when the shell ended between calls.
+That call says so. Measured with dash through a real PTY: `exit 3` ended the call in 16 to 37 ms and `kill -9 $$` in 12 to
+18 ms (three runs each), where both had taken the case's whole 3 s window. The reading is OQ-144's, extended in place
+([OQ-144](../open-questions.md)). It is pinned by two "(OQ-144)" cases in `terminal.test.ts` beside A9's, both red on the
+unrepaired code. Unlike the replacement watch it needs no `/proc`, so it holds off Linux too, but no other host has run
+it.*
+
+*Reported back 2026-09-30 (R-067), from the verifier's live run of the `fix-terminal-output` branch
+([`a-command-that-replaces-the-shell-reads-as-a-soft-pause`](../../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md),
+acceptance finding A9): **the marker protocol's premise — that the shell which printed the start frame is the one left
+to print the end frame — does not hold for a command that replaces the shell.** `exec bash` keeps the pid and never
+returns to the rest of the wrapped line; the call soft-paused after 30,027 ms and every later call ran under bash. It
+is L1's class by another road, and `command eval` is no guard against it, because `exec` succeeds. The session now
+watches the process behind its pid while a call runs, against the identity its shell had when it last answered one of
+the product's own lines (`/proc`'s executable and argument vector; a fresh shell answers one no-op line first). A
+different process ends the call within 200 ms as an `execution_error` with no exit code, and the session restarts on
+its shell with PD-TOOLS-001's snapshot re-applied. The POSIX description says not to replace the shell. Neither the
+answer nor the restart is stated anywhere: [OQ-144](../open-questions.md), raised with this reading built. Off on
+macOS, where `/proc` does not exist. Pinned by "REQ-TOOLS-097/098/103/104 (OQ-144, acceptance A9): …" in
+`terminal.test.ts`, red on the unwatched session (a soft pause after the whole window, and `sh` in place of
+`/bin/sh -i` for the next call). The no-op line is awaited before the call writes its command, so it carries the
+call's cancel and reports a kill from the terminal window: the first form lost both (acceptance round 1's verifier),
+and the call now ends on either before its command is written.*
 
 **Found — defect C: the agent's capture was VT-STRIPPED where every other surface was EMULATED.** Deleting a
 control sequence is not applying it. Measured against the real shell at the session's own 240×50: ConPTY
@@ -395,9 +586,62 @@ fired-and-forgotten: it rides the same scan a concurrent next command would over
 clears the snapshot — the user asked for a clean shell. Aliases, functions and background jobs are not
 restored and the detail says so. The timeout test now asserts the variable survives the respawn.
 
+*Reported back 2026-09-29 (R-067), when the timeout test's intermittent `[]` was traced
+([`a-hard-timeout-reset-can-lose-the-restored-variable-under-load`](../../defects/fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md)):
+"the snapshot after each completed command" means each command the session **sees** complete. A command that
+soft-paused (REQ-TOOLS-098) and finished while the next call waited behind it is never seen. Its effects are then
+missing from the snapshot a later reset re-applies, although they happened before the respawn PD-TOOLS-001 names.
+The test had run into that, and now names its own timeout. Whether the directive asks for more is
+[OQ-134](../open-questions.md).*
+
 **The exit-1 map is narrowed, not widened.** The run''s `git diff --no-index` with differences exited 1
 carrying the payload and read as `shell_failure`, which the agent had to explain away. REQ-TOOLS-112 test 4
 stands; the carve-out is the commands whose exit 1 IS the convention — `git diff`/`diff`, `grep` and its kin
 plus `findstr` on Windows — matched on the command''s own leading tokens, with a real failure kind still
 outranking it. Recorded as ESC-41; the amendment round writes the carve-out into the requirement. The e2e
 proof spells the search portably (`findstr` on Windows, `grep` on POSIX) because the suite runs on both.
+
+## Fourth first execution — 2026-09-29, a SIGINT the shell discarded, sent again (OQ-135, R-067)
+
+The background session's signal delivery (REQ-TOOLS-110, REQ-TOOLS-128; OQ-10 as ruled in R-044) had been executed as
+delivery once to the session's group. Acceptance finding A8 graded its known exposure a product defect. Where
+`/bin/sh` is `dash`, a SIGINT landing between `dash`'s `vfork` and its command's `exec` is discarded by the command,
+and the session runs on until the command ends. Measured through `BackgroundManager` on the branch before the repair,
+45 of 200 `sleep 30` sessions signalled the instant they started were still running 3 s later under six CPU burners.
+**Found: delivery reached every process, as decided, and did not stop the session, which R-044 rules it must.** The
+repair keeps delivery to the group and adds a check ~~on Linux, the one host whose `/bin/sh` has the window~~ *on Linux,
+where the session's shell is `dash` (corrected 2026-09-30, fix round 3; below)*. ~~At 250 ms and
+1.5 s, while the session runs, the process table (`linuxProcessTable`, `@rotaris/platform`) is read for members that
+never received the signal: alive at SIGINT's default, created within one second before it. Each is sent SIGINT once
+more, alone (`missedSigint`), and the re-delivery is logged. After it, 0 of 200 ran on, with and without the burners.
+A command that catches SIGINT is never sent a second.~~ *Falsified 2026-09-30 by the verifier, kept beside its
+replacement: "alive at the default, created within a second before the signal" is also how a command stands whose
+one-shot handler (`process.once('SIGINT')`) restored the default as it ran, so such a command signalled the instant it
+was up was sent a second SIGINT that cut its shutdown off.* The group is now read the instant before the signal
+(`ProcessTable.tree`, a walk of the shell's descendants, so the reading does not push the signal past the window), and
+again at 250 ms and 1.5 s while the session runs. ~~A member is sent SIGINT once more, alone (`missedSigint`), only when
+the first reading found it still the shell, holding SIGINT off (the aimed reading found `dash` and its `vfork`ed child
+both `blocked`), and the later one finds it running another image at SIGINT's default. A process the first reading
+found running the command is never sent a second. With that predicate 0 of 200 ran on under six burners (twice) and
+without them; with re-delivery disabled, 8 of 200 still ran on under the burners.~~ *Falsified 2026-09-30 by the
+verifier's second round, kept beside its replacement: "at SIGINT's default" and "its name changed" miss what a dev server
+or a watcher is. Node catches SIGINT as it starts (as Python and a shell do), and a shell `exec`ing a shell keeps the
+name `sh`; 27 of 150 Node sessions and 39 of 200 `sh -c 'sleep 30; echo x'` sessions still ran on under six burners,
+with `sleep 30` alone passing.* A member the first reading found still the shell and not ignoring SIGINT is now sent it
+again, alone, when it runs another image, told by its name **or its arguments** (`/proc/<pid>/cmdline`), whatever it now
+does with SIGINT; where it had started nothing and is still the shell, what it started since is sent it; and with each,
+its descendants the first reading did not hold. A process the first reading found running the command is never sent a
+second, nor what it starts on receiving it. With that predicate 0 ran on of 150 Node, 200 `sh -c`, 200 `sh x.sh` and 200
+`sleep 30` sessions under six burners, against 15, 18, 28 and 5 with the check disabled. *Falsified 2026-09-30 by the
+verifier's third round, kept beside its replacement: "on Linux, the one host whose `/bin/sh` has the window" and "nor
+what it starts on receiving it" hold of `dash` alone. Where `/bin/sh` is `bash` (Fedora, RHEL, Arch), `bash` absorbs a
+SIGINT its command handled, goes on when that command exits 0, and `exec`s the last command of its `-c` list in place,
+so that clean-up — a shell replaced after the signal, by name and arguments — was sent a second SIGINT that killed it,
+under a false "vfork window" warning (measured through the manager with a `sh` link to `/bin/bash` 5.2, signalled 1 s
+and 5 s after the start, with `;` and `&&`).* The check is now armed only where the session's shell is `dash`, told
+once per manager by the shell file's real path (`hasVforkWindow`); any other shell is signalled once, and the same
+command under `bash` completes with its clean-up and no warning. Aimed at `dash`'s window without burners, 0 of 900 ran
+on either side of that correction. OQ-135 records the reading,
+its residue (an `exec` inside the reading's step; a script that traps SIGINT overridden; a shell other than `dash` not
+read), and stays open
+([the note](../../defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md)).

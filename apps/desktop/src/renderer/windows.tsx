@@ -2,9 +2,9 @@ import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { RUN_AGENT_ID, TERMINAL_REFUSALS, type ApprovalOption, type ApprovalPayload, type CommandOutcome, type HooksSummary, type PausePayload, type PauseResolution, type ProviderDialogPayload, type ProviderSignInResult, type SessionListItemPayload, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
-import { Acknowledgements, ApprovalDialog, createTerminalWindowStreams, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, restingView, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
+import { Acknowledgements, ApprovalDialog, ArtifactInspector, createTerminalWindowStreams, type ArtifactLoaded, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, restingView, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
 import { acknowledge, acknowledgements, bridge, cancelAgent, cancelRun, control, displayPrefs, openLink, replica, terminalHost, terminalStreams } from './shell.js';
-import { entryOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
+import { entryOf, useCancelOverlaid, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
 import { followCoalesced } from './coalesced-follow.js';
 
 /**
@@ -132,26 +132,46 @@ export function PersonaApp({ persona, initialSelect }: { persona: string; initia
     (window as unknown as { __rotarisPersonaSelect?: (id: string, focus: boolean) => boolean }).__rotarisPersonaSelect = (id, focus) => { setSelected(id); if (focus) setFocusSteer((n) => n + 1); return true; };
     return () => { document.removeEventListener('visibilitychange', onVisibility); delete (window as unknown as { __rotarisPersonaSelect?: unknown }).__rotarisPersonaSelect; };
   }, []);
-  const entry = useMemo(() => entryOf(snapshot, state.rows, state.session?.agents ?? []), [snapshot, state]);
+  // REQ-MONITOR-128 / REQ-MONITOR-296: this window's surfaces read the record under its optimistic cancels of one agent.
+  const session = useCancelOverlaid(state.session);
+  const entry = useMemo(() => entryOf(snapshot, state.rows, session), [snapshot, state.rows, session]);
   // PD-ORCH-005 clause 13 (OQ-100): in REQ-CHAT-008's recovery state the run-level agent presents `paused`, as in the main
   // window — from `restingView`, the one call the Workspace and the Mission root make too.
-  const needsRecovery = useNeedsRecovery(state.session?.id ?? null, state.session?.executionStatus ?? null);
-  const { runLevel } = useMemo(() => restingView(state.session, entry, needsRecovery), [state.session, entry, needsRecovery]);
-  const nowIso = useElapsedTick(visible ? state.session : null);
-  const declared = snapshot?.roles.find((r) => r.role === persona)?.tools ?? [];
+  const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
+  const { runLevel } = useMemo(() => restingView(session, entry, needsRecovery), [session, entry, needsRecovery]);
+  const nowIso = useElapsedTick(visible ? session : null);
+  const declared = snapshot?.roles.find((r) => r.role === persona)?.declaredTools ?? [];
   const display = useStore(displayPrefs, (s) => s);
+  // REQ-MONITOR-068/069 (live-run finding K1): an artifact link opens the artifact inspector IN THIS WINDOW (REQ-LIBRARY-131:
+  // modeless, one per id, re-raised when opened again; the inspectors are per window) — no command reaches the main
+  // window's Library from here, and the artifact is the loaded session's, which the run host serves to any window.
+  const [artifactsOpen, setArtifactsOpen] = useState<readonly { id: string; raised: number }[]>([]);
+  const openArtifact = (id: string) => setArtifactsOpen((current) => (current.some((x) => x.id === id) ? current.map((x) => (x.id === id ? { id, raised: x.raised + 1 } : x)) : [...current, { id, raised: 1 }]));
+  const loadArtifact = async (id: string) => {
+    const r = await bridge.command({ kind: 'artifacts.body', ref: id });
+    return r.ok ? { ok: true as const, artifact: r.value as ArtifactLoaded } : { ok: false as const, reason: r.detail ?? r.headline };
+  };
+  const saveArtifact = async (id: string, body: string) => {
+    const r = await bridge.command({ kind: 'artifacts.save', ref: id, body });
+    return r.ok ? { ok: true as const, editedAt: (r.value as { editedAt: string }).editedAt } : { ok: false as const, reason: r.detail ?? r.headline };
+  };
   return (<>
     <PersonaWindow
       onOpenLink={openLink} onAcknowledge={acknowledge} showReasoning={display.showReasoning} autoCollapseTools={display.autoCollapseTools}
       // Part AL2 — REQ-SHELL-075 (b): this window's own preview registry, and the pop-out request (REQ-CHAT-076).
       terminalPreview={(streamId) => terminalStreams.previewOf(streamId)} openTerminal={(streamId) => terminalHost.open(streamId)}
-      persona={persona} session={state.session} rows={state.rows} runLevel={runLevel} declaredTools={declared} selectedAgentId={selected} onSelectTab={setSelected}
+      persona={persona} session={session} rows={state.rows} runLevel={runLevel} declaredTools={declared} selectedAgentId={selected} onSelectTab={setSelected}
       nowIso={nowIso} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60} focusSteer={focusSteer}
       onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
       // REQ-SHELL-075(g) / REQ-MONITOR-009: the confirmed Cancel of the run's own instance is the run's final cancel
       // (PD-ORCH-005 clauses 3 and 15); of a child, that child's.
       onCancel={(agentId) => (agentId === RUN_AGENT_ID ? cancelRun() : cancelAgent(agentId))}
+      onOpenArtifact={openArtifact}
     />
+    {artifactsOpen.map((entry) => (
+      <ArtifactInspector key={entry.id} id={entry.id} raised={entry.raised} onLoad={loadArtifact} onSave={saveArtifact}
+        onClose={(id) => setArtifactsOpen((current) => current.filter((x) => x.id !== id))} />
+    ))}
     {/* ADR-0049's fourth decision: the acknowledgement stack is PER WINDOW, so this window owns its own — the same
         shared component the main window draws, swept for accessibility here in its own right (REQ-SHELL-112). */}
     <Acknowledgements store={acknowledgements} />

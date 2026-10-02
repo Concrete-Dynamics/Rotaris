@@ -1,0 +1,55 @@
+## A queued prompt's task id is not an 8-character hexadecimal id
+
+`Run.consumeQueued` appends each triggered queued prompt to the planner todo with the prompt's own id as the task id
+(`this.todo.appendTask('Queued Prompts', p.prompt_id, …)`). A prompt id is a full UUID (part-j-proof's queue scenario stores
+the task as `{ id: "36d4b6fa-…", … }`), so the task's backend id is 36 characters with hyphens, where REQ-CHAT-089 fixes
+every backend-assigned task id as 8 lowercase hexadecimal characters. Its name, "Queued Prompt: <first 8 characters of the
+prompt id>" (REQ-CHAT-040), already uses only the first eight; the id does not. Whether the other `appendTask` callers
+(`Run`'s 'Continued Prompts' task, whose id is `deps.taskId`) mint ids of the required form was not checked.
+
+Noticed 2026-10-01 by the verifier of the repair of
+[`a-queued-prompts-task-is-not-named-queued-prompt.md`](a-queued-prompts-task-is-not-named-queued-prompt.md)
+(acceptance A28, R-067), and written here by its repairer. Not repaired: out of that task's scope.
+
+**Repaired 2026-10-01.** The other callers had the same fault: the first run's task was `<session>:main:1` (`Sessions.start`)
+and a continue's `<session>:continued:<n>` (`continuedTaskId`); a planner phase had no id at all, the plan showing its name
+in that place; and an improvement run's plan (REQ-LIBRARY-060) was stored as main built it, each task under its proposal's
+`imp_…` id and its `improvement_run` phase with none. Every task and phase id the engine assigns is now minted by
+`mintTodoId` (`packages/engine/src/run/todo.ts`): 8 lowercase hexadecimal characters, unique within the todo (its tasks' and
+phases' ids) and, for a planner task, among the task ids the session's iterations recorded. The paths repaired: the first
+run's task (`Sessions.start`), a continue's (`continuedTaskId`), a queued prompt's (`Run.consumeQueued`), a planner todo
+edit's added task (live `Run.editTodo` and at rest; the id a request sends is no longer recorded), each phase `Todo` creates
+(`Phase.id`, shown by `projectPlannerTodo`, by which an edit names its phase), an improvement run's tasks and phase
+(`Todo.seeded`, when the run creates its todo from the plan main sends; the proposal stays named in each task's payload,
+REQ-LIBRARY-061's `Proposal: <id> (<category>)`), and a user's added task in an agent's or a child's todo (`editAgentTodo`,
+live and at rest, now minted against every id of that document; it was 8 hexadecimal characters already, unchecked for a
+repeat). An agent's own `todo` tool already gave a phase or task it left without an id 8 hexadecimal characters
+(`packages/agent-tools/src/tools/todo.ts`); an id an agent supplies is its own, not the backend's, and is untouched. (The
+first version of this outcome said "every backend task and phase id" with the improvement run's plan unrepaired; its
+verifier found the path, and the outcome was corrected in place.) The queued prompt stays traceable by its task's name and by the
+`prompt_triggered` timeline entry, which carries its full id. A record written under the old forms reads back unchanged:
+an id is compared, never parsed, and a phase with no id is shown and edited by its name. Pinned by
+`packages/engine/src/run/message-task.test.ts` ("every task and phase id a run appends is 8 lowercase hexadecimal
+characters…", which failed on `S-msg-1:main:1` before the repair), `run/todo.test.ts` (`mintTodoId`, phase ids, an old
+document edited by phase name, `Todo.seeded`), `run.test.ts` ("starts an improvement run from its supplied
+approved-proposal todo…", which stored `imp_1` before the repair), `todo-view.test.ts` (an agent todo add repeats no id of
+its document) and `control.test.ts`; `part-j-proof`'s queue scenario asserts every
+stored task and phase id has the form, finds the iteration that took the prompt up by its task's id (it compared the
+iteration's `todo_task_id` with the prompt's UUID), and finds the prompt by its timeline entry.
+
+## Specs
+
+REQ-CHAT-089 — "Task and phase ids assigned by the backend MUST be 8-character hexadecimal strings, fixed when the task or
+phase is created and unchanged thereafter … The hexadecimal digits MUST be lowercase". A repair has to keep the task
+traceable to its prompt some other way (the `prompt_triggered` timeline entry carries the full `prompt_id`), since the
+first eight characters of two prompt ids may collide.
+
+## Relevant files
+
+- `packages/engine/src/run/run.ts` — `consumeQueued`, which passes `p.prompt_id` as the task id.
+- `packages/engine/src/run/todo.ts` — `Todo.appendTask`, which stores the id it is given; `mintTodoId` since the repair.
+- `packages/engine/src/sessions.ts` — `start`'s `<session>:main:1` and `continuedTaskId`'s `<session>:continued:<n>`.
+- `packages/engine/src/session-writer.ts` — `triggerQueuedPrompts`, where the prompt id is recorded on the timeline.
+- `apps/desktop/src/main/commands/improvements.ts` — the improvement run's plan, its tasks under their proposals' ids;
+  `Todo.seeded` (`run/todo.ts`) since the repair.
+- `packages/engine/src/todo-view.ts` — `editAgentTodo`, an agent's or a child's todo edit.

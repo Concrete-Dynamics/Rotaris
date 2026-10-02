@@ -9,8 +9,20 @@ import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, ty
 import { nodeClocks } from '@rotaris/platform';
 import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, openStore, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
-/** PD-ORCH-005 revision 4 clause 14: what v24 added, undone before v23's so a test that lowers `user_version` below 24 can climb it again. */
-const UNDO_V24 = 'DROP TABLE agent_fingerprints;';
+/** REQ-MONITOR-044 with REQ-ORCH-153 (R-067): what v30 added, undone before v29's so a test that lowers `user_version` below 30 can climb it again. */
+const UNDO_V30 = 'DROP TABLE plan_roots;';
+/** REQ-MONITOR-102 with REQ-ORCH-153 (R-067): what v29 added, undone before v28's so a test that lowers `user_version` below 29 can climb it again. v30's goes first. */
+const UNDO_V29 = `${UNDO_V30} ALTER TABLE sessions DROP COLUMN plan_root_task_id; ALTER TABLE sessions DROP COLUMN plan_root_persona;`;
+/** REQ-LIBRARY-098 / REQ-TOOLS-152 (R-067): what v28 added, undone before v27's so a test that lowers `user_version` below 28 can climb it again. v29's goes first. */
+const UNDO_V28 = `${UNDO_V29} ALTER TABLE children DROP COLUMN attach_artifacts; ALTER TABLE children DROP COLUMN inherited_context_block;`;
+/** PD-ORCH-005 clause 3 (OQ-103, R-067): what v27 added, undone before v26's so a test that lowers `user_version` below 27 can climb it again. v28's goes first. */
+const UNDO_V27 = `${UNDO_V28} ALTER TABLE iterations DROP COLUMN cancel_accepted_at;`;
+/** REQ-MONITOR-102 (R-067): what v26 added, undone before v25's so a test that lowers `user_version` below 26 can climb it again. v27's goes first. */
+const UNDO_V26 = `${UNDO_V27} ALTER TABLE iterations DROP COLUMN root_tool_calls;`;
+/** REQ-TOOLS-152 (R-067): what v25 added, undone before v24's so a test that lowers `user_version` below 25 can climb it again. v26's goes first. */
+const UNDO_V25 = `${UNDO_V26} ALTER TABLE children DROP COLUMN suppress_auto_context;`;
+/** PD-ORCH-005 revision 4 clause 14: what v24 added, undone before v23's so a test that lowers `user_version` below 24 can climb it again. v25's goes first. */
+const UNDO_V24 = `${UNDO_V25} DROP TABLE agent_fingerprints;`;
 /** PD-ORCH-005: what v23 added, undone so a test that lowers `user_version` below 23 can migrate forward through it again. v24's goes first. */
 const UNDO_V23 = `${UNDO_V24} ALTER TABLE children DROP COLUMN interruption; ALTER TABLE children DROP COLUMN resume_state; ALTER TABLE children DROP COLUMN write_scope; DROP TABLE iterations; DROP TABLE agent_messages; DROP TABLE agent_terminals;`;
 
@@ -633,6 +645,25 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     r.db.close();
     forgetSpelling(r.dir);
   });
+
+  it('REQ-ORCH-014: the newest entry of one name is read under the primary key, newest first, with no sort', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000092');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const dal = new StoreDal(r.db);
+    const sid = asSessionId('S-latest');
+    dal.upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    expect(dal.latestTimelineEntry(sid, 'run_continuation_intent')).toBeUndefined();
+    dal.insertTimeline(sid, 1, 't1', 'run_continuation_intent', 'rotaris', 'first', '{"n":1}', 'aaaaaaaa', 'info');
+    dal.insertTimeline(sid, 2, 't2', 'run_start', 'rotaris', 'started', '{}', 'bbbbbbbb', 'info');
+    dal.insertTimeline(sid, 3, 't3', 'run_continuation_intent', 'rotaris', 'second', '{"n":3}', 'cccccccc', 'info');
+    dal.insertTimeline(sid, 4, 't4', 'run_start', 'rotaris', 'started', '{}', 'dddddddd', 'info');
+    expect(dal.latestTimelineEntry(sid, 'run_continuation_intent')).toMatchObject({ ordinal: 3, metadata: '{"n":3}' });
+    const plan = (r.db.prepare('EXPLAIN QUERY PLAN SELECT * FROM timeline WHERE session_id = ? AND name = ? ORDER BY ordinal DESC LIMIT 1').all(sid, 'x') as { detail: string }[]).map((p) => p.detail).join(' | ');
+    expect(plan).toMatch(/PRIMARY KEY|USING INDEX sqlite_autoindex_timeline_1/);
+    expect(plan).not.toMatch(/TEMP B-TREE/);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
 });
 
 describe('store - a declared index is a claim about a query plan; the plan is asserted (spike 8)', () => {
@@ -654,6 +685,15 @@ describe('store - a declared index is a claim about a query plan; the plan is as
     // index's own order, with no sort (found by phase 6's third review: a hand-written copy did not cover the statement).
     const statements = (new StoreDal(r.db) as unknown as { stmts: Record<string, { source: string }> }).stmts;
     expect(plan(statements['artifactsOf']!.source, 's')).toBe('SEARCH artifacts USING INDEX artifacts_by_created (session_id=?)');
+    // Live-run finding K1 (REQ-MONITOR-044/052): the agent surfaces' links are read at every snapshot, through the same index.
+    expect(plan(statements['artifactLinksOf']!.source, 's')).toBe('SEARCH artifacts USING INDEX artifacts_by_created (session_id=?)');
+    // REQ-LIBRARY-093 with OQ-106: so are the publishes that name a root no iteration records — the same index, and each
+    // publish's conversation looked up among the session's children and its iterations' roots by primary-key prefix.
+    const roots = plan(statements['rootPublishersOf']!.source, 's');
+    expect(roots).toContain('SEARCH a USING INDEX artifacts_by_created (session_id=?)');
+    expect(roots).toMatch(/SEARCH c USING (COVERING )?INDEX sqlite_autoindex_children_1 \(session_id=\? AND task_id=\?\)/);
+    expect(roots).toContain('SEARCH i USING INDEX sqlite_autoindex_iterations_1 (session_id=?)');
+    expect(roots).not.toMatch(/SCAN|TEMP B-TREE/);
     r.db.close();
     forgetSpelling(r.dir);
   });
@@ -762,11 +802,14 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     // rebuilt `improvement_artifacts` for PD-LIBRARY-002's retrospective, which belongs to no session;
     // v20 gives `plan_cycles` the cascade REQ-SESSION-166's delete assumes; v21 records the cost qualifier; v22 the
     // continuation a child was delegated as (PD-ORCH-004); v23 the record a paused run resumes from (PD-ORCH-005); v24 the
-    // fingerprint each agent started with (PD-ORCH-005 revision 4 clause 14).
-    expect(CURRENT_SCHEMA_VERSION).toBe(24);
+    // fingerprint each agent started with (PD-ORCH-005 revision 4 clause 14); v25 the call's `suppress_auto_context` (REQ-TOOLS-152);
+    // v26 the root's tool-call count on its iteration (REQ-MONITOR-102); v27 the explicit cancel's mark (PD-ORCH-005 clause 3, OQ-103);
+    // v28 the call's attachments and inherited-context block (REQ-LIBRARY-098, REQ-TOOLS-152); v29 the plan cycle's root
+    // under way (REQ-MONITOR-102 with REQ-ORCH-153); v30 every plan cycle's root, for good (REQ-MONITOR-044 with REQ-ORCH-153).
+    expect(CURRENT_SCHEMA_VERSION).toBe(30);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
-    expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null, continuation_of: null, interruption: null, resume_state: null, write_scope: '[]' });
+    expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null, continuation_of: null, interruption: null, resume_state: null, write_scope: '[]', suppress_auto_context: 0, attach_artifacts: '[]', inherited_context_block: '' });
     // PD-ORCH-004: a continuation carries the task id of the child it continues.
     dal.insertChild({ ...child(sid, 'bg_00000002'), continuation_of: 'bg_00000001' });
     expect(dal.getChild(sid, 'bg_00000002')!.continuation_of).toBe('bg_00000001');
@@ -917,6 +960,8 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
       dal.upsertAgentTerminal({ session_id: sid, terminal_id: 'ts_00000001', task_id: 'bg_00000000', command: 'c', started_at: 't', state: 'running', exit_code: null, output_tail: '', updated_at: 't' });
       // v24 (PD-ORCH-005 revision 4 clause 14): the fingerprint beside the agent's record goes with it.
       dal.insertAgentFingerprint({ session_id: sid, task_id: 'bg_00000000', iteration: 1, instructions: 'i', tools: 't', at: 't' });
+      // v30 (REQ-MONITOR-044 with REQ-ORCH-153): a plan cycle's root is part of the session's record and goes with it.
+      dal.insertPlanRoot({ session_id: sid, root_task_id: 'bg_0000000f', root_canonical_name: 'orchestrator', root_persona: 'orchestrator', opened_at: 't' });
       // Part Y (v12): the artifact record goes with its session, so its body file is the only thing left to remove.
       dal.insertArtifact({
         session_id: raw, id: `art_${raw.slice(-6)}A`, slug: `slug-${raw.toLowerCase()}`, title: 't', kind: 'agent_published', source_task_id: null, canonical_name: null, source_persona: 'p',
@@ -932,10 +977,10 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
     // requirement's run history outlives the session it names (REQ-TRACE-405/476: "no requirement SHALL be silently
     // reset"), so the dependants of the session row are the tables whose session_id column REFERENCES it.
     const tables = (r.db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND (m.name = 'sessions' OR EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) WHERE \"from\" = 'session_id' AND \"table\" = 'sessions'))").all() as { name: string }[]).map((t) => t.name).sort();
-    // Every table whose session_id references the session row is a dependant of it: nineteen today (v20's
-    // `plan_cycles` cascade, v23's three and v24's one among them) plus `sessions` itself. `delivery_runs` names a session and is NOT among them (Part AK).
+    // Every table whose session_id references the session row is a dependant of it: twenty today (v20's
+    // `plan_cycles` cascade, v23's three, v24's one and v30's `plan_roots` among them) plus `sessions` itself. `delivery_runs` names a session and is NOT among them (Part AK).
     expect((r.db.prepare("SELECT count(*) AS c FROM pragma_table_info('delivery_runs') WHERE name = 'session_id'").get() as { c: number }).c).toBe(1);
-    expect(tables).toEqual(['agent_fingerprints', 'agent_messages', 'agent_terminals', 'artifacts', 'checkpoints', 'children', 'events', 'issues', 'iterations', 'launch_audits', 'model_slot_queue', 'permission_audit', 'plan_cycles', 'queued_prompts', 'ring_state', 'session_locks', 'sessions', 'timeline', 'tool_calls', 'transcript_rows']);
+    expect(tables).toEqual(['agent_fingerprints', 'agent_messages', 'agent_terminals', 'artifacts', 'checkpoints', 'children', 'events', 'issues', 'iterations', 'launch_audits', 'model_slot_queue', 'permission_audit', 'plan_cycles', 'plan_roots', 'queued_prompts', 'ring_state', 'session_locks', 'sessions', 'timeline', 'tool_calls', 'transcript_rows']);
     const count = (table: string, sid: string) => (r.db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid) as { c: number }).c;
     for (const t of tables) expect(count(t, gone), `${t} planted`).toBeGreaterThan(0);
     // The delete runs on the RUN HOST's kind of connection — openStore on the resolved file, no migrateStore — which is
@@ -1058,10 +1103,10 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
   it('is v19, and the migration list is append-only with nothing renumbered', () => {
     // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
     // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16; the plan gate appended
-    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20; PD-MONITOR-001 revision 2 appended v21; PD-ORCH-004 appended v22; PD-ORCH-005 appended v23, and its revision 4 v24. The ladder is asserted whole rather than at its top, so a later part
+    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20; PD-MONITOR-001 revision 2 appended v21; PD-ORCH-004 appended v22; PD-ORCH-005 appended v23, and its revision 4 v24; REQ-TOOLS-152's `suppress_auto_context` (R-067) appended v25; REQ-MONITOR-102's root count (R-067) appended v26; the explicit cancel's mark (OQ-103, R-067) appended v27; a child's attachments and inherited-context block (REQ-LIBRARY-098, REQ-TOOLS-152, R-067) appended v28; the plan cycle's root under way (REQ-MONITOR-102 with REQ-ORCH-153, R-067) appended v29; every plan cycle's root, kept (REQ-MONITOR-044 with REQ-ORCH-153, R-067), v30. The ladder is asserted whole rather than at its top, so a later part
     // that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(24);
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(30);
   });
 });
 
@@ -1236,6 +1281,130 @@ describe('store — v24: the fingerprint an agent started with (PD-ORCH-005 revi
     const dal = new StoreDal(r.db);
     expect(dal.agentMessagesOf(sid, 'bg_000000a1')).toHaveLength(1);
     expect(dal.agentFingerprintOf(sid, 'bg_000000a1')).toBeUndefined();
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('REQ-TOOLS-152: a v24 store migrates to v25; a child written before it gives the sibling index, and the flag a delegate set is stored', () => {
+    const { r, sid } = open('3');
+    r.db.exec(UNDO_V25);
+    r.db.pragma('user_version = 24');
+    r.db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, task, spawned_at)
+      VALUES (?, 'bg_00000001', 'old', 'old', 'coding-agent', 'failed', 'root', 1, 1, 'm', 't', 't')`).run(sid);
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 24, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    expect(dal.getChild(sid, 'bg_00000001')!.suppress_auto_context).toBe(0);
+    const child = { session_id: sid, canonical_name: 'x', given_name: 'x', persona: 'coding-agent', state: 'queued', parent_id: 'root', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' };
+    dal.insertChild({ ...child, task_id: 'bg_00000002', suppress_auto_context: 1 });
+    dal.insertChild({ ...child, task_id: 'bg_00000003' });
+    expect(dal.getChild(sid, 'bg_00000002')!.suppress_auto_context).toBe(1);
+    expect(dal.getChild(sid, 'bg_00000003')!.suppress_auto_context).toBe(0);
+    expect(() => dal.insertChild({ ...child, task_id: 'bg_00000004', suppress_auto_context: 2 })).toThrow(/CHECK/);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('REQ-MONITOR-102: a v25 store migrates to v26; an iteration written before it has no known root count and keeps none, and one opened after starts at 0 and counts', () => {
+    const { r, sid } = open('4');
+    r.db.exec(UNDO_V26);
+    r.db.pragma('user_version = 25');
+    r.db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_canonical_name, root_persona, todo_task_id, task, state, opened_at)
+      VALUES (?, 1, 'bg_000000a1', 'orchestrator', 'orchestrator', 't', 't', 'open', 't')`).run(sid);
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 25, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    expect(dal.getIteration(sid, 1)!.root_tool_calls).toBeNull();
+    expect(dal.addIterationRootCalls(sid, 1, 3)).toBe(false);
+    expect(dal.getIteration(sid, 1)!.root_tool_calls).toBeNull();
+    dal.closeIteration(sid, 1, 'succeeded', 't');
+    dal.insertIteration({ session_id: sid, iteration: 2, root_task_id: 'bg_000000a2', root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+    expect(dal.getIteration(sid, 2)!.root_tool_calls).toBe(0);
+    expect(dal.addIterationRootCalls(sid, 2, 3)).toBe(true);
+    expect(dal.addIterationRootCalls(sid, 2, 2)).toBe(true);
+    expect(dal.getIteration(sid, 2)!.root_tool_calls).toBe(5);
+    expect(() => r.db.prepare('UPDATE iterations SET root_tool_calls = -1 WHERE session_id = ? AND iteration = 2').run(sid)).toThrow(/CHECK/);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('PD-ORCH-005 clause 3 (OQ-103, R-067): a v26 store migrates to v27; an iteration written before it carries no mark, and the mark lands on the open iteration only, the first acceptance kept', () => {
+    const { r, sid } = open('5');
+    r.db.exec(UNDO_V27);
+    r.db.pragma('user_version = 26');
+    r.db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_canonical_name, root_persona, todo_task_id, task, state, opened_at, root_tool_calls)
+      VALUES (?, 1, 'bg_000000a1', 'orchestrator', 'orchestrator', 't', 't', 'closed', 't', 0)`).run(sid);
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 26, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    expect(dal.getIteration(sid, 1)!.cancel_accepted_at).toBeNull();
+    // No iteration open: nothing to mark, and the closed one is left as it is.
+    expect(dal.markCancelAccepted(sid, 'a')).toBe(false);
+    expect(dal.getIteration(sid, 1)!.cancel_accepted_at).toBeNull();
+    dal.insertIteration({ session_id: sid, iteration: 2, root_task_id: 'bg_000000a2', root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+    expect(dal.getIteration(sid, 2)!.cancel_accepted_at).toBeNull();
+    expect(dal.markCancelAccepted(sid, 'a')).toBe(true);
+    expect(dal.markCancelAccepted(sid, 'b')).toBe(false);
+    expect(dal.getIteration(sid, 2)!.cancel_accepted_at).toBe('a');
+    // The close keeps it: a closed row's mark is history.
+    dal.closeIteration(sid, 2, 'cancelled', 't');
+    expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', cancel_accepted_at: 'a' });
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('REQ-LIBRARY-098 / REQ-TOOLS-152 (R-067): a v27 store migrates to v28; a child written before it carries no attachments and no inherited block, and what a delegate carried is stored', () => {
+    const { r, sid } = open('6');
+    r.db.exec(UNDO_V28);
+    r.db.pragma('user_version = 27');
+    r.db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, task, spawned_at)
+      VALUES (?, 'bg_00000001', 'old', 'old', 'coding-agent', 'paused', 'root', 1, 1, 'm', 't', 't')`).run(sid);
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 27, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    expect(dal.getChild(sid, 'bg_00000001')).toMatchObject({ attach_artifacts: '[]', inherited_context_block: '' });
+    const child = { session_id: sid, canonical_name: 'x', given_name: 'x', persona: 'coding-agent', state: 'queued', parent_id: 'root', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '["bg_00000001"]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' };
+    dal.insertChild({ ...child, task_id: 'bg_00000002', attach_artifacts: '["survey","art_1"]', inherited_context_block: '[Inherited context]\n\nreport' });
+    dal.insertChild({ ...child, task_id: 'bg_00000003' });
+    expect(dal.getChild(sid, 'bg_00000002')).toMatchObject({ attach_artifacts: '["survey","art_1"]', inherited_context_block: '[Inherited context]\n\nreport' });
+    expect(dal.getChild(sid, 'bg_00000003')).toMatchObject({ attach_artifacts: '[]', inherited_context_block: '' });
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('REQ-MONITOR-102 with REQ-ORCH-153 (R-067): a v28 store migrates to v29; a session written before it names no plan cycle\'s root, one recorded under way is released once', () => {
+    const { r, sid } = open('7');
+    r.db.exec(UNDO_V29);
+    r.db.pragma('user_version = 28');
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 28, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    expect(dal.getSession(sid)).toMatchObject({ plan_root_task_id: null, plan_root_persona: null });
+    expect(dal.clearPlanRoot(sid, 'bg_000000a1')).toBe(false);
+    dal.setPlanRoot(sid, 'bg_000000a1', 'orchestrator');
+    expect(dal.getSession(sid)).toMatchObject({ plan_root_task_id: 'bg_000000a1', plan_root_persona: 'orchestrator' });
+    // Another root's release leaves it; its own releases it once.
+    expect(dal.clearPlanRoot(sid, 'bg_000000a2')).toBe(false);
+    expect(dal.clearPlanRoot(sid, 'bg_000000a1')).toBe(true);
+    expect(dal.clearPlanRoot(sid, 'bg_000000a1')).toBe(false);
+    expect(dal.getSession(sid)).toMatchObject({ plan_root_task_id: null, plan_root_persona: null });
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('REQ-MONITOR-044 with REQ-ORCH-153 and REQ-LIBRARY-093 (R-067): a v29 store migrates to v30; a session written before it records no plan cycle\'s root, and one recorded is kept once, in start order', () => {
+    const { r, sid } = open('8');
+    r.db.exec(UNDO_V30);
+    r.db.pragma('user_version = 29');
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 29, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    expect(dal.planRootsOf(sid)).toEqual([]);
+    const second = { session_id: sid, root_task_id: 'bg_000000b2', root_canonical_name: 'Lead-Planner', root_persona: 'Lead Planner', opened_at: '2026-09-29T02:00:00.000Z' };
+    const first = { session_id: sid, root_task_id: 'bg_000000b1', root_canonical_name: 'Lead-Planner', root_persona: 'Lead Planner', opened_at: '2026-09-29T01:00:00.000Z' };
+    expect(dal.insertPlanRoot(second)).toBe(true);
+    expect(dal.insertPlanRoot(first)).toBe(true);
+    // Who the root was is never rewritten: a second write of the same root changes nothing.
+    expect(dal.insertPlanRoot({ ...first, root_persona: 'other', opened_at: '2026-09-29T03:00:00.000Z' })).toBe(false);
+    expect(dal.planRootsOf(sid)).toEqual([first, second]);
+    // Unlike v29's pair, the record outlives the root's release.
+    dal.setPlanRoot(sid, 'bg_000000b1', 'Lead Planner');
+    expect(dal.clearPlanRoot(sid, 'bg_000000b1')).toBe(true);
+    expect(dal.planRootsOf(sid)).toEqual([first, second]);
     r.db.close();
     forgetSpelling(r.dir);
   });

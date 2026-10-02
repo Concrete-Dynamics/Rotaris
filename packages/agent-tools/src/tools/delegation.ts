@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import { z } from 'zod';
 import { errorObservation, INTERRUPTED_FAILURE_KIND, observation, type ToolExecutor } from './types.js';
 
@@ -8,7 +9,7 @@ import { errorObservation, INTERRUPTED_FAILURE_KIND, observation, type ToolExecu
  * `wait_for_tasks` with the returned id.
  */
 export interface DelegationPort {
-  delegate(parentId: string, req: { persona: string; taskName: string; task: string; dependsOn: readonly string[]; inheritedContext: readonly string[]; category: string; runInBackground: boolean; attachArtifacts: readonly string[]; writeScope: readonly string[]; continuationOf?: string | undefined }): Promise<
+  delegate(parentId: string, req: { persona: string; taskName: string; task: string; dependsOn: readonly string[]; inheritedContext: readonly string[]; category: string; runInBackground: boolean; attachArtifacts: readonly string[]; writeScope: readonly string[]; continuationOf?: string | undefined; suppressAutoContext?: boolean | undefined; sessionId?: string | undefined }): Promise<
     | { status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; canonicalName: string; taskId: string; message: string; attachments?: { attached: number; unresolved: readonly string[] } | undefined }
     | { status: 'rejected'; canonicalName: string; message: string }
   >;
@@ -24,6 +25,7 @@ const delegateSchema = z.object({
   depends_on: z.array(z.string()).default([]),
   inherited_context: z.array(z.string()).default([]),
   category: z.enum(['quick', 'deep', 'planning', 'research']).optional(),
+  /** REQ-TOOLS-152 as PD-ORCH-005 clause 22 rules it: the task_id of your own child that has ended, to follow it up with `task`. */
   session_id: z.string().optional(),
   run_in_background: z.boolean().default(true),
   attach_artifacts: z.array(z.string()).default([]),
@@ -42,11 +44,11 @@ export function renderDelegateObservation(canonical: string, status: string, mes
 export function delegateTool(port: DelegationPort, parentId: string): ToolExecutor<z.infer<typeof delegateSchema>> {
   return {
     name: 'delegate',
-    description: 'Delegate a task to a specialist persona (requirements-engineer, codebase-analyst, librarian, architect, planner, coding-agent, tester, docs-writer, refactorer, verifier, ui-verifier, gatekeeper; aliases coder, playwright). Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false. When the child will write files, give write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit. When a child\'s report makes a continuation offer, give continuation_of: that child\'s task_id, to delegate the remaining work as its continuation.',
+    description: 'Delegate a task to a specialist persona (requirements-engineer, codebase-analyst, librarian, architect, planner, coding-agent, tester, docs-writer, refactorer, verifier, ui-verifier, gatekeeper; aliases coder, playwright). Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false. When the child will write files, give write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit. When a child\'s report makes a continuation offer, give continuation_of: that child\'s task_id, to delegate the remaining work as its continuation. To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead.',
     schema: delegateSchema,
     label: (a) => `delegate ${a.persona}: ${a.task_name}`,
     execute: async (a) => {
-      const r = await port.delegate(parentId, { persona: a.persona, taskName: a.task_name, task: a.task, dependsOn: a.depends_on, inheritedContext: a.inherited_context, category: a.category ?? '', runInBackground: a.run_in_background, attachArtifacts: a.attach_artifacts, writeScope: a.write_scope, ...(a.continuation_of === undefined ? {} : { continuationOf: a.continuation_of }) });
+      const r = await port.delegate(parentId, { persona: a.persona, taskName: a.task_name, task: a.task, dependsOn: a.depends_on, inheritedContext: a.inherited_context, category: a.category ?? '', runInBackground: a.run_in_background, attachArtifacts: a.attach_artifacts, writeScope: a.write_scope, ...(a.continuation_of === undefined ? {} : { continuationOf: a.continuation_of }), ...(a.suppress_auto_context ? { suppressAutoContext: true } : {}), ...(a.session_id === undefined || a.session_id === '' ? {} : { sessionId: a.session_id }) });
       if (r.status === 'rejected') return errorObservation(renderDelegateObservation(r.canonicalName, 'rejected', r.message, null));
       // REQ-LIBRARY-098 (Part Y): the attachments are injected as the child's `PRIOR AGENT CONTEXT (FULL)` block; what
       // the store could not resolve is reported HERE, to the caller, rather than only inside the child's own block.
@@ -54,8 +56,8 @@ export function delegateTool(port: DelegationPort, parentId: string): ToolExecut
       // from the code with its reason kept in this comment.
       const warnings: string[] = [];
       if (r.attachments) {
-        if (r.attachments.attached > 0) warnings.push(`${r.attachments.attached} artifact(s) were attached to its context.`);
-        if (r.attachments.unresolved.length > 0) warnings.push(`${r.attachments.unresolved.length} attachment(s) could not be resolved: ${r.attachments.unresolved.join(', ')}.`);
+        if (r.attachments.attached > 0) warnings.push(`${countNoun(r.attachments.attached, 'artifact')} ${r.attachments.attached === 1 ? 'was' : 'were'} attached to its context.`);
+        if (r.attachments.unresolved.length > 0) warnings.push(`${countNoun(r.attachments.unresolved.length, 'attachment')} could not be resolved: ${r.attachments.unresolved.join(', ')}.`);
       }
       let text = renderDelegateObservation(r.canonicalName, r.status, [r.message, ...warnings].join(' '), r.taskId);
       if (!a.run_in_background) {

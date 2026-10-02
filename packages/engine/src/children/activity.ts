@@ -16,6 +16,8 @@ export interface SeedCall {
 }
 
 interface AgentEntry {
+  /** REQ-ORCH-089 / REQ-MONITOR-119: the seconds of silence its stall watch's latest evaluation found, while stalled. */
+  stalledSeconds: number | null;
   /** First-call order, so REQ-MONITOR-062's chip order never depends on the state that changed. */
   readonly called: string[];
   readonly calledSet: Set<string>;
@@ -31,7 +33,7 @@ export class AgentActivity {
 
   private entry(agent: string): AgentEntry {
     let e = this.agents.get(agent);
-    if (!e) { e = { called: [], calledSet: new Set(), active: new Map(), count: 0, contextUsed: 0, compressions: 0 }; this.agents.set(agent, e); }
+    if (!e) { e = { stalledSeconds: null, called: [], calledSet: new Set(), active: new Map(), count: 0, contextUsed: 0, compressions: 0 }; this.agents.set(agent, e); }
     return e;
   }
 
@@ -77,8 +79,35 @@ export class AgentActivity {
     return this.agents.get(agent)?.compressions ?? 0;
   }
 
+  /**
+   * REQ-ORCH-089 / REQ-MONITOR-119/120: the host's stall callback — every evaluation of the agent's stall watch reports the
+   * seconds of silence it found while it finds the agent stalled, and null otherwise (recovered, waiting on its tools, its
+   * watch disarmed). Returns whether the figure changed, so the caller republishes the record only then: at every evaluation
+   * of a stall, since its figure advances, and once at a recovery.
+   */
+  stalled(agent: string, seconds: number | null): boolean {
+    const e = this.entry(agent);
+    const next = seconds === null ? null : Math.max(0, Math.floor(seconds));
+    if (e.stalledSeconds === next) return false;
+    e.stalledSeconds = next;
+    return true;
+  }
+  stalledSeconds(agent: string): number | null {
+    return this.agents.get(agent)?.stalledSeconds ?? null;
+  }
+
   calledTools(agent: string): string[] {
     return [...(this.agents.get(agent)?.called ?? [])];
+  }
+  /**
+   * The called tools of every agent `include` admits, once each: agents in the order the tracker first saw them, each
+   * agent's in its first-call order. `entryToolsOf` reads the run-level agent's history this way when no iteration names
+   * the root it ran as (REQ-MONITOR-060 with REQ-ORCH-153).
+   */
+  calledToolsWhere(include: (agent: string) => boolean): string[] {
+    const out = new Set<string>();
+    for (const [agent, e] of this.agents) if (include(agent)) for (const tool of e.called) out.add(tool);
+    return [...out];
   }
   activeTools(agent: string): string[] {
     const e = this.agents.get(agent);

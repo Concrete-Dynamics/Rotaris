@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { EncodedKey } from '@rotaris/contracts';
 import { resolveTerminalColours, resolveTerminalFont, useThemeVersion } from './colours.js';
-import { GeometryReporter, PREFERRED_COLS, PREFERRED_ROWS, proposeGeometry, type GridGeometry } from './geometry.js';
+import { GeometryReporter, PREFERRED_COLS, PREFERRED_ROWS, proposeGeometry, RemeasureGate, type GridGeometry } from './geometry.js';
 import { decideKey } from './keys.js';
 import { GRID_DESCRIPTION, GRID_NAME } from './labels.js';
 import { copyText, type CopyOutcome } from './selection.js';
@@ -68,11 +68,6 @@ export function TerminalGrid({ view, armed, running, onKey, onRejectedInput, onC
   useEffect(() => { latest.current = { armed, running, onKey, onRejectedInput, onCopy, onGeometry }; });
   // One reporter for the grid's life: it reports only on change (REQ-SHELL-100) and the count is what the proof reads.
   const reporter = useRef<GeometryReporter | null>(null);
-  // Defect fifty-five (ADR-0047 note): a theme change that alters the face also re-lays the tab's header in the SAME
-  // frame, the host shrinks, and the resize observer measured it against the cell the library had painted with the OLD
-  // face — one wrong geometry reached the process a frame before the right one. While a re-measure is pending, the
-  // observer stays quiet; the frame after the library has repainted measures once, with the new cell.
-  const remeasurePending = useRef(false);
 
   // Mount the library's container; name the element that actually takes focus (REQ-SHELL-095/099).
   useLayoutEffect(() => {
@@ -124,24 +119,33 @@ export function TerminalGrid({ view, armed, running, onKey, onRejectedInput, onC
     if (proposal && reporter.current.offer(proposal)) view.resize(proposal.cols, proposal.rows);
   }, [view]);
 
+  // Defect fifty-five (ADR-0047) and its recurrence under load: a face change re-lays the tab's header in the same frame,
+  // and the resize observer can run before React has rendered the theme change. Every measurement therefore goes
+  // through the gate, which measures only against the face the library was given and applies a newer one first.
+  const gate = useRef<RemeasureGate | null>(null);
   useLayoutEffect(() => {
-    const root = document.documentElement;
-    remeasurePending.current = true;
-    view.applyTheme(resolveTerminalColours(root), resolveTerminalFont(root));
-    // The library re-measures its own cell on the font change; measure after it has painted with the new face.
-    const frame = requestAnimationFrame(() => { remeasurePending.current = false; measure(); });
-    return () => cancelAnimationFrame(frame);
-  }, [view, measure, themeVersion]);
+    const current = new RemeasureGate({
+      face: () => resolveTerminalFont(document.documentElement),
+      apply: (face) => { view.applyTheme(resolveTerminalColours(document.documentElement), face); },
+      measure,
+      nextFrame: (run) => { const frame = requestAnimationFrame(run); return () => cancelAnimationFrame(frame); },
+    });
+    gate.current = current;
+    return () => { current.dispose(); if (gate.current === current) gate.current = null; };
+  }, [view, measure]);
+
+  // The library re-measures its own cell on the font change; the gate measures in the frame after it has repainted.
+  useLayoutEffect(() => { gate.current?.retheme(); }, [view, measure, themeVersion]);
 
   useEffect(() => {
     const element = host.current;
     if (!element || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => { if (!remeasurePending.current) measure(); });
+    const observer = new ResizeObserver(() => { gate.current?.observe(); });
     observer.observe(element);
-    const onVisibility = () => { if (!remeasurePending.current) measure(); };
+    const onVisibility = () => { gate.current?.observe(); };
     document.addEventListener('visibilitychange', onVisibility);
     return () => { observer.disconnect(); document.removeEventListener('visibilitychange', onVisibility); };
-  }, [measure]);
+  }, []);
 
   // REQ-SHELL-101: the wheel, ours, in the capture phase — the library's own handler never runs.
   useEffect(() => {

@@ -76,6 +76,10 @@ export const McpSecretsViewSchema = z.object({
 export const MCP_SETUP_STEP_IDS = ['create', 'index', 'memory'] as const;
 export const MCP_SETUP_STEP_STATUSES = ['pending', 'running', 'succeeded', 'failed', 'skipped-no-code', 'not-attempted'] as const;
 export const MCP_SETUP_OUTCOMES = ['completed', 'failed', 'cancelled', 'unavailable'] as const;
+/** Why a `failed` step was stopped before it finished: the setup's cancellation, or its budget exhausted (REQ-MCP-099). */
+export const MCP_SETUP_STEP_STOPS = ['cancelled', 'budget'] as const;
+/** Why a step did not run its command: the creation step's marker already present, or a workspace without code (REQ-MCP-099). */
+export const MCP_SETUP_STEP_SKIPS = ['marker-present', 'no-code'] as const;
 export const McpSetupStepSchema = z.object({
   id: z.enum(MCP_SETUP_STEP_IDS),
   label: z.string(),
@@ -83,6 +87,24 @@ export const McpSetupStepSchema = z.object({
   /** A failing step's output, its LAST 400 characters (REQ-MCP-099); a skipped or unattempted step's reason. */
   detail: z.string(),
   elapsedMs: z.number().nonnegative().nullable(),
+  /**
+   * Present only on a step stopped before it finished, saying what stopped it, so a reader that owes its own words for
+   * such a step — REQ-WORKSPACE-092's two fixed sentences — need not read them out of `detail`, which stays the run host's.
+   */
+  stopped: z.enum(MCP_SETUP_STEP_STOPS).optional(),
+  /**
+   * Present only on a step that did not run its command because it had no need to, saying why — the facts a reader that
+   * owes its own words for such a step (REQ-WORKSPACE-091's fixed sentences) reads instead of `detail`.
+   */
+  skipped: z.enum(MCP_SETUP_STEP_SKIPS).optional(),
+  /**
+   * Present only on a step whose command ran, stopped or not: the end of its combined standard output and standard error
+   * as captured, trimmed and at most the last 400 characters (REQ-MCP-099), with none of `detail`'s prose around it — so a
+   * reader that owes REQ-WORKSPACE-092's "last 400 bytes" cuts it from the output itself. Empty when it wrote nothing.
+   */
+  output: z.string().optional(),
+  /** Present only on a step whose command could not be started: the launch's own error text, without `detail`'s prose. */
+  startError: z.string().optional(),
 });
 export type McpSetupStep = z.infer<typeof McpSetupStepSchema>;
 /**

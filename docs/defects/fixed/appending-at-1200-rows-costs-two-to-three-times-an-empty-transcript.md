@@ -584,7 +584,7 @@ the first form:
 2. **The update shape compares keys only past the rows both arrays share** (`pool.ts`'s `updateShape`). *Test:* an append
    at 1,200 reads at most four keys — the first form read 2,401 — and 2,000 seeded pairs answer what the first form
    answered. (It never answers `extend`, and neither did the first form: recorded as
-   [`the-update-shape-never-answers-extend.md`](../the-update-shape-never-answers-extend.md).)
+   [`the-update-shape-never-answers-extend.md`](the-update-shape-never-answers-extend.md).)
 3. **The places are built from the previous projection's** (`Row.tsx`'s `placementsFrom`, carried by the projector): a
    row the bounded form carried over keeps its place object, and above the first changed position only a row entering or
    leaving the most recent tool pair gets a new one. *Test:* an appended tool row at 1,200 builds its own place and
@@ -769,10 +769,10 @@ Left open, and not this note's: the comparison's reading under a burst and again
 with this round's evidence — the part-empty first launch still charges a full viewport's rebinding, about 1.6 ms an
 increment, to the loaded side), and the proof on Windows, which this Linux container cannot run. Noticed on the way and
 recorded, not repaired:
-[`a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`](../a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md),
-[`the-update-shape-never-answers-extend.md`](../the-update-shape-never-answers-extend.md), and — running the proofs whose
+[`a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`](a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md) (repaired 2026-09-29),
+[`the-update-shape-never-answers-extend.md`](the-update-shape-never-answers-extend.md), and — running the proofs whose
 surfaces this round touched — [`terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md`](terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md) (a duplicate of a note `main` had already repaired; settled at the merge)
-and [`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](../chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md);
+and [`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md);
 `rows-proof`, `questions-proof`, `layout-proof`, `compression-proof` and `plan-gate-proof` passed. The runs' logs,
 `append.json` files and traces were kept beside the work; `.proof/transcript-proof/` holds only the last. Reported back
 into ADR-0045 in place, with one row in `first-executions.md` and OQ-89's evidence.

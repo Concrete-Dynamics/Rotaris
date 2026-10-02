@@ -4,7 +4,7 @@
  * Both rules live in `harness.mjs`, and both were broken by scripts that spelled their own answer:
  *
  *   1. **The scratch global configuration directory comes from `configDirFor`.** Twelve scripts spelled
- *      `join(local, 'rotaris', 'config')`, which is the Windows answer only; off Windows the product never read what
+ *      `join(local, 'rotaris', 'config')`, which was then the Windows answer only; off Windows the product never read what
  *      those proofs wrote (REQ-CONFIG-001, REQ-STARTUP-145). `proof-isolation.test.ts` keeps `configDirFor` in step with
  *      the product's `resolveUserDirs`; this file keeps every script on `configDirFor`.
  *   2. **Every launch of Electron carries `hostSwitches`, and carries it where no positional reader sees it.** As root,
@@ -14,6 +14,24 @@
  *      bundle it forks. Chromium honours a switch anywhere before a bare `--`, so the rule is: before any `'--'`, and
  *      after every positional argument unless the entry is the product's own main, whose `workspaceFromArgv` skips a
  *      switch. A launch with `ELECTRON_RUN_AS_NODE` starts no Chromium and is exempt.
+ *   3. **A launch of the reserved token keeps the token first** (REQ-MCP-033): the sentinel (`src/main/sentinel.ts`)
+ *      reads it at one fixed index — the argument right after the entry on the development binary, the first on a
+ *      packaged one — so the switch goes between the token and `--`, the product's own order
+ *      (`src/run-host/code-intelligence-launch.ts`). Rule 2 admits the switch ahead of the token too, and
+ *      `code-intel-proof` put it there: as root the application started instead of the server
+ *      (`docs/defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`).
+ *   4. **No launch of Electron goes through `spawnSync`.** At its `timeout` Node signals the child and closes its ends
+ *      of the pipes at the same moment. Until the application's EPIPE loop was repaired (2026-09-29) that launch never
+ *      exited, so an overrun hung its proof. Since then the application does quit, and `spawnSync` returns with
+ *      `status` 0 and only `error.code` `ETIMEDOUT` to show the overrun, and without the quit path's lines (measured
+ *      2026-09-30), so an overrun passed a `launch`'s status check as a clean exit instead of failing it. Every launch
+ *      is `spawnBounded`'s (`lib/bounded-launch.mjs`: SIGTERM with the
+ *      pipes open, a grace, SIGKILL to the group, reported with the log tail) or the driver's
+ *      (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`). A launch with
+ *      `ELECTRON_RUN_AS_NODE` starts no application and no quit path, and is exempt here as under rule 2. Every script
+ *      that launches through `spawnBounded` names an overrun with `overrunMessage`, so the failure carries the log tail.
+ *      The scan sees a launch only when its binary is named `electron` or `exe`, as every launch here is; a launch
+ *      through another name (`process.execPath`, a `binary` variable) would escape rules 2 to 4.
  *
  * This is a static scan, not a launch: it reads the scripts' text, so it is decidable on any host and in `pnpm check`.
  * What it does not measure is that Chromium honours the switch where the rule puts it; the proofs measure that.
@@ -119,14 +137,34 @@ function launchProblem(launch: Launch): string | null {
   if (launch.binary === 'electron' && !productMain(launch.args[0]!) && at !== launch.args.length - 1) {
     return `\`...hostSwitches\` precedes a positional argument of ${launch.args[0]}, which reads it as one`;
   }
+  // Rule 3: the reserved token sits at the sentinel's fixed index — first, or right after the product's main entry.
+  const token = launch.args.findIndex(isToken);
+  if (token > 0 && !(token === 1 && productMain(launch.args[0]!))) {
+    return `the reserved token follows ${launch.args[token - 1]}, not the entry; the sentinel reads it at one fixed index (REQ-MCP-033)`;
+  }
   return null;
 }
+
+/** The reserved token of REQ-MCP-033, spelled as the literal or as the scripts' `TOKEN` constant. */
+const isToken = (element: string): boolean => element === 'TOKEN' || element === "'builtin:code-intelligence'";
 
 const all = scripts(SCRIPTS);
 
 describe('R-062: the proof harness platform rules, kept at every script', () => {
   it('no script but the harness spells the scratch global configuration directory itself (REQ-CONFIG-001, REQ-STARTUP-145)', () => {
-    const spelled = all.filter((f) => f !== HARNESS && /['"]rotaris['"]\s*,\s*['"]config['"]/.test(readFileSync(f, 'utf8')));
+    // Both Windows spellings are refused: `rotaris\config` (the product's until 2026-09-29) and REQ-CONFIG-001's
+    // `rotaris\rotaris`, which `configDirFor` answers since.
+    const spelled = all.filter((f) => f !== HARNESS && /['"]rotaris['"]\s*,\s*['"](?:config|rotaris)['"]/.test(readFileSync(f, 'utf8')));
+    expect(spelled.map((f) => relative(SCRIPTS, f))).toEqual([]);
+  });
+
+  it('no script but the harness spells the data directory itself (REQ-PROVIDER-014; rule 1 for the data directory)', () => {
+    // `<local>/rotaris/data` is the Windows answer only: off Windows the data directory is `<XDG_DATA_HOME>/rotaris`.
+    // `slice-proof` waited on, and checked the sign-out against, a credential file at that spelling the product never
+    // wrote off Windows, and `code-intel-proof` kept a code-intelligence home the product never used there
+    // (`docs/defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md`).
+    // `dataDirFor`, `tokensDirFor`, `workspacesRootFor` and `machineIdFileFor` answer it by platform.
+    const spelled = all.filter((f) => f !== HARNESS && /['"]rotaris['"]\s*,\s*['"]data['"]/.test(readFileSync(f, 'utf8')));
     expect(spelled.map((f) => relative(SCRIPTS, f))).toEqual([]);
   });
 
@@ -150,5 +188,76 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
     expect(launchProblem(call("[join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace]"))).toBeNull();
     expect(launchProblem(call("[driver, join(app, 'out', 'main', 'workspace-service.js'), fixture, ...hostSwitches]"))).toBeNull();
     expect(launchProblem(launches('fixture.cjs', "spawnSync(exe, [probe, dir], { env: { ELECTRON_RUN_AS_NODE: '1' } });")[0]!)).toBeNull();
+  });
+
+  it('no launch of Electron goes through spawnSync, whose timeout reports an overrun as a clean exit (rule 4)', () => {
+    const found = all.flatMap((f) => launches(relative(SCRIPTS, f).split(sep).join('/'), readFileSync(f, 'utf8')));
+    const unbounded = found.filter((l) => l.call.startsWith('spawnSync(') && !/ELECTRON_RUN_AS_NODE/.test(l.call)).map((l) => l.file);
+    expect(unbounded).toEqual([]);
+    // Not vacuous: the scan sees the bounded launches, and it sees a `spawnSync` launch where one is written.
+    expect(found.filter((l) => l.call.startsWith('spawnBounded(')).length).toBeGreaterThanOrEqual(39);
+    expect(launches('fixture.mjs', "const r = spawnSync(electron, [mainEntry, ...hostSwitches, ws], { timeout: 1 });")[0]!.call).toMatch(/^spawnSync\(/);
+  });
+
+  it('every other launch of Electron is spawnBounded\'s too, but for the three named with their reasons (rule 4)', () => {
+    // Rule 4 once scanned only `spawnSync(`, so a script that spawned the app itself with a bound of its own escaped it.
+    // `fetch-proof`'s bound was a bare `child.kill()`: SIGTERM, no SIGKILL, no overrun flag, and the app answers SIGTERM
+    // with `quit: exiting with status 0`, so its overrun passed `status !== 0` as a clean exit with no log tail — the
+    // defect rule 4 exists for. `workspace-proof`'s hand-over launch and `mcp-console-spike`'s launch were the same
+    // shape (the spike had no bound at all). Each is `spawnBounded`'s since 2026-09-30.
+    const exempt: Record<string, string> = {
+      // The driven launch: `stopApp` ends it (quit, then `endOverrun`) and `driverOverrunMessage` names it.
+      'lib/driver.mjs': 'the driver',
+      // Not an application launch: the code-intelligence branch is a stdio server whose standard input the proof writes;
+      // `line-rpc-client`'s guard rejects every request when it dies or hangs, and a branch that outlives the proof's
+      // close is killed and reported as `killed-after-30s`, never as a clean exit.
+      'code-intel-proof.mjs': 'the branch',
+      // The live run: its timeout sends SIGKILL and reports `status` null with `signal` SIGKILL, never a clean exit,
+      // and its fault scenarios act on the child in flight (`launchInFlight`), which `spawnBounded` does not hand out.
+      'live-run.mjs': 'runElectron',
+    };
+    const found = all.flatMap((f) => launches(relative(SCRIPTS, f).split(sep).join('/'), readFileSync(f, 'utf8')));
+    const bare = found.filter((l) => l.call.startsWith('spawn(') && !/ELECTRON_RUN_AS_NODE/.test(l.call));
+    expect(bare.filter((l) => !(l.file in exempt)).map((l) => l.file)).toEqual([]);
+    // Not vacuous: the scan sees each exemption where it is written, and a bare launch where one is written.
+    expect([...new Set(bare.map((l) => l.file))].sort()).toEqual(Object.keys(exempt).sort());
+    expect(launches('fixture.mjs', "const child = spawn(electron, [mainEntry, ...hostSwitches, ws], { env });")[0]!.call).toMatch(/^spawn\(/);
+  });
+
+  it('every script that launches through spawnBounded reports an overrun with overrunMessage\'s log tail (rule 4)', () => {
+    // An overrun is a failure named with the launch's last log lines, whether the script throws it or records it as a
+    // check. `updater-proof` recorded its overrun check with only the bound and how it ended until 2026-09-30.
+    const found = all.flatMap((f) => launches(relative(SCRIPTS, f).split(sep).join('/'), readFileSync(f, 'utf8')));
+    const files = [...new Set(found.filter((l) => l.call.startsWith('spawnBounded(')).map((l) => l.file))];
+    expect(files.length).toBeGreaterThanOrEqual(37);
+    const untold = files.filter((f) => !/\boverrunMessage\(/.test(readFileSync(join(SCRIPTS, f), 'utf8')));
+    expect(untold).toEqual([]);
+    // And per SITE, not per file: each `spawnBounded` launch reads its `.overran` before the file's next launch and within
+    // forty lines of its own, so a script whose second launch forgot the check does not pass on its first one's.
+    const unchecked = files.flatMap((f) => {
+      const text = readFileSync(join(SCRIPTS, f), 'utf8');
+      const at = [...text.matchAll(/\bspawnBounded\(\s*(?:electron|exe)\s*,/g)].map((m) => m.index!);
+      return at.flatMap((start, i) => {
+        const window = text.slice(start, at[i + 1] ?? text.length).split('\n').slice(0, 40).join('\n');
+        return /\.overran\b/.test(window) ? [] : [`${f}:${text.slice(0, start).split('\n').length}`];
+      });
+    });
+    expect(unchecked).toEqual([]);
+  });
+
+  it('a launch of the reserved token keeps it at the sentinel\'s index, the switch after it, including code-intel-proof as it was (REQ-MCP-033)', () => {
+    const call = (binary: string, args: string) => launches('fixture.mjs', `spawn(${binary}, ${args}, { env });`)[0]!;
+    // code-intel-proof's branch launch before the repair: rule 2 passed it, and as root the application started instead.
+    expect(launchProblem(call('exe', "[...before, ...hostSwitches, TOKEN, '--', ...tail]"))).toMatch(/reserved token follows \.\.\.hostSwitches/);
+    expect(launchProblem(call('electron', "[mainEntry, ...hostSwitches, 'builtin:code-intelligence', '--', 'start-mcp-server']"))).toMatch(/reserved token follows/);
+    // The product's own order, on both binaries.
+    expect(launchProblem(call('exe', "[...before, TOKEN, ...hostSwitches, '--', ...tail]"))).toBeNull();
+    expect(launchProblem(call('electron', "[mainEntry, TOKEN, ...hostSwitches, '--', 'no-such-subcommand']"))).toBeNull();
+    expect(launchProblem(call('exe', "[TOKEN, ...hostSwitches, '--', ...tail]"))).toBeNull();
+    // And the scan reaches code-intel-proof's two token launches, so the rule is not vacuous there.
+    const text = readFileSync(join(SCRIPTS, 'code-intel-proof.mjs'), 'utf8');
+    const tokenLaunches = launches('code-intel-proof.mjs', text).filter((l) => l.args?.some(isToken));
+    expect(tokenLaunches).toHaveLength(2);
+    expect(tokenLaunches.map(launchProblem)).toEqual([null, null]);
   });
 });

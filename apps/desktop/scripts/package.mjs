@@ -33,6 +33,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { closingLines, reached, STEPS } from './lib/package-verdict.mjs';
 import { ABOUT_ASSETS, flagUsage, settleNoticesStep, WITHOUT_NOTICES } from './lib/about-assets.mjs';
 import { declaredProductVersion, namedConfigurationText, packagingArtifactNames } from './lib/artifact-names.mjs';
@@ -57,6 +58,19 @@ function step(name, fn) {
   process.stdout.write(`\n[package] ${name}\n`);
   try {
     const result = fn();
+    report.steps.push({ name, ms: Date.now() - at, ok: true, ...(result ?? {}) });
+    return result;
+  } catch (e) {
+    report.steps.push({ name, ms: Date.now() - at, ok: false, error: String(e && e.message ? e.message : e) });
+    throw e;
+  }
+}
+/** `step` for a body that awaits: the packaged app's launch, which `spawnBounded` ends within its bound. */
+async function stepAsync(name, fn) {
+  const at = Date.now();
+  process.stdout.write(`\n[package] ${name}\n`);
+  try {
+    const result = await fn();
     report.steps.push({ name, ms: Date.now() - at, ok: true, ...(result ?? {}) });
     return result;
   } catch (e) {
@@ -150,8 +164,9 @@ try {
     const bundle = readFileSync(join(mainOut, 'index.js'), 'utf8');
     const kept = ['ROTARIS_CAPTURE_PNG', 'ROTARIS_CAPTURE_PROMPT', 'ROTARIS_CAPTURE_AFTER_MS'];
     // The last two are the injection proof's (2026-09-27): one writes every scripted model call's system text to a
-    // file it names, the other points the machine-wide instruction base at any directory — neither may ship.
-    const forbidden = ['ROTARIS_CAPTURE_CLICKS', 'ROTARIS_CAPTURE_DOUBLE_CLICKS', 'ROTARIS_CAPTURE_TYPE', 'ROTARIS_CAPTURE_CHORDS', 'ROTARIS_CAPTURE_EVAL_AT', 'ROTARIS_CAPTURE_OS_INPUT', 'ROTARIS_CAPTURE_SELECT', 'ROTARIS_CAPTURE_NOTICES', 'ROTARIS_CAPTURE_DRAG_AT', 'ROTARIS_CAPTURE_PERSONA_STEER', 'ROTARIS_THEME_PROOF_DIR', 'ROTARIS_DRIVER', 'ROTARIS_CAPTURE_MODEL_REQUESTS', 'ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE', 'ROTARIS_CAPTURE_SKILLS_MACHINE'];
+    // file it names, the other points the machine-wide instruction base at any directory — neither may ship. The
+    // scripted client's standing ledger (2026-10-01) is a file the run host writes under the same flag.
+    const forbidden = ['scripted-standing.json', 'ROTARIS_CAPTURE_CLICKS', 'ROTARIS_CAPTURE_DOUBLE_CLICKS', 'ROTARIS_CAPTURE_TYPE', 'ROTARIS_CAPTURE_CHORDS', 'ROTARIS_CAPTURE_EVAL_AT', 'ROTARIS_CAPTURE_OS_INPUT', 'ROTARIS_CAPTURE_SELECT', 'ROTARIS_CAPTURE_NOTICES', 'ROTARIS_CAPTURE_DRAG_AT', 'ROTARIS_CAPTURE_PERSONA_STEER', 'ROTARIS_CAPTURE_PERSONA_CLICKS', 'ROTARIS_THEME_PROOF_DIR', 'ROTARIS_DRIVER', 'ROTARIS_CAPTURE_MODEL_REQUESTS', 'ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE', 'ROTARIS_CAPTURE_SKILLS_MACHINE'];
     const missing = kept.filter((name) => !bundle.includes(name));
     const present = [];
     for (const file of emitted) {
@@ -205,7 +220,7 @@ if (process.env['ROTARIS_PACKAGE_SKIP_APP']) finish(true, 'rule 4 (b) skipped by
 // Rule 4 (b): the packaged app on the product's own path. Scratch profile and workspace under release/.
 let appRun;
 try {
-appRun = step('the packaged app opens a store and runs a terminal call', () => {
+appRun = await stepAsync('the packaged app opens a store and runs a terminal call', async () => {
   const exe = join(RELEASE, 'win-unpacked', 'Rotaris.exe');
   if (!existsSync(exe)) throw new Error(`no packaged executable at ${exe}`);
   const scratch = join(RELEASE, 'scratch');
@@ -230,9 +245,10 @@ appRun = step('the packaged app opens a store and runs a terminal call', () => {
     ROTARIS_CAPTURE_AFTER_MS: '9000',
   };
   for (const k of Object.keys(env)) if (k.startsWith('ROTARIS_CAPTURE_') && !(k in { ROTARIS_CAPTURE_PNG: 1, ROTARIS_CAPTURE_PROMPT: 1, ROTARIS_CAPTURE_AFTER_MS: 1 })) delete env[k];
-  const r = spawnSync(exe, [...hostSwitches, ws], { env, encoding: 'utf8', timeout: 120_000, windowsHide: true });
+  const r = await spawnBounded(exe, [...hostSwitches, ws], { env, timeoutMs: 120_000, windowsHide: true });
   const log = `${r.stdout || ''}\n${r.stderr || ''}`;
   writeFileSync(join(RELEASE, 'load-proof.app.log'), log);
+  if (r.overran) throw new Error(`${overrunMessage('the packaged app', r, log)}\n(see load-proof.app.log)`);
   const dbs = [];
   // By the platform, never as a Windows literal: the POSIX answer has no `data` segment, so the literal
   // found nothing off Windows while reading as though the launch had written nothing.

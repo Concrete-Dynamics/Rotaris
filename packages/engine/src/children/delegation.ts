@@ -30,6 +30,18 @@ export interface DelegateRequest {
    * as its continuation. Absent or empty delegates ordinary work.
    */
   readonly continuationOf?: string | undefined;
+  /**
+   * REQ-TOOLS-152: omit the automatic index of prior sibling artifacts (REQ-LIBRARY-097, item (3) of REQ-TOOLS-154) from
+   * the child's payload. Absent or false gives it, unless the persona's `skip_auto_sibling_context` (REQ-CONFIG-107) forces
+   * the same omission.
+   */
+  readonly suppressAutoContext?: boolean | undefined;
+  /**
+   * REQ-TOOLS-152's `session_id`, as PD-ORCH-005 clause 22 and PD-TOOLS-006 revision 3 rule it: the task id of a settled
+   * child of the caller, which the call follows up — the child resumes from its record with `task` as its next user
+   * message, under its own task id, persona, dependencies and write scope. Absent or empty delegates a new child.
+   */
+  readonly sessionId?: string | undefined;
 }
 
 /** REQ-LIBRARY-098: what became of the caller's attachments, so the tool reports it rather than guessing. */

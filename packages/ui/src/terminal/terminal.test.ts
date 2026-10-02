@@ -3,7 +3,7 @@ import { CONTRACT_SCHEMA_VERSION, bytesFor, describeKey, encodeKey, isNavigation
 import { AuditBuffer } from './audit.js';
 import { applyFrame, createStreamDisplay } from './emulator.js';
 import type { DisplayFrame } from './frames.js';
-import { GeometryReporter, MIN_COLS, MIN_ROWS, proposeGeometry, TERM_GUTTER_PX } from './geometry.js';
+import { GeometryReporter, MIN_COLS, MIN_ROWS, proposeGeometry, RemeasureGate, TERM_GUTTER_PX, type GridFace, type GridGeometry } from './geometry.js';
 import { headlessEmulator, parsed } from './headless.js';
 import { decideKey } from './keys.js';
 import { BANNERS, backgroundDisplayName, commandLabel, elide, KILL_DIALOG, outcomeLabel, tabLabel, tabTooltip, terminalWindowTitle } from './labels.js';
@@ -205,6 +205,104 @@ describe('geometry — the 6 px gutter, the 20×4 floor, and never a placeholder
   });
 });
 
+// ── REQ-SHELL-100: the re-measure on a face change reports the settled shape alone ──────────────────────────
+describe('geometry — a face change re-measures against the new cell only (REQ-SHELL-100, ADR-0047 defect fifty-five)', () => {
+  /**
+   * The grid as `TerminalGrid` wires it: the root names a face, the library draws with the face it was last given, and
+   * its cell follows that face. The host is 118×26 cells of the 12 px face; growing the face to 16 px also grows the
+   * tab's header, so the host loses 12 px of height in the same frame (`118×25` against the old cell, `88×19` against
+   * the new one, the shapes the note measured in the built proof).
+   */
+  function world() {
+    const cellOf = (sizePx: number) => ({ width: sizePx / 2, height: sizePx });
+    const w = {
+      rootFace: { family: 'mono', sizePx: 12 },
+      libraryFace: null as GridFace | null,
+      hostWidth: 6 * 118 + 12,
+      hostHeight: 12 * 26 + 12 + 6,
+      frames: [] as (() => void)[],
+      reports: [] as GridGeometry[],
+    };
+    const reporter = new GeometryReporter((g) => { w.reports.push(g); });
+    const gate = new RemeasureGate({
+      face: () => w.rootFace,
+      apply: (face) => { w.libraryFace = face; },
+      measure: () => {
+        const cell = w.libraryFace ? cellOf(w.libraryFace.sizePx) : { width: 0, height: 0 };
+        reporter.offer(proposeGeometry({ hostWidth: w.hostWidth, hostHeight: w.hostHeight, cellWidth: cell.width, cellHeight: cell.height, visible: true }));
+      },
+      nextFrame: (run) => { w.frames.push(run); return () => { w.frames = w.frames.filter((f) => f !== run); }; },
+    });
+    const frame = () => { const due = w.frames; w.frames = []; for (const run of due) run(); };
+    /** The root's `--rt-text-sm` grows and the header with it, in one style change. */
+    const growFace = (sizePx: number) => { w.rootFace = { family: 'mono', sizePx }; w.hostHeight -= 12; };
+    return { w, gate, frame, growFace };
+  }
+
+  it('reports only the final shape when the resize observer runs before the theme change has rendered', () => {
+    const { w, gate, frame, growFace } = world();
+    gate.retheme();
+    frame();
+    expect(w.reports).toEqual([{ cols: 118, rows: 26 }]);
+    // The note's ordering: a frame falls between the root's style change and React's render of it, so the observer
+    // sees the shrunk host first. Measured against the 12 px cell the library still had, that was `118×25`.
+    growFace(16);
+    gate.observe();
+    expect(w.reports).toEqual([{ cols: 118, rows: 26 }]);
+    expect(w.libraryFace).toEqual({ family: 'mono', sizePx: 16 });
+    expect(gate.pending).toBe(true);
+    // Then React renders the theme change and its layout effect re-themes; the next frame measures once.
+    gate.retheme();
+    frame();
+    expect(w.reports).toEqual([{ cols: 118, rows: 26 }, { cols: 88, rows: 19 }]);
+  });
+
+  it('stays quiet while a re-measure waits for its frame (the order defect fifty-five repaired)', () => {
+    const { w, gate, frame, growFace } = world();
+    gate.retheme();
+    frame();
+    growFace(16);
+    gate.retheme();
+    gate.observe();
+    expect(w.reports).toHaveLength(1);
+    frame();
+    expect(w.reports).toEqual([{ cols: 118, rows: 26 }, { cols: 88, rows: 19 }]);
+  });
+
+  it('measures a resize at once while the face is the one the library has', () => {
+    const { w, gate, frame } = world();
+    gate.retheme();
+    frame();
+    w.hostHeight += 24;
+    gate.observe();
+    expect(w.reports).toEqual([{ cols: 118, rows: 26 }, { cols: 118, rows: 28 }]);
+    expect(w.frames).toHaveLength(0);
+  });
+
+  it('applies a face that changed again before the frame, and measures it alone a frame later', () => {
+    const { w, gate, frame, growFace } = world();
+    gate.retheme();
+    frame();
+    growFace(16);
+    gate.retheme();
+    w.rootFace = { family: 'mono', sizePx: 20 };
+    frame();
+    expect(w.reports).toHaveLength(1);
+    expect(w.libraryFace).toEqual({ family: 'mono', sizePx: 20 });
+    frame();
+    expect(w.reports).toEqual([{ cols: 118, rows: 26 }, { cols: 70, rows: 15 }]);
+  });
+
+  it('measures nothing after it is disposed', () => {
+    const { w, gate, frame } = world();
+    gate.retheme();
+    gate.dispose();
+    frame();
+    expect(w.reports).toEqual([]);
+    expect(gate.pending).toBe(false);
+  });
+});
+
 // ── REQ-SHELL-082/087/092/081: the labels ────────────────────────────────────────────────────────────────────
 describe('labels — tab, header, tooltip, dialog and title text (REQ-SHELL-081/082/087/092)', () => {
   const meta = (over: Partial<TerminalStreamMeta>): TerminalStreamMeta => ({ streamId: 'fg:agent-1', sessionId: 's', kind: 'agent', displayName: 'Coder 1', running: true, truncated: false, cols: 80, rows: 24, acceptsInput: true, canKill: true, ...over });
@@ -322,6 +420,46 @@ describe('emulator — a character grid, not a log (REQ-SHELL-095), applied by s
     await parsed(e);
     expect(e.snapshot().lines.slice(0, 3)).toEqual(['final', 'output', 'text']);
     expect(set.previewOf('fg:a')).toMatchObject({ lines: ['final', 'output', 'text'], running: false, exitCode: 0, command: 'demo', displayName: 'Coder 1' });
+  });
+  it('REQ-TOOLS-127/REQ-SHELL-104 (live-run L9): the next command on a re-opened stream starts on the row after the closing text, never glued to its last line', async () => {
+    // The frame sequence the run host emits for two commands on one foreground PTY since L9's repair: the second
+    // command's first delta is its own first line, no longer the echoed wrapper that used to take the glued position.
+    const set = new TerminalStreamSet(headlessEmulator);
+    set.apply(frame(1, 'meta', '', { meta: META }));
+    set.apply(frame(2, 'delta', 'first-cmd\r\n'));
+    set.apply(frame(3, 'screen', 'first-cmd', { closing: true }));
+    set.apply(frame(4, 'meta', '', { meta: { ...META, running: false, exitCode: 0 } }));
+    set.apply(frame(5, 'meta', '', { meta: { ...META, running: true, command: 'second' } }));
+    set.apply(frame(6, 'delta', 'second-cmd\r\n'));
+    const e = set.get('fg:a')!.emulator;
+    await parsed(e);
+    expect(set.previewOf('fg:a')!.lines).toEqual(['first-cmd', 'second-cmd']);
+    // A closing text that is empty leaves the cursor at column 0 already: nothing is added, no blank row.
+    const empty = new TerminalStreamSet(headlessEmulator);
+    empty.apply(frame(1, 'meta', '', { meta: META }));
+    empty.apply(frame(2, 'screen', '', { closing: true, meta: { ...META, running: false, exitCode: 0 } }));
+    empty.apply(frame(3, 'meta', '', { meta: { ...META, running: true } }));
+    empty.apply(frame(4, 'delta', 'next'));
+    await parsed(empty.get('fg:a')!.emulator);
+    expect(empty.previewOf('fg:a')!.lines).toEqual(['next']);
+    // A late attacher's display is created from the ended stream's closing resync frame (`running: false` from the
+    // start, so it never saw the running → closed transition); the next command still starts on a fresh row.
+    const late = new TerminalStreamSet(headlessEmulator);
+    late.apply(frame(9, 'screen', 'earlier', { closing: true, meta: { ...META, running: false, exitCode: 0 } }));
+    late.apply(frame(10, 'meta', '', { meta: { ...META, running: true } }));
+    late.apply(frame(11, 'delta', 'later\r\n'));
+    await parsed(late.get('fg:a')!.emulator);
+    expect(late.previewOf('fg:a')!.lines).toEqual(['earlier', 'later']);
+    // The closing screen itself is unchanged until the next command opens: no row is added under the final text.
+    const closed = new TerminalStreamSet(headlessEmulator);
+    closed.apply(frame(1, 'screen', 'final\ntext', { closing: true, meta: { ...META, running: false, exitCode: 0 } }));
+    await parsed(closed.get('fg:a')!.emulator);
+    expect(closed.get('fg:a')!.emulator.snapshot().cursor).toEqual({ x: 4, y: 1 });
+    // A re-opening resync (a `screen` frame carrying `running: true`) replaces the screen, so it takes no separator either.
+    set.apply(frame(7, 'screen', 'third', { closing: true, meta: { ...META, running: false, exitCode: 0 } }));
+    set.apply(frame(8, 'screen', 'live\r\nscreen', { meta: { ...META, running: true } }));
+    await parsed(e);
+    expect(set.previewOf('fg:a')!.lines).toEqual(['live', 'screen']);
   });
   it('an unknown stream displays "Terminal" until a meta frame names it; a stream exists only once a frame arrived; clear() empties everything', () => {
     const set = new TerminalStreamSet(headlessEmulator);

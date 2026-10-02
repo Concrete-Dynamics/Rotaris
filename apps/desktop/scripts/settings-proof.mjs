@@ -24,6 +24,11 @@
  *                     raises REQ-CONFIG-286's guard, and Save puts the new value on the row already drawn.
  *   6. falsified    — a file written with Part Z's key names governs nothing: the controls show the requirement's
  *                     defaults instead (REQ-CONFIG-172).
+ *   7. run-start    — the Runtime category's run-start mode hint (REQ-ORCH-152, REQ-CONFIG-320, PD-ORCH-003), in a
+ *                     workspace of its own set to `plan`: with no session followed it says what `plan` does and never
+ *                     that the gate is not built; then a prompt is held at the gate, the plan approved, and the approved
+ *                     session reopened, where the same hint states that the session is released and names the control
+ *                     that re-arms it (`docs/defects/fixed/the-run-start-setting-says-the-plan-gate-is-not-built.md`).
  *
  * The legal links and the licence bundle are exercised through the capture seam's scripted opener
  * (`ROTARIS_CAPTURE_OPEN_EXTERNAL`), which reports success or the platform refusal without launching a browser.
@@ -41,7 +46,9 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, wr
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cleanEnvironment, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import Database from 'better-sqlite3';
+import { cleanEnvironment, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { ABOUT_ASSETS } from './lib/about-assets.mjs';
 import { produce, put, restore, stage } from './lib/staged-resources.mjs';
 import { REDIRECTING } from '../../../tools/build-id/build-id.mjs';
@@ -78,16 +85,16 @@ const PROBES = [
   '[data-testid="tool-result-lines"]', '[data-testid="tool-input-lines"]',
   '[data-testid="show-tool-results"]', '[data-testid="show-tool-inputs"]',
   '[data-testid="auto-collapse-tools"]', '[data-testid="group-tools"]',
-  '.settings__body',
+  '.settings__body', '[data-testid="run-start-hint"]',
 ];
 
-function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
+async function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
   // `hostSwitches`: as root Chromium starts only with `--no-sandbox`; on every other host the list is empty.
   const args = [join(app, 'out', 'main', 'index.js'), ...hostSwitches];
   if (workspace !== null) args.push(workspace);
-  const result = spawnSync(electron, args, {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, args, {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -102,6 +109,7 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000)
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const probes = {};
@@ -147,8 +155,10 @@ const openCategory = (label, atMs = 900) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARI
 // ── 1. No workspace: About, Tools and the empty Instructions ────────────────────────────────────────────────
 // The About page's two files are the proof's from here until launch 1′ ends: whatever a build left is moved aside, so
 // this launch measures the absent branch of each. `finally` gives them back when a launch fails or its Electron dies.
-// A signal to this process is not caught: Node would run a handler only once `spawnSync` returned, so a handler would
-// hold a SIGTERM until the launch ended and then swallow it. The process goes, and the next run's `restore` repairs it.
+// A signal to this process is not caught here. Under `spawnSync` (until 2026-09-29) Node would have run a handler only
+// once the launch returned, holding a SIGTERM until then. The launch is `spawnBounded`'s now, whose own handler runs at
+// once during a launch: it SIGKILLs the application's process group and raises the signal again, so the proof still
+// dies of it without reaching `finally`. The process goes, and the next run's `restore` repairs it.
 // In a clone that has never built, the directory itself is the proof's: `pnpm build-id` makes it during 1′.
 const hadResources = existsSync(resources);
 const emptyAndNew = () => !hadResources && existsSync(resources) && readdirSync(resources).length === 0;
@@ -163,7 +173,7 @@ let noWorkspace;
 let present;
 let written;
 try {
-  noWorkspace = launch('no-workspace', null, local, preferences, {
+  noWorkspace = await launch('no-workspace', null, local, preferences, {
     ...openCategory('About'),
     ROTARIS_CAPTURE_OPEN_EXTERNAL: 'record',
     // Click the first legal link and the licence bundle: one reports success, the other the absent bundle.
@@ -180,7 +190,7 @@ try {
   if (writer.status !== 0) throw new Error(`pnpm build-id exited ${writer.status ?? writer.signal}: ${writer.stderr}`);
   written = readFileSync(join(resources, BUILD_ID), 'utf8');
   put(resources, stash, NOTICES, 'THIRD-PARTY-LICENSES.txt — a fixture written by settings-proof (first-release-plan.md §4.4), removed when the launch ends.\n');
-  present = launch('about-present', null, local, preferences, {
+  present = await launch('about-present', null, local, preferences, {
     ...openCategory('About'),
     ROTARIS_CAPTURE_OPEN_EXTERNAL: 'record',
     ROTARIS_CAPTURE_CLICKS: '[data-testid="licenses-open"]@2200',
@@ -239,7 +249,7 @@ if (JSON.stringify(after) !== JSON.stringify(found)) throw new Error(`apps/deskt
 results.assetsRestored = { [BUILD_ID]: found[BUILD_ID] ? 'the file that was there, byte for byte' : 'absent, as before', [NOTICES]: found[NOTICES] ? 'the file that was there, byte for byte' : 'absent, as before' };
 
 // The Tools inventory, and the empty Instructions, in the same launch profile (no workspace at all).
-const tools = launch('tools', null, local, preferences, { ...openCategory('Tools'), ROTARIS_CAPTURE_AFTER_MS: '2600' });
+const tools = await launch('tools', null, local, preferences, { ...openCategory('Tools'), ROTARIS_CAPTURE_AFTER_MS: '2600' });
 const toolRows = rows(tools.probes, '[data-testid="inventory-row"]');
 // REQ-CONFIG-277: populated unconditionally — with no workspace open at all.
 if (toolRows.length !== 19) throw new Error(`the Tools inventory listed ${toolRows.length} rows, not the nineteen public names`);
@@ -249,7 +259,7 @@ if (toolRows.some((r) => r.data['data-source'] !== 'built-in')) throw new Error(
 if (!toolRows.find((r) => r.data['data-name'] === 'git_commit')?.text.includes('no executor registered')) throw new Error('the row for the unimplemented name did not say so');
 results.tools = { rows: toolRows.length, sorted: true, source: 'built-in' };
 
-const noFiles = launch('instructions-empty', workspace, local, preferences, { ...openCategory('Instructions'), ROTARIS_CAPTURE_AFTER_MS: '2600' });
+const noFiles = await launch('instructions-empty', workspace, local, preferences, { ...openCategory('Instructions'), ROTARIS_CAPTURE_AFTER_MS: '2600' });
 if (rows(noFiles.probes, '[data-testid="inventory-row"]').length !== 0) throw new Error('the Instructions inventory listed a row before either file existed');
 const emptyState = text(noFiles.probes, '[data-testid="inventory-empty"]')[0] ?? '';
 if (!emptyState.includes('AGENTS.md') || !emptyState.includes(workspace)) throw new Error(`the empty state did not name the file to create: "${emptyState}"`);
@@ -258,7 +268,7 @@ results.instructionsEmpty = { rows: 0, namesTheFile: true };
 // ── 2. Both instruction files on disk ───────────────────────────────────────────────────────────────────────
 writeFileSync(join(workspace, 'AGENTS.md'), '# standing instructions\n');
 writeFileSync(join(workspace, 'AGENTS.override.md'), '# overriding instructions\n');
-const instructions = launch('instructions', workspace, local, preferences, {
+const instructions = await launch('instructions', workspace, local, preferences, {
   ...openCategory('Instructions'),
   // PD-WORKSPACE-002: switch the first file off and save — the per-file policy round trip.
   ROTARIS_CAPTURE_CLICKS: '[data-testid="instruction-toggle"][data-id="workspace:AGENTS.md"]@1600;;.save-bar .btn-primary>>Save@3200',
@@ -280,7 +290,7 @@ if (!/workspace:AGENTS\.md: off/.test(instructionsYaml)) throw new Error(`the pe
 results.instructionToggle = { off: 'workspace:AGENTS.md', file: true };
 
 // ── 3. The Display category: move all six, save, and read the file ──────────────────────────────────────────
-const display = launch('display', workspace, local, preferences, {
+const display = await launch('display', workspace, local, preferences, {
   ...openCategory('Display'),
   // The two preferences first (immediate), then the four configuration fields (deferred to Save).
   ROTARIS_CAPTURE_CLICKS: [
@@ -311,7 +321,7 @@ if (prefs['display/groupTools'] !== false) throw new Error(`the grouping prefere
 results.display = { dirtyThenSaved: true, file: { tool_result_max_lines: 20, tool_input_max_lines: 0, show_tool_results: false, foreignKeyKept: true }, preferences: { autoCollapseTools: true, groupTools: false } };
 
 // ── 4. Reopen: the saved values come back, and the form is clean ─────────────────────────────────────────────
-const reopen = launch('reopen', workspace, local, preferences, { ...openCategory('Display'), ROTARIS_CAPTURE_AFTER_MS: '3000' });
+const reopen = await launch('reopen', workspace, local, preferences, { ...openCategory('Display'), ROTARIS_CAPTURE_AFTER_MS: '3000' });
 const resultCap = first(reopen.probes, '[data-testid="tool-result-lines"]')?.value;
 const inputCap = first(reopen.probes, '[data-testid="tool-input-lines"]')?.value;
 if (resultCap !== '20') throw new Error(`the result cap came back as ${resultCap}`);
@@ -335,7 +345,7 @@ results.reopen = { tool_result_lines: resultCap, tool_input_lines: inputCap, cle
 // file disagree while a transcript is visible is unreachable in the main window. The renderer publishes its
 // pending caps to the transcript all the same (`pendingDisplay`), which is what makes Discard show immediately
 // and what a second transcript surface would read; the narrowing is recorded rather than papered over.
-const live = launch('live-apply', workspace, local, preferences, {
+const live = await launch('live-apply', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'read,answer',
   ROTARIS_CAPTURE_PROMPT: 'Read the file.',
   // The timings clear code intelligence's discovery at run start (~5 s, Part T), so the tool row exists first.
@@ -370,13 +380,85 @@ writeFileSync(configFile, [
   '  # Part Z read these two; no requirement ever stated them (REQ-CONFIG-172).',
   '  tool_result_lines: 50', '  tool_input_lines: 1', '',
 ].join('\n'));
-const falsified = launch('falsified-keys', workspace, local, preferences, { ...openCategory('Display'), ROTARIS_CAPTURE_AFTER_MS: '3000' });
+const falsified = await launch('falsified-keys', workspace, local, preferences, { ...openCategory('Display'), ROTARIS_CAPTURE_AFTER_MS: '3000' });
 const fResult = first(falsified.probes, '[data-testid="tool-result-lines"]')?.value;
 const fInput = first(falsified.probes, '[data-testid="tool-input-lines"]')?.value;
 if (fResult !== '10' || fInput !== '2') throw new Error(`the falsified keys still govern: result=${fResult} input=${fInput}`);
 // That the two also WARN as unknown keys (REQ-CONFIG-233) is asserted where the warnings are observable, in
 // `packages/config/src/display-section.test.ts`; the load's warnings do not reach this process's log.
 results.falsifiedKeys = { result: fResult, input: fInput, govern: false };
+
+// ── 7. The run-start mode hint, unfollowed and on a released session (REQ-ORCH-152, PD-ORCH-003) ─────────────
+// A workspace and a profile of its own, so the earlier launches' session and file do not decide what is followed. The
+// mode is `plan`, and code intelligence is off because its discovery costs seconds of every run start (the plan gate
+// proof's fixture, for the same reason).
+const runStart = join(output, 'run-start');
+const rsWorkspace = join(runStart, 'workspace');
+const rsLocal = join(runStart, 'local');
+const rsPreferences = join(runStart, 'preferences');
+mkdirSync(join(rsWorkspace, '.rotaris'), { recursive: true });
+mkdirSync(rsLocal, { recursive: true });
+writeFileSync(join(rsWorkspace, 'README.md'), '# run-start hint workspace\n');
+writeFileSync(join(rsWorkspace, '.rotaris', 'agents.yaml'), [
+  '# scratch configuration written by the proof script',
+  'models:', '  scripted: { provider: scripted, model_id: scripted }',
+  'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+  'runtime:', '  permission_mode: autonomous', '  run_start_mode: plan', '  max_iterations: 3',
+  'mcp_servers:', '  code_intelligence: { enabled: false }', '',
+].join('\n'));
+const hintOf = (probes) => first(probes, '[data-testid="run-start-hint"]');
+/** The latest session of the run-start workspace, read after the process that wrote it has exited. */
+function runStartSession() {
+  const db = new Database(oneDatabase(rsLocal), { readonly: true });
+  try { return db.prepare('SELECT execution_status, plan_cycle, plan_released FROM sessions ORDER BY created_at DESC LIMIT 1').get() ?? null; } finally { db.close(); }
+}
+
+// 7a. No session followed: what `plan` does, and nothing about a release.
+const unfollowed = await launch('run-start-unfollowed', rsWorkspace, rsLocal, rsPreferences, { ...openCategory('Runtime'), ROTARIS_CAPTURE_AFTER_MS: '2600' });
+const plainHint = hintOf(unfollowed.probes);
+if (!plainHint) throw new Error('the Runtime category drew no run-start mode hint');
+if (/not built/i.test(plainHint.text)) throw new Error(`the hint still says the plan gate is not built: "${plainHint.text}"`);
+if (!/plan gate/.test(plainHint.text) || !/next run/.test(plainHint.text)) throw new Error(`the hint does not say what plan does: "${plainHint.text}"`);
+if (plainHint.data['data-released'] !== 'false' || /released/.test(plainHint.text)) throw new Error(`with no session followed the hint spoke of a release: "${plainHint.text}"`);
+
+// 7b. A prompt held at the gate. The wait is a DEADLINE for the gate's plan, not an appointment (plan-gate-proof's rule).
+await launch('run-start-held', rsWorkspace, rsLocal, rsPreferences, {
+  ROTARIS_CAPTURE_PROMPT: 'create planned.txt with the word done in it',
+  ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
+  ROTARIS_CAPTURE_WAIT_MS: '60000',
+  ROTARIS_CAPTURE_AFTER_MS: '1500',
+}, 120_000);
+const held = runStartSession();
+if (held?.execution_status !== 'awaiting_plan_decision') throw new Error(`the run-start workspace's prompt was not held at the gate: ${JSON.stringify(held)}`);
+
+// 7c. Approve: the session now holds a release (PD-ORCH-003), which is the state the hint must name.
+await launch('run-start-approved', rsWorkspace, rsLocal, rsPreferences, {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="plan-approve"]@6000',
+  ROTARIS_CAPTURE_AFTER_MS: '30000',
+}, 180_000);
+const approvedSession = runStartSession();
+if (approvedSession?.plan_released !== 1) throw new Error(`approval did not release the session, so the released hint cannot be measured: ${JSON.stringify(approvedSession)}`);
+
+// 7d. The approved session followed, Settings open on Runtime: the hint states the release and the re-arming control.
+const released = await launch('run-start-released', rsWorkspace, rsLocal, rsPreferences, {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ...openCategory('Runtime', 3000),
+  ROTARIS_CAPTURE_AFTER_MS: '5000',
+});
+const releasedHint = hintOf(released.probes);
+if (!releasedHint) throw new Error('the Runtime category drew no run-start mode hint over the released session');
+if (releasedHint.data['data-released'] !== 'true') throw new Error(`the followed session holds a release and the hint did not say so: ${JSON.stringify(releasedHint)}`);
+if (/not built/i.test(releasedHint.text)) throw new Error(`the hint still says the plan gate is not built: "${releasedHint.text}"`);
+if (!/This session is released/.test(releasedHint.text)) throw new Error(`the hint does not state that the session is released: "${releasedHint.text}"`);
+if (!/Plan first/.test(releasedHint.text) || !/run-start control/.test(releasedHint.text)) throw new Error(`the hint does not name the control that re-arms the session: "${releasedHint.text}"`);
+// The selector still reads `plan`: an approval never writes the setting (PD-ORCH-003).
+if (!/run_start_mode: plan/.test(readFileSync(join(rsWorkspace, '.rotaris', 'agents.yaml'), 'utf8'))) throw new Error('the approval wrote the run-start mode');
+results.runStartHint = {
+  unfollowed: { released: plainHint.data['data-released'], text: plainHint.text },
+  session: { held: held.execution_status, released: approvedSession.plan_released },
+  released: { released: releasedHint.data['data-released'], text: releasedHint.text },
+};
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 2));

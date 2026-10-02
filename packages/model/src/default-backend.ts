@@ -23,10 +23,11 @@ export class DefaultAgentBackend implements AgentBackend {
     let started = false;
     for await (const part of this.client.stream({
       model: input.model, messages, thinking: input.thinking, signal,
-      timeoutMs: input.timeoutMs, retries: input.retries, resolveCredential: input.resolveCredential, tools: input.tools, ...(input.output ? { output: input.output } : {}),
+      timeoutMs: input.timeoutMs, retries: input.retries, onRetry: (r) => sink.retried?.(r), resolveCredential: input.resolveCredential, tools: input.tools, ...(input.output ? { output: input.output } : {}),
     })) {
       // REQ-ORCH-090: any part — a delta, a tool call, an error the provider answered with — is a model event.
       if (!started) { started = true; sink.started?.(); }
+      sink.event?.(part.ok ? part.value.kind : 'error');
       if (!part.ok) return { status: 'failed', text, usage, error: part.error, toolCalls: [...calls].map(([callId, c]) => ({ callId, ...c })) };
       switch (part.value.kind) {
         case 'text':

@@ -1,16 +1,18 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { canonicaliseRoles, mergeLayers, overlaySection, PLAIN_OPS } from './merge.js';
-import { loadConfiguration, readDelegationStrategy, type LoadedConfiguration } from './load.js';
+import { loadConfiguration, readDelegationStrategy, repositoryExcludeFile, type LoadedConfiguration } from './load.js';
 import { parseConfig } from './document.js';
 import { referentialMessages, renderFatal, renderProblems } from './validate.js';
-import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, unwrapSynthetic } from './slots.js';
+import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, syntheticOriginOf } from './slots.js';
 import { readRuntimeSection, validateRuntimeField, RUNTIME_DEFAULTS } from './sections/runtime.js';
 import { effectivePricing, readModelEntry, providerEffort } from './sections/models.js';
 import { readCircuitBreakerSection, CIRCUIT_BREAKER_DEFAULTS } from './circuit-breaker-section.js';
 import { checkpointsEnabledFor } from './sections/checkpoints.js';
+import { CODE_INTELLIGENCE_MARKER_SEGMENTS } from './mcp/code-intelligence.js';
 import type { ProblemSink } from './sections/field.js';
 
 const dirs: string[] = [];
@@ -157,7 +159,7 @@ describe('REQ-CONFIG-051 the end-to-end two-scope fixture', () => {
     // The stated thinking synthesises the reserved model name (REQ-CONFIG-079); the underlying
     // model is the entry's own default, the small slot's base.
     expect(entry).toMatchObject({ name: 'intent-classifier', mcp_servers: [] });
-    expect(unwrapSynthetic(entry!.model, c.models)).toBe('gpt-4o-mini');
+    expect(syntheticOriginOf(entry!.model, c.syntheticOrigins)).toBe('gpt-4o-mini');
     expect(c.warnings).toEqual([]);
   });
 });
@@ -194,6 +196,25 @@ describe('REQ-CONFIG-063..081 tier aliases and reasoning synthesis', () => {
     expect(c.personas['planner']).toMatchObject({ model: 'gpt-4o', thinking: null });
     expect(c.models['__persona__:verifier']?.thinking).toBe('low');
     expect(c.warnings).toContain("thinking for role librarian skipped: 'missing' is not a configured model");
+  });
+  it('REQ-CONFIG-081/094: each synthetic copy records the models: key it was copied from, even where two keys name the same provider model', () => {
+    const c = loaded(null, 'models:\n  openai-compatible--alpha/qwen: { provider: openai-compatible, model_id: qwen, base_url: https://alpha.example/v1, max_parallel: 1 }\n  openai-compatible--beta/qwen: { provider: openai-compatible, model_id: qwen, base_url: https://beta.example/v1, max_parallel: 4 }\nsmall_model: openai-compatible--beta/qwen\nsmall_model_thinking: high\npersonas:\n  verifier: { model: openai-compatible--beta/qwen, thinking: low }\n  tester: { model: openai-compatible--alpha/qwen, thinking: low }\n');
+    expect(c.personas['verifier']?.model).toBe('__persona__:verifier');
+    expect(c.syntheticOrigins['__persona__:verifier']).toBe('openai-compatible--beta/qwen');
+    expect(c.syntheticOrigins['__persona__:tester']).toBe('openai-compatible--alpha/qwen');
+    expect(c.syntheticOrigins['__startup_slot__:small_model']).toBe('openai-compatible--beta/qwen');
+    expect(syntheticOriginOf('__persona__:verifier', c.syntheticOrigins)).toBe('openai-compatible--beta/qwen');
+    // A name the loader did not synthesise is its own key.
+    expect(syntheticOriginOf('openai-compatible--alpha/qwen', c.syntheticOrigins)).toBe('openai-compatible--alpha/qwen');
+  });
+  it('REQ-CONFIG-094/253: a slot chained through five earlier slots\' copies still unwraps to the key at the end of the chain', () => {
+    // Each slot names the one before it and states a level, so each copy's recorded origin is the previous slot's copy.
+    const c = loaded(null, 'models:\n  openai-compatible--alpha/qwen: { provider: openai-compatible, model_id: qwen }\n  openai-compatible--beta/qwen: { provider: openai-compatible, model_id: qwen }\ndefault_summary_model: openai-compatible--beta/qwen\ndefault_summary_model_thinking: low\nimprovement_collector_model: default_summary_model\nimprovement_collector_model_thinking: low\nretrospective_model: improvement_collector_model\nretrospective_model_thinking: low\ngatekeeper_model: retrospective_model\ngatekeeper_model_thinking: low\nsmall_model: gatekeeper_model\nsmall_model_thinking: low\nmedium_model: small_model\nmedium_model_thinking: high\n');
+    expect(c.slots.medium_model).toBe('__startup_slot__:medium_model');
+    expect(c.syntheticOrigins['__startup_slot__:medium_model']).toBe('__startup_slot__:small_model');
+    expect(syntheticOriginOf('__startup_slot__:medium_model', c.syntheticOrigins)).toBe('openai-compatible--beta/qwen');
+    // A recorded cycle (never produced by the loader) ends the walk instead of spinning.
+    expect(syntheticOriginOf('a', { a: 'b', b: 'a' })).toBe('b');
   });
   it('the transform is pure over a draft', () => {
     const draft = { slots: { small_model: 'a', medium_model: 'a', large_model: 'a', default_summary_model: 'small_model', improvement_collector_model: null, retrospective_model: null, gatekeeper_model: null, fallback_model: null }, slotThinking: { small_model: null, medium_model: null, large_model: null, default_summary_model: null, improvement_collector_model: null, retrospective_model: null, gatekeeper_model: null, fallback_model: null }, models: { a: readModelEntry('a', { provider: 'p', model_id: 'a' }, sink())! }, personas: {}, compressorModel: 'small_model', circuitBreakerModel: 'x' };
@@ -362,11 +383,122 @@ describe('the rest of the load', () => {
     const s = scopes(null, null);
     writeFileSync(join(s.workspaceRoot, '.gitignore'), 'node_modules');
     loadConfiguration(s);
-    expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules\n.rotaris/\n.serena/\n');
+    expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules\n.rotaris/\n');
     loadConfiguration(s);
-    expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules\n.rotaris/\n.serena/\n');
+    expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules\n.rotaris/\n');
     const fresh = scopes(null, null);
     expect(loadConfiguration({ ...fresh, keepIgnored: false }).ok).toBe(true);
+  });
+
+  describe("OQ-161's reading: the code-intelligence marker's directory is kept out of version control without touching a tracked file", () => {
+    const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'init.defaultBranch=main', ...args], { cwd, encoding: 'utf8' });
+    const marker = CODE_INTELLIGENCE_MARKER_SEGMENTS[0]!;
+
+    it('a fresh repository gets `.rotaris/` in .gitignore and the marker in .git/info/exclude, once each', () => {
+      const s = scopes(null, null);
+      git(s.workspaceRoot, 'init', '-q');
+      loadConfiguration(s);
+      loadConfiguration(s);
+      expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('.rotaris/\n');
+      const exclude = readFileSync(join(s.workspaceRoot, '.git', 'info', 'exclude'), 'utf8');
+      expect(exclude.split('\n').filter((line) => line === `${marker}/`)).toHaveLength(1);
+      expect(exclude.endsWith(`\n${marker}/\n`)).toBe(true);
+    });
+
+    it("a repository whose committed .gitignore already names `.rotaris/` stays clean once the runtime's marker exists", () => {
+      const s = scopes(null, null);
+      git(s.workspaceRoot, 'init', '-q');
+      writeFileSync(join(s.workspaceRoot, '.gitignore'), 'node_modules/\n.rotaris/\n');
+      writeFileSync(join(s.workspaceRoot, 'README.md'), '# fixture\n');
+      git(s.workspaceRoot, 'add', '.gitignore', 'README.md');
+      git(s.workspaceRoot, 'commit', '-q', '-m', 'fixture');
+      loadConfiguration(s);
+      mkdirSync(join(s.workspaceRoot, ...CODE_INTELLIGENCE_MARKER_SEGMENTS.slice(0, -1)), { recursive: true });
+      writeFileSync(join(s.workspaceRoot, ...CODE_INTELLIGENCE_MARKER_SEGMENTS), 'project_name: fixture\n');
+      expect(git(s.workspaceRoot, 'status', '--porcelain', '--untracked-files=all')).toBe('');
+      expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules/\n.rotaris/\n');
+    });
+
+    it("a linked worktree writes the repository's shared exclude file, and stays clean once the runtime's marker exists", () => {
+      const s = scopes(null, null);
+      git(s.workspaceRoot, 'init', '-q');
+      writeFileSync(join(s.workspaceRoot, '.gitignore'), '.rotaris/\n');
+      git(s.workspaceRoot, 'add', '.gitignore');
+      git(s.workspaceRoot, 'commit', '-q', '-m', 'fixture');
+      const linked = join(tmp(), 'linked');
+      git(s.workspaceRoot, 'worktree', 'add', '-q', linked);
+      mkdirSync(join(linked, '.rotaris'), { recursive: true });
+      loadConfiguration({ ...s, workspaceRoot: linked });
+      expect(readFileSync(join(s.workspaceRoot, '.git', 'info', 'exclude'), 'utf8')).toContain(`\n${marker}/\n`);
+      mkdirSync(join(linked, marker), { recursive: true });
+      writeFileSync(join(linked, ...CODE_INTELLIGENCE_MARKER_SEGMENTS), 'project_name: linked\n');
+      expect(git(linked, 'status', '--porcelain', '--untracked-files=all')).toBe('');
+    });
+
+    it('a workspace below a repository\'s top level writes nothing into that repository', () => {
+      const outer = scopes(null, null);
+      git(outer.workspaceRoot, 'init', '-q');
+      const before = readFileSync(join(outer.workspaceRoot, '.git', 'info', 'exclude'), 'utf8');
+      const below = join(outer.workspaceRoot, 'packages', 'app');
+      mkdirSync(join(below, '.rotaris'), { recursive: true });
+      loadConfiguration({ ...outer, workspaceRoot: below });
+      expect(readFileSync(join(outer.workspaceRoot, '.git', 'info', 'exclude'), 'utf8')).toBe(before);
+      expect(readFileSync(join(below, '.gitignore'), 'utf8')).toBe('.rotaris/\n');
+    });
+
+    it('a workspace in no repository gets no exclude file, and a marker line .gitignore already holds is not repeated', () => {
+      const s = scopes(null, null);
+      loadConfiguration(s);
+      expect(existsSync(join(s.workspaceRoot, '.git'))).toBe(false);
+      const old = scopes(null, null);
+      git(old.workspaceRoot, 'init', '-q');
+      writeFileSync(join(old.workspaceRoot, '.gitignore'), `.rotaris/\n${marker}/\n`);
+      loadConfiguration(old);
+      expect(readFileSync(join(old.workspaceRoot, '.gitignore'), 'utf8')).toBe(`.rotaris/\n${marker}/\n`);
+      expect(readFileSync(join(old.workspaceRoot, '.git', 'info', 'exclude'), 'utf8')).not.toContain(`\n${marker}/\n`);
+    });
+
+    it("a stale `gitdir:` pointer (the repository moved or deleted) creates nothing and writes nothing", () => {
+      const s = scopes(null, null);
+      const gone = join(tmp(), 'gone', 'repo', '.git', 'worktrees', 'ws');
+      writeFileSync(join(s.workspaceRoot, '.git'), `gitdir: ${gone}\n`);
+      loadConfiguration(s);
+      expect(existsSync(dirname(dirname(dirname(dirname(gone)))))).toBe(false);
+      expect(repositoryExcludeFile(s.workspaceRoot)).toBeNull();
+      expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('.rotaris/\n');
+    });
+
+    it('a `gitdir:` pointer to a directory that is not a git directory writes nothing into it', () => {
+      const parent = tmp();
+      const workspaceRoot = join(parent, 'ws');
+      const notARepo = join(parent, 'not-a-repo');
+      mkdirSync(join(workspaceRoot, '.rotaris'), { recursive: true });
+      mkdirSync(notARepo);
+      writeFileSync(join(notARepo, 'notes.txt'), 'not a repository\n');
+      writeFileSync(join(workspaceRoot, '.git'), 'gitdir: ../not-a-repo\n');
+      loadConfiguration({ ...scopes(null, null), workspaceRoot });
+      expect(readdirSync(notARepo)).toEqual(['notes.txt']);
+      expect(repositoryExcludeFile(workspaceRoot)).toBeNull();
+    });
+
+    it("a git directory whose `commondir` names a directory that is not one writes nothing there", () => {
+      const s = scopes(null, null);
+      git(s.workspaceRoot, 'init', '-q');
+      const elsewhere = tmp();
+      writeFileSync(join(s.workspaceRoot, '.git', 'commondir'), `${elsewhere}\n`);
+      loadConfiguration(s);
+      expect(readdirSync(elsewhere)).toEqual([]);
+      expect(repositoryExcludeFile(s.workspaceRoot)).toBeNull();
+    });
+
+    it('a repository without an `info` directory gains only that directory and its exclude file', () => {
+      const s = scopes(null, null);
+      git(s.workspaceRoot, 'init', '-q', '--template=');
+      expect(existsSync(join(s.workspaceRoot, '.git', 'info'))).toBe(false);
+      loadConfiguration(s);
+      expect(readFileSync(join(s.workspaceRoot, '.git', 'info', 'exclude'), 'utf8')).toBe(`${marker}/\n`);
+      expect(readdirSync(join(s.workspaceRoot, '.git', 'info'))).toEqual(['exclude']);
+    });
   });
   it('rotaris.delegation_strategy is a separate workspace-only lookup with no validation', () => {
     expect(loaded('rotaris:\n  delegation_strategy: single\n', null).delegationStrategy).toBe('orchestrator');

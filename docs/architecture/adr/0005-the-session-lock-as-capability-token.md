@@ -586,6 +586,14 @@ not write a session's rows without holding its lock"); what the requirement's or
 preceding the status — holds. The alternative, an entry written after the release, would be a row written without the
 lock, which this record forbids outright.
 
+*Corrected 2026-09-29 (R-067, acceptance finding A14): "the writer releases the lock last" and "an entry written after
+the release would be a row written without the lock" held for a session **not** loaded in the process that repairs it,
+whose writer `withWriter` opens (claiming the lock) for the call. For a session loaded here the unit wrote through the
+live writer and never looked at the lock, which the run's teardown had already released, so the status, the entry and
+the crash record were written with no lock row at all, and the safety checkpoint and the restore's outcome
+(`recordSafetyCheckpoint`, `recordRestore`) the same way. The reading is kept as it was taken; the section "a write
+through a loaded session outside a run" below is what the loaded branch does now.*
+
 ## The Part U proof on Linux: the machine identifier where the product keeps it — 2026-09-28 (R-062)
 
 `pnpm sessions-proof` had never run past launch 3 anywhere but Windows. It plants the locks for launch 4,
@@ -641,3 +649,45 @@ while active named this process's pid. On the code before the repair the same pr
 
 **Found: the claim this record made on 2026-09-05 was true of a process's first continue only** — corrected in place
 above, with its measurement kept. Nothing in the decision moves.
+
+## First execution — 2026-09-29, a write through a loaded session outside a run
+
+*Recorded under R-067 (acceptance finding A14); the repair of
+`../../defects/fixed/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`.*
+
+**Built and run:** the three writes the run host makes against a session's record from outside a run — the repair
+(`repairOne`: REQ-SESSION-060's browser Repair and REQ-GIT-094's open-time repair), the restore's safety checkpoint
+(`recordSafetyCheckpoint`, REQ-GIT-058 gate 5) and its outcome (`recordRestore`, REQ-GIT-062) — go through `withWriter`,
+whose branch for a session loaded here now claims the lock through `claimHold` before writing: kept when this process
+holds it, taken with REQ-SESSION-047's one reap and given back after the write otherwise, and refused `lock-held`, naming
+the holder, with nothing written while another live process holds it — the refusal the branch for a session not loaded
+here already gave through `SessionWriter.open`. Pinned by three cases in `session-resume.test.ts` that failed before the
+repair. In the built app, `checkpoint-proof`'s `loaded-restore` launch runs a session so it stays loaded after its
+teardown releases the lock, plants a lock naming another machine once the run has ended, and drives a restore: the
+restore stopped at gate 5 under that holder's lock with the file untouched and the planted lock kept; on the code before
+the repair the same launch restored the file under it.
+
+**Found: the claim this record made on 2026-09-06 held only for a session not loaded here** — corrected in place
+above, with its reading kept. Two further writes through a loaded writer outside a run (the REQ-CHAT-090 todo edit at
+rest and the quit's terminal record) are the same shape and are recorded, not repaired:
+`../../defects/a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md` (now under `fixed/`; repaired on
+2026-10-01, the section below). Nothing in the decision moves.
+
+## First execution — 2026-10-01, a todo edit at rest and the quit's terminal record
+
+*The repair of `../../defects/fixed/a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md`.*
+
+**Built and run:** the two remaining writes through a loaded session's writer from outside a run now claim the lock the
+way the three above do (`claimHold`). A todo edit while the session rests (REQ-CHAT-090, `editStoredTodo`) keeps a lock
+this process holds, takes and gives back a free one, and is refused with nothing written while another live process
+holds it — `session_locked`, in REQ-SESSION-048's words (`lockHeldRefusal`) — or `store_failed` when the store could not
+be read or written to take it; a malformed edit is refused before the lock is touched. The quit's record of a resting
+session's background sessions (PD-ORCH-005 clause 10, `recordQuitTerminals` from `closeAll`) is written under the same
+claim, and for a session another live process holds it records nothing and warns: those rows are that holder's to
+write, and the background session stays `running` in the record for the next repair or continue to settle.
+
+**Found the note true on the branch.** With a lock row planted for another live process after a run's teardown, the todo
+edit answered `ok` and wrote under it, and the quit recorded the background session as `quit` under it. Three of the
+four new cases in `control.test.ts` and `run/turn.test.ts` failed on that code; the fourth, a malformed edit never
+touching the lock, passed on both. Nothing in the decision moves: "the run host must not write a session's rows without
+holding its lock" now holds for every `s.writer` write `sessions.ts` makes outside a run that was read on 2026-09-29.

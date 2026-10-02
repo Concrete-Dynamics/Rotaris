@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 import { posix, win32 } from 'node:path';
 import { resolveUserDirs, dataLayout } from '@rotaris/platform';
-import { configDirFor, machineIdFileFor, proofIsolationEnv, scratchHomeFor, tokensDirFor, workspacesRootFor } from './harness.mjs';
+import { configDirFor, dataDirFor, machineIdFileFor, proofIsolationEnv, scratchHomeFor, tokensDirFor, workspacesRootFor } from './harness.mjs';
 
 const PROFILE = 'D:\\repo\\.proof\\transcript-proof\\profile';
 const LOCAL = `${PROFILE}\\local`;
@@ -139,8 +139,17 @@ describe('proof isolation lands inside the scratch profile on every platform', (
       expect(configDirFor(LOCAL, platform)).toBe(dirs.config);
       // And the machine identifier (REQ-SESSION-046), which `sessions-proof` plants into the locks that name this machine.
       expect(machineIdFileFor(LOCAL, platform)).toBe(dataLayout(dirs, platform).machineId);
+      // And the data directory itself, which the product joins its code-intelligence home to (`main/sentinel.ts`) and
+      // `code-intel-proof` keeps across runs (`docs/defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md`).
+      expect(dataDirFor(LOCAL, platform)).toBe(dirs.data);
     }
+    // The spelling `code-intel-proof` used everywhere, `<local>/rotaris/data`, is the Windows answer only.
+    expect(dataDirFor(LOCAL, 'win32')).toBe(`${LOCAL}\\rotaris\\data`);
+    expect(dataDirFor(LOCAL, 'linux')).toBe(`${LOCAL.split(win32.sep).join(posix.sep)}/rotaris/data/rotaris`);
     // The spelling `sessions-proof` used everywhere is the Windows answer only; on Linux the data directory ends in `rotaris`.
+    // The Windows configuration directory is REQ-CONFIG-001's spelling, `rotaris\rotaris`, and the copy says so too:
+    // until 2026-09-29 both answered `rotaris\config`, so the parity above held over a name the requirement never spells.
+    expect(configDirFor(LOCAL, 'win32')).toBe(`${LOCAL}\\rotaris\\rotaris`);
     expect(machineIdFileFor(LOCAL, 'win32')).toBe(`${LOCAL}\\rotaris\\data\\machine-id`);
     expect(machineIdFileFor(LOCAL, 'linux')).toBe(`${LOCAL.split(win32.sep).join(posix.sep)}/rotaris/data/rotaris/machine-id`);
     // And the answers really do differ, so the test above is not agreeing with itself.
@@ -159,6 +168,7 @@ describe('proof isolation lands inside the scratch profile on every platform', (
     expect(workspacesRootFor(LOCAL, 'darwin', home)).toBe(dataLayout(dirs, 'darwin').workspaces);
     expect(tokensDirFor(LOCAL, 'darwin', home)).toBe(dataLayout(dirs, 'darwin').tokens);
     expect(machineIdFileFor(LOCAL, 'darwin', home)).toBe(dataLayout(dirs, 'darwin').machineId);
+    expect(dataDirFor(LOCAL, 'darwin', home)).toBe(dirs.data);
     // The home is not read on the other two: their answers are rooted at `local`, as their launches are.
     expect(configDirFor(LOCAL, 'linux', home)).toBe(configDirFor(LOCAL, 'linux'));
     expect(configDirFor(LOCAL, 'win32', home)).toBe(configDirFor(LOCAL, 'win32'));

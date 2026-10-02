@@ -1,6 +1,6 @@
 import type { TaskPlan } from '@rotaris/contracts';
 import type { ChildRow, SessionRow } from '@rotaris/store';
-import type { TodoDocument } from './run/todo.js';
+import { mintTodoId, taskLine, taskTitle, type TodoDocument } from './run/todo.js';
 
 /** REQ-TOOLS-144's persisted shape, repeated structurally across the package boundary. */
 export interface AgentTodoDocument {
@@ -35,8 +35,9 @@ export function isAgentTodoDocument(value: unknown): value is AgentTodoDocument 
 
 export function isPlannerTodoDocument(value: unknown): value is TodoDocument {
   const phases = phasesOf(value);
-  return phases !== null && phases.every((phase) => object(phase) && typeof phase['name'] === 'string' && Array.isArray(phase['tasks'])
-    && phase['tasks'].every((task) => object(task) && typeof task['id'] === 'string' && typeof task['text'] === 'string' && typeof task['state'] === 'string'));
+  return phases !== null && phases.every((phase) => object(phase) && typeof phase['name'] === 'string' && (phase['id'] === undefined || typeof phase['id'] === 'string') && Array.isArray(phase['tasks'])
+    && phase['tasks'].every((task) => object(task) && typeof task['id'] === 'string' && typeof task['text'] === 'string' && typeof task['state'] === 'string'
+      && (task['name'] === undefined || typeof task['name'] === 'string')));
 }
 
 /**
@@ -91,11 +92,13 @@ export function projectPlannerTodo(document: TodoDocument): TaskPlan {
   return {
     source: 'planner', ownerId: null, sourceLabel: 'Planner plan',
     phases: document.phases.map((phase, phaseIndex) => ({
-      id: phase.name || `phase-${phaseIndex + 1}`,
+      // REQ-CHAT-089: the phase's backend id; a phase an earlier build created carries none and is known by its name.
+      id: phase.id ?? (phase.name || `phase-${phaseIndex + 1}`),
       name: phase.name,
       tasks: phase.tasks.map((task, taskIndex) => ({
         id: task.id || `${phase.name || `phase-${phaseIndex + 1}`}-task-${taskIndex + 1}`,
-        text: task.text,
+        // REQ-CHAT-040: a queued prompt's task is drawn by its name, "Queued Prompt: <id>", as an agent task is by its name.
+        text: taskTitle(task),
         state: displayTaskState(task.state),
       })),
     })),
@@ -118,13 +121,18 @@ export function projectSessionTodos(row: SessionRow, children: readonly ChildRow
   return { todo, childTodos };
 }
 
-export function editAgentTodo(document: AgentTodoDocument, op: 'add' | 'update' | 'remove', id: string, text: string, phaseId: string, mintId: () => string): { changed: boolean; document: AgentTodoDocument; id?: string } {
+/**
+ * A user's edit of an agent's or a child's todo. REQ-CHAT-089: an added task takes a backend id — 8 lowercase hexadecimal
+ * characters — that no phase or task of the document already carries; `mintId` is handed those ids (`mintTodoId` by
+ * default, as the planner's adds are minted).
+ */
+export function editAgentTodo(document: AgentTodoDocument, op: 'add' | 'update' | 'remove', id: string, text: string, phaseId: string, mintId: (taken: ReadonlySet<string>) => string = (taken) => mintTodoId(taken)): { changed: boolean; document: AgentTodoDocument; id?: string } {
   const phases = document.phases.map((phase) => ({ ...phase, tasks: phase.tasks.map((task) => ({ ...task })) }));
   const body = text.trim();
   if (op === 'add') {
     const phase = phases.find((candidate) => candidate.id === phaseId);
     if (!phase || body === '') return { changed: false, document };
-    const newId = mintId().toLowerCase();
+    const newId = mintId(new Set(phases.flatMap((p) => [p.id, ...p.tasks.map((t) => t.id)]))).toLowerCase();
     phase.tasks.push({ id: newId, name: body, description: '', state: 'PENDING' });
     return { changed: true, document: { schema_version: 1, phases }, id: newId };
   }
@@ -150,6 +158,6 @@ export function editAgentTodo(document: AgentTodoDocument, op: 'add' | 'update' 
 export function todoLinesFromStored(json: string | null): string[] {
   const stored = decodeStoredTodo(json);
   if (stored.agent) return stored.agent.phases.flatMap((phase) => phase.tasks.map((task) => `[${displayTaskState(task.state)}] ${phase.name} — ${task.name}${task.description ? `: ${task.description}` : ''}`));
-  if (stored.planner) return stored.planner.phases.flatMap((phase) => phase.tasks.map((task) => `[${displayTaskState(task.state)}] ${phase.name} — ${task.text}`));
+  if (stored.planner) return stored.planner.phases.flatMap((phase) => phase.tasks.map((task) => `[${displayTaskState(task.state)}] ${phase.name} — ${taskLine(task)}`));
   return [];
 }

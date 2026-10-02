@@ -3,6 +3,8 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-marker.mjs';
 
 /**
  * ADR-0049's first execution in full (Part V), in the built application.
@@ -56,7 +58,12 @@ function scenario(name, { globalHooks = null, workspaceHook = false } = {}) {
     'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
     // Part T's shipped code_intelligence entry costs about 4.5 s per run start; this proof measures notices.
     'mcp_servers:', '  code_intelligence: { enabled: false }',
-    'runtime:', '  permission_mode: autonomous', '',
+    'runtime:', '  permission_mode: autonomous',
+    // The project-setup task answered (REQ-WORKSPACE-081/111): `enabled: false` above does not make it inapplicable
+    // (REQ-WORKSPACE-090), and without the bundled runtime its background run (REQ-WORKSPACE-083) fails and publishes
+    // "Project setup did not finish" into the ONE notice slot this proof reads (REQ-NOTIFY-024) — in `review-action`
+    // 0.8 s after the hook-review notice it replaced (REQ-NOTIFY-224).
+    ...SETUP_ANSWERED, '',
     // REQ-HOOKS-013: a WORKSPACE hook is never trusted without review, so the summary reports `review` and
     // REQ-NOTIFY-224's notice is raised once the window is interactive.
     ...(workspaceHook ? ['hooks:', '  entries:', '    - event: pre_tool', '      command: "exit 0"', ''] : []),
@@ -70,11 +77,11 @@ function scenario(name, { globalHooks = null, workspaceHook = false } = {}) {
   }
   return { root, workspace, local, preferences: join(root, 'preferences') };
 }
-function launch(name, s, extra, opts = {}) {
+async function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout: opts.timeout ?? 150_000, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs: opts.timeout ?? 150_000, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: s.preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ...extra,
@@ -82,8 +89,11 @@ function launch(name, s, extra, opts = {}) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
+  // The precondition the section establishes, checked rather than assumed: a background setup's notice is not this proof's subject.
+  if (backgroundSetupStarted(log)) throw new Error(`${name}: the workspace's initialization started code-intelligence-setup in the background, so its notice may stand in the slot this proof reads; see ${name}.log`);
   const errors = log.split('\n').filter((l) => /renderer console:/.test(l));
   return { log, png, elapsedMs: Date.now() - started, errors };
 }
@@ -106,7 +116,7 @@ const s1 = scenario('advisory', {
   ].join('\n'),
 });
 {
-  const r = launch('advisory', s1, {
+  const r = await launch('advisory', s1, {
     ROTARIS_SCRIPT: 'read,read,read,read,answer',
     ROTARIS_CAPTURE_PROMPT: 'read a few files so the hook fails its way to being switched off',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '2500',
@@ -162,7 +172,7 @@ const s1 = scenario('advisory', {
 const s2 = scenario('scoping');
 {
   const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
-  const r = launch('scoping', s2, {
+  const r = await launch('scoping', s2, {
     ROTARIS_CAPTURE_NOTICES: [
       // Unscoped, then a run starts: cleared (REQ-NOTIFY-058).
       step(2600, { op: 'report', severity: 'info', title: 'unscoped notice' }),
@@ -206,7 +216,7 @@ const s2 = scenario('scoping');
 const s3 = scenario('stack');
 {
   const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
-  const r = launch('stack', s3, {
+  const r = await launch('stack', s3, {
     ROTARIS_CAPTURE_NOTICES: [
       // One alone: the wide presentation (REQ-NOTIFY-013).
       step(2600, { op: 'acknowledge', kind: 'info', title: 'alone' }),
@@ -262,7 +272,7 @@ const s3 = scenario('stack');
 // 6. ESC-34: the review action names its workspace, and that name reaches the review.
 const s4 = scenario('review-action', { workspaceHook: true });
 {
-  const r = launch('review-action', s4, {
+  const r = await launch('review-action', s4, {
     ROTARIS_CAPTURE_AFTER_MS: '6000',
     // The notice is raised 800 ms after the workspace opens; probe it, then click its action.
     ROTARIS_CAPTURE_PROBE_AT: '[data-testid="notice-title"]@2500',

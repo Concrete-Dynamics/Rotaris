@@ -22,7 +22,8 @@ export function gitCommands(
       const r = await svc.link.request({ kind: 'git.view', workspaceRoot: canonicalPath(w.workspace) }, millis(600_000));
       if (r.kind !== 'git.state') return refusal(r, 'The repository could not be read');
       const st = r.state;
-      log(`git view: ${st.reads} reads in ${st.readMs} ms (git=${st.gitAvailable} repo=${st.isRepository} branch=${st.branch ?? (st.detached ? 'detached' : '-')} +${st.ahead}/-${st.behind} worktrees=${st.worktrees.length} history=${st.history.length}${st.failed.length > 0 ? ` failed=${st.failed.join(',')}` : ''})`);
+      // PD-MONITOR-002, live-run finding a71-9: "git view: N reads in M ms (…)" is the workspace service's line, which
+      // performed the reads; main relays the answer and does not write the same fact a second time.
       // REQ-GIT-104 / ADR-0038 c.1: a fixed identity, so refreshes replace rather than stack it; a non-repository raises nothing.
       if (!st.gitAvailable && raiseNoticeKeyed('git.missing', 'info', 'Working without Git', 'Git is not installed or not on PATH, so this workspace has no history and no worktrees. Everything else works, and Rotaris makes its changes in place instead of in a worktree of its own.')) log('notice: Working without Git');
       return { ok: true, value: st };

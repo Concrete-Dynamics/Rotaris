@@ -8,13 +8,14 @@ import {
 } from './project.js';
 import type { DisplayRow } from './types.js';
 import {
-  beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, estimateHeight, forgetMeasured, indexAt, markMeasured,
-  newUpdatesLabel, remeasuredSince, restoreAnchor, reuseOffsets, updateShape, visibleRange,
+  beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, estimateHeight, forgetMeasured, indexAt, markMeasured, measureAtCommit,
+  newUpdatesLabel, observeAgain, readHeight, remeasuredSince, restoreAnchor, reuseOffsets, updateShape, visibleRange,
 } from './pool.js';
 import { countLabel, indexAll, indexSuffix, matchRow, step } from './search.js';
 import { SCROLL_ORIGIN_EPSILON, isOwnScroll } from './scroll.js';
 import { LruCache, identityOf, measureKey, reuseKey } from './cache.js';
-import { H_MAX, POOL_CAPACITY, ROW_MIN_HEIGHT, capacityFor } from './constants.js';
+import { H_MAX, POOL_CAPACITY, ROW_MIN_HEIGHT, SHORTEST_ROW_HEIGHT, capacityFor } from './constants.js';
+import { readFileSync } from 'node:fs';
 
 const row = (index: number, over: Partial<TranscriptRow> = {}): TranscriptRow => ({
   index, kind: 'agent', settled: true, body: `row ${index}`, at: '2026-09-06T09:00:00.000Z', ts: '09:00:00', name: 'orchestrator', persona: 'orchestrator', ...over,
@@ -56,11 +57,50 @@ const thinking = (index: number, over: Partial<TranscriptRow> = {}): TranscriptR
 
 describe('ADR-0045 — the pool, its capacity and its geometry', () => {
   it('capacity is a declared product constant, not a function of the window (ADR-0045)', () => {
-    expect(POOL_CAPACITY).toBe(Math.ceil(H_MAX / ROW_MIN_HEIGHT) + 10);
+    expect(POOL_CAPACITY).toBe(Math.ceil(H_MAX / SHORTEST_ROW_HEIGHT) + 10);
+    expect(POOL_CAPACITY).toBe(226);
     // The ONE growth branch: a viewport taller than H_max, which the benchmark's window never reaches.
     expect(capacityFor(900)).toBe(POOL_CAPACITY);
     expect(capacityFor(H_MAX)).toBe(POOL_CAPACITY);
     expect(capacityFor(20_000)).toBeGreaterThan(POOL_CAPACITY);
+  });
+
+  /*
+   * docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md: PD-CHAT-003 lifted REQ-CHAT-057's
+   * 30 px floor off the row's box, and a one-line system notice inside a block drew 23.8 px in the built app (2026-09-30).
+   * A capacity counted in 30 px units left the rows past `first + capacity - 1` unbound — blank space at the bottom of a
+   * tall viewport (REQ-CHAT-165). The unit is now the shortest a row can draw, whatever it carries.
+   */
+  it('REQ-CHAT-165 / PD-CHAT-003: inside H_MAX the pool binds every visible row, however short a row PD-CHAT-003 draws', () => {
+    // The measured system notice inside a block, and the floor itself: no row the stylesheet draws is shorter.
+    for (const height of [23.8, SHORTEST_ROW_HEIGHT]) {
+      const count = 2_000;
+      const table = buildOffsets(Array.from({ length: count }, () => height));
+      for (const viewport of [900, 3_200, 3_430, 3_800, H_MAX]) {
+        // At the tail, where nothing lies below and the whole overscan sits above, and in the middle.
+        for (const scrollTop of [table.total - viewport, Math.floor(table.total / 2)]) {
+          const span = visibleRange(table, scrollTop, viewport, count, capacityFor(viewport));
+          const lastVisible = Math.min(count - 1, indexAt(table, scrollTop + viewport));
+          expect(span.first <= indexAt(table, scrollTop) && span.last >= lastVisible,
+            `${height} px rows at a ${viewport} px viewport, scrolled to ${scrollTop}: bound ${span.first}..${span.last}, visible to ${lastVisible}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('PD-CHAT-003: the capacity unit is no taller than the shortest row the stylesheet can draw', () => {
+    // A continuation row is `.row`'s 4 px top margin, its 1 px border either side and a grid whose role column holds the
+    // continuation bar (2 px wide) at its 14 px `min-height`; the first row of a block carries 12 px above it and a role line instead.
+    const css = readFileSync(new URL('../shell.css', import.meta.url), 'utf8');
+    const rule = (selector: string): string => new RegExp(`^${selector.replace(/\./g, '\\.')} \\{([^}]*)\\}`, 'm').exec(css)?.[1] ?? '';
+    const marginTop = Number(/margin:\s*(\d+)px/.exec(rule('.row'))?.[1]);
+    const border = Number(/border:\s*(\d+)px/.exec(rule('.row'))?.[1]);
+    const bar = Number(/min-height:\s*(\d+)px/.exec(rule('.row__bar'))?.[1]);
+    const floor = marginTop + 2 * border + bar;
+    expect(floor).toBe(20);
+    expect(SHORTEST_ROW_HEIGHT).toBeLessThanOrEqual(floor);
+    // And no taller than the shortest one-line row measured in the built app (2026-09-30).
+    expect(SHORTEST_ROW_HEIGHT).toBeLessThanOrEqual(23.8);
   });
 
   it('the offset table is a prefix sum and locates a row by binary search', () => {
@@ -79,6 +119,10 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     expect(span.first).toBe(90);
     expect(span.last).toBe(130);
     expect(visibleRange(table, 0, 600, 1000, 5)).toEqual({ first: 0, last: 4 });
+    // A pool too small for the span with its overscan sheds the overscan — below, then above — before a visible row:
+    // rows 100..120 are on screen, and 25 slots bind all of them and four above.
+    expect(visibleRange(table, 3000, 600, 1000, 25)).toEqual({ first: 96, last: 120 });
+    expect(visibleRange(table, 3000, 600, 1000, 35)).toEqual({ first: 90, last: 124 });
     expect(visibleRange(table, 0, 600, 0, POOL_CAPACITY)).toEqual({ first: 0, last: -1 });
   });
 
@@ -102,6 +146,23 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     expect(updateShape(d(['a', 'b']), d(['a', 'b']))).toBe('replace');
     expect(updateShape(d(['a', 'b']), d(['a', 'b', 'c', 'd']))).toBe('append');
     expect(updateShape(d(['a', 'x']), d(['a', 'y', 'z']))).toBe('other');
+    // The fourth: the last row keeps its identity and grows while rows are appended after it. Its key is the same on
+    // both sides, so the keys alone read this as `append`; what tells it apart is the last row's content
+    // (docs/defects/fixed/the-update-shape-never-answers-extend.md).
+    const streamed = (body: string) => ({ shape: 'row' as const, key: 'row:1', row: row(1, { body, settled: false }) });
+    const a = { shape: 'row' as const, key: 'row:0', row: row(0) };
+    const before = [a, streamed('The answer')];
+    expect(updateShape(before, [a, streamed('The answer is'), { shape: 'row' as const, key: 'tool:c2', row: tool(2, 'bash') }])).toBe('extend');
+    // The same last row, unchanged (the same object, or a new object with the same content), with a row after it: `append`.
+    expect(updateShape(before, [a, before[1]!, { shape: 'row' as const, key: 'tool:c2', row: tool(2, 'bash') }])).toBe('append');
+    expect(updateShape(before, [a, streamed('The answer'), { shape: 'row' as const, key: 'tool:c2', row: tool(2, 'bash') }])).toBe('append');
+    // Extended with nothing after it is the same number of rows replaced in place: `replace`.
+    expect(updateShape(before, [a, streamed('The answer is')])).toBe('replace');
+    // A group is the last displayed row just as a row is: a run that gains a member while rows follow is an extension.
+    const run = (members: number) => asGroup(projectDisplay(options(Array.from({ length: members }, (_, i) => tool(10 + i, 'read_file', { callKey: `r${i}` }))))[0]);
+    expect(run(3).key).toBe(run(2).key);
+    expect(updateShape([a, run(2)], [a, run(3), { shape: 'row' as const, key: 'row:20', row: row(20) }])).toBe('extend');
+    expect(updateShape([a, run(2)], [a, run(2), { shape: 'row' as const, key: 'row:20', row: row(20) }])).toBe('append');
   });
 
   it('REQ-CHAT-168: the "N new updates" label is written for the count it carries, at zero, one and many', () => {
@@ -147,11 +208,18 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
   });
 
   it('PD-CHAT-003: a one-line row estimates content height, not the old padding-box 46 px', () => {
-    // A one-line row is one ~17 px text line over the 30 px unit — NOT the old 34 px padding-box term.
-    const oneLine = estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'one line' }) });
+    // A one-line plain row is one text line over the 30 px unit — NOT the old 34 px padding-box term.
+    const oneLine = estimateHeight({ shape: 'row', key: 'k', row: row(0, { kind: 'system', body: 'one line' }) });
     expect(oneLine).toBe(ROW_MIN_HEIGHT);
+    // An agent message's one line is a Markdown paragraph, which keeps its 8 px bottom margin inside the row (REQ-CHAT-056):
+    // the unit and that margin, still well under the old padding box. (This read 30 until 2026-09-30, when the built
+    // app drew such a row 33.4 px — docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md.)
+    const message = estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'one line' }) });
+    expect(message).toBe(ROW_MIN_HEIGHT + 8);
+    expect(message).toBeLessThan(46);
     // Multi-line rows still grow per line.
-    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\nb\nc' }) })).toBeGreaterThan(oneLine);
+    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { kind: 'system', body: 'a\nb\nc' }) })).toBeGreaterThan(oneLine);
+    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\n\nb\n\nc' }) })).toBeGreaterThan(message);
   });
 
   it('a collapsed thinking row estimates its one-line summary, never its hidden body (REQ-CHAT-062/167)', () => {
@@ -166,6 +234,59 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     // Other shapes are unaffected by the flag.
     expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\nb\nc' }) }, false))
       .toBe(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\nb\nc' }) }, true));
+  });
+
+  // ---- the estimate is never short of what a new row draws before its first measurement -----------------------
+  // docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md: a new
+  // row at the tail is positioned by its estimate until the measurement pass reaches it, so an estimate SHORT of what
+  // the row draws puts it through the row beneath it for those frames. The figures are the built app's, read from a
+  // planted transcript of every row kind below at a 740 px viewport on 2026-09-30 (slot heights, which include the row
+  // gap above each row): the first repair covered only the block gap, and `transcript-proof` went on catching a
+  // one-line agent message INSIDE a block drawn 33.4 px into the 30 px it was given.
+
+  it('PD-CHAT-003: the first row of a block estimates the 12 px it is drawn below, over what one row inside a block is', () => {
+    const shapes: DisplayRow[] = [
+      { shape: 'row', key: 'k', row: row(0, { body: 'one line' }) },
+      { shape: 'row', key: 't', row: row(0, { kind: 'thinking', body: 'deliberating' }) },
+      asGroup(projectDisplay(options([tool(0, 'read'), tool(1, 'read')]))[0]),
+    ];
+    for (const d of shapes) {
+      // `.row--block-start`'s `--rt-space-3` against `.row`'s 4 px: the only difference between the two boxes.
+      expect(estimateHeight(d, false, 900, true) - estimateHeight(d, false, 900, false), d.key).toBe(8);
+    }
+    // A caller that says nothing about the block keeps the estimate it had (a row inside a block).
+    expect(estimateHeight(shapes[0]!, false, 900)).toBe(estimateHeight(shapes[0]!, false, 900, false));
+  });
+
+  it('PD-CHAT-003 / REQ-CHAT-056: no row kind is estimated short of what the built app drew, inside a block or starting one', () => {
+    const WIDTH = 740;
+    const PROSE = 'The transcript keeps each row at the height it drew, and until a row has been measured the pane positions it by an estimate of that height, which is why the estimate has to be read against what the built application actually draws on this host and on every other one it ships to, including the wrapped paragraphs an agent writes when it explains what it changed and why the change was needed at all.';
+    const at = (over: Partial<TranscriptRow>): DisplayRow => ({ shape: 'row', key: 'k', row: row(0, over) });
+    const drawn: [string, DisplayRow, boolean, number][] = [
+      // The case transcript-proof caught after the first repair: a one-line agent message INSIDE a block, whose
+      // Markdown paragraph keeps its 8 px bottom margin in the row. Estimated 30 before this repair.
+      ['one-line agent message inside a block', at({ body: 'The scripted answer, after deliberating.' }), false, 33.4],
+      ['one-line agent message starting a block', at({ body: 'agent one line' }), true, 41.4],
+      // `.row--user`'s 8 px padding above and below: 11.4 px short before this repair, at both positions.
+      ['one-line user message inside a block', at({ kind: 'user', body: 'second user line' }), false, 41.4],
+      ['one-line user message starting a block', at({ kind: 'user', body: 'Say something about the notes.' }), true, 49.4],
+      ['one-line system notice inside a block', at({ kind: 'system', body: 's2' }), false, 23.8],
+      ['one-line system notice starting a block', at({ kind: 'system', body: 'The run completed.' }), true, 31.8],
+      ['collapsed reasoning row starting a block', at({ kind: 'thinking', body: 'deliberating' }), true, 33.4],
+      ['three Markdown paragraphs', at({ body: 'para one\n\npara two\n\npara three' }), false, 88.3],
+      ['a two-item Markdown list starting a block', at({ body: '- item one\n- item two' }), true, 68.9],
+      ['a Markdown heading and a paragraph', at({ body: '# Heading\n\nbody' }), false, 71.3],
+      ['a six-line user message starting a block', at({ kind: 'user', body: 'u1\nu2\nu3\nu4\nu5\nu6' }), true, 146.6],
+      ['a paragraph that wraps to seven lines', at({ body: PROSE }), false, 150.1],
+      ['a user message that wraps to seven lines', at({ kind: 'user', body: PROSE }), true, 166.1],
+      ['a paragraph of 800 characters that wraps to fourteen lines', at({ body: 'word '.repeat(160) }), false, 286.1],
+      ['a five-line diff starting a block', at({ kind: 'diff', name: 'edit', body: '--- a/x\n+++ b/x\n@@\n-a\n+b' }), true, 103.1],
+      ['a sixteen-segment activity line starting a block (six drawn lines)',
+        asGroup(projectDisplay(options(Array.from({ length: 16 }, (_, i) => tool(i, `inspect-${i}`))))[0]), true, 130.6],
+    ];
+    for (const [name, d, blockStart, height] of drawn) {
+      expect(estimateHeight(d, false, WIDTH, blockStart), name).toBeGreaterThanOrEqual(height);
+    }
   });
 
   // ---- the estimate models WRAPPING (docs/defects/live-rows-are-never-measured.md) ------------------------
@@ -197,8 +318,9 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     const paragraph = 'x'.repeat(1_200);
     const drawn = estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: paragraph }) }, false, 900);
     expect(drawn).toBeGreaterThan(ROW_MIN_HEIGHT * 3);
-    // With no width known nothing can be predicted, so the old width-blind count is what is left.
-    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: paragraph }) }, false)).toBe(ROW_MIN_HEIGHT);
+    // With no width known nothing can be predicted, so the old width-blind count — one line — is what is left.
+    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: paragraph }) }, false))
+      .toBe(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'one line' }) }, false));
   });
 
   it('a long agent name costs the row a second line, because the role gutter wraps (REQ-CHAT-057)', () => {
@@ -316,6 +438,98 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
     expect(reads).toBe(1_202);
   });
 
+  it('ADR-0045 / PD-CHAT-003: a slot rebound under a new measurement key is observed again, and one still under its key is not', () => {
+    const observed = new Map<number, string>();
+    // First bound: observed. The same key on the next commit: nothing to do — the observer already delivers its changes.
+    expect(observeAgain(observed, 0, 'row:1|a|740|c||')).toBe(true);
+    expect(observeAgain(observed, 0, 'row:1|a|740|c||')).toBe(false);
+    // A scroll rebinds the slot to another row: observed again, so its size is delivered even if it equals the last row's.
+    expect(observeAgain(observed, 0, 'row:2|b|740|c||')).toBe(true);
+    // An unbound slot has nothing to measure, and is recorded so the row bound to it next is observed.
+    expect(observeAgain(observed, 0, '')).toBe(false);
+    expect(observeAgain(observed, 0, 'row:2|b|740|c||')).toBe(true);
+    // Slots are independent.
+    expect(observeAgain(observed, 1, 'row:2|b|740|c||')).toBe(true);
+  });
+
+  it('the pane\'s height reader takes the measurement, then the identity\'s last height, then the estimate at the row\'s own block start (PD-CHAT-003)', () => {
+    const d = displayed(0, 'one line');
+    const none = { peek: (): number | undefined => undefined };
+    const inside = [{ blockStart: false }];
+    const starts = [{ blockStart: true }];
+    // Nothing measured: the estimate, read with the block start of the row's OWN position.
+    expect(readHeight(d, 0, 800, new Set(), starts, none, none)).toBe(estimateHeight(d, false, 800, true));
+    expect(readHeight(d, 0, 800, new Set(), inside, none, none)).toBe(estimateHeight(d, false, 800, false));
+    expect(readHeight(d, 0, 800, new Set(), starts, none, none) - readHeight(d, 0, 800, new Set(), inside, none, none)).toBe(8);
+    // A position the places do not reach is read as a row inside a block, never as an error.
+    expect(readHeight(d, 3, 800, new Set(), starts, none, none)).toBe(estimateHeight(d, false, 800, false));
+    // What the identity drew last wins over any estimate, and the row's own measurement over both.
+    const last = { peek: (identity: string): number | undefined => (identity === d.key ? 77 : undefined) };
+    expect(readHeight(d, 0, 800, new Set(), starts, none, last)).toBe(77);
+    const key = measureKey(d, 800, false, null);
+    const measured = { peek: (k: string): number | undefined => (k === key ? 55 : undefined) };
+    expect(readHeight(d, 0, 800, new Set(), starts, measured, last)).toBe(55);
+  });
+
+  /*
+   * docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md: a row whose content
+   * changes has no measurement under its new key, so the table places it by the height its identity drew last — and a row
+   * that GROWS was drawn through the row beneath it until the observer's delivery rendered, a frame later. transcript-proof
+   * read 21.8 px on the planted activity line turning live again (52.9 px settled, 74.7 px live).
+   */
+  it('PD-CHAT-003 / ADR-0045: a row that grows is measured at the commit, so the row beneath it is placed below what it draws', () => {
+    const ledger = createMeasureLedger();
+    const measurements = new LruCache<number>(100, Number.MAX_SAFE_INTEGER);
+    const lastByIdentity = new LruCache<number>(100, Number.MAX_SAFE_INTEGER);
+    const places = [{ blockStart: true }, { blockStart: false }];
+    const heightOf = (d: DisplayRow, at: number): number => readHeight(d, at, 740, new Set(), places, measurements, lastByIdentity);
+    const remeasured = (identity: string, since: number): boolean => remeasuredSince(ledger, identity, since);
+    const build = (display: readonly DisplayRow[]) => reuseOffsets(ledger.committed, { display, width: 740, expanded: new Set(), stamp: ledger.stamp }, remeasured, heightOf);
+    // Drawn and measured once: the line settled at 52.9 px, the row beneath it at 30.
+    const settled = displayed(0, 'settled');
+    const beneath = displayed(1);
+    for (const [d, h] of [[settled, 52.9], [beneath, 30]] as const) { measurements.set(measureKey(d, 740, false, null), h, 0); lastByIdentity.set(d.key, h, 0); }
+    commitTable(ledger, build([settled, beneath]));
+    // The same identity carrying new content that draws 74.7 px: before any measurement of it, the table places the row
+    // beneath by the identity's last height — 21.8 px inside the row above. This is the defect, as the table reads it.
+    const grown = displayed(0, 'live again, with its preview line');
+    const before = build([grown, beneath]);
+    expect(before.offsets[1]).toBe(52.9);
+    commitTable(ledger, before);
+    // The commit's pass reads what the bound slots draw now, for exactly the keys with no measurement, and says so.
+    const reads: string[] = [];
+    const bound = [
+      { key: measureKey(grown, 740, false, null), read: () => { reads.push('grown'); return 74.7; } },
+      { key: measureKey(beneath, 740, false, null), read: () => { reads.push('beneath'); return 30; } },
+      { key: '', read: () => { reads.push('empty'); return 0; } },
+    ];
+    expect(measureAtCommit(ledger, bound, measurements, lastByIdentity)).toBe(true);
+    expect(reads).toEqual(['grown']);
+    // The table the pass's render builds places the row beneath at what the row above draws — before that frame is painted.
+    const after = build([grown, beneath]);
+    expect(after.offsets[1]).toBe(74.7);
+    commitTable(ledger, after);
+    // Measured, nothing is read again and nothing asks for another render; a row whose new content draws what its identity
+    // drew last is filed without asking for one either.
+    expect(measureAtCommit(ledger, bound, measurements, lastByIdentity)).toBe(false);
+    const same = displayed(0, 'live again, the same height');
+    expect(measureAtCommit(ledger, [{ key: measureKey(same, 740, false, null), read: () => 74.7 }], measurements, lastByIdentity)).toBe(false);
+    expect(measurements.peek(measureKey(same, 740, false, null))).toBe(74.7);
+    expect(reads).toEqual(['grown']);
+  });
+
+  it('the offset table hands a row\'s height reader its position, where the pane finds the row\'s block (PD-CHAT-003)', () => {
+    const display = Array.from({ length: 5 }, (_, i) => displayed(i));
+    const seen: number[] = [];
+    const table = reuseOffsets(null, { display, width: 800, expanded: new Set(), stamp: 0 }, null, (_d, at) => { seen.push(at); return at === 0 ? 38 : 30; });
+    expect(seen).toEqual([0, 1, 2, 3, 4]);
+    expect(table.offsets).toEqual([0, 38, 68, 98, 128, 158]);
+    // An appended row is read at its own position, and the rows above it are not read again.
+    seen.length = 0;
+    reuseOffsets(table, { display: [...display, displayed(5)], width: 800, expanded: table.expanded, stamp: 0 }, null, (_d, at) => { seen.push(at); return 30; });
+    expect(seen).toEqual([5]);
+  });
+
   it('the ledger answers an identity re-measured after a stamp, and forgets what a committed table has read', () => {
     const ledger = createMeasureLedger();
     beginMeasuring(ledger);
@@ -346,7 +560,7 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
     expect(evicted).toEqual(['a|1', 'b|1', 'c|1']);
   });
 
-  it('the update shape reads the keys only past the rows both arrays share, and answers what comparing every key answered', () => {
+  it('the update shape reads the keys only past the rows both arrays share, and answers what comparing every key answered (REQ-CHAT-053, REQ-CHAT-055)', () => {
     let reads = 0;
     const counted = (d: DisplayRow): DisplayRow => ({ shape: 'row', row: d.shape === 'row' ? d.row : row(0), get key() { reads += 1; return d.key; } });
     const before = Array.from({ length: 1_200 }, (_, i) => counted(displayed(i)));
@@ -355,7 +569,9 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
     // The first form mapped both arrays to their keys: 2,401 reads for one appended row.
     expect(reads).toBeLessThanOrEqual(4);
 
-    // Against the first form's answer, over pairs that share objects, share keys on new objects, and differ.
+    // Against the first form's answer, over pairs that share objects, share keys on new objects, and differ. The first
+    // form never answered `extend` (docs/defects/fixed/the-update-shape-never-answers-extend.md): its answer stands
+    // everywhere else, and where it said `append` the last row's content now decides between `append` and `extend`.
     const oracle = (a: readonly DisplayRow[], b: readonly DisplayRow[]) => {
       const x = a.map((d) => d.key);
       const y = b.map((d) => d.key);
@@ -363,9 +579,12 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
       const shared = Math.min(x.length, y.length);
       let common = 0;
       while (common < shared && x[common] === y[common]) common += 1;
-      if (common === x.length && y.length > x.length) return 'append';
+      if (common === x.length && y.length > x.length) {
+        const was = a[x.length - 1];
+        const now = b[x.length - 1];
+        return was !== undefined && now !== undefined && asRow(was).row.body !== asRow(now).row.body ? 'extend' : 'append';
+      }
       if (common === y.length && x.length > y.length) return 'truncate';
-      if (x.length > 0 && common === x.length - 1 && y.length >= x.length && x[x.length - 1] === y[x.length - 1]) return 'extend';
       return 'other';
     };
     let seed = 7;
@@ -375,7 +594,8 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
       const a = Array.from({ length: Math.floor(rand() * 6) }, (_, i) => displayed(i));
       let b: DisplayRow[] = [...a];
       const op = rand();
-      if (op < 0.25) b = [...b, displayed(a.length)];
+      if (op < 0.2) b = [...b, displayed(a.length)];
+      else if (op < 0.25 && b.length > 0) b = [...b.slice(0, -1), displayed(a.length - 1, 'grown in place'), displayed(a.length)];
       else if (op < 0.4 && b.length > 0) b = b.slice(0, -1);
       else if (op < 0.6 && b.length > 0) { const at = Math.floor(rand() * b.length); b[at] = displayed(at, 'same key, new object'); }
       else if (op < 0.75 && b.length > 0) { const at = Math.floor(rand() * b.length); b[at] = displayed(100 + at); }
@@ -384,7 +604,7 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
       seen.add(expected);
       expect(updateShape(a, b), `pair ${k}`).toBe(expected);
     }
-    expect([...seen].sort()).toEqual(['append', 'other', 'replace', 'truncate']);
+    expect([...seen].sort()).toEqual(['append', 'extend', 'other', 'replace', 'truncate']);
   });
 });
 

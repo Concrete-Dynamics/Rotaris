@@ -38,6 +38,25 @@ export interface ConfigSettingsProps {
    */
   readonly confinement?: ConfinementVerdict | null;
   readonly onRecheckConfinement?: (() => Promise<void>) | undefined;
+  /**
+   * PD-ORCH-003: the followed session holds an approved release, so its runs start without the plan gate whatever the
+   * run-start mode says. The Runtime category states it beside the mode, so the control never reads as promising a
+   * gate that will not open. Absent or false when no session is followed or the followed one holds none.
+   */
+  readonly planReleased?: boolean | undefined;
+}
+
+/**
+ * REQ-ORCH-152 / REQ-CONFIG-320 / PD-ORCH-003: the words under the Runtime category's run-start mode selector. Until
+ * 2026-09-29 they said "The plan gate itself is not built in this version", which ADR-0062 had made false; they now say
+ * what `plan` does (REQ-ORCH-153's hold, and its answer-group exemption), and for a released session that it is
+ * released and which control re-arms it. The selector here defers to Save and re-arms nothing, so the hint names the
+ * composer's control, where choosing `plan` IS the re-arm (`setRunStartMode`); OQ-137 records that reading.
+ */
+export function runStartModeHint(planReleased: boolean): string {
+  const base = 'Applies from the next run. With plan, a run writes a plan and waits at the plan gate for your answer before it changes anything; a question or an exploration is not held.';
+  if (!planReleased) return base;
+  return `${base} This session is released: a plan was approved in it, so its runs start without the gate whatever this setting says. Choose Plan first on the composer's run-start control to plan its next run again.`;
 }
 
 type Outcome = { ok: true } | { ok: false; reason: string };
@@ -245,7 +264,7 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
         <DesignSelect id="run-start-mode" className="input select settings__select" aria-label="Run-start mode" aria-description="Decides whether a run produces a plan and waits for an answer before it changes anything." value={rt.run_start_mode} onChange={(e) => onChange({ kind: 'runtime', key: 'run_start_mode', value: e.currentTarget.value as 'auto' | 'plan' })}>
           {RUN_START_MODE_NAMES.map((m) => <option key={m} value={m}>{m}</option>)}
         </DesignSelect>
-        <span className="text-secondary settings__hint">Stored for the next run. The plan gate itself is not built in this version.</span>
+        <span className="text-secondary settings__hint" data-testid="run-start-hint" data-released={props.planReleased === true ? 'true' : 'false'}>{runStartModeHint(props.planReleased === true)}</span>
       </div>
       <h2 className="settings__heading">Delegation limits</h2>
       <div className="settings__action">

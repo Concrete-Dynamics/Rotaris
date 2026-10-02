@@ -6,7 +6,7 @@ import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, Ma
 import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
-import { startDriver } from './driver.js';
+import { startDriver, type AuxiliaryWindow } from './driver.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
 import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
 import { requirementColumnFoldsKey, type PreferenceKey } from '@rotaris/platform';
@@ -19,7 +19,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, utilityProcess,
 import { join } from 'node:path';
 import { mkdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { millis, toIsoUtc } from '@rotaris/kernel';
+import { countNoun, millis, toIsoUtc } from '@rotaris/kernel';
 import { type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
 import { claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
@@ -31,7 +31,7 @@ import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
-import { InitializationCoordinator } from './initialization.js'; // Part AS (ADR-0064)
+import { deliverSetupCancel, InitializationCoordinator } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
 import { checkpointsCommands } from './commands/checkpoints.js';
 import { configCommands } from './commands/config.js';
@@ -48,8 +48,8 @@ import { sessionCommands } from './commands/session.js';
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
-import { closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
-import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
+import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
+import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
@@ -81,6 +81,10 @@ const launchArtifact = takeArtifactVariables(process.env);
 const clocks = nodeClocks();
 /** PD-ORCH-005 clause 9: what tells a surface the application's quit closed from one a person closed (`exit.ts`). */
 const quit = new QuitState();
+/** The run host's service name, which Electron reports it by (`child-process-gone`'s `name`). */
+const RUN_HOST_SERVICE_NAME = 'rotaris-run-host';
+/** PD-MONITOR-002 (live-run finding L13): the children main ends itself, whose `killed` report is not a loss (`exit.ts`). */
+const endedByMain = new ChildrenEndedByMain();
 /**
  * Main's end waits for the run host's (`endBeforeMain`, `exit.ts`): a run host that outlives main keeps every session it
  * held refused to the next launch until its pid stops answering. Nothing to wait for until the run host is forked.
@@ -109,7 +113,9 @@ if (!catalogue.ok) throw new Error(`the provider catalogue is invalid: ${catalog
  * the credential store, the settings store, the provider service) now does, rather than having its `warn` dropped.
  */
 const appLogLevel = appLogThreshold(process.env[APP_LOG_LEVEL_VARIABLE]);
-const logAt = createAppLog({ threshold: appLogLevel.threshold, now: () => toIsoUtc(clocks.wall.instant()), write: (line) => console.log(line) });
+// A standard stream whose reader has gone must not turn the log into an endless uncaught EPIPE (`standardStreamWriter`).
+standardStreamWriter(process.stderr);
+const logAt = createAppLog({ threshold: appLogLevel.threshold, now: () => toIsoUtc(clocks.wall.instant()), write: standardStreamWriter(process.stdout) });
 const log = (m: string, level: AppLogLevel = 'info'): void => { logAt(level, null, m); };
 // ADR-0019's prohibition, from the other side: an uncaught exception in main would raise the platform's native
 // error box — a synchronous modal that blocks the loop and every poll reply. Log it instead; nothing here may hang.
@@ -137,12 +143,14 @@ app.on('session-created', (created) => { withoutRuntimeRequests(created, (m) => 
 app.on('before-quit', () => { log('quit: requested (before-quit)'); });
 app.on('quit', (_e, code) => { log(`quit: exiting with status ${code}`); });
 // PD-MONITOR-002: a process lost for any reason but `clean-exit` is an `error`, so a log kept at `warning` or `error`
-// still says a crash happened; `clean-exit` is the one reason in Electron's vocabulary that is not a loss.
+// still says a crash happened; `clean-exit` is the one reason in Electron's vocabulary that is not a loss — and a child
+// main ended itself is not lost either (`ChildrenEndedByMain`, `exit.ts`; live-run finding L13).
 app.on('render-process-gone', (_e, contents, details) => {
   log(`RENDERER GONE (${details.reason}, exit ${details.exitCode}) for ${contents.getURL() || 'a destroyed frame'}`, details.reason === 'clean-exit' ? 'info' : 'error');
 });
 app.on('child-process-gone', (_e, details) => {
-  log(`CHILD PROCESS GONE (${details.type}${details.name === undefined ? '' : ` ${details.name}`}: ${details.reason}, exit ${details.exitCode})`, details.reason === 'clean-exit' ? 'info' : 'error');
+  const gone = endedByMain.gone(details);
+  log(gone.message, gone.level);
 });
 process.on('exit', (code) => { log(`main process exiting with status ${code}`); });
 
@@ -238,11 +246,12 @@ async function main(): Promise<void> {
   // REQ-MCP-033 / OQ-82: the run host builds the reserved token's launch of this executable, and that launch carries the
   // sandbox switch THIS process was started with (`--no-sandbox`, as root on Linux). A utility process's argv is what it
   // is forked with, not the parent's, so the switch is handed over here; the run host reads it back from its own argv.
-  const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [...inheritedChromiumSwitches(process.argv)], { serviceName: 'rotaris-run-host' });
+  const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [...inheritedChromiumSwitches(process.argv)], { serviceName: RUN_HOST_SERVICE_NAME });
+  // PD-MONITOR-002 (live-run finding L13): main's own end of the run host is recorded, so Electron's `killed` is not a loss.
+  const runHostEndable = endedByMain.endable(RUN_HOST_SERVICE_NAME, runHostChild);
   // Watched from the fork so the quit can race its `shutdown` against it and never miss the event (`exit.ts`).
   const runHostExit = watchChildExit(runHostChild);
   const runHost = new ProcessLink<RunHostRequest>(portOf(runHostChild), clocks.timers);
-  let lastLeaseLine = '';
   // ADR-0030: the run host's one ask — the bearers for the providers a run names. Never logged.
   // ADR-0039 / ADR-0002 c.4: the run host's three checkpoint asks are relayed to the workspace service of that root and answered back.
   runHost.onAsk(async (a) => {
@@ -255,12 +264,10 @@ async function main(): Promise<void> {
     if (a.kind !== 'credentials.lease') return { kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from the run host` };
     const { bearers, report } = providers.lease(a.providerIds);
     /**
-     * REQ-PROVIDER-068: an unresolved credential is reported once, not at every check. Every continuation
-     * re-leases (ADR-0030, the standing substitute for the keep-fresh timer), so this answered three times a
-     * prompt and said the same sentence each time. The same sentence twice running is one fact, not two.
+     * REQ-PROVIDER-068: the lease's report is the run host's to write — `LeaseReportLog` (`run-host/launch.ts`) says
+     * the opening report whole per workspace root, then only what changed. Main wrote its own "credentials leased: …"
+     * beside it, so every lease reached the application log twice (PD-MONITOR-002, live-run finding a71-9).
      */
-    const line = `credentials leased: ${report.authenticated.join(', ') || 'none'}${Object.keys(report.unresolved).length > 0 ? `; unresolved ${Object.entries(report.unresolved).map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`;
-    if (line !== lastLeaseLine) { lastLeaseLine = line; log(line); }
     return { kind: 'credentials.leased', bearers, report: { authenticated: [...report.authenticated], renewed: [...report.renewed], unresolved: { ...report.unresolved } } };
   });
   // PD-MONITOR-002: 0 is an orderly end — main's own `shutdown` (`dispatch.ts`), or Electron tearing the process down at
@@ -273,10 +280,9 @@ async function main(): Promise<void> {
   // An immediate exit asked nothing of the run host, so it is ended at once; the orderly quit below gives it the grace
   // its answered `shutdown` needs (a 0 ms timer) before ending it. Either way the next launch finds its pid dead.
   const runHostStillRunning = (): void => { log(`quit: the run host (pid ${runHostChild.pid ?? '?'}) was still running ${RUN_HOST_END_BOUND_MS} ms after it was ended; a session it held is refused to the next launch until it exits`, 'error'); };
-  endRunHost = () => endBeforeMain(runHostChild, runHostExit, clocks.timers, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
+  endRunHost = () => endBeforeMain(runHostEndable, runHostExit, clocks.timers, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest>; exit: ChildExit }>();
-  const workspaceIds = new Map<string, string>();
   let cancelImprovementWorkspace = (_workspaceRoot: string): void => undefined;
   /**
    * Step A1 of the window builder (ADR-0048's registry over main windows; ADR-0055 consequences 5 and 6).
@@ -341,7 +347,7 @@ async function main(): Promise<void> {
       services.set(key, svc);
       // PD-MONITOR-002: 0 is an orderly end — main's own `shutdown`, or Electron tearing the service down at quit (see the
       // run host's exit above); any other status is the service lost, and an `error`.
-      child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`, code === 0 ? 'info' : 'error'); services.delete(key); workspaceIds.delete(key); cancelImprovementWorkspace(key); });
+      child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`, code === 0 ? 'info' : 'error'); services.delete(key); cancelImprovementWorkspace(key); });
       // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads),
       // at the level the service gave them and under the same threshold as main's own (PD-MONITOR-002).
       svc.link.onEvent((e) => { if (e.kind === 'log') logAt(e.level, 'workspace service', e.message); });
@@ -367,12 +373,12 @@ async function main(): Promise<void> {
     // other project's window — and every workspace-scoped command resolves its window through that field.
     // REQ-NOTIFY-224 / REQ-SHELL-016: the unreviewed-hooks notice is raised after the window exists, never a dialog by itself.
     if (ack.kind === 'workspace.ack') {
-      workspaceIds.set(key, opened.workspaceId);
       // REQ-WORKSPACE-141: initialization resolution takes the same slot as the hook-review notice — once
       // the window is interactive, never during its construction and never as a dialog opened unbidden.
-      initialization.open(key, scopeFiles(resolveUserDirs().config, key).workspace.agents);
+      // REQ-WORKSPACE-013/102: this workspace's own automatic resolution, whichever window is focused when the slot comes.
+      initialization.open(key, scopeFiles(resolveUserDirs().config, key).workspace.agents, opened.workspaceId);
       clocks.timers.after(millis(process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
-        void initialization.resolve(true, key).catch((cause: unknown) => log(`initialization: resolve failed (${String(cause)})`));
+        void initialization.resolve(key, true).catch((cause: unknown) => log(`initialization: resolve failed (${String(cause)})`));
         void runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).then((r) => {
           if (r.kind === 'hooks.summary' && r.summary.status === 'review') { raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review', r.summary.workspace)); return; }
           // REQ-WORKSPACE-152 (3): once the window is interactive, never as a dialog; the only run-time consequence is REQ-WORKSPACE-137's refusal.
@@ -952,8 +958,10 @@ async function main(): Promise<void> {
   /**
    * Part AS — ADR-0064's project-initialization coordinator. It lives here because the marker's one
    * writer is the workspace service and the one task's work runs in the run host, and neither may
-   * import the other (REQ-WORKSPACE-085; `eslint.config.js`). Channel 12 carries the nine values of
-   * REQ-WORKSPACE-105 to every live window, whichever view it is showing.
+   * import the other (REQ-WORKSPACE-085; `eslint.config.js`). Channel 12 carries a workspace's nine values of
+   * REQ-WORKSPACE-105 to the main windows holding that workspace, whichever view each is showing, and to no other.
+   * The setup port addresses the run host by the run's own workspace, never by the focused window's (PD-SHELL-001;
+   * `docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
    */
   const initialization = new InitializationCoordinator({
     clocks,
@@ -965,30 +973,30 @@ async function main(): Promise<void> {
       return r.kind === 'config.snapshot' ? { ok: true } : { ok: false, reason: r.kind === 'refused' ? r.headline : `the service answered ${r.kind}` };
     },
     setup: {
-      start: async (root) => {
-        const id = workspaceIds.get(root);
-        if (!id) return { ok: false, reason: 'no workspace is open' };
+      start: async (id) => {
         const r = await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'start' }, millis(15_000));
-        return r.kind === 'mcp.setup' ? { ok: true, status: r.status } : { ok: false, reason: r.kind === 'refused' ? r.headline : `the run host answered ${r.kind}` };
+        // The refusal's code travels with its words, so the coordinator can tell a busy slot from REQ-WORKSPACE-094's case.
+        if (r.kind === 'mcp.setup') return { ok: true, status: r.status };
+        return r.kind === 'refused' ? { ok: false, code: r.code, reason: r.headline } : { ok: false, code: r.kind, reason: `the run host answered ${r.kind}` };
       },
-      cancel: async (root) => {
-        const id = workspaceIds.get(root);
-        if (id) await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'cancel' }, millis(15_000));
-      },
-      status: async (root) => {
-        const id = workspaceIds.get(root);
-        if (!id) return null;
+      // Rejects unless the run host took it, so an undelivered cancellation reaches the log (REQ-WORKSPACE-092).
+      cancel: async (id) => await deliverSetupCancel(id, async (to) => await runHost.request({ kind: 'mcp.setup', workspaceId: to, action: 'cancel' }, millis(15_000))),
+      status: async (id) => {
         const r = await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'status' }, millis(15_000));
         return r.kind === 'mcp.setup' ? r.status : null;
       },
     },
     publish: (root, state) => {
-      for (const owner of orderedMainWindows()) if (owner.workspace === root && !owner.win.isDestroyed()) owner.win.webContents.send(CHANNEL.initializationState, { v: CONTRACT_SCHEMA_VERSION, ...state });
+      for (const holder of mainWindows.holding(root)) holder.win.webContents.send(CHANNEL.initializationState, { v: CONTRACT_SCHEMA_VERSION, ...state });
     },
     banner: (headline, detail) => raiseNotice('error', headline, detail),
     modelReachable: () => providers.list().some((row) => row.authenticated),
+    quitting,
   });
-  runHost.onEvent((e) => { if (e.kind === 'mcp.setupStatus') initialization.onSetupStatus(e.workspaceRoot, e.status); });
+  runHost.onEvent((e) => { if (e.kind === 'mcp.setupStatus') initialization.onSetupStatus(e.status); });
+  // REQ-WORKSPACE-084/109: the run host is never forked again, so a setup it held can never send its finished status; the
+  // coordinator ends that follow as a failure, or every later setup would wait behind it for the life of the process.
+  runHostChild.on('exit', (code) => { initialization.onRunHostExit(code ?? -1); });
   /**
    * Verification only — `ROTARIS_INIT_TEST_TASK=consent|fail`. REQ-WORKSPACE-080's last sentence is what
    * this exercises and it is the only way to exercise it: "a setup task added after the fact SHALL
@@ -1095,7 +1103,10 @@ async function main(): Promise<void> {
     },
     revokePresenter: (wcId) => {
       parentWindowIds.delete(String(wcId));
-      void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
+      // PD-ORCH-005 clause 9: the run host's shutdown follows only after `window-all-closed` has waited on the checkpoint
+      // operation (REQ-GIT-101). A revoke the quit causes says so, and what an agent asks in that gap waits for the quit
+      // to withdraw it instead of meeting no presenter and being denied.
+      void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId), quitting: quitting() }, millis(5_000)).catch(() => undefined);
     },
     forgetTerminalFrames: (wcId) => terminalFrames.forget(wcId),
     closeConfirmed: (wcId) => { quit.closeConfirmed(wcId); },
@@ -1116,9 +1127,6 @@ async function main(): Promise<void> {
     samePath,
     chooseProjectFolder: (win, startAt) => chooseProjectFolder(win, startAt),
     openWorkspace: (workspace) => openWorkspaceInner(workspace),
-    onWorkspaceClosed: (workspace) => {
-      if (!orderedMainWindows().some((owner) => owner.workspace === workspace)) initialization.close(workspace);
-    },
     closeGuard: (owner) => owner.win.webContents
       .executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true')
       .then((proceed: unknown) => proceed !== false)
@@ -1147,6 +1155,8 @@ async function main(): Promise<void> {
     },
     // REQ-STARTUP-043/114: the update check, initiated from the post-show activation of every main window and nowhere else.
     postShowActivation: (window) => { void updater.activate({ windowId: window.wcId }); },
+    // REQ-WORKSPACE-013: a workspace no window holds any more has its initialization run cancelled, and nothing recorded.
+    workspaceClosed: (workspace) => { initialization.close(canonicalPath(workspace)); },
   });
   /**
    * REQ-SHELL-109: "when a stream changes while the window is closed, the preference is on, and that stream is running,
@@ -1346,14 +1356,13 @@ async function main(): Promise<void> {
     if (assessed.kind !== 'workspace.restore.assessment') return refusal(assessed, 'The backup could not be assessed');
     const a = assessed.assessment;
     if (a.refusal) { raiseNotice('error', 'The restore was refused', a.refusal.detail); return { ok: false, code: `restore.${a.refusal.why}`, headline: 'The restore was refused', detail: a.refusal.detail }; }
-    const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
     const cancel = (): CommandOutcome => ({ ok: true, value: { cancelled: true } });
 
     // 1 — which workspace, when, and what it does to the store that is there now. Cancel is the default.
     const from = a.artifact.lastSeenWorkspacePath ?? a.artifact.workspaceId;
     const nowText = a.target.exists
-      ? `The store this backup restores into currently holds ${plural(a.target.sessions, 'session')}. Restoring replaces it: those sessions are moved aside and kept (never deleted), and the backup's ${plural(a.artifact.sessions, 'session')} take their place. A session here and absent from the backup will no longer be listed; one in the backup and absent here will appear.`
-      : `No store exists here for this backup's workspace yet; restoring creates it with the backup's ${plural(a.artifact.sessions, 'session')}.`;
+      ? `The store this backup restores into currently holds ${countNoun(a.target.sessions, 'session')}. Restoring replaces it: those sessions are moved aside and kept (never deleted), and the backup's ${countNoun(a.artifact.sessions, 'session')} take their place. A session here and absent from the backup will no longer be listed; one in the backup and absent here will appear.`
+      : `No store exists here for this backup's workspace yet; restoring creates it with the backup's ${countNoun(a.artifact.sessions, 'session')}.`;
     const first = await askBox(w.win, {
       type: 'question', title: 'Restore the session store', message: `This backup was taken from ${from} on ${a.artifact.takenAtUtc}.`, detail: nowText,
       buttons: ['Cancel', 'Restore'], defaultId: 0, cancelId: 0, noLink: true,
@@ -1380,7 +1389,7 @@ async function main(): Promise<void> {
     if (a.target.foreignLocks.length > 0) {
       const third = await askBox(w.win, {
         type: 'warning', title: 'Lock records name another machine',
-        message: `${plural(a.target.foreignLocks.length, 'session')} in the store carry lock records naming another machine: ${a.target.foreignLocks.join(', ')}.`,
+        message: `${countNoun(a.target.foreignLocks.length, 'session')} in the store ${a.target.foreignLocks.length === 1 ? 'carries' : 'carry'} lock records naming another machine: ${a.target.foreignLocks.join(', ')}.`,
         detail: 'Nothing on this machine is writing under them. If this store genuinely is reachable from another machine, a run there may be writing to it now, and the restore replaces what it writes. Nothing needs to be cleared one at a time.',
         buttons: ['Cancel', 'Restore anyway'], defaultId: 0, cancelId: 0, noLink: true,
       });
@@ -1394,7 +1403,7 @@ async function main(): Promise<void> {
     if (rep.ok) {
       // The workspace now resolves as the restore left it; hand the run host the store again (W-18).
       await openWorkspace(root, w);
-      raiseNotice('info', `Restored ${plural(a.artifact.sessions, 'session')} from the backup taken on ${a.artifact.takenAtUtc}.${rep.identifierEstablished ? ' This workspace now carries the backup\'s identifier.' : ''}${rep.displaced ? ` The previous store was kept at ${rep.displaced}.` : ''}`);
+      raiseNotice('info', `Restored ${countNoun(a.artifact.sessions, 'session')} from the backup taken on ${a.artifact.takenAtUtc}.${rep.identifierEstablished ? ' This workspace now carries the backup\'s identifier.' : ''}${rep.displaced ? ` The previous store was kept at ${rep.displaced}.` : ''}`);
       return { ok: true, value: { restoredInto: rep.restoredInto, identifierEstablished: rep.identifierEstablished } };
     }
     const why = rep.refusal
@@ -1531,7 +1540,9 @@ async function main(): Promise<void> {
        * A4: the seam addresses a window instead of assuming there is one. `which` is an index into the
        * most-recently-focused ordering, or a suffix of a window's workspace path so a proof can say which
        * project it means; absent is the active window, which is what every proof written before two windows
-       * existed already meant. A selector that matches nothing returns null and the driver refuses.
+       * existed already meant. A selector that matches nothing returns null and the driver refuses. A role
+       * selector (`persona:<name>`, `approval`, `terminal`) never reaches here: the driver resolves it over
+       * `auxiliary` below.
        */
       window: (which) => {
         const ordered = orderedMainWindows();
@@ -1543,12 +1554,30 @@ async function main(): Promise<void> {
         return picked && !picked.win.isDestroyed() ? picked.win : null;
       },
       windows: () => orderedMainWindows().map((candidate, index) => ({ index, workspace: candidate.workspace, wcId: candidate.wcId })),
+      /**
+       * The auxiliary windows a drive can address by role (`driver.ts`, `AuxiliaryWindow`): each main window's persona
+       * windows, the approval dialog it holds open, and its terminal window, in the main windows' order.
+       */
+      auxiliary: () => orderedMainWindows().flatMap((candidate, owner): AuxiliaryWindow[] => {
+        const found: AuxiliaryWindow[] = [];
+        for (const listed of candidate.personaWindows.list()) {
+          const entry = candidate.personaWindows.entry(listed.persona);
+          if (entry) found.push({ selector: `persona:${listed.persona}`, role: 'persona', owner, wcId: entry.wcId, visible: listed.visible, win: entry.win });
+        }
+        const dialog = mainWindows.openDialog(candidate.wcId);
+        if (dialog && !dialog.win.isDestroyed()) found.push({ selector: 'approval', role: 'approval', owner, wcId: dialog.win.webContents.id, visible: dialog.win.isVisible(), win: dialog.win });
+        const terminal = candidate.terminalWindows.current();
+        if (terminal) found.push({ selector: 'terminal', role: 'terminal', owner, wcId: terminal.wcId, visible: terminal.win.isVisible(), win: terminal.win });
+        return found;
+      }),
       timers: clocks.timers,
       monotonic: clocks.monotonic,
       log,
       command: (request, selectedWindow) => runCommand(request, selectedWindow.webContents.id),
       deferProjectOffer: (selectedWindow, delayMs) => mainWindows.deferProjectOffer(selectedWindow.webContents.id, delayMs),
-      quit: () => exitCleanly(0),
+      // The application's quit is the default (`driver.ts`, `quit`); the immediate exit is asked for by name.
+      quit: () => { log('driver: quitting through the application\'s quit'); app.quit(); },
+      exit: () => exitCleanly(0),
     });
     app.on('will-quit', () => driver.close());
   }
@@ -1574,6 +1603,7 @@ async function main(): Promise<void> {
     themeName: () => currentTheme.name,
     resultSeen: () => resultSeen,
     exit: (code) => { exitCleanly(code); },
+    quit: () => { app.quit(); },
   });
 
   /*
@@ -1617,7 +1647,7 @@ async function main(): Promise<void> {
       // REQ-GIT-101 again, one process down: each workspace service finishes its in-flight checkpoint Git before it exits.
       await Promise.all([...services].map(([key, s]) => shutdownAtQuit(() => s.link.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(330_000)), s.exit, (cause) => { log(`quit: the workspace service for ${key} did not complete its shutdown (${String(cause)}); its in-flight work may be lost`, 'error'); })));
       // The run host is gone before main is, so no session lock it held outlives this instance (`endBeforeMain`).
-      await endBeforeMain(runHostChild, runHostExit, clocks.timers, { graceMs: RUN_HOST_END_BOUND_MS, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
+      await endBeforeMain(runHostEndable, runHostExit, clocks.timers, { graceMs: RUN_HOST_END_BOUND_MS, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
       app.quit();
     })();
   });

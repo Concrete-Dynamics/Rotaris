@@ -1,5 +1,6 @@
+import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
-import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, formatAppLogLine, type AppLogLevel } from './app-log.js';
+import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, formatAppLogLine, standardStreamWriter, type AppLogLevel } from './app-log.js';
 
 const LEVELS: readonly AppLogLevel[] = ['debug', 'info', 'warn', 'error'];
 const AT = '2026-09-27T10:00:00.000Z';
@@ -127,5 +128,60 @@ describe('PD-MONITOR-002: a line is recorded only at or above the threshold', ()
     for (let i = 0; i < 141; i += 1) h.log('debug', 'run host', `mcp code_intelligence stderr: line ${i}`);
     expect(h.written).toEqual([]);
     expect(h.stamps()).toBe(0);
+  });
+});
+
+/**
+ * Defect `a-quit-with-its-standard-output-closed-loops-on-its-own-epipe` (R-067): with its reader gone, main's standard
+ * output fails every write with EPIPE, reported as an `error` event. Unlistened, that event is an uncaught exception,
+ * which main's handler logged through the same stream — without end, so the quit and its 30 s backstop never ran
+ * (REQ-MONITOR-131).
+ */
+describe('REQ-MONITOR-131: a standard stream whose reader has gone never turns the log into a loop of its own failures', () => {
+  function stream(opts: { throws?: boolean } = {}) {
+    const e = new EventEmitter();
+    const written: string[] = [];
+    return Object.assign(e, { written, write: (chunk: string) => { if (opts.throws === true) throw new Error('write EPIPE'); written.push(chunk); return true; } });
+  }
+  const epipe = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
+
+  it('writes each line with its line break while the stream is whole', () => {
+    const out = stream();
+    const write = standardStreamWriter(out);
+    write('one');
+    write('two');
+    expect(out.written).toEqual(['one\n', 'two\n']);
+  });
+
+  it('listens for the stream\'s failure, so an EPIPE is never an uncaught exception, and writes nothing more after it', () => {
+    const out = stream();
+    // Without a listener an emitted `error` throws: that throw is the uncaught exception the loop was made of.
+    expect(() => out.emit('error', epipe)).toThrow('write EPIPE');
+    const write = standardStreamWriter(out);
+    write('before');
+    expect(() => out.emit('error', epipe)).not.toThrow();
+    // What the uncaught-exception handler would have written — and every line after it — goes nowhere.
+    write('UNCAUGHT in main: Error: write EPIPE');
+    write('quit: requested (before-quit)');
+    expect(out.written).toEqual(['before\n']);
+  });
+
+  it('treats a write that throws at once as the same failure, and does not try again', () => {
+    const out = stream({ throws: true });
+    let attempts = 0;
+    const counting = Object.assign(out, { write: (chunk: string) => { attempts += 1; throw new Error(`write EPIPE ${chunk}`); } });
+    const write = standardStreamWriter(counting);
+    expect(() => write('one')).not.toThrow();
+    write('two');
+    expect(attempts).toBe(1);
+  });
+
+  it('carries the log\'s own lines, so a logger over a broken stream is silent rather than failing', () => {
+    const out = stream();
+    const log = createAppLog({ threshold: 'info', now: () => AT, write: standardStreamWriter(out) });
+    log('info', null, 'quit: requested (before-quit)');
+    out.emit('error', epipe);
+    log('error', null, 'UNCAUGHT in main: Error: write EPIPE');
+    expect(out.written).toEqual([`${formatAppLogLine(AT, 'info', null, 'quit: requested (before-quit)')}\n`]);
   });
 });

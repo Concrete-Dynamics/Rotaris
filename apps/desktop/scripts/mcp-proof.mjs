@@ -2,7 +2,7 @@
  * The MCP proof (Part S): ADR-0033 and ADR-0034's first execution behind the real run host — the hand-written
  * fixture server (`fixtures/mcp-fixture-server.mjs`) declared three ways (global YAML, a workspace `.mcp.json`
  * with an envFile and an unknown key, a workspace YAML overlay), a persona carrying the three with a grant, a
- * denial and a rename, one stored secret, and nine launches against one scratch profile:
+ * denial and a rename, one stored secret, and ten launches against one scratch profile:
  *
  *   1. discovery   — the prompt's MCP section character-exact and equal to the callable set; the inert grant reported
  *                    once; gamma's unknown key warned once per load; the discovery file byte-identical after the run;
@@ -11,7 +11,13 @@
  *   2. call        — `echo` end to end (tool.start before tool.finish, the result text, the row succeeded); `slow` beyond
  *                    `request_timeout: 2` fails naming the server and the connection serves the following `echo` (003/069).
  *   3. one process — two children calling alpha concurrently share one connection and one fixture process; a third
- *                    child after they end uses the same pid (067/068).
+ *                    child after they end uses the same pid (067/068). The children's persona carries a `tool_restrictions`
+ *                    list naming `read_file` and `echo`, and each child's row records that grant — `read_file` alone of its
+ *                    native tools and `echo` alone under alpha — not its declared tools (REQ-MCP-065 with REQ-TOOLS-006;
+ *                    the row recorded the declared set until 2026-10-01).
+ *  3b. empty grant — a child whose `tool_restrictions` names `echo` alone: its row records an empty native grant marked
+ *                    `recorded`, and the inspector, the child selected, lists no native tool and `echo` used under alpha
+ *                    (REQ-MONITOR-049/060; the declared tools stood in for that empty grant until 2026-10-01). Driven.
  *   4. narrowing   — `--rename-after` withdraws `extra` mid-run; calling it is refused; the prompt is not re-rendered.
  *   5. crash       — `--crash-after` fails the call in flight, one warning issue, the next call re-establishes (069).
  *   6. drop rules  — an unknown server, an unavailable command, `enabled: false`, and a session toggle off from the
@@ -34,6 +40,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
 
 const require = createRequire(import.meta.url);
@@ -119,15 +126,15 @@ function resetPids() { for (const f of ['alpha', 'beta', 'gamma', 'browser']) wr
 const pidLines = (name) => readFileSync(join(pids, `${name}.pids`), 'utf8').split('\n').filter((l) => l.trim() !== '');
 const sha = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 
-function launch(name, extra, { files = {}, timeout = 150_000 } = {}) {
+async function launch(name, extra, { files = {}, timeout = 150_000 } = {}) {
   writeFileSync(join(configDir, 'agents.yaml'), files.global ?? globalYaml());
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), files.workspace ?? WORKSPACE);
   writeFileSync(join(workspace, '.mcp.json'), files.mcpJson ?? MCP_JSON);
   resetPids();
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs: timeout, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: png,
@@ -141,6 +148,7 @@ function launch(name, extra, { files = {}, timeout = 150_000 } = {}) {
   const elapsedMs = Date.now() - started;
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   return { log, elapsedMs, png };
 }
@@ -289,7 +297,7 @@ const ROUND_OVER = `(() => {
   const before = sha(join(workspace, '.mcp.json'));
   const clients = join(output, 'alpha.clients.jsonl');
   writeFileSync(clients, '');
-  const r = launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' }, { files: { global: globalYaml({ alphaFlags: ['--client-file', clients] }) } });
+  const r = await launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' }, { files: { global: globalYaml({ alphaFlags: ['--client-file', clients] }) } });
   if (sha(join(workspace, '.mcp.json')) !== before) throw new Error('the discovery file changed across the load (REQ-MCP-027)');
   const surface = lines(r.log, /mcp: surface for orchestrator/);
   if (surface.length === 0) throw new Error(`no surface line:\n${r.log}`);
@@ -326,7 +334,7 @@ const ROUND_OVER = `(() => {
 
 // ---- 2. A call end to end, and the allowance ------------------------------------------------------------------
 {
-  const r = launch('call', { ROTARIS_CAPTURE_PROMPT: 'slow then echo', ROTARIS_SCRIPT: 'mcp:alpha.slow,mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '12000' }, { files: { global: globalYaml({ alphaTimeout: 2 }) } });
+  const r = await launch('call', { ROTARIS_CAPTURE_PROMPT: 'slow then echo', ROTARIS_SCRIPT: 'mcp:alpha.slow,mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '12000' }, { files: { global: globalYaml({ alphaTimeout: 2 }) } });
   const db = new Database(oneDatabase(), { readonly: true });
   const s = latestSession(db);
   const slow = toolRows(db, s.session_id, 'slow');
@@ -345,13 +353,13 @@ const ROUND_OVER = `(() => {
 
 // ---- 3. One connection per server per session ---------------------------------------------------------------
 {
-  const r = launch('one-process', {
+  const r = await launch('one-process', {
     ROTARIS_CAPTURE_PROMPT: 'fan out', ROTARIS_SCRIPT: 'delegate:coding-agent:one,delegate:coding-agent:two,wait:2500,delegate:coding-agent:three,wait:2500,answer', ROTARIS_CHILD_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '16000', ROTARIS_INTENT_SCRIPT: 'moderate_feature',
-  }, { files: { global: globalYaml({ personas: { 'coding-agent': '{ mcp_servers: [alpha] }' } }), workspace: WORKSPACE.replace('  delegation_strategy: single\n', '  delegation_strategy: orchestrator\n') } });
+  }, { files: { global: globalYaml({ personas: { 'coding-agent': '{ mcp_servers: [alpha], tool_restrictions: { coding-agent: [read_file, echo] } }' } }), workspace: WORKSPACE.replace('  delegation_strategy: single\n', '  delegation_strategy: orchestrator\n') } });
   const db = new Database(oneDatabase(), { readonly: true });
   const s = latestSession(db);
   const echo = toolRows(db, s.session_id, 'echo');
-  const children = db.prepare('SELECT canonical_name, state, granted_mcp FROM children WHERE session_id = ? ORDER BY spawned_at').all(s.session_id);
+  const children = db.prepare('SELECT canonical_name, state, granted_tools, granted_mcp FROM children WHERE session_id = ? ORDER BY spawned_at').all(s.session_id);
   db.close();
   const connected = lines(r.log, /mcp alpha: connected for the session \(pid (\d+)/).map((l) => /pid (\d+)/.exec(l)[1]);
   if (echo.length !== 3 || echo.some((e) => e.status !== 'ok')) throw new Error(`three children should each have called echo once: ${JSON.stringify(echo.map((e) => e.status))}`);
@@ -361,12 +369,56 @@ const ROUND_OVER = `(() => {
   if (launches.length !== 2) throw new Error(`alpha was launched ${launches.length} times (one discovery, one session expected)`);
   const evidence = JSON.parse(children[0].granted_mcp);
   if (!evidence.granted?.alpha?.includes('echo') || !evidence.servers?.some((x) => x.name === 'alpha' && x.fate === 'connected')) throw new Error(`the child's evidence is wrong: ${children[0].granted_mcp}`);
-  results.oneProcess = { children: children.map((c) => `${c.canonical_name}:${c.state}`), sessionPid: connected[0], launches: launches.length, evidence };
+  // REQ-MCP-065 with REQ-TOOLS-006: each row records the grant its port put in force — what the allowed-tool list left.
+  for (const c of children) {
+    const tools = JSON.parse(c.granted_tools);
+    const mcp = JSON.parse(c.granted_mcp);
+    if (JSON.stringify(tools) !== '["read_file"]') throw new Error(`${c.canonical_name}'s recorded native grant is not what tool_restrictions left: ${c.granted_tools}`);
+    if (JSON.stringify(mcp.granted) !== '{"alpha":["echo"]}') throw new Error(`${c.canonical_name}'s recorded MCP grant is not what tool_restrictions left: ${JSON.stringify(mcp.granted)}`);
+  }
+  results.oneProcess = { children: children.map((c) => `${c.canonical_name}:${c.state}`), sessionPid: connected[0], launches: launches.length, evidence, grantedTools: children.map((c) => JSON.parse(c.granted_tools)) };
+}
+
+// ---- 3b. A grant the controls left empty of native tools ------------------------------------------------------
+/*
+ * REQ-MONITOR-049/060 with REQ-TOOLS-006 and REQ-MCP-065: a child whose `tool_restrictions` list names only `echo` keeps no
+ * native tool. Its row records that empty grant (marked `recorded`), and the inspector, with the child selected, lists no
+ * native tool and `echo` under alpha. Until 2026-10-01 the empty list read as "no grant recorded" and the inspector listed
+ * the persona's declared tools as granted (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
+ * Driven, as 6 is: the selection and every read wait for their condition.
+ */
+{
+  const r = await drivenLaunch('empty-native-grant', { ROTARIS_SCRIPT: 'delegate:coding-agent:four,answer', ROTARIS_CHILD_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_INTENT_SCRIPT: 'moderate_feature' }, {
+    files: { global: globalYaml({ personas: { 'coding-agent': '{ mcp_servers: [alpha], tool_restrictions: { coding-agent: [echo] } }' } }), workspace: WORKSPACE.replace('  delegation_strategy: single\n', '  delegation_strategy: orchestrator\n') },
+  }, async (d, step) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    const before = latestSessionId();
+    await typePrompt(d, step, 'delegate to four');
+    const session = await step('the run settled', until(() => sessionAfter(before), (s) => s !== null && SETTLED.has(s.execution_status), { timeoutMs: 90_000, what: 'a new session settling' }));
+    await step('four in the tree', d.waitFor('.agent-row__task', { text: 'four' }));
+    await step('select four', d.click('.agent-row__task', { text: 'four' }));
+    await step('the inspector shows four', d.waitFor('[data-testid="inspector-name"]', { text: 'four' }));
+    await step('alpha in the inspector', d.waitFor('.inspector__mcp[data-mcp-server="alpha"] .chip'));
+    const native = await step('the native tools field', d.probe('[data-testid="inspector-chips"]'));
+    const nativeChips = await step('the native chips', d.probe('[data-testid="inspector-chips"] .chip'));
+    const alpha = await step('the alpha chips', d.probe('.inspector__mcp[data-mcp-server="alpha"] .chip'));
+    return { session, native: native[0]?.text ?? null, nativeChips: nativeChips.map((c) => c.data['data-tool']), alpha: alpha.map((c) => `${c.data['data-tool']}:${c.data['data-state']}`) };
+  });
+  const db = new Database(oneDatabase(), { readonly: true });
+  const four = db.prepare('SELECT canonical_name, state, granted_tools, granted_mcp FROM children WHERE session_id = ?').all(r.value.session.session_id);
+  db.close();
+  if (four.length !== 1 || four[0].canonical_name !== 'four') throw new Error(`expected the one child four: ${JSON.stringify(four)}`);
+  const recorded = JSON.parse(four[0].granted_mcp);
+  if (four[0].granted_tools !== '[]' || recorded.recorded !== true || JSON.stringify(recorded.granted) !== '{"alpha":["echo"]}') throw new Error(`four's row does not record the empty native grant beside echo: ${four[0].granted_tools} ${four[0].granted_mcp}`);
+  if (r.value.nativeChips.length !== 0) throw new Error(`the inspector lists native tools the controls removed (REQ-MONITOR-049/060): ${JSON.stringify(r.value.nativeChips)}`);
+  if (!/No tools resolved\./.test(r.value.native ?? '')) throw new Error(`the native tools field does not say it holds none: ${JSON.stringify(r.value.native)}`);
+  if (JSON.stringify(r.value.alpha) !== '["echo:used"]') throw new Error(`alpha's chips are not echo, used: ${JSON.stringify(r.value.alpha)}`);
+  results.emptyNativeGrant = { row: { grantedTools: JSON.parse(four[0].granted_tools), grantedMcp: recorded }, inspector: { native: r.value.native, nativeChips: r.value.nativeChips, alpha: r.value.alpha }, sessionStatus: r.value.session.execution_status, png: r.png };
 }
 
 // ---- 4. Narrowing ---------------------------------------------------------------------------------------------
 {
-  const r = launch('narrowing', { ROTARIS_CAPTURE_PROMPT: 'echo then extra', ROTARIS_SCRIPT: 'mcp:alpha.echo,wait:2000,mcp:alpha.extra,answer', ROTARIS_CAPTURE_AFTER_MS: '12000' }, { files: { global: globalYaml({ alphaFlags: ['--rename-after', '300'] }) } });
+  const r = await launch('narrowing', { ROTARIS_CAPTURE_PROMPT: 'echo then extra', ROTARIS_SCRIPT: 'mcp:alpha.echo,wait:2000,mcp:alpha.extra,answer', ROTARIS_CAPTURE_AFTER_MS: '12000' }, { files: { global: globalYaml({ alphaFlags: ['--rename-after', '300'] }) } });
   const db = new Database(oneDatabase(), { readonly: true });
   const s = latestSession(db);
   const extra = toolRows(db, s.session_id, 'extra');
@@ -381,7 +433,7 @@ const ROUND_OVER = `(() => {
 
 // ---- 5. Unreachable after connect ---------------------------------------------------------------------------
 {
-  const r = launch('crash', { ROTARIS_CAPTURE_PROMPT: 'slow then echo after a crash', ROTARIS_SCRIPT: 'mcp:alpha.slow,mcp:alpha.echo,mcp:beta.beta_echo,answer', ROTARIS_CAPTURE_AFTER_MS: '14000' }, { files: { global: globalYaml({ alphaFlags: ['--crash-after', '200'] }) } });
+  const r = await launch('crash', { ROTARIS_CAPTURE_PROMPT: 'slow then echo after a crash', ROTARIS_SCRIPT: 'mcp:alpha.slow,mcp:alpha.echo,mcp:beta.beta_echo,answer', ROTARIS_CAPTURE_AFTER_MS: '14000' }, { files: { global: globalYaml({ alphaFlags: ['--crash-after', '200'] }) } });
   const db = new Database(oneDatabase(), { readonly: true });
   const s = latestSession(db);
   const slow = toolRows(db, s.session_id, 'slow');
@@ -504,12 +556,12 @@ const ROUND_OVER = `(() => {
 // ---- 8. Fatal YAML defects; the same in the discovery file --------------------------------------------------
 {
   const broken = `${globalYaml()}\n`.replace('mcp_servers:\n', 'mcp_servers:\n  nocmd: { type: stdio }\n  badtimeout: { command: node, request_timeout: -1 }\n');
-  const r = launch('fatal', { ROTARIS_CAPTURE_PROMPT: 'run on a broken file', ROTARIS_CAPTURE_AFTER_MS: '4000' }, { files: { global: broken } });
+  const r = await launch('fatal', { ROTARIS_CAPTURE_PROMPT: 'run on a broken file', ROTARIS_CAPTURE_AFTER_MS: '4000' }, { files: { global: broken } });
   const refusal = lines(r.log, /could not be loaded/)[0] ?? '';
   if (!/mcp_servers\.nocmd\.command/.test(refusal) || !/mcp_servers\.badtimeout\.request_timeout/.test(refusal)) throw new Error(`the refusal did not report both defects: ${refusal}`);
   if (/session .* started/.test(r.log)) throw new Error('a run started on a fatal configuration');
   const mcpJson = `{\n  "mcpServers": {\n    "nocmd": { "type": "stdio" },\n    "empty": { "command": "" },\n    "gamma": { "command": ${y(node)}, "args": ${y([fixture])} }\n  }\n}\n`;
-  const r2 = launch('fatal-discovered', { ROTARIS_CAPTURE_PROMPT: 'run with dropped discovered entries', ROTARIS_SCRIPT: 'mcp:gamma.gamma_echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' }, { files: { mcpJson } });
+  const r2 = await launch('fatal-discovered', { ROTARIS_CAPTURE_PROMPT: 'run with dropped discovered entries', ROTARIS_SCRIPT: 'mcp:gamma.gamma_echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' }, { files: { mcpJson } });
   const dropped = lines(r2.log, /the entry is dropped \(REQ-MCP-023\)/);
   if (dropped.length < 2) throw new Error(`the discovered defects were not dropped: ${dropped.length}`);
   if (!/ended completed/.test(r2.log)) throw new Error('the run with dropped discovered entries did not complete');
@@ -520,7 +572,7 @@ const ROUND_OVER = `(() => {
 {
   // The run's first port waits on the mute server's discovery; the bound fires at 35 s, the run proceeds with alpha listed bare,
   // and the user closes the window at 40 s — the exit must follow without waiting on anything.
-  const r = launch('exit-bound', { ROTARIS_CAPTURE_PROMPT: 'a server that never answers', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '60000', ROTARIS_CAPTURE_QUIT_MS: '40000' }, { files: { global: globalYaml({ alphaFlags: ['--never-init'] }) }, timeout: 120_000 });
+  const r = await launch('exit-bound', { ROTARIS_CAPTURE_PROMPT: 'a server that never answers', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '60000', ROTARIS_CAPTURE_QUIT_MS: '40000' }, { files: { global: globalYaml({ alphaFlags: ['--never-init'] }) }, timeout: 120_000 });
   const disc = lines(r.log, /mcp: discovery of 'alpha' failed/)[0] ?? '';
   const ms = Number(/in (\d+) ms/.exec(disc)?.[1] ?? NaN);
   if (!(ms >= 34_000 && ms <= 35_500)) throw new Error(`discovery did not return at the 35 s bound: ${disc}`);

@@ -33,7 +33,9 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, machineIdFileFor, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { describeLingeringHolder, lockHolderAfterExit, pidExists, plantedDeadPid } from './lib/lock-holder.mjs';
+import { sessionCascade } from './lib/session-cascade.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -61,10 +63,10 @@ const PROBES = [
   '[data-testid="session-unreadable-detail"]', '[data-testid="session-delete-confirm"]', '.notice__headline', '.notice__detail', '.app-shell',
 ];
 
-function launch(name, extra, timeoutMs = 150_000) {
+async function launch(name, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -73,6 +75,7 @@ function launch(name, extra, timeoutMs = 150_000) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const probes = {};
@@ -128,7 +131,6 @@ const sessionRow = (sid) => withDb((db) => db.prepare('SELECT * FROM sessions WH
 const latestSession = () => withDb((db) => db.prepare('SELECT * FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get());
 const countIn = (table, sid) => withDb((db) => db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid).c);
 const tablesWithSession = () => withDb((db) => db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND EXISTS (SELECT 1 FROM pragma_table_info(m.name) WHERE name = 'session_id')").all().map((t) => t.name));
-const tablesReferencingSessions = () => withDb((db) => db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) WHERE \"table\" = 'sessions')").all().map((t) => t.name));
 // The identifier where the product mints it on THIS platform (`dataLayout().machineId`), not the Windows spelling alone
 // (`docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`).
 const machineId = () => readFileSync(machineIdFileFor(local), 'utf8').split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0 && !s.startsWith('#'));
@@ -150,7 +152,7 @@ const NOTHING_STALE = 'Nothing was stale: every session either asserts no run in
 const LIVE_REFUSAL = "This session is still running. Deleting it would destroy the run's own record, so wait for it to finish or stop it first.";
 
 // 1. seed — session A with checkpoint 1.
-const seed = launch('seed', { ROTARIS_SCRIPT: 'write,answer', ROTARIS_CAPTURE_PROMPT: 'Write the notes.', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500' });
+const seed = await launch('seed', { ROTARIS_SCRIPT: 'write,answer', ROTARIS_CAPTURE_PROMPT: 'Write the notes.', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500' });
 const A = latestSession().session_id;
 {
   expect(sessionRow(A).execution_status === 'completed', `seed ended ${sessionRow(A).execution_status}`);
@@ -163,7 +165,7 @@ const A = latestSession().session_id;
 
 // 2. live — the delete refused during a run; the app exits mid-run and leaves A running behind a dead lock.
 const rowSel = (sid) => `.session-browser tr[data-session-id="${sid}"]`;
-const live = launch('live', {
+const live = await launch('live', {
   ROTARIS_SCRIPT: 'wait:20000,answer', ROTARIS_CAPTURE_RESUME: A, ROTARIS_CAPTURE_PROMPT: 'Wait a while.',
   ROTARIS_CAPTURE_CLICKS: `.title-bar__sessions@7000;;${rowSel(A)} [data-testid="session-actions"]@7800;;[data-testid="session-delete"]@8400;;.confirm-dialog .btn-danger@9400`,
   ROTARIS_CAPTURE_SHOT: `${join(output, 'delete-confirm-live.png')}@9000`,
@@ -189,7 +191,7 @@ const live = launch('live', {
 }
 
 // 3. repair-one — the stale row, Actions → Repair, the report; then the disclosure.
-const repairOne = launch('repair-one', {
+const repairOne = await launch('repair-one', {
   ROTARIS_CAPTURE_CLICKS: `.title-bar__sessions@1200;;${rowSel(A)} [data-testid="session-actions"]@2600;;[data-testid="session-repair"]@3200;;[data-testid="session-disclosure-toggle"]@4800`,
   ROTARIS_CAPTURE_PROBE_AT: `.session-browser tr[data-session-id]@2400;;[data-testid="session-report"]@4500;;.session-browser tr[data-session-id]@4500;;[data-testid="session-disclosure"]@5600;;[data-testid="session-disclosure-carried"]@5600;;[data-testid="session-disclosure-remedies"]@5600`,
   ROTARIS_CAPTURE_PNG_AT: `${join(output, 'repair-one-report.png')}@4600`,
@@ -231,7 +233,7 @@ try {
   expect(Number.isInteger(deadPid) && deadPid > 0 && !pidExists(deadPid), `the pid planted as dead (${deadPid}) still probes alive`);
   plantSession('C-deadlock', 'running', { lock: { pid: deadPid } });
   plantSession('D-live', 'running', { lock: { pid: holder.pid } });
-  const repairAll = launch('repair-all', {
+  const repairAll = await launch('repair-all', {
     ROTARIS_CAPTURE_CLICKS: '.title-bar__sessions@1200;;[data-testid="session-repair-all"]@2400;;[data-testid="session-repair-all"]@4600',
     ROTARIS_CAPTURE_PROBE_AT: '[data-testid="session-report"]@3800;;[data-testid="session-report"]@6000;;.session-browser tr[data-session-id]@6000',
     ROTARIS_CAPTURE_PNG_AT: `${join(output, 'repair-all-report.png')}@3900`,
@@ -270,7 +272,7 @@ withDb((db) => {
 });
 const recordsB = join(exportsDir, 'records-B.json');
 const recordsC = join(exportsDir, 'records-C.json');
-const exportRecords = launch('export-records', {
+const exportRecords = await launch('export-records', {
   ROTARIS_CAPTURE_SAVE_PATH: `${recordsB};;${recordsC}`,
   ROTARIS_CAPTURE_CLICKS: `.title-bar__sessions@1200;;${rowSel('B-nolock')} [data-testid="session-actions"]@2400;;[data-testid="session-export-records"]@3000;;${rowSel('C-deadlock')} [data-testid="session-actions"]@5000;;[data-testid="session-export-records"]@5600`,
   ROTARIS_CAPTURE_PROBE_AT: '[data-testid="session-report"]@4600;;[data-testid="session-report"]@7200',
@@ -336,7 +338,7 @@ withDb((db) => {
 });
 const trajB = join(exportsDir, 'trajectory-B.json');
 const batchCB = join(exportsDir, 'trajectories-C-B.json');
-const exportTraj = launch('export-trajectory', {
+const exportTraj = await launch('export-trajectory', {
   ROTARIS_CAPTURE_SAVE_PATH: `${trajB};;${batchCB}`,
   ROTARIS_CAPTURE_CLICKS: `.title-bar__sessions@1200;;${rowSel('B-nolock')} [data-testid="session-actions"]@2400;;[data-testid="session-export-trajectory"]@3000;;${rowSel('C-deadlock')} input[type="checkbox"]@4800;;${rowSel('B-nolock')} input[type="checkbox"]@5300;;[data-testid="session-export-selected"]@5900`,
   ROTARIS_CAPTURE_PROBE_AT: '[data-testid="session-report"]@4500;;[data-testid="session-report"]@7400',
@@ -374,7 +376,7 @@ const exportTraj = launch('export-trajectory', {
 
 // 7. unreadable — G's corrupt state: listed with the detail, Open refused, Delete works, the rest usable.
 plantSession('G-corrupt', 'completed', { progress: '{"unterminated": ' });
-const unreadable = launch('unreadable', {
+const unreadable = await launch('unreadable', {
   ROTARIS_CAPTURE_CLICKS: `.title-bar__sessions@1200;;${rowSel('G-corrupt')} [data-testid="session-open"]@2600;;${rowSel('G-corrupt')} [data-testid="session-actions"]@3400;;[data-testid="session-delete"]@4000;;.confirm-dialog .btn-danger@5200`,
   ROTARIS_CAPTURE_PROBE_AT: `.session-browser tr[data-session-id]@2400;;[data-testid="session-unreadable-detail"]@2400;;${rowSel('G-corrupt')} [data-testid="session-open"]@2400;;.session-browser tr[data-session-id]@3200;;[data-testid="session-report"]@6600;;.session-browser tr[data-session-id]@6600`,
   ROTARIS_CAPTURE_SHOT: `${join(output, 'delete-confirm-unreadable.png')}@4700`,
@@ -416,17 +418,22 @@ const tables = tablesWithSession();
 // too and `delivery_runs` stands alone as the one deliberate exception. The cascade premise is therefore "the tables
 // whose session_id REFERENCES sessions", read from the schema rather than pinned by count. The count pin that stood
 // here was the sixtieth defect: the ruling narrowed the premise in the store's own suite, and nothing carried it to
-// this proof until the merge-1 proof pass ran it.
-const cascaded = ['sessions', ...tablesReferencingSessions()];
-const facts = tables.filter((t) => !cascaded.includes(t));
-expect(cascaded.length === 16, `tables whose session_id references sessions: ${cascaded.join(', ')}`);
-expect(JSON.stringify(facts) === '["delivery_runs"]', `tables carrying session_id as a fact: ${facts.join(', ')}`);
+// this proof until the merge-1 proof pass ran it. A second count pin, sixteen, stood here after v20 and broke the same way
+// when v23-v24 (PD-ORCH-005) added `iterations`, `agent_messages`, `agent_terminals` and `agent_fingerprints`
+// (`docs/defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`). The premise is now
+// the cascade's SHAPE, whatever the count: every reference to `sessions` is session_id → session_id ON DELETE CASCADE,
+// and `delivery_runs` is the one table carrying session_id as a fact (`lib/session-cascade.mjs`, pinned beside it).
+const { cascaded, facts, problems: cascadeProblems } = withDb((db) => sessionCascade(db));
+expect(cascadeProblems.length === 0, `the cascade premise: ${cascadeProblems.join('; ')} (tables whose session_id references sessions: ${cascaded.join(', ')}; as a fact: ${facts.join(', ')})`);
 withDb((db) => db.prepare("INSERT INTO delivery_runs (req_id, unit, session_id, worktree_ref, permissions, status, stage, outcome, started_at, ended_at) VALUES ('REQ-PROOF-001', 'u1', ?, NULL, '', 'running', NULL, NULL, '2026-09-05T09:00:00.000Z', NULL)").run(A));
 // v20 (REQ-SESSION-166): A's VERBATIM plan text is planted so the built-app delete below measures the cascade taking it.
 withDb((db) => db.prepare("INSERT INTO plan_cycles (session_id, cycle, opened_at, plan, intent, todo) VALUES (?, 1, 't', 'proof plan, verbatim', 'small_feature', '')").run(A));
+// PD-ORCH-005 clause 12 (v23): the scripted runs start no background terminal, so A's `agent_terminals` row is planted —
+// one ended terminal, as plan_cycles' is — and the delete below measures the cascade taking that table too.
+withDb((db) => db.prepare("INSERT INTO agent_terminals (session_id, terminal_id, task_id, command, started_at, state, exit_code, output_tail, updated_at) VALUES (?, 'proof-terminal', 'root', 'echo proof', 't', 'completed', 0, 'proof', 't')").run(A));
 const plantedBefore = Object.fromEntries(tables.map((t) => [t, countIn(t, A)]));
 expect(refsOf(workspace, A).length === 2, `A's refs before: ${JSON.stringify(refsOf(workspace, A))}`);
-const del = launch('delete', {
+const del = await launch('delete', {
   ROTARIS_CAPTURE_CLICKS: `.title-bar__sessions@1200;;${rowSel(A)} [data-testid="session-actions"]@2400;;[data-testid="session-delete"]@3000;;.confirm-dialog .btn-danger@4200;;${rowSel('F-moved')} [data-testid="session-actions"]@6200;;[data-testid="session-delete"]@6800;;.confirm-dialog .btn-danger@7600`,
   ROTARIS_CAPTURE_SHOT: `${join(output, 'delete-confirm.png')}@3700`,
   ROTARIS_CAPTURE_PROBE_AT: '[data-testid="session-report"]@5800;;[data-testid="session-report"]@9200;;.session-browser tr[data-session-id]@9200;;.notice__headline@9200',
@@ -445,6 +452,10 @@ const del = launch('delete', {
   expect(plantedBefore.delivery_runs === 1 && after.delivery_runs === 1, `A's delivery run: ${plantedBefore.delivery_runs} before, ${after.delivery_runs} after`);
   // REQ-SESSION-166 (v20): A's VERBATIM plan text leaves with the session; it is not a second `delivery_runs`.
   expect(plantedBefore.plan_cycles === 1 && after.plan_cycles === 0, `A's plan cycles: ${plantedBefore.plan_cycles} before, ${after.plan_cycles} after`);
+  // PD-ORCH-005 clause 12: the conversation record A's two runs wrote (v23-v24), with the terminal planted above,
+  // belongs to A and leaves with it.
+  const record = ['iterations', 'agent_messages', 'agent_terminals', 'agent_fingerprints'];
+  expect(record.every((t) => plantedBefore[t] > 0 && after[t] === 0), `A's agent record: ${record.map((t) => `${t} ${plantedBefore[t]} before, ${after[t]} after`).join('; ')}`);
   expect(refsOf(workspace, A).length === 0, `A's refs after: ${JSON.stringify(refsOf(workspace, A))}`);
   expect(!existsSync(filesA), `A's files remain at ${filesA}`);
   expect(refsOf(workspace, 'B-nolock').length === 0 && sessionRow('B-nolock') !== undefined && countIn('permission_audit', 'B-nolock') === CAP, 'another session was touched');
@@ -460,7 +471,7 @@ const del = launch('delete', {
 }
 
 // 9 + 10. isolated — E in a worktree with its ref in the shared repository; then deleted from the browser.
-const isolated = launch('isolated', {
+const isolated = await launch('isolated', {
   ROTARIS_SCRIPT: 'write,answer',
   ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Write the notes in a worktree.>>composer@4400',
@@ -472,7 +483,7 @@ const E = latestSession();
   expect(refsOf(workspace, E.session_id).length === 1, `E's ref: ${JSON.stringify(refsOf(workspace, E.session_id))}`);
   results.isolated = { sessionId: E.session_id, worktree: JSON.parse(E.worktree).worktree_path, png: isolated.png };
 }
-const delIso = launch('delete-isolated', {
+const delIso = await launch('delete-isolated', {
   ROTARIS_CAPTURE_CLICKS: `.title-bar__sessions@1200;;${rowSel(E.session_id)} [data-testid="session-actions"]@2400;;[data-testid="session-delete"]@3000;;.confirm-dialog .btn-danger@4200`,
   ROTARIS_CAPTURE_PROBE_AT: '[data-testid="session-report"]@5800',
   ROTARIS_CAPTURE_AFTER_MS: '6600',

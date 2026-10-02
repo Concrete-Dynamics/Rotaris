@@ -104,16 +104,41 @@ describe('the shared specification (REQ-SANDBOX-056..061, 091)', () => {
 });
 
 describe('the Linux renderer (REQ-SANDBOX-076, -077, -079)', () => {
-  const spec = computeConfinement({ mode: 'workspace-write', executionRoot: '/ws', writableRoots: [], allowNetwork: false }, present('/ws/.git'));
+  const spec = computeConfinement({ mode: 'workspace-write', executionRoot: '/ws', writableRoots: [], allowNetwork: false }, present('/ws/.git', '/ws/.rotaris'));
 
   it('renders the fixed sequence: read-only root, dev, proc, tmpfs, binds, carve-outs, network, die-with-parent', () => {
     expect(bwrapOptions(spec)).toEqual([
       '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--tmpfs', '/tmp',
       '--bind', '/ws', '/ws',
       '--ro-bind-try', '/ws/.git', '/ws/.git',
-      '--tmpfs', '/ws/.rotaris', '--remount-ro', '/ws/.rotaris',
+      '--ro-bind-try', '/ws/.rotaris', '/ws/.rotaris',
       '--unshare-net', '--die-with-parent',
     ]);
+  });
+
+  it('case (c) is refused, never rendered as a mount that bubblewrap would create on the host (REQ-SANDBOX-077, -083)', () => {
+    // Measured 2026-09-28 (IC-8): to mount at a name that does not exist, bubblewrap first creates the mountpoint, and
+    // under a writable bind that lands on the host. REQ-SANDBOX-077's closing paragraph: a backend that cannot establish
+    // a carve-out without creating a host-visible directory SHALL NOT create one; it refuses under REQ-SANDBOX-083.
+    const absent = computeConfinement({ mode: 'workspace-write', executionRoot: '/ws', writableRoots: ['/extra'], allowNetwork: false }, present('/extra', '/ws/.git', '/ws/.rotaris', '/extra/.rotaris'));
+    expect(() => bwrapOptions(absent)).toThrow(SandboxUnavailableError);
+    expect(() => renderBwrap(absent, 'ls')).toThrow(SandboxUnavailableError);
+    // The cause names the protected path that is absent, and only that one.
+    expect(() => renderBwrap(absent, 'ls')).toThrow(/\/extra\/\.git/);
+    try { renderBwrap(absent, 'ls'); } catch (error) { expect((error as Error).message).not.toContain('/ws/.git'); }
+  });
+
+  it('case (c) under bubblewrap refuses the command through the wrap, which the terminal turns into its refusal (REQ-SANDBOX-078, -083)', () => {
+    const request = { spec: { mode: 'workspace-write' as const, executionRoot: '/ws', writableRoots: [], allowNetwork: false }, verdict: available('bubblewrap') };
+    expect(() => wrapForConfinement(request, 'ls', present('/ws/.git'))).toThrow(SandboxUnavailableError);
+    // The same specification under Seatbelt denies the name by rule and creates nothing, so it is not refused.
+    expect(wrapForConfinement({ ...request, verdict: available('seatbelt') }, 'ls', present('/ws/.git')).line.startsWith('sandbox-exec ')).toBe(true);
+  });
+
+  it('case (a) and the trial render no carve-out and are never refused (REQ-SANDBOX-070, -077a)', () => {
+    const readOnly = computeConfinement({ mode: 'read-only', executionRoot: '/ws', writableRoots: [], allowNetwork: false }, nothing);
+    expect(bwrapOptions(readOnly)).not.toContain('/ws/.git');
+    expect(() => renderBwrap(readOnly, 'ls')).not.toThrow();
   });
 
   it('case (b) tolerates a source removed between the check and the launch (REQ-SANDBOX-077b, -078)', () => {
@@ -127,7 +152,7 @@ describe('the Linux renderer (REQ-SANDBOX-076, -077, -079)', () => {
   });
 
   it('the network namespace is kept separate unless the opt-in grants it (REQ-SANDBOX-059)', () => {
-    const open = computeConfinement({ mode: 'workspace-write', executionRoot: '/ws', writableRoots: [], allowNetwork: true }, nothing);
+    const open = computeConfinement({ mode: 'workspace-write', executionRoot: '/ws', writableRoots: [], allowNetwork: true }, present('/ws/.git', '/ws/.rotaris'));
     expect(bwrapOptions(open)).not.toContain('--unshare-net');
   });
 
@@ -184,8 +209,9 @@ describe('backend parity (REQ-SANDBOX-061)', () => {
     const a = computeConfinement(input, deps);
     const b = computeConfinement(input, deps);
     expect(a).toEqual(b);
-    // A fresh worktree holding neither name still denies both, on both backends.
-    expect(bwrapOptions(a).filter((o) => o === '--remount-ro')).toHaveLength(4);
+    // A fresh worktree holding neither name still denies both, on both backends: Seatbelt by rule, and bubblewrap by
+    // refusing the command, since it cannot hide an absent name without creating it on the host (REQ-SANDBOX-077).
+    expect(() => bwrapOptions(a)).toThrow(SandboxUnavailableError);
     expect(seatbeltProfile(a).match(/\(deny file-write\*/g)).toHaveLength(4);
   });
 });
@@ -355,7 +381,7 @@ describe('the status pair and the refusal (REQ-SANDBOX-093, -074, -083)', () => 
 
   it('wrapping yields a NEW command string or throws; it never yields the original (REQ-SANDBOX-074)', () => {
     const spec = { mode: 'workspace-write' as const, executionRoot: '/ws', writableRoots: [], allowNetwork: false };
-    const wrapped = wrapForConfinement({ spec, verdict: available('bubblewrap') }, 'ls', nothing);
+    const wrapped = wrapForConfinement({ spec, verdict: available('bubblewrap') }, 'ls', present('/ws/.git', '/ws/.rotaris'));
     expect(wrapped.line).not.toBe('ls');
     expect(wrapped.line.startsWith('bwrap ')).toBe(true);
 

@@ -18,6 +18,21 @@ export interface SchedulerDeps {
   /** Runs a child from `starting` to a terminal state; never throws into the pass. */
   readonly runChild: (row: ChildRow) => Promise<void>;
   readonly warn: (m: string) => void;
+  /**
+   * PD-ORCH-005 clause 22: whether the child's record holds a conversation — a settled child its parent followed up,
+   * waiting in `queued` to start from its record. REQ-ORCH-048's cascade settles a dependent before it has started, and
+   * this one has: its dependencies were judged when it was first admitted, so the cascade leaves it (OQ-131). Absent
+   * means no child has one.
+   */
+  readonly hasConversation?: ((taskId: string) => boolean) | undefined;
+  /**
+   * REQ-ORCH-098: the teardown of a child this scheduler settles itself — one REQ-ORCH-048's cascade blocks, or one the
+   * finalize sweep cancels — given its terminal row and the report just stored, before the terminal callbacks fire, as a
+   * child's own settle writes it (`IterationChildren.afterTerminal`). The repair of
+   * `a-child-that-never-started-gets-no-teardown-timeline-entries.md`: a child that never started reaches a terminal state
+   * too (OQ-152). A raise out of it is warned and the settle goes on. Absent means nothing is written.
+   */
+  readonly teardown?: ((row: ChildRow, report: Readonly<Record<string, unknown>>) => void) | undefined;
 }
 
 const PRE_START: ReadonlySet<string> = new Set<ChildState>(['waiting_on_dependencies', 'queued', 'waiting_on_model_slot']);
@@ -80,16 +95,30 @@ export class Scheduler {
     try { return JSON.parse(row.depends_on) as string[]; } catch { return []; }
   }
 
-  /** REQ-ORCH-048: a dependency in failed/cancelled/blocked blocks every pre-start dependent, transitively. */
+  /**
+   * REQ-ORCH-048: a dependency in failed/cancelled/blocked blocks every pre-start dependent, transitively. REQ-ORCH-108:
+   * the blocked child is terminal, so it has its report — status `blocked` (REQ-ORCH-112), naming the dependency and
+   * how it ended — stored, and materialised (REQ-LIBRARY-092), before the terminal callbacks resume its parent. The
+   * repair of `a-child-blocked-by-its-dependency-gets-no-report.md`; it covers PD-ORCH-005 clause 16's route too, a
+   * paused dependent of a child cancelled at rest that the resumed run's first pass blocks here (OQ-101).
+   */
   private cascadeBlocked(): boolean {
     let changed = false;
     const all = this.deps.ledger.all();
     for (const c of all) {
       if (!PRE_START.has(c.state)) continue;
       const deps = this.deps_(c).map((d) => all.find((x) => x.task_id === d));
-      if (deps.some((d) => d && (d.state === 'failed' || d.state === 'cancelled' || d.state === 'blocked'))) {
+      const cause = deps.find((d): d is ChildRow => d !== undefined && (d.state === 'failed' || d.state === 'cancelled' || d.state === 'blocked'));
+      if (cause && this.deps.hasConversation?.(c.task_id) !== true) {
         const r = this.deps.ledger.transition(c.task_id, 'blocked');
-        if (r.ok) { changed = true; this.settled(r.row); } else this.deps.warn(r.reason);
+        if (r.ok) {
+          changed = true;
+          const report = blockedReport(c, cause);
+          this.deps.ledger.storeReport(c.task_id, report);
+          const row = this.deps.ledger.get(c.task_id) ?? r.row;
+          this.tearDown(row, report);
+          this.settled(row);
+        } else this.deps.warn(r.reason);
       }
     }
     return changed;
@@ -155,6 +184,12 @@ export class Scheduler {
     return true;
   }
 
+  /** REQ-ORCH-098: `deps.teardown` for a child settled here; a raise never keeps the scheduler from being told. */
+  private tearDown(row: ChildRow, report: Readonly<Record<string, unknown>>): void {
+    try { this.deps.teardown?.(row, report); }
+    catch (e) { this.deps.warn(`the teardown of child ${row.task_id} raised: ${String(e)}`); }
+  }
+
   /** Called by the child's execution when it reaches a terminal state, and by the sweeps. */
   settled(row: ChildRow): void {
     for (const l of [...this.terminalListeners]) { try { l(row); } catch (e) { this.deps.warn(`a terminal listener raised: ${String(e)}`); } }
@@ -180,7 +215,9 @@ export class Scheduler {
       const r = this.deps.ledger.transition(c.task_id, 'cancelled', 'cancellation');
       if (r.ok) {
         n += 1;
-        this.deps.ledger.storeReport(c.task_id, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: reason, key_findings: [], last_response: '', final_response: '', errors: [{ type: 'cancelled', message: reason }] });
+        const report = { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: reason, key_findings: [], last_response: '', final_response: '', errors: [{ type: 'cancelled', message: reason }] };
+        this.deps.ledger.storeReport(c.task_id, report);
+        this.tearDown(r.row, report);
         this.settled(r.row);
       } else this.deps.warn(r.reason);
     }
@@ -194,4 +231,13 @@ export class Scheduler {
   get isCancelled(): boolean {
     return this.cancelled;
   }
+}
+
+/**
+ * REQ-ORCH-108 / REQ-ORCH-112: the report of a child REQ-ORCH-048's cascade blocked. It never started, so it made no
+ * call and said nothing: no summarising pass is made, and the report states only why it never ran.
+ */
+export function blockedReport(child: Pick<ChildRow, 'canonical_name' | 'persona'>, dependency: Pick<ChildRow, 'task_id' | 'canonical_name' | 'state'>): Record<string, unknown> {
+  const message = `Its dependency ${dependency.canonical_name} (${dependency.task_id}) ended ${dependency.state}, so this child never started (REQ-ORCH-048).`;
+  return { agent_name: child.canonical_name, role: child.persona, status: 'blocked', summary: `Blocked: ${message}`, key_findings: [], last_response: '', final_response: '', errors: [{ type: 'blocked', message }] };
 }

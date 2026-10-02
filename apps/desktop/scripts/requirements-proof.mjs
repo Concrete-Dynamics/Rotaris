@@ -48,7 +48,9 @@
  *               consequence confirmed, the elevation's disclosure ABANDONED (and nothing written for it, which the
  *               SQL afterwards proves by counting one release and not two), then accepted; a real session started by
  *               main's coordinator against the scripted dialect; the review pane opened from the requirement's own
- *               detail and its accept decision taken; the card resting in `done`; then the requirement's source
+ *               detail and its accept decision taken — the pane then keeps the review it was reading, says it is out
+ *               of date and offers the reload alone, drawing no refusal (REQ-TRACE-426, live-run finding L12), and
+ *               the reload reads REQ-TRACE-424's refusal for a card in `done`; the card resting in `done`; then the requirement's source
  *               document edited ON DISK by this script and a SECOND launch of the same profile showing the card in
  *               `needs-update` (REQ-TRACE-407/499). The delivery store is then read with SQL for the two facts no
  *               surface can show: that every state-changing action left a record, and that the run record carries a
@@ -62,6 +64,10 @@
  *               REQ-TRACE-497 a proof can reach — an epic card offering no delivery action and not draggable, a drag
  *               on a non-delivery axis refused in words, a column count agreeing with the widgets in it, and the card
  *               and its detail agreeing on health. The rotated-rail clause is asserted in `fold`, which has a rail.
+ *   review-rerun — REQ-TRACE-426 with REQ-TRACE-472: a release accepted through the disclosure, the run arrived at
+ *               review, and the review pane's Rerun taken. The disclosure is due again; while it stands the pane says
+ *               nothing has been recorded, as the decision's state and not as a refusal; once it is accepted the pane
+ *               says the re-run was recorded, offers the reload alone and draws no alert; the history holds one rerun.
  *
  * Evidence under `.proof/requirements-proof/`: `vitest.json`, one PNG and one log per launch, `results.json`.
  * `--skip-build` skips the desktop build.
@@ -71,6 +77,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -153,10 +160,10 @@ const PROBES = [
   '.app-shell', '[data-testid="requirements"]', '[data-testid="req-total"]', '[data-testid="req-column"]', '[data-testid="req-rail"]', '[data-testid="req-card"]', '[data-testid="req-epic"]',
   '[data-testid="req-filter-summary"]', '[data-testid="req-feedback"]', '[data-testid="req-move-control"]', '[data-testid="req-error"]', '[data-testid="req-empty-source"]', '[data-testid="req-blocked"]',
 ];
-function launch(name, workspace, local, preferences, extra, timeoutMs = 180_000) {
+async function launch(name, workspace, local, preferences, extra, timeoutMs = 180_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -165,6 +172,7 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 180_000)
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const probes = {};
@@ -300,7 +308,7 @@ const deferred = [];
 
 // ── board: the fixture at 1264 px, the budget, the partition, the header ─────────────────────────
 const boardProfile = profile('board');
-const board = launch('board', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
+const board = await launch('board', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_EVAL_AT: [`${ARM_LONGTASKS}@900`, `${READ_LONGTASKS}@4600`].join(';;'),
   ROTARIS_CAPTURE_VIEWS: '4@1200',
@@ -345,7 +353,7 @@ stage2.board = { view: 'requirements', paintMs, longestTaskMs: longTasks.longest
 // from the board's header, its host's box is compared with the window, and the host is asserted to be a child of the
 // same board body that holds the columns, which is what "one stack" means when it is read off the built DOM.
 const PANE_AT_MINIMUM = `(() => { const host = document.querySelector('[data-testid="req-pane-host"]'); const body = document.querySelector('.req-body'); const cols = document.querySelector('[data-testid="req-columns"]'); if (host === null) return null; const r = host.getBoundingClientRect(); const pane = host.querySelector('[data-testid="req-pane-queue"]'); const p = pane === null ? null : pane.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), sharesStackWithBoard: body !== null && host.parentElement === body && cols !== null && cols.parentElement === body, clipsHorizontally: host.scrollWidth > host.clientWidth + 1, pane: p === null ? null : { w: Math.round(p.width), h: Math.round(p.height) }, paneClipsHorizontally: pane === null ? null : pane.scrollWidth > pane.clientWidth + 1, close: document.querySelector('[data-testid="req-pane-close"]') !== null, viewport: { width: window.innerWidth, height: window.innerHeight } }; })()`;
-const minimum = launch('minimum', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
+const minimum = await launch('minimum', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1000x680@300',
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="req-column"]@4200;;.req-header .btn, .req-header .select, .req-header input@4200',
@@ -387,7 +395,7 @@ const SCROLL_TO_DONE = `(() => { const el = document.querySelector('[data-testid
 // nothing at all. The claim belongs in the one stage that folds a column, and this is it. REQ-TRACE-493's two
 // accessible names and the rail's operability without a pointer are read in the same instant, from the same DOM.
 const RAIL_AND_HEADING = `(() => { const rail = document.querySelector('[data-testid="req-rail"]'); const heading = document.querySelector('[data-testid="req-heading"]'); if (rail === null) return null; const s = getComputedStyle(rail); const r = rail.getBoundingClientRect(); return { writingMode: s.writingMode, transform: s.transform, w: Math.round(r.width), h: Math.round(r.height), railName: rail.getAttribute('aria-label'), railTag: rail.tagName, railDisabled: rail.disabled === true, railTabIndex: rail.tabIndex, headingName: heading === null ? null : (heading.getAttribute('aria-label') ?? heading.textContent.trim()), headingTag: heading === null ? null : heading.tagName }; })()`;
-const folded = launch('fold', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
+const folded = await launch('fold', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_EVAL_AT: `${SCROLL_TO_DONE}@3200;;${RAIL_AND_HEADING}@4600`,
   ROTARIS_CAPTURE_CLICKS: '[data-testid="req-column"][data-column="done"] [data-testid="req-heading"]@3600',
@@ -411,18 +419,18 @@ expect(railShape.w > 0 && railShape.h > 0, `REQ-TRACE-497: the folded rail occup
 expect(typeof railShape.railName === 'string' && railShape.railName.length > 0, `REQ-TRACE-493: the folded rail has no accessible name (${JSON.stringify(railShape)})`);
 expect(railShape.railTag === 'BUTTON' && !railShape.railDisabled && railShape.railTabIndex >= 0, `REQ-TRACE-493: the rail is not operable without a pointer (${JSON.stringify({ tag: railShape.railTag, disabled: railShape.railDisabled, tabIndex: railShape.railTabIndex })})`);
 expect(typeof railShape.headingName === 'string' && railShape.headingName.length > 0, `REQ-TRACE-493: an unfolded column heading has no accessible name (${JSON.stringify(railShape)})`);
-const relaunched = launch('fold-relaunch', boardProfile.workspace, boardProfile.local, boardProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
+const relaunched = await launch('fold-relaunch', boardProfile.workspace, boardProfile.local, boardProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
 const relaunchRails = (relaunched.probes['[data-testid="req-rail"]'] ?? []).map((r) => r.data['data-column']);
 expect(relaunchRails.join(',') === 'done', `REQ-TRACE-321: after the relaunch the folded columns are ${JSON.stringify(relaunchRails)}, not the Done column alone`);
 const otherProfile = profile('other', boardProfile.preferences);
-const other = launch('fold-other-workspace', otherProfile.workspace, otherProfile.local, otherProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
+const other = await launch('fold-other-workspace', otherProfile.workspace, otherProfile.local, otherProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
 const otherRails = (other.probes['[data-testid="req-rail"]'] ?? []).map((r) => r.data['data-column']);
 expect(otherRails.length === 0, `REQ-TRACE-312: a fold made in one workspace reached another (${JSON.stringify(otherRails)})`);
 stage2.fold = { folded: 'done', offscreenBeforeScroll: doneColumn.offscreen, focusAfterFold: railInspect.active?.testId, railName: railInspect.matches[0].attrs['aria-label'], afterRelaunch: relaunchRails, otherWorkspace: otherRails, railShape };
 
 // ── filter: an epic filter survives the axis switch (REQ-TRACE-299) ───────────────────────────────
 const filterProfile = profile('filter');
-const filtered = launch('filter', filterProfile.workspace, filterProfile.local, filterProfile.preferences, {
+const filtered = await launch('filter', filterProfile.workspace, filterProfile.local, filterProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="req-filter-toggle"]@3400',
   ROTARIS_CAPTURE_SELECT: '[data-testid="req-filter-epic"]>>REQ-100@3900;;[data-testid="req-axis"]>>epic@4700',
@@ -442,7 +450,7 @@ stage2.filter = { summaryBefore, cardsBefore: 7, summaryAfter, columnsAfter: aft
 
 // ── chord: Ctrl+M focuses the move control, which names the first reachable target with the consequence ──
 const chordProfile = profile('chord');
-const chord = launch('chord', chordProfile.workspace, chordProfile.local, chordProfile.preferences, {
+const chord = await launch('chord', chordProfile.workspace, chordProfile.local, chordProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_CLICKS: '[data-req-card="REQ-101"]@3400',
   ROTARIS_CAPTURE_CHORDS: 'Ctrl+M@4600',
@@ -468,7 +476,7 @@ const DROP = `(async () => { const board = window.__rotarisBoard; if (!board || 
 const dropProfile = profile('drop');
 const deprecatedPath = join(dropProfile.workspace, 'docs', 'requirements', 'REQ-100-fixture-epic', 'REQ-104-draft.md');
 writeFileSync(deprecatedPath, readFileSync(deprecatedPath, 'utf8').replace('status: draft', 'status: deprecated'));
-const drop = launch('drop', dropProfile.workspace, dropProfile.local, dropProfile.preferences, {
+const drop = await launch('drop', dropProfile.workspace, dropProfile.local, dropProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_EVAL_AT: `${DROP}@3600`,
   ROTARIS_CAPTURE_AFTER_MS: '5400',
@@ -489,7 +497,7 @@ stage2.drop = { revealed: dropped.revealed, transferTypes: dropped.types, feedba
 const scaleProfile = generatedProfile('scale');
 const SCROLL = `(async () => { const list = document.querySelector('[data-testid="req-column"][data-column="backlog"] [data-testid="req-list"]'); if (!list) return 'no list'; const seen = []; for (let i = 0; i <= 10; i += 1) { list.scrollTop = ((list.scrollHeight - list.clientHeight) * i) / 10; await new Promise((r) => setTimeout(r, 80)); const ids = [...list.querySelectorAll('[data-req-card]')].map((el) => el.getAttribute('data-req-card')); seen.push({ top: Math.round(list.scrollTop), realised: ids.length, first: ids[0] ?? null, last: ids.at(-1) ?? null }); } list.scrollTop = list.scrollHeight; await new Promise((r) => setTimeout(r, 120)); const endIds = [...list.querySelectorAll('[data-req-card]')].map((el) => el.getAttribute('data-req-card')); return { seen, scrollHeight: list.scrollHeight, clientHeight: list.clientHeight, atEnd: list.scrollTop + list.clientHeight >= list.scrollHeight - 1, endLast: endIds.at(-1) ?? null, endRealised: endIds.length }; })()`;
 const SCROLL_COLUMNS = `(() => { const el = document.querySelector('[data-testid="req-columns"]'); if (!el) return null; const present = el.querySelectorAll(':scope > [data-column]').length; const built = el.querySelectorAll(':scope > [data-column]:not([data-offscreen])').length; el.scrollLeft = el.scrollWidth; return { scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, scrollLeft: el.scrollLeft, columns: el.querySelectorAll('[data-testid="req-column"]').length, rails: el.querySelectorAll('[data-testid="req-rail"]').length, present, built, placeholders: present - built }; })()`;
-const scale = launch('scale', scaleProfile.workspace, scaleProfile.local, scaleProfile.preferences, {
+const scale = await launch('scale', scaleProfile.workspace, scaleProfile.local, scaleProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_EVAL_AT: [`${ARM_LONGTASKS}@900`, `${READ_LONGTASKS}@9000`, `${SCROLL}@9200`, `${ARM_LONGTASKS}@11000`, `${READ_LONGTASKS}@14500`, `${SCROLL_COLUMNS}@14600`, `${ARM_LONGTASKS}@16000`, `${READ_LONGTASKS}@19000`].join(';;'),
   ROTARIS_CAPTURE_VIEWS: '4@1200',
@@ -578,10 +586,16 @@ const BOARD_AT = `(() => { const el = document.querySelector('[data-req-card="RE
 const DISCLOSURE_AT = `(() => { const d = document.querySelector('[data-testid="req-pane-disclosure"]'); return d === null ? null : { lines: [...d.querySelectorAll('li')].map((l) => l.textContent.trim()), buttons: [...d.querySelectorAll('button')].map((b) => b.textContent.trim()) }; })()`;
 /** REQ-TRACE-364: the board's own operation for bringing a named card into view, used before a read that must find it. */
 const REVEAL_101 = `(() => { const b = window.__rotarisBoard; return b && typeof b.reveal === 'function' ? b.reveal('REQ-101') : 'no observable'; })()`;
+/**
+ * REQ-TRACE-426 with REQ-TRACE-424 (live-run finding L12): what the review pane shows once a decision is taken — the
+ * notice, the actions it offers, the refusal line if one is drawn, the state tag of the payload on screen, and whether
+ * the decisions are still offered.
+ */
+const REVIEW_AT = `(() => { const p = document.querySelector('[data-testid="req-pane-review"]'); if (p === null) return null; const d = p.querySelector('[data-testid="req-pane-review-decided"]'); const r = p.querySelector('[data-testid="req-pane-review-refusal"]'); const tag = p.querySelector('.req-pane__state'); const said = d === null ? null : d.querySelector('span'); return { decided: said === null ? null : said.textContent.trim(), actions: d === null ? [] : [...d.querySelectorAll('button')].map((b) => b.textContent.trim()), refusal: r === null ? null : r.textContent.trim(), column: tag === null ? null : tag.textContent.trim(), decisions: p.querySelector('[data-testid="req-pane-review-decisions"]') !== null }; })()`;
 const HISTORY_AT = `(() => { const p = document.querySelector('[data-testid="req-history-state"]'); const d = document.querySelector('[data-testid="req-detail"]'); return { state: p === null ? null : p.getAttribute('data-state'), entries: p === null ? [] : [...p.querySelectorAll('li')].map((l) => l.textContent.trim()), detailHealth: d === null ? null : (d.querySelector('[data-section="requirement"] dd .mono') || {}).textContent, runs: d === null ? [] : [...d.querySelectorAll('.req-detail__run')].map((r) => r.textContent.trim()) }; })()`;
 
 const e2e = profile('end-to-end');
-const release = launch('end-to-end', e2e.workspace, e2e.local, e2e.preferences, {
+const release = await launch('end-to-end', e2e.workspace, e2e.local, e2e.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_CLICKS: [
@@ -599,14 +613,16 @@ const release = launch('end-to-end', e2e.workspace, e2e.local, e2e.preferences, 
     '[data-testid="req-detail-review"]@32000',
     '[data-testid="req-pane-review-decisions"] .btn-primary@34000',
     '[data-testid="req-pane-review-confirm"] .btn-primary@35600',
+    // REQ-TRACE-426: the notice's one action, taken after the resting reads below.
+    '[data-testid="req-pane-review-decided"] .btn>>Reload the review@38800',
   ].join(';;'),
   // The focused card opens its own detail with Enter (REQ-TRACE-484); the harness sends single clicks only.
   ROTARIS_CAPTURE_KEYS: 'Return@31000',
   // The resting column is read through the board's OWN reveal operation (REQ-TRACE-364) first: `done` is the sixth of
   // seven columns and lies outside the columns area's viewport at 1264 px, so it is a sized placeholder holding no
   // card widget (defect AK2-3, by design). Reading the DOM without revealing first reads `null` and proves nothing.
-  ROTARIS_CAPTURE_EVAL_AT: [`${DISCLOSURE_AT}@6400`, `${BOARD_AT}@7600`, `${BOARD_AT}@13000`, `${BOARD_AT}@18000`, `${BOARD_AT}@23000`, `${BOARD_AT}@29000`, `${REVEAL_101}@37000`, `${BOARD_AT}@38000`, `${HISTORY_AT}@38400`].join(';;'),
-  ROTARIS_CAPTURE_AFTER_MS: '39000',
+  ROTARIS_CAPTURE_EVAL_AT: [`${DISCLOSURE_AT}@6400`, `${BOARD_AT}@7600`, `${BOARD_AT}@13000`, `${BOARD_AT}@18000`, `${BOARD_AT}@23000`, `${BOARD_AT}@29000`, `${REVIEW_AT}@36800`, `${REVEAL_101}@37000`, `${BOARD_AT}@38000`, `${HISTORY_AT}@38400`, `${REVIEW_AT}@39800`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '40400',
 }, 300_000);
 
 const disclosure = release.evals['6400'];
@@ -629,6 +645,20 @@ for (const t of [abandoned, ...timeline]) for (const c of t.columns ?? []) if (!
 expect(release.evals['37000'] === true, `REQ-TRACE-364: revealing REQ-101 before the resting read answered ${JSON.stringify(release.evals['37000'])}`);
 const settled = release.evals['38000'];
 expect(settled && settled.column === 'done', `REQ-TRACE-499: after the review's accept REQ-101 sits in ${settled?.column}, not done`);
+// REQ-TRACE-426 (live-run finding L12): after the accept the pane keeps the payload the decision was made against, says
+// it is out of date, and offers exactly one action — the reload. It draws no refusal: nobody opened a review on a card
+// that is not awaiting one. Until 2026-09-29 the host re-read the review as soon as the decision was recorded, so the
+// pane stood under REQ-TRACE-424's refusal ("… it is in done.") above a notice calling that refusal out of date.
+const decidedPane = release.evals['36800'];
+expect(decidedPane !== null && decidedPane !== undefined, `REQ-TRACE-426: the review pane was not open after the accept (${JSON.stringify(decidedPane)})`);
+expect(decidedPane.decided === 'Accept recorded for REQ-101. The review you were reading is out of date.', `REQ-TRACE-426: after the accept the pane's notice reads ${JSON.stringify(decidedPane.decided)}`);
+expect(JSON.stringify(decidedPane.actions) === JSON.stringify(['Reload the review']), `REQ-TRACE-426: the notice after the accept offers ${JSON.stringify(decidedPane.actions)}, not exactly the reload`);
+expect(decidedPane.refusal === null, `REQ-TRACE-424/426 (L12): the pane shows a refusal right after the user's own accept: ${JSON.stringify(decidedPane.refusal)}`);
+expect(decidedPane.column === 'review' && decidedPane.decisions === false, `REQ-TRACE-426: the pane shows the payload in ${JSON.stringify(decidedPane.column)} with decisions ${decidedPane.decisions ? 'still offered' : 'withdrawn'}, not the out-of-date review with the decisions withdrawn`);
+// The reload is the one action, and what it reads is the requirement where the decision put it: REQ-TRACE-424's refusal.
+const reloadedPane = release.evals['39800'];
+expect(reloadedPane !== null && reloadedPane !== undefined && reloadedPane.decided === null, `REQ-TRACE-426: the reload left the notice standing (${JSON.stringify(reloadedPane)})`);
+expect(reloadedPane.refusal === 'REQ-101 is not awaiting a review decision: it is in done.', `REQ-TRACE-424: the reloaded review reads ${JSON.stringify(reloadedPane.refusal)}`);
 const history = release.evals['38400'];
 expect(history && history.state === 'available' && history.entries.length >= 2, `REQ-TRACE-497: the delivery history of REQ-101 reads ${JSON.stringify(history)} after a release and an accept`);
 expect(history.entries.some((e) => /release/i.test(e)) && history.entries.some((e) => /accept/i.test(e)), `REQ-TRACE-405: the history does not carry both actions (${JSON.stringify(history.entries)})`);
@@ -687,7 +717,7 @@ const edited = before
   .trimEnd();
 expect(edited !== before.trimEnd(), `the proof could not edit ${docName}: neither a title nor a heading was found in it`);
 writeFileSync(docPath, `${edited}\n\nEdited on disk by requirements-proof after the delivery was accepted, so the text no longer matches the accepted snapshot.\n`);
-const noticed = launch('end-to-end-edited', e2e.workspace, e2e.local, e2e.preferences, {
+const noticed = await launch('end-to-end-edited', e2e.workspace, e2e.local, e2e.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   // `needs-update` is the fifth column and lies outside the viewport at 1264 px, so the card is revealed first.
@@ -705,9 +735,60 @@ stage2['end-to-end'] = {
   observedBy: Object.fromEntries(['13000', '18000', '23000', '29000'].map((k) => [k, release.evals[k]?.column ?? null])),
   timings: productTimings,
   timeline: columnsSeen, settled: settled.column, history: history.entries.length,
+  review: { afterAccept: decidedPane, afterReload: reloadedPane },
   store: { tables: rows.tables, counts: rows.counts, releases: releases.length, runs: runRows.length, session: String(runRows[0].session_id).slice(0, 8), permissions: runRows[0].permissions },
   afterEdit: { column: after.column, health: after.health },
 };
+
+// ── review-rerun: a review decision that starts a run, taken through the launch's disclosure (REQ-TRACE-426/472) ──
+//
+// Re-run and send-back start a run, so the disclosure stands between the decision and the record: the pane's first
+// answer is that nothing has been recorded yet. Until 2026-10-01 the pane drew that answer as an error alert and was
+// never told what the disclosure came to — accepting it took the decision while the pane went on saying nothing was
+// recorded and offering the six decisions again, with no reload (defect note
+// `a-review-decision-taken-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`). The release here
+// is accepted with "Start the run" and not "always", so the disclosure is still due for the re-run (REQ-TRACE-472).
+/** The pane while a decision is waiting on the disclosure, and once it has been answered. */
+const DECISION_AT = `(() => { const p = document.querySelector('[data-testid="req-pane-review"]'); if (p === null) return null; const text = (sel) => { const el = p.querySelector(sel); return el === null ? null : el.textContent.trim(); }; const d = p.querySelector('[data-testid="req-pane-review-decided"]'); const footer = p.querySelector('[data-testid="req-pane-review-decisions"]'); return { decided: text('[data-testid="req-pane-review-decided"] span'), actions: d === null ? [] : [...d.querySelectorAll('button')].map((b) => b.textContent.trim()), waiting: text('[data-testid="req-pane-review-waiting"]'), refused: text('[data-testid="req-pane-review-refused"]'), alerts: [...p.querySelectorAll('[role="alert"]')].map((a) => a.textContent.trim()), decisions: footer === null ? null : [...footer.querySelectorAll('button')].map((b) => ({ label: b.textContent.trim(), disabled: b.disabled })) }; })()`;
+const rr = profile('review-rerun');
+const rerun = await launch('review-rerun', rr.workspace, rr.local, rr.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_CLICKS: [
+    `${CARD_101}@3000`,
+    '[data-testid="req-move-control"]@4400',
+    '[data-testid="req-confirm"] .btn>>Release@5400',
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@6800',
+    `${CARD_101}@30000`,
+    '[data-testid="req-detail-review"]@32000',
+    '[data-testid="req-pane-review-decisions"] .btn>>Rerun@34000',
+    '[data-testid="req-pane-review-confirm"] .btn-primary@35600',
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@37600',
+  ].join(';;'),
+  ROTARIS_CAPTURE_KEYS: 'Return@31000',
+  ROTARIS_CAPTURE_EVAL_AT: [`${BOARD_AT}@29000`, `${DISCLOSURE_AT}@36600`, `${DECISION_AT}@36800`, `${DECISION_AT}@39400`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '40000',
+}, 300_000);
+expect(rerun.evals['29000']?.column === 'review', `REQ-TRACE-499: the release never arrived at review before the re-run (${JSON.stringify(rerun.evals['29000']?.column)})`);
+const rerunDisclosure = rerun.evals['36600'];
+expect(rerunDisclosure !== null && rerunDisclosure !== undefined && rerunDisclosure.buttons.includes('Start the run'), `REQ-TRACE-472: the review's re-run raised no disclosure (${JSON.stringify(rerunDisclosure)})`);
+const waitingPane = rerun.evals['36800'];
+expect(waitingPane !== null && waitingPane !== undefined, 'REQ-TRACE-426: the review pane was not open while the re-run waited on the disclosure');
+// While the disclosure is on screen nothing has been recorded, and the pane says so — as the decision's state, not as
+// a refusal: nothing refused the re-run.
+expect(typeof waitingPane.waiting === 'string' && waitingPane.waiting.startsWith('Nothing has been recorded for REQ-101 yet'), `REQ-TRACE-472: while the disclosure stands the pane reads ${JSON.stringify(waitingPane.waiting)}`);
+expect(waitingPane.alerts.length === 0, `REQ-TRACE-472: a re-run waiting on its disclosure is drawn as a refusal: ${JSON.stringify(waitingPane.alerts)}`);
+const rerunPane = rerun.evals['39400'];
+expect(rerunPane !== null && rerunPane !== undefined, 'REQ-TRACE-426: the review pane was not open after the disclosure was accepted');
+expect(rerunPane.decided === 'Rerun recorded for REQ-101. The review you were reading is out of date.', `REQ-TRACE-426/472: once the disclosure was accepted the pane's notice reads ${JSON.stringify(rerunPane.decided)} (alerts ${JSON.stringify(rerunPane.alerts)})`);
+expect(JSON.stringify(rerunPane.actions) === JSON.stringify(['Reload the review']), `REQ-TRACE-426: the notice after the re-run offers ${JSON.stringify(rerunPane.actions)}, not exactly the reload`);
+expect(rerunPane.alerts.length === 0 && rerunPane.waiting === null, `REQ-TRACE-472: after the disclosure was accepted the pane still says ${JSON.stringify({ alerts: rerunPane.alerts, waiting: rerunPane.waiting })}`);
+expect(rerunPane.decisions === null, `REQ-TRACE-426: after the re-run the pane still offers the decisions on an out-of-date payload: ${JSON.stringify(rerunPane.decisions)}`);
+const rerunRows = deliveryRows(rr.local);
+expect(rerunRows !== null, `no delivery store was written under ${rr.local}`);
+const rerunHistory = rerunRows.query(`select * from "${rerunRows.tables.find((t) => /history/.test(t))}" order by rowid`).map((e) => String(e.action));
+expect(rerunHistory.filter((a) => a === 'rerun').length === 1, `REQ-TRACE-422: the re-run accepted through the disclosure left ${JSON.stringify(rerunHistory)} in the history, not one rerun`);
+stage2['review-rerun'] = { disclosure: rerunDisclosure.buttons, waiting: waitingPane.waiting, afterAccept: { decided: rerunPane.decided, actions: rerunPane.actions, alerts: rerunPane.alerts }, history: rerunHistory };
 
 // ── panes and the graph: the registry's contract, and the rest of REQ-TRACE-497 a proof can reach ────────────────
 // Defect `R2-6`, and the reason this read carries geometry at all: every assertion below once read attributes through
@@ -724,7 +805,7 @@ const EPIC_AND_RAIL = `(() => { const epic = document.querySelector('[data-testi
 const DRAG_ON_EPIC_AXIS = `(async () => { const card = document.querySelector('[data-req-card="REQ-101"]'); if (card === null) return 'absent'; const dt = new DataTransfer(); const ev = new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }); card.dispatchEvent(ev); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const area = document.querySelector('[data-testid="req-columns"]'); return { defaultPrevented: ev.defaultPrevented, types: [...dt.types], dragging: area === null ? null : area.getAttribute('data-dragging'), feedback: [...document.querySelectorAll('[data-testid="req-feedback"]')].map((f) => f.textContent.trim()) }; })()`;
 
 const paneProfile = profile('panes');
-const panes = launch('panes', paneProfile.workspace, paneProfile.local, paneProfile.preferences, {
+const panes = await launch('panes', paneProfile.workspace, paneProfile.local, paneProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_CLICKS: [

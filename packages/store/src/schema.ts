@@ -934,6 +934,134 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    to: 25,
+    /*
+     * REQ-TOOLS-152 (R-067): "`suppress_auto_context` — omits the automatic index of prior sibling artifacts". The flag a
+     * `delegate` call carried is stored with the child's record, as its `write_scope` is (PD-TOOLS-006 revision 2), so every
+     * assembly of the child's payload reads it: its first, REQ-ORCH-088's retry, and a resumed child's retry in a later run,
+     * whose launch-time memory is gone. `1` omits the index; `0` — every row written before this version, and true of them:
+     * no call before this version could set it — gives it. The persona-level setting (REQ-CONFIG-107,
+     * `skip_auto_sibling_context`) is configuration, read at each assembly, and is not copied here.
+     */
+    sql: `
+      ALTER TABLE children ADD COLUMN suppress_auto_context INTEGER NOT NULL DEFAULT 0 CHECK (suppress_auto_context IN (0, 1));
+    `,
+  },
+  {
+    to: 26,
+    /*
+     * REQ-MONITOR-102 (R-067, the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): "Per-agent
+     * metrics are persisted with the session and comprise: tool-call count" — and a session-wide total "counts each call
+     * once". A child's count is its row's `tool_calls`; the root's had no persisted count of its own, so a crash, which ends
+     * the root's turn without returning, left no record of which of its recorded calls the total already held, and the
+     * crash record could not add the rest without counting some twice.
+     *
+     * `root_tool_calls` is that count: the calls of the iteration's root the session total holds. It is raised where the
+     * root's calls join the total — when its turn returns (REQ-ORCH-097's cadence, unchanged), in the same transaction as
+     * the total — and by the crash record, which adds the calls the root's record shows that the column does not. Every
+     * iteration inserted from this version starts at `0`. A row written before it is NULL — not known — and the crash
+     * record adds nothing for such a root, as before: it cannot tell which of its calls an earlier run counted.
+     */
+    sql: `
+      ALTER TABLE iterations ADD COLUMN root_tool_calls INTEGER CHECK (root_tool_calls IS NULL OR root_tool_calls >= 0);
+    `,
+  },
+  {
+    to: 27,
+    /*
+     * PD-ORCH-005 clause 3 (R-067, OQ-103's last question ruled; the repair of
+     * `a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`): the cancel control's agents "end
+     * `cancelled` as today, and those are never resumed" — REQ-MONITOR-126, "cannot be undone in this session". The run-level
+     * explicit cancel ended its agents only in the run's teardown, so a host that died before the teardown left a store no
+     * different from any mid-run crash's, and the next continue resumed what the user had cancelled.
+     *
+     * `cancel_accepted_at` is the durable mark: the instant the explicit cancel was accepted while this iteration was open,
+     * written when it is accepted, before anything of it is carried out. The run's own close of the iteration leaves it as
+     * it is, a closed row's mark being history only. An open row that carries it is one whose cancel was never carried out:
+     * the next repair or continue ends its unfinished agents `cancelled` and closes it `cancelled` in the cancel's place
+     * (`recordCrash`), no surface presents it as a crash left it, and the Continue action counts none of it. NULL on every
+     * row written before this version, and true of them: none could record the mark.
+     */
+    sql: `
+      ALTER TABLE iterations ADD COLUMN cancel_accepted_at TEXT;
+    `,
+  },
+  {
+    to: 28,
+    /*
+     * REQ-TOOLS-154 items (4) and (5), REQ-LIBRARY-098, REQ-TOOLS-152 (R-067, the repair of
+     * `a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`): two parts of a child's payload were
+     * held in memory by the run that accepted its `delegate` call — the artifacts it attached and its inherited-context
+     * block. Since PD-ORCH-005 a child outlives that run, so a resumed child whose REQ-ORCH-088 retry, or whose follow-up
+     * before it ever started (clause 22), assembles its payload again in a later run found neither, and started without
+     * them with nothing said. Both are now stored with the child's record, as its `write_scope` and its
+     * `suppress_auto_context` are, and every assembly reads them from there.
+     *
+     * `attach_artifacts` is the call's field as given, a JSON array of artifact ids or slugs in the caller's order; the
+     * bodies are read from the artifact store when the payload is assembled, as they were. `inherited_context_block` is the
+     * block rendered at the call from the reports of the siblings that had completed then — "as they stood when the call
+     * was made"; which of the named ids counted is not recoverable later from `inherited_context`, since a sibling ignored as
+     * unfinished may have completed since. `'[]'` and `''` on every row written before this version: such a row's
+     * attachments and block were never recorded, and its retry in a later run carries none, as before.
+     */
+    sql: `
+      ALTER TABLE children ADD COLUMN attach_artifacts TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE children ADD COLUMN inherited_context_block TEXT NOT NULL DEFAULT '';
+    `,
+  },
+  {
+    to: 29,
+    /*
+     * REQ-MONITOR-102 with REQ-ORCH-153 (R-067, the repair of
+     * `a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`): a root's calls join the session total when
+     * its turn returns, and a crash ends that turn without returning. For an execution iteration's root the crash record
+     * reads what the total holds from `iterations.root_tool_calls` (v26); a plan cycle is not an iteration and has no
+     * `iterations` row, so nothing told the crash record that a plan cycle's root was under way, and its calls were lost.
+     *
+     * `plan_root_task_id` names the plan cycle's root while its turn runs and none of its calls is counted; `plan_root_persona`
+     * is the name its transcript rows carry. Both are written when the plan cycle's root starts and cleared, in the same
+     * transaction that adds its calls to the total, when its turn returns or the stop's grace gives up on it — or with none
+     * counted when its turn raises. A row that still names one after its process died is a crash during that plan cycle: the
+     * next repair or continue answers the root's open calls, adds the calls its record holds, and clears both. At most one
+     * plan cycle runs at a time in a session, so one pair of columns holds it. NULL on every row written before this
+     * version, and true of them: no plan cycle's root was recorded as under way.
+     */
+    sql: `
+      ALTER TABLE sessions ADD COLUMN plan_root_task_id TEXT;
+      ALTER TABLE sessions ADD COLUMN plan_root_persona TEXT;
+    `,
+  },
+  {
+    to: 30,
+    /*
+     * REQ-MONITOR-044/052/069 with REQ-LIBRARY-093 and REQ-LIBRARY-099 (R-067, the repair of
+     * `a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`): the run-level agent is known by the
+     * names of the session's roots — each iteration's from its `iterations` row. A plan cycle is not an iteration
+     * (REQ-ORCH-153) and has no row; its root was named by its live run, and once that run parked or ended, by its publishes
+     * alone. A plan cycle's root that read an artifact and published nothing was then no agent's: the read records the
+     * reader by its canonical instance name (REQ-LIBRARY-099, REQ-LIBRARY-093), and the run-level agent lost that received
+     * link at the gate and in every later snapshot.
+     *
+     * `plan_roots`: one row per plan cycle's root, written when its turn starts (in the transaction that records it under
+     * way, v29) and never changed — its task id, the canonical instance name it reads and publishes under, and the name its
+     * rows carry. A plan cycle's root is always a fresh root, so the pair is the one `iterations` keeps for an iteration's.
+     * Unlike v29's pair it is not released when the root's calls are counted: it is who the root was, not whether it is
+     * under way. The table cascades with its session; every read is the primary key's prefix. A session written before
+     * this version has no rows, and true of it: its plan cycles' roots were never recorded, and those that published are
+     * still named by their publishes.
+     */
+    sql: `
+      CREATE TABLE plan_roots (
+        session_id          TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        root_task_id        TEXT NOT NULL,
+        root_canonical_name TEXT NOT NULL,
+        root_persona        TEXT NOT NULL,
+        opened_at           TEXT NOT NULL,
+        PRIMARY KEY (session_id, root_task_id)
+      );
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

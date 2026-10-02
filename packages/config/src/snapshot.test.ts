@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { instructionFiles, INSTRUCTION_FILE_NAMES } from './snapshot.js';
+import { BUILT_IN_ROLE_TOOLS } from '@rotaris/contracts';
+import { instructionFiles, INSTRUCTION_FILE_NAMES, readSnapshot } from './snapshot.js';
 // The machine-wide base follows the skills ladder's own predicate (REQ-WORKSPACE-051), imported from there.
 import { hasEtcHierarchy } from './skills/roots.js';
 
@@ -100,5 +101,26 @@ describe('PD-WORKSPACE-002 — the Instructions inventory', () => {
     ]);
     // The platform rule stands above the directory: a platform with no `/etc` hierarchy reads no machine-wide file.
     expect(instructionFiles(root, { ...env, platform: 'win32' })).toEqual([]);
+  });
+});
+
+/**
+ * Live-run finding K1 (R-067): a built-in role whose files state no `tools:` had an empty role view, so the inspector's
+ * stand-in for an agent with no resolved set (REQ-MONITOR-060) was empty and it drew "No tools resolved.". The role view
+ * now names the DECLARED tools by the run host's own rule (`declaredToolsOf`); `tools` stays what the files state.
+ */
+describe('REQ-MONITOR-060 / REQ-TOOLS-002: the role view names the tools each role declares', () => {
+  it('a built-in role stating none declares the built-in list; a stated list wins; `tools` stays as written', () => {
+    const root = dir('rotaris-roles-');
+    mkdirSync(join(root, '.rotaris'), { recursive: true });
+    writeFileSync(join(root, '.rotaris', 'agents.yaml'), 'personas:\n  verifier:\n    tools: [read_file, grep]\n');
+    const snapshot = readSnapshot(dir('rotaris-roles-global-'), root, undefined, isolated());
+    const orchestrator = snapshot.roles.find((r) => r.role === 'orchestrator')!;
+    expect(orchestrator.tools).toEqual([]);
+    expect(orchestrator.declaredTools).toEqual([...BUILT_IN_ROLE_TOOLS.orchestrator]);
+    expect(orchestrator.declaredTools).toContain('delegate');
+    const verifier = snapshot.roles.find((r) => r.role === 'verifier')!;
+    expect(verifier.tools).toEqual(['read_file', 'grep']);
+    expect(verifier.declaredTools).toEqual(['read_file', 'grep']);
   });
 });

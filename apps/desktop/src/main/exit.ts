@@ -1,5 +1,6 @@
 import type { ProcessReply } from '@rotaris/contracts';
 import { millis, type Timers } from '@rotaris/kernel';
+import type { AppLogLevel } from './app-log.js';
 
 /**
  * An immediate exit (`app.exit`) that does not crash on Linux.
@@ -200,4 +201,42 @@ function exitedWithin(exit: ChildExit, ms: number, timers: Timers): Promise<bool
     const bound = timers.after(millis(ms), () => resolve(false));
     void exit.exited.then(() => { bound.cancel(); resolve(true); });
   });
+}
+
+/** What Electron's `child-process-gone` carries that the line reads. */
+export interface ChildGone {
+  readonly type: string;
+  readonly name?: string | undefined;
+  readonly reason: string;
+  readonly exitCode: number;
+}
+
+/**
+ * PD-MONITOR-002: a child process gone for any reason but `clean-exit` is a loss, written at `error` — except one main
+ * ended itself (live-run finding L13, `docs/defects/fixed/an-orderly-quit-logs-the-run-host-gone-at-error.md`).
+ *
+ * An immediate exit (the capture seam, the driver's `quit`) ends the run host at once through `endBeforeMain`, and one
+ * whose `shutdown` went unanswered past the grace is ended the same way. Electron then reports the end `killed` — exit 15,
+ * the SIGTERM `kill()` sends — after the run host's own `exit` event has already said 0. Written at `error`, it made an
+ * orderly quit end on an `error` line in 9 of the 11 launches of the live runs of 2026-09-29. So the kill is recorded
+ * here, by the child's service name, as main sends it, and Electron's report of that end is written at `info` and says
+ * main ended it. A child killed by anything else (a SIGKILL from outside was the first execution's measured loss), a
+ * child that crashed, and one main never ended stay at `error`. A loss that main's kill papers over is not hidden:
+ * the unanswered `shutdown` and the run host still running past its bound are written at `error` on the quit path.
+ */
+export class ChildrenEndedByMain {
+  readonly #ended = new Set<string>();
+
+  /** `child` whose `kill` is recorded under `name` — the service name Electron reports it by — before it is sent. */
+  endable(name: string, child: { kill(): boolean }): { kill(): boolean } {
+    return { kill: () => { this.#ended.add(name); return child.kill(); } };
+  }
+
+  /** The line for Electron's report of a child gone, and its level. */
+  gone(details: ChildGone): { readonly level: AppLogLevel; readonly message: string } {
+    const message = `CHILD PROCESS GONE (${details.type}${details.name === undefined ? '' : ` ${details.name}`}: ${details.reason}, exit ${details.exitCode})`;
+    if (details.reason === 'clean-exit') return { level: 'info', message };
+    if (details.reason === 'killed' && details.name !== undefined && this.#ended.has(details.name)) return { level: 'info', message: `${message}; main ended it at its exit` };
+    return { level: 'error', message };
+  }
 }

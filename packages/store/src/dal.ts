@@ -65,6 +65,12 @@ export interface SessionRow {
   readonly improvement_artifact_ids: string;
   // v21 — PD-MONITOR-001 revision 2 / REQ-MONITOR-166: the qualifier the run's cost total earned, recorded with it.
   readonly cost_qualifier: string;
+  /**
+   * v29 — REQ-MONITOR-102 with REQ-ORCH-153: the plan cycle's root while its turn runs and none of its calls is counted, and
+   * the name its rows carry; NULL when no plan cycle's root is under way. Still set after its process died: a crash during it.
+   */
+  readonly plan_root_task_id: string | null;
+  readonly plan_root_persona: string | null;
 }
 /** v17 — REQ-ORCH-154's durable record: one row per plan cycle, the decision taken and the text that was approved. */
 export interface PlanCycleRow {
@@ -257,8 +263,14 @@ export interface ChildRow {
   readonly resume_state: string | null;
   /** v23 — PD-TOOLS-006 revision 2: the child's declared write scope, a JSON array of patterns; `'[]'` when it declared none. */
   readonly write_scope: string;
+  /** v25 — REQ-TOOLS-152: `1` when the `delegate` call set `suppress_auto_context`, so the child's payload omits the sibling index. */
+  readonly suppress_auto_context: number;
+  /** v28 — REQ-LIBRARY-098 / REQ-TOOLS-154 (4): the call's `attach_artifacts`, a JSON array of ids or slugs; `'[]'` when it attached none. */
+  readonly attach_artifacts: string;
+  /** v28 — REQ-TOOLS-152 / REQ-TOOLS-154 (5): the inherited-context block as rendered at the call; `''` when nothing was carried. */
+  readonly inherited_context_block: string;
 }
-export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo' | 'continuation_of' | 'interruption' | 'resume_state' | 'write_scope'> & { readonly todo?: string | null; readonly continuation_of?: string | null; readonly write_scope?: string };
+export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo' | 'continuation_of' | 'interruption' | 'resume_state' | 'write_scope' | 'suppress_auto_context' | 'attach_artifacts' | 'inherited_context_block'> & { readonly todo?: string | null; readonly continuation_of?: string | null; readonly write_scope?: string; readonly suppress_auto_context?: number; readonly attach_artifacts?: string; readonly inherited_context_block?: string };
 
 /**
  * v23 — PD-ORCH-005 clause 1: one execution iteration and the task id of its root, open from the moment it begins until it
@@ -280,8 +292,31 @@ export interface IterationRow {
   readonly interruption: string | null;
   readonly opened_at: string;
   readonly closed_at: string | null;
+  /**
+   * v26 — REQ-MONITOR-102: the calls of this iteration's root the session's `tool_calls` holds — raised with the total when
+   * the root's turn returns, and by the crash record. NULL on a row written before v26: not known.
+   */
+  readonly root_tool_calls: number | null;
+  /**
+   * v27 — PD-ORCH-005 clause 3 (OQ-103, R-067): when the explicit cancel (REQ-MONITOR-126) was accepted while this
+   * iteration was open; NULL when none was. An OPEN row carrying it is a cancel its run never carried out.
+   */
+  readonly cancel_accepted_at: string | null;
 }
 export type IterationInsert = Pick<IterationRow, 'session_id' | 'iteration' | 'root_task_id' | 'root_canonical_name' | 'root_persona' | 'todo_task_id' | 'task' | 'opened_at'>;
+
+/**
+ * v30 — REQ-MONITOR-044 with REQ-ORCH-153 and REQ-LIBRARY-093: a plan cycle's root, recorded when its turn starts. A plan
+ * cycle is not an iteration, so this is the record that names its root once its run is gone: the canonical instance name
+ * its reads and publishes record, and the name its rows carry.
+ */
+export interface PlanRootRow {
+  readonly session_id: string;
+  readonly root_task_id: string;
+  readonly root_canonical_name: string;
+  readonly root_persona: string;
+  readonly opened_at: string;
+}
 
 /**
  * v23 — PD-ORCH-005 clauses 1 and 12: one entry of an agent's recorded conversation. `message` is one message as the
@@ -440,6 +475,13 @@ export class StoreDal {
           message_limit = coalesce(@message_limit, message_limit),
           token_samples = coalesce(@token_samples, token_samples)
         WHERE session_id = @session_id`),
+      // v29 — REQ-MONITOR-102 with REQ-ORCH-153: the plan cycle's root under way, and its release once its calls are counted.
+      setPlanRoot: db.prepare('UPDATE sessions SET plan_root_task_id = ?, plan_root_persona = ? WHERE session_id = ?'),
+      clearPlanRoot: db.prepare('UPDATE sessions SET plan_root_task_id = NULL, plan_root_persona = NULL WHERE session_id = ? AND plan_root_task_id = ?'),
+      // v30: a plan cycle's root is recorded once and never changed; a second write of the same root changes nothing.
+      insertPlanRoot: db.prepare(`INSERT OR IGNORE INTO plan_roots (session_id, root_task_id, root_canonical_name, root_persona, opened_at)
+        VALUES (@session_id, @root_task_id, @root_canonical_name, @root_persona, @opened_at)`),
+      planRootsOf: db.prepare('SELECT * FROM plan_roots WHERE session_id = ? ORDER BY opened_at, root_task_id'),
       // REQ-ORCH-087 / REQ-SESSION-110: the pause recorded with its count; the resolution clears it in the same act that writes the status.
       setPause: db.prepare('UPDATE sessions SET execution_status = ?, paused_at_count = ?, message_limit = ?, updated_at = ? WHERE session_id = ?'),
       // REQ-ORCH-153/154 (v17): the plan cycle record, and the two session columns that hold a gate open across a restart.
@@ -464,6 +506,7 @@ export class StoreDal {
       insertTimeline: db.prepare('INSERT INTO timeline (session_id, ordinal, at, name, actor, message, metadata, id, severity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'),
       maxTimelineOrdinal: db.prepare('SELECT max(ordinal) AS m FROM timeline WHERE session_id = ?'),
       timelineOf: db.prepare('SELECT * FROM timeline WHERE session_id = ? ORDER BY ordinal'),
+      latestTimelineEntry: db.prepare('SELECT * FROM timeline WHERE session_id = ? AND name = ? ORDER BY ordinal DESC LIMIT 1'),
       listLocks: db.prepare('SELECT * FROM session_locks'),
       getLock: db.prepare('SELECT * FROM session_locks WHERE session_id = ?'),
       // REQ-SESSION-046: claimed by an operation that either succeeds or reports the existing holder.
@@ -529,8 +572,8 @@ export class StoreDal {
       issuesOf: db.prepare('SELECT * FROM issues WHERE session_id = ? ORDER BY ordinal'),
 
       // ADR-0012: the child ledger. Every statement carries session_id (REQ-ORCH-151, asserted by a test over this text).
-      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of, write_scope)
-        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of, @write_scope)`),
+      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of, write_scope, suppress_auto_context, attach_artifacts, inherited_context_block)
+        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of, @write_scope, @suppress_auto_context, @attach_artifacts, @inherited_context_block)`),
       getChild: db.prepare('SELECT * FROM children WHERE session_id = ? AND task_id = ?'),
       // Acceptance order: children accepted in the same millisecond keep the order they were inserted in, which the
       // resume's re-claim of their write scopes depends on (PD-TOOLS-006 revision 2; found by phase 4's review).
@@ -541,21 +584,31 @@ export class StoreDal {
       // REQ-ORCH-049: the start claim is ONE conditional update; its affected-row count is the claim's outcome.
       claimChildStart: db.prepare("UPDATE children SET state = 'starting', launch_generation = launch_generation + 1 WHERE session_id = ? AND task_id = ? AND state = 'queued'"),
       setChildReport: db.prepare('UPDATE children SET report = ?, report_stored = 1 WHERE session_id = ? AND task_id = ?'),
+      // PD-ORCH-005 clause 22: a follow-up takes a settled child out of its terminal state — its completion time, its
+      // report and its parent's having observed it are cleared, since it ends, reports and is observed again.
+      reopenChild: db.prepare('UPDATE children SET state = ?, completed_at = NULL, report = NULL, report_stored = 0, observed = 0 WHERE session_id = ? AND task_id = ?'),
       setChildObserved: db.prepare('UPDATE children SET observed = 1 WHERE session_id = ? AND task_id = ?'),
       setChildContextInjected: db.prepare('UPDATE children SET context_injected = 1 WHERE session_id = ? AND task_id = ?'),
       setChildTodo: db.prepare('UPDATE children SET todo = ?, tool_calls = ? WHERE session_id = ? AND task_id = ?'),
+      // REQ-MCP-065 / REQ-TOOLS-006: the grant the child's tool port put in force, written once the port is ready.
+      setChildGrant: db.prepare('UPDATE children SET granted_tools = ?, granted_mcp = ? WHERE session_id = ? AND task_id = ?'),
       // PD-ORCH-005: the two facts a rest records beside the move to `paused`, and their clearing when the child resumes.
       setChildRest: db.prepare('UPDATE children SET interruption = ?, resume_state = ? WHERE session_id = ? AND task_id = ?'),
       pausedChildrenOfIteration: db.prepare("SELECT * FROM children WHERE session_id = ? AND iteration = ? AND state = 'paused' ORDER BY spawned_at, rowid"),
 
       // v23 — PD-ORCH-005: the iterations, each carrying its root's task id.
-      insertIteration: db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_canonical_name, root_persona, todo_task_id, task, state, opened_at)
-        VALUES (@session_id, @iteration, @root_task_id, @root_canonical_name, @root_persona, @todo_task_id, @task, 'open', @opened_at)`),
+      // v26: an iteration opened from this version holds a root count, starting at 0 (REQ-MONITOR-102).
+      insertIteration: db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_canonical_name, root_persona, todo_task_id, task, state, opened_at, root_tool_calls)
+        VALUES (@session_id, @iteration, @root_task_id, @root_canonical_name, @root_persona, @todo_task_id, @task, 'open', @opened_at, 0)`),
       getIteration: db.prepare('SELECT * FROM iterations WHERE session_id = ? AND iteration = ?'),
       openIterationOf: db.prepare("SELECT * FROM iterations WHERE session_id = ? AND state = 'open' ORDER BY iteration DESC LIMIT 1"),
       iterationsOf: db.prepare('SELECT * FROM iterations WHERE session_id = ? ORDER BY iteration'),
       closeIteration: db.prepare("UPDATE iterations SET state = 'closed', outcome = ?, closed_at = ? WHERE session_id = ? AND iteration = ? AND state = 'open'"),
       setIterationInterruption: db.prepare("UPDATE iterations SET interruption = ? WHERE session_id = ? AND iteration = ? AND state = 'open'"),
+      // v26 — REQ-MONITOR-102: a NULL count (a row older than v26) is not known and stays NULL.
+      addIterationRootCalls: db.prepare('UPDATE iterations SET root_tool_calls = root_tool_calls + ? WHERE session_id = ? AND iteration = ? AND root_tool_calls IS NOT NULL'),
+      // v27 — PD-ORCH-005 clause 3 (OQ-103): the explicit cancel's mark, on the open iteration only, the first acceptance kept.
+      markCancelAccepted: db.prepare("UPDATE iterations SET cancel_accepted_at = ? WHERE session_id = ? AND state = 'open' AND cancel_accepted_at IS NULL"),
 
       // v23 — PD-ORCH-005: the agents' conversations. The sequence is per agent and taken inside the insert, as the slot queue's is.
       insertAgentMessage: db.prepare(`INSERT INTO agent_messages (session_id, task_id, seq, iteration, kind, body, at)
@@ -609,10 +662,19 @@ export class StoreDal {
         @highlight_paths, @snippets, @edited_files, @created_files, @commands, @tags, @supersedes, @superseded_by, @created_by, @consumed_by, @timeline_event_id, @conversation_id, @importance, @created_at, @edited_at, @body_file)`),
       // REQ-LIBRARY-096: ascending by creation time, the index's own order; the plan is asserted in `store.test.ts`.
       artifactsOf: db.prepare('SELECT * FROM artifacts WHERE session_id = ? ORDER BY created_at, id'),
+      // Live-run finding K1: the few columns an agent surface links by, read at every snapshot — never the bodies.
+      artifactLinksOf: db.prepare('SELECT id, slug, title, status, created_by, canonical_name, consumed_by FROM artifacts WHERE session_id = ? AND superseded_by IS NULL ORDER BY created_at, id'),
+      // REQ-LIBRARY-093 with OQ-106: the publishes of a root no iteration row records (a plan cycle's), read at every snapshot.
+      rootPublishersOf: db.prepare(`SELECT a.source_persona, a.created_by FROM artifacts a
+        WHERE a.session_id = ? AND a.kind = 'agent_published' AND a.conversation_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM children c WHERE c.session_id = a.session_id AND c.task_id = a.conversation_id)
+          AND NOT EXISTS (SELECT 1 FROM iterations i WHERE i.session_id = a.session_id AND i.root_task_id = a.conversation_id)
+        ORDER BY a.created_at, a.id`),
       artifactById: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND id = ?'),
       artifactBySlug: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND slug = ?'),
       artifactByTask: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND source_task_id = ?'),
-      artifactByCanonical: db.prepare("SELECT * FROM artifacts WHERE session_id = ? AND canonical_name = ? AND kind = 'child_report' ORDER BY created_at, id"),
+      // REQ-LIBRARY-092 as amended (OQ-113): the name keys only a report no task wrote.
+      artifactByCanonical: db.prepare("SELECT * FROM artifacts WHERE session_id = ? AND canonical_name = ? AND kind = 'child_report' AND (source_task_id IS NULL OR source_task_id = '') ORDER BY created_at, id"),
       slugsLike: db.prepare('SELECT slug FROM artifacts WHERE session_id = ? AND (slug = ? OR slug LIKE ?)'),
       // REQ-LIBRARY-094: only the body's timestamp moves here — the body itself is a file, so the row records that it changed and nothing more.
       touchArtifactEdited: db.prepare('UPDATE artifacts SET edited_at = ? WHERE session_id = ? AND id = ?'),
@@ -664,7 +726,7 @@ export class StoreDal {
   }
 
   insertChild(row: ChildInsert): void {
-    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null, continuation_of: row.continuation_of ?? null, write_scope: row.write_scope ?? '[]' });
+    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null, continuation_of: row.continuation_of ?? null, write_scope: row.write_scope ?? '[]', suppress_auto_context: row.suppress_auto_context ?? 0, attach_artifacts: row.attach_artifacts ?? '[]', inherited_context_block: row.inherited_context_block ?? '' });
   }
   getChild(id: SessionId, taskId: string): ChildRow | undefined {
     return this.stmts['getChild']!.get(id, taskId) as ChildRow | undefined;
@@ -685,6 +747,10 @@ export class StoreDal {
   setChildReport(id: SessionId, taskId: string, report: string): void {
     this.stmts['setChildReport']!.run(report, id, taskId);
   }
+  /** PD-ORCH-005 clause 22: a settled child followed up moves to `state` with its completion, report and observation cleared. */
+  reopenChild(id: SessionId, taskId: string, state: string): boolean {
+    return this.stmts['reopenChild']!.run(state, id, taskId).changes === 1;
+  }
   setChildObserved(id: SessionId, taskId: string): void {
     this.stmts['setChildObserved']!.run(id, taskId);
   }
@@ -693,6 +759,10 @@ export class StoreDal {
   }
   setChildTodo(id: SessionId, taskId: string, todo: string | null, toolCalls: number): void {
     this.stmts['setChildTodo']!.run(todo, toolCalls, id, taskId);
+  }
+  /** REQ-MCP-065: the child's grant in force — its native tools as a JSON array, its MCP evidence as a JSON object. */
+  setChildGrant(id: SessionId, taskId: string, grantedTools: string, grantedMcp: string): void {
+    this.stmts['setChildGrant']!.run(grantedTools, grantedMcp, id, taskId);
   }
   /** PD-ORCH-005: the interruption and the resume state a rest records, or both cleared (null) when the child resumes. */
   setChildRest(id: SessionId, taskId: string, interruption: string | null, resumeState: string | null): void {
@@ -724,6 +794,17 @@ export class StoreDal {
   /** The rest that left an open iteration open; a resume sets it back to NULL, so a later crash is not read as the earlier rest. */
   setIterationInterruption(id: SessionId, iteration: number, interruption: string | null): boolean {
     return this.stmts['setIterationInterruption']!.run(interruption, id, iteration).changes === 1;
+  }
+  /** v26 — REQ-MONITOR-102: `n` more of the root's calls held by the session total; false when the count is not known (NULL). */
+  addIterationRootCalls(id: SessionId, iteration: number, n: number): boolean {
+    return this.stmts['addIterationRootCalls']!.run(n, id, iteration).changes === 1;
+  }
+  /**
+   * v27 — PD-ORCH-005 clause 3 (OQ-103, R-067): the explicit cancel was accepted at `at` while the session's open iteration
+   * was open. False when none is open, or its mark is already set (the first acceptance is kept).
+   */
+  markCancelAccepted(id: SessionId, at: string): boolean {
+    return this.stmts['markCancelAccepted']!.run(at, id).changes === 1;
   }
   insertAgentMessage(row: Omit<AgentMessageRow, 'seq'>): void {
     this.stmts['insertAgentMessage']!.run(row);
@@ -890,6 +971,22 @@ export class StoreDal {
       token_samples: patch.token_samples ?? null,
     });
   }
+  /** v29 — REQ-MONITOR-102 with REQ-ORCH-153: records `taskId` as the plan cycle's root under way, its rows under `persona`. */
+  setPlanRoot(id: SessionId, taskId: string, persona: string): void {
+    this.stmts['setPlanRoot']!.run(taskId, persona, id);
+  }
+  /** v30 — REQ-ORCH-153: records a plan cycle's root; false when it is recorded already. */
+  insertPlanRoot(row: PlanRootRow): boolean {
+    return this.stmts['insertPlanRoot']!.run(row).changes === 1;
+  }
+  /** v30: the session's plan cycles' roots, in the order they started. */
+  planRootsOf(id: SessionId): PlanRootRow[] {
+    return this.stmts['planRootsOf']!.all(id) as PlanRootRow[];
+  }
+  /** v29: releases the plan cycle's root `taskId`; false when the session does not name it (never, or released already). */
+  clearPlanRoot(id: SessionId, taskId: string): boolean {
+    return this.stmts['clearPlanRoot']!.run(id, taskId).changes === 1;
+  }
   /** REQ-ORCH-087 / REQ-SESSION-110: status, the count reached (null clears the pause) and the limit in force, one statement. */
   setPause(id: SessionId, status: string, pausedAtCount: number | null, messageLimit: number | null, updatedAt: string): void {
     this.stmts['setPause']!.run(status, pausedAtCount, messageLimit, updatedAt, id);
@@ -974,6 +1071,13 @@ export class StoreDal {
   }
   timelineOf(id: SessionId): TimelineRow[] {
     return this.stmts['timelineOf']!.all(id) as TimelineRow[];
+  }
+  /**
+   * The session's newest timeline entry of `name`, or undefined — read under the primary key, newest first, so a surface
+   * that reads one fact from the timeline (REQ-ORCH-014's intent in effect after a continuation) reads one row.
+   */
+  latestTimelineEntry(id: SessionId, name: string): TimelineRow | undefined {
+    return this.stmts['latestTimelineEntry']!.get(id, name) as TimelineRow | undefined;
   }
 
   listLocks(): LockRow[] {
@@ -1195,6 +1299,22 @@ export class StoreDal {
   artifactsOf(id: SessionId): ArtifactRow[] {
     return this.stmts['artifactsOf']!.all(id) as ArtifactRow[];
   }
+  /**
+   * REQ-MONITOR-044/052 (live-run finding K1): the session's artifacts not superseded, as the agent surfaces link them —
+   * the columns a link needs and no body, in the index's own order (`artifacts_by_created`), read at every snapshot.
+   */
+  artifactLinksOf(id: SessionId): Pick<ArtifactRow, 'id' | 'slug' | 'title' | 'status' | 'created_by' | 'canonical_name' | 'consumed_by'>[] {
+    return this.stmts['artifactLinksOf']!.all(id) as Pick<ArtifactRow, 'id' | 'slug' | 'title' | 'status' | 'created_by' | 'canonical_name' | 'consumed_by'>[];
+  }
+  /**
+   * REQ-LIBRARY-093 with OQ-106: the persona and the instance name (`created_by`) of every publish whose conversation — the
+   * publishing agent's own task id — is no child's and no iteration's root, superseded or not, in creation order. Those are
+   * the publishes of a root no iteration row records: a plan cycle's (REQ-ORCH-153), or a root recorded before v23. A
+   * child's publish and its report carry the child's task id, and an iteration's root is known by its row.
+   */
+  rootPublishersOf(id: SessionId): Pick<ArtifactRow, 'source_persona' | 'created_by'>[] {
+    return this.stmts['rootPublishersOf']!.all(id) as Pick<ArtifactRow, 'source_persona' | 'created_by'>[];
+  }
   /** REQ-LIBRARY-096: lookup accepts an id or a slug; the id is tried first, so a slug that looks like an id cannot shadow one. */
   artifactByRef(id: SessionId, ref: string): ArtifactRow | undefined {
     return (this.stmts['artifactById']!.get(id, ref) as ArtifactRow | undefined) ?? (this.stmts['artifactBySlug']!.get(id, ref) as ArtifactRow | undefined);
@@ -1203,6 +1323,10 @@ export class StoreDal {
   artifactByTask(id: SessionId, taskId: string): ArtifactRow | undefined {
     return this.stmts['artifactByTask']!.get(id, taskId) as ArtifactRow | undefined;
   }
+  /**
+   * REQ-LIBRARY-092's fallback key as amended 2026-09-29 (OQ-113): the earliest child report under `canonicalName` that
+   * carries no task id — never one a task wrote, which only its own task id finds (`artifactByTask`).
+   */
   artifactByCanonical(id: SessionId, canonicalName: string): ArtifactRow | undefined {
     return (this.stmts['artifactByCanonical']!.all(id, canonicalName) as ArtifactRow[])[0];
   }

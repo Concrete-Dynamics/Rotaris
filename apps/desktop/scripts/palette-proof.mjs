@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
  * Part W's first execution in the built application: the ONE action vocabulary reaching the screen three ways.
@@ -74,11 +75,11 @@ function setPreference(s, key, value) {
   const current = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
   writeFileSync(file, `${JSON.stringify({ ...current, [key]: value }, null, 2)}\n`);
 }
-function launch(name, s, extra, opts = {}) {
+async function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout: opts.timeout ?? 150_000, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs: opts.timeout ?? 150_000, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: s.preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ...extra,
@@ -86,6 +87,7 @@ function launch(name, s, extra, opts = {}) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const errors = log.split('\n').filter((l) => /renderer console:/.test(l));
@@ -106,7 +108,7 @@ const expect = (cond, message) => { if (!cond) throw new Error(message); };
 // 1. The palette: the dialog, the filter, the hidden keywords, the close-then-run order.
 const s1 = scenario('palette');
 {
-  const r = launch('palette', s1, {
+  const r = await launch('palette', s1, {
     ROTARIS_CAPTURE_CHORDS: 'Ctrl+K@3000;;Return@5200',
     ROTARIS_CAPTURE_TYPE_AT: 'config@4200',
     ROTARIS_CAPTURE_INSPECT_AT: [
@@ -170,7 +172,7 @@ const s1 = scenario('palette');
 // 2. Keyboard help: a row per shortcut-bearing command, no Escape row, the prose line, Escape closes.
 const s2 = scenario('help');
 {
-  const r = launch('help', s2, {
+  const r = await launch('help', s2, {
     ROTARIS_CAPTURE_CHORDS: 'F1@3000;;Escape@4600',
     ROTARIS_CAPTURE_INSPECT_AT: [
       '[data-testid="keyboard-help"]@3600',
@@ -207,7 +209,7 @@ const s2 = scenario('help');
 const s3 = scenario('modality');
 {
   setPreference(s3, 'interface/agentPopOut', true);
-  const r = launch('modality', s3, {
+  const r = await launch('modality', s3, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:34000,answer',
     ROTARIS_CAPTURE_PROMPT: 'pop out an agent for the modality reading',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
@@ -283,7 +285,7 @@ const s3 = scenario('modality');
 // 4. The rest of the table still carries the window, and Ctrl+Return declines while the send control is disabled.
 const s4 = scenario('shortcuts');
 {
-  const r = launch('shortcuts', s4, {
+  const r = await launch('shortcuts', s4, {
     ROTARIS_CAPTURE_CHORDS: 'Ctrl+3@3000;;Ctrl+,@4000;;Ctrl+L@5000;;Ctrl+Return@6000',
     ROTARIS_CAPTURE_INSPECT_AT: '.app-shell@3400;;.app-shell@4400;;.app-shell@5400;;.composer__input@5400;;.app-shell@6600',
     ROTARIS_CAPTURE_AFTER_MS: '7200',
@@ -308,7 +310,7 @@ const s4 = scenario('shortcuts');
 // 5. Reachable at the minimum window size (REQ-SHELL-022).
 const s5 = scenario('minimum');
 {
-  const r = launch('minimum', s5, {
+  const r = await launch('minimum', s5, {
     ROTARIS_CAPTURE_RESIZE: '1000x680@2600',
     ROTARIS_CAPTURE_CHORDS: 'Ctrl+K@3400',
     ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="command-palette"]@4000;;.cmdk-item@4000',

@@ -120,7 +120,11 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('runs.active'), workspaceId: z.string() }),
   /** ADR-0019: the presenter is a capability main registers per window and revokes on close; the poll reply carries the windows it holds. */
   z.object({ kind: z.literal('presenter.register'), windowId: z.string().min(1) }),
-  z.object({ kind: z.literal('presenter.revoke'), windowId: z.string().min(1) }),
+  /**
+   * PD-ORCH-005 clause 9: `quitting` is set when the application's quit closed the window (main's `QuitState`), so an
+   * approval or a question asked after the last one closes waits for the quit to withdraw it rather than being denied.
+   */
+  z.object({ kind: z.literal('presenter.revoke'), windowId: z.string().min(1), quitting: z.boolean().optional() }),
   z.object({ kind: z.literal('presenter.pollReply'), seq: z.number().int().nonnegative(), windows: z.array(z.string()) }),
   /** REQ-TOOLS-063: main reports whether the dialog was put in front of a person; a failure denies with source presenter-error. */
   /** ADR-0015: the Hooks tab's reads and writes; the run host holds the hooks package and the store (REQ-HOOKS-136). */
@@ -574,7 +578,7 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
    * main can talk, and SR-3 withdrew polling exactly where they can. REQ-WORKSPACE-109 is what needs
    * it: a step must be visible "at the moment that step finishes", which a poll can only approximate.
    */
-  z.object({ kind: z.literal('mcp.setupStatus'), workspaceRoot: z.string(), status: McpSetupStatusSchema }),
+  z.object({ kind: z.literal('mcp.setupStatus'), status: McpSetupStatusSchema }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

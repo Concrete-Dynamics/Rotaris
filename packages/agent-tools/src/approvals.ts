@@ -34,9 +34,21 @@ interface Waiter {
   shown: boolean;
 }
 
+/**
+ * PD-ORCH-005 clause 9: what holds a wait past its budget. While `held` answers true — the application's quit has closed
+ * the last window and is on its way to withdrawing every wait — an expiring timer is armed again rather than settling
+ * the wait `timed_out`, which REQ-TOOLS-052 would turn into a denial. The quit's shutdown then withdraws it.
+ */
+export interface WaitHoldOptions {
+  readonly held?: (() => boolean) | undefined;
+}
+
 export class PendingApprovals {
   private readonly waiters = new Map<string, Waiter>();
-  constructor(private readonly timers: Timers) {}
+  private readonly held: () => boolean;
+  constructor(private readonly timers: Timers, options: WaitHoldOptions = {}) {
+    this.held = options.held ?? (() => false);
+  }
 
   /** REQ-TOOLS-054: an empty id is rejected; a duplicate pending id is rejected with the fixed message. */
   create(payload: ApprovalPayload, timeoutMs: number | null): Promise<ApprovalOutcome> {
@@ -47,7 +59,11 @@ export class PendingApprovals {
     const promise = new Promise<ApprovalOutcome>((resolve) => { settle = resolve; });
     const w: Waiter = { payload, promise, settle, timer: null, shown: false };
     if (timeoutMs !== null && timeoutMs > 0) {
-      w.timer = this.timers.after(timeoutMs as Millis, () => this.finish(id, { kind: 'timed_out', afterSeconds: timeoutMs / 1000 }));
+      const expire = (): void => {
+        if (this.held()) { w.timer = this.timers.after(timeoutMs as Millis, expire); return; }
+        this.finish(id, { kind: 'timed_out', afterSeconds: timeoutMs / 1000 });
+      };
+      w.timer = this.timers.after(timeoutMs as Millis, expire);
     }
     this.waiters.set(id, w);
     return promise;
@@ -117,6 +133,8 @@ export const DEFAULT_LAPSE_MS = 3_000;
 /** ADR-0019: registrations per main window; a lapse is a gap since the last reply, on the run host's clock. */
 export class PresenterRegistry {
   private readonly windows = new Set<string>();
+  /** PD-ORCH-005 clause 9: main said the quit took the window it revoked last; a registration ends it. */
+  private quitBegun = false;
   private lastReplyAt: Millis | null = null;
   private lapsed = false;
   private seq = 0;
@@ -143,11 +161,17 @@ export class PresenterRegistry {
   /** Explicit and prompt, on window creation (ADR-0019 c.1). */
   register(windowId: string): void {
     this.windows.add(windowId);
+    this.quitBegun = false;
     if (this.lastReplyAt === null) this.lastReplyAt = this.deps.monotonic.now();
   }
-  /** Explicit and prompt, on window close: the last one closing makes the application unattended. */
-  revoke(windowId: string): void {
+  /**
+   * Explicit and prompt, on window close: the last one closing makes the application unattended. `quitting` is main's
+   * word that the application's quit closed the window (PD-ORCH-005 clause 9), so what is asked of a person afterwards
+   * waits for the quit to withdraw it instead of being resolved as though nobody were there.
+   */
+  revoke(windowId: string, quitting = false): void {
     this.windows.delete(windowId);
+    if (quitting) this.quitBegun = true;
   }
   /** A reply refreshes the set main holds and clears a lapse (asks raised afterwards are brokered again). */
   pollReplied(windows: readonly string[]): void {
@@ -166,6 +190,14 @@ export class PresenterRegistry {
   /** REQ-TOOLS-053: a prompt can be put in front of a person. */
   get attended(): boolean {
     return this.windows.size > 0 && !this.lapsed;
+  }
+  /**
+   * PD-ORCH-005 clause 9: the application's quit has closed every main window and its shutdown is still to come (it waits
+   * on REQ-GIT-101's checkpoint operation first). No presenter is left, but an approval or a question is withdrawn by the
+   * quit, never denied or cancelled for want of one.
+   */
+  get quitting(): boolean {
+    return this.quitBegun && this.windows.size === 0;
   }
   get isLapsed(): boolean {
     return this.lapsed;

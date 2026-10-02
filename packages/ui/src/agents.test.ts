@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedCancelWith, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, steerOffered, tableOrder } from './agents.js';
+import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, entryRole, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedCancelWith, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, steerOffered, tableOrder } from './agents.js';
 import { personaColourToken } from './PersonaWindow.js';
 import { useShellState } from './shell-state.js';
 
 const agent = (over: Partial<AgentRecord>): AgentRecord => ({
   id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'running', presentationState: 'running', parentId: 'root:1', dependencies: [], activity: 'do the thing', model: 'scripted/alpha',
   depth: 1, background: true, category: 'quick', spawnedAt: '2026-09-05T10:00:00.000Z', completedAt: null, toolCalls: 2, delegationTask: 'do the thing', reasoning: 'medium', contextUsed: 1000, contextLimit: DEFAULT_CONTEXT_CAPACITY,
-  grantedTools: ['read_file', 'grep'], calledTools: ['grep'], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, ...over,
+  grantedTools: ['read_file', 'grep'], calledTools: ['grep'], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantRecorded: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, ...over,
 });
 const row = (over: Partial<TranscriptRow>): TranscriptRow => ({ index: 0, kind: 'agent', settled: true, body: 'x', at: '2026-09-05T10:00:00.000Z', ts: '10:00:00', ...over });
 const session = (over: Partial<SessionRecord>): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-05T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-05T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
-  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, ...over,
+  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryStalledSeconds: null, entryToolCalls: null, ...over,
 });
 
 describe('agents — the shared selection (REQ-MONITOR-042) and the run-level agent (REQ-MONITOR-043/057)', () => {
@@ -25,13 +25,29 @@ describe('agents — the shared selection (REQ-MONITOR-042) and the run-level ag
   });
   it('the run-level agent is the entry role: live while the run is busy, its own tool calls the session total less the children, no record-carried context', () => {
     const entry = { persona: 'orchestrator', model: 'scripted/alpha', reasoning: 'high', tools: ['delegate', 'read_file'] };
-    const r = runLevelAgent(session({ agents: [agent({ toolCalls: 2 })] }), entry, false)!;
-    expect(r).toMatchObject({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', presentationState: 'running', live: true, toolCalls: 3, model: 'scripted/alpha', reasoning: 'high', grantedTools: ['delegate', 'read_file'], contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY, completedAt: null });
-    expect(runLevelAgent(session({ executionStatus: 'completed' }), entry, false)).toMatchObject({ presentationState: 'done', live: false, completedAt: '2026-09-05T10:05:00.000Z' });
+    // Live-run finding K1: a live run-level agent's tools are its root port's resolution, never the declared set standing in
+    // (REQ-MONITOR-061) — this assertion read the declared `entry.tools` of a RUNNING agent until that repair.
+    const r = runLevelAgent(session({ agents: [agent({ toolCalls: 2 })], entryTools: { resolved: ['read_file', 'delegate'], called: [], active: [] } }), entry, false)!;
+    expect(r).toMatchObject({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', presentationState: 'running', live: true, toolCalls: 3, model: 'scripted/alpha', reasoning: 'high', grantedTools: ['read_file', 'delegate'], contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY, completedAt: null });
+    // With no live instance the persona's declared tools stand in (REQ-MONITOR-060).
+    expect(runLevelAgent(session({ executionStatus: 'completed' }), entry, false)).toMatchObject({ presentationState: 'done', live: false, completedAt: '2026-09-05T10:05:00.000Z', grantedTools: ['delegate', 'read_file'] });
     expect(runLevelAgent(session({ executionStatus: 'failed' }), entry, false)?.presentationState).toBe('failed');
     expect(runLevelAgent(session({ executionStatus: 'paused' }), entry, false)?.presentationState).toBe('cancelled');
     expect(runLevelAgent(session({ runStartedAt: null }), entry, false)).toBeNull();
+    // REQ-MONITOR-117/119: the entry agent's own stall figure, while its run is live; none once it has ended.
+    expect(runLevelAgent(session({ entryStalledSeconds: 90 }), entry, false)?.stalledSeconds).toBe(90);
+    expect(runLevelAgent(session({ executionStatus: 'completed', entryStalledSeconds: 90 }), entry, false)?.stalledSeconds).toBeNull();
     expect(runLevelAgent(null, entry, false)).toBeNull();
+  });
+  it('REQ-MONITOR-044/052 (acceptance A20): the run-level agent\'s count is the session\'s own figure for it, which holds the calls its running turn has made; with none, the total less the children', () => {
+    const entry = { persona: 'orchestrator', model: 'scripted/alpha', reasoning: 'high', tools: [] };
+    // The artifacts-proof screenshot's state: the root's turn has made two calls the total does not hold yet, and a child's
+    // live count is ahead of the total too. The total less the children read 0 beside the root's used chips.
+    const live = session({ toolCalls: { total: 0, agents: 1, byTool: [] }, agents: [agent({ toolCalls: 1 })], entryTools: { resolved: ['delegate', 'artifact_write'], called: ['delegate', 'artifact_write'], active: [] }, entryToolCalls: 2 });
+    expect(runLevelAgent(live, entry, false)?.toolCalls).toBe(2);
+    expect(metaLine(runLevelAgent(live, entry, false)!, '8s')).toBe('running · 8s · 2 tool calls');
+    // A record with no projection still derives it.
+    expect(runLevelAgent(session({ agents: [agent({ toolCalls: 2 })] }), entry, false)?.toolCalls).toBe(3);
   });
 });
 
@@ -62,6 +78,88 @@ describe('agents — the inspector follows the latest author (REQ-MONITOR-053/05
     expect(rowsOf(rows, helper).map((r) => r.index)).toEqual([2, 4]);
     expect(rowsOf(rows, runLevel).map((r) => r.index)).toEqual([1]);
   });
+  /*
+   * Found by the fourth review of the repair of a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record
+   * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md): a root resumed as the entry role keeps
+   * its own persona's name on its rows, so matching them by the entry persona alone dropped every one of them.
+   */
+  it('PD-ORCH-005 clause 4 with OQ-97: a root resumed as the entry role keeps its own persona\'s name on its rows, and the run-level agent still owns them (REQ-MONITOR-071) and is the agent they are followed to (REQ-MONITOR-053); a child of the entry persona stays its own', () => {
+    const coding = agent({ id: 'bg_00000009', name: 'coder', persona: 'coding-agent' });
+    // The entry role is `coding-agent` now; the session's roots were opened as `orchestrator` (`SessionRecord.entryRoots`).
+    const roots = [{ name: 'orchestrator', canonical: 'orchestrator' }];
+    const fallback = runLevelAgent(session({ agents: [coding], entryRoots: roots }), { persona: 'coding-agent', model: 'm', reasoning: 'medium', tools: [] }, false)!;
+    const rows = [
+      row({ index: 1, kind: 'agent', persona: 'orchestrator', name: 'orchestrator' }),
+      row({ index: 2, kind: 'agent', persona: 'coding-agent', name: 'orchestrator' }),
+      row({ index: 3, kind: 'tool', persona: 'coding-agent', name: 'orchestrator', toolName: 'grep' }),
+      row({ index: 4, kind: 'tool', persona: 'coding-agent', name: 'coder', toolName: 'grep' }),
+    ];
+    expect(rowsOf(rows, fallback, roots).map((r) => r.index)).toEqual([1, 2, 3]);
+    expect(rowsOf(rows, coding, roots).map((r) => r.index)).toEqual([4]);
+    // The root's row written before the rest, under the persona it ran as then, is followed to the run-level agent too.
+    expect(followedAgent(rows.slice(0, 1), [coding], fallback, roots)?.id).toBe(RUN_AGENT_ID);
+    expect(followedAgent(rows, [coding], fallback, roots)?.id).toBe(coding.id);
+  });
+});
+
+/*
+ * REQ-MONITOR-060/069 with PD-ORCH-003 (docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md):
+ * the entry persona can change between runs, and the run-level agent's chips are marked from the latest root's history
+ * (`entryToolsOf`). Its name, its model and reasoning and the declared tools that stand in for its grant come from that
+ * same root's persona, not the first root's. Until 2026-10-01 they came from the transcript's first root row, so after an
+ * iteration as `orchestrator` and a plan cycle as `reviewer` the inspector drew `orchestrator`'s fourteen tools with
+ * `reviewer`'s `glob` marked used.
+ */
+describe('entryRole — the run-level agent is drawn as the latest root (REQ-MONITOR-060, PD-ORCH-003)', () => {
+  const roles = [
+    { role: 'orchestrator', effectiveModel: 'large', rawThinking: 'high', declaredTools: ['read_file', 'grep', 'glob', 'write_file'] },
+    { role: 'reviewer', effectiveModel: 'scripted', rawThinking: null, declaredTools: ['glob', 'read_file', 'todo'] },
+  ];
+  it('rows for an orchestrator root then a reviewer root draw the reviewer, with its declared tools, model and reasoning', () => {
+    const rows = [
+      row({ index: 0, kind: 'user', body: 'read the readme' }),
+      row({ index: 1, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }),
+      row({ index: 2, kind: 'agent', name: 'helper', persona: 'coding-agent' }),
+      row({ index: 3, kind: 'user', body: 'now review it' }),
+      row({ index: 4, kind: 'agent', name: 'reviewer', persona: 'reviewer' }),
+      row({ index: 5, kind: 'agent', name: 'helper', persona: 'coding-agent' }),
+    ];
+    expect(entryRole(roles, rows, [agent({ name: 'helper' })])).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', tools: ['glob', 'read_file', 'todo'] });
+  });
+  it('a row named for one of the session\'s roots is preferred, so a child\'s row ahead of its record cannot pass for the latest root', () => {
+    const rows = [row({ index: 0, kind: 'agent', name: 'reviewer', persona: 'reviewer' }), row({ index: 1, kind: 'agent', name: 'fresh', persona: 'coding-agent' })];
+    expect(entryRole(roles, rows, [], [{ name: 'reviewer' }]).persona).toBe('reviewer');
+    // OQ-97: a root resumed under a fallback keeps its own name on its rows while their persona is the role it runs as.
+    const resumed = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 1, kind: 'agent', name: 'house-style', persona: 'reviewer' })];
+    expect(entryRole(roles, resumed, [], [{ name: 'orchestrator' }, { name: 'house-style' }]).persona).toBe('reviewer');
+  });
+  /*
+   * The verifier's finding on the first repair: a turn writes an `agent` row only when text arrives, and its tool calls,
+   * reasoning and diffs carry the same persona and name. Read from `agent` rows alone, a switched root whose first steps were
+   * tool calls was drawn as the previous root, under the chips its own calls marked, until its first text.
+   */
+  it('a latest root that has written only tool, reasoning or diff rows is drawn, not the root before it', () => {
+    const roots = [{ name: 'orchestrator' }, { name: 'reviewer' }];
+    const before = [row({ index: 0, kind: 'user', body: 'read the readme' }), row({ index: 1, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 2, kind: 'user', body: 'now review it' })];
+    for (const kind of ['tool', 'thinking', 'diff'] as const) {
+      const rows = [...before, row({ index: 3, kind, name: 'reviewer', persona: 'reviewer', ...(kind === 'tool' ? { toolName: 'glob' } : {}) })];
+      expect(entryRole(roles, rows, [], roots)).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', tools: ['glob', 'read_file', 'todo'] });
+    }
+    // A row that names no author (a system notice) is no root's.
+    expect(entryRole(roles, [...before, row({ index: 3, kind: 'system', body: 'Intent classified: question' })], [], roots).persona).toBe('orchestrator');
+  });
+  it('while a run is live, the persona its root runs as (`SessionRecord.entryPersona`) is drawn, before that root has written any row', () => {
+    const rows = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 1, kind: 'user', body: 'now review it' })];
+    expect(entryRole(roles, rows, [], [{ name: 'orchestrator' }], 'reviewer')).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', tools: ['glob', 'read_file', 'todo'] });
+    // At rest (no live run) the transcript decides.
+    expect(entryRole(roles, rows, [], [{ name: 'orchestrator' }], null).persona).toBe('orchestrator');
+  });
+  it('one root, a child\'s rows after it, or no root row at all', () => {
+    const rows = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 1, kind: 'agent', name: 'helper', persona: 'coding-agent' })];
+    expect(entryRole(roles, rows, [agent({ name: 'helper' })])).toEqual({ persona: 'orchestrator', model: 'large', reasoning: 'high', tools: ['read_file', 'grep', 'glob', 'write_file'] });
+    expect(entryRole(roles, [], []).persona).toBe('orchestrator');
+    expect(entryRole([], [row({ kind: 'agent', name: 'reviewer', persona: 'reviewer' })], [])).toEqual({ persona: 'reviewer', model: '', reasoning: 'medium', tools: [] });
+  });
 });
 
 describe('agents — chips, enablement, cascade, pause (REQ-MONITOR-060/062/063/064, 274/276)', () => {
@@ -71,8 +169,19 @@ describe('agents — chips, enablement, cascade, pause (REQ-MONITOR-060/062/063/
     expect(before.map((c) => c.name)).toEqual(after.map((c) => c.name));
     expect(before.map((c) => c.state)).toEqual(['not used', 'active', 'not used']);
     expect(after.map((c) => c.state)).toEqual(['not used', 'used', 'not used']);
-    expect(resolvedTools(agent({ grantedTools: [] }), ['a', 'b'])).toEqual(['a', 'b']);
+    expect(resolvedTools(agent({ grantedTools: [], grantRecorded: false }), ['a', 'b'])).toEqual(['a', 'b']);
     expect(resolvedTools(agent({ grantedTools: ['x'] }), ['a'])).toEqual(['x']);
+  });
+  /*
+   * REQ-MONITOR-049/060 with REQ-TOOLS-006 (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md):
+   * a grant the controls left empty of native tools is a recorded grant, and the declared tools do not stand in for it.
+   * Until 2026-10-01 an empty list read as "no grant recorded", so the inspector listed every tool the controls removed.
+   */
+  it('REQ-MONITOR-049 / REQ-TOOLS-006: a recorded empty grant lists no native tool; an unrecorded one lets the declared tools stand in', () => {
+    expect(resolvedTools(agent({ grantedTools: [], grantRecorded: true, live: false }), ['read_file', 'grep'])).toEqual([]);
+    expect(resolvedTools(agent({ grantedTools: [], grantRecorded: true, live: true }), ['read_file', 'grep'])).toEqual([]);
+    expect(resolvedTools(agent({ grantedTools: [], grantRecorded: false, live: false }), ['read_file', 'grep'])).toEqual(['read_file', 'grep']);
+    expect(resolvedTools(agent({ grantedTools: ['read_file'], grantRecorded: true }), ['read_file', 'grep'])).toEqual(['read_file']);
   });
   it('Steer while running or waiting; Cancel while running, waiting or queued; Pop out always for a shown agent', () => {
     expect(inspectorEnablement('running')).toEqual({ steer: true, cancel: true, popOut: true });
@@ -119,6 +228,8 @@ describe('agents — the table order, the ring, the meta line, the nouns (REQ-MO
   it('the meta line and the nouns', () => {
     expect(metaLine(agent({ toolCalls: 1 }), '12s')).toBe('running · 12s · 1 tool call');
     expect(metaLine(agent({ toolCalls: 0 }), null)).toBe('running · — · 0 tool calls');
+    // REQ-ORCH-089 / REQ-MONITOR-119: a stalled agent's line ends with the watch's figure.
+    expect(metaLine(agent({ toolCalls: 1, stalledSeconds: 95 }), '12s')).toBe('running · 12s · 1 tool call · stalled\u00a095s');
     expect(countNoun(1, 'instance')).toBe('1 instance');
     expect(countNoun(2, 'instance')).toBe('2 instances');
   });
@@ -166,6 +277,19 @@ describe('agents — PD-ORCH-005 clause 13 (revision 4): a paused agent presents
     expect(runLevelAgent(session({ executionStatus: 'running', resumable }), entry, false)).toMatchObject({ presentationState: 'running', live: true });
     expect(runLevelAgent(session({ executionStatus: 'paused', resumable: null }), entry, false)?.presentationState).toBe('cancelled');
     expect(runLevelAgent(session({ executionStatus: 'completed', resumable }), entry, false)?.presentationState).toBe('done');
+  });
+  it('OQ-103 (R-067): in REQ-CHAT-008\'s recovery state with nothing to resume — an accepted explicit cancel the host died before carrying out — the run-level agent is presented ended as the repair will leave it, not live, and offered neither Steer nor Cancel', () => {
+    for (const executionStatus of ['running', 'starting', 'cancelling']) {
+      const shown = runLevelAgent(session({ executionStatus, resumable: null, entryTools: { resolved: ['delegate'], called: [], active: ['delegate'] } }), entry, true)!;
+      expect(shown, executionStatus).toMatchObject({ state: 'cancelled', presentationState: 'cancelled', live: false, activeTools: [] });
+      expect(shown.completedAt, executionStatus).not.toBeNull();
+      expect(inspectorEnablement(shown.presentationState), executionStatus).toEqual({ steer: false, cancel: false, popOut: true });
+      expect(cancelOffered(shown, false, false), executionStatus).toBe(false);
+      // What the repair then writes — `interrupted`, nothing open — presents the same.
+      expect(runLevelAgent(session({ executionStatus: 'interrupted', resumable: null }), entry, false)).toMatchObject({ presentationState: 'cancelled', live: false });
+    }
+    // A live run with nothing open — no recovery — is still running.
+    expect(runLevelAgent(session({ executionStatus: 'running', resumable: null }), entry, false)).toMatchObject({ presentationState: 'running', live: true });
   });
   it('the inspector\'s meta line names it; it is not live, so it offers no steer, and its Cancel is clause 16\'s alone', () => {
     const paused = agent({ id: 'bg_00000002', parentId: 'bg_00000001', state: 'paused', presentationState: 'paused', live: false, interruption: 'stop' });

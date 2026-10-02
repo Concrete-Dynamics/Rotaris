@@ -45,7 +45,7 @@ flowchart TB
     store["store<br/>schema (v16), delivery/, StoreDal, open/migrate,<br/>lock, rings,<br/>saved prompts, session artifacts"]
     platform["platform<br/>dirs, document (ADR-0004), instance,<br/>machine id, liveness, clocks, preferences"]
     contracts["contracts<br/>channels, commands, control, process protocol,<br/>requirements, terminal, terminal-keys,<br/>status, tools, children, hooks, intent, roles,<br/>config projections, theme data"]
-    kernel["kernel<br/>Result, ids, time & clocks,<br/>redaction, similarity, glob, money,<br/>generated requirement symbols"]
+    kernel["kernel<br/>Result, ids, time & clocks,<br/>redaction, similarity, glob, money,<br/>count nouns, generated requirement symbols"]
   end
 
   main --> shell & providers & config & platform & contracts & kernel
@@ -110,7 +110,9 @@ Edges worth knowing the reason for:
   already owns the YAML document model the marker is a section of and the code-intelligence binding the task
   is built from.
 - **`main` cannot import `ui`/`ui-core`**: theme data the main process needs before first paint lives in
-  `contracts/src/theme/`; the persona vocabulary the loader and the engine share lives in `contracts/src/roles.ts`.
+  `contracts/src/theme/`; the persona vocabulary the loader and the engine share lives in `contracts/src/roles.ts`, and since live-run finding K1
+  (2026-09-29) so do the built-in roles' tool declarations (`BUILT_IN_ROLE_TOOLS`, `declaredToolsOf`) — the loader's role
+  view and the run host's persona resolver read one rule; the prompts stay in the engine.
 - **`providers` lives in main and only main** (ADR-0030): the credential store, sign-in and discovery run in the
   main process; the run host is *leased* a resolved bearer per run over the utility-process channel and never
   reads `tokens/`. `main` therefore imports `providers` and `config` (for the snapshot layer's types and the
@@ -276,7 +278,12 @@ assets in the specification's sense, as the fonts and the icon set are; `bundled
 that carry a licence file (REQ-STARTUP-143), so this module is named for the surface it serves.
 `scripts/lib/package-verdict.mjs` holds the lines `package.mjs` closes on, each printed only when the steps that ran
 make it true. `scripts/lib/staged-resources.mjs` is `settings-proof`'s, for staging the two files and giving them back;
-the proof also takes the writer's list of git's redirecting variables from `build-id.mjs`. **Edges unchanged**:
+the proof also takes the writer's list of git's redirecting variables from `build-id.mjs`. `package.mjs` launches the
+packaged application through `scripts/lib/bounded-launch.mjs`'s `spawnBounded`, as every proof launch a script starts
+itself does since 2026-09-29 (`fetch-proof`'s, `workspace-proof`'s hand-over and `mcp-console-spike`'s since 2026-09-30),
+so a launch that overruns its bound is ended and reported as a failure with its log tail. The driven launch is ended by
+`lib/driver.mjs`'s `stopApp`; `code-intel-proof`'s branch and `live-run`'s `runElectron` keep their own bounds, for the
+reasons `scripts/lib/launch-sites.test.ts` names beside them. **Edges unchanged**:
 `apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts reach the tools and never the
 reverse, and no product code imports either.
 
@@ -324,7 +331,11 @@ briefs, thirty-one exports — plus `shared.ts` (the two class helpers) and `lay
 under `packages/ui/src` and `apps/desktop/src/renderer` without an exception list. Each component forwards native
 attributes and its ref, so a caller's `data-testid`, `aria-*` and handler survive the substitution; a specialised
 class already carrying a requirement's visual contract is passed through rather than overwritten
-(`componentClass`).
+(`componentClass`). **`Tag` and `StatusDot` are the exceptions** (acceptance A40, 2026-10-01): `Tag` joins a caller's
+class to the `tag tag-<kind>` it draws, its kinds the design Tag's seven tones (`TAG_KINDS`), and
+`tools/check-ui-language.mjs` refuses a Tag whose class spells `tag` or a `tag-` tone; `StatusDot` writes the design
+StatusDot's state (`STATUS_DOT_STATES`) to `data-state`, which `shell.css` paints from its token at the specificity of
+`.status-dot` alone.
 
 `layout-contract.ts` is **verification-only data, not behaviour**: a `UiLayoutContract` on a component root is
 serialised into `data-ui` / `data-ui-contract` — by `layoutContractAttributes` alone, which `tools/check-ui-language.mjs` enforces — and evaluated by `ui-audit` against live geometry after layout and

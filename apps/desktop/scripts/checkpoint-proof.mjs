@@ -22,6 +22,9 @@
  *   isolated    `checkpoints:` unset, a run through the launch dialog in a worktree → the ref in the shared repository's
  *               namespace, `.rotaris/` in no checkpoint tree; then a restore rewrites the worktree only.
  *   disabled    `enabled: false` + isolation → no checkpoint (REQ-GIT-044).
+ *   loaded-restore  the isolated session resumed and run in the launch, so it stays loaded after its run releases the
+ *               lock; a lock naming another machine planted once the run has ended; then a restore → refused at gate 5
+ *               under that holder's lock, the hand edit untouched, the planted lock kept (ADR-0005, REQ-EVENTS-098).
  *
  * Evidence under `.proof/checkpoint-proof/`: one PNG and one log per launch, the confirmation dialog's PNG, `results.json`
  * with the capture, preview and restore times and the Git invocation counts. `--skip-build` skips the build.
@@ -31,6 +34,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { describeLingeringHolder, lockHolderAfterExit } from './lib/lock-holder.mjs';
 
 const require = createRequire(import.meta.url);
@@ -60,10 +64,10 @@ const PROBES = [
   '[data-testid="checkpoint-progress-text"]', '[data-testid="checkpoint-message"]', '[data-testid="acknowledgement-title"]', '.notice__headline', '.notice__detail', '.notice__body', '.composer__error', '.app-shell', '[data-testid="git-branch"]',
 ];
 
-function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000) {
+async function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -72,6 +76,7 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000)
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const probes = {};
@@ -155,7 +160,7 @@ const NOTES_EDITED = '# Notes\n\nWritten by the scripted agent (edited) through 
 
 // 1. Capture, iteration 1: a fresh session writes NOTES.md; the Git view afterwards.
 const before1 = fingerprint(workspace);
-const capture1 = launch('capture-1', workspace, local, preferences, {
+const capture1 = await launch('capture-1', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'write,answer', ROTARIS_CAPTURE_PROMPT: 'Write the notes.',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
 });
@@ -176,7 +181,7 @@ const sid = session.session_id;
   const after1 = fingerprintAfter(workspace);
   if (differing(before1, after1).length > 0) throw new Error(`REQ-GIT-004: the user's Git state changed in ${differing(before1, after1).join(', ')}: ${JSON.stringify({ before: before1, after: after1 })}`);
   const t = timelineOf(sid, 'checkpoint_created');
-  if (t.length !== 1 || t[0].actor !== 'checkpoints' || t[0].message !== 'Recorded checkpoint 1 over 1 file(s).') throw new Error(`timeline: ${JSON.stringify(t)}`);
+  if (t.length !== 1 || t[0].actor !== 'checkpoints' || t[0].message !== 'Recorded checkpoint 1 over 1 file.') throw new Error(`timeline: ${JSON.stringify(t)}`);
   const ev = eventsOf(sid, 'checkpoint.created');
   if (ev.length !== 1 || ev[0].sequence !== 1 || ev[0].kind !== 'iteration' || ev[0].iteration !== 1 || ev[0].changed_paths !== 1 || ev[0].ref !== refs[0][0]) throw new Error(`event: ${JSON.stringify(ev)}`);
   const painted = ckptRows(capture1.probes);
@@ -187,7 +192,7 @@ const sid = session.session_id;
 }
 
 // 2. Capture, iteration 2: the session resumed from the browser and continued from the composer.
-const capture2 = launch('capture-2', workspace, local, preferences, {
+const capture2 = await launch('capture-2', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'readnotes,edit,answer', ROTARIS_CAPTURE_RESUME: sid, ROTARIS_CAPTURE_PROMPT: 'Edit the notes.',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
 });
@@ -205,7 +210,7 @@ const capture2 = launch('capture-2', workspace, local, preferences, {
 // 3. Nothing to record: NOTES.md committed by hand so the tree equals HEAD; a read-only iteration records nothing.
 git(workspace, 'add', 'NOTES.md');
 commit('notes as the agent left them');
-const nothing = launch('nothing', workspace, local, preferences, {
+const nothing = await launch('nothing', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'read,answer', ROTARIS_CAPTURE_RESUME: sid, ROTARIS_CAPTURE_PROMPT: 'Read the notes.',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
 });
@@ -223,7 +228,7 @@ const NOTES_HAND = '# Notes\n\nEdited by hand after the run.\n';
 writeFileSync(join(workspace, 'NOTES.md'), NOTES_HAND);
 const before4 = fingerprint(workspace);
 const dialogPng = join(output, 'restore-dialog.png');
-const restored = launch('restore', workspace, local, preferences, {
+const restored = await launch('restore', workspace, local, preferences, {
   ROTARIS_CAPTURE_VIEW: '5',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="git-checkpoint-row"][data-sequence="1"]@3500;;[data-testid="git-restore"]@4200;;[data-testid="checkpoint-overwrite"]@9500;;[data-testid="checkpoint-restore-confirm"]@10200',
   ROTARIS_CAPTURE_SHOT: `${dialogPng}@9000`,
@@ -235,11 +240,11 @@ const restored = launch('restore', workspace, local, preferences, {
   if (!confirm) throw new Error('the confirmation dialog was not open at the shot');
   if (confirm.data['data-dirty'] !== '1') throw new Error('the dialog did not carry the dirty state');
   const summary = text(s, '[data-testid="checkpoint-summary"]')[0] ?? '';
-  if (!summary.startsWith(`This replaces 1 file(s) in ${workspace} with the state recorded in checkpoint 1. Rotaris records a safety checkpoint`)) throw new Error(`the summary reads "${summary}"`);
+  if (!summary.startsWith(`This replaces 1 file in ${workspace} with the state recorded in checkpoint 1. Rotaris records a safety checkpoint`)) throw new Error(`the summary reads "${summary}"`);
   const preview = text(s, '[data-testid="checkpoint-preview-text"]')[0] ?? '';
-  if (preview !== ['Restoring checkpoint 1 would change 1 file(s):', '  overwrite NOTES.md', 'Warning: 1 uncommitted change(s) would be overwritten:', '  NOTES.md'].join('\n')) throw new Error(`the preview text reads:\n${preview}`);
+  if (preview !== ['Restoring checkpoint 1 would change 1 file:', '  overwrite NOTES.md', 'Warning: 1 uncommitted change would be overwritten:', '  NOTES.md'].join('\n')) throw new Error(`the preview text reads:\n${preview}`);
   const warning = text(s, '[data-testid="checkpoint-warning"]')[0] ?? '';
-  if (!warning.includes('1 uncommitted change(s) would be overwritten: NOTES.md Restore again with force to overwrite them.') || !warning.includes('Overwrite 1 uncommitted change(s)')) throw new Error(`the warning reads "${warning}"`);
+  if (!warning.includes('1 uncommitted change would be overwritten: NOTES.md Restore again with force to overwrite them.') || !warning.includes('Overwrite 1 uncommitted change') || /\(s\)/.test(warning)) throw new Error(`the warning reads "${warning}"`);
   const confirmButton = first(s, '[data-testid="checkpoint-restore-confirm"]');
   if (!confirmButton || confirmButton.data['aria-disabled'] !== 'true' || confirmButton.data['title'] !== 'Confirm that the uncommitted changes above may be overwritten first.') throw new Error(`the confirm button before consent: ${JSON.stringify(confirmButton)}`);
   if (!existsSync(dialogPng)) throw new Error('the dialog PNG was not captured');
@@ -251,7 +256,7 @@ const restored = launch('restore', workspace, local, preferences, {
   if (git(workspace, 'log', '-1', '--format=%s', rows[2].commit_id) !== `rotaris pre-restore checkpoint 3 for session ${sid} (before restoring checkpoint 1)`) throw new Error('the safety checkpoint message is wrong');
   if (sessionRow(sid).last_restored_sequence !== 1) throw new Error(`last_restored_sequence is ${sessionRow(sid).last_restored_sequence}`);
   const t = timelineOf(sid, 'checkpoint_restored');
-  if (t.length !== 1 || t[0].message !== 'Restored the working tree to checkpoint 1 over 1 file(s).') throw new Error(`timeline: ${JSON.stringify(t)}`);
+  if (t.length !== 1 || t[0].message !== 'Restored the working tree to checkpoint 1 over 1 file.') throw new Error(`timeline: ${JSON.stringify(t)}`);
   const meta = JSON.parse(t[0].metadata);
   if (meta.safety_sequence !== 3 || meta.forced !== true || meta.dirty_paths !== 1 || fold(meta.tree_root) !== fold(workspace)) throw new Error(`timeline metadata: ${t[0].metadata}`);
   const ev = eventsOf(sid, 'checkpoint.restored');
@@ -261,7 +266,7 @@ const restored = launch('restore', workspace, local, preferences, {
   const headlines = text(restored.probes, '.notice__headline');
   if (!headlines.some((h) => h === 'Restored checkpoint 1')) throw new Error(`the notice headlines are ${JSON.stringify(headlines)}`);
   const body = [...text(restored.probes, '.notice__detail'), ...text(restored.probes, '.notice__body')].join(' ');
-  if (!body.includes('1 file(s) changed. Safety checkpoint 3 holds the pre-restore state.')) throw new Error(`the notice body reads "${body}"`);
+  if (!body.includes('1 file changed. Safety checkpoint 3 holds the pre-restore state.')) throw new Error(`the notice body reads "${body}"`);
   const painted = ckptRows(restored.probes);
   if (painted.length !== 3 || painted[2].data['data-kind'] !== 'pre_restore') throw new Error(`the card after the restore: ${JSON.stringify(painted.map((p) => p.text))}`);
   results.restore = { preview: previewLine(restored.log), restore: restoreLine(restored.log), safetyCommit: rows[2].commit_id, lastRestored: 1, notice: 'Restored checkpoint 1', dialogPng, png: restored.png };
@@ -272,7 +277,7 @@ const restored = launch('restore', workspace, local, preferences, {
 git(workspace, 'add', 'NOTES.md');
 commit('notes as restored');
 writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), agentsYaml(['checkpoints:', '  enabled: true', '  max_per_session: 2']));
-const retention = launch('retention', workspace, local, preferences, {
+const retention = await launch('retention', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'readnotes,edit,answer', ROTARIS_CAPTURE_RESUME: sid, ROTARIS_CAPTURE_PROMPT: 'Edit the notes again.',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
 });
@@ -288,7 +293,7 @@ const retention = launch('retention', workspace, local, preferences, {
 // 6. Refusals. (a) A fresh session on a clean tree records nothing: the empty sentence and Restore disabled with its reason.
 git(workspace, 'add', 'NOTES.md');
 commit('notes edited again');
-const noRows = launch('no-rows', workspace, local, preferences, {
+const noRows = await launch('no-rows', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'read,answer', ROTARIS_CAPTURE_PROMPT: 'Read only.',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
 });
@@ -306,7 +311,7 @@ const emptySid = latestSession().session_id;
 
 // (b) A checkpoint whose ref was deleted from outside: gate 2's second sentence.
 git(workspace, 'update-ref', '-d', `refs/rotaris/checkpoints/${sid}/4`);
-const refGone = launch('ref-gone', workspace, local, preferences, {
+const refGone = await launch('ref-gone', workspace, local, preferences, {
   ROTARIS_CAPTURE_VIEW: '5',
   ROTARIS_CAPTURE_SELECT: `[data-testid="git-checkpoint-session"]>>${sid}@3000`,
   ROTARIS_CAPTURE_CLICKS: '[data-testid="git-checkpoint-row"][data-sequence="4"]@4500;;[data-testid="git-restore"]@5200',
@@ -321,7 +326,7 @@ const refGone = launch('ref-gone', workspace, local, preferences, {
 }
 
 // (c) A live run: the restore is refused with REQ-GIT-092's first text; the app then exits mid-run.
-const live = launch('live', workspace, local, preferences, {
+const live = await launch('live', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'wait:20000,answer', ROTARIS_CAPTURE_RESUME: sid, ROTARIS_CAPTURE_PROMPT: 'Wait a while.',
   ROTARIS_CAPTURE_CLICKS: '.nav-item>>Git@6500;;[data-testid="git-checkpoint-row"][data-sequence="3"]@8500;;[data-testid="git-restore"]@9200',
   ROTARIS_CAPTURE_AFTER_MS: '13000',
@@ -347,7 +352,7 @@ const live = launch('live', workspace, local, preferences, {
 }
 
 // (d) REQ-GIT-094: opening that session's checkpoints repairs it — interrupted, the lock released, the notice raised.
-const repaired = launch('repaired', workspace, local, preferences, {
+const repaired = await launch('repaired', workspace, local, preferences, {
   ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_SELECT: `[data-testid="git-checkpoint-session"]>>${sid}@3000`,
   ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '6000',
 });
@@ -376,7 +381,7 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), agentsYaml([]));
 git(workspace, 'rm', '-q', 'NOTES.md');
 commit('notes removed');
 if (existsSync(join(workspace, 'NOTES.md'))) throw new Error('NOTES.md still in the base tree');
-const isolated = launch('isolated', workspace, local, preferences, {
+const isolated = await launch('isolated', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'write,answer',
   ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Write the notes in a worktree.>>composer@4400',
@@ -405,7 +410,7 @@ const iso = latestSession();
   results.isolated = { sessionId: iso.session_id, worktree: binding.worktree_path, capture: captureLines(isolated.log)[0] ?? null, refInSharedRepo: true, noRotarisInAnyTree: true, png: isolated.png };
   // The restore rewrites the worktree only.
   writeFileSync(join(binding.worktree_path, 'NOTES.md'), NOTES_HAND);
-  const isoRestore = launch('isolated-restore', workspace, local, preferences, {
+  const isoRestore = await launch('isolated-restore', workspace, local, preferences, {
     ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_SELECT: `[data-testid="git-checkpoint-session"]>>${iso.session_id}@3000`,
     ROTARIS_CAPTURE_CLICKS: '[data-testid="git-checkpoint-row"][data-sequence="1"]@4500;;[data-testid="git-restore"]@5200;;[data-testid="checkpoint-overwrite"]@10500;;[data-testid="checkpoint-restore-confirm"]@11200',
     ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '18000',
@@ -418,7 +423,7 @@ const iso = latestSession();
 
 // 8. Disabled: an explicit false stays off even when isolated (REQ-GIT-044).
 writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), agentsYaml(['checkpoints:', '  enabled: false']));
-const disabled = launch('disabled', workspace, local, preferences, {
+const disabled = await launch('disabled', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'write,answer',
   ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Write the notes with checkpoints off.>>composer@4400',
@@ -431,6 +436,52 @@ const disabled = launch('disabled', workspace, local, preferences, {
   if (!/checkpoints: disabled for session .* \(checkpoints.enabled=false, isolated/.test(disabled.log)) throw new Error('the port did not log the explicit false');
   if (text(disabled.probes, '[data-testid="git-checkpoints-empty"]')[0] !== 'No checkpoints are recorded for this session. Rotaris records one after each iteration of a worktree-isolated run.') throw new Error('the card is not empty for the disabled session');
   results.disabled = { sessionId: s.session_id, rows: 0, refs: 0, png: disabled.png };
+}
+
+// 9. A restore of a session loaded here after its run ended (ADR-0005, REQ-EVENTS-098; the repair of
+// `docs/defects/fixed/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`, R-067). The run's
+// teardown releases the lock while the session stays loaded in the run host, so the restore's two writes — the safety
+// checkpoint's row and the outcome — go through the loaded writer. Once the run has ended, this script plants a lock
+// naming another machine (a second instance on the same store), and the restore is driven after it: the safety
+// checkpoint's row is refused under the other holder's lock, so the restore stops at gate 5, the hand edit is left
+// where it was, and the planted lock is untouched. Before the repair the loaded writer wrote without looking at the
+// lock, and the restore rewrote the file under the other instance's lock.
+{
+  const binding = JSON.parse(iso.worktree);
+  writeFileSync(join(binding.worktree_path, 'NOTES.md'), NOTES_HAND);
+  const OTHER_HOST = 'm1-0000000000000000000000000000000b';
+  const db = new Database(findDatabases(local)[0]);
+  db.pragma('busy_timeout = 5000');
+  const runStarts = () => db.prepare("SELECT count(*) AS c FROM timeline WHERE session_id = ? AND name = 'run_start'").get(iso.session_id).c;
+  const startsBefore = runStarts();
+  const launchedAt = Date.now();
+  let planted = null;
+  const planter = setInterval(() => {
+    if (planted !== null) return;
+    try {
+      const row = db.prepare('SELECT execution_status FROM sessions WHERE session_id = ?').get(iso.session_id);
+      const lock = db.prepare('SELECT pid FROM session_locks WHERE session_id = ?').get(iso.session_id);
+      if (runStarts() > startsBefore && row?.execution_status === 'completed' && !lock) {
+        db.prepare('INSERT INTO session_locks (session_id, pid, host, acquired_at) VALUES (?, ?, ?, ?)').run(iso.session_id, 4242, OTHER_HOST, new Date().toISOString());
+        planted = Date.now() - launchedAt;
+      }
+    } catch { /* the store is busy: the next tick reads again */ }
+  }, 100);
+  const loaded = await launch('loaded-restore', workspace, local, preferences, {
+    ROTARIS_SCRIPT: 'read,answer', ROTARIS_CAPTURE_RESUME: iso.session_id, ROTARIS_CAPTURE_PROMPT: 'Read the notes.',
+    ROTARIS_CAPTURE_CLICKS: '.nav-item>>Git@16000;;[data-testid="git-checkpoint-row"][data-sequence="1"]@18500;;[data-testid="git-restore"]@19200;;[data-testid="checkpoint-overwrite"]@24500;;[data-testid="checkpoint-restore-confirm"]@25200',
+    ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '32000',
+  }, 180_000);
+  clearInterval(planter);
+  const lock = db.prepare('SELECT pid, host FROM session_locks WHERE session_id = ?').get(iso.session_id);
+  db.close();
+  if (planted === null) throw new Error('the loaded session\'s run never ended with its lock released, so no second holder was planted (see loaded-restore.log)');
+  if (planted > 15_000) throw new Error(`the second holder was planted ${planted} ms into the launch, after the restore's first click was due`);
+  const refusal = new RegExp(`checkpoint restore ${iso.session_id}/1 refused: Could not persist the safety checkpoint on the session: Session ${iso.session_id} is held by pid 4242 on ${OTHER_HOST}`);
+  if (!refusal.test(loaded.log)) throw new Error(`the restore of the loaded session was not refused under the other holder's lock (see loaded-restore.log)${restoreLine(loaded.log) ? '; it restored the file under that lock' : ''}`);
+  if (readFileSync(join(binding.worktree_path, 'NOTES.md'), 'utf8') !== NOTES_HAND) throw new Error('the restore rewrote the file under another holder\'s lock');
+  if (!lock || lock.pid !== 4242 || lock.host !== OTHER_HOST) throw new Error(`the other holder's lock was not left as it was: ${JSON.stringify(lock)}`);
+  results.loadedRestore = { sessionId: iso.session_id, plantedAfterMs: planted, refused: true, fileUntouched: true, otherHolderKept: true, png: loaded.png };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

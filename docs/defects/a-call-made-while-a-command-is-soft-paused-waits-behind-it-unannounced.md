@@ -1,0 +1,122 @@
+## A call made while a command is soft-paused waits behind it without saying so, and the paused command's end goes unreported
+
+After a soft pause, REQ-TOOLS-098 tells the agent it can poll or interrupt. An agent can also issue a new command. The
+product sends the new command's line to the shell at once, and the shell runs it only when the paused command has
+finished. The new call's observation reports its own command and nothing else: not that it waited, not what for, and not
+that the paused command ended. The paused command's end, meaning what it wrote since the last poll and its exit status,
+is held for an empty poll that nothing prompts the agent to make.
+
+In the default live run's `terminal` scenario, `node -e "setTimeout(…, 45000)"` soft-paused at 30.0 s, and one poll
+found it still running. The agent then issued `node -e "console.log('failed to connect to the docker API');
+process.exit(0)"`. That call took 5,932 ms and ended at 02:57:59.105, when the 45 s timer ran out. Its observation said
+only "The command exited with code 0." The agent never polled again, so the paused command's own exit was never
+reported.
+
+The code shows a worse case, not measured here. Behind a paused command that stays silent, a new call that names no
+timeout reaches its own no-output window and soft-pauses in turn. That pause replaces the earlier paused call: its screen
+is disposed and its end never reaches a poll (`foreground.ts:886-899`). A call that names a timeout runs into that
+timeout instead. The autopsy said the new call would run into "its 100 s hard timeout and reset the session"; that holds
+only for a call that names a timeout, because a call that names none soft-pauses at 30 s first.
+
+Live-run finding: a71-8
+
+No requirement covers this third move. It is raised as [OQ-164](../architecture/open-questions.md).
+[OQ-147](../architecture/open-questions.md) covers a paused call's status only once a poll hands it over. The open notes
+[`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md`](fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)
+and [`a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`](fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)
+are neighbours, and neither describes this case. Recorded, not repaired.
+
+## Specs
+
+- `REQ-TOOLS-098`: a soft-paused call returns −1 "while its process keeps running", and the observation explains "that
+  the agent can poll with an empty `command` or interrupt with `C-c` and `is_input=true`". No third move is described.
+- `REQ-TOOLS-187`: "a second foreground call against a session whose previous foreground command has not returned
+  waits for it". A soft-paused call has returned while its command has not finished, so the requirement does not settle
+  whether the wait applies, whether it counts against the new call's window and timeout, or what the new call reports.
+- `REQ-TOOLS-096`: the empty-command poll is the only route by which the paused command's end is reported.
+
+## Evidence
+
+- Default pack `.live-run/runs/2026-10-01T02-42-49-120Z/` (the `accept` worktree; git-ignored), session `cd083fc1`
+  (`terminal`):
+  - #5, at 02:57:13.986: `node -e "setTimeout(() => {}, 45000)"`. It returned −1 after 30,008 ms: "No output for 30
+    seconds in the merged terminal stream … Poll by calling the tool again with an empty command, or interrupt by
+    sending C-c with is_input=true."
+  - #6, at 02:57:45.744: an empty poll. It returned −1, with "No new output in 1.7 seconds since the previous
+    observation".
+  - #7, at 02:57:53.173: the `console.log` command. It took 5,932 ms and returned exit 0, with the observation "The
+    command exited with code 0." Its 5.9 s are the wedge's remaining time.
+  - #8 and #9 are later calls. No poll followed.
+
+## Relevant files
+
+- `packages/agent-tools/src/terminal/foreground.ts:764-858` — `execute`. The new call's hard timeout and no-output window
+  are armed from its own start (`:836-847`), and its line is submitted at once (`:858`), whether or not a command is
+  paused.
+- `packages/agent-tools/src/terminal/foreground.ts:655-716` — `onData`. The paused call's share of the stream ends at its
+  own end frame or at the next call's start marker, and the paused call is then kept as `pausedDone`.
+- `packages/agent-tools/src/terminal/foreground.ts:886-899` — a new soft pause disposes of `pausedDone` and of a
+  still-running `pausedCommand` and replaces them.
+- `packages/agent-tools/src/terminal/foreground.ts:940-950` — `poll`, the only reader of `pausedDone`.
+
+## Partly repaired — 2026-10-01 (the silence and the loss); the rest is the owner's (OQ-164)
+
+**Confirmed first on the branch** (`fin1-term-shell-ends`, from `origin/main` e68f8f2), dash through a real PTY with a 1 s
+no-output window. A `sleep 3; …; (exit 5)` soft-paused, and an `echo behind` issued at once waited about 1.9 s behind it.
+Its observation said only "The command exited with code 0." A paused `sleep 2; (exit 6)` that ended unpolled was not
+mentioned by the next command either. All three cases below were red on that code.
+
+**Fixed, under the reading recorded in [OQ-164](../architecture/open-questions.md)** (the reading changed, the question
+not ruled):
+- A call issued while a command is soft-paused reports that command beside its own outcome (`ForegroundResult.earlier`,
+  `terminal/index.ts`'s `earlierSentence`). It says that it waited behind the command, when the command ended relative to
+  its own submission, and how: its own exit status, none of its own (OQ-147), by ending the shell, or by the session's
+  reset. What the paused command wrote since it was last observed follows the detail. The paused call is handed over
+  there, so nothing waits for a poll.
+- A paused command that ended before the next call and was never polled is reported by that call ("had ended … before
+  this command was submitted … and no poll had reported it").
+- **The case the code showed is closed.** A call that soft-pauses while the earlier paused command is still running no
+  longer disposes of it. The earlier call is kept ahead (`pausedAhead`), still fed its share of the stream, and the next
+  observation reports its end. The new call's own pause says that the shell has not started it yet, and carries none of
+  the earlier command's output as its own. *(The first build's claim was true of the pause only.
+  Its verification found that a poll of the queued call handed the earlier command's output over as the queued command's
+  own. Corrected before the merge: nothing before the call's own printed start marker is its own, on any observation.)*
+- **After an interrupt, a line queued behind the interrupted one never runs**, because the terminal discards what the
+  shell has not read. The first build missed this, as its verification found: the next call carried its own marker,
+  output and end frame as the interrupted command's, and a poll after the `C-c` read "still running" over a dead command.
+  Corrected before the merge: the first later line's printed marker closes a paused call, a discarded line is reported as
+  never run with no exit code, and the poll's no-op line closes every open paused call. A call waiting behind the paused
+  command when the terminal window's interrupt comes ends at once as never run, with no reset. The detail of a call
+  submitted after the interrupt says that the interrupt came first, not that the call waited.
+  *(~~The poll's no-op line closes every open paused call~~ was still false of that correction, as the second
+  verification found on 2026-10-01: the interrupt marked the interrupted call alone, so when that command survived the
+  interrupt (`trap '' INT`, a SIGINT handler) and ended on its own, the queued call was left unmarked and every poll read
+  it "still running" over an idle prompt. Corrected before the merge: the interrupt marks every open paused call. The
+  same verification found that a queued call closed by the session's reset before it ran was called "still running" and
+  said to have lost its shell; it is now reported in the never-ran form, naming the reset.)*
+- A paused command that reads its input can take the line queued behind it, with no interrupt; the queued call then
+  reads "still running" until the next command reports it as never run. That was so before this repair, and is stated
+  in OQ-164's reading, not built.
+- The tool description states the third move: "a new command issued meanwhile waits behind it, and its result reports
+  how the paused one ended".
+
+**Pinned by** `terminal.test.ts`: "REQ-TOOLS-098/179 (OQ-164): a command issued behind a still-running soft-paused one says
+it waited, and carries that command's end and output", and "… a paused command that ended unpolled is reported by the next
+command, and a second soft pause no longer loses the first one's end". The second covers the replaced-pause case: the poll
+after reads "ahead of the polled one ended … with exit code 7". Five A10 cases now read the paused command's end from the
+next call's report and keep their assertions. The verification's corrections are pinned by four more real-PTY cases,
+each red on the first build: "… after C-c, a soft pause queued behind the interrupted one never ran …", "… a poll after C-c
+with a soft pause queued behind the interrupted one reads both as ended …", "… a poll of a soft pause the shell has not
+started yet hands over nothing of the earlier command's as its own", and "… the window's interrupt while a call waits
+behind a soft-paused command ends that call as never run …". The second verification's corrections are pinned by "… after
+C-c, a command that survives the interrupt ends with its own status, and the soft pause queued behind it reads never run on
+the next poll" and "… a soft pause queued behind a running one that a reset closes is reported as never run, by the
+reset", both red on the code before them. The live run's `terminal` scenario carries `wedge-again` and `behind-paused`
+(`lib/terminal-shapes.mjs`, `pausedBehindReading`). Its first run (2026-10-01, the self-hosted endpoint, pack
+`.live-run/runs/2026-10-01T11-09-06-837Z` of the `fin1-termshellend` worktree) read the command issued behind the paused
+`sleep 45` as "… waited behind it: that command ended 12.5 seconds after this command was submitted, with exit code 0",
+with the paused command's `slept` carried ([first-executions row](../architecture/first-executions.md)).
+
+**Left open, the owner's (OQ-164):** whether such a call is refused with REQ-TOOLS-098's remedy, waits as built, or
+interrupts the paused command; whether the wait counts against the new call's no-output window and timeout (it still
+does); and whether the report built here is the answer to the last point. This note stays open until that ruling.

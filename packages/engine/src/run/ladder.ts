@@ -4,6 +4,7 @@ import type { SessionWriter } from '../session-writer.js';
 import { classifyFailure, describeCondition, describeError, entryOf, localBackoffMs, pairKey, providerIdentity, retryAfterMs, sameTierCandidates, withSettings, type CatalogueEntry, type ModelChoice, type ResilienceMemory } from './resilience.js';
 import type { WaitRegistry } from './waits.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
+import { duringImposedWait, type ImposedWaitPort } from '../children/stall.js';
 
 /**
  * The ladder over one model step (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..090/094/096/099). It sits at the
@@ -87,6 +88,12 @@ export interface LadderDeps {
    * PD-MONITOR-001 revision 2: the request arrives PRICED — here is where the model it was sent to is known.
    */
   readonly onRequestUsage?: ((usage: PricedUsage) => void) | undefined;
+  /**
+   * OQ-173: the agent's stall watch is told of each wait this ladder holds the agent in between its model steps — a
+   * retry's backoff and the suspended wait on a provider limit — so it reports a wait and not a stall; the returned
+   * release ends it. Absent means nobody is watching.
+   */
+  readonly imposedWait?: ImposedWaitPort | undefined;
 }
 
 function pause(clocks: Clocks, ms: number, signal: AbortSignal): Promise<void> {
@@ -131,8 +138,10 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
       cell.fallbackAttempted = true;
       const seconds = r.llmResponseTimeoutMs / 1000;
       const message = `${agent} received no model event from ${provider}/${modelId} within ${seconds} s; the call was closed and re-run on the fallback model ${fbProvider}/${fb.model.modelId}.`;
-      writer.appendTimeline('unresponsive_model_fallback', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: fbProvider, to_model: fb.model.modelId, threshold_seconds: seconds });
-      writer.recordIssue({ kind: 'unresponsive_model', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${fbProvider}/${fb.model.modelId}`, threshold_seconds: seconds } });
+      // REQ-ORCH-139: the vocabulary's `llm_unresponsive` names both the entry and the issue (A29; formerly
+      // `unresponsive_model_fallback` and `unresponsive_model`, names no list has).
+      writer.appendTimeline('llm_unresponsive', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: fbProvider, to_model: fb.model.modelId, threshold_seconds: seconds });
+      writer.recordIssue({ kind: 'llm_unresponsive', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${fbProvider}/${fb.model.modelId}`, threshold_seconds: seconds } });
       deps.warn(message);
       cell.attempted.add(pairKey(provider, modelId));
       cell.model = withSettings(catalogue, fb);
@@ -152,7 +161,7 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
       const message = `${cls === 'transient' ? 'Transient' : 'Validation'} model failure for ${agent} on ${provider}/${modelId} (retry ${attempt} of ${limit}): ${describeError(err)}; retrying after ${delayS} s.`;
       writer.recordIssue({ kind: cls === 'transient' ? 'transient_llm_error' : 'validation_llm_error', severity: 'warning', actor: agent, message, metadata: { attempt, limit, delay_seconds: delayS, provider, model: modelId } });
       deps.warn(message);
-      await pause(clocks, delayS * 1000, signal);
+      await duringImposedWait(deps.imposedWait, 'backoff', () => pause(clocks, delayS * 1000, signal));
       if (signal.aborted) return report;
       continue;
     }
@@ -193,8 +202,11 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
         cell.attempted.add(pairKey(candidate.provider, candidate.model.modelId));
         const condition = cls === 'quota_exhausted' ? 'quota exhaustion' : 'rate limit';
         const message = `${agent} moved from ${provider}/${modelId} to ${candidate.provider}/${candidate.model.modelId} after a ${condition} response (same tier, different provider${exhausted ? '; the provider is marked exhausted' : ''}).`;
-        writer.appendTimeline('model_fallback', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: candidate.provider, to_model: candidate.model.modelId, to_key: candidate.key, condition: cls, provider_exhausted: exhausted });
-        writer.recordIssue({ kind: 'model_fallback', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${candidate.provider}/${candidate.model.modelId}`, provider_exhausted: exhausted, condition: cls } });
+        // REQ-ORCH-139 / REQ-NOTIFY-090: the vocabulary's words for the same-tier change — the `quota_fallback_model` entry and
+        // the `quota_fallback` issue, under a rate limit as under exhaustion (REQ-NOTIFY-082's "usage limit"); A29, formerly
+        // `model_fallback` for both, a name no list has. `condition` in the metadata still says which it was.
+        writer.appendTimeline('quota_fallback_model', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: candidate.provider, to_model: candidate.model.modelId, to_key: candidate.key, condition: cls, provider_exhausted: exhausted });
+        writer.recordIssue({ kind: 'quota_fallback', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${candidate.provider}/${candidate.model.modelId}`, provider_exhausted: exhausted, condition: cls } });
         deps.warn(message);
         cell.model = withSettings(catalogue, { model: candidate.model, thinking: candidate.thinking });
         continue;
@@ -212,7 +224,7 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
     writer.recordIssue({ kind: 'model_wait', severity: 'warning', actor: agent, message, metadata: { attempt: cell.waitAttempt, model: modelId, provider, wait_seconds: seconds, auto_resume: seconds !== null, provider_exhausted: exhausted } });
     writer.appendRow('system', `Waiting on a provider limit — ${reason}`, true);
     deps.warn(message);
-    const decision = await waits.enter({ agent, provider, model: modelId, exhausted, attempt: cell.waitAttempt, reason }, waitMs, signal);
+    const decision = await duringImposedWait(deps.imposedWait, 'provider_limit', () => waits.enter({ agent, provider, model: modelId, exhausted, attempt: cell.waitAttempt, reason }, waitMs, signal));
     if (decision.kind === 'cancelled') return { ...report, error: { ...err, headline: reason } };
     if (decision.kind === 'model') {
       cell.attempted.add(pairKey(provider, modelId));

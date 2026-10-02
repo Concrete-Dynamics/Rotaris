@@ -28,7 +28,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { cleanEnvironment, configDirFor, electron, hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, dataDirFor, electron, hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { lineRpcClient } from './lib/line-rpc-client.mjs';
 
 const require = createRequire(import.meta.url);
@@ -52,17 +53,18 @@ const keepOutput = process.argv.includes('--keep');
 // The runtime's per-user home (the language servers it provisions live there) is kept across proof runs: everything else is wiped.
 const root = join(output, 'profile');
 const local = join(root, 'local');
-const runtimeHome = join(local, 'rotaris', 'data', 'code-intelligence');
+// Where the product keeps it on THIS platform: `join(resolveUserDirs().data, 'code-intelligence')` (`src/main/sentinel.ts`).
+const runtimeHome = join(dataDirFor(local), 'code-intelligence');
 const keep = join(repo, '.proof', '.code-intel-proof-home.tmp');
 let previous = {};
 if (keepOutput && existsSync(join(output, 'results.json'))) { try { previous = JSON.parse(readFileSync(join(output, 'results.json'), 'utf8')); } catch { previous = {}; } }
 if (!keepOutput) {
   if (existsSync(runtimeHome)) { rmSync(keep, { recursive: true, force: true }); renameSync(runtimeHome, keep); }
   rmSync(output, { recursive: true, force: true });
-  mkdirSync(join(local, 'rotaris', 'data'), { recursive: true });
+  mkdirSync(dataDirFor(local), { recursive: true });
   if (existsSync(keep)) renameSync(keep, runtimeHome);
 }
-mkdirSync(join(local, 'rotaris', 'data'), { recursive: true });
+mkdirSync(dataDirFor(local), { recursive: true });
 
 // The bundle, then the build.
 const marker = join(app, 'resources', 'code-intelligence', 'bundle.json');
@@ -72,7 +74,10 @@ if (!existsSync(marker)) {
 }
 const bundle = JSON.parse(readFileSync(marker, 'utf8'));
 if (!process.argv.includes('--skip-build')) {
-  const built = spawnSync('cmd.exe', ['/d', '/s', '/c', 'pnpm --filter @rotaris/desktop build'], { cwd: repo, encoding: 'utf8', timeout: 180_000 });
+  // By platform, as `init-proof` builds: `cmd.exe` alone could not build off Windows.
+  const built = process.platform === 'win32'
+    ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'pnpm --filter @rotaris/desktop build'], { cwd: repo, encoding: 'utf8', timeout: 180_000 })
+    : spawnSync('pnpm', ['--filter', '@rotaris/desktop', 'build'], { cwd: repo, encoding: 'utf8', timeout: 180_000 });
   writeFileSync(join(output, 'build.log'), `${built.stdout ?? ''}\n${built.stderr ?? ''}`);
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
@@ -92,7 +97,13 @@ writeFileSync(join(workspace, 'README.md'), '# code-intelligence proof workspace
 writeFileSync(join(workspace, 'src', 'index.ts'), 'export interface Greeter { name: string }\nexport function greet(g: Greeter): string { return `hi ${g.name}`; }\nexport class Counter { private n = 0; bump(): number { return ++this.n; } }\n');
 writeFileSync(join(noCode, 'README.md'), '# no code here\n');
 for (const ws of [workspace, noCode]) spawnSync('git', ['init', '-q'], { cwd: ws, stdio: 'ignore' });
-const WORKSPACE = ['# workspace configuration', 'runtime:', '  permission_mode: autonomous', '  allow_unsandboxed_autonomous: true', 'rotaris:', '  delegation_strategy: single', ''].join('\n');
+// The initialization marker resolves `code-intelligence-setup` (skipped, REQ-WORKSPACE-078/111), so no launch starts it
+// in the background at open (ADR-0064, REQ-WORKSPACE-083/088). This proof measures ADR-0035's branch and REQ-MCP-099's
+// setup action; without the marker every launch opened a never-initialized workspace, the background task was already
+// running when section 5 clicked, and the run host refused the click
+// (`docs/defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md`).
+const INITIALIZED = ['initialization:', '  completed: []', '  skipped: [code-intelligence-setup]', "  last_run: '2026-09-28T00:00:00.000Z'"];
+const WORKSPACE = ['# workspace configuration', 'runtime:', '  permission_mode: autonomous', '  allow_unsandboxed_autonomous: true', 'rotaris:', '  delegation_strategy: single', ...INITIALIZED, ''].join('\n');
 const GLOBAL = ['# scratch configuration written by the code-intelligence proof', 'models:', '  scripted: { provider: scripted, model_id: scripted }', 'small_model: scripted', 'medium_model: scripted', 'large_model: scripted', ''].join('\n');
 /** REQ-MCP-036/099: an entry whose arguments hold no launch subcommand — the non-retryable failure. */
 const GLOBAL_BROKEN = `${GLOBAL}mcp_servers:\n  code_intelligence: { args: ["--transport", "stdio"] }\n`;
@@ -130,14 +141,13 @@ function sessionFrom(r) {
 function toolRows(db, sessionId, tool) { return db.prepare('SELECT ordinal, status, is_error, entry FROM tool_calls WHERE session_id = ? AND tool_name = ? ORDER BY ordinal').all(sessionId, tool).map((r) => ({ ...r, entry: JSON.parse(r.entry) })); }
 function eventOrdinals(db, sessionId, kind) { return db.prepare('SELECT ordinal, payload FROM events WHERE session_id = ? AND kind = ? ORDER BY ordinal').all(sessionId, kind); }
 
-function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_000 } = {}) {
+async function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_000 } = {}) {
   writeFileSync(join(configDir, 'agents.yaml'), global);
   writeFileSync(join(ws, '.rotaris', 'agents.yaml'), WORKSPACE);
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [mainEntry, ...hostSwitches, ws], {
-    cwd: app, encoding: 'utf8', timeout, windowsHide: true, maxBuffer: 64 * 1024 * 1024,
-    env: {
+  const result = await spawnBounded(electron, [mainEntry, ...hostSwitches, ws], {
+    cwd: app, timeoutMs: timeout, windowsHide: true, env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: png,
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -150,7 +160,10 @@ function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_00
   const elapsedMs = Date.now() - started;
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
+  // The marker above is what keeps the setup this proof drives the only one: say so if the product started another.
+  if (/initialization: running code-intelligence-setup/.test(log)) throw new Error(`${name}: the workspace's initialization started code-intelligence-setup in the background beside this launch's own; see ${name}.log`);
   return { log, elapsedMs, png, startedAt: new Date(started).toISOString() };
 }
 
@@ -158,15 +171,22 @@ function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_00
 async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs = 120_000, sample = true }) {
   const t0 = Date.now();
   const launchedAt = new Date();
-  // `hostSwitches` ahead of the token: the branch is a Chromium process too, and as root it dies without them.
-  const child = spawn(exe, [...before, ...hostSwitches, TOKEN, '--', ...tail], { env, cwd: ws, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  // The product's own order (`code-intelligence-launch.ts`): the token FIRST, where the sentinel reads it at its fixed
+  // index (REQ-MCP-033), then `hostSwitches`, then `--`. The branch is a Chromium process too and as root it dies without
+  // the switch; ahead of the token the sentinel does not see the token and the whole application starts instead
+  // (`docs/defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`).
+  const child = spawn(exe, [...before, TOKEN, ...hostSwitches, '--', ...tail], { env, cwd: ws, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   // The client rejects every pending request when the child exits, errors or is killed by the guard, with the exit
   // status and standard error's tail — a branch that dies fails here in seconds instead of hanging (`lib/line-rpc-client.mjs`).
   const rpc = lineRpcClient(child, { guardMs: callTimeoutMs + 60_000, t0 });
   const send = (method, params) => rpc.send(method, params);
   const ps = `$since = [DateTime]::Parse('${launchedAt.toISOString()}').ToLocalTime(); Get-Process -Name electron,Rotaris,python,conhost,node -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt $since } | Select-Object Id,ProcessName,MainWindowHandle,MainWindowTitle | ConvertTo-Json -Compress`;
   const samples = [];
-  const sampler = sample ? setInterval(() => {
+  // The window sampler reads `Get-Process`'s MainWindowHandle through `powershell.exe`: Windows only. Elsewhere the
+  // "no window" check is NOT MEASURED, and is said so in the results rather than passing on an empty sample. A branch
+  // that opened a window would fail consequence 1 on any platform; what is missing off Windows is the instrument.
+  const sampling = sample && process.platform === 'win32';
+  const sampler = sampling ? setInterval(() => {
     const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8', windowsHide: true, timeout: 5_000 });
     let procs = []; try { const parsed = JSON.parse(r.stdout.trim() || '[]'); procs = Array.isArray(parsed) ? parsed : [parsed]; } catch { procs = []; }
     samples.push({ atMs: Date.now() - t0, processes: procs.map((p) => ({ id: p.Id, name: p.ProcessName, handle: String(p.MainWindowHandle), title: p.MainWindowTitle ?? '' })) });
@@ -198,13 +218,15 @@ async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs =
   result.windowed = [...new Set(samples.flatMap((s) => s.processes.filter((p) => p.handle !== '0' && p.handle !== '')).map((p) => `${p.name}#${p.id} handle ${p.handle} "${p.title}"`))];
   result.postLaunchProcesses = [...new Set(samples.flatMap((s) => s.processes.filter((p) => p.name !== 'conhost').map((p) => p.name)))];
   result.samples = samples.length;
+  result.windowCheck = sampling ? `sampled ${samples.length} time(s)` : sample ? `not measured on this host (${process.platform}): the sampler reads Get-Process's MainWindowHandle through powershell.exe, which exists on Windows only, and no window lister stands in for it here, so a window this launch opened would go unseen` : 'not sampled';
   const stderr = rpc.stderr;
   result.fetchLines = stderr.split(/\r?\n/).filter((l) => /npm install|uvx|Failed to fetch|Could not find|not installed|download|Installing/i.test(l)).map((l) => l.replace(/^.*? - /, '').slice(0, 220)).slice(0, 12);
   result.stderrBytes = stderr.length;
   return result;
 }
 async function exitStatus({ exe, before, env }) {
-  const r = spawnSync(exe, [...before, ...hostSwitches, TOKEN, '--', 'no-such-subcommand'], { env, encoding: 'utf8', windowsHide: true, timeout: 60_000 });
+  const r = await spawnBounded(exe, [...before, TOKEN, ...hostSwitches, '--', 'no-such-subcommand'], { env, windowsHide: true, timeoutMs: 60_000 });
+  if (r.overran) throw new Error(overrunMessage('the unknown-subcommand launch', r, `${r.stdout}\n${r.stderr}`));
   return { code: r.status, stdout: r.stdout ?? '', stderrTail: (r.stderr ?? '').trim().split(/\r?\n/).at(-1) ?? '' };
 }
 const SERVER_TAIL = (ws) => ['start-mcp-server', '--transport', 'stdio', '--context', 'ide', '--project', ws];
@@ -233,12 +255,12 @@ if (want(1)) {
     if (pstatus.code !== 2) throw new Error(`branch (packaged): an unknown subcommand exited ${pstatus.code}`);
     results.branch.packaged = { ...pk, unknownSubcommandExit: pstatus.code };
   }
-  console.log(`[code-intel-proof] 1 branch: tools/list at ${dev.toolsListMs} ms (dev), ${dev.toolNames.length} tools, preamble ${dev.bytesBeforeFirstBrace || 'none'}, exit ${dev.exit.code}; unknown subcommand → ${status.code}${packaged ? `; packaged tools/list at ${results.branch.packaged.toolsListMs} ms` : ''}`);
+  console.log(`[code-intel-proof] 1 branch: tools/list at ${dev.toolsListMs} ms (dev), ${dev.toolNames.length} tools, preamble ${dev.bytesBeforeFirstBrace || 'none'}, exit ${dev.exit.code}; unknown subcommand → ${status.code}; window check ${dev.windowCheck}${packaged ? `; packaged tools/list at ${results.branch.packaged.toolsListMs} ms` : ''}`);
 }
 
 // ---- 2. discovery through the token, the grant, the block, the probe; 3. the binding -------------------------------
 if (want(2) || want(3)) {
-  const r = launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'list the project memories', ROTARIS_SCRIPT: 'mcp:code_intelligence.list_memories,answer', ROTARIS_CAPTURE_AFTER_MS: '25000' }, { ws: noCode, timeout: 180_000 });
+  const r = await launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'list the project memories', ROTARIS_SCRIPT: 'mcp:code_intelligence.list_memories,answer', ROTARIS_CAPTURE_AFTER_MS: '25000' }, { ws: noCode, timeout: 180_000 });
   const surface = lines(r.log, /mcp: surface for orchestrator/);
   if (surface.length === 0) throw new Error(`discovery: no surface line:\n${r.log.slice(-3000)}`);
   const first = surface[0];
@@ -272,7 +294,7 @@ if (want(2) || want(3)) {
 
 // ---- 4. a real call against a TypeScript file -----------------------------------------------------------------------
 if (want(4)) {
-  const r = launch('call', { ROTARIS_CAPTURE_PROMPT: 'overview of src/index.ts', ROTARIS_SCRIPT: 'mcp:code_intelligence.get_symbols_overview,answer', ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ get_symbols_overview: { relative_path: 'src/index.ts' } }), ROTARIS_CAPTURE_AFTER_MS: '240000' }, { timeout: 330_000 });
+  const r = await launch('call', { ROTARIS_CAPTURE_PROMPT: 'overview of src/index.ts', ROTARIS_SCRIPT: 'mcp:code_intelligence.get_symbols_overview,answer', ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ get_symbols_overview: { relative_path: 'src/index.ts' } }), ROTARIS_CAPTURE_AFTER_MS: '240000' }, { timeout: 330_000 });
   const { db, session: s } = sessionFrom(r);
   const calls = toolRows(db, s.session_id, 'get_symbols_overview');
   const starts = eventOrdinals(db, s.session_id, 'tool.start');
@@ -287,7 +309,25 @@ if (want(4)) {
 }
 
 // ---- 5. project setup from the MCP category ------------------------------------------------------------------------
-const SETUP_ENV = (after, extra = {}) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'MCP Servers', ROTARIS_CAPTURE_CLICKS: 'button[data-action="setup-start"]@2500', ROTARIS_CAPTURE_PROBE: '[data-setup-step];;[data-setup-message];;[data-setup-refused];;[data-setup-invocation];;[data-language-server-store];;[data-language-server]', ROTARIS_CAPTURE_AFTER_MS: String(after), ...extra });
+// The presses wait for what they press (`docs/defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`).
+// Every setup launch raises one notice at the open's 800 ms slot ("No model provider is authenticated yet": the profile
+// has no provider, REQ-WORKSPACE-152), and that persistent banner, drawn above the view, moves Settings down by its own
+// height. A press whose point was read before it drew lands on whatever sat above its target. The shared seam's
+// `ROTARIS_CAPTURE_VIEW=7` read its category's point once and pressed there once, at ~800 ms, the same instant, so it was
+// deflected onto a category above more than once: in `setup-again` on 2026-09-29, and then in `setup-cancel`, where
+// Start had already been pressed and the card, Cancel with it, left the screen before Cancel could be pressed (the fix
+// round's verifier, three reds in seven runs; the seam's own note, `docs/defects/fixed/
+// the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`, repaired 2026-09-30: the seam now presses
+// again until the category is selected). These launches still do not use that seam. They open Settings with the Ctrl+7 chord, which has no point to miss, and every press waits until the notice
+// has been drawn (`body:has([data-testid="notice"])`), so no point is read before the one shift of the launch. The
+// category press is made only if MCP Servers is not the selected category. Start is pressed as soon as it is drawn
+// enabled, which is once the setup status has arrived. `settledPresses` refuses a launch whose Start was never
+// pressed, and says whether the notice drew.
+const AFTER_NOTICE = 'body:has([data-testid="notice"])';
+const NAV_TO_MCP = `${AFTER_NOTICE} .nav-list__item:not(.is-selected)>>MCP Servers@~20000`;
+const PRESS_START = `${AFTER_NOTICE} button[data-action="setup-start"]:not([disabled])@~30000`;
+const PRESS_CANCEL = `${AFTER_NOTICE} button[data-action="setup-cancel"]@~30000`;
+const SETUP_ENV = (after, extra = {}) => ({ ROTARIS_CAPTURE_CHORDS: 'Ctrl+7@600', ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START}`, ROTARIS_CAPTURE_PROBE: '[data-setup-step];;[data-setup-message];;[data-setup-refused];;[data-setup-invocation];;[data-language-server-store];;[data-language-server]', ROTARIS_CAPTURE_AFTER_MS: String(after), ...extra });
 function setupSteps(log) {
   const probe = lines(log, /capture: probe \[data-setup-step\]/).at(-1) ?? '';
   const found = JSON.parse(probe.slice(probe.indexOf('→') + 2) || '[]');
@@ -299,11 +339,18 @@ function setupMessage(log) {
   return found.map((f) => f.text).join(' | ');
 }
 const setupLog = (log) => lines(log, /mcp setup:/).map((l) => l.slice(l.indexOf('mcp setup:')).slice(0, 240));
+/** The presses above reached Start; if not, say whether the notice they wait for ever drew, rather than a step list. */
+function settledPresses(name, log) {
+  if (lines(log, /capture: clicked ".*setup-start/).length > 0) return;
+  const notice = lines(log, /notice: /).length > 0;
+  throw new Error(`${name}: Start was never pressed; the open's notice ${notice ? 'drew' : 'never drew, and every press waits for it'}\n${lines(log, /capture: /).slice(-8).join('\n')}`);
+}
 if (want(5)) {
   // The runtime auto-creates its project marker when a server is started with `--project` (launches 1–4 did), so the
   // marker is removed first: this launch must run the creation step for real, not skip it.
   rmSync(join(workspace, '.serena'), { recursive: true, force: true });
-  const r = launch('setup', SETUP_ENV(90_000), { timeout: 200_000 });
+  const r = await launch('setup', SETUP_ENV(90_000), { timeout: 200_000 });
+  settledPresses('setup', r.log);
   const steps = setupSteps(r.log);
   if (steps.map((s) => s.status).join(',') !== 'succeeded,succeeded,succeeded') throw new Error(`setup: ${JSON.stringify(steps)}\n${setupLog(r.log).join('\n')}`);
   if (/creation skipped/.test(steps[0].text)) throw new Error(`setup: creation was skipped on a workspace without a marker: ${steps[0].text}`);
@@ -328,7 +375,8 @@ if (want(5)) {
   console.log(`[code-intel-proof] 5 setup: ${steps.map((s) => s.status).join(' ')} — ${message} (${JSON.stringify(times)})`);
 }
 if (want(5)) {
-  const r = launch('setup-again', SETUP_ENV(60_000), { timeout: 150_000 });
+  const r = await launch('setup-again', SETUP_ENV(60_000), { timeout: 150_000 });
+  settledPresses('setup-again', r.log);
   const steps = setupSteps(r.log);
   // Say what was found rather than indexing into nothing. A launch that emits no setup line at all — the 150 s
   // timeout reached on a loaded machine, or the window dying before the first step — used to fail here as
@@ -342,7 +390,8 @@ if (want(5)) {
 }
 if (want(5)) {
   rmSync(join(noCode, '.serena'), { recursive: true, force: true });
-  const r = launch('setup-nocode', SETUP_ENV(40_000), { ws: noCode, timeout: 120_000 });
+  const r = await launch('setup-nocode', SETUP_ENV(40_000), { ws: noCode, timeout: 120_000 });
+  settledPresses('setup-nocode', r.log);
   const steps = setupSteps(r.log);
   if (steps.map((s) => s.status).join(',') !== 'succeeded,skipped-no-code,skipped-no-code') throw new Error(`setup-nocode: ${JSON.stringify(steps)}\n${setupLog(r.log).join('\n')}`);
   if (/creation skipped/.test(steps[0].text)) throw new Error(`setup-nocode: creation was skipped: ${steps[0].text}`);
@@ -351,7 +400,8 @@ if (want(5)) {
   console.log(`[code-intel-proof] 5 setup no-code: ${steps.map((s) => s.status).join(' ')}`);
 }
 if (want(5)) {
-  const r = launch('setup-broken', SETUP_ENV(12_000), { global: GLOBAL_BROKEN, timeout: 90_000 });
+  const r = await launch('setup-broken', SETUP_ENV(12_000), { global: GLOBAL_BROKEN, timeout: 90_000 });
+  settledPresses('setup-broken', r.log);
   const message = setupMessage(r.log);
   const refused = setupLog(r.log).find((l) => /refused/.test(l)) ?? '';
   if (!/not a local launch/.test(message) || !/not a local launch/.test(refused)) throw new Error(`setup-broken: the non-retryable text is missing: '${message}' / '${refused}'`);
@@ -361,9 +411,12 @@ if (want(5)) {
   console.log(`[code-intel-proof] 5 setup broken entry: ${message.slice(0, 120)}`);
 }
 if (want(5)) {
-  // REQ-MCP-112: cancel while `create` runs. The step in flight finishes; later steps are not attempted.
+  // REQ-MCP-112: cancel while `create` runs. The step in flight reaches its terminal result; later steps are not attempted.
+  // Cancel is pressed as soon as it is drawn, which is when the run host has reported `create` running: the step's child
+  // is spawned in the same turn as that report (`packages/mcp/src/setup.ts`), so the press lands on a running step.
   rmSync(join(noCode, '.serena'), { recursive: true, force: true });
-  const r = launch('setup-cancel', SETUP_ENV(30_000, { ROTARIS_CAPTURE_CLICKS: 'button[data-action="setup-start"]@2500;;button[data-action="setup-cancel"]@3300' }), { ws: noCode, timeout: 120_000 });
+  const r = await launch('setup-cancel', SETUP_ENV(30_000, { ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START};;${PRESS_CANCEL}` }), { ws: noCode, timeout: 120_000 });
+  settledPresses('setup-cancel', r.log);
   const steps = setupSteps(r.log);
   const message = setupMessage(r.log);
   if (!['succeeded', 'failed'].includes(steps[0]?.status) || steps[1]?.status !== 'not-attempted' || steps[2]?.status !== 'not-attempted' || !/Cancelled/.test(message)) throw new Error(`setup-cancel: ${JSON.stringify(steps)} — '${message}'\n${setupLog(r.log).join('\n')}`);

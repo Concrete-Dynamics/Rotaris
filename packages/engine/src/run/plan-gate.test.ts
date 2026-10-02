@@ -1,13 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { IntentCategory } from '@rotaris/contracts';
-import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
+import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
 import { SUPERVISOR_DEFAULTS, type LoopClassifier } from './supervisor.js';
-import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type RuntimePosture, type ToolPort } from '../index.js';
+import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type RuntimePosture, type ToolPort, type ToolPortContext } from '../index.js';
 
 /**
  * REQ-ORCH-152/153/154 (ADR-0062): the plan gate end to end through the session manager — the park, what it
@@ -53,7 +53,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
   });
 
-  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier; grep?: boolean; preflightHold?: Promise<void> | (() => Promise<void>); tools?: ToolPort } = {}) {
+  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier; grep?: boolean; preflightHold?: Promise<void> | (() => Promise<void>); tools?: ToolPort; toolsFor?: (ctx: ToolPortContext) => ToolPort } = {}) {
     const runtime: RuntimePosture = {
       permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' },
       sessionLogLevel: 'WARNING', runStartMode: opts.mode ?? 'plan',
@@ -70,6 +70,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
       // "no supervisor is attached" is observable at all — a run without it looks the same from the outside.
       ...(opts.classifier ? { supervisor: () => ({ config: { ...SUPERVISOR_DEFAULTS, repetitionThreshold: 3 }, classifier: opts.classifier! }), tools: () => grepPort() } : opts.grep ? { tools: () => grepPort() } : {}),
       ...(opts.tools ? { tools: () => opts.tools! } : {}),
+      ...(opts.toolsFor ? { tools: opts.toolsFor } : {}),
     });
     return sessions;
   }
@@ -115,6 +116,62 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     const result = await sessions.running(sid)!;
     expect(result.execution_status).toBe('awaiting_plan_decision');
     expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: false });
+  });
+
+  it('REQ-MONITOR-133 with OQ-128 (found by the third review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the plan cycle\'s turn has returned a steer is refused while the park is still forwarded, not acknowledged for a step no agent of the held run takes', async () => {
+    let release!: () => void;
+    const parkHold = new Promise<void>((r) => { release = r; });
+    let parking = false;
+    const sessions = sessionsWith(scripted([answer('Step 1: do it.')]).backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    // REQ-EVENTS-165: the park's drain waits on this consumer once the gate is recorded, before the run has ended.
+    sessions.bus.attach(sid, { mode: 'blocking', deliver: () => { if (dal.timelineOf(sid).some((t) => t.name === 'plan_gate_opened')) { parking = true; return parkHold; } return undefined; } });
+    await vi.waitFor(() => { expect(parking).toBe(true); });
+    expect(sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: 'run', text: 'mind the tests' } })).toEqual({ ok: false });
+    release();
+    expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+    expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('steering_'))).toEqual([]);
+  });
+
+  /*
+   * Found by the fourth review of the same repair: the park's close sat before the two branches that end the run instead
+   * of parking it, so a steer pending when the plan cycle was stopped, quit, or ended by its failed turn was recorded as
+   * not delivered because "the run was held at the plan gate" — a gate that never opened. Only the park names the gate; an
+   * end that takes teardown is recorded by teardown's own close, as the run ending.
+   */
+  for (const how of ['stopped', 'quit', 'failed'] as const) it(`REQ-MONITOR-134 with OQ-128: a steer pending when the plan cycle's turn is ${how === 'failed' ? 'ended by a failed model step' : `${how} while its call runs`} is recorded as not delivered because the run ended, never as held at a plan gate that did not open`, async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    let calling = false;
+    const port: ToolPort = {
+      specs: () => [{ name: 'glob', description: 'find', parameters: { type: 'object' } }],
+      // The plan turn's call, held until the test lets it return.
+      dispatch: async () => { calling = true; await hold; return { text: 'a.ts', isError: false, status: 'ok', durationMs: 1, label: 'glob', args: {} }; },
+      cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+    };
+    const { client, backend } = scripted(how === 'failed'
+      ? [{ parts: [{ hold }, { error: modelError({ code: 'http', status: 401, headline: 'unauthorised', providerMessage: 'bad key' }) }] }]
+      : [toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('Step 1: the plan.')]);
+    const sessions = sessionsWith(backend, { tools: port });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await vi.waitFor(() => { expect(how === 'failed' ? client.requests.length > 0 : calling).toBe(true); });
+    expect(sessions.run(sid)!.isPlanGateHeld).toBe(true);
+    const steered = sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: 'run', text: 'mind the tests' } });
+    expect(steered.ok).toBe(true);
+    let closed: Promise<void> | null = null;
+    if (how === 'stopped') expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+    else if (how === 'quit') closed = sessions.closeAll();
+    release();
+    expect((await sessions.running(sid)!).execution_status).not.toBe('awaiting_plan_decision');
+    await closed;
+    const timeline = dal.timelineOf(sid);
+    expect(timeline.map((t) => t.name)).not.toContain('plan_gate_opened');
+    const steering = timeline.filter((t) => t.name.startsWith('steering_'));
+    expect(steering.map((t) => t.name)).toEqual(['steering_submitted', 'steering_not_delivered']);
+    const line = steering[1]!.message;
+    expect(line).not.toMatch(/plan gate/);
+    expect(line).toMatch(/was not delivered: the run ended before /);
+    expect(dal.residentRows(sid).filter((r) => r.kind === 'system').map((r) => r.body)).toContain(line);
   });
 
   it('PD-ORCH-003 revision 2: a continue that resumes an open iteration runs it without holding, and with no new work after it no plan cycle opens', async () => {
@@ -331,6 +388,30 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     // Only one cycle exists: a plan produced later in the same run must not block execution.
     expect(dal.planCyclesOf(sid)).toHaveLength(1);
     expect(dal.timelineOf(sid).map((t) => t.name)).toContain('plan_gate_resolved');
+  });
+
+  /**
+   * REQ-ORCH-153 with REQ-MCP-062 (traced for the repair of `an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`):
+   * a port resolves its MCP surface, its listing and its prompt section once, so a port built while the gate held would go
+   * on withholding a tool-server tool after the approval. Approval launches a new run, and that run builds its ports anew
+   * with the gate released: every agent of the approved segment holds its execution grants from its first listing.
+   */
+  it('approve: the approved segment builds its tool ports anew, with the gate released, so its listing and prompt are resolved without the hold', async () => {
+    const built: { readonly port: ToolPort; readonly heldAtBuild: boolean }[] = [];
+    const sessions = sessionsWith(scripted([answer('a plan'), answer('carried out')]).backend, {
+      toolsFor: (ctx) => { const port = grepPort(); built.push({ port, heldAtBuild: ctx.planGateHeld?.() ?? false }); return port; },
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    const parked = built.length;
+    expect(parked).toBeGreaterThan(0);
+    expect(built.every((b) => b.heldAtBuild)).toBe(true);
+    expect(sessions.planDecision(sid, 'approve')).toMatchObject({ ok: true, value: { relaunched: true } });
+    await sessions.running(sid)!;
+    const approved = built.slice(parked);
+    expect(approved.length).toBeGreaterThan(0);
+    expect(approved.every((b) => !b.heldAtBuild)).toBe(true);
+    for (const b of approved) expect(built.slice(0, parked).some((p) => p.port === b.port)).toBe(false);
   });
 
   it('revise starts a further cycle with the plan as it stands and the changes stated; there is no limit on cycles', async () => {

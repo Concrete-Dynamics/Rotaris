@@ -1,11 +1,12 @@
-import type { SessionId } from '@rotaris/kernel';
+import { toIsoUtc, type SessionId } from '@rotaris/kernel';
 import { isTerminalChildState, type ChildState, type Interruption, type ResumeState, type RootExecutionRecord, type SettlingPath } from '@rotaris/contracts';
 import type { ChildInsert, ChildRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import type { ArtifactStore } from '../artifacts/store.js';
-import { canonicaliseName, mintTaskId, takenTaskIds, uniqueUnderParent } from './naming.js';
-import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type Persona, type PersonaResolver } from './personas.js';
+import { canonicaliseName, mintTaskId, recordedRootNames, takenTaskIds, uniqueUnderParent } from './naming.js';
+import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type AgentGrant, type Persona, type PersonaResolver } from './personas.js';
 import type { RanCommand } from '../artifacts/record.js';
+import { inheritedContextBlock } from './notify.js';
 
 /**
  * PD-LIBRARY-001: the report's `commands` as the artifact record wants them. The report carries `exit_code`
@@ -42,11 +43,11 @@ export function userCancellation(t: Pick<ChildRow, 'task_id' | 'canonical_name' 
 
 /**
  * REQ-LIBRARY-092: EVERY terminal child report is materialised as an artifact. The materialisation lives beside the one
- * write every stored report passes through — the ledger's own reports, the scheduler's cancellation, the user's cancel,
- * the settle of a child a previous run left (REQ-ORCH-053) and the decline of a resumable iteration (PD-ORCH-005
- * clause 6) — so no caller can store a report without one, exactly as the adjacent-duplicate rule lives beside its
- * insert rather than in a caller. A child REQ-ORCH-048's cascade blocks gets no report at all
- * (`docs/defects/a-child-blocked-by-its-dependency-gets-no-report.md`). The last two wrote the report alone until 2026-09-27
+ * write every stored report passes through — the ledger's own reports, the scheduler's cancellation and its blocking
+ * cascade (REQ-ORCH-048), the user's cancel, the settle of a child a previous run left (REQ-ORCH-053) and the decline of a
+ * resumable iteration (PD-ORCH-005 clause 6) — so no caller can store a report without one, exactly as the
+ * adjacent-duplicate rule lives beside its insert rather than in a caller. The cascade stored no report at all until
+ * 2026-09-29 (`docs/defects/fixed/a-child-blocked-by-its-dependency-gets-no-report.md`). The last two wrote the report alone until 2026-09-27
  * (`docs/defects/fixed/a-stale-settled-childs-report-is-never-an-artifact.md`). The row names the artifact; without
  * one, the report is stored and no artifact is made.
  */
@@ -65,6 +66,41 @@ export function storeChildReport(deps: { readonly writer: SessionWriter; readonl
     highlightPaths: [], snippets: [], tags: list(report['tags']), conversationId: taskId,
   });
   if (!m.ok) deps.warn(`the report for child ${taskId} could not be materialised as an artifact: ${m.error.reason}`);
+}
+
+/**
+ * REQ-ORCH-098: a child's teardown entries, whatever terminal state it reached — `child_end`, `child_result` and
+ * `child_conversation_closed`, in that order, with its report's status and summary. Every path that ends a child writes
+ * them once, after its report is stored and before the terminal callbacks tell its parent: both settles of a child's
+ * execution; the scheduler, for a child it settles without one (blocked, or cancelled by the finalize sweep; OQ-152); and,
+ * since the repair of `a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`, every path that
+ * settles a child `cancelled` outside its execution — the user's cancel of one child and its live descendants, the
+ * cancel of a paused child at rest, "continue without them", the crash record of an accepted cancel, and the stale-child
+ * settle. A child that never started had no conversation, and its closing is recorded all the same, so every terminal
+ * child is torn down alike (OQ-152's reading). Lives beside `storeChildReport` because the last two run from the store
+ * alone, with no `IterationChildren`; the time is the writer's own clock (`SessionWriter.wall`).
+ */
+export function writeTeardown(writer: SessionWriter, row: Pick<ChildRow, 'task_id' | 'canonical_name'>, terminal: string, status: string, summary: string): void {
+  writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended ${terminal}.`, { task_id: row.task_id, state: terminal, at: toIsoUtc(writer.wall.instant()) });
+  writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported ${status}: ${summary.slice(0, 120)}`, { task_id: row.task_id, status });
+  writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
+}
+
+/** `writeTeardown` for a child ended `cancelled` with `report`, in its report's status and summary. */
+export function writeCancelledTeardown(writer: SessionWriter, row: Pick<ChildRow, 'task_id' | 'canonical_name'>, report: Readonly<Record<string, unknown>>): void {
+  writeTeardown(writer, row, 'cancelled', typeof report['status'] === 'string' ? report['status'] : 'cancelled', typeof report['summary'] === 'string' ? report['summary'] : '');
+}
+
+/**
+ * REQ-CONFIG-094 / REQ-MONITOR-020 / REQ-ORCH-050: whether a child holds a place on its `models:` entry's cap — from the
+ * start claim (`starting`) until its terminal state, through `running` and `summarizing`. PD-ORCH-005 clause 4: "each
+ * agent keeps the place in every child limit it already held", so a child `paused` out of `running` or `summarizing` (its
+ * `resume_state`) keeps its place while its session rests, and resumes into it; one paused while it waited, or before its
+ * start was claimed, held none and holds none (OQ-149).
+ */
+export function holdsModelSlot(c: Pick<ChildRow, 'state' | 'resume_state'>): boolean {
+  if (c.state === 'starting' || c.state === 'running' || c.state === 'summarizing') return true;
+  return c.state === 'paused' && (c.resume_state === 'running' || c.resume_state === 'summarizing');
 }
 
 /**
@@ -99,11 +135,14 @@ export interface SpawnInput {
   readonly category: string;
   readonly background: boolean;
   readonly modelKey: string;
-  readonly grantedTools: readonly string[];
   /** PD-ORCH-004: the child this one continues, admitted by the caller before the spawn; absent for ordinary work. */
   readonly continuationOf?: string | undefined;
   /** PD-TOOLS-006 revision 2: the validated patterns the child declared, stored with its record; absent means none. */
   readonly writeScope?: readonly string[] | undefined;
+  /** REQ-TOOLS-152: the call's `suppress_auto_context`, stored with its record; absent means the index is given. */
+  readonly suppressAutoContext?: boolean | undefined;
+  /** REQ-LIBRARY-098: the call's `attach_artifacts`, as given, stored with its record; absent means none. */
+  readonly attachArtifacts?: readonly string[] | undefined;
 }
 
 export type SpawnRejection = { readonly reason: string };
@@ -131,6 +170,11 @@ export class ChildLedger {
     readonly iteration: number;
     readonly budget: Budget;
     readonly modelCap: (modelKey: string) => number | null;
+    /**
+     * REQ-CONFIG-094: the slots on a key the process's OTHER runs hold (`ModelSlots.heldElsewhere`) — the cap counts every
+     * child on the entry across the whole process, and this ledger sees one iteration of one session. Absent means none.
+     */
+    readonly slotsHeldElsewhere?: ((modelKey: string) => number) | undefined;
     readonly warn: (m: string) => void;
     readonly personas?: PersonaResolver | undefined;
     readonly artifacts?: ArtifactStore | undefined;
@@ -202,9 +246,16 @@ export class ChildLedger {
    * REQ-MONITOR-020 describes the release (a slot frees when a running or summarizing child ends). Read
    * together: a slot is held from the claim until the terminal state, so the cap is never exceeded by two
    * children claimed in one pass (recorded on ADR-0012).
+   *
+   * REQ-CONFIG-094: the count is the whole process's — this iteration's children and every other run's
+   * (`slotsHeldElsewhere`), so two sessions under way in one run host cannot each fill a cap (acceptance A13).
    */
   slotsInUse(modelKey: string): number {
-    return this.all().filter((c) => c.model_key === modelKey && (c.state === 'starting' || c.state === 'running' || c.state === 'summarizing')).length;
+    return this.slotsInUseHere(modelKey) + (this.deps.slotsHeldElsewhere?.(modelKey) ?? 0);
+  }
+  /** This iteration's children holding a slot on the key (`holdsModelSlot`). */
+  slotsInUseHere(modelKey: string): number {
+    return this.all().filter((c) => c.model_key === modelKey && holdsModelSlot(c)).length;
   }
   slotFree(modelKey: string): boolean {
     const cap = this.deps.modelCap(modelKey);
@@ -270,10 +321,15 @@ export class ChildLedger {
     taken.add(this.root.taskId);
     const taskId = mintTaskId(taken);
     for (const dep of input.dependsOn) if (reaches(dep, taskId)) return { ok: false, error: { reason: 'Dependency cycle detected' } };
-    const siblingNames = new Set(siblings.map((c) => c.canonical_name));
-    if (this.isRoot(input.parentId)) {
-      siblingNames.add(this.root.canonicalName);
-    }
+    /*
+     * REQ-ORCH-044 with OQ-158: a name is unique under its parent, and no child at any depth takes a name a root of the
+     * session carries — this root's canonical name and the entry persona it runs as, and every recorded root's
+     * (`recordedRootNames`). The surfaces know the run-level agent by those names (REQ-MONITOR-071, REQ-CHAT-069,
+     * REQ-MONITOR-044), so a child carrying one was presented as the run-level agent too. Until 2026-10-01 only the
+     * root's direct children were kept off its canonical name
+     * (`docs/defects/fixed/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`).
+     */
+    const siblingNames = new Set([...siblings.map((c) => c.canonical_name), ...recordedRootNames(this.deps.dal, this.deps.sessionId), this.root.canonicalName, this.root.persona]);
     const canonical = uniqueUnderParent(canonicaliseName(input.taskName), siblingNames);
     const held = input.dependsOn.length === 0 && !this.slotFree(input.modelKey);
     const state: ChildState = input.dependsOn.length > 0 ? 'waiting_on_dependencies' : held ? 'waiting_on_model_slot' : 'queued';
@@ -281,13 +337,29 @@ export class ChildLedger {
     const row: Omit<ChildInsert, 'session_id' | 'spawned_at'> = {
       task_id: taskId, canonical_name: canonical, given_name: input.taskName, persona: role.persona.name, state, parent_id: effectiveParentId, depth,
       iteration: this.deps.iteration, model_key: input.modelKey, category: input.category, background: input.background ? 1 : 0, task: input.task,
-      depends_on: JSON.stringify(input.dependsOn), inherited_context: JSON.stringify(input.inheritedContext), granted_tools: JSON.stringify(input.grantedTools),
-      // REQ-MCP-065 / REQ-MCP-114 (Part S): the grant evidence at spawn — `{ granted: {server: [tool…]}, servers: [{name, transport, origin, fate, reason?}] }` — from the persona's resolver; `{}` was written until then.
-      granted_mcp: JSON.stringify(role.persona.mcpEvidence?.() ?? EMPTY_MCP_EVIDENCE),
+      depends_on: JSON.stringify(input.dependsOn), inherited_context: JSON.stringify(input.inheritedContext),
+      /*
+       * REQ-MCP-065 with REQ-TOOLS-006: no grant at spawn. A grant is what the child's tool port puts in force — the native
+       * tools REQ-TOOLS-006's controls leave and the MCP surface after them, `{ granted: {server: [tool…]}, servers: [{name,
+       * transport, origin, fate, reason?}] }` — and `recordGrant` writes it once that port is ready. Until 2026-10-01 the
+       * spawn wrote the persona's declared tools and its MCP surface before any control, so a tool a control removed was
+       * recorded as granted (`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
+       * Until a port reports, REQ-MONITOR-049's stand-in (the declared tools) is the surface's, not the record's.
+       */
+      granted_tools: '[]',
+      granted_mcp: JSON.stringify(EMPTY_MCP_EVIDENCE),
       // PD-ORCH-004: "A child delegated as a continuation carries that relationship in its record."
       continuation_of: input.continuationOf ?? null,
       // PD-TOOLS-006 revision 2: "the `write_scope` a child declared is stored with its record".
       write_scope: JSON.stringify(input.writeScope ?? []),
+      // REQ-TOOLS-152: the call's `suppress_auto_context`, so every assembly of the payload — a retry's included — omits the index.
+      suppress_auto_context: input.suppressAutoContext === true ? 1 : 0,
+      // REQ-LIBRARY-098 / REQ-TOOLS-154 (4) and (5): what the payload carries beside the task, stored with the record so an
+      // assembly in a later run — a resumed child's REQ-ORCH-088 retry, a follow-up of a child that never started — carries
+      // it too. The inherited block is rendered now, from the reports as they stand at the call: a sibling ignored here as
+      // unfinished may have completed by then, so the ids alone would not say which counted.
+      attach_artifacts: JSON.stringify(input.attachArtifacts ?? []),
+      inherited_context_block: inheritedContextBlock(inherited),
     };
     const r = this.deps.writer.spawnChild(row);
     if (!r.ok) return { ok: false, error: { reason: `The child could not be recorded: ${r.error.code}` } };
@@ -316,6 +388,16 @@ export class ChildLedger {
     if (r.ok) return { ok: true, row: r.value };
     return { ok: false, reason: r.error.code === 'illegal-move' ? r.error.reason : `recording failed: ${r.error.code}` };
   }
+  /**
+   * PD-ORCH-005 clause 22: a settled child followed up moves back to `queued` with `messages` joining its record — the
+   * writer's one transaction. A refusal names both states and changes nothing.
+   */
+  followUp(taskId: string, messages: readonly unknown[]): { ok: true; row: ChildRow } | { ok: false; reason: string } {
+    const row = this.get(taskId);
+    const r = this.deps.writer.followUpChild(taskId, row?.iteration ?? this.deps.iteration, messages);
+    if (r.ok) return { ok: true, row: r.value };
+    return { ok: false, reason: r.error.code === 'illegal-move' ? r.error.reason : `recording failed: ${r.error.code}` };
+  }
   claimStart(taskId: string): boolean {
     const row = this.get(taskId);
     const r = this.deps.writer.claimChildStart(taskId, row?.canonical_name ?? taskId);
@@ -327,6 +409,11 @@ export class ChildLedger {
   }
   markObserved(taskId: string): void {
     this.deps.dal.setChildObserved(this.deps.sessionId, taskId);
+  }
+  /** REQ-MCP-065 / REQ-TOOLS-006: the grant the child's port put in force, recorded on its row once the port is ready. */
+  recordGrant(taskId: string, grant: AgentGrant): void {
+    const r = this.deps.writer.recordChildGrant(taskId, grant);
+    if (!r.ok) this.deps.warn(`the grant of child ${taskId} could not be recorded: ${r.error.code}`);
   }
   markContextInjected(taskId: string): void {
     this.deps.dal.setChildContextInjected(this.deps.sessionId, taskId);

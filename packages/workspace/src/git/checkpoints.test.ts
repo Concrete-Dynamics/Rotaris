@@ -50,20 +50,20 @@ describe('ADR-0039 pure pieces', () => {
     expect(['A', 'D', 'M', 'R', 'T'].map(verbFor)).toEqual(['delete', 'recreate', 'overwrite', 'rename', 'change']);
     const text = previewText(3, [{ status: 'M', path: 'b.txt' }, { status: 'A', path: 'a.txt' }, { status: 'R', path: 'z.txt', otherPath: 'y.txt' }, { status: 'X', path: 'q' }], ['b.txt', 'a.txt'], dirtyReason(['b.txt', 'a.txt']));
     expect(text).toBe([
-      'Restoring checkpoint 3 would change 4 file(s):',
+      'Restoring checkpoint 3 would change 4 files:',
       '  delete    a.txt',
       '  overwrite b.txt',
       '  change    q',
       '  rename    z.txt',
-      'Warning: 2 uncommitted change(s) would be overwritten:',
+      'Warning: 2 uncommitted changes would be overwritten:',
       '  a.txt',
       '  b.txt',
     ].join('\n'));
     expect(previewText(4, [], [], '')).toBe('Restoring checkpoint 4 would change nothing.');
     expect(previewText(4, [], [], 'Checkpoint 4 is recorded for session s but its Git snapshot is gone, so it can no longer be restored.')).toBe('Checkpoint 4 is recorded for session s but its Git snapshot is gone, so it can no longer be restored.');
-    expect(dirtyReason(['f', 'e', 'd', 'c', 'b', 'a', 'g'])).toBe('7 uncommitted change(s) would be overwritten: a, b, c, d, e and 2 more Restore again with force to overwrite them.');
+    expect(dirtyReason(['f', 'e', 'd', 'c', 'b', 'a', 'g'])).toBe('7 uncommitted changes would be overwritten: a, b, c, d, e and 2 more Restore again with force to overwrite them.');
     // Byte order, not locale order: 'B' (0x42) sorts before 'a' (0x61).
-    expect(dirtyReason(['a', 'B'])).toBe('2 uncommitted change(s) would be overwritten: B, a Restore again with force to overwrite them.');
+    expect(dirtyReason(['a', 'B'])).toBe('2 uncommitted changes would be overwritten: B, a Restore again with force to overwrite them.');
   });
   it('REQ-GIT-037: the listing keeps only this namespace and numeric suffixes, sorted numerically', () => {
     const text = [
@@ -249,8 +249,8 @@ describe.skipIf(!gitPresent)('ADR-0039 against scratch repositories', () => {
     // REQ-GIT-056: the tree differs from the only candidate, so the dirty set is (differs from baseline) ∩ (touched) — the four
     // entries plus the rename's checkpoint-side name, which the restore recreates and which the baseline holds differently.
     expect(p.dirty).toEqual(['README.md', 'created.txt', 'dir/nested.txt', 'moved.md', 'src.txt']);
-    expect(p.blockedReason).toBe('5 uncommitted change(s) would be overwritten: README.md, created.txt, dir/nested.txt, moved.md, src.txt Restore again with force to overwrite them.');
-    expect(p.text.split('\n')[0]).toBe('Restoring checkpoint 1 would change 4 file(s):');
+    expect(p.blockedReason).toBe('5 uncommitted changes would be overwritten: README.md, created.txt, dir/nested.txt, moved.md, src.txt Restore again with force to overwrite them.');
+    expect(p.text.split('\n')[0]).toBe('Restoring checkpoint 1 would change 4 files:');
     expect(p.text).toContain('  rename    moved.md');
     expect(p.text).toContain('  recreate  dir/nested.txt');
     // No candidate at all → no drift (gate 1 refuses such a restore before drift can matter).

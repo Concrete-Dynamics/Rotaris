@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -54,9 +54,13 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     const prompts = dal.queuedPromptsOf(sid);
     expect(prompts).toHaveLength(1);
     expect(prompts[0]).toMatchObject({ prompt_id: promptId, content: 'then do this instead', status: 'TRIGGERED' });
-    const todo = JSON.parse(row.todo!) as { phases: { name: string; tasks: { id: string; text: string; state: string }[] }[] };
+    const todo = JSON.parse(row.todo!) as { phases: { name: string; tasks: { id: string; name?: string; text: string; state: string }[] }[] };
     expect(todo.phases.map((p) => p.name)).toEqual(['main', 'Queued Prompts']);
-    expect(todo.phases[1]!.tasks[0]).toMatchObject({ id: promptId, text: 'then do this instead', state: 'complete' });
+    // REQ-CHAT-040 / REQ-ORCH-071 (acceptance A28): the task is NAMED "Queued Prompt: <first 8 characters of the prompt id>"
+    // and carries the prompt text as its content.
+    expect(todo.phases[1]!.tasks[0]).toMatchObject({ name: `Queued Prompt: ${promptId.slice(0, 8)}`, text: 'then do this instead', state: 'complete' });
+    // REQ-CHAT-089: its id is the backend's, 8 lowercase hexadecimal characters — never the prompt's own UUID.
+    expect(todo.phases[1]!.tasks[0]!.id).toMatch(/^[0-9a-f]{8}$/);
     expect(dal.timelineOf(sid).map((t) => t.name)).toEqual(expect.arrayContaining(['prompt_queued', 'prompt_edited', 'prompt_triggered']));
     // A run that ended answers false; a triggered prompt cannot be edited or removed.
     expect(sessions.control({ op: 'removeQueuedPrompt', sessionId: sid, args: { promptId } })).toEqual({ ok: false });
@@ -192,6 +196,41 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     expect(dal.getSession(sid)!.paused_at_count).not.toBeNull();
   });
 
+  it('REQ-MONITOR-133/134 with OQ-128 (found by the third review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): a root steer still pending at the message-limit pause is recorded as not delivered, and a steer once the pause is reached is refused', async () => {
+    let releaseEnd!: () => void;
+    const endHold = new Promise<void>((r) => { releaseEnd = r; });
+    let releasePause!: () => void;
+    const pauseHold = new Promise<void>((r) => { releasePause = r; });
+    let atEnd = false;
+    let atPause = false;
+    const sessions = makeSessions(many(6), { messageLimit: 1 });
+    const started = sessions.start(dal, 'C:/ws', 'limited');
+    if (!started.ok) throw new Error(started.error.reason);
+    const sid = started.value;
+    sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'more work' } });
+    // REQ-EVENTS-165: the boundary's drain waits on this consumer once iteration 1 has ended, and the pause's once it is recorded.
+    sessions.bus.attach(sid, { mode: 'blocking', deliver: (e) => {
+      if (dal.timelineOf(sid).some((t) => t.name === 'run_paused_message_limit')) { atPause = true; return pauseHold; }
+      if (e.event === 'iteration.end') { atEnd = true; return endHold; }
+      return undefined;
+    } });
+    await vi.waitFor(() => { expect(atEnd).toBe(true); });
+    // The root's turn has returned and the limit is met at this boundary: no step of this run will inject the steer.
+    const steered = sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: 'run', text: 'mind the tests' } });
+    expect(steered.ok && steered.value?.length).toBe(36);
+    const promptId = steered.ok ? steered.value! : '';
+    releaseEnd();
+    await vi.waitFor(() => { expect(atPause).toBe(true); });
+    expect(sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: 'run', text: 'too late' } })).toEqual({ ok: false });
+    releasePause();
+    expect((await sessions.running(sid))?.execution_status).toBe('paused_message_limit');
+    const steering = dal.timelineOf(sid).filter((t) => t.name.startsWith('steering_'));
+    expect(steering.map((t) => t.name)).toEqual(['steering_submitted', 'steering_not_delivered']);
+    expect(JSON.parse(steering[1]!.metadata)).toMatchObject({ prompt_id: promptId, agent: 'root' });
+    expect(steering[1]!.message).toMatch(/was not delivered: the run paused at the message limit before /);
+    expect(dal.residentRows(sid).filter((r) => r.kind === 'system').map((r) => r.body)).toContain(steering[1]!.message);
+  });
+
   it('cancel at the limit sets paused with stop reason message_limit_reached; a null limit cannot resume and warns (REQ-SESSION-110)', async () => {
     const notices: RunNotice[] = [];
     const sessions = makeSessions(many(4), { messageLimit: 1, notice: (n) => { notices.push(n); } });
@@ -241,9 +280,57 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     const rows = dal.residentRows(sid).filter((r) => r.kind === 'system').map((r) => r.body);
     expect(rows.some((b) => b.includes('reasoning level switched to high'))).toBe(true);
     expect(rows.some((b) => b.includes('Entry model switched to fast'))).toBe(true);
-    const todo = JSON.parse(dal.getSession(sid)!.todo!) as { phases: { name: string; tasks: { id: string }[] }[] };
-    expect(todo.phases[0]!.tasks.map((t) => t.id)).toContain('extra');
+    const todo = JSON.parse(dal.getSession(sid)!.todo!) as { phases: { name: string; tasks: { id: string; text: string }[] }[] };
+    // REQ-CHAT-089: the added task carries the backend's id, never the one the request sent.
+    const added = todo.phases[0]!.tasks.find((t) => t.text === 'one more thing');
+    expect(added?.id).toMatch(/^[0-9a-f]{8}$/);
+    expect(todo.phases[0]!.tasks.map((t) => t.id)).not.toContain('extra');
     expect(dal.timelineOf(sid).map((t) => t.name)).toContain('todo_edited');
     expect(sessions.control({ op: 'editTodo', sessionId: asSessionId('S-other'), args: { op: 'add', id: 'x', text: 'y' } })).toEqual({ ok: false });
+  });
+
+  describe('REQ-CHAT-090 with REQ-EVENTS-098 / ADR-0005: a todo edit at rest is written under the session\'s lock', () => {
+    const planned = (sid: SessionId) => (JSON.parse(dal.getSession(sid)!.todo!) as { phases: { tasks: { text: string }[] }[] }).phases.flatMap((p) => p.tasks.map((t) => t.text));
+    const rested = async () => {
+      const sessions = makeSessions(many(2));
+      const started = sessions.start(dal, 'C:/ws', 'edit me at rest');
+      if (!started.ok) throw new Error(started.error.reason);
+      const sid = started.value;
+      await sessions.running(sid);
+      // The run's teardown released the lock while the session stays loaded here.
+      expect(dal.getSession(sid)!.execution_status).toBe('completed');
+      expect(dal.getLock(sid)).toBeUndefined();
+      return { sessions, sid };
+    };
+
+    it('another live process holding the lock refuses the edit in REQ-SESSION-048\'s words, writing nothing and leaving its lock; once it is free the edit takes the lock for the write and gives it back', async () => {
+      const { sessions, sid } = await rested();
+      const before = dal.getSession(sid)!.todo;
+      expect(dal.claimLock(sid, 999, HOST, '2026-10-01T00:00:00.000Z').claimed).toBe(true);
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', text: 'one more thing' } })).toEqual({ ok: false, refusal: { code: 'session_locked', message: `Session ${sid} is held by another run in this application (pid 999). Finish or stop that run first.` } });
+      expect(dal.getSession(sid)!.todo).toBe(before);
+      expect(dal.getLock(sid)).toMatchObject({ pid: 999 });
+      dal.releaseLock(sid, 999, HOST);
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', text: 'one more thing' } }).ok).toBe(true);
+      expect(planned(sid)).toContain('one more thing');
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+
+    it('a store error while taking the lock involves no other process: it is refused store_failed, writing nothing', async () => {
+      const { sessions, sid } = await rested();
+      const before = dal.getSession(sid)!.todo;
+      const read = vi.spyOn(dal, 'getLock').mockImplementationOnce(() => { throw new Error('SQLITE_IOERR: disk I/O error'); });
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', text: 'one more thing' } })).toEqual({ ok: false, refusal: { code: 'store_failed', message: 'The workspace store could not take this session\'s lock, so the todo was not edited: Error: SQLITE_IOERR: disk I/O error' } });
+      read.mockRestore();
+      expect(dal.getSession(sid)!.todo).toBe(before);
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+
+    it('a malformed edit is refused before the lock is touched, so it never names a foreign holder', async () => {
+      const { sessions, sid } = await rested();
+      expect(dal.claimLock(sid, 999, HOST, '2026-10-01T00:00:00.000Z').claimed).toBe(true);
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', text: '   ' } })).toEqual({ ok: false });
+      expect(dal.getLock(sid)).toMatchObject({ pid: 999 });
+    });
   });
 });

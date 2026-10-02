@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { DELEGATION_STRATEGY_NAMES, isBusy, presentationStatus, RUN_AGENT_ID, STATUS_LABELS, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { AgentTable } from './AgentTable.js';
 import { AgentTree } from './AgentTree.js';
-import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cancelUnavailableReason, cascadeNote, pauseAvailability } from './agents.js';
-import { RUN_STATE_LABELS } from './composer.js';
+import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cancelUnavailableReason, cascadeKind, cascadeNote, PAUSED_CANCEL_ALONE, pauseAvailability, pausedCancelWith } from './agents.js';
+import { pausePendingAfter, RUN_STATE_LABELS, type PauseScope } from './composer.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { markMotionStart } from './motion.js';
 import { Button as DesignButton, PageHeader as DesignPageHeader, Select as DesignSelect } from './design-system/index.js';
@@ -55,13 +55,15 @@ export interface MissionViewProps {
 export const STRATEGY_NOTE = 'A change takes effect on the next run.';
 
 /**
- * REQ-MONITOR-055/064: the Mission view's confirmation of one agent's cancel names it, its persona and what cascades. A
- * paused child is final and says so, and counts its paused descendants (PD-ORCH-005 clauses 3 and 16, OQ-101); a live
- * one counts the paused descendants its cancel also ends (clause 13, OQ-100).
+ * REQ-MONITOR-055/064: the Mission view's confirmation of one agent's cancel names it, its persona and what cascades; a
+ * live one counts the paused descendants its cancel also ends (clause 13, OQ-100). A paused child's cancel is final
+ * (PD-ORCH-005 clauses 3 and 16, OQ-101), and the Mission view says so in the words the Workspace and a persona window
+ * use (`pausedCancelWith`, `PAUSED_CANCEL_ALONE`) — before, it read only "will be cancelled and will not resume", leaving
+ * out that the cancel cannot be undone. The lines under the body name each descendant cancelled with it (REQ-MONITOR-128).
  */
 export function missionCancelBody(agent: Pick<AgentRecord, 'name' | 'persona' | 'presentationState'>, cascade: readonly Pick<AgentRecord, 'presentationState'>[]): string {
-  const paused = agent.presentationState === 'paused';
-  return `${agent.name} (${agent.persona}) will be cancelled${paused ? ' and will not resume' : ''}. ${cascadeNote(cascade) || 'Nothing cascades.'}`;
+  if (agent.presentationState === 'paused') return `${agent.name} (${agent.persona}) will be cancelled. ${cascade.length > 0 ? pausedCancelWith(cascadeKind(cascade)) : PAUSED_CANCEL_ALONE}`;
+  return `${agent.name} (${agent.persona}) will be cancelled. ${cascadeNote(cascade) || 'Nothing cascades.'}`;
 }
 
 /**
@@ -85,6 +87,16 @@ export function MissionView(props: MissionViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<{ agent: AgentRecord; cascade: AgentRecord[] } | null>(null);
   const [pausePending, setPausePending] = useState(false);
+  // REQ-MONITOR-296: the accepted pause's pending mark belongs to the run that accepted it and ends when that run leaves
+  // the busy states (REQ-NOTIFY-050) or another session is shown — the composer's rule (`pausePendingAfter`), derived during
+  // render from the scope last seen as the Workspace derives it. Never cleared, the view read `Pausing…` beside a session
+  // at rest `paused` for as long as it stayed mounted.
+  const pauseScope: PauseScope = { sessionId: session?.id ?? null, busy: session !== null && isBusy(session.executionStatus) };
+  const [pauseScopeSeen, setPauseScopeSeen] = useState<PauseScope>(pauseScope);
+  if (pauseScopeSeen.sessionId !== pauseScope.sessionId || pauseScopeSeen.busy !== pauseScope.busy) {
+    setPauseScopeSeen(pauseScope);
+    if (pausePending && !pausePendingAfter(pausePending, pauseScopeSeen, pauseScope)) setPausePending(false);
+  }
   const selectedAgent = selectedAgentId === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgentId) ?? null;
   // PD-ORCH-005 clause 16: a paused child is cancellable while its session rests (OQ-101); the run and a live agent while
   // the run is active — never the run-level agent presenting `paused`, which in REQ-CHAT-008's recovery state is a run the

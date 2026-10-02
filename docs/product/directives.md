@@ -1104,6 +1104,13 @@ adding to it.
 > `0.0024 at configured rates`. A cost below 0.00005 still renders `0.0000`, which contradicts REQ-SHELL-045's
 > own promise and is recorded in `docs/defects/`. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **First execution of revision 3, 2026-09-29, the day it was ruled:** the floor held as written. `formatAmount`
+> returns `< 0.0001` for an amount greater than zero that the half-up rounding brings to zero, and `costLabelOf`
+> needed no change, because each label takes the rendered figure whole: `< 0.0001 at configured rates`,
+> `< 0.0001 reported by the provider`, `at least < 0.0001; some requests have no price` — the table above, unchanged.
+> The stored figure is the exact one. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 <a id="pd-tools-001"></a>
 
@@ -1811,8 +1818,9 @@ so a child that genuinely loops is still stopped at the same point.
 > `stall_timeout` were loaded and validated and reached no run; the progress rule is their first reader. Both are now
 > handed to the run, and the role's value substitutes for the run's on that role's children (REQ-CONFIG-108). The
 > stall recovery REQ-NOTIFY-111/112 describe for the same window is not built, and that is recorded in
-> [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md),
-> not changed. **(2) How a parent names a continuation.** REQ-TOOLS-152's fields have none. `session_id` reuses a
+> [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/fixed/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md),
+> not changed. *(Built 2026-09-29 under R-067, with REQ-ORCH-089's watchdog over the same window; the readings are
+> OQ-127.)* **(2) How a parent names a continuation.** REQ-TOOLS-152's fields have none. `session_id` reuses a
 > delegation's session, and this directive asks for a new child and never a resume, so `delegate` takes one new
 > optional field, `continuation_of`, the task id of the child continued. It is recorded on the new child as
 > `children.continuation_of` (store v22). REQ-TOOLS-152 calls itself the whole of the `delegate` contract, and this
@@ -1932,11 +1940,24 @@ so a child that genuinely loops is still stopped at the same point.
 > `d`'s report artifact, whose summary denied the edits `d` had made, because the summariser read only the transcript's
 > head (`a-long-childs-report-denies-the-edits-it-made.md`, ruled as OQ-111). The duress run's own check "no child ended
 > failed with nothing to say" flagged `d`, a false positive of the harness
-> (`the-duress-silent-child-check-flags-a-cut-off-child.md`).
+> (`the-duress-silent-child-check-flags-a-cut-off-child.md`, repaired 2026-09-29 under R-067 and now in `docs/defects/fixed/`:
+> a cut-off child's `last_response` and `cut_off` are something to say; an error entry alone is not).
 >
 > **What was not measured.** An offer taken up by a later iteration's or a later run's root (revisions 3 and 4): this one
 > was taken within its iteration by the agent that delegated `d`. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Second live execution, 2026-10-01 — the duress scenario on merged `main` `71ad8e8`, under [R-066](requests.md#r-066):**
+> pack `.live-run/runs/2026-10-01T03-15-27-194Z/` of the `accept` worktree, session `57095770`, the same endpoint and
+> model. It met a real model with the clause the first live execution could not reach: a continuation that itself times
+> out while making progress. `reconcile-docs` (`bg_71164543`) and `verify-result` (`bg_5d571a7a`) were cut off at
+> 1,200 s while making progress, each report carrying the offer, and the orchestrator took both.
+> `reconcile-docs-continue` (`continuation_of` `bg_71164543`) was cut off at 1,200 s too; its report carries the cut-off
+> statement and the changed paths (`docs/overview.md`), and its `continuation_offer` is `null`: "a piece of work is
+> continued once and never chained". `verify-result-continue` succeeded. Nothing in the text was wrong. **What was not measured,
+> still:** an offer taken up by a later iteration's or a later run's root. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md)
+> ([`fixed/no-live-run-has-executed-on-merged-main.md`](../defects/fixed/no-live-run-has-executed-on-merged-main.md)).
 
 ---
 
@@ -2004,8 +2025,13 @@ are not recorded, and cannot be recovered afterwards.
 > `error   CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 15)` after "run host exited (0)" and "quit: exiting
 > with status 0" — main kills the run host itself and logs Electron's report of the kill at `error`. One such exit writing
 > nothing was the race going the other way. Recorded as
-> [`an-orderly-quit-logs-the-run-host-gone-at-error.md`](../defects/an-orderly-quit-logs-the-run-host-gone-at-error.md)
-> (live-run finding L13); the last-window close's 24 clean quits are not contradicted.* The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
+> [`an-orderly-quit-logs-the-run-host-gone-at-error.md`](../defects/fixed/an-orderly-quit-logs-the-run-host-gone-at-error.md)
+> (live-run finding L13); the last-window close's 24 clean quits are not contradicted. Repaired the same day under
+> [R-067](requests.md#r-067): main records the run host it ends itself (`ChildrenEndedByMain`, `main/exit.ts`), and
+> Electron's `killed` report of that end is written at `info`, saying main ended it — so "a child process gone for any
+> reason but `clean-exit`" above now reads "… but `clean-exit`, or `killed` by main's own end"; a child killed from
+> outside, one that crashed and one main never ended stay `error`. `pnpm live-run --only=ask` then ended both of its
+> launches through the immediate exit with that line at `info` and no `error` line of main's.* The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
 > orderly quits (3 in 26, each waiting out the 30 s bound), because a child's answer can lose the race with its own
 > exit; the quit now races each `shutdown` against the child's exit, recorded as
 > [`a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`](../defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md).
@@ -2036,6 +2062,16 @@ are not recorded, and cannot be recovered afterwards.
 > The levels are this directive's: a run host ended at quit reports exit 0 and writes its `info` line; one still running
 > past the bound after it was ended is a loss, written at `error`. A driven close at the default level wrote no
 > `warning` or `error` line from the close onwards, and main was gone 103 ms after it.
+
+> **2026-09-29, under [R-067](requests.md#r-067):** the log's one writer wrote through `console.log`, and a standard output
+> whose reader had gone failed each write with EPIPE, reported as an `error` event nothing listened for — an uncaught
+> exception the uncaught-exception handler logged to the same stream, without end, so the quit and REQ-MONITOR-131's
+> backstop starved. The writer is now `standardStreamWriter` (`main/app-log.ts`): it listens for the stream's failure and
+> writes nothing more after it, and standard error gets the same listener. Measured on the built app by closing the
+> pipes of a running launch and sending SIGTERM: it exited in about 60 ms, where the writer put back to `console.log`
+> spun at full CPU until SIGKILL. The note is moved to
+> [`a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`](../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md)
+> and the row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -2124,7 +2160,7 @@ file to `codebase-analyst`, a persona that holds no file-writing tool, with that
 accepted, the child ran for 2 min 47 s and could only answer that it had no file-writing tool, its report still read
 `succeeded`, and a second child was commissioned for the same file. A refusal at the call moves that discovery to the
 moment the parent can still choose. And `session_id` was accepted and dropped
-([`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md)),
+([`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md)),
 so a caller that set it was told nothing and got a fresh child. What it costs:
 - a parent can no longer give a read-only child a scope for coordination alone;
 - a persona whose only writing tools are ones the claim does not fence — the code-intelligence server's editing tools,
@@ -2166,6 +2202,53 @@ revision 3 as [R-067](requests.md#r-067).*
 >
 > **What was not measured.** No built-app run declared a scope. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 3's scope refusal, 2026-09-29, built under [R-067](requests.md#r-067):** the refusal
+> was built as written ([OQ-112](../architecture/open-questions.md)). `IterationChildren.delegate` refuses a
+> `write_scope` for a known persona that cannot write files, straight after the scope's own validation, with status
+> `rejected`, no record and no task id. The reason names the catalogue's writers. The phrase "after REQ-TOOLS-006's
+> controls" met one gap in the build. The per-persona `tool_restrictions` map, the fourth control, narrows no agent's
+> grant today ([`a-personas-tool-restrictions-never-narrow-its-grant`](../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md)).
+> The check therefore reads the two controls a child's grant does meet, `coordinator_only` and `read_only`. The
+> clause's text is not wrong; the build lacks a control it names. *Closed 2026-09-29 under R-067 (acceptance finding
+> A4):* the map now narrows the grant as [OQ-145](../architecture/open-questions.md) builds it — the entry the persona's
+> own map and the delegating persona's map give its name — and the check reads the same lists. A persona the caller's
+> map restricts to reading cannot take a scope, and the reason names only the writers the caller's map lets write
+> (`children.test.ts`, "the parent agent's tool_restrictions bind the refusal"). The sentence above is kept as the reason
+> the first build read two controls. Two existing scripted cases had scoped a read-only
+> `codebase-analyst`, which the directive now forbids, and they scope a `docs-writer` instead. Revision 3's other
+> refusal, a `session_id` naming no settled child, is not part of this build.
+>
+> The persona checked is the one the ledger resolves, an alias included. The first build read the built-in table
+> without its aliases, so `playwright` with a scope reached the ledger and was accepted as `ui-verifier`; the branch's
+> verification found it, and the check now reads the ledger's resolution.
+>
+> **What was measured.** Scripted end-to-end cases in `children.test.ts` over the duress call's shape and over the
+> alias, each red with its check removed, and the predicate, the catalogue and the reason in `write-scope.test.ts`. Live, in the duress run of
+> session `b4a768a2`, a scope given to `verifier` was refused with the writers named. The orchestrator's next request,
+> 15 s later, delegated the task to `docs-writer`. In a second duress run built from the alias repair (session `059ae1d7`), a scope given
+> to `codebase-analyst`, the finding's own shape, and one given to `verifier` were both refused, and each task went next
+> to a writer (`docs-writer`, `tester`). No alias was delegated live. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 3's `session_id`, 2026-09-29, built under [R-067](requests.md#r-067) with `PD-ORCH-005`
+> clause 22:** the refusal and what `session_id` names were built as written. `IterationChildren.followUp` refuses, with
+> status `rejected`, no record touched and no task id:
+> - an id that is no task id of the caller's own children;
+> - a child that has not ended;
+> - a child its `child_timeout` cut off, with a reason that names `continuation_of`.
+>
+> The text met the code in two places, and [OQ-131](../architecture/open-questions.md) records the reading built for
+> each:
+> - "names no settled child of the calling agent" is one reason for an unknown id and for another agent's child alike.
+>   REQ-TOOLS-155's parent scoping reads another's child as none of the caller's, as `background_output` does.
+> - "cut off" is read from the child's stored report: a `timeout` error, or `PD-ORCH-004`'s `cut_off` block.
+>
+> The follow-up re-claims the child's stored `write_scope` as revision 2 has a resumed child do.
+>
+> **What was measured.** Scripted end-to-end cases in `children.test.ts`, each red on the code before the repair, where
+> the id was dropped and a fresh child spawned. **What was not measured.** No built-app or live run set `session_id`. The
+> row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -2537,9 +2620,9 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > Two defects were read and left unrepaired:
 > - [`a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md`](../defects/fixed/a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md),
 >   which is still the corpus's contradiction; *settled 2026-09-29 by revision 5's clause 21 ([R-067](requests.md#r-067))*;
-> - [`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md),
+> - [`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md),
 >   because the resume gives `session_id` no meaning. *Revision 5's clause 22 gives it one (2026-09-29); the note stays open until
->   it is built.*
+>   it is built. Built and repaired the same day, recorded below.*
 >
 > Other defects noticed along the way are recorded in `docs/defects/`.
 >
@@ -2548,9 +2631,11 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > commits name:
 > - two guards removed as redundant;
 > - the tool deadline's cancel at a run's exit, which is timer hygiene;
-> - `track`'s change, which no test can observe while
->   [`a-child-whose-execution-raises-before-its-turn-stays-running.md`](../defects/a-child-whose-execution-raises-before-its-turn-stays-running.md)
->   stands;
+> - `track`'s change, which no test could observe while
+>   [`a-child-whose-execution-raises-before-its-turn-stays-running.md`](../defects/fixed/a-child-whose-execution-raises-before-its-turn-stays-running.md)
+>   stood. *(2026-09-29, R-067: the note is repaired and still no test observes it, for a new reason: `executeSettling`
+>   now settles a raise before `track` sees it, so an execution reaches `track` rejected only when that settle itself
+>   raises.)*
 > - main's `before-quit`, which only the built app reaches.
 >
 > In the built app, driven, one session went through three rests with one child (`bg_d5cb3784`):
@@ -2581,11 +2666,15 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 >   one, recorded below revision 4's note.
 > - Only Linux under Xvfb was driven.
 > - The scripted model client restarts its script for every run
->   ([`the-scripted-client-restarts-its-script-for-every-run.md`](../defects/the-scripted-client-restarts-its-script-for-every-run.md)),
+>   ([`the-scripted-client-restarts-its-script-for-every-run.md`](../defects/fixed/the-scripted-client-restarts-its-script-for-every-run.md)),
 >   so a driven agent's steps after a continue are the script's first steps again. Its record is what is resumed.
+>   *(2026-09-29, R-067: repaired. A resumed agent now takes the step after the ones its own record holds, in the same
+>   process or after a relaunch; `part-j-proof`'s steer-at-rest scenario pins it.)*
 > - The driver's own quit is an immediate exit that skips the shutdown
->   ([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/the-drivers-quit-skips-the-applications-shutdown.md));
+>   ([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md));
 >   the quit above was a window close.
+>   *(2026-09-29, R-067: repaired. The driver's `quit` is now the application's quit unless it names the immediate exit,
+>   and `driver-proof` quits a live run through it and reads the session at rest.)*
 >
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
@@ -2654,7 +2743,9 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > - The four repairs of the last review round were checked in the built app by the round that made them; the independent
 >   re-drive did not run, because the subagents' usage limit was reached.
 > - Persona windows cannot be addressed by the driver, so their state was read from screen captures
->   ([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/the-driver-cannot-address-persona-or-approval-windows.md)).
+>   ([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md)).
+>   *(2026-09-29, R-067: repaired. The driver names a persona window, the approval dialog and the terminal window by
+>   role, and `driver-proof` probes a persona window's state and answers an approval in its dialog.)*
 > - Clause 14's orchestrator-instructions and tool-change variants were not driven.
 > - Clause 20 is not observable with the scripted client; its evidence is the tests.
 > - No live run was made with the build, and only Linux under Xvfb was driven; the live run of 2026-09-29 follows.
@@ -2681,6 +2772,67 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 >   independently (OQ-82 for the code-intelligence child), and its repairs stand.
 >
 > The evidence packs are under `.live-run/runs/`, outside the repository.
+
+> **First execution of revision 5's clause 22, 2026-09-29, built under [R-067](requests.md#r-067):** a `delegate` call
+> whose `session_id` names a settled child of the caller resumes that child from its record. The build:
+> - `IterationChildren.followUp` admits the call;
+> - the writer's `followUpChild` makes REQ-MONITOR-300's one exit from a terminal state, in one transaction with the
+>   follow-up's user message in the record;
+> - the scheduler starts the child as any queued child;
+> - `execute` finds the conversation in its record and carries on from it under the child's own task id.
+>
+> The child keeps its identity and its stored write scope, and it ends, reports and notifies its parent again. A child
+> the timeout cut off is refused, and the reason names `continuation_of`.
+>
+> The text met the code in these places, and [OQ-131](../architecture/open-questions.md) records the reading built for
+> each:
+> - **The state it resumes into is `queued`,** so the follow-up waits under REQ-ORCH-050's cap and REQ-ORCH-046's active
+>   limit. It holds no place in either when it is followed up, unlike a paused agent that "keeps the place" it held.
+> - **Only the call's `task` is read.** The child's identity is its record's.
+> - **A child that never started has no conversation,** so it is given its payload first. REQ-ORCH-048's cascade does
+>   not block it again.
+> - **A follow-up waits for the child's execution to wind down.** Building it found that a child the user cancelled is
+>   settled before its aborted execution returns. An execution that then found its record live again wrote over the
+>   follow-up, which a case pins.
+> - **The fallback retry starts from the payload** and loses the follow-up. That is put to the owner.
+> - **A child the user cancelled is settled, and may be followed up.** Clause 3 says a cancelled agent is "never
+>   resumed", and clause 16 calls a paused child's cancel "final as clause 3 says". Clause 22 names every terminal state
+>   but the cut-off one, and says clause 5, which lists `cancelled`, does not bar a follow-up. The build reads clauses 3
+>   and 16 as about a continue's resume, which a follow-up is not, so a parent can follow up a child the user cancelled
+>   (REQ-MONITOR-128). The cancel race's case pins it. Refusing it would add a refusal PD-TOOLS-006 revision 3 does not
+>   list; that is put to the owner.
+>
+> Three places of the resume path serve the follow-up unchanged:
+> - clause 3's crash record and clause 2's rest pause a follow-up that has not started, from its record;
+> - clause 4's resume starts it again from the record;
+> - a case pauses one held behind a model slot and continues it.
+>
+> The defect note is repaired:
+> [`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md).
+>
+> **What was measured.** Fourteen cases in `children.test.ts` (twelve in the clause 22 describe, with the transition
+> table's case and the writer's) and two in `agent-tools`' `delegation.test.ts`. The two tool cases and the first seven
+> engine cases were red on the code before the repair. Each later case was red with its own limb removed. This report
+> first said fifteen cases; that counted the two outer cases twice, and the case for a later iteration's root, added
+> since, had not been written. **What was not
+> measured.** No built-app or live run followed a child up. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **The quit's gap, repaired 2026-09-29 under [R-067](requests.md#r-067):** clause 9's withdrawal by a quit was built for
+> what is pending when the run host's `shutdown` arrives, and main sends it only after `window-all-closed` has waited on
+> REQ-GIT-101's checkpoint operation. The last window's presenter is revoked as it closes, so an approval asked in that
+> gap met no presenter and was denied by the headless policy. Main now marks the revoke its quit causes (`quitting`, from
+> `QuitState`), and the run host holds what is asked meanwhile — an approval unshown in `pending_approvals`, a present
+> that crossed the close, a question — with no budget expiring on it, for the shutdown to withdraw by `quit`. The same
+> hold keeps an approval asked before the quit from timing out into a denial while the checkpoint operation runs.
+> [OQ-132](../architecture/open-questions.md) states the reading against REQ-TOOLS-064, REQ-TOOLS-058, REQ-EVENTS-049 and
+> REQ-CHAT-094. The note is repaired:
+> [`an-approval-asked-after-the-last-window-closes-is-denied.md`](../defects/fixed/an-approval-asked-after-the-last-window-closes-is-denied.md).
+> **What was measured.** Eight unit cases across `gate.test.ts`, `questions.test.ts`, the run host's `tools.test.ts` and
+> `dispatch.test.ts`; the first was red on the code before the repair, and each limb's cases were red with it removed.
+> **What was not measured.** No built-app quit with a checkpoint operation in flight and an ask made during it was
+> driven; main's `revokePresenter` is wiring no unit reaches. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

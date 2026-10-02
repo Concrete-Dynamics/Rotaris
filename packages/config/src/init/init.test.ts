@@ -8,7 +8,7 @@ import { ignoredBy, parseGitignore } from './gitignore.js';
 import { classifyWorkspace, classifyWorkspaceRoot, DEFAULT_SOURCE_EXTENSIONS, extensionOf } from './classify.js';
 import { applyRecord, initializationOf, isNeverInitialized, isResolved, NEVER_INITIALIZED, readInitializationState, recordPatch, sourceExtensionOverrideOf, type InitializationState } from './state.js';
 import { DUPLICATE_TASK, isApplicable, labelFor, TaskRegistry, type InitializationTask, type TaskResult } from './registry.js';
-import { deriveSets, promptDue, promptOwed, sameView, viewOf } from './sets.js';
+import { deriveSets, promptOwed, sameView, viewOf } from './sets.js';
 import { executeTasks, recordSkip, stampOnly } from './execute.js';
 
 function tree(): string {
@@ -221,7 +221,7 @@ describe('the task registry', () => {
   it('treats a raising predicate as not applicable, and logs it', async () => {
     const lines: string[] = [];
     const bad = task('x', { applicable: () => { throw new Error('boom'); } });
-    expect(await isApplicable(bad, (m) => lines.push(m))).toBe(false);
+    expect(await isApplicable(bad, (m) => lines.push(m), { workspaceRoot: 'C:/ws' })).toBe(false);
     expect(lines[0]).toContain('boom');
   });
 
@@ -236,6 +236,18 @@ describe('the task registry', () => {
 /** REQ-WORKSPACE-081/082/105. */
 describe('the task sets and the nine values', () => {
   const log = () => undefined;
+  const at = { workspaceRoot: 'C:/ws' };
+
+  /** REQ-WORKSPACE-013/102, PD-SHELL-001: the sets are one workspace's, and every predicate is told which. */
+  it('asks every predicate about the workspace the sets are derived for', async () => {
+    const r = new TaskRegistry();
+    const asked: string[] = [];
+    r.register(task('only-alpha', { applicable: ({ workspaceRoot }) => { asked.push(workspaceRoot); return workspaceRoot === 'C:/alpha'; } }));
+    const state: InitializationState = { completed: [], skipped: [], lastRun: null, classification: null };
+    expect((await deriveSets(r, state, log, { workspaceRoot: 'C:/alpha' })).applicable.map((t) => t.id)).toEqual(['only-alpha']);
+    expect((await deriveSets(r, state, log, { workspaceRoot: 'C:/beta' })).applicable).toEqual([]);
+    expect(asked).toEqual(['C:/alpha', 'C:/beta']);
+  });
 
   it('separates applicable, pending, runnable, background and consent', async () => {
     const r = new TaskRegistry();
@@ -245,7 +257,7 @@ describe('the task sets and the nine values', () => {
     r.register(task('skip'));
     r.register(task('gone', { applicable: () => false }));
     const state: InitializationState = { completed: ['done'], skipped: ['skip'], lastRun: 'x', classification: null };
-    const sets = await deriveSets(r, state, log);
+    const sets = await deriveSets(r, state, log, at);
     expect(sets.applicable.map((t) => t.id)).toEqual(['bg', 'ask', 'done', 'skip']);
     expect(sets.pending.map((t) => t.id)).toEqual(['bg', 'ask']);
     // A skipped task stays runnable; a completed one does not.
@@ -258,7 +270,7 @@ describe('the task sets and the nine values', () => {
   it('counts an id in both lists at once as completed', async () => {
     const r = new TaskRegistry();
     r.register(task('a'));
-    const sets = await deriveSets(r, { completed: ['a'], skipped: ['a'], lastRun: 'x', classification: null }, log);
+    const sets = await deriveSets(r, { completed: ['a'], skipped: ['a'], lastRun: 'x', classification: null }, log, at);
     expect(sets.pending).toEqual([]);
     expect(sets.runnable).toEqual([]);
   });
@@ -266,7 +278,7 @@ describe('the task sets and the nine values', () => {
   it('owes the prompt on a consent task pending whatever the workspace has done before', async () => {
     const r = new TaskRegistry();
     r.register(task('ask', { requiresConsent: true }));
-    const sets = await deriveSets(r, { completed: ['other'], skipped: [], lastRun: 'x', classification: 'code' }, log);
+    const sets = await deriveSets(r, { completed: ['other'], skipped: [], lastRun: 'x', classification: 'code' }, log, at);
     expect(promptOwed(sets)).toBe(true);
   });
 
@@ -275,7 +287,7 @@ describe('the task sets and the nine values', () => {
     r.register(task('a'));
     r.register(task('b'));
     const state: InitializationState = { completed: ['a', 'b'], skipped: [], lastRun: 'x', classification: 'code' };
-    const sets = await deriveSets(r, state, log);
+    const sets = await deriveSets(r, state, log, at);
     const one = viewOf(state, sets, false, null);
     const other = viewOf({ ...state, completed: ['b', 'a'] }, sets, false, null);
     expect(sameView(one, other)).toBe(true);
@@ -288,16 +300,8 @@ describe('the task sets and the nine values', () => {
     const r = new TaskRegistry();
     r.register(task('gone', { applicable: () => false }));
     const state: InitializationState = { completed: ['gone', 'ghost'], skipped: [], lastRun: 'x', classification: null };
-    const view = viewOf(state, await deriveSets(r, state, log), false, null);
+    const view = viewOf(state, await deriveSets(r, state, log, at), false, null);
     expect(view.completed).toEqual([]);
-  });
-
-  it('holds the prompt back while a run is in progress', async () => {
-    const r = new TaskRegistry();
-    r.register(task('ask', { requiresConsent: true }));
-    const sets = await deriveSets(r, NEVER_INITIALIZED, log);
-    expect(promptDue(viewOf(NEVER_INITIALIZED, sets, false, null))).toBe(true);
-    expect(promptDue(viewOf(NEVER_INITIALIZED, sets, true, null))).toBe(false);
   });
 });
 
@@ -388,9 +392,10 @@ describe('one execution', () => {
   /**
    * The defect ADR-0064's first execution found in the built app: a run computes each patch from the
    * state it started with, and a patch replaces both lists wholesale — so a skip answered while the run
-   * was in flight was erased by the run's own next recording.
+   * was in flight was erased by the run's own next recording. The patch is now built from the state the
+   * commit reads when it writes, and the run goes on from that state.
    */
-  it('re-reads the persisted state before each recording, so a concurrent skip survives', async () => {
+  it('builds each recording from the state the commit reads when it writes, so a concurrent skip survives', async () => {
     const patches: PlainMap[] = [];
     let onDisk: InitializationState = NEVER_INITIALIZED;
     const tasks = [task('slow', {
@@ -400,16 +405,18 @@ describe('one execution', () => {
         return { status: 'success', steps: [], classification: null, error: '', retryable: false, summary: '' };
       },
     })];
-    await executeTasks(tasks, NEVER_INITIALIZED, deps({
-      reread: () => onDisk,
-      write: async (p) => { patches.push(p); return { ok: true }; },
+    const r = await executeTasks(tasks, NEVER_INITIALIZED, deps({
+      commit: async (build) => { patches.push(build(onDisk)); return { ok: true }; },
+      write: async () => { throw new Error('write is not called when a commit is supplied'); },
     }));
     const section = patches[0]!['initialization'] as Record<string, unknown>;
     expect(section['completed']).toEqual(['slow']);
     expect(section['skipped']).toEqual(['asks']);
+    expect(r.state.skipped).toEqual(['asks']);
+    expect(r.state.completed).toEqual(['slow']);
   });
 
-  it('uses the run\'s own state when no re-read is supplied', async () => {
+  it('uses the run\'s own state when no commit is supplied', async () => {
     const patches: PlainMap[] = [];
     await executeTasks([task('a')], { completed: [], skipped: ['b'], lastRun: 'x', classification: null }, deps({ write: async (p) => { patches.push(p); return { ok: true }; } }));
     expect((patches[0]!['initialization'] as Record<string, unknown>)['skipped']).toEqual(['b']);

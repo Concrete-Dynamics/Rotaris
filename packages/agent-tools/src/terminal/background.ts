@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { ChildProcess } from 'node:child_process';
+import { realpathSync } from 'node:fs';
+import { constants as osConstants } from 'node:os';
 import type { Millis, MonotonicClock, TimerHandle, Timers, WallClock } from '@rotaris/kernel';
-import { spawnChild } from '@rotaris/platform';
+import { COMM_MAX_CHARS, linuxProcessTable, spawnChild, type GroupMember, type ProcessTable } from '@rotaris/platform';
 import { toIsoUtc } from '@rotaris/kernel';
 import type { ShellBackend } from './foreground.js';
 import { killTree } from './foreground.js';
@@ -19,6 +21,113 @@ export const BACKGROUND_BUFFER = 1024 * 1024;
 export const DEFAULT_MAX_BACKGROUND = 20;
 export const DEFAULT_BACKGROUND_TIMEOUT_S = 3600;
 
+/**
+ * REQ-TOOLS-109/179 with OQ-133: the status and exit code a background session ends with, from what its process's
+ * `exit` reported. An exit code is the command's own outcome — `completed` for 0, `failed` for any other. A death by a
+ * signal carries no exit code: one the product delivered at the agent's or the user's request (`send_signal`, the
+ * stream-control interrupt) ends it `killed` with −1, as an explicit kill does, because the agent or the user ended it
+ * deliberately (REQ-TOOLS-112); one the product never sent — a crash, another process's kill — is `failed` with the
+ * shell's `128 + n` for signal `n`, so −1 stays `killed`'s alone. Before this, every signal death read `failed (exit -1)`
+ * (live-run finding L4).
+ */
+export function endOfExit(code: number | null, signal: NodeJS.Signals | null, delivered: ReadonlySet<string>): { readonly status: BackgroundStatus; readonly exitCode: number } {
+  if (code !== null) return { status: code === 0 ? 'completed' : 'failed', exitCode: code };
+  if (signal !== null && delivered.has(signal)) return { status: 'killed', exitCode: -1 };
+  const n = signal === null ? undefined : (osConstants.signals as Record<string, number | undefined>)[signal];
+  return { status: 'failed', exitCode: n === undefined ? -1 : 128 + n };
+}
+
+/**
+ * OQ-135 (REQ-TOOLS-110, REQ-TOOLS-128), the reading built: a SIGINT to a session's group is preceded by one reading of
+ * the group, and when the session is found still running after it, a member is sent SIGINT once more, alone, exactly
+ * when that reading found it the SHELL — its name the shell's, so not yet replaced by the command — holding SIGINT off
+ * (catching it, blocking it, or holding it pending), and it has since replaced its image (its name or its arguments
+ * changed), whatever it now does with SIGINT; with it, each of its descendants the reading did not find, which the command
+ * started after the signal and which so never received it either.
+ *
+ * Why exactly those: `dash` catches SIGINT under `-c`, and blocks signals across its `vfork`; the command it is starting
+ * runs the shell's image, handler included, until its `exec` (the reading of an aimed signal found both the shell and its
+ * child standing `blocked`). A SIGINT landing there is taken by that handler and lost with the image; the command that
+ * replaces it never receives one, and the shell holds its own copy until that command ends, which for a server is never.
+ * What the command does with SIGINT says nothing about whether it received one: Node, Python and a shell install their
+ * own handler as they start, so a command that missed the signal stands `caught` as often as at the default. The name
+ * alone misses a shell `exec`ing a shell (`sh -c '…'`, `sh script.sh`), whose name stays `sh`; its arguments change.
+ * A process the reading found already running the command is never sent a second SIGINT, whatever it did with the
+ * first — one that catches it, and one whose handler restored the default as it ran (`process.once`, `SA_RESETHAND`).
+ * A process started after the reading by a member that did receive the signal is never sent one, so a clean-up the
+ * command starts on its way out is not interrupted. All of this holds for `dash` alone, so only a session whose shell is
+ * `dash` is read (`hasVforkWindow`): `bash` as `/bin/sh` absorbs a SIGINT its command handled, goes on, and `exec`s the
+ * clean-up that follows in place, which by name and arguments is a shell replaced after the signal.
+ *
+ * The residue: a member that `exec`s between the reading and the delivery (one synchronous step) received the signal as
+ * the command, and is sent a second if it is still alive at the check; and a script that traps SIGINT and then `exec`s
+ * (`trap … INT; …; exec server`) chose to absorb the signal, and its command is sent one all the same; and a shell
+ * other than `dash` that loses a SIGINT across its fork, if one does, is not read — nor is a `dash` the command starts
+ * itself where the session's shell is another.
+ */
+export const SIGINT_RECHECK_AFTER_MS: readonly number[] = [250, 1_500];
+
+/**
+ * OQ-135: whether the session's shell has the vfork window — the check is armed only where it does. `dash` has it: it
+ * catches SIGINT under `-c` and blocks signals across its `vfork`. It is told by the shell file's real path, since
+ * `/bin/sh` is a link to it on Debian and Ubuntu. Any other shell has not been measured to have it and is not read.
+ *
+ * The reason it was armed on every Linux host, falsified and kept beside its replacement: "a member that was the shell
+ * took the signal into the shell's handler if it took it at all, and a new image it runs afterwards never received it".
+ * Where `/bin/sh` is `bash` (Fedora, RHEL, Arch), bash waits on a command that handles SIGINT, goes on when that command
+ * exits 0, and `exec`s the last command of its `-c` list in place (bash 5.1 on). That clean-up replaced the shell after
+ * the signal, and was sent a second SIGINT that killed it, under a false "vfork window" warning (acceptance finding A8,
+ * round 4, measured through this manager with a `sh` link to `/bin/bash`, signalled 1 s and 5 s after the start).
+ */
+export function hasVforkWindow(backend: ShellBackend, realpath: (file: string) => string = realpathSync): boolean {
+  if (backend.kind !== 'posix') return false;
+  try { return shellComm(realpath(backend.file)) === 'dash'; } catch { return false; }
+}
+
+/** The name a process running the session's shell carries: the shell file's base name, cut as the kernel cuts it. */
+export function shellComm(file: string): string {
+  return (file.split(/[\\/]/).pop() ?? file).slice(0, COMM_MAX_CHARS);
+}
+
+/**
+ * OQ-135: the members of a still-running session's group that never received the SIGINT. `before` is the reading taken
+ * the instant before it was sent, `now` the one taken since, and `shell` the shell's name; the shell is `dash`, the one
+ * shell read (`hasVforkWindow`). A member `before` found running the shell, and not ignoring SIGINT, took the signal into
+ * the shell's handler if it took it at all (at the default it would be gone), and `dash` under `-c` ends on it once its
+ * running command ends, starting nothing more. Named, each with its descendants alive `now` that `before` did not hold,
+ * since those started after the signal:
+ *
+ * - such a member alive `now` and running another image — its name or its arguments changed — whatever it does with
+ *   SIGINT: the command replaced the shell after the signal, and never received it;
+ * - where such a member had started nothing in `before` and is still the shell `now`, each child it has started since:
+ *   the shell took the signal as it started, went on, and the command it started never received it.
+ *
+ * A member already sent it again (`alreadyResent`) is not named, nor are its descendants, which may be the clean-up it
+ * started on receiving it.
+ */
+export function missedSigint(before: readonly GroupMember[], now: readonly GroupMember[], shell: string, alreadyResent: ReadonlySet<number>): number[] {
+  const wasShell = new Map(before.filter((m) => m.comm === shell && m.sigint !== 'ignored').map((m) => [m.pid, m]));
+  const seen = new Set(before.map((m) => m.pid));
+  const startedNothing = (pid: number): boolean => !before.some((m) => m.ppid === pid);
+  const alive = now.filter((m) => m.state !== 'Z' && m.state !== 'X');
+  // Arguments that cannot be read, or read empty (a process between images, or gone), say nothing either way.
+  const known = (c: string | null): c is string => c !== null && c !== '';
+  const replaced = (was: GroupMember, is: GroupMember): boolean => is.comm !== was.comm || (known(was.cmdline) && known(is.cmdline) && is.cmdline !== was.cmdline);
+  const out: number[] = [];
+  const add = (pid: number): void => {
+    if (out.includes(pid) || alreadyResent.has(pid)) return;
+    out.push(pid);
+    for (const c of alive) if (c.ppid === pid && !seen.has(c.pid)) add(c.pid);
+  };
+  for (const m of alive) {
+    const was = wasShell.get(m.pid);
+    if (was === undefined || alreadyResent.has(m.pid)) continue;
+    if (replaced(was, m)) add(m.pid);
+    else if (startedNothing(m.pid)) for (const c of alive) if (c.ppid === m.pid && !seen.has(c.pid)) add(c.pid);
+  }
+  return out;
+}
+
 export interface BackgroundDeps {
   readonly backend: ShellBackend;
   readonly cwd: string;
@@ -28,6 +137,12 @@ export interface BackgroundDeps {
   readonly timers: Timers;
   readonly maxSessions?: number;
   readonly warn: (m: string) => void;
+  /** OQ-135: the process table a SIGINT's delivery is checked against; absent means the host's (Linux only), null none. */
+  readonly processes?: ProcessTable | null;
+  /** OQ-135: whether the session's shell has the vfork window; absent means its real path decides (`hasVforkWindow`). */
+  readonly vforkWindow?: boolean;
+  /** The signal primitive, `process.kill` by default — a seam for a test to stand in for a discarded delivery. */
+  readonly kill?: (pid: number, signal: NodeJS.Signals) => void;
 }
 
 export class BackgroundSession {
@@ -35,6 +150,11 @@ export class BackgroundSession {
   readonly startedAt: string;
   status: BackgroundStatus = 'running';
   exitCode: number | null = null;
+  /**
+   * REQ-TOOLS-103 (OQ-143): why the process could not be started, when Node reported that after `start` returned; null
+   * for a session whose process ran. Such a session is `failed` with no exit code, and its poll is an `execution_error`.
+   */
+  spawnError: string | null = null;
   /** REQ-SANDBOX-085: this spawn was confined, so its failure may be the launcher's rather than the command's. */
   confined = false;
   /**
@@ -50,6 +170,10 @@ export class BackgroundSession {
   private exited: Promise<void>;
   /** Part AL: the live stream's taps (REQ-TOOLS-127: `bg:<id>` publishes what the pipe produces). */
   private taps: ((chunk: string) => void)[] = [];
+  /** OQ-133: the signals `signal` delivered to the session's group, so a death by one of them reads `killed`. */
+  private readonly delivered = new Set<string>();
+  /** OQ-135: the checks a SIGINT arms, cancelled when the process exits. */
+  private sigintChecks: TimerHandle[] = [];
 
   constructor(readonly command: string, private readonly child: ChildProcess, id: string, startedAt: string, timeoutMs: number, private readonly deps: BackgroundDeps) {
     this.id = id;
@@ -58,12 +182,23 @@ export class BackgroundSession {
     child.stdout?.on('data', onData);
     child.stderr?.on('data', onData);
     this.exited = new Promise<void>((resolve) => {
-      child.on('exit', (code) => {
+      child.on('exit', (code, signal) => {
         this.timer?.cancel();
-        if (this.status === 'running') { this.exitCode = code ?? -1; this.status = code === 0 ? 'completed' : 'failed'; }
+        for (const t of this.sigintChecks) t.cancel();
+        this.sigintChecks = [];
+        if (this.status === 'running') { const end = endOfExit(code, signal, this.delivered); this.exitCode = end.exitCode; this.status = end.status; }
         resolve();
       });
-      child.on('error', (e) => { this.append(`\n[spawn error] ${String(e)}`); if (this.status === 'running') { this.status = 'failed'; this.exitCode = -1; } resolve(); });
+      // REQ-TOOLS-100/103/179 (OQ-143): Node reports a spawn that failed after `start` returned — ENOENT, EACCES — through
+      // `error` and never `exit`, and the child then has no pid. The command never ran, so it has no exit code: the session
+      // is `failed` with none, and the poll answers `execution_error`. It read `failed (exit -1)` before, a −1 that
+      // REQ-TOOLS-179 gives `killed` alone. An `error` once the process runs is not its end; its `exit` still comes.
+      child.on('error', (e) => {
+        if (child.pid !== undefined) { this.deps.warn(`background session ${this.id}: ${String(e)}`); return; }
+        this.append(`\n[spawn error] ${String(e)}`);
+        if (this.status === 'running') { this.timer?.cancel(); this.status = 'failed'; this.exitCode = null; this.spawnError = String(e); }
+        resolve();
+      });
     });
     this.timer = deps.timers.after(timeoutMs as Millis, () => { void this.end('timeout'); });
   }
@@ -135,7 +270,54 @@ export class BackgroundSession {
       void this.end('killed');
       return true;
     }
-    try { process.kill(-pid, name); return true; } catch { return false; }
+    const kill = this.deps.kill ?? ((p: number, s: NodeJS.Signals) => { process.kill(p, s); });
+    // OQ-135: the group as it stands before a SIGINT lands — which members are still the shell, catching it. Read only
+    // where the shell has the vfork window (`dash`): elsewhere a member that was the shell and runs another image since may
+    // be a clean-up the shell `exec`d after absorbing the signal (bash as `/bin/sh`).
+    const table = name === 'SIGINT' && this.deps.vforkWindow === true ? (this.deps.processes === undefined ? linuxProcessTable() : this.deps.processes) : null;
+    const before = table === null ? [] : table.tree(pid);
+    try { kill(-pid, name); } catch { return false; }
+    this.delivered.add(name);
+    if (table !== null && before.length > 0) this.checkSigint(pid, table, before, kill);
+    return true;
+  }
+
+  /**
+   * OQ-135: after a SIGINT, the checks that find a member of the group which never received it — `missedSigint` says
+   * which — and send it the signal once, alone. Only SIGINT has the window: `dash` catches it under `-c` and catches no
+   * other signal `send_signal` offers. Only `dash` is read (`hasVforkWindow`), and where there is no process table (every
+   * host but Linux) nothing is checked.
+   *
+   * The reason it was not, kept beside its replacement: delivery once to the group, as REQ-TOOLS-110 states, with the
+   * session left to report what its process did. Measured through this manager, `/bin/sh -c 'sleep 30'` signalled the
+   * instant it started, 45 of 200 sessions were still running 3 s later under six CPU burners. The first repair's reason,
+   * falsified and kept: "a process at SIGINT's default that received it is gone", so every member alive at the default and
+   * created within 1 s before the signal was sent it again. A command whose one-shot handler restored the default as it
+   * ran stands the same way, and was sent a second SIGINT that cut its shutdown off (`process.once`, signalled the instant
+   * it was up). The reading taken before the delivery now says which members were still the shell. The second repair's
+   * reason, falsified and kept: "a command that missed the signal stands at SIGINT's default, under another name", so a
+   * member was sent it again only then. Node installs its own SIGINT handler as it starts, and so do Python and a shell,
+   * and a shell `exec`ing a shell keeps its name: measured through this manager under six CPU burners, 27 of 150
+   * `node -e "setInterval(…)"` sessions and 39 of 200 `sh -c 'sleep 30; echo x'` sessions signalled the instant they
+   * started were still running 3 s later. A member that was the shell is now sent it again whatever its standing, when
+   * its name or its arguments changed, and with it what it started since.
+   */
+  private checkSigint(pid: number, table: ProcessTable, before: readonly GroupMember[], kill: (pid: number, signal: NodeJS.Signals) => void): void {
+    const shell = shellComm(this.deps.backend.file);
+    const resent = new Set<number>();
+    for (const after of SIGINT_RECHECK_AFTER_MS) {
+      this.sigintChecks.push(this.deps.timers.after(after as Millis, () => {
+        if (this.status !== 'running') return;
+        const found = new Set(before.map((m) => m.pid));
+        for (const member of missedSigint(before, table.tree(pid), shell, resent)) {
+          resent.add(member);
+          try { kill(member, 'SIGINT'); } catch { continue; }
+          this.deps.warn(found.has(member)
+            ? `background session ${this.id}: process ${member} was the shell starting its command as SIGINT was sent and never received it (the shell's vfork window, OQ-135); SIGINT sent to it once more`
+            : `background session ${this.id}: process ${member} was started after SIGINT was sent, by a command that never received it (the shell's vfork window, OQ-135); SIGINT sent to it`);
+        }
+      }));
+    }
   }
 }
 
@@ -152,7 +334,11 @@ export class BackgroundManager {
   private readonly sessions = new Map<string, BackgroundSession>();
   /** Part AL: the cap as the run's configuration set it (REQ-TOOLS-108); null means the construction-time value. */
   private maxOverride: number | null = null;
-  constructor(private readonly deps: BackgroundDeps) {}
+  private readonly deps: BackgroundDeps;
+  constructor(deps: BackgroundDeps) {
+    // OQ-135: whether the shell has the vfork window is told once, here, so neither a start nor a signal pays for it.
+    this.deps = { ...deps, vforkWindow: deps.vforkWindow ?? hasVforkWindow(deps.backend) };
+  }
 
   get running(): number {
     return [...this.sessions.values()].filter((s) => s.status === 'running').length;

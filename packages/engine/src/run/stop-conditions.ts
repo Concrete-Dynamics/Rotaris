@@ -8,6 +8,7 @@
  * guessed success (REQ-EVENTS-026, REQ-SESSION-187).
  */
 
+import { countNoun } from '@rotaris/kernel';
 import {
   ACTIVE_STATUSES, EXECUTION_STATUSES, STOP_REASONS, TERMINAL_RESULTS, isActiveStatus, isBusy, presentationStatus,
   type ExecutionStatus, type PresentationStatus, type StopReason, type TerminalResult,
@@ -107,7 +108,7 @@ export function summarise(s: { stopReason: string | null; completed: number; aba
   if (s.stopReason === 'user_cancelled') return { status: 'paused', severity: 'warning', message: "The run came to rest at the user's request." };
   if (s.completed === 0 && s.abandoned === 0) return { status: 'completed', severity: 'information', message: `The run ended without resolving any task (${s.stopReason ?? 'no stop reason recorded'}).` };
   if (s.abandoned === 0) return { status: 'completed', severity: 'information', message: 'The run completed.' };
-  if (s.completed === 0) return { status: 'failed', severity: 'error', message: s.lastFailure ? `The run failed: ${s.lastFailure}` : `The run failed: ${s.abandoned} task(s) abandoned.` };
+  if (s.completed === 0) return { status: 'failed', severity: 'error', message: s.lastFailure ? `The run failed: ${s.lastFailure}` : `The run failed: ${countNoun(s.abandoned, 'task')} abandoned.` };
   return { status: 'completed', severity: 'warning', message: `The run completed with failures: ${s.completed} completed, ${s.abandoned} abandoned.` };
 }
 

@@ -66,7 +66,8 @@ Measured as root under Xvfb on Linux, Node 24, from `fix-proofs-b2`:
 - **With `bwrap` 0.9.0** (installed through the proxy for this measurement): exit 1. Scenarios 1 to 5 passed, and in
   scenario 6 fourteen of fifteen checks held. The failing one was a product defect: case (c) of REQ-SANDBOX-077 left
   an empty `.git` directory on the host
-  ([`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md)).
+  ([`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md),
+  repaired 2026-09-29).
   The proof stays red on a Linux host with `bwrap` until that defect is repaired. Weakening the check to get a green
   result was not an option. The result is recorded in IC-8 (`docs/architecture/implementation-conditions.md`).
 

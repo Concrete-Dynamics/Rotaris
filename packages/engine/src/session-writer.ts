@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto';
-import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
+import { countNoun, err, type Instant, type MachineId, maskArguments, ok, redactRowString, type Result, type SessionId, toIsoUtc, type WallClock } from '@rotaris/kernel';
 import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type AgentTerminalRow, type CheckpointRow, type IterationInsert, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
-import { interruptionPhrase, isLegalChildMove, isResumeState, isTerminalChildState, type ChildState, type ImageAttachment, type Interruption, type ResumeState, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
+import { FOLLOW_UP_STATE, interruptionPhrase, isLegalChildMove, isLegalFollowUp, isResumeState, isTerminalChildState, type ChildState, type ImageAttachment, type Interruption, type ResumeState, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus, summarise } from './run/stop-conditions.js';
 import { AgentActivity } from './children/activity.js';
+import type { AgentGrant } from './children/personas.js';
 
 /**
  * ADR-0008 — one ordered session writer per session, owning the session's
@@ -159,7 +160,8 @@ export interface ToolCallOpen {
 }
 export interface ToolCallSettle {
   readonly status: 'ok' | 'failed' | 'blocked';
-  readonly elapsed_ms: number;
+  /** Null only for a call a crash cut, settled by the crash record: no process observed its end, so its duration is not known. */
+  readonly elapsed_ms: number | null;
   readonly is_error: boolean;
   readonly result: string;
   readonly error?: string | null;
@@ -379,6 +381,13 @@ export class SessionWriter {
 
   get sessionId(): SessionId {
     return this.deps.sessionId;
+  }
+  /**
+   * The wall clock this writer stamps its entries with, for a record written beside them by a caller with no clock of its
+   * own — the crash record and the stale-child settle, which run from the store alone (`writeTeardown`, REQ-ORCH-098).
+   */
+  get wall(): WallClock {
+    return this.deps.wall;
   }
   /** REQ-EVENTS-088: sticky for the remainder of the run. */
   get failed(): string | null {
@@ -660,7 +669,7 @@ export class SessionWriter {
         // PD-ORCH-005 revision 4 clause 14: the fingerprint is part of the agent's record, so it goes with it.
         const fingerprints = dal.clearClosedAgentFingerprints(sessionId);
         const ordinal = dal.nextTimelineOrdinal(sessionId);
-        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${removed} row(s) removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex, records_removed: records, fingerprints_removed: fingerprints }), id, 'info');
+        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${countNoun(removed, 'row')} removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex, records_removed: records, fingerprints_removed: fingerprints }), id, 'info');
         dal.touchSession(sessionId, this.status, at);
       });
     } catch (cause) {
@@ -1008,6 +1017,29 @@ export class SessionWriter {
   }
 
   /**
+   * REQ-MCP-065 with REQ-TOOLS-006: the grant a child's tool port put in force once it was ready — the native tools the
+   * controls left and the MCP evidence after them — over whatever the row held. The spawn records none, since no port has
+   * resolved a grant yet. The whole-session update is republished, so the inspector and the persona window read it at once
+   * (REQ-MCP-100/114).
+   *
+   * The evidence is written with `recorded: true` (REQ-MONITOR-049/060): the spawn writes `[]` and evidence with no marker,
+   * and so did every row before 2026-10-01, so the marker is what tells a grant the controls left empty of native tools
+   * from no grant recorded at all, with no migration (`toAgentRecord`'s `grantRecorded`;
+   * docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
+   */
+  recordChildGrant(taskId: string, grant: AgentGrant): Result<void, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId } = this.deps;
+    try {
+      dal.setChildGrant(sessionId, taskId, JSON.stringify(grant.tools), JSON.stringify({ ...grant.mcp, recorded: true }));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    this.deps.onCommitted({ kind: 'save' });
+    return ok(undefined);
+  }
+
+  /**
    * ADR-0012: the SOLE implementation of REQ-MONITOR-300's moves. Validates against the table (or a settling
    * path), stamps the completion timestamp on a terminal state, writes the row and `child.transition` in ONE
    * transaction — a refused move commits nothing and names both states (REQ-MONITOR-016), and there is no
@@ -1112,12 +1144,125 @@ export class SessionWriter {
     return ok(dal.getChild(sessionId, taskId)!);
   }
 
+  /**
+   * PD-ORCH-005 clause 22 (revision 5): a settled child its parent follows up by `session_id` leaves its terminal state
+   * for `queued` (`FOLLOW_UP_STATE`), its completion time, report and observation cleared, since it ends, reports and is
+   * observed again. `messages` — the call's `task` as a user message, after the child's payload where its record holds no
+   * conversation — join its conversation record, with `child.transition` and a `child_resumed` timeline entry, in ONE
+   * transaction: no reader sees the child queued without the message it is to answer, and a rest or a crash before it
+   * starts leaves a record it resumes from. Refused unless the child is terminal; which settled child may be followed up
+   * is the engine's (PD-TOOLS-006 revision 3).
+   */
+  followUpChild(taskId: string, iteration: number, messages: readonly unknown[]): Result<ChildRow, WriteFailure | { code: 'illegal-move'; from: string; to: string; reason: string }> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const current = dal.getChild(sessionId, taskId);
+    if (!current) return err({ code: 'illegal-move', from: '(none)', to: FOLLOW_UP_STATE, reason: `child ${taskId} does not exist in session ${sessionId}` });
+    const from = current.state as ChildState;
+    if (!isLegalFollowUp(from)) {
+      return err({ code: 'illegal-move', from, to: FOLLOW_UP_STATE, reason: `child ${taskId} is in state '${from}', not a terminal one, and cannot be followed up (REQ-MONITOR-300, PD-ORCH-005 clause 22)` });
+    }
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('child.transition', at, { child_id: taskId, from_state: from, to_state: FOLLOW_UP_STATE });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event child.transition could not be serialised and was not recorded: ${line.error.reason}`);
+    try {
+      dal.transaction(() => {
+        dal.reopenChild(sessionId, taskId, FOLLOW_UP_STATE);
+        for (const m of messages) dal.insertAgentMessage({ session_id: sessionId, task_id: taskId, iteration, kind: 'message', body: JSON.stringify(m), at });
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'child.transition', at, EVENT_SCHEMA_VERSION, null, line.value);
+        dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_resumed', 'rotaris', `Child ${current.canonical_name} (${taskId}), which had ended ${from}, was followed up by its parent; it resumes as ${FOLLOW_UP_STATE}.`, JSON.stringify({ task_id: taskId, follow_up: true, from_state: from, resume_state: FOLLOW_UP_STATE }), timelineId(), 'info');
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(dal.getChild(sessionId, taskId)!);
+  }
+
+  /**
+   * REQ-MONITOR-102 (the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): calls that join the
+   * session's tool-call total, and the per-agent counts that say the total holds them — the root's
+   * (`iterations.root_tool_calls`, raised by `root.add`) and each child's (`children.tool_calls`, set to `calls` where that
+   * is more than it holds) — in one transaction, so no process death leaves a call held by one and not the other. `total`
+   * is the session's new total, as a run's aggregates hold it; absent, the stored total is raised by what the agents'
+   * counts gained. Returns the total written. The save that follows publishes it.
+   *
+   * `planRoot` (REQ-ORCH-153, the repair of `a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`): the
+   * plan cycle's root, which has no iteration row, is released (`sessions.plan_root_task_id`) in the same transaction as its
+   * `add` calls join the total — and only a release adds them, so a root released already adds nothing a second time.
+   */
+  countToolCalls(counts: { readonly root?: { readonly iteration: number; readonly add: number }; readonly planRoot?: { readonly taskId: string; readonly add: number }; readonly children?: readonly { readonly taskId: string; readonly calls: number }[] }, total?: number): Result<number, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId } = this.deps;
+    try {
+      return ok(dal.transaction(() => {
+        let gained = 0;
+        if (counts.root && counts.root.add > 0 && dal.addIterationRootCalls(sessionId, counts.root.iteration, counts.root.add)) gained += counts.root.add;
+        if (counts.planRoot && dal.clearPlanRoot(sessionId, counts.planRoot.taskId)) gained += Math.max(0, counts.planRoot.add);
+        for (const c of counts.children ?? []) {
+          const current = dal.getChild(sessionId, c.taskId);
+          if (!current || c.calls <= current.tool_calls) continue;
+          dal.setChildTodo(sessionId, c.taskId, current.todo, c.calls);
+          gained += c.calls - current.tool_calls;
+        }
+        const stored = dal.getSession(sessionId)?.tool_calls ?? 0;
+        if (total === undefined && gained === 0) return stored;
+        const written = total ?? stored + gained;
+        dal.updateSessionRun(sessionId, { tool_calls: written });
+        return written;
+      }));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
+  /**
+   * REQ-MONITOR-102 with REQ-ORCH-153 (store v29): the plan cycle's root `taskId` is under way, its rows carrying `persona`,
+   * and none of its calls is counted — until `countToolCalls`'s `planRoot` releases it. In the same transaction the root is
+   * recorded for good under `persona` and its canonical instance name (store v30, REQ-MONITOR-044 with REQ-LIBRARY-093):
+   * what names it to the surfaces once its run has parked or ended, whether or not it published
+   * (`entryRootsOf`; the repair of `a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`).
+   */
+  openPlanRoot(taskId: string, persona: string, canonicalName: string): Result<void, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    try {
+      dal.transaction(() => {
+        dal.setPlanRoot(sessionId, taskId, persona);
+        dal.insertPlanRoot({ session_id: sessionId, root_task_id: taskId, root_canonical_name: canonicalName, root_persona: persona, opened_at: at });
+      });
+      return ok(undefined);
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
   /** PD-ORCH-005: the interruption that left the open iteration open, or NULL when it resumes. Its own transaction. */
   recordIterationInterruption(iteration: number, interruption: Interruption | null): Result<boolean, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId } = this.deps;
     try {
       return ok(dal.transaction(() => dal.setIterationInterruption(sessionId, iteration, interruption)));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
+  /**
+   * PD-ORCH-005 clause 3 (OQ-103's last question, ruled under R-067): the explicit cancel (REQ-MONITOR-126) was accepted —
+   * marked on the open iteration at once, before anything of it is carried out, so a host that dies before its teardown
+   * leaves a store the next repair or continue reads as that cancel and never as a crash (`recordCrash`). At the stronger
+   * durability setting (ADR-0058), as a terminal save is: the mark stands for a final act. `false` when no iteration is
+   * open, or the open one is already marked (the first acceptance is kept).
+   */
+  recordCancelAccepted(): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    try {
+      return ok(dal.durableTransaction(() => dal.markCancelAccepted(sessionId, toIsoUtc(wall.instant()))));
     } catch (cause) {
       return this.fail(cause);
     }
@@ -1426,7 +1571,7 @@ export class SessionWriter {
       dal.transaction(() => {
         dal.insertCheckpoint({ session_id: sessionId, sequence: input.sequence, ref: input.ref, commit_id: input.commit, created_at: at, iteration: input.iteration, child_name: input.childName, files: JSON.stringify(input.files), kind: input.kind });
         trimmed = dal.trimCheckpoints(sessionId, keep);
-        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_created', 'checkpoints', `Recorded checkpoint ${input.sequence} over ${input.files.length} file(s).`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, iteration: input.iteration, child_name: input.childName, kind: input.kind, file_count: input.files.length }), timelineId(), 'info');
+        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_created', 'checkpoints', `Recorded checkpoint ${input.sequence} over ${countNoun(input.files.length, 'file')}.`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, iteration: input.iteration, child_name: input.childName, kind: input.kind, file_count: input.files.length }), timelineId(), 'info');
         if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'checkpoint.created', at, EVENT_SCHEMA_VERSION, input.iteration, line.value);
         dal.touchSession(sessionId, this.status, at);
       });
@@ -1463,7 +1608,7 @@ export class SessionWriter {
       dal.transaction(() => {
         if (input.restored) {
           dal.setLastRestored(sessionId, input.sequence, at);
-          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_restored', 'checkpoints', `Restored the working tree to checkpoint ${input.sequence} over ${input.changedPaths} file(s).`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, safety_sequence: input.safetySequence, changed_files: input.changedPaths, dirty_paths: input.dirtyPaths.length, forced: input.forced, tree_root: input.treeRoot }), timelineId(), 'info');
+          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_restored', 'checkpoints', `Restored the working tree to checkpoint ${input.sequence} over ${countNoun(input.changedPaths, 'file')}.`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, safety_sequence: input.safetySequence, changed_files: input.changedPaths, dirty_paths: input.dirtyPaths.length, forced: input.forced, tree_root: input.treeRoot }), timelineId(), 'info');
         } else {
           const id = issueId();
           const message = `Restore of checkpoint ${input.sequence} did not run: ${input.blockedReason}`;

@@ -16,7 +16,8 @@
  *                 which sends `traceability.operate` (check, regenerate, regenerate) against a second copy of the
  *                 fixture and a `check` over the scale tree cancelled mid-pass through `traceability.cancel` — so
  *                 the real worker thread, the shared cancel flag and the process protocol execute before merge;
- *                 `process-results.json`.
+ *                 then the board's command family over the fixture, and REQ-TRACE-512's busy refusal over the scale
+ *                 tree, the second check answered while the first is still unanswered; `process-results.json`.
  *
  * `--skip-build` skips the desktop build. The scale tree and the fixture copies are removed at the end (they are
  * TypeScript the linter would otherwise parse); the numbers and texts stay in the JSON and log files.
@@ -26,6 +27,8 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { growthVerdict } from './lib/growth-verdict.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -48,22 +51,24 @@ const expect = (condition, message) => { if (!condition) throw new Error(message
  *  - **Work, asserted always.** The half-size tree must really be about half — the documents parsed, the files swept
  *    or the files parsed on each side. No clock can tell a proof that, and if it is wrong the timing ratio means
  *    nothing whatever it reads. This is the assertion that cannot be bought off by load.
- *  - **Time, taken as the minimum of three readings and floored.** Load can only make a pass slower, never faster,
- *    so the minimum is the least contaminated estimate (`msMin`, in `traceability.proof.test.ts`). Below the floor,
- *    a wall clock cannot tell two passes apart at all, so the ratio is RECORDED and not asserted, and the line says
- *    so rather than passing silently — a proof that cannot fail is not evidence, and neither is one that pretends
- *    a 3 ms reading measured something.
+ *  - **Time, taken as the minimum of repeated readings and floored.** Load can only make a pass slower, never faster,
+ *    so the minimum is the least contaminated estimate. Below the floor, a wall clock cannot tell two passes apart
+ *    at all, so the ratio is RECORDED and not asserted, and the line says so rather than passing silently — a proof
+ *    that cannot fail is not evidence, and neither is one that pretends a 3 ms reading measured something.
+ *
+ * 2026-10-01 (R-067): the two sides are now read EVENLY — seven readings each after one warm-up each, interleaved
+ * and alternating which side goes first (`interleavedMinima`, `packages/workspace/src/traceability/growth-readings.ts`).
+ * Reading the full tree first and the half tree afterwards had let the half side run hotter and read cheap, and the
+ * parse went red at 3.04 to 3.37, twice in a row on an idle host. The verdict and its message are `growthVerdict`
+ * (`lib/growth-verdict.mjs`), which prints each side's readings as that side's
+ * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
  */
-const GROWTH_FLOOR_MS = 25;
-const GROWTH_CEILING = 3.0;
+const growthLines = [];
 const linear = (label, pair, lower) => {
-  const workRatio = Math.round((pair.work.full / Math.max(pair.work.half, 1)) * 100) / 100;
-  expect(workRatio > 1.5 && workRatio < 2.6, `${label}: the half-size tree is not about half the work (${pair.work.full} against ${pair.work.half}, ratio ${workRatio})`);
-  if (pair.fullMinMs < GROWTH_FLOOR_MS || pair.halfMinMs < GROWTH_FLOOR_MS) {
-    console.log(`  NOTE  ${label} growth ratio ${pair.ratio} recorded, NOT asserted: ${pair.fullMinMs} ms against ${pair.halfMinMs} ms is below the ${GROWTH_FLOOR_MS} ms floor at which a wall clock can tell two passes apart (work ratio ${workRatio} asserted instead)`);
-    return;
-  }
-  expect(pair.ratio > lower && pair.ratio < GROWTH_CEILING, `${label} growth ratio ${pair.ratio} is not linear — minimum of the readings ${JSON.stringify(pair.warmRunsMs ?? [])} full against ${JSON.stringify(pair.halfWarmRunsMs ?? pair.warmRunsMs ?? [])} half, work ratio ${workRatio}`);
+  const verdict = growthVerdict(label, pair, lower);
+  expect(verdict.ok, verdict.message);
+  if (!verdict.asserted) console.log(`  NOTE  ${verdict.message}`);
+  growthLines.push(verdict.message);
 };
 
 /**
@@ -151,8 +156,9 @@ try {
   // `hostSwitches` after the four positional arguments the driver destructures from `process.argv.slice(2)`:
   // Electron keeps a Chromium switch in `process.argv`, so ahead of them `--no-sandbox` became the service bundle as
   // root. Chromium honours a switch anywhere before a bare `--`, so the end of the list still reaches it.
-  const drove = spawnSync(electron, [driver, join(app, 'out', 'main', 'workspace-service.js'), processFixture, scale, processOut, ...hostSwitches], { cwd: app, encoding: 'utf8', timeout: 180_000, windowsHide: true, env });
+  const drove = await spawnBounded(electron, [driver, join(app, 'out', 'main', 'workspace-service.js'), processFixture, scale, processOut, ...hostSwitches], { cwd: app, timeoutMs: 180_000, windowsHide: true, env });
   writeFileSync(join(output, 'process.log'), `${drove.stdout ?? ''}\n${drove.stderr ?? ''}`);
+  if (drove.overran) throw new Error(`${overrunMessage('the Electron driver', drove, `${drove.stdout}\n${drove.stderr}`)}\n(see .proof/traceability-proof/process.log)`);
   expect(drove.status === 0, `the Electron driver exited ${drove.status ?? drove.signal ?? 'unknown'} (see .proof/traceability-proof/process.log)`);
   const proc = JSON.parse(readFileSync(processOut, 'utf8'));
   results.process = proc;
@@ -180,8 +186,22 @@ try {
   const bb = viaBoard(proc.boardBaselines);
   expect(bb !== null && bb.result.ok && bb.result.value.length === 3 && proc.boardBaselines.changed, 'the baseline update through the board did not write three baselines with the generation moved');
   expect(viaBoard(proc.boardCompare) !== null && proc.boardCompare.changed === undefined, 'compare through the board did not answer in the operation reply shape, or moved the generation');
-  const busy = proc.boardBusy.map(viaBoard);
-  expect(busy.filter((b) => b && b.result.ok === false && b.result.error.kind === 'busy').length === 1 && busy.filter((b) => b && b.result.ok === true).length === 1, `two concurrent checks did not yield exactly one busy refusal (REQ-TRACE-512): ${JSON.stringify(busy.map((b) => b && b.result.ok))}`);
+  // REQ-TRACE-512: the second check, posted while the first was unanswered, is refused `busy`; the first is not refused,
+  // and answers `cancelled` (the cancel found it in flight) or ok (it finished first). The timings make a red readable.
+  const [busyFirst, busySecond] = proc.boardBusy.map(viaBoard);
+  // Recorded before it is asserted, so `results.json` carries both replies and their timings on a red as on a pass.
+  results.busyPair = {
+    replies: [busyFirst, busySecond].map((b) => (b === null ? 'unreadable' : b.result.ok ? 'ok' : b.result.error.kind)),
+    serviceMs: [busyFirst, busySecond].map((b) => (b === null ? null : b.elapsedMs)),
+    ...proc.boardBusyTiming,
+    cancelFoundTheFirst: proc.boardBusyCancel && proc.boardBusyCancel.value ? proc.boardBusyCancel.value.cancelled : null,
+  };
+  const busyRead = JSON.stringify(results.busyPair);
+  expect(results.busyPair.replies[1] === 'busy', `a second check posted while the first was in flight was not refused busy (REQ-TRACE-512): ${busyRead}`);
+  // The service takes its requests in order, so a second answered while the first is still unanswered was decided while the
+  // first was in flight: that is what makes the refusal evidence rather than a race that happened to line up.
+  expect(results.busyPair.firstUnansweredAtSecondReply === true, `the first check had answered before the second did, so it was not held in flight (REQ-TRACE-512): ${busyRead}`);
+  expect(['ok', 'cancelled'].includes(results.busyPair.replies[0]), `the first of the two checks answered neither ok nor cancelled (REQ-TRACE-512): ${busyRead}`);
   const boardValue = proc.board.value;
   expect(boardValue && boardValue.source.kind === 'store' && boardValue.cards.length === fixtureResults.records.length, `the board after the operations: ${JSON.stringify(boardValue).slice(0, 200)}`);
   // REQ-TRACE-258/270: the projection joins the verification state the pass now supplies — no card without one.
@@ -205,7 +225,9 @@ console.log(`  parse ${results.spike.parse.documents} documents: ${results.spike
 console.log(`  sweep ${results.spike.sweep.files} files / ${results.spike.sweep.sites} sites: ${results.spike.sweep.warmMs} ms warm (${results.spike.sweep.coldMs} ms cold); half-size ratio ${results.spike.sweepHalf.ratio}`);
 console.log(`  parser (TypeScript ${results.spike.parser.version}) over ${results.spike.parser.files} files: ${results.spike.parser.warmMs} ms warm (${results.spike.parser.coldMs} ms cold), ${results.spike.parser.perFileMs} ms/file, load ${results.spike.parser.loadMs} ms; inside the sweep ${results.spike.parser.sweepParsedFiles} files in ${results.spike.parser.sweepParseMs} ms; half-size ratio ${results.spike.parser.ratio}`);
 console.log(`  process path: check ${results.process.check.elapsedMs} ms, regenerate ${results.process.regenerate1.elapsedMs} ms, cancelled check ${results.process.cancelledCheck.elapsedMs} ms`);
+for (const line of growthLines) console.log(`  growth: ${line}`);
 console.log(`  board path (requirements.operation): check ${results.boardPath.checkMs} ms, regenerate ${results.boardPath.regenerateMs} ms, baselines ${results.boardPath.baselinesMs} ms; generation ${results.boardPath.generation}; the card's sentences asserted over the real replies`);
+console.log(`  busy pair over the scale tree: first ${results.busyPair.replies[0]} at ${results.busyPair.firstAnsweredMs} ms (service ${results.busyPair.serviceMs[0]} ms), second ${results.busyPair.replies[1]} at ${results.busyPair.secondAnsweredMs} ms (posted at ${results.busyPair.secondPostedMs} ms; the first still unanswered)`);
 
 /** The Electron driver: fork the built workspace service as a utilityProcess and speak the process protocol to it. */
 function driverSource() {
@@ -265,8 +287,24 @@ app.whenReady().then(async () => {
     results.boardRegenerate = await board({ name: 'requirements.operation', operation: 'regenerate' });
     results.boardBaselines = await board({ name: 'requirements.operation', operation: 'baselines' });
     results.boardCompare = await board({ name: 'requirements.operation', operation: 'compare' });
-    results.boardBusy = await Promise.all([board({ name: 'requirements.operation', operation: 'check' }), board({ name: 'requirements.operation', operation: 'check' })]);
     results.board = await board({ name: 'requirements.board' });
+    // REQ-TRACE-512's busy refusal, with the first check held in flight for real: two checks over the 11-requirement
+    // fixture raced, since a first that finished in ~8 ms before the service took the second off its channel left both
+    // answering ok (docs/defects/fixed/traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md).
+    // The pair runs over the scale tree, opened as the workspace, whose check lasts long enough to cancel mid-pass above;
+    // the second is posted only while the first is unanswered, the first is then cancelled, and both replies are timed.
+    results.scaleOpened = await request({ kind: 'workspace.open', workspaceRoot: scaleRoot });
+    const scaleBoard = (command) => request({ kind: 'requirements.command', workspaceRoot: scaleRoot, command: { workspace: scaleRoot, ...command }, actor: { kind: 'system' } });
+    const busyStarted = Date.now();
+    const busyTiming = { firstAnsweredMs: null };
+    const first = scaleBoard({ name: 'requirements.operation', operation: 'check' }).then((r) => { busyTiming.firstAnsweredMs = Date.now() - busyStarted; return r; });
+    busyTiming.secondPostedMs = Date.now() - busyStarted; // in the same tick: the first cannot have answered yet
+    const second = await scaleBoard({ name: 'requirements.operation', operation: 'check' });
+    busyTiming.secondAnsweredMs = Date.now() - busyStarted;
+    busyTiming.firstUnansweredAtSecondReply = busyTiming.firstAnsweredMs === null;
+    results.boardBusyCancel = await scaleBoard({ name: 'requirements.cancel', operation: 'check' });
+    results.boardBusy = [await first, second];
+    results.boardBusyTiming = busyTiming;
     shuttingDown = true;
     await request({ kind: 'shutdown', deadlineMs: 5000 }, 10000);
     fs.writeFileSync(outFile, JSON.stringify(results, null, 2));

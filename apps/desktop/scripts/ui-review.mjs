@@ -8,6 +8,7 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from '
 import { join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo } from './lib/harness.mjs';
+import { countByKind, countContractsByRelation } from './lib/audit-finding.mjs';
 
 const argv = process.argv.slice(2).filter((value) => value !== '--');
 const flag = (name) => argv.find((value) => value.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -97,7 +98,9 @@ function previousIterationCritique(n) {
   return candidates[0]?.candidate ?? null;
 }
 const previousCritique = previousIterationCritique(iteration);
-const byKind = report.findings.reduce((acc, finding) => ({ ...acc, [finding.kind]: (acc[finding.kind] ?? 0) + 1 }), {});
+const byKind = countByKind(report.findings);
+// A CONTRACT finding names the relation that failed under `relation`, never under `kind`.
+const contractsByRelation = countContractsByRelation(report.findings);
 const manifest = {
   version: 1,
   revision,
@@ -110,7 +113,7 @@ const manifest = {
   // What ground the pack was captured on. A critique that names a contrast is answerable only
   // against a named palette, and a screenshot does not say which one it is.
   captured: { theme: report.theme ?? null, sizes: report.sizes ?? [], views: report.views ?? [] },
-  deterministic: { findings: report.findings.length, byKind },
+  deterministic: { findings: report.findings.length, byKind, contractsByRelation },
   files,
   previousCritique: previousCritique === null ? null : relative(output, previousCritique).replaceAll('\\', '/'),
 };

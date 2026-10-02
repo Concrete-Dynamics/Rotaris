@@ -3,8 +3,9 @@
  * R-043 — the run-autopsy snapshot printer: the store_snapshot.py habit as a
  * product reader. Read-only: it opens the workspace store read-only, runs one
  * pass over the session's own records, and prints the session row, the
- * per-model-key tool-call attribution (from the children record — the
- * usage.update payload carries tokens and cost alone), failure
+ * per-model-key tool-call attribution (a child's from the children record —
+ * the usage.update payload carries tokens and cost alone — and the entry
+ * agent's from its launch audit, continuations and switches), failure
  * detail grouped by cause, the usage curve with the largest jumps, coherence
  * warnings, and per-endpoint model-request counts.
  *
@@ -30,6 +31,8 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { workspacesRootFor } from './lib/harness.mjs';
+import { nullSummaryLine, zeroCostLine } from './lib/autopsy-coherence.mjs';
+import { childModelKeys, entryKeyLabel, entryModelKeys } from './lib/autopsy-entry-model.mjs';
 
 const require = createRequire(join(process.cwd(), 'apps', 'desktop', 'package.json'));
 const Database = require('better-sqlite3');
@@ -100,10 +103,11 @@ const row = db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sid);
 if (!row) throw new Error(`no session ${sid} in ${dbPath}`);
 
 const toolCalls = db.prepare('SELECT * FROM tool_calls WHERE session_id = ? ORDER BY ordinal').all(sid);
-const timeline = db.prepare('SELECT ordinal, at, name, actor, message, severity FROM timeline WHERE session_id = ? ORDER BY ordinal').all(sid);
+const timeline = db.prepare('SELECT ordinal, at, name, actor, message, metadata, severity FROM timeline WHERE session_id = ? ORDER BY ordinal').all(sid);
+const launchAudit = db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sid);
 const issues = db.prepare('SELECT ordinal, id, kind, severity, actor, message FROM issues WHERE session_id = ? ORDER BY ordinal').all(sid);
 const events = db.prepare('SELECT ordinal, kind, at, payload FROM events WHERE session_id = ? ORDER BY ordinal').all(sid);
-const children = db.prepare('SELECT given_name, persona, state, tool_calls, model_key FROM children WHERE session_id = ? ORDER BY spawned_at').all(sid);
+const children = db.prepare('SELECT given_name, canonical_name, persona, state, tool_calls, model_key FROM children WHERE session_id = ? ORDER BY spawned_at').all(sid);
 const checkpoints = db.prepare('SELECT sequence FROM checkpoints WHERE session_id = ? ORDER BY sequence').all(sid);
 db.close();
 
@@ -159,17 +163,19 @@ for (const t of toolCalls) {
   const command = args !== null && typeof args === 'object' && !Array.isArray(args) ? head(str(args.command).replace(/\s+/g, ' '), 120) : '';
   if (command !== '') commands.set(command, (commands.get(command) ?? 0) + 1);
 }
-const stopped = !['idle', 'running', 'background', 'waiting'].includes(row.execution_status);
-
 // Per-model-key attribution: the store records no provider or model on the
-// usage.update payload (tokens and cost alone), so tool calls attribute to
-// the model_key the children record carries. The entry agent's own calls
-// read as the session's own model key.
+// usage.update payload (tokens and cost alone), so a child's tool calls go to
+// the model_key the children record carries, and the entry agent's to the
+// key(s) its own records name — the launch audit, its continuations, its
+// switches, the overrides of its pair and the ladder's fallbacks of it — or
+// `session` when none does; never its children's (a71-13). A child is matched
+// by the canonical name its calls and the ladder's entries carry, never by
+// the name it was given (`childModelKeys`).
 const callsByAgent = new Map();
 for (const t of toolCalls) callsByAgent.set(t.agent_name, (callsByAgent.get(t.agent_name) ?? 0) + 1);
-const keyByAgent = new Map(children.map((c) => [c.given_name, c.model_key]));
+const keyByAgent = childModelKeys(children);
 const childAgents = new Set(keyByAgent.keys());
-const entryKey = new Set(children.map((c) => c.model_key)).size === 1 ? children[0].model_key : 'session';
+const entryKey = entryKeyLabel(entryModelKeys(launchAudit?.payload, timeline, childAgents));
 const endpoints = new Map();
 for (const [agent, n] of callsByAgent) {
   const key = childAgents.has(agent) ? keyByAgent.get(agent) : entryKey;
@@ -199,12 +205,14 @@ if (jumps.length === 0) console.log('  none');
 for (const j of jumps.slice(0, 10)) console.log(`  ${j.at}: in=${j.input} out=${j.output} jump=+${j.jump}`);
 console.log('');
 console.log('### coherence');
-console.log(`  null summary on stopped run: ${stopped && (row.summary_text ?? '') === ''}`);
-console.log(`  zero cost with tokens: ${row.cost === '0' && row.tokens_input + row.tokens_output > 0}`);
+// `unasked` for a session that never stopped, never a `false` a check could pass on (live-run finding H-c).
+console.log(nullSummaryLine(row));
+// Asked only where a figure existed: `cost_qualifier` `unknown` makes 0 the correct total (live-run finding K2(b)).
+console.log(zeroCostLine(row));
 for (const [path, n] of [...reads.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(cut(`  read ${n}×: ${path}`));
 for (const [command, n] of [...commands.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(cut(`  retried ${n}×: ${command}`));
 console.log('');
-console.log('### tool calls per model key (from the children record)');
+console.log('### tool calls per model key (children from the children record by canonical name, the entry agent from its launch audit, continuations, switches, overrides and fallbacks)');
 if (endpoints.size === 0) console.log('  none recorded');
 for (const [endpoint, v] of [...endpoints.entries()].sort((a, b) => b[1].calls - a[1].calls)) console.log(cut(`  ${endpoint}: ${v.calls} calls [${v.agents.sort().join(', ')}]`));
 console.log('');

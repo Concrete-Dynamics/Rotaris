@@ -1,4 +1,4 @@
-import { presentationStatus, PROJECT_SETUP_SEND_REASON, STATUS_LABELS, type PresentationStatus } from '@rotaris/contracts';
+import { presentationStatus, PROJECT_SETUP_SEND_REASON, resolvePreset, STATUS_LABELS, type PresentationStatus } from '@rotaris/contracts';
 
 /**
  * Part AB — the composer's and the run header's rules, as values rather than as markup, so each is checkable
@@ -74,6 +74,17 @@ export function statusStripRunItem(executionStatus: string | null, needsRecovery
   if (executionStatus === null) return 'no session';
   if (runStateOf(executionStatus, needsRecovery) === 'recovery') return RUN_STATE_LABELS.recovery;
   return `run ${STATUS_LABELS[presentationStatus(executionStatus)]}`;
+}
+
+/**
+ * REQ-TOOLS-184's `mode: <preset>`, shown permanently: the focused session's own mode, and with no session focused the
+ * configured one — the preset the next run starts from (REQ-CONFIG-288's reading, which the composer's mode chip
+ * already follows). Before a configuration has been read there is none, and a missing key resolves to REQ-TOOLS-046's
+ * shipped default. Until 2026-09-29 the strip fell back to the literal `ask` whatever was configured (live-run finding
+ * L7), understating an `autonomous` workspace on the one indicator that is there for safety.
+ */
+export function statusStripModeItem(sessionMode: string | null, configuredMode: string | null): string {
+  return `mode: ${sessionMode ?? resolvePreset(configuredMode).preset}`;
 }
 
 /** What the Pause control's pending mark is scoped to: the session shown and whether its run is busy (REQ-NOTIFY-050). */
@@ -202,6 +213,24 @@ export function modelChipLabel(loaded: boolean, models: readonly string[], selec
  */
 export const DRAFT_PUBLISH_MS = 200;
 export const DRAFT_WRITE_MS = 400;
+
+/**
+ * Whether the composer takes keyboard focus back once a submission it awaited has settled (a start, a continue, a
+ * queue, an executed slash command). It does when focus is nowhere (`null` or the body), in the composer, or still on
+ * whatever held it when the submission began (the send pill, or the widget a Ctrl+Return came from, REQ-CHAT-001). It
+ * does NOT when something else took focus while the submission was in flight: a dialog that opened meanwhile keeps
+ * it. The run's events draw "Steer the run" before the start's reply arrives, so the steer dialog (REQ-MONITOR-137)
+ * can open and focus its field in that window; until 2026-10-01 the composer took the focus back from under the modal
+ * and the steer's text was typed into the composer behind it
+ * (`docs/defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`).
+ * Nothing in the specification moves focus out of an open modal (REQ-CHAT-002 gives a modal its own keys).
+ *
+ * The elements are compared by identity and nothing else is read of them, so the rule is checkable without a DOM.
+ */
+export function composerReclaimsFocus<T>(focus: { readonly now: T | null; readonly atSubmit: T | null; readonly body: T | null; readonly composer: T | null }): boolean {
+  const { now, atSubmit, body, composer } = focus;
+  return now === null || now === body || now === composer || now === atSubmit;
+}
 
 /** REQ-CHAT-010's geometry, as the requirement states it. */
 export const COMPOSER_DEFAULT_HEIGHT = 150;

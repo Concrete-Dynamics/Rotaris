@@ -1,15 +1,15 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { toIsoUtc, type Clocks } from '@rotaris/kernel';
-import { presetRank, resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
+import { presetRank, resolvePreset, restrictionsAllow, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, directWorkBundle, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, EMPTY_MCP_EVIDENCE, toolRestrictionsFor, type AgentGrant, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
-import type { McpHost } from './mcp.js';
+import { grantEvidence, type McpHost } from './mcp.js';
 import { artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
@@ -95,6 +95,12 @@ export interface ToolPortDeps {
   /** ADR-0034 (Part S): the run host's MCP holder and the run's configuration; null means no MCP surface (tests). */
   readonly mcp?: McpHost | null | undefined;
   readonly configured?: ((workspaceRoot: string) => ConfiguredRun | null) | undefined;
+  /**
+   * PD-ORCH-005 clause 9: the application's quit has closed its last window and its shutdown is still to come. What an
+   * agent asks of a person meanwhile — an approval or a question — waits, unshown, for the quit to withdraw it, and no
+   * budget expires on it. Absent in a test that never quits.
+   */
+  readonly quitting?: (() => boolean) | undefined;
 }
 
 /** REQ-TOOLS-104/106: the backend by presence alone; the PTY factory loaded once. Null when no shell exists on the host. */
@@ -105,18 +111,41 @@ export async function terminalManagerFromHost(clocks: Clocks, warn: (m: string) 
   return new TerminalManager({ factory: await nodePtyFactory(), backend, clocks, config: { ...TERMINAL_DEFAULTS, commandTimeoutS: shellCommandTimeoutS }, env, warn });
 }
 
-/** The sink the gate writes through: every unit lands in the session writer's transactions. */
-function writerSink(writer: SessionWriter, sessionId: string, clocks: Clocks, warn: (m: string) => void): GateSink {
-  return {
-    decision: (e) => { const r = writer.recordDecision({ timestamp: toIsoUtc(clocks.wall.instant()), session_id: sessionId, ...e }); return r.ok ? r.value : null; },
-    approvalRequested: (p) => { writer.recordEvent('approval.requested', p); },
-    pendingChanged: (pending) => { writer.save(writer.currentStatus, { pending_approvals: JSON.stringify(pending) }); },
-    issue: (i) => { writer.recordIssue(i); },
-    timeline: (name, actor, message, metadata) => { writer.appendTimeline(name, actor, message, metadata); },
-    toolOpen: (o) => { const r = writer.openToolCall(o); return r.ok ? r.value : null; },
-    toolSettle: (ordinal, o, s) => { writer.settleToolCall(ordinal, o, s); },
+/**
+ * The sink the gate writes through: every unit lands in the session writer's transactions — until `close`.
+ *
+ * REQ-SESSION-094: the writer outlives the run (a continue in this process writes through the same one), so a call the
+ * stop's grace detached, returning after its run ended, would write its settle, `tool.finish` and issues into the
+ * finished session, or into a later run of it. `close` settles each call still open, as failed with the engine's
+ * statement, before the run's terminal pair, and drops every write after it. The repair of
+ * `a-detached-call-still-writes-through-its-tool-gate.md`.
+ */
+function writerSink(writer: SessionWriter, sessionId: string, clocks: Clocks, warn: (m: string) => void): { readonly sink: GateSink; readonly close: (cutOff: string) => void; readonly closed: () => boolean } {
+  let closed = false;
+  const open = new Map<number, { readonly call: Parameters<GateSink['toolOpen']>[0]; readonly started: number }>();
+  const sink: GateSink = {
+    decision: (e) => { if (closed) return null; const r = writer.recordDecision({ timestamp: toIsoUtc(clocks.wall.instant()), session_id: sessionId, ...e }); return r.ok ? r.value : null; },
+    approvalRequested: (p) => { if (!closed) writer.recordEvent('approval.requested', p); },
+    pendingChanged: (pending) => { if (!closed) writer.save(writer.currentStatus, { pending_approvals: JSON.stringify(pending) }); },
+    issue: (i) => { if (!closed) writer.recordIssue(i); },
+    timeline: (name, actor, message, metadata) => { if (!closed) writer.appendTimeline(name, actor, message, metadata); },
+    toolOpen: (o) => {
+      if (closed) return null;
+      const r = writer.openToolCall(o);
+      if (!r.ok) return null;
+      open.set(r.value, { call: o, started: clocks.monotonic.now() });
+      return r.value;
+    },
+    toolSettle: (ordinal, o, s) => { if (closed) return; open.delete(ordinal); writer.settleToolCall(ordinal, o, s); },
     warn,
   };
+  const close = (cutOff: string): void => {
+    if (closed) return;
+    closed = true;
+    for (const [ordinal, { call, started }] of open) writer.settleToolCall(ordinal, call, { status: 'failed', elapsed_ms: clocks.monotonic.now() - started, is_error: true, result: cutOff });
+    open.clear();
+  };
+  return { sink, close, closed: () => closed };
 }
 
 /**
@@ -239,6 +268,14 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // ADR-0036: the configured persona over the built-in table; the built-in table alone when no configuration resolved.
   const resolver = deps.personas(ctx.workspaceRoot);
   const persona = resolver?.resolve(ctx.persona)?.persona ?? BUILT_IN_PERSONAS[ctx.persona as RoleName] ?? BUILT_IN_PERSONAS.orchestrator;
+  /*
+   * REQ-TOOLS-006 (4) with REQ-CONFIG-103, under OQ-145's reading: the allowed-tool lists binding this agent — the entry
+   * its own persona's `tool_restrictions` gives its name, and the entry the delegating persona's map gives it. The reason
+   * no restriction ever narrowed a grant, kept beside its replacement (acceptance finding A4, R-067): this call passed the
+   * persona's name, tools, `coordinator_only` and `read_only`, and never its map.
+   */
+  const parentAgentPersona = ctx.parentPersona === undefined ? null : resolver?.resolve(ctx.parentPersona)?.persona ?? BUILT_IN_PERSONAS[ctx.parentPersona as RoleName] ?? null;
+  const restrictions = toolRestrictionsFor(persona, parentAgentPersona);
   const isEntry = isEntryPort(ctx);
   // REQ-ORCH-025: `single` grants the entry role the direct-work bundle and withholds delegate from every role.
   const single = runtime.runOverride === 'single';
@@ -285,12 +322,15 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
    * (REQ-CHAT-094). The budget is REQ-TOOLS-178's shared `runtime.approval_timeout_seconds`, whose 300 s default is
    * REQ-CHAT-093's figure and whose 0 means no limit.
    */
-  const questions = new PendingQuestions(deps.clocks.timers);
+  const quitting = (): boolean => deps.quitting?.() === true;
+  const questions = new PendingQuestions(deps.clocks.timers, { held: quitting });
   const conversationId = ctx.parentId ?? 'root';
   executors.set('ask_questions', askQuestionsTool({
     pending: questions, conversationId, agentId: ctx.agentName, timeoutMs: runtime.approvalTimeoutMs,
     publish: () => {
-      if (!ctx.attended()) return false;
+      // PD-ORCH-005 clause 9 with PD-CHAT-002 revision 2: a prompt put while the quit is under way is held for the quit to
+      // withdraw — published to the record, never discarded as unshowable (REQ-CHAT-094's cancellation).
+      if (!ctx.attended() && !quitting()) return false;
       return ctx.writer.save(ctx.writer.currentStatus).ok;
     },
   }) as ToolExecutor);
@@ -298,16 +338,29 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // `canPublishArtifacts` follows the store's presence: REQ-TOOLS-004 reserves `artifact_publish_not_granted`
   // for a build that withholds publishing separately, and no requirement in this part names such a grant — a
   // persona that must not publish declares no `artifact_write` (REQ-TOOLS-002). Recorded as a decision taken.
-  const resolved = resolveToolSet({ name: ctx.persona, tools: declared, coordinatorOnly: persona.coordinatorOnly && delegationAvailable && !directWork, readOnly: persona.readOnly }, {}, {
+  const resolved = resolveToolSet({ name: ctx.persona, tools: declared, coordinatorOnly: persona.coordinatorOnly && delegationAvailable && !directWork, readOnly: persona.readOnly, toolRestrictions: restrictions }, {}, {
     // Part AC: `userPromptChannel` is attendedness (REQ-TOOLS-053/069) — an unattended run has no surface to put a
     // prompt in front of, so the registry removes `ask_questions` with `user_prompt_channel_absent`. It stood at a
     // literal `false` until this part, because there was no executor for it to be true of.
     delegationRuntime: delegationAvailable, userPromptChannel: ctx.attended(), artifactStore: artifacts !== undefined, canPublishArtifacts: artifacts !== undefined, terminalBackend: executors.has('terminal'), executors: new Set(executors.keys()),
   }, isEntry);
-  for (const r of resolved.removals) ctx.warn(`tool '${r.tool}' removed from ${ctx.persona} by ${r.control}${r.reason ? ` (${r.reason})` : ''} (REQ-TOOLS-004/006)`);
+  /*
+   * REQ-TOOLS-006: "every removal is logged together with the persona and the control that removed it", at no level the
+   * requirement names. A narrowing control's removal (the run's allow-list, `coordinator_only`, `read_only`,
+   * `tool_restrictions`) is the configuration doing what it says — every coordinated run removes the orchestrator's four
+   * write and command tools — so it is `info`: PD-MONITOR-002's default threshold keeps it in the application log, and the
+   * session log's default `WARNING` (REQ-SESSION-142) leaves it out. Until live-run finding L14 it was a warning, four
+   * per coordinated run, and the only warnings most sessions carried. A REQ-TOOLS-004 prerequisite's removal is a
+   * declared tool this run cannot provide ("degrade availability") and stays a warning.
+   */
+  const logInfo = ctx.info ?? ctx.warn;
+  for (const r of resolved.removals) (r.control === 'prerequisite' ? ctx.warn : logInfo)(`tool '${r.tool}' removed from ${ctx.persona} by ${r.control}${r.reason ? ` (${r.reason})` : ''} (REQ-TOOLS-004/006)`);
   const callable = new Map<string, ToolExecutor>();
   for (const n of resolved.tools) { const e = executors.get(n); if (e) callable.set(n, e); }
   const specs = [...callable.values()].map(toolSpec);
+  // REQ-MONITOR-060/061 (live-run finding K1): the native tools the one resolution kept AND that hold an executor — the
+  // names the agent can call, before the MCP surface joins the callable map on `ready()` (those are shown per server).
+  const nativeResolved = [...callable.keys()];
 
   /*
    * REQ-TOOLS-048 (narrowed by PD-TOOLS-002): the requested mode is SELECTED here, at agent construction, from
@@ -319,9 +372,11 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const pin = persona.permissionMode ?? null;
   let mode: PermissionPreset = selectRequestedMode({ pin, override: ctx.modeOverride ?? null, runtime: ctx.requestedMode });
   const policy = new PolicyContext(buildPolicy({ preset: mode, workspaceRoot: root }));
-  const approvals = new PendingApprovals(deps.clocks.timers);
+  const approvals = new PendingApprovals(deps.clocks.timers, { held: quitting });
+  const writes = writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn);
+  const toolHooks = ctx.hooks ?? null;
   const gate = new Gate({
-    sessionId: ctx.sessionId, workspaceRoot: root, policy, approvals, attended: ctx.attended, presenter: deps.presenter,
+    sessionId: ctx.sessionId, workspaceRoot: root, policy, approvals, attended: ctx.attended, presenter: deps.presenter, quitting,
     headlessPolicy: runtime.headlessPolicy, abortHook: ctx.abortRun, approvalTimeoutMs: runtime.approvalTimeoutMs,
     executors: callable, resolvePath: (p) => { try { return realPathOf(p); } catch { return null; } },
     // PD-TOOLS-004: a name is the public tool's when the callable map holds the very executor `executorsFor` built
@@ -329,8 +384,10 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // set lacks one) is a different object, and its session approval keeps REQ-TOOLS-024's exact match.
     publicTool: (name) => { const e = callable.get(name) ?? callable.get(name.toLowerCase()); return e !== undefined && executors.get(e.name) === e; },
     monotonic: deps.clocks.monotonic, wall: deps.clocks.wall, timers: deps.clocks.timers,
-    sink: writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn), nextSequence: deps.nextSequence,
-    hooks: ctx.hooks ?? null,
+    sink: writes.sink, nextSequence: deps.nextSequence,
+    // REQ-SESSION-094: a call that returns after its run ended fires no `post_tool` hook — the run's hooks write into its
+    // session, and the run has removed its own attachment (REQ-HOOKS-087).
+    hooks: toolHooks ? { preTool: (c) => toolHooks.preTool(c), postTool: (c) => (writes.closed() ? Promise.resolve({ feedback: '' }) : toolHooks.postTool(c)) } : null,
     // REQ-ORCH-153, enforcement point 2: the authoritative one — refused whichever role issues the call and by
     // whatever route the tool reached it, including a name this port's narrowing never saw.
     planGateHeld,
@@ -352,21 +409,46 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const run = deps.configured?.(ctx.workspaceRoot) ?? null;
   const withhold = mode === 'restricted' || persona.readOnly;
   let mcpSection = '';
+  /*
+   * REQ-MCP-065 with REQ-TOOLS-006: the grant this port puts in force, set once `ready()` has resolved its surface — the
+   * native tools the one resolution kept and, per carried server, the tools that joined the callable map. A child's row
+   * records it (`ChildLedger.recordGrant`); the persona's declared set was recorded at spawn until 2026-10-01.
+   */
+  let grant: AgentGrant | null = null;
   let readiness: Promise<void> | null = null;
   const ready = (): Promise<void> => {
     if (readiness) return readiness;
     readiness = (async () => {
-      if (!deps.mcp || !run) return;
+      if (!deps.mcp || !run) { grant = { tools: nativeResolved, mcp: EMPTY_MCP_EVIDENCE }; return; }
       const mcp = deps.mcp;
       await mcp.prepare(run.cfg, ctx.workspaceRoot);
       const session = { sessionId: ctx.sessionId, writer: ctx.writer };
-      const surface = mcp.surfaceFor(run.cfg, ctx.workspaceRoot, ctx.persona, session, new Set(callable.keys()));
+      const offered = mcp.surfaceFor(run.cfg, ctx.workspaceRoot, ctx.persona, session, new Set(callable.keys()));
       if (withhold) {
-        if (surface.active.some((s) => s.tools.length > 0)) ctx.warn(`mcp: ${ctx.persona}'s MCP tools are withheld under ${mode === 'restricted' ? "the 'restricted' preset" : 'read_only'} (ADR-0016: a tool outside the registry declares no facet, so a withholding rule withholds it)`);
-        mcpSection = mcp.section({ ...surface, active: surface.active.map((s) => ({ ...s, tools: [] })) });
+        if (offered.active.some((s) => s.tools.length > 0)) ctx.warn(`mcp: ${ctx.persona}'s MCP tools are withheld under ${mode === 'restricted' ? "the 'restricted' preset" : 'read_only'} (ADR-0016: a tool outside the registry declares no facet, so a withholding rule withholds it)`);
+        mcpSection = mcp.section({ ...offered, active: offered.active.map((s) => ({ ...s, tools: [] })) });
+        // Every carried server is listed with its fate, and none grants a tool (REQ-MCP-114).
+        grant = { tools: nativeResolved, mcp: grantEvidence(offered, () => false) };
         return;
       }
+      // REQ-TOOLS-006 (4), OQ-145: an allowed-tool list is closed — a server's tool it does not name is withheld, as a
+      // withholding rule withholds a tool outside the registry (ADR-0016), and logged with the control like a native one.
+      // It is taken off the SURFACE, so the executors and the prompt section both come from what is left and a printed
+      // name stays callable (REQ-MCP-062) — until 2026-09-29 it was skipped only in the executor loop, and the section
+      // still printed it.
+      const surface = {
+        ...offered,
+        active: offered.active.map((s) => ({
+          ...s,
+          tools: s.tools.filter((t) => {
+            if (restrictionsAllow(restrictions, t.callable)) return true;
+            logInfo(`tool '${t.callable}' removed from ${ctx.persona} by tool_restrictions (REQ-TOOLS-004/006)`);
+            return false;
+          }),
+        })),
+      };
       const remove = (name: string) => { callable.delete(name); };
+      const joined = new Set<string>();
       for (const e of mcp.executorsFor({ cfg: run.cfg, workspaceRoot: ctx.workspaceRoot, role: ctx.persona, surface, ctx: session, remove, log: (m) => ctx.warn(m) })) {
         // REQ-ORCH-153: an MCP tool carries no declaration, so the fail-closed predicate withholds it while the
         // gate is held (ADR-0016's reading, the same one `restricted` and `read_only` already take above). The
@@ -377,15 +459,31 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
         if (planGateHeld() && withheldUnderPlanGate(e.name, false)) { withheldAtPlanGate.add(e.name); ctx.warn(`mcp: '${e.name}' is withheld while this run is held at the plan gate (REQ-ORCH-153)`); continue; }
         if (callable.has(e.name)) { ctx.warn(`mcp: the tool name '${e.name}' collides with a native tool of ${ctx.persona}; the MCP tool is not offered`); continue; }
         callable.set(e.name, e);
+        joined.add(e.name);
         specs.push(toolSpec(e));
       }
-      mcpSection = mcp.section(surface);
+      /*
+       * REQ-MCP-062: "a printed name SHALL be callable". The section and the grant are drawn from the surface narrowed to the
+       * tools that joined the callable map, so what the loop above withheld — at the plan gate (REQ-ORCH-153), for a
+       * collision with a native name — is neither printed nor granted. Until 2026-10-01 the section was rendered from
+       * `surface`, which still held them, and printed names the agent could not call
+       * (`docs/defects/fixed/an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`). The hold is read when the
+       * port is built and its readiness resolved once; approval launches a new run, whose ports are built with the gate
+       * released, so the approved segment prints and calls the tool (traced in `run/plan-gate.test.ts`).
+       */
+      const callableSurface = { ...surface, active: surface.active.map((s) => ({ ...s, tools: s.tools.filter((t) => joined.has(t.callable)) })) };
+      mcpSection = mcp.section(callableSurface);
+      grant = { tools: nativeResolved, mcp: grantEvidence(callableSurface) };
     })();
     return readiness;
   };
 
   return {
     specs: () => specs,
+    // REQ-MONITOR-060/061 (live-run finding K1): the native callable set — what the inspector shows.
+    resolvedTools: () => nativeResolved,
+    // REQ-MCP-065 / REQ-TOOLS-006: the grant in force, null until `ready()` has resolved.
+    grant: () => grant,
     ready,
     promptSection: () => mcpSection,
     dispatch: async (call: PortToolCall, signal): Promise<PortToolResult> => {
@@ -425,5 +523,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     answerQuestions: (requestId, answers) => questions.resolve(requestId, answers),
     cancelQuestions: (requestId) => questions.cancel(requestId),
     pendingQuestions: () => questions.pending(),
+    // REQ-SESSION-094: the run has ended; what this port's gate still has open settles now, and nothing more is written.
+    close: (cutOff) => writes.close(cutOff),
   };
 }

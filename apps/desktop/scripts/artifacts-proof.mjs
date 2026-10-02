@@ -10,14 +10,20 @@
  *                  PROCESS with none of this product's code loaded.
  *   2. children  — a delegating run materialises every terminal child report exactly once (REQ-LIBRARY-092),
  *                  each with its `artifact_published` timeline entry carrying the artifact id, and the id of
- *                  that entry linked back onto the record.
+ *                  that entry linked back onto the record. While that run is still active the inspector follows
+ *                  the run-level agent: its chips are the live root port's resolution, and following its produced
+ *                  artifact link opens that artifact in the Library (live-run finding K1, REQ-MONITOR-052/060/061).
+ *                  Its ring caption states its own context window and never denies the reading (acceptance A36,
+ *                  REQ-MONITOR-065/089).
  *   3. bad tag   — an invalid tag refuses the publish WHOLE: the observation is REQ-LIBRARY-089's wording, and
  *                  no row, no file and no partial state are left behind.
  *   4. inspector — the inspector opens on the selected row, the Markdown tab is edited and saved, the table's
  *                  status cell gains ` · edited`, and opening the same id again RE-RAISES the one dialog
  *                  (REQ-LIBRARY-131/132/133).
  *   5. missing   — the body file is deleted underneath a stored session; on a relaunch that resumes it the
- *                  record is still listed and the inspector reports the failure (REQ-LIBRARY-091, 134).
+ *                  record is still listed and the inspector reports the failure (REQ-LIBRARY-091, 134). Before
+ *                  that, the reopened session AT REST shows the run-level agent's declared tools standing in, marked
+ *                  from its reopened history, and still links what it published (K1, REQ-MONITOR-052/060).
  *   6. commands  — PD-LIBRARY-001: a child runs three ordered terminal calls (success, exit 7, one the
  *                  permission gate denies) and its child report carries the command ledger — exact order and
  *                  statuses — checked in SQLite, through the `artifact_read` sections filter (the tool path
@@ -31,6 +37,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -90,13 +97,13 @@ function oneDatabase() {
 /** REQ-SESSION-002: the session's files sit beside the store, under `sessions/<id>`. */
 const filesDir = (sessionId) => join(dirname(oneDatabase()), 'sessions', sessionId);
 
-function launch(name, extra, { files = {}, timeout = 180_000 } = {}) {
+async function launch(name, extra, { files = {}, timeout = 180_000 } = {}) {
   writeFileSync(join(configDir, 'agents.yaml'), files.global ?? globalYaml());
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), files.workspace ?? WORKSPACE_SINGLE);
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs: timeout, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: png,
@@ -107,6 +114,7 @@ function launch(name, extra, { files = {}, timeout = 180_000 } = {}) {
   const elapsedMs = Date.now() - started;
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   return { log, elapsedMs, png };
 }
@@ -130,12 +138,20 @@ const PROBE_ROWS = 'tr[data-artifact-id]';
 // The Library opens on its FIRST tab (REQ-LIBRARY-103's order), so every launch below picks the Artifacts tab
 // after the view switch. Before the merge this proof drove a Library that held only this tab and needed no click.
 const ARTIFACTS_TAB = '[data-testid="library-tab"][data-tab="artifacts"]';
+// Live-run finding K1: the inspector's name, chips and artifact links, and the produced group's links.
+const INSPECTOR_NAME = '[data-testid="inspector-name"]';
+const INSPECTOR_CHIPS = '[data-testid="inspector-chips"] .chip';
+const INSPECTOR_ARTIFACTS = '[data-testid="inspector-artifacts"]';
+const INSPECTOR_PRODUCED = '[data-testid="inspector-artifacts-produced"]';
+// Acceptance A36: the ring caption, which denied the run-level agent's prompt reading one line under the figure.
+const INSPECTOR_RING_CAPTION = '.inspector__ring-caption';
+const INSPECTOR_META = '[data-testid="inspector-meta"]';
 const PROBES = [PROBE_ROWS, '[data-testid="library-artifacts"]', '[data-testid="library-artifacts-empty"]', '[data-testid="library-artifacts-inspect"]', '[data-testid="artifact-inspector"]', '[data-testid="artifact-inspector-meta"]', '[data-testid="artifact-inspector-status"]', '[data-testid="artifact-preview"]', '[data-testid="artifact-save"]'];
 const results = {};
 
 // ---- 1. A scripted run publishes; the row appears on the next refresh; the sidecar parses elsewhere ----------
 {
-  const r = launch('publish', {
+  const r = await launch('publish', {
     // The Library is shown FIRST (empty), the run then publishes, the view is left and returned to: the row
     // appears on the next refresh, with no restart and no manual reload (REQ-LIBRARY-136).
     ROTARIS_CAPTURE_VIEWS: '6@1200;;2@2000;;6@14000',
@@ -157,14 +173,20 @@ const results = {};
   const rows = artifacts(db, s.session_id);
   const writes = toolRows(db, s.session_id, 'artifact_write');
   const listing = toolRows(db, s.session_id, 'artifact_list');
+  const roots = db.prepare('SELECT iteration, root_task_id, root_canonical_name FROM iterations WHERE session_id = ? ORDER BY iteration').all(s.session_id);
   db.close();
   if (rows.length !== 1) throw new Error(`expected one artifact row, found ${rows.length}`);
   const record = rows[0];
   if (record.kind !== 'agent_published' || record.status !== 'published') throw new Error(`the record is not an agent publish: ${JSON.stringify(record)}`);
   if (!/^art_[0-9A-Za-z]{8}$/.test(record.id)) throw new Error(`the id is not REQ-LIBRARY-088's shape: ${record.id}`);
-  // REQ-LIBRARY-093: `created_by` is the publishing agent INSTANCE by its canonical name — the name the tool call
-  // was recorded under. (For the root that name is also its persona; there is one such instance, and a child's is not.)
-  if (record.created_by !== writes[0]?.agent_name) throw new Error(`created_by is not the publishing agent's canonical name: ${record.created_by} vs ${writes[0]?.agent_name}`);
+  // REQ-LIBRARY-093: `created_by` is the publishing agent INSTANCE by its canonical name. The publisher here is the
+  // iteration's root, so that is the canonical name its iteration records, and the record's conversation is the root's
+  // task id. (It once compared the tool call's recorded name, which for a root is its persona — the two coincide for
+  // this persona id and not for one the canonicaliser rewrites: `a-roots-publish-names-its-persona-as-its-author.md`.)
+  if (roots.length !== 1) throw new Error(`expected one iteration, found ${roots.length}`);
+  if (record.created_by !== roots[0].root_canonical_name) throw new Error(`created_by is not the publishing root's canonical name: ${record.created_by} vs ${roots[0].root_canonical_name}`);
+  if (record.conversation_id !== roots[0].root_task_id) throw new Error(`the publish's conversation is not the root's task id: ${record.conversation_id} vs ${roots[0].root_task_id}`);
+  if (writes[0]?.agent_name === undefined) throw new Error('the publish recorded no tool call');
   if (!String(writes[0]?.entry.result ?? '').includes(`Published artifact ${record.id} (slug: ${record.slug}).`)) throw new Error(`the publish observation is wrong: ${JSON.stringify(writes[0])}`);
   if (!String(listing[0]?.entry.result ?? '').includes(`- ${record.id} [${record.slug}] persona=`)) throw new Error(`the listing observation is wrong: ${JSON.stringify(listing[0])}`);
   // REQ-SESSION-002: the body is a FILE beside the session's other files, named flat.
@@ -210,13 +232,25 @@ const results = {};
 
 // ---- 2. Child reports materialise once, each with its artifact_published entry ---------------------------------
 {
-  const r = launch('children', {
+  const r = await launch('children', {
     ROTARIS_CAPTURE_PROMPT: 'delegate twice', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     // The orchestrator publishes FIRST, so the children are created with a session that already holds an
     // artifact: REQ-LIBRARY-097's `PRIOR SIBLING ARTIFACT INDEX` reaches them and its diagnostic is recorded.
     ROTARIS_SCRIPT: 'artifact:artifact_write,delegate:coding-agent:one,delegate:tester:two,wait:4000,answer', ROTARIS_CHILD_SCRIPT: 'answer',
     ROTARIS_INTENT_SCRIPT: 'moderate_feature',
-    ROTARIS_CAPTURE_VIEWS: '6@16000', ROTARIS_CAPTURE_CLICKS: `${ARTIFACTS_TAB}@16400`, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
+    ROTARIS_CAPTURE_VIEWS: '6@16000',
+    // Live-run finding K1 (REQ-MONITOR-052/060/061, REQ-LIBRARY-102/131): WHILE THE RUN IS STILL ACTIVE (it ends after
+    // the 11 s click — the root's `wait:4000` and the children run past it), the Workspace inspector follows the run-level
+    // agent: its chips are the LIVE ROOT PORT'S resolution (the coordinator's `background_output` and `wait_for_tasks`,
+    // which no declaration names), marked from its history, and the artifact it published is linked; following the link
+    // opens the Library on the Artifacts tab with the artifact inspector open on it. The at-rest reading, with the
+    // declared tools standing in, is launch 5's, in a freshly opened process.
+    // (This comment first said "with the run over … its declared tools stand in" — false: the verifier found the 10 s
+    // probes and the 11 s click land before the run ends, and the PNG reads "Run active".)
+    ROTARIS_CAPTURE_PROBE_AT: [INSPECTOR_NAME, INSPECTOR_META, INSPECTOR_CHIPS, INSPECTOR_ARTIFACTS, INSPECTOR_PRODUCED, INSPECTOR_RING_CAPTION].map((s) => `${s}@10000`).concat(['.app-shell@12500', '[data-testid="artifact-inspector"]@12500', '[data-testid="library"]@12500']).join(';;'),
+    ROTARIS_CAPTURE_CLICKS: [`${INSPECTOR_PRODUCED} .artifact-link__open@11000`, `${ARTIFACTS_TAB}@16400`].join(';;'),
+    ROTARIS_CAPTURE_PNG_AT: `${join(output, 'children-inspector.png')}@10200`,
+    ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '18000',
   }, { files: { workspace: WORKSPACE_ORCHESTRATOR } });
   const db = new Database(oneDatabase(), { readonly: true });
@@ -242,7 +276,40 @@ const results = {};
     if (!record) throw new Error(`the artifact_published entry names an unknown artifact: ${entry.metadata}`);
     if (record.timeline_event_id !== entry.id) throw new Error(`the entry's id is not linked back onto the record: ${record.timeline_event_id} vs ${entry.id}`);
   }
+  // Live-run finding K1: the run-level agent's inspector while its run is active, and the link it draws for what it published.
+  // (First written "at rest" — false; see the launch's comment.)
+  const shownName = probe(r.log, INSPECTOR_NAME, 10000)[0]?.text;
+  const chips = probe(r.log, INSPECTOR_CHIPS, 10000).map((c) => `${c.data['data-tool']}:${c.data['data-state']}`);
+  const panel = probe(r.log, INSPECTOR_ARTIFACTS, 10000)[0] ?? null;
+  const produced = probe(r.log, `${INSPECTOR_PRODUCED}`, 10000)[0]?.text ?? '';
+  const published = rows.find((x) => x.kind === 'agent_published');
+  if (shownName !== 'orchestrator') throw new Error(`the inspector did not follow the run-level agent at 10 s: "${shownName}"`);
+  if (chips.length === 0) throw new Error('the running run-level agent drew no tool chips (REQ-MONITOR-060)');
+  // The live resolution, not the declaration: the coordinator's port adds what no declaration names (REQ-TOOLS-004 facets).
+  const chipNames = chips.map((c) => c.split(':')[0]);
+  if (!chipNames.includes('background_output') || !chipNames.includes('wait_for_tasks')) throw new Error(`the running run-level agent's chips are not its root port's resolution (REQ-MONITOR-060/061): ${JSON.stringify(chips)}`);
+  if (!chips.includes('delegate:used') || !chips.includes('artifact_write:used')) throw new Error(`the run-level agent's chips are not marked from its history (REQ-MONITOR-060): ${JSON.stringify(chips)}`);
+  // Acceptance A20 (REQ-MONITOR-044/052): the meta line's count is the run-level agent's own while its turn runs — at least
+  // one call per tool its chips mark used or active. It read `running · 8s · 0 tool calls` beside the used chips, because
+  // the root's calls join the session total only when its turn returns
+  // (docs/defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md).
+  const meta = probe(r.log, INSPECTOR_META, 10000)[0]?.text ?? '';
+  const metaCalls = /· (\d+) tool calls?\b/.exec(meta);
+  const marked = chips.filter((c) => c.endsWith(':used') || c.endsWith(':active')).length;
+  if (!metaCalls || Number(metaCalls[1]) < marked) throw new Error(`the running run-level agent's meta line counts fewer calls than the ${marked} tools its chips mark used (REQ-MONITOR-052): "${meta}"`);
+  if (/no artifact store/.test(panel?.text ?? '')) throw new Error(`the inspector still says there is no artifact store: "${panel?.text}"`);
+  // Acceptance A36 (REQ-MONITOR-089/065): the caption states the run-level agent's own reading and never denies that the
+  // record carries it.
+  const caption = probe(r.log, INSPECTOR_RING_CAPTION, 10000)[0]?.text ?? '';
+  if (!/This agent's own context window: [\d,.\s]+ of [\d,.\s]+ tokens\./.test(caption)) throw new Error(`the run-level agent's ring caption does not state its context window: "${caption}" (REQ-MONITOR-065)`);
+  if (/does not carry/.test(caption)) throw new Error(`the run-level agent's ring caption still denies the prompt reading it shows: "${caption}" (REQ-MONITOR-089)`);
+  if (!published || panel?.data?.['data-produced'] !== '1' || !produced.includes(published.slug)) throw new Error(`the inspector does not link what the run-level agent published: ${JSON.stringify(panel)} / "${produced}" (REQ-MONITOR-052)`);
+  const view = probe(r.log, '.app-shell', 12500)[0]?.data?.['data-view'];
+  const opened = probe(r.log, '[data-testid="artifact-inspector"]', 12500).map((d) => d.data['data-artifact-id']);
+  const library = probe(r.log, '[data-testid="library"]', 12500)[0]?.data?.['data-tab'];
+  if (view !== 'library' || library !== 'artifacts' || opened.length !== 1 || opened[0] !== published.id) throw new Error(`following the link did not open the artifact in the Library: view ${view}, tab ${library}, inspectors ${JSON.stringify(opened)} (REQ-LIBRARY-102/131)`);
   results.children = {
+    inspector: { runActive: true, shown: shownName, meta, chips, produced, ringCaption: caption, openedFromLink: { view, tab: library, artifact: opened[0] }, png: join(output, 'children-inspector.png') },
     children: children.map((c) => `${c.canonical_name}:${c.state}`),
     artifacts: reports.map((x) => ({ id: x.id, slug: x.slug, status: x.status, importance: x.importance, task: x.source_task_id, persona: x.source_persona, timelineEventId: x.timeline_event_id })),
     publishedEntries: timeline.length,
@@ -252,7 +319,7 @@ const results = {};
 
 // ---- 3. An invalid tag refuses the publish whole ---------------------------------------------------------------
 {
-  const r = launch('bad-tag', {
+  const r = await launch('bad-tag', {
     ROTARIS_CAPTURE_PROMPT: 'publish with a bad tag', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     ROTARIS_SCRIPT: 'artifact:artifact_write:bad,answer',
     ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify({ bad: { slug: 'refused', title: 'Refused', body: 'nothing should survive this', tags: ['research', 'Nonsense'] } }),
@@ -278,7 +345,7 @@ const results = {};
 // ---- 4. The inspector: open, edit, save, ` · edited`, and ONE dialog on re-opening -----------------------------
 let edited = null;
 {
-  const r = launch('inspector', {
+  const r = await launch('inspector', {
     ROTARIS_CAPTURE_PROMPT: 'publish the plan', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     ROTARIS_SCRIPT: 'artifact:artifact_write,answer',
     // The modeless inspector is 720x560 at the bottom-right (REQ-LIBRARY-131); the window is widened so the
@@ -340,15 +407,28 @@ let edited = null;
   // The store outlives the process; the file does not survive being removed from outside it (REQ-LIBRARY-158's
   // serialisation covers the store, and the bodies deliberately sit outside it).
   rmSync(join(edited.directory, edited.bodyFile), { force: true });
-  const r = launch('missing-body', {
+  const r = await launch('missing-body', {
     ROTARIS_CAPTURE_RESUME: edited.sessionId,
     ROTARIS_CAPTURE_RESIZE: '1360x980@300',
     ROTARIS_CAPTURE_VIEWS: '6@4000',
     ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@4400`, `${PROBE_ROWS}@5000`, '[data-testid="library-artifacts-inspect"]@6000'].join(';;'),
-    ROTARIS_CAPTURE_PROBE_AT: [`${PROBE_ROWS}@4600`, '[data-testid="artifact-inspector-status"]@7200'].join(';;'),
+    // Live-run finding K1 (REQ-MONITOR-049/052/060): the reopened session AT REST, in a freshly opened process, before the
+    // view switch — no run is live, so the orchestrator's DECLARED tools stand in, marked from its history as the tool-call
+    // ring seeded it under the latest iteration's `root_persona`, and the artifact it published is still linked.
+    ROTARIS_CAPTURE_PROBE_AT: [`${PROBE_ROWS}@4600`, '[data-testid="artifact-inspector-status"]@7200', `${INSPECTOR_NAME}@3400`, `${INSPECTOR_CHIPS}@3400`, `${INSPECTOR_PRODUCED}@3400`].join(';;'),
+    ROTARIS_CAPTURE_PNG_AT: `${join(output, 'missing-body-inspector.png')}@3500`,
     ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '9000',
   });
+  const restName = probe(r.log, INSPECTOR_NAME, 3400)[0]?.text;
+  const restChips = probe(r.log, INSPECTOR_CHIPS, 3400).map((c) => `${c.data['data-tool']}:${c.data['data-state']}`);
+  const restProduced = probe(r.log, INSPECTOR_PRODUCED, 3400)[0]?.text ?? '';
+  // The global configuration's orchestrator declaration, in its own order (`globalYaml`).
+  const declared = ['read_file', 'grep', 'glob', 'delegate', 'todo', 'artifact_read', 'artifact_list', 'artifact_write'];
+  if (restName !== 'orchestrator') throw new Error(`the reopened session's inspector did not follow the run-level agent: "${restName}"`);
+  if (JSON.stringify(restChips.map((c) => c.split(':')[0])) !== JSON.stringify(declared)) throw new Error(`at rest the orchestrator's declared tools did not stand in (REQ-MONITOR-060): ${JSON.stringify(restChips)}`);
+  if (!restChips.includes('artifact_write:used')) throw new Error(`at rest the chips are not marked from the reopened history (REQ-MONITOR-060): ${JSON.stringify(restChips)}`);
+  if (!restProduced.includes(edited.slug)) throw new Error(`at rest the inspector does not link what the run-level agent published: "${restProduced}" (REQ-MONITOR-052)`);
   const listed = probe(r.log, PROBE_ROWS, 4600);
   const status = probe(r.log, '[data-testid="artifact-inspector-status"]', 7200)[0]?.text ?? '';
   // `disabled` is carried by the END-OF-RUN probe (the mid-run one reads data-* attributes only), and the
@@ -360,7 +440,7 @@ let edited = null;
   // REQ-LIBRARY-134 fixes the wording; the FIRST run of this proof found it doubled (the store prefixed the
   // reason and the surface prefixed it again), which is the defect this assertion now holds shut.
   if (/Could not load artifact: Could not load artifact:/.test(status)) throw new Error(`the load failure is worded twice: ${status}`);
-  results.missingBody = { stillListed: listed.length, status, saveDisabled: true, resumedSession: edited.sessionId };
+  results.missingBody = { stillListed: listed.length, status, saveDisabled: true, resumedSession: edited.sessionId, inspectorAtRest: { shown: restName, chips: restChips, produced: restProduced, png: join(output, 'missing-body-inspector.png') } };
 }
 
 // ---- 6. PD-LIBRARY-001: the child's command ledger, end to end -------------------------------------------------
@@ -372,7 +452,7 @@ let edited = null;
   // After the wait, the orchestrator reads the report back through the TOOL path with the section filter —
   // the interface the port's private allow-list silently widened to the whole document (the defect this
   // launch exists to hold shut).
-  const r = launch('commands', {
+  const r = await launch('commands', {
     ROTARIS_CAPTURE_PROMPT: 'delegate one child that runs commands', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     ROTARIS_SCRIPT: 'delegate:coding-agent:commands,wait:15000,artifact:artifact_read:commands,answer',
     ROTARIS_CHILD_SCRIPT: 'terminal:ok,terminal:fail,terminal:denied,answer',

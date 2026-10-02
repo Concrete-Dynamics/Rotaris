@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import Database from 'better-sqlite3';
 import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { parseEvals, readEval } from './lib/capture-evals.mjs';
 
 /**
@@ -24,6 +25,19 @@ import { parseEvals, readEval } from './lib/capture-evals.mjs';
  *     the gate stays shut, because the release belongs to the session and not to the run that took it.
  *  8. **PD-ORCH-003: choosing `plan` again on the run-start chip re-arms it** — driven through the chip's own
  *     popover, after which the next prompt is held at a third cycle.
+ *  9. **REQ-MONITOR-060 at a gate no iteration precedes** — a fresh session's plan cycle root calls a tool and parks;
+ *     reopened in the next launch, the inspector's run-level agent marks that tool `used` from the store's history
+ *     (acceptance A21).
+ * 10. **REQ-MONITOR-060 at a gate an iteration precedes, under a switched entry persona** (PD-ORCH-003) — a fresh
+ *     session runs an iteration as `orchestrator` with `run_start_mode: auto`; `plan` is chosen and the entry persona
+ *     switched before the next prompt, whose plan cycle root calls another tool and parks; reopened, the chips mark the
+ *     plan cycle root's tool `used` and the iteration root's not, and the run-level agent is named, and its chips drawn,
+ *     as the latest root's persona (`reviewer`: glob, read_file, todo), not the first root's.
+ * 11. **REQ-MCP-062 with REQ-ORCH-153: a tool-server tool withheld at the gate is not printed** — the entry role carries
+ *     the MCP fixture server `alpha`; every model request of the held cycle (launch 1, captured by the scripted client)
+ *     lists the server with no tool under it, and the approved run's requests (launch 4) print and offer its tools. Until
+ *     2026-10-01 the held cycle's prompt printed tools the agent could not call
+ *     (docs/defects/fixed/an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md).
  *
  * Every assertion reads the store, the workspace or the app's own log. The PNGs are read back so a launch
  * that painted nothing cannot pass.
@@ -68,6 +82,11 @@ const GLOBAL = [
   '',
   'mcp_servers:',
   '  code_intelligence: { enabled: false }',
+  // Assertion 11: the hand-written fixture server, carried by the entry role, whose tools declare no facet (ADR-0016).
+  `  alpha: { command: ${JSON.stringify(process.execPath)}, args: ${JSON.stringify([join(app, 'scripts', 'fixtures', 'mcp-fixture-server.mjs')])} }`,
+  '',
+  'personas:',
+  '  orchestrator: { mcp_servers: [alpha] }',
   '',
 ].join('\n');
 
@@ -81,10 +100,10 @@ mkdirSync(configDir, { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# plan gate proof\n');
 writeFileSync(join(configDir, 'agents.yaml'), GLOBAL);
 
-function launch(name, extra, timeoutMs = 120_000) {
+async function launch(name, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ local, preferences: join(root, 'preferences') }),
@@ -96,6 +115,7 @@ function launch(name, extra, timeoutMs = 120_000) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   // A relaunch refused because the previous instance's run host still held the session is the product defect
@@ -152,7 +172,14 @@ const results = {};
 const PLANNED_FILE = join(workspace, 'planned.txt');
 
 // 1. The run starts in `plan` mode and holds. Nothing the plan names has been written.
-const log1 = launch('held', {
+const HELD_REQUESTS = join(output, 'held.requests.jsonl');
+const APPROVED_REQUESTS = join(output, 'approved.requests.jsonl');
+/** Every captured request's system text (the scripted client's `ROTARIS_CAPTURE_MODEL_REQUESTS`), in call order. */
+const systemsOf = (file) => (existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l).system) : []);
+/** The prompt's `## MCP servers` section of one system text, or null when it carries none. */
+const mcpSectionOf = (system) => { const at = system.indexOf('## MCP servers'); return at < 0 ? null : system.slice(at).split(/\n(?=## )/)[0].trim(); };
+const log1 = await launch('held', {
+  ROTARIS_CAPTURE_MODEL_REQUESTS: HELD_REQUESTS,
   ROTARIS_CAPTURE_PROMPT: 'create planned.txt with the word done in it',
   ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
   ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
@@ -173,9 +200,13 @@ if (!held.timeline.includes('plan_gate_opened')) throw new Error(`no plan_gate_o
 if (!(inspected(log1, '[data-testid="plan-gate"]')?.matches?.length > 0)) throw new Error(`the gate surface was not found in the primary view:\n${log1}`);
 if (!(inspected(log1, '[data-testid="plan-gate-plan"]')?.matches?.length > 0)) throw new Error('the gate drew no plan');
 if (readEval(parseEvals(log1), GATE_DEADLINE_MS, GATE_TEXT) !== true) throw new Error('the gate does not say "Plan ready for your decision"');
+// 11. REQ-MCP-062 with REQ-ORCH-153: every request of the held cycle carries alpha with no tool printed under it.
+const heldSections = systemsOf(HELD_REQUESTS).map(mcpSectionOf).filter((x) => x !== null);
+if (heldSections.length === 0) throw new Error(`the held cycle's requests carry no MCP section — the fixture server did not reach the entry role:\n${log1}`);
+for (const section of heldSections) if (section !== '## MCP servers\n\n- `alpha`') throw new Error(`the held cycle's prompt prints a tool-server tool the gate withholds (REQ-MCP-062):\n${section}`);
 results.held = {
   status: held.session.execution_status, cycle: held.session.plan_cycle, released: held.session.plan_released,
-  plan: held.cycles[0].plan.slice(0, 200), plannedFileExists: false,
+  plan: held.cycles[0].plan.slice(0, 200), plannedFileExists: false, mcpSection: heldSections[0], requests: heldSections.length,
 };
 
 // 2. Reopened after the window is gone: the decision is still pending and still answerable (REQ-ORCH-153).
@@ -183,7 +214,7 @@ const EDIT = 'Revised by the user: write planned.txt containing the word done.';
 // The edit goes through the product's own path: set the value the way React's tracker accepts and let the
 // blur write it through. React delegates `onBlur` from `focusout`, so a non-bubbling `blur` reaches nothing.
 const EDIT_PLAN = `(() => { const el = document.querySelector('[data-testid="plan-gate-plan"]'); if (!el) return 'absent'; const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(EDIT)}); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); return 'edited'; })()`;
-const log2 = launch('reopened-and-edited', {
+const log2 = await launch('reopened-and-edited', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   // Both readings wait for the reopened gate; the capture waits for the edit to stand in the field, then leaves the
   // write-through its own few seconds before the process ends.
@@ -209,7 +240,7 @@ results.survivedRestart = { status: edited.session.execution_status, cycle: edit
  * gate OPENS in and once after the collapse control has been clicked like a user clicks it.
  */
 const STATE_PROBE = "(() => { const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) }; }; const gate = document.querySelector('[data-testid=\"plan-gate\"]'); const plan = document.querySelector('[data-testid=\"plan-gate-preview\"]') || document.querySelector('[data-testid=\"plan-gate-plan\"]'); const tr = document.querySelector('.transcript'); const answers = document.querySelector('[data-ui=\"plan-gate-actions\"]'); const ws = document.querySelector('.workspace'); return { collapsed: ws ? (ws.getAttribute('data-plan-gate-collapsed') || '') : 'no-workspace', workspace: r(ws), rows: ws ? getComputedStyle(ws).gridTemplateRows : null, children: gate ? [...gate.children].map((c) => ({ c: c.className.split(' ')[0], h: Math.round(c.getBoundingClientRect().height), grow: getComputedStyle(c).flexGrow })) : null, gate: r(gate), plan: r(plan), answers: r(answers), transcript: r(tr), threeAnswers: ['plan-approve', 'plan-revise', 'plan-cancel'].every((t) => document.querySelector('[data-testid=\"' + t + '\"]') !== null), viewport: Math.round(window.innerHeight) }; })()";
-const log2b = launch('two-states', {
+const log2b = await launch('two-states', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_AFTER_MS: '14000',
   ROTARIS_CAPTURE_EVAL_AT: `${STATE_PROBE}@7000;;${STATE_PROBE}@10000`,
@@ -250,7 +281,7 @@ results.twoStates = {
 };
 
 // 3. Revise: a further cycle, carrying the changes stated, and still nothing written.
-const log3 = launch('revised', {
+const log3 = await launch('revised', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_AFTER_MS: '16000',
   ROTARIS_CAPTURE_EVAL_AT: `(() => { const el = document.querySelector('[data-testid="plan-gate-changes"], #plan-gate-changes'); if (el) { const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; setter.call(el, 'use fewer steps'); el.dispatchEvent(new Event('input', { bubbles: true })); } return el ? 'stated' : 'absent'; })()@6000`,
@@ -267,7 +298,8 @@ if (!revised.timeline.includes('plan_gate_resolved')) throw new Error('no plan_g
 results.revised = { cycles: revised.cycles.length, firstDecision: revised.cycles[0].decision, changes: revised.cycles[1].changes, released: revised.session.plan_released, plannedFileExists: false };
 
 // 4. Approve: execution released, the release recorded, and the work actually done.
-const log4 = launch('approved', {
+const log4 = await launch('approved', {
+  ROTARIS_CAPTURE_MODEL_REQUESTS: APPROVED_REQUESTS,
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_AFTER_MS: '30000',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="plan-approve"]@6000',
@@ -278,9 +310,13 @@ if (approved.session.plan_released !== 1) throw new Error('approval did not rele
 if (approved.session.plan_cycle !== null) throw new Error('the gate is still pending after approval');
 if (approved.session.execution_status === 'awaiting_plan_decision') throw new Error('the run returned to the gate after approval (REQ-ORCH-154: approval is one-way)');
 if (approved.cycles.length !== 2) throw new Error(`a plan produced after approval opened a gate: ${approved.cycles.length} cycles`);
+// 11. The approved run builds its ports with the gate released: its requests print alpha's tools, which it may call.
+const approvedSections = systemsOf(APPROVED_REQUESTS).map(mcpSectionOf).filter((x) => x !== null);
+if (!approvedSections.some((section) => section.startsWith('## MCP servers\n\n- **`alpha`**\n  - `echo`'))) throw new Error(`the approved run's prompt does not print alpha's tools: ${JSON.stringify(approvedSections)}\n${log4}`);
 results.approved = {
   decision: approved.cycles[1].decision, released: approved.session.plan_released, status: approved.session.execution_status,
   cycles: approved.cycles.length, plannedFileExists: existsSync(PLANNED_FILE), log: /ended \w+/.exec(log4)?.[0] ?? null,
+  mcpSection: approvedSections.find((section) => section.includes('`echo`')) ?? null,
 };
 
 /*
@@ -290,7 +326,7 @@ results.approved = {
  * still `plan`, the intent of the follow-up is outside REQ-ORCH-021's answer group, and the gate must stay shut
  * anyway because this session already holds an approval. The prompt is typed through the real input path.
  */
-const log5 = launch('follow-up-not-held', {
+const log5 = await launch('follow-up-not-held', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_PROMPT: 'also add a second line saying again to planned.txt',
   ROTARIS_CAPTURE_PROMPT_MS: '10000',
@@ -317,7 +353,7 @@ results.followUpNotHeld = {
 // the opening click schedules, so a single expression that clicks and then queries is racing its own effect.
 const OPEN_CHIP = `(() => { const chip = document.querySelector('[data-testid="chip-run-start-mode"]'); if (!chip) return 'no-chip'; const trigger = chip.querySelector('[data-ui-component="PopoverMenu"]'); if (!trigger) return 'no-trigger'; trigger.click(); return 'opened'; })()`;
 const CHOOSE_PLAN = `(() => { const panel = document.querySelector('[data-testid="chip-menu-panel"]'); if (!panel) return 'no-panel'; const item = [...panel.querySelectorAll('[role="menuitemradio"]')].find((b) => /plan first/i.test(b.textContent || '')); if (!item) return 'no-plan-option'; const chosen = (item.textContent || '').trim(); item.click(); return 'chose:' + chosen; })()`;
-const log6 = launch('re-armed', {
+const log6 = await launch('re-armed', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_EVAL_AT: `${OPEN_CHIP}@10000;;${CHOOSE_PLAN}@11000`,
   ROTARIS_CAPTURE_PROMPT: 'now do the other thing entirely',
@@ -338,6 +374,136 @@ results.reArmed = {
   chipChoice: rearmChoice, released: rearmed.session.plan_released, status: rearmed.session.execution_status,
   cycle: rearmed.session.plan_cycle, cycles: rearmed.cycles.length,
 };
+
+/*
+ * 7. REQ-MONITOR-060 with REQ-ORCH-153: at a gate no iteration precedes, the run-level agent's chips are marked from the
+ * plan cycle's root's calls. A fresh session's root calls a tool and parks; reopened by the next launch, the inspector
+ * draws the run-level agent from the store's history alone. Before the repair of
+ * docs/defects/fixed/the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md (acceptance A21,
+ * R-067) that history was read under the latest iteration's root, and a plan cycle has no iteration, so every chip read
+ * `not used` while the user reviewed the plan.
+ */
+const INSPECTOR_NAME = '[data-testid="inspector-name"]';
+const INSPECTOR_CHIPS = '[data-testid="inspector-chips"] .chip';
+// The process that parked it last published the record while the run was still its own, so the reading that shows the
+// defect is the one a fresh process makes: the session reopened at its gate, its record read from the store alone.
+await launch('tools-at-gate', {
+  ROTARIS_SCRIPT: 'glob,answer',
+  ROTARIS_CAPTURE_PROMPT: 'plan a change to the readme',
+  ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '1500',
+});
+const log7 = await launch('tools-at-gate-reopened', {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '2500',
+  ROTARIS_CAPTURE_PROBE: [INSPECTOR_NAME, INSPECTOR_CHIPS].join(';;'),
+});
+const probed = (selector) => {
+  const line = log7.split('\n').find((l) => l.includes(`capture: probe ${selector} → `));
+  if (!line) return [];
+  try { return JSON.parse(line.slice(line.indexOf(' → ') + 3)); } catch { return []; }
+};
+const gated = readStore();
+if (gated.session?.execution_status !== 'awaiting_plan_decision' || gated.session.plan_cycle !== 1) throw new Error(`the fresh session did not park at its first gate: ${gated.session?.execution_status}\n${log7}`);
+const ringDb = new Database(findStore(join(local, 'rotaris')), { readonly: true });
+const rootCalls = ringDb.prepare('SELECT agent_name, tool_name FROM tool_calls WHERE session_id = ? ORDER BY ordinal').all(gated.session.session_id);
+const iterations = ringDb.prepare('SELECT count(*) AS c FROM iterations WHERE session_id = ?').get(gated.session.session_id).c;
+ringDb.close();
+if (iterations !== 0) throw new Error(`the fresh session recorded ${iterations} iteration(s) before its gate`);
+if (rootCalls.length === 0) throw new Error(`the plan cycle's root called no tool, so there is no history to show (the scripted step found no such tool):\n${log7}`);
+const calledTool = rootCalls[0].tool_name;
+const chips7 = probed(INSPECTOR_CHIPS).map((c) => `${c.data['data-tool']}:${c.data['data-state']}`);
+const shown7 = probed(INSPECTOR_NAME)[0]?.text ?? null;
+if (!chips7.includes(`${calledTool}:used`)) throw new Error(`at the gate the run-level agent's chips do not mark the plan cycle root's ${calledTool} call used (REQ-MONITOR-060): ${JSON.stringify(chips7)} (inspector shows ${JSON.stringify(shown7)})`);
+results.toolsAtGate = { rootCalls, inspector: shown7, chips: chips7 };
+
+/*
+ * 8. PD-ORCH-003 with REQ-MONITOR-060 and REQ-ORCH-153: a plan cycle after an iteration, under a switched entry persona. A
+ * fresh session runs one iteration as `orchestrator` in `auto` mode, its root reading the README. Then the configuration
+ * chooses `plan` and switches the entry persona to `reviewer` before the next prompt, whose plan cycle root runs fresh under
+ * it, lists the files and parks. Reopened by the next launch, the run-level agent's chips are read from the store's history
+ * alone. Before the repair of docs/defects/fixed/a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md
+ * that history was read under the latest iteration root's persona whenever an iteration existed, so the plan cycle root's
+ * `glob` read `not used` and the iteration root's `read_file` `used`.
+ */
+const REVIEWER = [
+  'personas:',
+  '  reviewer:',
+  '    name: reviewer',
+  '    model: scripted',
+  "    purpose: 'Reviews the work before it is changed.'",
+  // The scripted double follows ROTARIS_SCRIPT for a system prompt that opens this way (`scripted-client.ts`).
+  "    system_prompt: 'You are the orchestrator, here as the reviewer. Plan the review.'",
+  '    tools: [glob, read_file, todo]',
+  '',
+].join('\n');
+// The run-start chip of step 6 wrote `run_start_mode` into the workspace file, which governs over the global one, so the
+// mode is set where the chip sets it: `auto` for the iteration, then `plan` again — the chip's own re-arm, written as it
+// writes it (PD-ORCH-003, REQ-CONFIG-476).
+const WORKSPACE_FILE = join(workspace, '.rotaris', 'agents.yaml');
+const workspaceBefore = existsSync(WORKSPACE_FILE) ? readFileSync(WORKSPACE_FILE, 'utf8') : null;
+writeFileSync(WORKSPACE_FILE, 'runtime:\n  run_start_mode: auto\n');
+await launch('persona-switch-iteration', {
+  ROTARIS_SCRIPT: 'read,answer',
+  ROTARIS_CAPTURE_PROMPT: 'read the readme and summarise it',
+  ROTARIS_CAPTURE_AFTER_MS: '20000',
+}, 180_000);
+const iterated = readStore();
+if (iterated.session?.execution_status !== 'completed') throw new Error(`the auto-mode session did not complete its iteration: ${iterated.session?.execution_status}`);
+writeFileSync(WORKSPACE_FILE, 'runtime:\n  run_start_mode: plan\n');
+// GLOBAL ends inside its own `personas:` mapping (assertion 11's entry role), so the reviewer joins it under that one key.
+writeFileSync(join(configDir, 'agents.yaml'), `${GLOBAL.replace('large_model: scripted', 'large_model: scripted\ndefault_persona: reviewer')}${REVIEWER.replace(/^personas:\n/, '')}`);
+await launch('persona-switch-plan', {
+  ROTARIS_SCRIPT: 'glob,answer',
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_PROMPT: 'now review the readme before changing it',
+  ROTARIS_CAPTURE_PROMPT_MS: '10000',
+  ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '1500',
+}, 180_000);
+const log8 = await launch('persona-switch-reopened', {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '2500',
+  ROTARIS_CAPTURE_PROBE: [INSPECTOR_NAME, INSPECTOR_CHIPS].join(';;'),
+});
+writeFileSync(join(configDir, 'agents.yaml'), GLOBAL);
+if (workspaceBefore === null) rmSync(WORKSPACE_FILE, { force: true }); else writeFileSync(WORKSPACE_FILE, workspaceBefore);
+const switched = readStore();
+if (switched.session?.session_id !== iterated.session.session_id) throw new Error(`the plan cycle ran in another session than the iteration: ${switched.session?.session_id} after ${iterated.session.session_id}`);
+if (switched.session.execution_status !== 'awaiting_plan_decision') throw new Error(`the re-armed session did not park at a gate: ${switched.session.execution_status}\n${log8}`);
+const switchDb = new Database(findStore(join(local, 'rotaris')), { readonly: true });
+const iterationRoots = switchDb.prepare('SELECT root_persona FROM iterations WHERE session_id = ? ORDER BY iteration').all(switched.session.session_id).map((r) => r.root_persona);
+const planRoots = switchDb.prepare('SELECT root_persona FROM plan_roots WHERE session_id = ? ORDER BY opened_at').all(switched.session.session_id).map((r) => r.root_persona);
+const switchCalls = switchDb.prepare('SELECT agent_name, tool_name FROM tool_calls WHERE session_id = ? ORDER BY ordinal').all(switched.session.session_id);
+switchDb.close();
+if (JSON.stringify(iterationRoots) !== JSON.stringify(['orchestrator'])) throw new Error(`expected one iteration whose root ran as orchestrator: ${JSON.stringify(iterationRoots)}`);
+if (JSON.stringify(planRoots) !== JSON.stringify(['reviewer'])) throw new Error(`expected one plan cycle whose root ran as reviewer: ${JSON.stringify(planRoots)}`);
+const iterationTool = switchCalls.find((c) => c.agent_name === 'orchestrator')?.tool_name;
+const planTool = switchCalls.find((c) => c.agent_name === 'reviewer')?.tool_name;
+if (!iterationTool || !planTool || iterationTool === planTool) throw new Error(`the two roots did not call two different tools under their own names: ${JSON.stringify(switchCalls)}`);
+const probed8 = (selector) => {
+  const line = log8.split('\n').find((l) => l.includes(`capture: probe ${selector} → `));
+  if (!line) return [];
+  try { return JSON.parse(line.slice(line.indexOf(' → ') + 3)); } catch { return []; }
+};
+const chips8 = probed8(INSPECTOR_CHIPS).map((c) => `${c.data['data-tool']}:${c.data['data-state']}`);
+const shown8 = probed8(INSPECTOR_NAME)[0]?.text ?? null;
+if (!chips8.includes(`${planTool}:used`)) throw new Error(`at the gate after an iteration the chips do not mark the plan cycle root's ${planTool} call used (REQ-MONITOR-060): ${JSON.stringify(chips8)} (inspector shows ${JSON.stringify(shown8)})`);
+if (chips8.includes(`${iterationTool}:used`)) throw new Error(`at the gate after an iteration the chips mark the earlier iteration root's ${iterationTool} call used: ${JSON.stringify(chips8)} (inspector shows ${JSON.stringify(shown8)})`);
+// The run-level agent is drawn as the latest root, whose calls mark its chips: named `reviewer`, with reviewer's declared
+// tools standing in (REQ-MONITOR-060). Until 2026-10-01 it was named, and its chips drawn, from the first root's persona,
+// `orchestrator`'s fourteen tools with `reviewer`'s glob marked used
+// (docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
+if (shown8 !== 'reviewer') throw new Error(`at the gate after a persona switch the run-level agent is not drawn as the latest root's persona, reviewer: ${JSON.stringify(shown8)}`);
+const tools8 = chips8.map((c) => c.slice(0, c.indexOf(':')));
+if (JSON.stringify(tools8) !== JSON.stringify(['glob', 'read_file', 'todo'])) throw new Error(`at the gate after a persona switch the chips are not reviewer's declared tools glob, read_file and todo: ${JSON.stringify(chips8)}`);
+results.toolsAtGateAfterIteration = { iterationRoots, planRoots, calls: switchCalls, inspector: shown8, chips: chips8 };
 
 /*
  * The write half of assertion 6 is reported rather than enforced: whether the scripted role chooses to call

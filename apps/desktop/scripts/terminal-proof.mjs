@@ -19,6 +19,7 @@ import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { cleanEnvironment, hostSwitches } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
@@ -86,8 +87,8 @@ await esbuild.build({
 
 // ── 3. Electron ────────────────────────────────────────────────────────────────────────────────────────────────
 
-const run = spawnSync(electron, [join(repo, 'apps', 'desktop', 'scripts', 'terminal-proof', 'main.cjs'), ...hostSwitches], {
-  cwd: repo, encoding: 'utf8', timeout: 400_000, windowsHide: true,
+const run = await spawnBounded(electron, [join(repo, 'apps', 'desktop', 'scripts', 'terminal-proof', 'main.cjs'), ...hostSwitches], {
+  cwd: repo, timeoutMs: 400_000, windowsHide: true,
   env: {
     ...cleanEnvironment(), TERMINAL_PROOF_OUT: output, TERMINAL_PROOF_PAGE: join(page, 'index.html'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
     // Part AL2: the live section's two halves.
@@ -96,7 +97,10 @@ const run = spawnSync(electron, [join(repo, 'apps', 'desktop', 'scripts', 'termi
 });
 writeFileSync(join(output, 'electron.log'), `${run.stdout ?? ''}\n${run.stderr ?? ''}`);
 const resultsFile = join(output, 'results.json');
-const electronResults = existsSync(resultsFile) ? JSON.parse(readFileSync(resultsFile, 'utf8')) : { passed: false, failures: [`no results.json (exit ${run.status ?? run.signal})`], results: {} };
+// An overrun is a failure named with the launch's last words, even when a results.json from part-way was written.
+const overran = run.overran ? `${overrunMessage('the terminal proof\'s Electron launch', run, `${run.stdout}\n${run.stderr}`)}\n(see electron.log)` : null;
+const read = existsSync(resultsFile) ? JSON.parse(readFileSync(resultsFile, 'utf8')) : { passed: false, failures: [`no results.json (exit ${run.status ?? run.signal})`], results: {} };
+const electronResults = overran === null ? read : { ...read, passed: false, failures: [overran, ...(read.failures ?? [])] };
 results.electron = { exit: run.status, ...electronResults };
 writeFileSync(join(output, 'summary.json'), `${JSON.stringify(results, null, 2)}\n`);
 

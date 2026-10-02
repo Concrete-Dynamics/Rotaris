@@ -27,53 +27,66 @@ that moves a shared seam breaks a neighbour's proof, and that is the point of ha
 **evidence, not a test of the harness**: a red is a defect of the product until the harness is shown to be
 wrong.
 
+No proof hangs on a launch that overruns. Every launch a script starts itself goes through
+`lib/bounded-launch.mjs`'s `spawnBounded`, and a driven one through the driver's `stopApp`. Two launches are neither,
+and `lib/launch-sites.test.ts` names them with their reasons: `code-intel-proof`'s branch, a stdio server whose RPC
+client fails every request when it dies or hangs, and `live-run`'s `runElectron`, whose bound is SIGKILL reported as
+a signal, never as a clean exit. Any other bare `spawn` of Electron fails that test. At its bound the
+application is sent SIGTERM with its pipes still open, and it answers: its quit path runs and it exits within a
+fraction of a second. SIGKILL follows a grace only if it does not. The proof then fails with the launch's last log
+lines. `lib/launch-sites.test.ts` refuses a `spawnSync` launch of Electron: its timeout closes the pipes as it signals,
+so the quit path's lines are lost, and it reports the overrun as exit status 0 with only `error.code` `ETIMEDOUT` to
+show it, which a check of the status passes as a clean exit. (Before the application's EPIPE loop was repaired on
+2026-09-29 it did not return at all.)
+([note](docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)).
+
 | Area | Script | What it measures |
 |---|---|---|
 | **The run** | `part-h-proof` | the loop supervisor and `continue` (ADR-0059) |
-| | `part-j-proof` | the control channel: a queued message at the iteration boundary, a steer, a graceful pause (its rest's summary, and the session lock the Continue holds for its run, sampled while the app runs), the message-limit pause |
-| | `plan-gate-proof` | the plan gate held, edited, answered (ADR-0062) |
-| | `resilience-proof` | the model ladder, the waits, the fallbacks, against scripted faults; the `override` launch is driven (the chooser the wait header draws), every launch is bounded (`lib/bounded-launch.mjs`: an overrun is ended by SIGTERM, a grace, then SIGKILL and reported with its log tail), and every scenario runs to its end with failures listed in `results.json` |
+| | `part-j-proof` | the control channel: a queued message at the iteration boundary, a steer (since 2026-10-01 its Steer waits for the control and the settled send, `lib/steer-rest.mjs`'s `STEER_CLICKS`, and an unpressed step fails by name), a steer whose dialog opened while the composer's send was still settling (since 2026-10-01, `lib/steer-early.mjs`: main holds the `session.subscribe` reply, `ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS`, and the root's record must hold the text typed into the dialog), a graceful pause (its rest's summary, and the session lock the Continue holds for its run, sampled while the app runs), a steer still pending at a pause reaching the resumed root, which carries on with its next scripted step rather than its first (the scripted client reads where a resumed agent stood from its record; since 2026-10-01 the launch's Pause waits for the steer dialog to close, `lib/steer-rest.mjs`, and the store must show the steer pending when the pause was asked for), the message-limit pause, and a later iteration's root the quit cut before its first reply there, resumed by the relaunch's Continue at the step after the one cut (since 2026-10-01: the scripted client's standing ledger, `scripted-standing.json` in the data directory, carries an agent's place across clients where its record holds no reply) |
+| | `plan-gate-proof` | the plan gate held, edited, answered (ADR-0062); since 2026-09-29 a fresh session whose plan cycle root called a tool is reopened at its gate, and the inspector's run-level agent must mark that tool `used` (`docs/defects/fixed/the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md`); since 2026-10-01 the same reading after an iteration, with `plan` chosen and the entry persona switched before the plan cycle, must mark the plan cycle root's tool `used` and not the iteration root's (`docs/defects/fixed/a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md`), and must name the run-level agent, and draw its chips, as the latest root's persona (`docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`); since 2026-10-01 the entry role carries the MCP fixture server, and every captured request of the held cycle must print it with no tool while the approved run's print its tools (`docs/defects/fixed/an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`) |
+| | `resilience-proof` | the model ladder, the waits, the fallbacks, against scripted faults, and (`quota-wait`, OQ-173) that a provider-limit wait past the stall threshold is logged as a wait and raises no `stall` issue; the `override` launch is driven (the chooser the wait header draws), every launch is bounded (`lib/bounded-launch.mjs`: an overrun is ended by SIGTERM, a grace, then SIGKILL and reported with its log tail), and every scenario runs to its end with failures listed in `results.json` |
 | | `compression-proof` | context compression and its timeline entries (ADR-0060) |
-| | `checkpoint-proof` | the capture at iteration close through to the desktop restore (ADR-0039); the `live` launch's lock is probed dead the moment it returns (`lib/lock-holder.mjs`), so a lock that outlives the application fails there and is not blamed on the `repaired` step (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`) |
-| | `sessions-proof` | the session browser's actions: repair, delete with ref cleanup, the exports; its planted locks read the machine identifier where the product mints it on the running platform (`machineIdFileFor`; `docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`) |
+| | `checkpoint-proof` | the capture at iteration close through to the desktop restore (ADR-0039); the `live` launch's lock is probed dead the moment it returns (`lib/lock-holder.mjs`), so a lock that outlives the application fails there and is not blamed on the `repaired` step (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`); since 2026-09-29 the `loaded-restore` launch restores a session still loaded after its run, once a second holder has taken its lock, and fails on a restore that writes under that holder (`docs/defects/fixed/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`) |
+| | `sessions-proof` | the session browser's actions: repair, delete with ref cleanup, the exports; its planted locks read the machine identifier where the product mints it on the running platform (`machineIdFileFor`; `docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`); the delete's cascade premise is the schema's shape, never a count of tables (`lib/session-cascade.mjs`; `docs/defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`) |
 | **Tools** | `fetch-proof` | `fetch` and its egress policy, read from saved configuration at **every** call |
 | | `questions-proof` | `ask_questions`, the trailer row, the stepper, the two control operations |
 | | `todo-proof` | the todo source priority, write-through edits, the pane |
 | | `attachments-proof` | content validation, ceilings, the capability gate, durable metadata |
-| | `artifacts-proof` | the session artifact store, the Artifacts tab, the inspector |
-| | `mcp-proof` | MCP declared three ways, against a real fixture server (ADR-0033/0034); launches 6 and 7 are driven, each step waiting for its condition (`<name>.steps.json`); launch 7's `.cmd`-runner check (REQ-MCP-113's wrap) is asserted on win32 only and **stated not applicable elsewhere**, the rest of the launch measured on every platform |
-| | `code-intel-proof` | the bundled code-intelligence runtime and its manifest (ADR-0035); its build step and process sampler are Windows-only (`--skip-build` passes the first, the second is caught), and **as root its branch launch cannot pass: it puts `--no-sandbox` ahead of the token, where the repaired sentinel no longer looks, so the application starts instead of the server and section 1 fails at the guard after three minutes** (`docs/defects/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`); its branch client (`lib/line-rpc-client.mjs`) fails every pending request when the child exits, errors or is killed, with the exit status and standard error's tail, so it no longer hangs (`docs/defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md`, `docs/defects/fixed/code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md`) |
+| | `artifacts-proof` | the session artifact store, the Artifacts tab, the inspector; since 2026-09-29 (live-run finding K1) item 2 also reads the agent inspector while the delegating run is still active — the run-level agent's chips (its live root port's resolution) marked from its history, the link to what it published — and follows the link into the Library's artifact inspector (first written "at rest", which it never was), and item 5 reads it at rest in a reopened session, the declared tools standing in; since 2026-10-01 (acceptance A20) item 2 also holds the run-level agent's meta line to at least one call per tool its chips mark used, which read `0 tool calls` while its turn ran |
+| | `mcp-proof` | MCP declared three ways, against a real fixture server (ADR-0033/0034); launches 3b, 6 and 7 are driven (3b: a child whose `tool_restrictions` leaves no native tool, its empty grant recorded and its inspector listing none), each step waiting for its condition (`<name>.steps.json`); launch 7's `.cmd`-runner check (REQ-MCP-113's wrap) is asserted on win32 only and **stated not applicable elsewhere**, the rest of the launch measured on every platform |
+| | `code-intel-proof` | the bundled code-intelligence runtime and its manifest (ADR-0035); it builds by platform; its window sampler is Windows-only, and elsewhere section 1 records the no-window check **not measured** (the instrument is missing, not the requirement), with its reason, in `results.json`; its setup launches open Settings with the Ctrl+7 chord rather than the shared category seam, and every press waits for the open's notice to have drawn and then for the control it presses (`docs/defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`); a press step that never matches logs `never matched`, which is expected for the `MCP Servers` step whenever Settings already opens there; its branch launch is the product's order, the token first and `hostSwitches` between it and `--`, which `lib/launch-sites.test.ts` holds for every token launch (`docs/defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`); its branch client (`lib/line-rpc-client.mjs`) fails every pending request when the child exits, errors or is killed, with the exit status and standard error's tail, so it no longer hangs (`docs/defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md`, `docs/defects/fixed/code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md`) |
 | | `skills-proof` | portable skill discovery, with a scratch home and a scratch machine-wide root (ADR-0063; `ROTARIS_CAPTURE_SKILLS_MACHINE`, off Windows only); the `/skills` listing written as one saved system row and read back after a reopen (REQ-CHAT-162) |
 | | `injection-proof` | workspace-context injection as the model port **received** it — order, the per-file switches, OQ-64, a worktree's execution root — and REQ-WORKSPACE-049's cold-cache p95 over 20 separate processes (`--skip-latency` skips it; cold only on Linux) |
-| | `sandbox-proof` | OS-level confinement (ADR-0022). The proof reads the host's own verdict (`process.platform`, the launcher on `PATH`, its own trial) and asserts the product's answer for that case (`docs/defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md`). On `win32` and on Linux without `bwrap` it proves the refusal path. **Where the backend is available it also runs REQ-SANDBOX-127's six effects (IC-8)**, and on Linux with `bwrap` it is **red** on REQ-SANDBOX-077's absent-subpath residue, a product defect (`docs/defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`). Read `results.json` → `effects` |
-| | `terminal-stream-proof` | the stream in the run host against a **real PTY** (ADR-0021), each command spelled in the host's shell: PowerShell on Windows, the POSIX shell elsewhere (REQ-TOOLS-104). Before 2026-09-28 it spoke PowerShell everywhere and measured nothing off Windows (`docs/defects/fixed/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md`) |
+| | `sandbox-proof` | OS-level confinement (ADR-0022). The proof reads the host's own verdict (`process.platform`, the launcher on `PATH`, its own trial) and asserts the product's answer for that case (`docs/defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md`). On `win32` and on Linux without `bwrap` it proves the refusal path. On every host it reads REQ-SANDBOX-130's disclosure on both surfaces, the settings card and the launch dialog (scenario 2b), and expects it only where no mechanism exists. **Where the backend is available it also runs REQ-SANDBOX-127's six effects (IC-8)** with `.git` present, plus a third confined launch with `.git` absent: REQ-SANDBOX-077's case (c). On Linux with `bwrap` that launch expects every command refused (`sandbox_unavailable`, 126, read from `tool_calls`) and `.git` still absent afterwards (`docs/defects/fixed/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`, OQ-140). Read `results.json` → `effects` |
+| | `terminal-stream-proof` | the stream in the run host against a **real PTY** (ADR-0021), each command spelled in the host's shell: PowerShell on Windows, the POSIX shell elsewhere (REQ-TOOLS-104). Before 2026-09-28 it spoke PowerShell everywhere and measured nothing off Windows (`docs/defects/fixed/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md`). Since 2026-09-29 the deltas carry what the command wrote and no marker (`deltasCarryOnlyTheCommand`, live-run L9), and a second command on the same stream starts on its own row of the renderer's display (`reopenedStreamStartsOnAFreshRow`) |
 | **Configuration and startup** | `config-proof` | hand-authored, commented files surviving every write (ADR-0036/0037) |
-| | `init-proof` | project initialization resolved once per workspace open (ADR-0064) |
-| | `workspace-proof` | reaching a project folder from inside the application: resolution, gates, switch |
-| | `settings-proof` | the Settings categories and the save bar; the About page's two files (`build-id.txt`, `THIRD-PARTY-LICENSES.txt`), absent and present (it stages them in `apps/desktop/resources/` and gives back what was there) |
+| | `init-proof` | project initialization resolved once per workspace open (ADR-0064); scenario 3 reads the dialog **before** its Escape (the reading marks the document and the key waits for the mark), and asserts that the background task starts and completes beside the consent prompt. Before the repairs it failed on Linux in both orders: a skip landing ahead of the resolution swallowed the background task (`docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`), and the background run drew itself in the dialog, which then refused Escape when the resolution came first (`docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`). It needs the bundled code-intelligence runtime: it builds it when it builds, and with `--skip-build` refuses before any launch naming `pnpm code-intel:bundle`; a setup that fails anyway is quoted from the app log (`docs/defects/fixed/init-proof-reads-a-missing-code-intelligence-bundle-as-a-task-that-recorded-nothing.md`) |
+| | `workspace-proof` | reaching a project folder from inside the application: resolution, gates, switch; scenario 8b switches away from a workspace whose initialization run is under way — its two projects point `code_intelligence` at a stand-in runtime written into the evidence directory, whose `project create` holds for 90 s and takes 2 s to end once asked — and asserts the outgoing run is cancelled, its step's process ended within 5 s, nothing recorded for it, the replacement's own setup followed to its recorded outcome once the outgoing one has ended, and a return to it resolved again (REQ-WORKSPACE-013/084/092/102/109; `docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`, `docs/defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`); scenario 8c holds the run host's one setup slot with the MCP category's setup and asserts that Initialize's refused start fails retryably in the refusal's own words, not as "not a local launch" (REQ-WORKSPACE-093/094; `docs/defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md`); scenario 8d kills the run host (Linux, found through `/proc` above the stand-in's held `project create`) while a second window's setup is queued behind the first, and asserts the first run ends as a retryable failure saying the run host exited and the queued run is then attempted, its unanswered start failing retryably in REQ-WORKSPACE-093's summary rather than as a task with no outcome (REQ-WORKSPACE-084/093/103/109; `docs/defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`, `docs/defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`); scenario 8e opens a second main window on another project while the first window's setup holds `create`, and asserts the first window reads its own initialization state and its Cancel cancels its own run, the second window's queued setup then running to its own recorded outcome (PD-SHELL-001, REQ-WORKSPACE-013/105; `docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`); 8f quits the app in order (`driver.quit()`) while a stand-in step holds `create` with a process of its own, both ignoring SIGTERM, and asserts the quit ends within 5000 ms through the run host's shutdown ending the setup, neither process running 5 s later, and no warning that the close's cancellation could not be delivered (REQ-WORKSPACE-092/109, PD-MONITOR-002; `docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`); 8g opens a documentation-only project carrying the runtime's marker and one whose stand-in creation writes to both streams and exits 3, and asserts the step rows read REQ-WORKSPACE-091's fixed sentences and the output's tail with no prefix, in the row and the error, while the run host's log lines keep its own words (REQ-WORKSPACE-091/092/093; `docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`) |
+| | `settings-proof` | the Settings categories and the save bar; the About page's two files (`build-id.txt`, `THIRD-PARTY-LICENSES.txt`), absent and present (it stages them in `apps/desktop/resources/` and gives back what was there); the Runtime category's run-start mode hint, with no session followed and over a released session (PD-ORCH-003) |
 | | `updater-proof` | the updater on the one path a development host can execute: a launch that is not a released artifact performs no check and issues no request (REQ-STARTUP-106/114/150) — the log's one `info` line, and a proxy sink every request of Chromium's stack would reach that records none for the feed and **none at all** from launch to first paint and quit (REQ-STARTUP-160, REQ-SHELL-005 — the spellchecker's dictionary download it once caught), with a net-log naming the URL of any connection it does record; and a second launch, started with both artifact variables set, whose one scripted `terminal` call finds neither in its shell's environment (REQ-STARTUP-147); the check, the download, the apply and the restart are unit-tested over fakes and their run against a real artifact is owed to the next Windows package (IC-3) |
 | **Surfaces** | `overview-proof` | the Overview painted from the run and the store |
-| | `transcript-proof` | the projection, the caches, the empty state (ADR-0045/0046), and REQ-CHAT-055's append comparison — alternating launches pooled to thirty a side, in frames and milliseconds with their spread, plus one traced launch of each fixture read back by `lib/trace-summary.mjs`, which since 2026-09-29 also carries V8's CPU profile: `append.json`'s `profile` names the script per increment by function and by source module, loaded minus empty |
+| | `transcript-proof` | the projection, the caches, the empty state (ADR-0045/0046), and REQ-CHAT-055's append comparison — alternating launches pooled to thirty a side, in frames and milliseconds with their spread, plus one traced launch of each fixture read back by `lib/trace-summary.mjs`, which since 2026-09-29 also carries V8's CPU profile: `append.json`'s `profile` names the script per increment by function and by source module, loaded minus empty; stage 3b also expands the planted activity line and reads the twelve frames after the click, opens a planted user row's image attachment (a growth under an unchanged measurement key) and reads the twelve painted frames after it, and holds a pair of rows already drawn to 1 px (2026-10-01); stage 3c (`capacity`, 2026-10-01) resizes the window to 1440x4300 over 400 one-line notices and holds every row on screen bound — Xvfb with no window manager does not clamp the window, so the standard `-screen 0 1600x1000x24` asks it, and a host that clamps the window records the stage NOT ASKED in the verdict; `--only=<stages>` runs named stages after the `empty` launch |
 | | `rows-proof` | the one row renderer, in both of its surfaces at once |
 | | `composer-proof` | the composer's chips, drafts, history recall and run header |
-| | `slash-proof` | the composer's slash-command catalogue; every eval is read by offset AND expression (`lib/capture-evals.mjs`), and REQ-CHAT-027's ground is the first opaque background from the input up; **red on the product** since the composer dock: the partial shade is corrected against `--rt-bg` and painted on `--rt-surface` (`docs/defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`) |
+| | `slash-proof` | the composer's slash-command catalogue; every eval is read by offset AND expression (`lib/capture-evals.mjs`), and REQ-CHAT-027's ground is the first opaque background from the input up, asserted to be the palette's `--rt-surface` (the dock's, `COMPOSER_GROUND` in `highlight.ts`); ~~**red on the product** since the composer dock: the partial shade is corrected against `--rt-bg` and painted on `--rt-surface`~~ green again 2026-09-29, the colours derived on the dock's ground (`docs/defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`) |
 | | `chat-controls-proof` | manual compression, the transcript clear, the prompt-file commands |
 | | `palette-proof` | one action vocabulary reaching the screen three ways. ADR-0048's **host-input** reading (`os-input.ps1`: a real Win32 click and keystrokes, and `IsWindowEnabled`) runs on `win32` only. Elsewhere `results.json` → `modality.hostInput` states it not applicable and why, and the application's own `isEnabled` reading is still asserted (`docs/defects/fixed/palette-proof-reads-the-win32-host-input-on-every-platform.md`) |
-| | `notice-proof` | the notice store and its chain (ADR-0049) |
+| | `notice-proof` | the notice store and its chain (ADR-0049); every scratch workspace carries an answered project setup, and a launch that starts the background setup anyway fails by name, so "Project setup did not finish" never stands in the slot it reads (`docs/defects/fixed/notice-proof-reads-a-failed-project-setup-in-place-of-the-hook-review-notice.md`) |
 | | `library-proof` | the Library shell and its Prompts tab |
-| | `mission-proof` | the Mission view, the per-agent inspector, the persona windows |
+| | `mission-proof` | the Mission view, the per-agent inspector, the persona windows; since 2026-09-29 a waiting agent's clock (item 1b: two children waiting behind a slot cap of one show their elapsed time, advancing — REQ-MONITOR-107/111, OQ-124); item 6 reads the running run-level agent's chips — its run's resolution, a coordinator's withheld tools absent (REQ-MONITOR-060/061, live-run finding K1); item 3 reads the still-mounted view's Pause once the session rests `paused` — `Pause`, not `Pausing…` (REQ-MONITOR-296, 2026-09-29); item 4 records the rows just after the confirmed cancel (REQ-MONITOR-128's optimistic cancel, not asserted: it depends on the host's timing) and asserts the engine's record has overwritten them by 9 s (REQ-MONITOR-296, 2026-09-29), and that the cancelled child and its descendant each read `child_user_cancelled`, `child_end`, `child_result`, `child_conversation_closed` once (REQ-ORCH-098, 2026-10-01); item 4b cancels the run from the Mission view's run row and asserts that every snapshot taken after the confirm was handled (one selector list per sample, counted once the confirmation has closed) reads the subtitle, the run row and the strip `Cancelling` or the run at rest, never `Running` nor another active status; item 4c pops the run-level agent out from the inspector, confirms its window's Cancel (`ROTARIS_CAPTURE_PERSONA_CLICKS`) and asserts the same of the instance's state label — `cancelling` or at rest, never `running`; how many samples land inside the `Cancelling` window is host timing, recorded as `cancellingSamples` and not asserted (REQ-MONITOR-127/130, acceptance A35, OQ-165) |
 | | `git-proof` | the Git view and the worktrees |
 | | `terminal-proof` | the terminal grid, the pop-out window, the transcript preview (ADR-0047). Its live section spells the size probe, the motion command and the flood in the shell its harness reports (REQ-TOOLS-104). Before 2026-09-28 they were PowerShell everywhere, and off Windows four checks measured nothing (`docs/defects/fixed/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md`) |
 | | `improvements-proof` | the reviewed-improvement lifecycle end to end |
 | | `retrospective-proof` | the retrospective pass, driven from its surfaces against the built app (PD-LIBRARY-002) |
-| | `theme-proof` | the themes and scales, rendered — plus two counterfactuals that must stay red |
-| | `layout-proof` | the Workspace view's grid, **measured** at the sizes the specification names |
+| | `theme-proof` | the themes and scales, rendered — plus two counterfactuals that must stay red; since 2026-09-30 a text's contrast is read only from the part of it left on screen by the window and by every ancestor whose `overflow` is not `visible` (scroll, `hidden` and `clip` alike), and a fragment under one em is skipped with its size (`lib/text-sample.mjs`), so a status-strip item scrolled 1.2 px onto the screen no longer decides the verdict; since 2026-10-01 the contrast verdict is bounded by what it measured (`lib/contrast-coverage.mjs`: every capture needs a measured text inside its own surface and at most 25% of that surface's texts skipped, the run at most 10% skipped, skips counted by reason), and a third counterfactual, `theme-proof:counterfactual:offscreen`, pushes the Workspace view off the screen and must stay red |
+| | `layout-proof` | the Workspace view's grid, **measured** at the sizes the specification names, and a task whose text is one unbroken token kept inside the plan column (REQ-SHELL-022) |
 | **Requirements** | `requirements-proof` | the delivery store and the board (ADR-0041) |
 | | `requirements-runs-proof` | runs started from the board, against a real scratch repository |
 | | `traceability-proof` | the traceability engine, including spike 7's scale store (ADR-0040) |
 | **The record itself** | `directive-proof` | that a directive's precedence over a requirement is machine-checked, not asserted in prose |
 | **Whole product** | `slice-proof` | sign-in through the product and one run on a real model |
-| | `driver-proof` | the driver seam `pnpm app:drive` depends on |
+| | `driver-proof` | the driver seam `pnpm app:drive` depends on — and that its `quit` brings a live run to rest, its shot straight after a navigation shows the new view, and it answers an approval in its dialog and probes a persona window |
 | | `ui-audit` / `ui-review` | what the browser **built** at every size; the deterministic pack a report-only critic reads |
 | | `live-run` | the built product against a real endpoint and a real key — **money; never automatic** |
 
@@ -83,6 +96,11 @@ Three portable workflows live under `.agents/skills/`, where REQ-WORKSPACE-051 m
 this repository: **`build-ui`** for creating or substantially restyling a surface, **`debug-ui`** for a bounded
 rendered defect, and **`review-ui`** for a report-only external critique. Their `.claude/skills/` entries are thin
 compatibility routers; the portable files are canonical.
+
+A fourth, **`orchestrated-build`**, drives a large body of work (a release backlog, every open defect) through a
+multi-agent workflow: independent verification per bundle, repair rounds, serialized merges, acceptance with the
+proof sweep and live runs, and recovery from container restarts out of the workflow journals. It improves itself
+under the guardrails its `SKILL.md` states; `pnpm check` runs its self-test.
 
 `build-ui` and `debug-ui` may change source within the authority of the current task. `review-ui` writes only
 evidence under `.ui-review/`. Its critique is proposed evidence and reaches implementation through a separate,
@@ -104,15 +122,32 @@ pnpm app:drive click ".nav-item" --text=Git
 pnpm app:drive inspect ".composer"          # boxes, attributes, text, what holds focus
 pnpm app:drive shot screen.png              # a PNG you can open, or read in a transcript
 pnpm app:drive log --tail=40                # what the app printed: info and above unless started as above (PD-MONITOR-002)
-pnpm app:drive stop
+pnpm app:drive windows                      # main windows, and each one's persona, approval and terminal windows
+pnpm app:drive useWindow persona:coding-agent   # later commands act on that window; no name: the active main window
+pnpm app:drive probe "#approval-title" --window=approval   # --window= on any command: that window, that command only
+pnpm app:drive stop                         # the application's quit: close guards, then the run host's shutdown
+pnpm app:drive stop --crash                 # the immediate exit: a live run is left as a crash leaves it
 ```
+
+`stop` is a person's quit: a live run comes to rest with the stop reason `application_shutdown`, and `stop` waits for
+the process to end; a close guard that keeps the application (unsaved settings) leaves it driven so the dialog can be
+answered. `stop --crash` is the immediate exit, for a drive that means to leave a crash for the next launch to repair.
+
+A window is named by its index in `windows`, by a suffix of a main window's workspace path, or by a role:
+`persona:<persona>` (that persona's window), `approval` (the open approval dialog, answered with its own buttons) or
+`terminal` (the terminal window). A name that matches no open window is refused with the list of what is open.
+
+`type` types a line break as Shift+Enter, the composer's newline (REQ-CHAT-001), so a multi-line text keeps its breaks and
+is submitted only by `--enter`; the capture seams' typed steps do the same.
 
 `command` is relayed to main's own `runCommand` — the same path the renderer's channel reaches — so driving a
 command drives the product, not a stand-in for it. The seam (`apps/desktop/src/main/driver.ts`) exists only
 when `ROTARIS_DRIVER` names an endpoint file at launch; it is verification only, and `pnpm driver-proof`
 is its proof.
 
-Two habits worth keeping: **`shot` produces a PNG an agent can read directly**, which is the cheapest way to meet
+Two habits worth keeping: **`shot` produces a PNG an agent can read directly** (it waits four of the renderer's
+frames first, so it is never the frame before a click or a navigation; its reply's `painted: false` says a window
+presented none), which is the cheapest way to meet
 `CLAUDE.md`'s "match after drawing" obligation; and a step that needs a condition should `waitFor` it rather than
 sleep, because the reason this seam exists is that fixed offsets have produced false reds three times.
 
@@ -135,6 +170,24 @@ not replace the part's own proof, it follows it.
 It is **never** automatic. It is not in `pnpm check`, `pnpm test` collects nothing from it, and no hook or CI
 step may call it. It runs when the owner asks for it, or when an agent asks the owner and is told yes.
 An agent must not run it on its own initiative: it costs money the owner pays.
+
+An owner's yes is not always enough in an agent session. On the Linux agent host, the harness's automatic permission
+classifier has refused some `live-run.mjs --confirm` launches as a real-world transaction even where the owner authorised
+the run (R-066, R-067; [`docs/defects/fixed/no-live-run-has-executed-on-merged-main.md`](docs/defects/fixed/no-live-run-has-executed-on-merged-main.md)).
+On 2026-09-30 it refused the launch over the default scenarios and the long `duress` launch, while it admitted targeted
+`--only=ask` and `--only=ask,edit` runs on repair branches the same day. Which launches it admits is not established, so
+an agent does not predict it. An agent that meets that refusal stops, and it does not reach the run by another route,
+such as splitting the refused launch into admitted `--only=` pieces. It records the refusal where its task lives and
+says so in its report. Only the owner can close the gap: by allowing `node apps/desktop/scripts/live-run.mjs --confirm`
+for agent sessions in the harness's permission rules, or by running the command by hand.
+
+On 2026-10-01 both refused launches ran on merged `main` `71ad8e8` and printed `live-run PASSED`. The orchestrating
+session launched them after the owner authorised live runs in its conversation. Since 03:23 that day, the owner's
+allow rule for the `--confirm --skip-build` launch forms has stood in the host's git-ignored
+`.claude/settings.local.json`. `.agents/skills/orchestrated-build/references/live-runs.md` lists those forms. A
+session that does not hold that rule, or a launch in any other form, can still meet the refusal, and the paragraph
+above still governs it. `main` has moved past `71ad8e8` since, so a live run of the head that would be released is
+still owed, and it is asked for like any other.
 
 ### Registering an endpoint, and storing its key
 
@@ -228,16 +281,16 @@ neither path depends on what the other did.
 
 | Scenario | What runs | What is asserted |
 | --- | --- | --- |
-| `sign-in` | Settings → Models → Add endpoint, filled and pressed in the product's dialog | the credential file, the snapshot's authenticated record, the catalogue, the bootstrapped `agents.yaml`, no credential in any log |
+| `sign-in` | Settings → Models → Add endpoint, filled and pressed in the product's dialog | the credential file, the snapshot's authenticated record, the catalogue, the bootstrapped `agents.yaml`, no credential in any log, the outcome's model count worded with no literal "(s)" (REQ-SHELL-044; live-run L11) |
 | `ask` | one real run: read `src/todos.js`, answer | the leased bearer, a request to the endpoint, a completed session, settled tool rows, usage figures, an answer naming the real exports |
-| `edit` | one real run: implement `REQ-103`, then run the suite in the terminal | `clearCompleted` exported and tested, the terminal tool used, the session's tool-call total agreeing with the ring across every agent (`REQ-MONITOR-102`), `git diff` non-empty, and **`node --test` run again by the script itself** — the agent's own report is never the evidence |
+| `edit` | one real run: implement `REQ-103` through two scoped children, each told to run the suite in the terminal (the orchestrator holds none: `coordinator_only`, REQ-TOOLS-006) | `clearCompleted` exported and tested, a child's terminal call running `node --test` and none by the orchestrator, the session's tool-call total agreeing with the ring across every agent (`REQ-MONITOR-102`), `git diff` non-empty, and **`node --test` run again by the script itself** — the agent's own report is never the evidence |
 | `resume` | one real delegating run, paused through the composer's Pause while a child runs and continued through its Continue (`PD-ORCH-005`) | the paused composer drew its children `paused` with the Continue action's count; the timeline's `iteration_paused` by `pause` and `iteration_resumed` for the same iteration; every child paused by the pause resumed under its own task id; each one's `agent_messages` continue across the pause, and its next request carried what it recorded last; the iteration closed `succeeded`, the session completed, and **both notes it asked for are read back from disk** |
 | `requirements` | the board: `REQ-104` selected, the move control pressed, the release confirmed, the run watched to review and its decision taken | the card's own trail `backlog → running → review → done`, exactly one release and an accept in the delivery history, the run record carrying its session identifier and the permissions it was granted (`REQ-TRACE-464/472`), real usage from the endpoint, the run confined to a worktree of its own, `completedCount` exported and tested **inside that worktree**, and **`node --test` run there by the script itself** |
 | `shell` | a relaunch with no prompt | Overview painted from the store: the sessions the runs left, the repository card's branch |
-| `frictions` | one real run engineered to trip the inducible autopsy frictions, read back from the store | first-use `write_file` with no operation repair, SIGINT delivered with no platform refusal — **red by design until the fixes land**; the exit-trace friction is recorded but not inducible on demand, and the stall-abort one moved to `faults` |
-| `faults` | two runs against an endpoint the proxy makes misbehave: a 429-then-500 ladder, and a stream that stops mid-answer with the socket open | the ladder run still completes; the stalled run does **not** report `user_cancelled` with nobody having pressed anything (defect 82's shape), **and the product is shown to have noticed the stall** in its own `issues` row — the negative alone would pass on a run that met no fault at all |
-| `terminal` | one run issuing six commands the record names verbatim: a multi-line here-string, forty long lines, a wedge with no `timeout`, an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` exiting 1, a pipeline through a pipe | the here-string terminated; all forty lines arrived, none concatenated, none carrying an escape sequence; a call with no `timeout` was still bounded; the docker line printed at exit 0 was neither `suspicious_success` nor given a failure-marker warning (`PD-TOOLS-003`); exit 1 from `git diff` was not `shell_failure`; **no end marker in anything the model read**. The pipeline is a NOTE — its deny fires as its requirements specify — and a shape the model never issued is a NOTE too |
-| `duress` | **opt-in** (`--only=duress`): one delegating run of **three dependent waves, six children**, under `LIVE_RUN_DURESS_MS` (default 40 min) against `--duress-fixture` | the autopsy's coherence section is clean (no null summary on a stopped run, no tokens against a zero cost); no child ended `failed` with nothing to say; a child that ran commands reported them; the `compressions` aggregate agrees with the timeline. Length, children and compressions are **reported**, so a run that was not duress says so |
+| `frictions` | one real run engineered to trip the inducible autopsy frictions, read back from the store | first-use `write_file` with no operation repair, every settled create reporting the lines its content holds (a final newline ends a line; live-run L6), SIGINT delivered with no platform refusal, every call the tool gate refused as `invalid_request` referenced by a `tool_error` issue (REQ-SESSION-136, live-run a71-6; none refused is a NOTE) — **red by design until the fixes land**; the exit-trace friction is recorded but not inducible on demand, and the stall-abort one moved to `faults` |
+| `faults` | two runs against an endpoint the proxy makes misbehave: a 429-then-500 ladder, and a stream that stops mid-answer with the socket open | the ladder run still completes, and each injected refusal left the trace of the layer that retried it — the session log's dispatch-layer line or the ladder's own issue (OQ-110), never the call count alone; the stalled run does **not** report `user_cancelled` with nobody having pressed anything (defect 82's shape), **and the product is shown to have noticed the stall** in its own `issues` row — the negative alone would pass on a run that met no fault at all; and, since 2026-09-30, the entry agent's own stall watch wrote REQ-MONITOR-119's `stall` issue (`agent appears stalled: …`) before the idle bound, with a photograph taken between the two (`faults-stall.stalled.png`, OQ-153) |
+| `terminal` | one run issuing the commands the record names verbatim: a multi-line here-string, forty long lines, off Windows an `exec bash` that replaces the session's shell (acceptance A9, OQ-144), off Windows a bash-ism `/bin/sh` cannot expand (live-run L1), off Windows an `exit 3` that ends the session's shell (OQ-144's sibling case), a wedge with no `timeout` and one empty poll of it (live-run L2), then `C-c` with `is_input` and one poll after it (OQ-147), a second wedge and a command issued while it is soft-paused (OQ-164), an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` exiting 1, a pipeline through a pipe | the here-string terminated; all forty lines arrived, none concatenated, none carrying an escape sequence; the shell replacement ended at once as an `execution_error` with no exit code, never a soft pause, the session was restarted on its own shell (`kill_status` `session_reset`), and the next command the same agent issued met `/bin/sh` again (a next command from another agent, whose foreground session is its own under REQ-TOOLS-187, is a NOTE); the bash-ism ended at once with the shell's own error status, never a soft pause; the `exit 3` ended at once as an `execution_error` with no exit code, never a soft pause, the shell was respawned (`kill_status` `session_reset`), and the same agent's next command reported `session_reinitialized` true; a call with no `timeout` was still bounded; the poll stated no more waiting than had passed and did not claim the no-output window; the poll after `C-c` handed the wedge over as ended without an exit status of its own, never as still running; the command issued behind the second wedge named it and how it ended, with what it wrote (`slept`), never only its own exit; the docker line printed at exit 0 was neither `suspicious_success` nor given a failure-marker warning (`PD-TOOLS-003`); exit 1 from `git diff` was not `shell_failure`; **no end marker in anything the model read**. The pipeline is a NOTE — its deny fires as its requirements specify — and a shape the model never issued is a NOTE too, **but a run that ended `failed` before any terminal call fails the scenario** (one stopped otherwise before any is a NOTE), so a dead run is never green (`terminalRunEndReading`) |
+| `duress` | **opt-in** (`--only=duress`): one delegating run of **three dependent waves, six children**, under `LIVE_RUN_DURESS_MS` (default 40 min) against `--duress-fixture` | the result inside the wait, with **where the time went** (endpoint, tools, launch, the product with nothing in flight) — an overrun the endpoint held while the run progressed — read only from requests and tool calls that ended on their own, never one the quit cut off — is a NOTE that the window was the bound; the autopsy's coherence section is clean (no null summary on a stopped run — `unasked`, a NOTE, for a session that never stopped — and no tokens against a zero cost where a request had a figure — the reader reads `cost_qualifier`); no child ended `failed` with nothing to say (`final_response`, `last_response` and `cut_off` each count, REQ-ORCH-110; an error entry alone does not — the product writes one on every failed child, and the eighty-second defect's children carried nothing else); a child that ran commands, found by its canonical name, reported them; the `compressions` aggregate agrees with the timeline; every call the tool gate refused as `invalid_request` is referenced by a `tool_error` issue (REQ-SESSION-136, live-run a71-6; `scripts/lib/refusal-issues.mjs`). Length, children and compressions are **reported** — a run that never compressed names its largest prompt against the REQ-CONFIG-134 trigger — so a run that was not duress says so. Readings in `scripts/lib/duress-checks.mjs` |
 
 An endpoint that discovers no model catalogue is not a dead end. The sign-in takes the dialog's own "Continue
 anyway" (the zero-model recovery), the catalogue check is recorded as a **NOTE** rather than a silent pass, and
@@ -262,7 +315,7 @@ directory per scenario:
 | `autopsy.txt` | `apps/desktop/scripts/autopsy.mjs` over that scenario's session |
 | `session.log` | the product's own per-session log, at `--session-log-level` (default `INFO`) |
 | `transcript.md` | every transcript row in full, not the 400 characters `results.json` keeps |
-| `model-traffic.jsonl` | **what the model was sent and what came back** — request and response bodies, status and duration per call. The product logs a method and a URL and nothing else, so this exists nowhere else |
+| `model-traffic.jsonl` | **what the model was sent and what came back** — request and response bodies, status and duration per call, in the file of the scenario that made the call, each naming how it ended (`outcome`: `complete`, `aborted` when the product let go — the endpoint is let go with it — `in-flight at close`, `stalled`, `released`, `cut`, `upstream-error`, `unreachable`). The product logs a method and a URL and nothing else, so this exists nowhere else |
 | `*.png` | the end of the scenario, plus one a fifth and one three fifths through its wait |
 | `node-test.log`, `diff.txt`, `changed/` | where the scenario produces them |
 
@@ -278,8 +331,11 @@ The sandbox itself is deleted at the end unless `--keep`. The record of what hap
 The proxy is in the path, so it can also be told to misbehave on a **named call**. Two launches:
 
 - **`faults-ladder`** — a 429 on the second completion and a 500 on the third, neither of which reaches the
-  endpoint, so the injected calls cost nothing. It asks whether the ladder waits, falls back and still finishes
-  (`REQ-ORCH-091..094`).
+  endpoint, so the injected calls cost nothing. It asks whether the run survives both and whether each refusal left
+  the trace of the layer that retried it: OQ-110 puts REQ-CONFIG-086's dispatch-layer retries before the ladder's
+  (`REQ-ORCH-091..094`), so with the default budget of 5 the trace is the session log's WARNING line, and the check
+  reads it (or the ladder's `model_wait`/`transient_llm_error` issue) for every injected status. `results.json`'s
+  `traffic.faultsFired`/`faultsDeclared` are the run's figures (`proxy.totals()`), never the last launch's.
 - **`faults-stall`** — the bytes stop mid-answer and the socket stays **open**. It asks the eighty-second
   defect's question: a model timeout once collapsed into the same `aborted` flag a user's stop sets, and the run
   reported `user_cancelled` with nobody having pressed anything. The check is that it does not do so again.
@@ -293,7 +349,8 @@ second completion" is a reproduction, "some completion" is a coincidence.
 calls against two refusals and completed *(falsified 2026-09-29: the two refusals were retried by the model client's
 dispatch layer — REQ-CONFIG-086's `num_retries`, default 5 — before the ladder saw them, and the ladder was never
 reached; the owner ruled that order as the specification's, OQ-110, R-067, so `faults-ladder` shows that a run survives
-the refusals and not that the ladder handled them)*; the stalled stream was noticed by the **idle bound at 120.5 s**,
+the refusals and not that the ladder handled them; each retry the dispatch layer absorbs is now a WARNING line in the
+session log, so a pack's `faults-ladder/session.log` names both refusals with the delay waited)*; the stalled stream was noticed by the **idle bound at 120.5 s**,
 classified `transient_llm_error`, retried at 121.5 s and finished — the first live evidence that the
 eighty-second defect's repair holds.
 
@@ -321,7 +378,7 @@ Sixty negative runs are not a negative result when none of them carries the inpu
 issues the recorded commands verbatim, and asserts from `tool_calls` — what the agent passed, what came back —
 rather than from what the model says it did.
 
-**One of the six shapes is a NOTE, on purpose.** The pipe-to-shell deny fires exactly as `REQ-TOOLS-036/038`
+**One of the shapes is a NOTE, on purpose.** The pipe-to-shell deny fires exactly as `REQ-TOOLS-036/038`
 specify; its note exists to measure what it costs, not to accuse the product. A shape the model never issued is
 also a NOTE. Reporting a faithful behaviour as a fault is how a scenario teaches its reader to ignore it — the
 mistake the board scenario made twice. The `FAILED`-marker shape was the second NOTE until 2026-09-27: it now
@@ -343,7 +400,7 @@ across waves, which is what reaches compression and re-spawn. A single wave of p
 minutes and measures the short path under a longer deadline. `--duress-fixture` remains for the question that
 is about size specifically.
 
-The shapes and the three readers (`diagnosticOf`, `longOutputReading`, `outputOf`) live in `apps/desktop/scripts/lib/terminal-shapes.mjs`, pinned by
+The shapes and the readers (`diagnosticOf`, `longOutputReading`, `outputOf`, `hereStringLinesReturned`, `unexpandableReading`, `replacedShellReading`) live in `apps/desktop/scripts/lib/terminal-shapes.mjs`, pinned by
 `terminal-shapes.test.ts` — a pattern that stopped matching its own command would turn every check in the
 scenario into "never attempted" without anybody being told, so the test asserts the round trip in both
 directions: every shape matches its own command, and none matches another's.
@@ -364,6 +421,45 @@ check is genuine — 2,406 s of 2,400 s, about 98 % of it the endpoint generatin
 check is the harness's false positive on a child cut off with a continuation offer. What the run let through is recorded
 as notes in `docs/defects/` carrying "Live-run finding: D…" and "H-…" lines.
 
+**Five of the scenario's own readings were wrong on that run, and were repaired on 2026-09-29 (R-067).** They now live in
+`apps/desktop/scripts/lib/duress-checks.mjs`, pinned by `duress-checks.test.ts` against the recorded shapes, and in the
+autopsy reader's null-summary line (`lib/autopsy-coherence.mjs`). A cut-off child's `last_response` and `cut_off` are
+something to say (H-a); an error entry alone is not, because the product writes one on every failed child (corrected
+2026-09-30 in the verifier's fix round 1, where the first repair had counted it and so passed the eighty-second defect's
+shape). A child's terminal calls are found under its canonical name, the one `tool_calls`
+records (H-b). A session that never stopped answers `unasked`, a NOTE, where it used to pass (H-c). A run that never
+compressed names its largest prompt against the REQ-CONFIG-134 trigger rather than its iteration count (H-d). And the
+deadline check says **where the time went** (H-h): endpoint, tools alone, launch, and the product with nothing in flight,
+each from the traffic and the store. The notes are in `docs/defects/fixed/`. **Run again on 2026-09-30** (pack
+`.live-run/runs/2026-09-30T05-29-56-712Z`, `katalyst`), the repaired checks read as they claim: the overrun was a NOTE
+(2,406 s of 2,400 s, 99 % the endpoint generating, 1 s of the product with nothing in flight); the session came to rest
+`paused`, `application_shutdown`, with its summary, so the null-summary question was asked and passed; no child
+failed; the no-compression note named a largest prompt of 77,043 tokens against a trigger of 157,286; and the prompt
+arrived with its line breaks (H-e). The commands question, asked at last, **failed falsely once more**: `f`, paused by
+the deadline quit after 26 terminal calls, had no report yet. It is now asked only of a child with a report, and
+an unsettled one is a NOTE — replayed over that pack, `b` is asked (6 commands) and `f` is noted. **Run a third time
+the same day, after the verifier's fix round 1** (pack `.live-run/runs/2026-09-30T06-33-14-401Z`), the scenario
+**passed**: the overrun a NOTE naming the one request the quit cut off (the last to end on its own 68 s before the
+launch did), a cut-off child (`w2d`, `last_response` and `cut_off`) met live and not counted silent, the commands
+question asked of the one settled child that ran commands and the paused `w3` noted.
+
+**`LIVE_RUN_DURESS_MS` — the default stays 40 minutes, and the check says when the window was the bound (decided
+2026-09-29).** The figure is the owner's of 2026-09-22, taken for this endpoint, and a harness repair does not reverse it.
+What the first execution falsified was the check's reading, not the figure: 2,406 s of 2,400 s was a FAIL, and replayed
+through the attribution it reads 99 % endpoint generating (200 requests, 178,627 reasoning tokens), 6 s of tools alone,
+5 s of launch, 3 s of the product with nothing in flight, and a request ending 2 s before the quit. A verdict that
+blames the product for the endpoint's throughput teaches its reader to ignore it (the rule above), so an overrun in
+which the run was still progressing (the last request or tool call **to end on its own** ended within 120 s of the
+launch's end) and the product had nothing in flight for at most a tenth of the wait is a **NOTE, "bounded by the window,
+not by the product"**. "On its own" is a request the endpoint completed, or anything that ended before the instant the
+wait ran out (the seam's timed-out line): a request the quit cut off ends at the quit whatever it was doing, and the
+first form of this reading let a stream hung from early in the wait pass as progress (corrected 2026-09-30, the
+verifier's fix round 1); such a request is named in the detail instead. The four figures are **occupancy, not a
+critical path**: a request open while the run's next step waits on something else still counts to the endpoint. Any other overrun, or one with no traffic to attribute, stays a FAIL naming the shares. To ask for the
+result on a reasoning endpoint like `katalyst`, give the run the time: `LIVE_RUN_DURESS_MS=5400000`, for example (90 minutes; the first
+execution on `katalyst` was still in its third wave at 40, and the launch's own bound is the wait plus 180 s, so a
+`timeout` around the command must sit above that).
+
 **The traffic is recorded through a loopback proxy**, so the sandbox's `base_url` is the proxy and the endpoint
 is one hop further on. Two consequences worth knowing before reading a pack: a `model request POST` line in
 `app.log` names the proxy rather than the endpoint, and it is `model-traffic.jsonl` that says the call reached
@@ -377,7 +473,11 @@ and the live run asserts that in `ask`.
 The sandbox holds a **real credential** — the app writes the leased key into its own store, as it would on the
 owner's machine — so the credential directory is deleted on every exit path there is: the normal end, `--keep`,
 a thrown error, and a Ctrl-C. `--keep` keeps the workspace and the store to read and marks the directory `KEPT`;
-the next run sweeps every unmarked leftover, and takes the credentials out of the marked ones too.
+the next run sweeps every unmarked leftover, and takes the credentials out of the marked ones too. Live runs may
+**overlap** on one host: each writes `OWNER` (its pid and start) into its sandbox as it makes it, and the sweep leaves
+a sandbox whose owner is still running — its key included — and one with no `OWNER` for twelve hours
+(`apps/desktop/scripts/lib/sandbox-sweep.mjs`;
+[fixed](docs/defects/fixed/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md)).
 
 ### Reading a failure
 

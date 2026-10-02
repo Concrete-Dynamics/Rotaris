@@ -3,7 +3,8 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
  * The vertical slice's proof (Part K.4): sign in to OpenRouter through the product and complete one run on a
@@ -78,15 +79,16 @@ const local = join(root, 'local');
 mkdirSync(workspace, { recursive: true });
 mkdirSync(local, { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# Slice proof workspace\n\nThis file exists so the agent has something to read.\n');
-const tokensFile = join(local, 'rotaris', 'data', 'tokens', `${PROVIDER_ID}.json`);
+// The credential store (REQ-PROVIDER-014) where the product writes it on THIS platform (`tokensDirFor`).
+const tokensFile = join(tokensDirFor(local), `${PROVIDER_ID}.json`);
 // The discovery snapshot where the product writes it on THIS platform (`configDirFor`), not the Windows spelling alone.
 const snapshotFile = join(configDirFor(local), 'project_settings.yaml');
 const agentsFile = join(workspace, '.rotaris', 'agents.yaml');
 
-function launch(name, extra, timeoutMs = 120_000) {
+async function launch(name, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ local, preferences: join(root, 'preferences') }),
@@ -97,6 +99,7 @@ function launch(name, extra, timeoutMs = 120_000) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   return log;
@@ -131,7 +134,7 @@ console.error(' SLICE PROOF — the authentication window will open in the app.'
 console.error(` Paste your OpenRouter API key into the "API key" field and press "Add endpoint".`);
 console.error(` The label and URL are filled for you. You have ${Math.round(KEY_WAIT_MS / 60_000)} minutes; the script waits for the credential file.`);
 console.error('================================================================================\n');
-const log1 = replay('first-launch') ? readFileSync(join(output, 'first-launch.log'), 'utf8') : launch('first-launch', {
+const log1 = replay('first-launch') ? readFileSync(join(output, 'first-launch.log'), 'utf8') : await launch('first-launch', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
   ROTARIS_CAPTURE_CLICKS: '[data-action="add-endpoint"]@2200',
   ROTARIS_CAPTURE_PROVIDER_FILL: `OpenRouter>>${BASE_URL}`,
@@ -147,7 +150,7 @@ if (/capture: wait for .* timed out/.test(log1) || (!replay('first-launch') && !
   process.exit(2);
 }
 results.keyPasted = true;
-const added = /providers: (Added OpenRouter; discovered (\d+) model\(s\)\.)/.exec(log1);
+const added = /providers: (Added OpenRouter; discovered (\d+) models?\.)/.exec(log1);
 if (!added) throw new Error(`the sign-in outcome was not logged:\n${log1}`);
 // After the sign-out scenario the file is gone; a replay reads the credential facts it recorded.
 const credentialFacts = join(output, 'credential-facts.json');
@@ -178,7 +181,7 @@ if (!readFileSync(agentsFile, 'utf8').includes('permission_mode:')) writeFileSyn
 results.firstLaunch = { notice: 'raised', outcome: added[1], discovered: Number(added[2]), credential: { keys: Object.keys(credential), expiresAt: credential.expires_at, extra: credential.extra }, protection: dacl ? { protected: dacl.protected, aces: dacl.aces.map((a) => `${a.type};${a.rights};${a.sid.startsWith('S-1-5-21') ? 'owner' : a.sid}`) } : 'posix', picks, bootstrap: 'written' };
 
 // 2. The three tier slots pinned to the proof model and saved.
-const log2 = replay('slots') ? readFileSync(join(output, 'slots.log'), 'utf8') : launch('slots', {
+const log2 = replay('slots') ? readFileSync(join(output, 'slots.log'), 'utf8') : await launch('slots', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
   ROTARIS_CAPTURE_SELECT: `select[aria-label="Model for small_model"]>>${QUALIFIED}@2200;;select[aria-label="Model for medium_model"]>>${QUALIFIED}@2500;;select[aria-label="Model for large_model"]>>${QUALIFIED}@2800`,
   ROTARIS_CAPTURE_CLICKS: '.save-bar .btn-primary>>Save@3600',
@@ -192,12 +195,13 @@ for (const slot of ['small_model', 'medium_model', 'large_model']) if (!agents.i
 results.slots = { agentsFile: agents };
 
 // 3. One real run on the leased bearer.
-const log3 = replay('run') ? readFileSync(join(output, 'run.log'), 'utf8') : launch('run', {
+const log3 = replay('run') ? readFileSync(join(output, 'run.log'), 'utf8') : await launch('run', {
   ROTARIS_CAPTURE_PROMPT: 'Read README.md in this workspace and tell me its first heading, in one sentence.',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
 }, RUN_WAIT_MS + 60_000);
 assertNoCredential(log3, 'run');
-if (!/credentials leased: openai-compatible--openrouter/.test(log3)) throw new Error('main did not lease the bearer');
+// The lease's report is the run host's (REQ-PROVIDER-068, `LeaseReportLog`); main no longer restates it (a71-9).
+if (!/credentials: leased for openai-compatible--openrouter/.test(log3)) throw new Error('main did not lease the bearer');
 if (!/credentials: 1 provider\(s\) authenticated/.test(log3)) throw new Error('the run host did not report the priming');
 const requests = (log3.match(/model request POST (\S+)/g) ?? []).map((l) => l.replace('model request POST ', ''));
 if (!requests.some((u) => u.startsWith(`${BASE_URL}/chat/completions`))) throw new Error(`no request reached OpenRouter:\n${requests.join('\n')}`);
@@ -231,7 +235,7 @@ results.run = {
 results.intents = [];
 for (const [i, c] of INTENTS.entries()) {
   const name = `intents-${i + 1}`;
-  const log = replay('intents') ? readFileSync(join(output, `${name}.log`), 'utf8') : launch(name, {
+  const log = replay('intents') ? readFileSync(join(output, `${name}.log`), 'utf8') : await launch(name, {
     ROTARIS_CAPTURE_PROMPT: c.prompt, ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '1500',
   }, RUN_WAIT_MS + 60_000);
   assertNoCredential(log, name);
@@ -262,7 +266,7 @@ const spikeSummary = stripAnsi(/Tests\s+(.*)$/m.exec(spikeOut)?.[1] ?? 'no summa
 results.spike6 = { exit: spike ? spike.status : 'replayed', tests: spikeSummary, lines: spikeLines };
 
 // 5. Sign out from the providers card; the file gone, the snapshot kept.
-const log5 = replay('sign-out') ? readFileSync(join(output, 'sign-out.log'), 'utf8') : launch('sign-out', {
+const log5 = replay('sign-out') ? readFileSync(join(output, 'sign-out.log'), 'utf8') : await launch('sign-out', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
   ROTARIS_CAPTURE_CLICKS: `[data-provider="${PROVIDER_ID}"] .btn-link@2200;;[data-provider-settings="${PROVIDER_ID}"] .btn-secondary>>Sign out@3200`,
   ROTARIS_CAPTURE_AFTER_MS: '5000',
@@ -274,7 +278,7 @@ if (!readFileSync(snapshotFile, 'utf8').includes(`  ${PROVIDER_ID}:`)) throw new
 results.signOut = { credentialFile: 'removed', snapshot: 'kept' };
 
 // 6. A prompt with the provider signed out: refused before any session exists (REQ-WORKSPACE-137).
-const log6 = replay('refused') ? readFileSync(join(output, 'refused.log'), 'utf8') : launch('refused', { ROTARIS_CAPTURE_PROMPT: 'Read README.md again.', ROTARIS_CAPTURE_AFTER_MS: '4000' });
+const log6 = replay('refused') ? readFileSync(join(output, 'refused.log'), 'utf8') : await launch('refused', { ROTARIS_CAPTURE_PROMPT: 'Read README.md again.', ROTARIS_CAPTURE_AFTER_MS: '4000' });
 assertNoCredential(log6, 'refused');
 if (!/providers: 0 authenticated/.test(log6)) throw new Error('the relaunch after sign-out still found a provider authenticated');
 if (!/run refused: Provider authentication required/.test(log6)) throw new Error(`the run after sign-out was not refused as specified:\n${log6.split('\n').filter((l) => /refused|session/.test(l)).join('\n')}`);

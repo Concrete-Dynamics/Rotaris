@@ -201,6 +201,41 @@ process exit until the run has reported (`REQ-MONITOR-131`).
 **Not exercised:** the second sweep (nothing to sweep); the workspace service's two waiting policies; the
 force-exit backstop from main's side; consequence 5's launch-during-quit.
 
+## The hard cancel reaches the root — 2026-09-29, first execution (R-067)
+
+*Reported in place under the standing policy; row in `../first-executions.md`. REQ-SESSION-092, REQ-MONITOR-129,
+REQ-SESSION-094; `PD-ORCH-005` clause 3 and OQ-96.* The decision says the deadline's expiry **hard-cancels**. As built
+on 2026-09-03 the expiry re-raised the request forced, and a forced request only aborted the run's signal again, which a
+call already ignoring the abort ignored twice. The first execution above could not see it ("with no tools in flight the
+graceful stop is the abort of the stream"). For a child execution PD-ORCH-005's rest had since bounded the wait with the
+same 30 s and detached what outlived it, but the run still awaited its root's turn to its end, so a root call whose
+executor ignored its abort held the run, and the session's lock, until the process ended
+(`../../defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md`).
+
+**Built:** `Run.stopGraceSpent` settles `STOP_GRACE` after the first stop request, forced at its first activation or
+not, and `Run.turn` races the root's turn against it. Past it the root is detached as a child execution is: its turn's
+`detached` reads true, so it writes nothing more when its call returns. It is left `paused` by a stop or a quit, with its
+open call answered as interrupted (`answerOpenCalls`), and under the explicit cancel that call is answered as cut off,
+naming no rest. The rest that follows is given what is left of the grace, counted from the same first request
+(`Run.stopGraceLeft`): every child execution was aborted at that request, so the one 30 s bounds the root and the
+children together. *First built as "what is left of the grace, which is nothing (`IterationChildren.rest(cause, 0)`)",
+given only after a root given up on, while a root that returned gave the rest a fresh 30 s; a root returning at 29 s
+therefore let the stop take 59 s. Corrected the same day, found by the verifier of the repair.* Under the explicit
+cancel, which rests nothing, the child executions still running once the records are settled are awaited within what is
+left of the same grace and detached past it (`IterationChildren.outlast`), and a root given up on drains the background children as one
+that returned does, bounded by REQ-ORCH-080's own timeout (OQ-121). The root is counted from the first request, so a
+stop forced at once still gives a root that honours the abort the moment to record its step.
+
+**Executed:** five cases in `children/children.test.ts` over the fake clock, all red before the change. Each limb (the
+root's detach flag, the children's spent grace, the cut-off answer under the cancel, the grace counted from a forced
+first request) was reverted in turn and turned exactly its case red. Three more, red on the first build: a root returning
+at 29 s ends the stop at 30 s; under the explicit cancel a child step beside a root given up on writes nothing when it
+returns; and such a root still drains a background child. **Not executed:** a live provider or tool that
+ignores its abort; the straggling call's own tool gate, which is a separate path
+(`../../defects/fixed/a-detached-call-still-writes-through-its-tool-gate.md`, repaired the same day: teardown closes
+every tool port first, and a detached model step writes nothing). **Nothing in the decision changes;** its hard
+cancel now reaches the root.
+
 ## Main is gone only after the run host — 2026-09-28, first execution (R-062)
 
 *Reported in place under the standing policy; row in `../first-executions.md`. REQ-SESSION-047, REQ-SESSION-050,

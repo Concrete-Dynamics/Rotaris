@@ -1,4 +1,5 @@
-import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, presentationStatus, RUN_AGENT_ID, type AgentRecord, type ConfigSnapshot, type EntryRoot, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { countNoun } from '@rotaris/kernel';
 import { treeRows } from './AgentTree.js';
 
 /**
@@ -72,32 +73,90 @@ export function runLevelResting(session: SessionRecord, recovery: boolean): bool
 }
 
 /**
+ * REQ-MONITOR-060/061 (live-run finding K1; the verifier's finding on its first repair): the run-level agent's tool set —
+ * the live run's root-port resolution when there is one; else, while the agent is live, nothing (the port resolves in
+ * `Run.iterate`, after the pre-flight, and a follow-up run is presented live from `starting` because it already holds
+ * `runStartedAt` — the declared set stood in there until this repair, withheld tools included); else, with no live
+ * instance, the persona's declared tools stand in (REQ-MONITOR-060).
+ */
+export function runLevelGrant(resolved: readonly string[], declared: readonly string[], live: boolean): string[] {
+  if (resolved.length > 0) return [...resolved];
+  return live ? [] : [...declared];
+}
+
+/**
  * REQ-MONITOR-043/057: the run itself is never a tree row, but the inspector, the Mission view and the persona
- * windows present the entry role as the run-level agent — its rows are the transcript's `agent`/`tool` rows whose
- * name is the entry persona and no child's. Its tool history is still not carried; its latest prompt reading IS,
- * from Part AH's `entryContext` (REQ-MONITOR-089) — before that every root-level meter drew zero for a run that
- * spawned no child, whatever the run had actually spent.
+ * windows present the entry role as the run-level agent — its rows are the transcript's `agent`/`tool` rows named for
+ * the entry persona or for any of the session's roots (`ownRow` with `SessionRecord.entryRoots`: a root resumed as the
+ * entry role keeps its own persona's name, OQ-97). Its latest prompt reading is Part AH's `entryContext` (REQ-MONITOR-089) —
+ * before that every root-level meter drew zero for a run that spawned no child, whatever the run had actually spent.
+ * Its tools are `entryTools` (live-run finding K1, R-067): the set the live run's root port resolved, else — only with no
+ * live instance — the entry persona's declared tools standing in (REQ-MONITOR-060, `runLevelGrant`), its called history and, while it runs, its active calls —
+ * before that it drew "No tools resolved." beside a run that had made fifteen calls. Its tool-call count is the session's
+ * `entryToolCalls` (REQ-MONITOR-044/052, acceptance A20, R-067): the roots' share of the persisted total plus the live root's
+ * calls not counted yet — else, for a record with no projection, the total less the children's. The agent's own count, not
+ * REQ-MONITOR-101's aggregate run count for the synthetic root: which of the two it shows is OQ-159's. The total alone read
+ * `0 tool calls` while the root's turn ran, since a root's calls join it only when its turn returns.
  */
 export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }, recovery: boolean): AgentRecord | null {
   if (!session || session.runStartedAt === null) return null;
   const resting = runLevelResting(session, recovery);
-  const busy = isBusy(session.executionStatus) && !resting;
+  // REQ-CHAT-008's recovery state with nothing to resume — a crash between iterations, or an explicit cancel accepted and
+  // never carried out (OQ-103, R-067) — has no process behind its busy status: it is presented as the repair will leave
+  // it (`interrupted` with nothing open, below), ended and not live, never as a live run offered Steer and Cancel.
+  const busy = isBusy(session.executionStatus) && !resting && !recovery;
   const status = session.executionStatus;
   const presentationState: AgentRecord['presentationState'] = resting ? 'paused' : busy ? 'running' : status === 'completed' ? 'done' : status === 'failed' ? 'failed' : status === 'waiting' ? 'running' : 'cancelled';
   const childCalls = session.agents.reduce((n, a) => n + a.toolCalls, 0);
   return {
     id: RUN_AGENT_ID, name: entry.persona, givenName: entry.persona, persona: entry.persona, state: resting ? 'paused' : busy ? 'running' : presentationState === 'done' ? 'succeeded' : presentationState === 'failed' ? 'failed' : 'cancelled',
     presentationState, parentId: '', dependencies: [], activity: session.summary?.message ?? '', model: entry.model, depth: 0, background: false, category: '',
-    spawnedAt: session.runStartedAt, completedAt: busy || resting ? null : session.updatedAt, toolCalls: Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
+    spawnedAt: session.runStartedAt, completedAt: busy || resting ? null : session.updatedAt, toolCalls: session.entryToolCalls ?? Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
     // REQ-MONITOR-086: the run-wide count is the sum of the per-agent counts, which is what the synthetic root shows.
     compressions: session.agents.reduce((n, a) => n + a.compressions, 0),
-    reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: [...entry.tools], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: busy,
+    reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: runLevelGrant(session.entryTools.resolved, entry.tools, busy),
+    // The run-level agent's set is already `runLevelGrant`'s choice; no row records its grant (REQ-MCP-065 is per child).
+    grantRecorded: false, calledTools: [...session.entryTools.called], activeTools: busy ? [...session.entryTools.active] : [], delegationSessionId: null, inheritedContext: '', live: busy,
     // Part S's evidence (REQ-MCP-065/114) is per child; the run-level agent carries none in this build.
     grantedMcp: {}, mcpServers: [],
     // PD-ORCH-005: the interruption belongs to a delegated agent's record; the synthetic run-level agent carries none.
     interruption: null,
+    // REQ-MONITOR-117/119: the entry agent's own stall watch's figure, while its run is live.
+    stalledSeconds: busy ? session.entryStalledSeconds : null,
   };
 }
+
+/** The entry role as `runLevelAgent` draws it: its persona, model, reasoning and the declared tools that stand in for its grant. */
+export interface EntryRole { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }
+/**
+ * The entry role as the run-level agent presents it (REQ-MONITOR-057/058): the persona the LATEST root runs or ran as —
+ * while a run is live, the persona its root runs as (`SessionRecord.entryPersona`, passed as `live`); else the `persona` of
+ * the transcript's last row a root authored, of any kind that names its author (`agent`, `tool`, `thinking`, `diff`: every
+ * row a turn writes carries the persona and the name), no child's, preferring a row named for one of the session's roots
+ * (`SessionRecord.entryRoots`, so a child's row that reaches the window before its record cannot pass for one); else
+ * `orchestrator`. Its model, reasoning and declared tools (REQ-MONITOR-060's stand-in) come from the snapshot's role view.
+ *
+ * The latest root, because the entry persona can change between runs (`default_persona` is read for every run, and
+ * PD-ORCH-003 lets a plan cycle run fresh after an iteration), and the run-level agent's chips are the latest root's
+ * (`entryToolsOf`: the live run's port and history, else the latest root's history): the name and the stand-in come from
+ * the persona whose tools the chips show. The specification does not say which persona is drawn once the entry persona has
+ * changed; this is the build's reading, recorded beside OQ-97. Until 2026-10-01 the FIRST root's `agent` row was read, so
+ * after an iteration as `orchestrator` and a plan cycle as `reviewer` the inspector drew `orchestrator`'s tools with
+ * `reviewer`'s calls marking them; the first repair read the last root's `agent` row alone, and a live root whose first
+ * steps were tool calls was drawn as the previous root until its first text, and one that had written no row at all
+ * until then too (the verifier's finding; docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
+ */
+export function entryRole(roles: readonly Pick<ConfigSnapshot['roles'][number], 'role' | 'effectiveModel' | 'rawThinking' | 'declaredTools'>[], rows: readonly TranscriptRow[], agents: readonly Pick<AgentRecord, 'name'>[], roots: readonly Pick<EntryRoot, 'name'>[] = [], live: string | null = null): EntryRole {
+  const childNames = new Set(agents.map((a) => a.name));
+  const rootNames = new Set(roots.map((r) => r.name));
+  const candidates = rows.filter((r) => AUTHORED_KINDS.has(r.kind) && r.persona !== undefined && r.name !== undefined && !childNames.has(r.name));
+  const latest = candidates.findLast((r) => rootNames.has(r.name!)) ?? candidates.at(-1);
+  const persona = live ?? latest?.persona ?? 'orchestrator';
+  const role = roles.find((r) => r.role === persona);
+  return { persona, model: role?.effectiveModel ?? '', reasoning: role?.rawThinking ?? 'medium', tools: role?.declaredTools ?? [] };
+}
+/** The row kinds a turn writes under its agent's persona and name (`run/turn.ts`): the rows an agent authors. */
+const AUTHORED_KINDS = new Set(['agent', 'tool', 'thinking', 'diff']);
 
 /**
  * PD-ORCH-005 clauses 13 and 16 (OQ-100, OQ-101): what a surface drawing the run-level agent and a paused child's Cancel
@@ -109,14 +168,43 @@ export function restingView(session: SessionRecord | null, entry: Parameters<typ
   return { runLevel: entry ? runLevelAgent(session, entry, recovery) : null, resting: session !== null && runLevelResting(session, recovery) };
 }
 
+/**
+ * REQ-MONITOR-127 / REQ-MONITOR-130 (acceptance A35, OQ-165): the muted state word a surface draws for an agent. The agent
+ * vocabulary (`PRESENTATION_CHILD_STATES`) has no `cancelling`, and `runLevelAgent` presents every busy status as
+ * `running`, so a confirmed cancel of the run reached no word a persona window draws. The run-level agent is the run
+ * (REQ-MONITOR-043), so while it is live and the shown session reads `cancelling` — a confirmed cancel's overlay, or the
+ * stop's own record — its word is the run's, `cancelling`, a member of REQ-NOTIFY-048's vocabulary and no new word. A
+ * child keeps the agent vocabulary: the engine settles children in the teardown, and no agent is shown cancelled by the
+ * run's cancel before it does.
+ */
+export function agentStateLabel(agent: Pick<AgentRecord, 'id' | 'presentationState' | 'live'>, session: Pick<SessionRecord, 'executionStatus'> | null): string {
+  if (agent.id === RUN_AGENT_ID && agent.live && session !== null && presentationStatus(session.executionStatus) === 'cancelling') return 'cancelling';
+  return agent.presentationState;
+}
+
 const NOT_FOLLOWED_KINDS = new Set(['user', 'system', 'intent', 'verifier', 'diff']);
+
+/**
+ * REQ-MONITOR-071 / REQ-CHAT-069: whether `row` is `agent`'s own. A child's by its name. The run-level agent's by the entry
+ * persona a surface knows it by, and by the name any of the session's roots carries (`SessionRecord.entryRoots`, PD-ORCH-005
+ * clause 4 with OQ-97): a root resumed as the entry role keeps its own persona's name on its rows while the entry persona
+ * is another, and matched by the entry persona alone its rows were never the run-level agent's
+ * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md). Never by a named row's persona: a child
+ * of the entry persona writes that persona too.
+ */
+export function ownRow(row: TranscriptRow, agent: AgentRecord, roots: readonly EntryRoot[] = []): boolean {
+  if (agent.id !== RUN_AGENT_ID) return row.name === agent.name;
+  if (row.name === undefined) return row.persona === agent.persona;
+  return row.name === agent.persona || roots.some((r) => r.name === row.name);
+}
 
 /**
  * REQ-MONITOR-053: with nothing selected, the agent that authored the latest row — scanning backwards past user,
  * intent, system and verifier rows and rows with unknown authorship. A row named for a child is that child; a row
- * named for the entry persona is the run-level agent when one exists.
+ * the run-level agent owns (`ownRow`, by the entry persona or any root's name in `roots`), or one of the entry persona
+ * no child is named for, is the run-level agent when one exists.
  */
-export function followedAgent(rows: readonly TranscriptRow[], agents: readonly AgentRecord[], runLevel: AgentRecord | null): AgentRecord | null {
+export function followedAgent(rows: readonly TranscriptRow[], agents: readonly AgentRecord[], runLevel: AgentRecord | null, roots: readonly EntryRoot[] = []): AgentRecord | null {
   const byName = new Map(agents.map((a) => [a.name, a]));
   for (let i = rows.length - 1; i >= 0; i -= 1) {
     const row = rows[i]!;
@@ -125,7 +213,7 @@ export function followedAgent(rows: readonly TranscriptRow[], agents: readonly A
     if (name === '') continue;
     const child = byName.get(name);
     if (child) return child;
-    if (runLevel && (name === runLevel.persona || row.persona === runLevel.persona)) return runLevel;
+    if (runLevel && (ownRow(row, runLevel, roots) || row.persona === runLevel.persona)) return runLevel;
   }
   return null;
 }
@@ -154,9 +242,18 @@ export function mcpChipStates(server: string, granted: readonly string[], called
 export function mcpFateText(s: { readonly fate: 'connected' | 'dropped'; readonly reason?: string | undefined }): string {
   return s.fate === 'connected' ? 'connected' : `dropped${s.reason ? ` — ${s.reason}` : ''}`;
 }
-/** REQ-MONITOR-049/060: the granted set, else the persona's declared tools stand in. */
-export function resolvedTools(agent: Pick<AgentRecord, 'grantedTools'>, declared: readonly string[]): string[] {
-  return agent.grantedTools.length > 0 ? [...agent.grantedTools] : [...declared];
+/**
+ * REQ-MONITOR-049/060: the granted set, else the persona's declared tools stand in — but never for a LIVE run-level agent
+ * (REQ-MONITOR-061; see `runLevelGrant`), whose empty set means its root port has not resolved yet, not that no grant was
+ * recorded: the persona has a live instance, so REQ-MONITOR-060's stand-in does not apply, and a coordinator's declared set
+ * holds the write, terminal and commit tools its policy withholds. A recorded grant is shown as it is, an empty one as no
+ * native tool (`grantRecorded`, REQ-TOOLS-006): until 2026-10-01 an empty list read as no grant recorded, so a child whose
+ * controls removed every native tool listed them all
+ * (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
+ */
+export function resolvedTools(agent: Pick<AgentRecord, 'id' | 'grantedTools' | 'grantRecorded' | 'live'>, declared: readonly string[]): string[] {
+  if (agent.grantedTools.length > 0 || agent.grantRecorded) return [...agent.grantedTools];
+  return agent.id === RUN_AGENT_ID && agent.live ? [] : [...declared];
 }
 
 /**
@@ -247,10 +344,8 @@ export function ringFigures(used: number, limit: number, thresholdPercent: numbe
   return { percent, threshold, band };
 }
 
-/** REQ-SHELL-044: a count with a noun that agrees with it. */
-export function countNoun(n: number, singular: string, plural = `${singular}s`): string {
-  return `${n} ${n === 1 ? singular : plural}`;
-}
+/** REQ-SHELL-044: a count with a noun that agrees with it — the kernel's, so every package words a count one way. */
+export { countNoun };
 
 /** REQ-MONITOR-050: the agents of one persona, in the tree's order — the run-level agent first when it is that persona. */
 export function instancesOf(persona: string, agents: readonly AgentRecord[], runLevel: AgentRecord | null): AgentRecord[] {
@@ -258,13 +353,53 @@ export function instancesOf(persona: string, agents: readonly AgentRecord[], run
   return runLevel && runLevel.persona === persona ? [runLevel, ...own] : own;
 }
 
-/** REQ-MONITOR-071: the transcript rows an instance authored — by its name; the run-level agent's by the entry persona. */
-export function rowsOf(rows: readonly TranscriptRow[], agent: AgentRecord): TranscriptRow[] {
-  if (agent.id === RUN_AGENT_ID) return rows.filter((r) => !NOT_FOLLOWED_KINDS.has(r.kind) && (r.name === agent.persona || (r.name === undefined && r.persona === agent.persona)));
-  return rows.filter((r) => r.name === agent.name && !NOT_FOLLOWED_KINDS.has(r.kind));
+/**
+ * REQ-MONITOR-071: the transcript rows an instance authored — by its name; the run-level agent's by the entry persona and
+ * every name the session's roots carry (`ownRow`).
+ */
+export function rowsOf(rows: readonly TranscriptRow[], agent: AgentRecord, roots: readonly EntryRoot[] = []): TranscriptRow[] {
+  return rows.filter((r) => !NOT_FOLLOWED_KINDS.has(r.kind) && ownRow(r, agent, roots));
 }
 
-/** REQ-MONITOR-052/069: the meta line and the context line, the elapsed fallback an em-dash / a hyphen. */
+/**
+ * The names an agent's artifacts record it by: a child's canonical name; the run-level agent's entry persona and, for each
+ * of the session's roots (`roots`), its persona and its canonical name — which its publishes and reads record
+ * (REQ-LIBRARY-093) and which is not the entry persona for a persona the canonicaliser rewrites
+ * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+ */
+function artifactNames(agent: Pick<AgentRecord, 'name'> & { readonly id?: string }, roots: readonly EntryRoot[]): string[] {
+  return agent.id === RUN_AGENT_ID ? [agent.name, ...roots.flatMap((r) => [r.name, r.canonical])] : [agent.name];
+}
+
+/**
+ * REQ-MONITOR-044/052/069 (live-run finding K1, R-067): an agent's artifact links — the ones it PRODUCED (the artifact's
+ * producer is one of the names it is recorded by, `artifactNames`: a child's canonical name; the run-level agent's roots'
+ * names, which its publishes record) and the ones it RECEIVED (one of those names among the artifact's consumers), each in
+ * the session's creation order. A pure reading of the session's list, so every surface draws the same links.
+ */
+export function agentArtifacts(agent: Pick<AgentRecord, 'name'> & { readonly id?: string }, artifacts: readonly SessionArtifactLink[], roots: readonly EntryRoot[] = []): { readonly produced: SessionArtifactLink[]; readonly received: SessionArtifactLink[] } {
+  const names = new Set(artifactNames(agent, roots));
+  return { produced: artifacts.filter((a) => names.has(a.producer)), received: artifacts.filter((a) => !names.has(a.producer) && a.consumedBy.some((c) => names.has(c))) };
+}
+/** REQ-MONITOR-068 (live-run finding K1): the persona-wide card — every artifact any instance of the persona produced. */
+export function personaArtifacts(instances: readonly (Pick<AgentRecord, 'name'> & { readonly id?: string })[], artifacts: readonly SessionArtifactLink[], roots: readonly EntryRoot[] = []): SessionArtifactLink[] {
+  const names = new Set(instances.flatMap((a) => artifactNames(a, roots)));
+  return artifacts.filter((a) => names.has(a.producer));
+}
+
+/**
+ * REQ-ORCH-089 / REQ-MONITOR-119 (the repair of `a-stalled-child-is-never-shown-stalled.md`): the stalled badge's text — the
+ * silence the agent's stall watch last found, in the elapsed figure's own form. The figure is the engine's, refreshed at
+ * each evaluation, so it advances at the watch's cadence (REQ-MONITOR-117) rather than on the surface's clock; null draws
+ * nothing. State is text as well as colour (REQ-SHELL-149).
+ */
+export function stalledText(seconds: number | null): string | null {
+  // A no-break space: the figure never wraps away from its word (the live run's inspector broke `stalled` / `104s`).
+  return seconds === null ? null : `stalled\u00a0${Math.max(0, Math.floor(seconds))}s`;
+}
+
+/** REQ-MONITOR-052/069: the meta line and the context line, the elapsed fallback an em-dash / a hyphen; a stalled agent says so. */
 export function metaLine(agent: AgentRecord, elapsed: string | null): string {
-  return `${agent.presentationState} · ${elapsed ?? '—'} · ${countNoun(agent.toolCalls, 'tool call')}`;
+  const stalled = stalledText(agent.stalledSeconds);
+  return `${agent.presentationState} · ${elapsed ?? '—'} · ${countNoun(agent.toolCalls, 'tool call')}${stalled === null ? '' : ` · ${stalled}`}`;
 }

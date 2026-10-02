@@ -2,9 +2,12 @@ import { ApprovalPayloadSchema, interruptionPhrase, isTerminalChildState, resume
 import type { SessionId } from '@rotaris/kernel';
 import type { ChildRow, IterationRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
-import { treeOf } from '../children/ledger.js';
+import type { ArtifactStore } from '../artifacts/store.js';
+import { storeChildReport, treeOf, writeCancelledTeardown } from '../children/ledger.js';
+import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 import { conversationOf } from './record.js';
-import { answerUnanswered, interruptedResult } from './interruption.js';
+import { Todo } from './todo.js';
+import { answerUnanswered, callsRun, interruptedResult } from './interruption.js';
 
 /** The children of a stored iteration: every child descending from its root, as the live ledger would hold them. */
 export function iterationAgents(dal: StoreDal, sessionId: SessionId, open: IterationRow): ChildRow[] {
@@ -32,8 +35,11 @@ export interface OpenCallsAgent {
  * assumes two agents that share a name — the root's persona across iterations, same-named children — never share a
  * call id as well; the provider mints the ids. A row released past the resident window is not read, and its call is
  * answered as never started.
+ *
+ * `cause` is null for a call no rest cut — a root the stop's grace gave up on under the explicit cancel — whose
+ * statement names no rest (OQ-96, "A call cut by no rest").
  */
-export function answerOpenCalls(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, agent: OpenCallsAgent, iteration: number, cause: Interruption): void {
+export function answerOpenCalls(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, agent: OpenCallsAgent, iteration: number, cause: Interruption | null): void {
   const rowOf = new Map(dal.residentRows(sessionId).flatMap((r) => (r.kind === 'tool' && r.name === agent.name && r.call_key !== null ? [[r.call_key, r] as const] : [])));
   const answer = answerUnanswered(conversationOf(dal.agentConversation(sessionId, agent.taskId)), cause, (callId) => {
     const row = rowOf.get(callId);
@@ -56,6 +62,11 @@ export interface CrashRecord {
   readonly iteration: number | null;
   /** The agents it left `paused` with interruption `crash`. */
   readonly paused: number;
+  /**
+   * The agents it ended `cancelled` because the run's explicit cancel was accepted and never carried out (OQ-103, R-067):
+   * the iteration is then closed `cancelled`, and none of them is paused.
+   */
+  readonly cancelled: number;
   /** The approvals it withdrew. */
   readonly withdrawn: number;
   /** The background terminal sessions it recorded as ended by the crash. */
@@ -73,19 +84,35 @@ export interface CrashRecord {
  * - an agent whose record ends on tool calls with no results — nothing ran to answer them — gains their results
  *   (`answerOpenCalls`): a call whose row settled keeps what it returned, and every other gains the result that it was
  *   interrupted before it completed and was not re-run, its row left `running` settling with the same (clauses 3 and 4);
+ * - a plan cycle's root the session still records as under way (REQ-ORCH-153; a plan cycle has no iteration row) has its
+ *   open calls answered the same way and the calls its record holds join the session total (`recordPlanRootCrash`), and so
+ *   does each of its unfinished children (`recordCutChild`), which the next continue's stale-child settle ends `cancelled`;
+ * - every call's row in the `tool_calls` ring still `running` settles `failed` with the crash's statement, as its
+ *   transcript row does (`settleDeadToolCalls`, REQ-SESSION-129 with ADR-0024) — unless `ownCallsMayRun`: a continue
+ *   while any run of this process on the session parked without closing its tool ports, whose call may still be under way;
  * - every approval still listed as pending is withdrawn by the crash, never denied (clause 9);
  * - every background terminal session still recorded as running, and not held by this process, is recorded as ended by
  *   the crash (clause 10: a crash ends them).
  *
- * Idempotent: a second call finds the interruption recorded, nothing pending and nothing running. It must be called
- * before the stale-child settle (REQ-ORCH-053), which would otherwise cancel what the crash leaves unfinished. Loading a
- * session to view it never calls it (clause 8).
+ * An open iteration that carries the explicit cancel's mark (`cancel_accepted_at`, store v27) is not paused: the cancel was
+ * accepted and its host died before carrying it out, and clause 3's "those are never resumed" governs it (OQ-103's last
+ * question, ruled under R-067). The record carries the cancel out instead (`recordAcceptedCancel`) — whether or not a rest
+ * had left the iteration open before the cancel landed.
+ *
+ * Idempotent: a second call finds the interruption recorded (or the iteration closed), nothing pending and nothing
+ * running. It must be called before the stale-child settle (REQ-ORCH-053), which would otherwise cancel what the crash
+ * leaves unfinished. Loading a session to view it never calls it (clause 8). `artifacts` materialises the reports of the
+ * agents an accepted cancel ends (REQ-LIBRARY-092); without it they are stored on their rows only.
  */
-export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, liveTerminals: ReadonlySet<string>, warn: (m: string) => void): CrashRecord {
+export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, liveTerminals: ReadonlySet<string>, warn: (m: string) => void, artifacts?: ArtifactStore, ownCallsMayRun = false): CrashRecord {
   let iteration: number | null = null;
   let paused = 0;
+  let cancelled = 0;
   const open = dal.openIterationOf(sessionId);
-  if (open && open.interruption === null) {
+  if (open && open.cancel_accepted_at !== null) {
+    iteration = open.iteration;
+    cancelled = recordAcceptedCancel(dal, writer, sessionId, open, warn, artifacts);
+  } else if (open && open.interruption === null) {
     iteration = open.iteration;
     writer.recordIterationInterruption(open.iteration, 'crash');
     const agents = iterationAgents(dal, sessionId, open);
@@ -97,11 +124,15 @@ export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: Ses
       if (r.ok) paused += 1;
       else warn(r.error.code === 'illegal-move' ? r.error.reason : `recording ${c.task_id} paused by a crash failed: ${r.error.code}`);
     }
-    // The root's rows carry its persona (`Run.turn`'s agent name), a child's its canonical name.
+    // The root's rows carry the persona its iteration was opened with (`Run.turn`'s agent name, which a root resumed as
+    // the entry role keeps), a child's its canonical name.
     const unfinished = agents.filter((c) => !isTerminalChildState(c.state)).map((c) => ({ taskId: c.task_id, name: c.canonical_name }));
     for (const agent of [{ taskId: open.root_task_id, name: open.root_persona }, ...unfinished]) answerOpenCalls(dal, writer, sessionId, agent, open.iteration, 'crash');
+    countCrashedCalls(dal, writer, sessionId, open, unfinished.map((c) => c.taskId), warn);
     writer.appendTimeline('iteration_paused', 'rotaris', `Iteration ${open.iteration} was left open by ${interruptionPhrase('crash')}; its unfinished agents are paused and resume when the session is continued.`, { iteration: open.iteration, interruption: 'crash', paused_agents: paused });
   }
+  recordPlanRootCrash(dal, writer, sessionId, warn);
+  if (!ownCallsMayRun) settleDeadToolCalls(dal, writer, sessionId, warn);
   const withdrawn = withdrawStoredApprovals(dal, writer, sessionId);
   let terminals = 0;
   for (const t of dal.agentTerminalsOf(sessionId)) {
@@ -109,7 +140,148 @@ export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: Ses
     const r = writer.recordAgentTerminal({ terminal_id: t.terminal_id, task_id: t.task_id, command: t.command, started_at: t.started_at, state: 'crash', exit_code: t.exit_code, output_tail: t.output_tail });
     if (r.ok && r.value) terminals += 1;
   }
-  return { iteration, paused, withdrawn, terminals };
+  return { iteration, paused, cancelled, withdrawn, terminals };
+}
+
+/** The report of an agent the record of an accepted cancel ends (REQ-ORCH-108's shape, as every cancelled agent's). */
+export const ACCEPTED_CANCEL_REPORT = 'Cancelled: the user cancelled the run, and the process running it ended before the cancel was carried out.';
+
+/**
+ * PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103's last question, ruled under R-067; the repair of
+ * `a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`): the explicit cancel was accepted while `open`
+ * was open (its mark) and the run host died before its teardown ended the agents and closed the iteration. From the store
+ * alone, this writes what that teardown would have:
+ *
+ * - the calls a dead step left without results are answered, as the crash record answers them, so no row is left
+ *   `running` (REQ-SESSION-129), and the calls the root and each unfinished agent made join the session total once
+ *   (REQ-MONITOR-102);
+ * - every agent of the iteration not in a terminal state — `paused` by a rest the cancel overtook, or where the crash left
+ *   it — ends `cancelled`, with its report stored and materialised (REQ-LIBRARY-092), and never `paused`;
+ * - the iteration closes `cancelled` (REQ-ORCH-135): `iteration.end` and the row's close in one transaction with the todo
+ *   its task goes back to `pending` in ("the task stays anchored"), and a continue's message it held with it (clause 17);
+ * - the session's count moves past it, as the run's close of a cancelled iteration moves it.
+ *
+ * It writes no timeline entry of its own: REQ-ORCH-139's vocabulary is closed and names none for this record. The close
+ * is the vocabulary's `iteration.end` event above, and the caller warns it to the session log (OQ-76's channel).
+ *
+ * No checkpoint is captured: the record runs from a repair, which has no Git port, or before a continue's run exists
+ * (OQ-130). The pending approvals and the background sessions are the crash's to record, as for any dead run.
+ */
+function recordAcceptedCancel(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, open: IterationRow, warn: (m: string) => void, artifacts: ArtifactStore | undefined): number {
+  const unfinished = iterationAgents(dal, sessionId, open).filter((c) => !isTerminalChildState(c.state));
+  const agents = unfinished.map((c) => ({ taskId: c.task_id, name: c.canonical_name }));
+  for (const agent of [{ taskId: open.root_task_id, name: open.root_persona }, ...agents]) answerOpenCalls(dal, writer, sessionId, agent, open.iteration, 'crash');
+  countCrashedCalls(dal, writer, sessionId, open, agents.map((a) => a.taskId), warn);
+  let cancelled = 0;
+  for (const c of unfinished) {
+    const r = writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
+    if (!r.ok) { warn(r.error.code === 'illegal-move' ? r.error.reason : `recording ${c.task_id} cancelled by the accepted cancel failed: ${r.error.code}`); continue; }
+    cancelled += 1;
+    const report = { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: ACCEPTED_CANCEL_REPORT, key_findings: [], last_response: '', final_response: '', errors: [] };
+    storeChildReport({ writer, artifacts, warn }, c.task_id, c, report);
+    // REQ-ORCH-098: torn down as the run's own teardown would have (OQ-152).
+    writeCancelledTeardown(writer, c, report);
+  }
+  const stored = decodeStoredTodo(dal.getSession(sessionId)?.todo ?? null);
+  const todo = stored.planner === null ? null : Todo.fromDocument(stored.planner);
+  todo?.reopen(open.todo_task_id);
+  todo?.releaseHeld(open.iteration, false);
+  const task = todo?.textOf(open.todo_task_id) ?? open.task;
+  const summary = 'the run was cancelled before the agent finished, and the process running it ended before the cancel was carried out';
+  const closed = writer.endIteration(open.iteration, { task, outcome: 'cancelled', summary }, 'cancelled', todo === null ? undefined : encodeStoredTodo({ ...stored, planner: todo.toDocument() }) ?? undefined);
+  if (!closed.ok) { warn(`closing iteration ${open.iteration} of ${sessionId} as the accepted cancel failed: ${closed.error.code}`); return cancelled; }
+  const completed = dal.getSession(sessionId)?.iterations_completed ?? 0;
+  if (completed < open.iteration) writer.save(writer.currentStatus, { iterations_completed: open.iteration });
+  return cancelled;
+}
+
+/**
+ * REQ-MONITOR-102 (the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): the calls a dead run's
+ * agents made that no count held — the root's are counted when its turn returns and a child's when its execution rests or
+ * settles, and a crash ends both without either — join the session's total, read from each agent's record once its open
+ * calls are answered (so a call the crash cut before it started is not one): the root's beyond its iteration's
+ * `root_tool_calls`, and each unfinished child's beyond its `tool_calls`. Both counts move with the total in one
+ * transaction, so a second recording, and a resumed child's own credit from its record (`IterationChildren.execute`), find
+ * nothing more to add. A root whose count is not known — an iteration opened before store v26 — adds nothing, as before.
+ * A record a compression replaced holds fewer calls than were made, so what it adds may fall short; it never exceeds.
+ */
+function countCrashedCalls(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, open: IterationRow, unfinished: readonly string[], warn: (m: string) => void): void {
+  const recorded = (taskId: string): number => callsRun(conversationOf(dal.agentConversation(sessionId, taskId)));
+  const root = open.root_tool_calls === null ? 0 : Math.max(0, recorded(open.root_task_id) - open.root_tool_calls);
+  const r = writer.countToolCalls({ root: { iteration: open.iteration, add: root }, children: unfinished.map((taskId) => ({ taskId, calls: recorded(taskId) })) });
+  if (!r.ok) warn(`the calls a crash left uncounted in ${sessionId} were not counted: ${r.error.code}`);
+}
+
+/**
+ * REQ-MONITOR-102 with REQ-ORCH-153 (the repair of `a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`):
+ * a plan cycle's root the session still records as under way (`sessions.plan_root_task_id`, store v29) is one a crash
+ * ended: its turn never returned, so none of its calls is counted. A plan cycle is not an iteration and is never at rest
+ * (OQ-96), so nothing is paused and it is never resumed; its open calls are answered as a crash's, under the plan cycle's
+ * 0, so the call the crash cut settles its row (REQ-SESSION-129) and a call it asked for and never started is not one; then
+ * every call its record holds joins the total, in the transaction that releases it — so a second recording finds nothing.
+ * A record a compression replaced holds fewer calls than were made, so what this adds may fall short; it never exceeds.
+ */
+function recordPlanRootCrash(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void): void {
+  const row = dal.getSession(sessionId);
+  const taskId = row?.plan_root_task_id ?? null;
+  if (taskId === null) return;
+  // Its unfinished children too (the repair of
+  // `a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md`): no record pauses them, and
+  // the stale-child settle that ends them runs only at a continue, so a repair alone would leave their cut rows `running`.
+  for (const c of treeOf(dal.childrenOfIteration(sessionId, 0), (id) => id === taskId)) {
+    if (!isTerminalChildState(c.state) && c.state !== 'paused') recordCutChild(dal, writer, sessionId, c, 'crash', warn);
+  }
+  answerOpenCalls(dal, writer, sessionId, { taskId, name: row?.plan_root_persona ?? '' }, 0, 'crash');
+  const r = writer.countToolCalls({ planRoot: { taskId, add: callsRun(conversationOf(dal.agentConversation(sessionId, taskId))) } });
+  if (!r.ok) warn(`the calls of the plan cycle's root ${taskId} a crash left uncounted in ${sessionId} were not counted: ${r.error.code}`);
+}
+
+/**
+ * REQ-MONITOR-102 / REQ-SESSION-129 (the repair of
+ * `a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md`): what the crash record does
+ * for an open iteration's unfinished agent (`answerOpenCalls`, `countCrashedCalls`), for a child a dead run left that no
+ * iteration's record reaches — a plan cycle's (a plan cycle has no `iterations` row, OQ-96) or another root's orphan. Its
+ * open calls are answered, so a row the death cut settles `failed` and a call it asked for and never started is not one;
+ * then the calls its record holds beyond its `children.tool_calls` join the session's total, in one transaction with its
+ * count. Both are idempotent — an answered call is not answered again and a count already held adds nothing — so the crash
+ * record and the stale-child settle after it (`settleStaleChildren`) may both run it, and a death between it and the
+ * child's terminal move leaves nothing for the next to do twice. `cause` is the crash's for a plan cycle's child, and null
+ * (cut by no rest, OQ-96) where the settle cannot say what ended the run. A record a compression replaced holds fewer calls
+ * than were made, so what it adds may fall short; it never exceeds.
+ */
+export function recordCutChild(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, child: Pick<ChildRow, 'task_id' | 'canonical_name' | 'iteration'>, cause: Interruption | null, warn: (m: string) => void): void {
+  answerOpenCalls(dal, writer, sessionId, { taskId: child.task_id, name: child.canonical_name }, child.iteration, cause);
+  const r = writer.countToolCalls({ children: [{ taskId: child.task_id, calls: callsRun(conversationOf(dal.agentConversation(sessionId, child.task_id))) }] });
+  if (!r.ok) warn(`the calls of child ${child.task_id} a dead run left uncounted in ${sessionId} were not counted: ${r.error.code}`);
+}
+
+/**
+ * REQ-SESSION-129 with ADR-0024 (the repair of `a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`): a call
+ * has two records, its transcript row and its row in the `tool_calls` ring. An orderly end settles every ring row still open
+ * when the run's tool ports close (the run host's gate sink); a crash closes none of them. A ring row still `running` when a
+ * crash is recorded is a dead run's when no run of this process may still hold it: a repair runs only when no process holds
+ * the session, and a continue's own run is not built yet. A run of this process closes its ports only at its teardown
+ * (`Run.closedItsPorts`); one that parked — the message-limit pause, the plan gate — closed none, and a call of its that
+ * ignored its abort may still be under way, its real settle still to come, so the caller passes `ownCallsMayRun` and the
+ * ring is left as it is (corrected 2026-10-01: this read "a run of this process closed its ports when it ended", which
+ * holds only for a teardown). The caller reads every run of this process on the session that parked so, not only the last
+ * (`Live.portsOpen`; repaired 2026-10-01: a later run's teardown re-armed the settle over an earlier parked run's rows).
+ * Every row this settles settles `failed` with the statement
+ * that the crash interrupted it and it was not re-run, as its transcript row does (`answerOpenCalls`), with REQ-EVENTS-057's
+ * `tool.finish`. The ring row recorded no output, so the statement carries none; no process observed the call's end, so its
+ * duration is not known (null). Every agent's, the crash record's paused agents' and the stale-child settle's alike: a
+ * `running` row reads as a call still under way (REQ-MONITOR-105), which no call of a dead host is. A row the ring's cap
+ * already released is gone, and a second recording finds none running.
+ */
+function settleDeadToolCalls(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void): void {
+  const statement = interruptedResult('crash', true, '');
+  for (const row of dal.toolCallsOf(sessionId)) {
+    if (row.status !== 'running') continue;
+    let args: Record<string, unknown> = {};
+    try { const e = JSON.parse(row.entry) as { args?: unknown }; if (e.args !== null && typeof e.args === 'object' && !Array.isArray(e.args)) args = e.args as Record<string, unknown>; } catch { args = {}; }
+    const r = writer.settleToolCall(row.ordinal, { call_id: row.call_id, agent_name: row.agent_name, tool_name: row.tool_name, args }, { status: 'failed', elapsed_ms: null, is_error: true, result: statement, error: statement });
+    if (!r.ok) warn(`the tool call ${row.call_id} (${row.tool_name}) a crash left running in ${sessionId} was not settled: ${r.error.code}`);
+  }
 }
 
 /** Clause 9 after a crash: every approval the dead run left listed as pending leaves the list, recorded as withdrawn. */

@@ -14,9 +14,69 @@ import { type CaptureHost, parseSelectors, pause } from './host.js';
  * `seams.ts` unless the packaged probe itself needs it.
  */
 
+/** One keyboard event as `webContents.sendInputEvent` takes it. */
+export interface TypedEvent {
+  readonly type: 'keyDown' | 'char' | 'keyUp';
+  readonly keyCode: string;
+  readonly modifiers?: readonly ('shift' | 'control')[];
+}
+
+/**
+ * The events that type `prompt` into the composer as a person types it, then submit it.
+ *
+ * Each character is one `char` event — the renderer needs the `char`, and a chord alone inserts nothing. A line break
+ * is not a character the composer takes that way: a `char` of `\n` inserts nothing, so every line of a multi-line
+ * prompt used to arrive joined to the next ("in order,each waiting", the duress live run of 2026-09-29, live-run
+ * finding H-e). It is typed as the composer receives a typed one instead — Shift+Enter, `keyDown`, `char` and `keyUp`
+ * each carrying `shift` — which REQ-CHAT-001 makes a newline and never a submit, so the prompt cannot go early either.
+ * A `\r` is dropped, so a CRLF prompt breaks its lines once. The one unmodified Enter at the end submits (REQ-CHAT-001).
+ */
+export function promptEvents(prompt: string): TypedEvent[] {
+  return [...textEvents(prompt, 'char'), ...enterEvents()];
+}
+
+/** One Enter — `keyDown`, `char` and `keyUp` — unmodified (REQ-CHAT-001's submit) or carrying `shift` (its newline). */
+function enterEvents(modifiers?: readonly ('shift' | 'control')[]): TypedEvent[] {
+  return (['keyDown', 'char', 'keyUp'] as const).map((type) => (modifiers === undefined ? { type, keyCode: 'Return' } : { type, keyCode: 'Return', modifiers }));
+}
+
+/**
+ * The events that type `text` into whatever holds focus, submitting nothing — the ONE place a typed line break is decided,
+ * shared by the prompt above, the driver's `type` and the scriptable seams' TYPE and TYPE_AT steps (named here without their
+ * variables, which a packaged build must not carry).
+ *
+ * `per` keeps each site's own shape for an ordinary character: `char` is one `char` event (the prompt and the TYPE seam),
+ * `key` is `keyDown`, `char`, `keyUp` (the driver and TYPE_AT). A `\n` is never sent as a character at any site: it is
+ * Shift+Enter, which a textarea takes as a newline and REQ-CHAT-001 makes the composer's newline, never its submit. A `\r`
+ * is dropped. Until 2026-09-30 the three other sites sent a `\n` as a `char` (or as a `keyDown` whose key code was
+ * `\n`), which is the shape that dropped the duress prompt's line breaks (live-run finding H-e;
+ * `docs/defects/fixed/the-driver-and-the-type-seams-type-a-newline-as-a-character.md`).
+ */
+export function textEvents(text: string, per: 'char' | 'key'): TypedEvent[] {
+  const events: TypedEvent[] = [];
+  for (const ch of text) {
+    if (ch === '\r') continue;
+    if (ch === '\n') events.push(...enterEvents(['shift']));
+    else if (per === 'char') events.push({ type: 'char', keyCode: ch });
+    else events.push({ type: 'keyDown', keyCode: ch }, { type: 'char', keyCode: ch }, { type: 'keyUp', keyCode: ch });
+  }
+  return events;
+}
+
+/** A `TypedEvent` in the shape `webContents.sendInputEvent` takes (its `modifiers` a mutable array). */
+export function inputEvent(event: TypedEvent): { type: TypedEvent['type']; keyCode: string; modifiers?: ('shift' | 'control')[] } {
+  return event.modifiers === undefined ? { type: event.type, keyCode: event.keyCode } : { type: event.type, keyCode: event.keyCode, modifiers: [...event.modifiers] };
+}
+
+/** `textEvents` followed by one unmodified Enter — what a typed step that submits sends. */
+export function submitEvents(text: string, per: 'char' | 'key'): TypedEvent[] {
+  return [...textEvents(text, per), ...enterEvents()];
+}
+
 /**
  * The typed prompt. Real input events, not a script: Ctrl+2 opens Workspace (REQ-SHELL-049), Ctrl+L
- * focuses the composer (REQ-CHAT-002), the text is typed, Enter submits (REQ-CHAT-001).
+ * focuses the composer (REQ-CHAT-002), the text is typed with its line breaks as Shift+Enter, Enter submits
+ * (REQ-CHAT-001) — `promptEvents`.
  *
  * `ROTARIS_CAPTURE_PROMPT_MS` says when — the MCP proof toggles a Settings control first, and a launch
  * that resumes a stored session first needs the transcript on screen before the composer means anything.
@@ -29,10 +89,7 @@ export function installPromptSeam(host: CaptureHost, prompt: string, resuming: b
     host.clocks.timers.after(millis(200), () => {
       wc.sendInputEvent({ type: 'keyDown', keyCode: 'L', modifiers: ['control'] });
       wc.sendInputEvent({ type: 'keyUp', keyCode: 'L', modifiers: ['control'] });
-      for (const ch of prompt) wc.sendInputEvent({ type: 'char', keyCode: ch });
-      wc.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
-      wc.sendInputEvent({ type: 'char', keyCode: 'Return' });
-      wc.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+      for (const event of promptEvents(prompt)) wc.sendInputEvent(inputEvent(event));
     });
   });
 }
@@ -51,6 +108,15 @@ export function installPromptSeam(host: CaptureHost, prompt: string, resuming: b
  * proof can drive a run from the Workspace view and read the Overview afterwards.
  * `ROTARIS_CAPTURE_PROBE="selector;;…"`: each selector's text and `data-*` attributes logged as JSON
  * before the capture — what a proof asserts against.
+ *
+ * How the launch ends. A capture whose wait was satisfied, or that had none, ends by the immediate exit it always
+ * has: what it waited for has happened, and a proof may read what the immediate exit leaves (part-j-proof reads a
+ * paused session's lock surviving it). A capture whose wait TIMED OUT ends through the application's quit
+ * (`host.quit`) instead: what it waited for — a run's result, as a rule — has not happened, so a run may still be live,
+ * and the immediate exit left it as a crash leaves it, `running` with no stop reason and its last usage unwritten
+ * (the duress live run of 2026-09-29, session `379f1490`;
+ * `docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`). The quit brings it to rest as a
+ * person's quit at that moment would (PD-ORCH-005 clause 3).
  */
 export function installFinish(host: CaptureHost, capture: string, prompt: string | undefined): void {
   const after = Number(process.env['ROTARIS_CAPTURE_AFTER_MS'] ?? (prompt ? 3_000 : 1_500));
@@ -59,7 +125,7 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
   const endView = Number(process.env['ROTARIS_CAPTURE_END_VIEW'] ?? 0);
   const probes = parseSelectors(process.env['ROTARIS_CAPTURE_PROBE']);
 
-  const finish = () => host.clocks.timers.after(millis(after), async () => {
+  const finish = (timedOut = false) => host.clocks.timers.after(millis(after), async () => {
     if (endView > 0) {
       host.win.webContents.sendInputEvent({ type: 'keyDown', keyCode: String(endView), modifiers: ['control'] });
       host.win.webContents.sendInputEvent({ type: 'keyUp', keyCode: String(endView), modifiers: ['control'] });
@@ -74,6 +140,7 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
     const img = await host.win.webContents.capturePage();
     writeFileSync(capture, img.toPNG());
     host.log(`captured ${capture}`);
+    if (timedOut) { host.log('capture: ending through the application\'s quit (the wait timed out; a run may still be live)'); host.quit(); return; }
     host.exit(0);
   });
 
@@ -91,6 +158,6 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
         .catch(() => { jsHit = false; });
     }
     if (satisfied()) { poll.cancel(); host.log(`capture: wait for ${wait} satisfied after ${Math.round(host.clocks.monotonic.now() - started)} ms`); finish(); }
-    else if (host.clocks.monotonic.now() - started > waitBound) { poll.cancel(); host.log(`capture: wait for ${wait} timed out after ${waitBound} ms`); finish(); }
+    else if (host.clocks.monotonic.now() - started > waitBound) { poll.cancel(); host.log(`capture: wait for ${wait} timed out after ${waitBound} ms`); finish(true); }
   });
 }

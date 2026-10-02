@@ -546,7 +546,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       presenters.register(req.windowId);
       return { kind: 'ack' };
     case 'presenter.revoke':
-      presenters.revoke(req.windowId);
+      presenters.revoke(req.windowId, req.quitting === true);
       return { kind: 'ack' };
     case 'presenter.pollReply':
       presenters.pollReplied(req.windows);
@@ -614,8 +614,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
       const run = configuredFor(s.root) ?? (configure(s.root, true).ok ? configuredFor(s.root) : null);
       // Part AS: `applicable` (REQ-WORKSPACE-090) is read off the same resolution every other answer is.
-      if (req.action === 'status') return { kind: 'mcp.setup', status: mcp.setupStatus(s.root, run?.cfg ?? null) };
-      if (req.action === 'cancel') return { kind: 'mcp.setup', status: mcp.cancelSetup(s.root) };
+      if (req.action === 'status') return { kind: 'mcp.setup', status: mcp.setupStatus(run?.cfg ?? null) };
+      if (req.action === 'cancel') return { kind: 'mcp.setup', status: mcp.cancelSetup() };
       if (!run) return { kind: 'refused', code: 'mcp.configuration', headline: 'The configuration could not be loaded' };
       const started = mcp.startSetup(run.cfg, s.root);
       if (!started.ok) return { kind: 'refused', code: 'mcp.setup.running', headline: started.reason };
@@ -631,6 +631,9 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     case 'terminal.audit':
       return terminalHost.handle(req);
     case 'shutdown': {
+      // REQ-WORKSPACE-092/109: the code-intelligence setup's step, and what it started, ended before the host exits — asked
+      // first, so its short grace runs beside the rest of the shutdown, and waited for before the exit below.
+      const setupEnded = mcp.endSetup();
       // ADR-0014 / REQ-MONITOR-255: every run asked to stop before any is waited on; the reply follows their h.terminal results.
       for (const controller of improvementControllers.values()) controller.abort();
       improvementControllers.clear();
@@ -643,6 +646,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       await mcp.closeAll();
       // REQ-TOOLS-111: every background session ended and every h.terminal resource closed before the host goes.
       await h.terminal?.dispose();
+      await setupEnded;
       for (const s of stores.values()) { try { s.db?.close(); } catch { /* */ } }
       stores.clear();
       clocks.timers.after(millis(0), () => process.exit(0));

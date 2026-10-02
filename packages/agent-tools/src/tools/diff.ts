@@ -1,3 +1,5 @@
+import { splitLines } from './lines.js';
+
 /**
  * REQ-CHAT-050: the user-only edit-diff row's text form — a header `<path>[ [Created]] +A -R`, then one
  * `[<line>]± <text>` line per changed line, at most 50 changed lines before "… +N more lines, diff
@@ -35,8 +37,10 @@ function lcsChanges(before: readonly string[], after: readonly string[]): Change
 }
 
 export function renderDiff(path: string, before: string | null, after: string): string {
-  const b = before === null ? [] : before.split('\n');
-  const a = after.split('\n');
+  // Lines as the file tools count them (`lines.ts`): a final newline ends the last line rather than adding an
+  // empty one, which the live run of 2026-09-29 saw drawn as `[2]+ ` under a one-line create.
+  const b = before === null ? [] : splitLines(before);
+  const a = splitLines(after);
   const changes = lcsChanges(b, a);
   const added = changes.filter((c) => c.sign === '+').length;
   const removed = changes.filter((c) => c.sign === '-').length;

@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
  * Part R's first execution in the built app — the agent surfaces: the Mission view (REQ-MONITOR-274..276), the per-agent
@@ -12,11 +13,22 @@ import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolat
  *
  *   1. painted     — Mission opened by Ctrl+3 during a run with three live children: the header, the run row, the tree,
  *                    the table with one row per agent and state text, elapsed advancing between two probes 1.5 s apart.
+ *   1b. waiting    — the model's slot cap one, two children waiting behind it: every row's Elapsed cell and tree meta
+ *                    carries a figure, and a waiting row's advances (REQ-MONITOR-107/111).
  *   2. parity      — the Mission tree, the Overview card and the Workspace sidebar probed in one run: identical ids and
  *                    states; then a 23-agent record (20 seeded) refreshed with Mission visible, the apply-to-paint time.
  *   3. pause       — a child selected → Pause refused with the explanation, no control sent; the run selected → accepted,
- *                    `pausing` then `paused`.
- *   4. cancel      — a child with a live descendant: the confirmation names it and the cascade; the child cancelled, the run on.
+ *                    `pausing` then `paused`; at rest the still-mounted view's Pause reads `Pause`, not `Pausing…`.
+ *   4. cancel      — a child with a live descendant: the confirmation names it and the cascade; the child cancelled, the run on;
+ *                    the rows sampled just after the confirm (REQ-MONITOR-128's optimistic cancel) and overwritten by the
+ *                    engine's record at 9 s (REQ-MONITOR-296).
+ *   4b. cancel run — the run row selected, "Cancel selection" confirmed: every sample after the confirm reads the subtitle and
+ *                    the run row (and the status strip) `Cancelling` or the run at rest — never `Running` nor another active
+ *                    status; how many land inside the `Cancelling` window is host timing, recorded and not asserted
+ *                    (acceptance A35, REQ-MONITOR-127/130).
+ *   4c. persona    — the inspector pops out the run-level agent; the window's Cancel on the run's own instance confirmed: every
+ *                    snapshot after the confirmation was handled reads the instance's state `cancelling` or the run at rest,
+ *                    never `running` (acceptance A35, REQ-MONITOR-127/130, REQ-SHELL-075 (a)).
  *   5. open        — pop-out off: Open pins the agent in the Workspace inspector; on: one window per persona, 820×620,
  *                    reused for a second instance, hidden on close, shown again; a new session destroys it.
  *   6. inspector   — following the latest author, pinned on selection, chips in one order across a state change, Steer
@@ -69,11 +81,11 @@ function setPreference(s, key, value) {
   const current = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
   writeFileSync(file, `${JSON.stringify({ ...current, [key]: value }, null, 2)}\n`);
 }
-function launch(name, s, extra, opts = {}) {
+async function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout: opts.timeout ?? 150_000, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs: opts.timeout ?? 150_000, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: s.preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ...extra,
@@ -81,6 +93,7 @@ function launch(name, s, extra, opts = {}) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const errors = log.split('\n').filter((l) => /renderer console:/.test(l));
@@ -105,7 +118,7 @@ const THREE = 'delegate:coding-agent:alpha,delegate:coding-agent:beta,delegate:c
 // 1. Mission painted during a run with three live children.
 const s1 = scenario('painted');
 {
-  const r = launch('painted', s1, {
+  const r = await launch('painted', s1, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'delegate to three agents',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission-subtitle"]@6000;;[data-testid="mission-run-row"]@6000;;.agent-table__row@6000;;[data-testid="agent-elapsed"]@6000;;[data-testid="agent-elapsed"]@7500;;.agent-table__state-text@6000;;.mission__run-row + .agent-tree .agent-row@6000',
@@ -140,10 +153,42 @@ const s1 = scenario('painted');
   results.painted = { subtitle, runRow, statesAt6s: states6, elapsedAt6s: e6, elapsedAt7_5s: e75, finalStates: endRows.map((p) => p.data['data-state']), png: join(output, 'mission.png') };
 }
 
+// 1b. A waiting agent's clock (REQ-MONITOR-107/111, resolution item 25; the note "a waiting agent's elapsed time is not
+// shown", R-067): the scripted model's slot cap is one, so two of the three children wait on the model slot while the first
+// runs; every row holds a spawn timestamp, so every Elapsed cell and every tree meta carries a figure, and a waiting row's
+// advances between the two probes as the running row's does. Before the repair a waiting row read an em-dash in the table
+// and its state alone in the tree.
+const s1b = scenario('waiting');
+{
+  const yaml = join(s1b.workspace, '.rotaris', 'agents.yaml');
+  writeFileSync(yaml, readFileSync(yaml, 'utf8').replace('model_id: scripted }', 'model_id: scripted, max_parallel: 1 }'));
+  const r = await launch('waiting', s1b, {
+    ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'delegate to three agents behind one slot',
+    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_PROBE_AT: '.agent-table__state-text@6000;;[data-testid="agent-elapsed"]@6000;;[data-testid="agent-elapsed"]@7500;;.mission__run-row + .agent-tree .agent-row__meta@6000;;.mission__run-row + .agent-tree .agent-row__meta@7500',
+    ROTARIS_CAPTURE_PNG_AT: `${join(output, 'mission-waiting.png')}@7000`,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
+  });
+  const states6 = probesAt(r.log, 6000, '.agent-table__state-text')?.map((p) => p.text) ?? [];
+  const waitingAt6 = states6.map((t, i) => (t === 'waiting' || t === 'queued' ? i : -1)).filter((i) => i >= 0);
+  expect(states6.length === 3 && waitingAt6.length > 0, `no waiting or queued row at 6 s behind the slot cap: ${JSON.stringify(states6)}`);
+  const cells6 = (probesAt(r.log, 6000, '[data-testid="agent-elapsed"]') ?? []).map((p) => p.text);
+  const cells75 = (probesAt(r.log, 7500, '[data-testid="agent-elapsed"]') ?? []).map((p) => p.text);
+  const e6 = cells6.map(seconds); const e75 = cells75.map(seconds);
+  expect(e6.length === 3 && e75.length === 3 && e6.every((v) => v !== null), `an Elapsed cell showed the fallback although the agent holds a spawn timestamp: ${JSON.stringify(cells6)} at ${JSON.stringify(states6)} (REQ-MONITOR-111)`);
+  expect(waitingAt6.every((i) => e75[i] !== null && e75[i] > e6[i]), `a waiting row's elapsed did not advance: ${JSON.stringify(cells6)} → ${JSON.stringify(cells75)} at ${JSON.stringify(states6)} (REQ-MONITOR-107)`);
+  const meta6 = (probesAt(r.log, 6000, '.mission__run-row + .agent-tree .agent-row__meta') ?? []).map((p) => p.text);
+  const meta75 = (probesAt(r.log, 7500, '.mission__run-row + .agent-tree .agent-row__meta') ?? []).map((p) => p.text);
+  expect(meta6.length === 3 && meta6.every((t) => seconds(t) !== null), `a tree meta showed its state alone although the agent holds a spawn timestamp: ${JSON.stringify(meta6)} (REQ-MONITOR-111)`);
+  expect(meta6.some((t, i) => /^(waiting|queued) · /.test(t) && seconds(meta75[i] ?? '') > seconds(t)), `no waiting tree meta advanced: ${JSON.stringify(meta6)} → ${JSON.stringify(meta75)} (REQ-MONITOR-107)`);
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  results.waiting = { statesAt6s: states6, elapsedAt6s: cells6, elapsedAt7_5s: cells75, treeMetaAt6s: meta6, treeMetaAt7_5s: meta75, png: join(output, 'mission-waiting.png') };
+}
+
 // 2. Parity across the three trees, then the 23-agent refresh with Mission visible.
 const s2 = scenario('parity');
 {
-  const r = launch('parity', s2, {
+  const r = await launch('parity', s2, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'three trees',
     // Probed once the two quick children have settled and the first is still waiting, so the states are steady across the three views (a state change between probes is not a parity fault).
     ROTARIS_CAPTURE_VIEWS: '3@7000;;1@8000;;2@9000',
@@ -165,7 +210,7 @@ const s2 = scenario('parity');
     insert.run({ session_id: row.session_id, task_id: id, canonical_name: `seeded-${i}`, given_name: `Seeded ${i}`, persona: i % 2 === 0 ? 'coding-agent' : 'codebase-analyst', state: 'succeeded', parent_id: parents[i % parents.length].task_id, depth: 2, task: `seeded agent ${i}`, spawned_at: '2026-09-05T10:00:00.000Z', completed_at: '2026-09-05T10:01:00.000Z' });
   }
   dbw.close();
-  const r2 = launch('parity-20', s2, {
+  const r2 = await launch('parity-20', s2, {
     // Opening a stored session lands on the Workspace; Mission is opened after it, and one whole read is asked for while Mission is visible.
     ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: '3@2600', ROTARIS_CAPTURE_RECONCILE_AT: '3200',
     ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission"]@4000;;.agent-table__row@4000',
@@ -183,12 +228,14 @@ const s2 = scenario('parity');
 // 3. Pause refused for a child, honoured for the run.
 const s3 = scenario('pause');
 {
-  const r = launch('pause', s3, {
+  const r = await launch('pause', s3, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:9000,answer', ROTARIS_CAPTURE_PROMPT: 'pause me',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;[data-testid="mission-pause"]@5400;;[data-testid="mission-run-row"]@6200;;[data-testid="mission-pause"]@6600',
     ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission-pause"]@5800;;[data-testid="mission-message"]@5800;;[data-testid="mission-pause-reason"]@5800;;.status-strip__item@5800;;[data-testid="mission-pause"]@6400;;[data-testid="mission-message"]@7200;;.status-strip__item@7200',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1000',
+    // The view stays mounted from the accepted pause until the session rests: what its Pause reads then (REQ-MONITOR-296).
+    ROTARIS_CAPTURE_PROBE: '[data-testid="mission-pause"];;[data-testid="mission-pause-reason"];;[data-testid="mission-subtitle"]',
   });
   const db = open(s3); const row = session(db); const names = timeline(db, row.session_id).map((t) => t.name); db.close();
   const refused = probesAt(r.log, 5800, '[data-testid="mission-pause"]')?.[0]?.data?.['data-enabled'];
@@ -205,19 +252,27 @@ const s3 = scenario('pause');
   expect(/Pause accepted/.test(accepted), `the accepted pause's message: "${accepted}"`);
   expect(strip72.includes('run Pausing') || strip72.includes('run Paused'), `the strip after the accepted pause: ${JSON.stringify(strip72)} (REQ-MONITOR-124)`);
   expect(row.execution_status === 'paused', `the session ended ${row.execution_status} (${row.stop_reason}), not paused`);
-  results.pause = { refusedMessage: message, stripAfterRefusal: strip58.find((t) => t.startsWith('run ')), stripAfterAccept: strip72.find((t) => t.startsWith('run ')), finalStatus: row.execution_status, timeline: names.filter((n) => /pause/.test(n)) };
+  // REQ-MONITOR-296 / REQ-NOTIFY-050: the accepted pause's pending mark belongs to the run that accepted it, so once the
+  // session rests `paused` the still-mounted view's Pause reads `Pause` beside the subtitle's Paused, never `Pausing…`
+  // (the note "the Mission view's pause reads pausing after the session rests").
+  const restPause = endProbe(r.log, '[data-testid="mission-pause"]')?.[0];
+  const restSubtitle = endProbe(r.log, '[data-testid="mission-subtitle"]')?.[0]?.text ?? '';
+  const restReason = endProbe(r.log, '[data-testid="mission-pause-reason"]')?.[0]?.text ?? '';
+  expect(/· Paused$/.test(restSubtitle), `the subtitle at rest: "${restSubtitle}"`);
+  expect(restPause?.text === 'Pause' && restPause?.data?.['data-enabled'] === '0' && restReason === 'Pause is unavailable because no active run exists.', `the Pause control at rest read "${restPause?.text}" (data-enabled=${restPause?.data?.['data-enabled']}) beside "${restReason}" (REQ-MONITOR-296)`);
+  results.pause = { pauseAtRest: restPause?.text ?? null, subtitleAtRest: restSubtitle, refusedMessage: message, stripAfterRefusal: strip58.find((t) => t.startsWith('run ')), stripAfterAccept: strip72.find((t) => t.startsWith('run ')), finalStatus: row.execution_status, timeline: names.filter((n) => /pause/.test(n)) };
 }
 
 // 4. Cancel a child with a live descendant: the confirmation names it and the cascade count; the child cancelled, the run on.
 // A configured persona that may delegate (only the built-in orchestrator declares `delegate`, and the scripted client would read a second orchestrator as the root).
 const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    model: scripted', "    purpose: 'Delegates the work, then waits for it.'", "    system_prompt: 'You are a lead. Delegate the work, then wait for it.'", '    tools: [delegate, read_file, todo]']);
 {
-  const r = launch('cancel', s4, {
+  const r = await launch('cancel', s4, {
     // The children share one step list: alpha delegates `sub`, and the next two calls — alpha's and sub's, in whichever order — each wait 16 s.
     ROTARIS_SCRIPT: 'delegate:lead:alpha,answer', ROTARIS_CHILD_SCRIPT: 'delegate:coding-agent:sub,wait:16000,answer,wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel a child',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@7000;;[data-testid="mission-cancel"]@7400;;.dialog-actions .btn-danger@8200',
-    ROTARIS_CAPTURE_PROBE_AT: '.agent-table__row@6800;;[data-testid="mission-confirm"]@7900;;[data-testid="mission-confirm"] .btn-danger@7900;;.agent-table__row@9000',
+    ROTARIS_CAPTURE_PROBE_AT: '.agent-table__row@6800;;[data-testid="mission-confirm"]@7900;;[data-testid="mission-confirm"] .btn-danger@7900;;.agent-table__row@8205;;.agent-table__row@8215;;.agent-table__row@8240;;.agent-table__row@9000',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
   }, { timeout: 200_000 });
   const db = open(s4); const row = session(db); const kids = children(db, row.session_id); const names = timeline(db, row.session_id); db.close();
@@ -231,13 +286,125 @@ const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    mo
   expect(alpha?.state === 'cancelled', `alpha ended ${alpha?.state}`);
   expect(row.execution_status === 'completed', `the run ended ${row.execution_status} (${row.stop_reason}) — it should have continued`);
   const after9 = (probesAt(r.log, 9000, '.agent-table__row') ?? []).map((p) => `${p.text.slice(0, 40)}:${p.data['data-state']}`);
-  results.cancel = { dialog, confirmLabel, alphaState: alpha?.state, descendants: kids.filter((k) => k.parent_id === alpha?.task_id).map((k) => `${k.canonical_name}:${k.state}`), rowsAfter: after9, runStatus: row.execution_status, cancelEntry: names.find((n) => n.name === 'child_user_cancelled')?.message ?? null };
+  // REQ-MONITOR-128 / REQ-MONITOR-296: sampled just after the confirm, before or as the engine answers. The activity line
+  // "The user cancelled this agent." is drawn only by the optimistic overlay (the engine's record keeps the task).
+  // Recorded, not asserted: whether a sample lands before the engine's own record depends on the host's timing (on
+  // 2026-09-29 the build without the overlay still read `running` 40 ms after the confirm, and the build with it read
+  // both agents cancelled with the user's activity lines). What is asserted is the overwrite by the authoritative read.
+  const justAfter = [8205, 8215, 8240].map((at) => ({ at, rows: (probesAt(r.log, at, '.agent-table__row') ?? []).map((p) => `${p.text.slice(0, 80)}:${p.data['data-state']}`) }));
+  const settled9 = probesAt(r.log, 9000, '.agent-table__row') ?? [];
+  expect(settled9.length >= 2 && settled9.every((p) => p.data['data-state'] === 'cancelled' && !/which the user cancelled|The user cancelled this agent/.test(p.text)), `at 9 s the rows were not the engine's cancelled record: ${JSON.stringify(settled9.map((p) => `${p.text.slice(0, 60)}:${p.data['data-state']}`))} (REQ-MONITOR-296)`);
+  // REQ-ORCH-098 (the repair of a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries): the cancel tears
+  // alpha and each live descendant it cancelled down, once each, after its `child_user_cancelled` — their executions, which
+  // return after the cancel, write no second teardown.
+  const TEARDOWN = ['child_end', 'child_result', 'child_conversation_closed'];
+  const ownEntries = (taskId) => names.filter((n) => { try { return JSON.parse(n.metadata).task_id === taskId; } catch { return false; } }).map((n) => n.name);
+  const cancelledKids = kids.filter((k) => k.state === 'cancelled' && (k.task_id === alpha?.task_id || k.parent_id === alpha?.task_id));
+  const teardowns = cancelledKids.map((k) => ({ child: k.canonical_name, entries: ownEntries(k.task_id).filter((n) => n === 'child_user_cancelled' || TEARDOWN.includes(n)) }));
+  for (const t of teardowns) expect(JSON.stringify(t.entries) === JSON.stringify(['child_user_cancelled', ...TEARDOWN]), `${t.child}'s cancel and teardown entries: ${JSON.stringify(t.entries)} (REQ-ORCH-098: once each, after the cancel's own entry)`);
+  results.cancel = { justAfterConfirm: justAfter, dialog, confirmLabel, alphaState: alpha?.state, descendants: kids.filter((k) => k.parent_id === alpha?.task_id).map((k) => `${k.canonical_name}:${k.state}`), rowsAfter: after9, runStatus: row.execution_status, cancelEntry: names.find((n) => n.name === 'child_user_cancelled')?.message ?? null, teardowns };
+}
+
+// 4b. Cancel the run from the Mission view (acceptance A35, REQ-MONITOR-127/130/296): the run row selected, "Cancel selection",
+// confirmed. The session is shown `cancelling` from the confirmation — the engine writes no `cancelling` for the explicit
+// cancel, so its records read `running` until the run's end (OQ-165) — and no sample from the confirm to the run's end
+// reads `Running`, in the subtitle, the run row or the status strip. Before the repair only the Workspace set anything, and the Mission view read `Running` throughout.
+const s4b = scenario('cancel-run', ['personas:', '  lead:', '    name: lead', '    model: scripted', "    purpose: 'Delegates the work, then waits for it.'", "    system_prompt: 'You are a lead. Delegate the work, then wait for it.'", '    tools: [delegate, read_file, todo]']);
+{
+  const SAMPLES = [8210, 8220, 8230, 8240, 8250, 8270, 8300, 8500, 9000, 10000];
+  // One selector list, so each sample is ONE querySelectorAll — the dialog, the subtitle, the run row and the strip read in
+  // the same instant. The confirm click is an input event the renderer handles after the main process logs "clicked", and a
+  // separate probe can run before it (seen 2026-10-01: the click and a probe reading `Running` logged in the same
+  // millisecond, the next probe 6 ms later reading `Cancelling`). The dialog closes in the same commit that lays the
+  // overlay (`confirmCancel`: `setConfirming(null)`, then `cancelRun`'s `beginRun`, in one handler), so a snapshot without
+  // the dialog was read after the click was handled — on the base build as on the repair.
+  const SNAPSHOT = '[data-testid="mission-confirm"], [data-testid="mission-subtitle"], [data-testid="mission-run-row"], .status-strip__item';
+  const r = await launch('cancel-run', s4b, {
+    ROTARIS_SCRIPT: 'delegate:lead:alpha,answer', ROTARIS_CHILD_SCRIPT: 'delegate:coding-agent:sub,wait:16000,answer,wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel the run',
+    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_CLICKS: '[data-testid="mission-run-row"]@7000;;[data-testid="mission-cancel"]@7400;;.dialog-actions .btn-danger@8200',
+    ROTARIS_CAPTURE_PROBE_AT: ['[data-testid="mission-subtitle"]@6800', '[data-testid="mission-confirm"]@7900', ...SAMPLES.map((at) => `${SNAPSHOT}@${at}`)].join(';;'),
+    ROTARIS_CAPTURE_PNG_AT: `${join(output, 'cancel-run.png')}@8240`,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
+  }, { timeout: 200_000 });
+  const db = open(s4b); const row = session(db); db.close();
+  const before = probesAt(r.log, 6800, '[data-testid="mission-subtitle"]')?.[0]?.text ?? '';
+  expect(/· Running$/.test(before), `the run was not running before the cancel: "${before}"`);
+  const dialog = probesAt(r.log, 7900, '[data-testid="mission-confirm"]')?.[0]?.text ?? '';
+  expect(/Cancel the run\?/.test(dialog), `the run's confirmation did not open: "${dialog}" (REQ-MONITOR-126)`);
+  // Only the snapshots the log records after the confirm click AND that no longer hold the dialog count: a click scheduled
+  // at 8.2 s can be logged after a probe scheduled at 8.215 s, and a probe logged after the click can still have run before
+  // the renderer handled it — both rightly read `Running`. "Logged after the click" alone went red that way on 2026-10-01.
+  const confirmed = r.log.indexOf('capture: clicked ".dialog-actions .btn-danger"');
+  expect(confirmed >= 0, 'the confirm click was not recorded');
+  const afterConfirm = r.log.slice(confirmed);
+  const byTestId = (snap, id) => snap.find((p) => p.data['data-testid'] === id)?.text ?? null;
+  const snapshots = SAMPLES.map((at) => ({ at, snap: probesAt(afterConfirm, at, SNAPSHOT) })).filter((x) => x.snap !== null);
+  const pending = snapshots.filter((x) => byTestId(x.snap, 'mission-confirm') !== null).map((x) => x.at);
+  const samples = snapshots.filter((x) => byTestId(x.snap, 'mission-confirm') === null).map(({ at, snap }) => ({ at, subtitle: byTestId(snap, 'mission-subtitle'), runRow: byTestId(snap, 'mission-run-row'), strip: snap.filter((p) => p.data['data-testid'] === undefined).map((p) => p.text).find((t) => t.startsWith('run ')) ?? null })).filter((x) => x.subtitle !== null);
+  expect(samples.length >= 3, `fewer than three samples landed after the confirm was handled: ${JSON.stringify(samples)} (still showing the dialog: ${JSON.stringify(pending)})`);
+  const status = (text) => (text === null ? null : text.split('·').pop().trim());
+  // REQ-MONITOR-127/130: from the confirmation on, the Mission view and the strip never read the run `Running` again — each
+  // sample reads `Cancelling` until the run's record at rest arrives (REQ-ORCH-082: `user_cancelled` rests `paused`).
+  const running = samples.filter((x) => status(x.subtitle) === 'Running' || /Running$/.test(x.runRow ?? '') || x.strip === 'run Running');
+  expect(running.length === 0, `the Mission view read the cancelled run Running after the confirm: ${JSON.stringify(running)} (REQ-MONITOR-127, acceptance A35)`);
+  // A sample that is not yet at rest is inside the cancel's window, so it reads `Cancelling` and no other active status.
+  const ACTIVE = ['Running', 'Waiting', 'Starting', 'Pausing', 'Background'];
+  const otherActive = samples.filter((x) => ACTIVE.includes(status(x.subtitle)));
+  expect(otherActive.length === 0, `a sample after the confirm read an active status other than Cancelling: ${JSON.stringify(otherActive)} (REQ-MONITOR-127)`);
+  // Whether a sample lands inside the cancel's window depends on the host's timing: recorded, not asserted.
+  const cancellingSamples = samples.filter((x) => status(x.subtitle) === 'Cancelling').length;
+  expect(!['running', 'waiting', 'starting', 'pausing', 'cancelling', 'background'].includes(row.execution_status), `the cancelled run ended ${row.execution_status} (${row.stop_reason})`);
+  results.cancelRun = { before, dialog, samples, stillShowingDialog: pending, cancellingSamples, finalStatus: row.execution_status, stopReason: row.stop_reason };
+}
+
+// 4c. Cancel the run from a persona window (acceptance A35's second half, the verifier's finding of 2026-10-01; REQ-MONITOR-127/130,
+// REQ-SHELL-075 (a)/(g)): the inspector following the run-level agent pops it out, the window's Cancel on the run's own
+// instance is confirmed, and every snapshot after the confirmation was handled reads the instance's state `cancelling` or
+// the run at rest — never `running`. Before the repair the window drew the run's instance through the agent vocabulary,
+// which has no `cancelling`, and read `running` until the record at rest arrived.
+const s4c = scenario('cancel-run-persona');
+{
+  const SAMPLES = [6610, 6620, 6630, 6640, 6660, 6700, 6800, 7000, 8000, 9000];
+  // One selector list per sample: the confirmation and the heading read in the same instant (see 4b).
+  const SNAPSHOT = '[data-testid="persona-cancel-confirm"], [data-testid="persona-agent-name"], [data-testid="persona-agent-state"]';
+  const r = await launch('cancel-run-persona', s4c, {
+    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel the run from its window',
+    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="inspector-name"]@3000',
+    ROTARIS_CAPTURE_CLICKS: '.inspector__actions .btn>>Pop out@3200',
+    ROTARIS_CAPTURE_WINDOWS_AT: '5000',
+    ROTARIS_CAPTURE_PERSONA_CLICKS: '[data-testid="persona-cancel"]@6000;;[data-testid="persona-cancel-confirm"] .btn-danger@6600',
+    ROTARIS_CAPTURE_PERSONA_PROBE_AT: [`${SNAPSHOT}@5500`, '[data-testid="persona-cancel-confirm"]@6300', ...SAMPLES.map((at) => `${SNAPSHOT}@${at}`)].join(';;'),
+    ROTARIS_CAPTURE_PERSONA_PNG_AT: `${join(output, 'cancel-run-persona-window.png')}@6620`,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
+  }, { timeout: 200_000 });
+  const db = open(s4c); const row = session(db); db.close();
+  const following = probesAt(r.log, 3000, '[data-testid="inspector-name"]')?.[0]?.text ?? null;
+  expect(following === 'orchestrator', `the inspector did not follow the run-level agent at 3 s: "${following}"`);
+  const windows = windowsAt(r.log, 5000) ?? [];
+  expect(windows.length === 1 && windows[0].title === 'Rotaris · orchestrator', `the run-level agent's window at 5 s: ${JSON.stringify(windows)} (REQ-SHELL-072)`);
+  const field = (snap, id) => snap?.find((p) => p.data['data-testid'] === id)?.text ?? null;
+  const before = personaProbesAt(r.log, 5500, SNAPSHOT);
+  expect(field(before, 'persona-agent-name') === 'orchestrator' && field(before, 'persona-agent-state') === 'running', `the run's instance before the cancel: ${JSON.stringify(before)}`);
+  const dialog = personaProbesAt(r.log, 6300, '[data-testid="persona-cancel-confirm"]')?.[0]?.text ?? '';
+  expect(/Cancel the run\?/.test(dialog), `the window's Cancel on the run's own instance did not ask "Cancel the run?": "${dialog}" (REQ-MONITOR-126)`);
+  expect(/persona-click-at 6600 \S.* → clicked/.test(r.log), 'the confirmation was not clicked in the persona window');
+  const snapshots = SAMPLES.map((at) => ({ at, snap: personaProbesAt(r.log, at, SNAPSHOT) })).filter((x) => x.snap !== null);
+  const pending = snapshots.filter((x) => field(x.snap, 'persona-cancel-confirm') !== null).map((x) => x.at);
+  const samples = snapshots.filter((x) => field(x.snap, 'persona-cancel-confirm') === null).map(({ at, snap }) => ({ at, name: field(snap, 'persona-agent-name'), state: field(snap, 'persona-agent-state') })).filter((x) => x.state !== null);
+  expect(samples.length >= 3, `fewer than three snapshots after the confirmation was handled: ${JSON.stringify(samples)} (still showing the dialog: ${JSON.stringify(pending)})`);
+  const running = samples.filter((x) => x.state === 'running');
+  expect(running.length === 0, `the persona window read the cancelled run's instance running after the confirm: ${JSON.stringify(running)} (REQ-MONITOR-127/130, acceptance A35)`);
+  // Whether a snapshot lands inside the cancel's window is host timing: recorded, not asserted.
+  const cancellingSamples = samples.filter((x) => x.state === 'cancelling').length;
+  expect(!['running', 'waiting', 'starting', 'pausing', 'cancelling', 'background'].includes(row.execution_status), `the cancelled run ended ${row.execution_status} (${row.stop_reason})`);
+  results.cancelRunPersona = { following, window: windows[0] ?? null, before: { name: field(before, 'persona-agent-name'), state: field(before, 'persona-agent-state') }, dialog, samples, stillShowingDialog: pending, cancellingSamples, finalStatus: row.execution_status, stopReason: row.stop_reason, png: join(output, 'cancel-run-persona-window.png') };
 }
 
 // 5. Open an agent under both preferences; the window's lifecycle; a new session destroys it.
 const s5 = scenario('open');
 {
-  const r = launch('open-off', s5, {
+  const r = await launch('open-off', s5, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:10000,answer', ROTARIS_CAPTURE_PROMPT: 'open an agent',
     ROTARIS_CAPTURE_VIEWS: '3@3500', ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;[data-testid="mission-open"]@5500',
     ROTARIS_CAPTURE_PROBE_AT: '.app-shell@6200;;[data-testid="inspector-tag"]@6200;;[data-testid="inspector-name"]@6200;;.inspector@6200',
@@ -253,7 +420,7 @@ const s5 = scenario('open');
   results.openOff = { view: 'workspace', tag, name, windows: 0 };
 
   setPreference(s5, 'interface/agentPopOut', true);
-  const r2 = launch('open-on', s5, {
+  const r2 = await launch('open-on', s5, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'pop out an agent',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;.agent-table__row:nth-child(2) .btn>>Pop out@7500;;.agent-table__row:nth-child(2) .btn>>Pop out@10500',
@@ -286,7 +453,7 @@ const s5 = scenario('open');
   results.openOn = { windowAt6_5s: w65[0], shownAt8_5s: name85, hiddenAt9_8s: w98[0], shownAt11_5s: w115[0], stateAt11_5s: state115, contextLine: line115, firstPaintMs: paints, png: join(output, 'persona.png') };
 
   // 5c. A new session destroys every persona window (REQ-SHELL-078): the stored session reopened, a window popped out, then New session → Start session → a prompt.
-  const r3 = launch('open-new-session', s5, {
+  const r3 = await launch('open-new-session', s5, {
     ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: '3@2500;;1@5000',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row .btn>>Pop out@3500;;.btn>>New session@5600;;[data-testid="start-session-accept"]@6400',
     ROTARIS_CAPTURE_TYPE: 'second session>>composer@7600',
@@ -303,10 +470,10 @@ const s5 = scenario('open');
 // 6. The inspector: following, pinned, chips stable across a state change, Steer through the persona window.
 const s6 = scenario('inspector');
 {
-  const r = launch('inspector', s6, {
+  const r = await launch('inspector', s6, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:5000,read,wait:6000,answer', ROTARIS_CAPTURE_PROMPT: 'inspect an agent',
     ROTARIS_CAPTURE_CLICKS: '.agent-row@4000;;.inspector__actions .btn>>Steer@9200',
-    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="inspector-tag"]@3000;;[data-testid="inspector-name"]@3000;;[data-testid="inspector-tag"]@4500;;[data-testid="inspector-name"]@4500;;[data-testid="inspector-chips"] .chip@4500;;[data-testid="inspector-chips"] .chip@8500;;[data-testid="inspector-meta"]@8500;;[data-testid="inspector-controls-note"]@8500;;.ctx-ring@8500',
+    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="inspector-tag"]@3000;;[data-testid="inspector-name"]@3000;;[data-testid="inspector-chips"] .chip@3000;;[data-testid="inspector-tag"]@4500;;[data-testid="inspector-name"]@4500;;[data-testid="inspector-chips"] .chip@4500;;[data-testid="inspector-chips"] .chip@8500;;[data-testid="inspector-meta"]@8500;;[data-testid="inspector-controls-note"]@8500;;.ctx-ring@8500',
     ROTARIS_CAPTURE_PERSONA_STEER: 'keep going, but summarise first@11000',
     ROTARIS_CAPTURE_PERSONA_PROBE_AT: '[data-testid="persona-steer"]@12000;;[data-testid="persona-steer-error"]@12000',
     ROTARIS_CAPTURE_PNG_AT: `${join(output, 'inspector-live.png')}@8600`,
@@ -315,6 +482,11 @@ const s6 = scenario('inspector');
   const db = open(s6); const row = session(db); const kids = children(db, row.session_id); const entries = timeline(db, row.session_id); db.close();
   const tag3 = probesAt(r.log, 3000, '[data-testid="inspector-tag"]')?.[0]?.text; const name3 = probesAt(r.log, 3000, '[data-testid="inspector-name"]')?.[0]?.text;
   expect(tag3 === 'Following — tracking whichever agent wrote last' && name3 === 'orchestrator', `following at 3 s: tag "${tag3}", name "${name3}" (REQ-MONITOR-053/054)`);
+  // Live-run finding K1 (REQ-MONITOR-060/061): the running run-level agent shows the tools its run resolved — a coordinator,
+  // so none of the write, terminal and commit tools its policy withholds — marked from its own history (it has delegated).
+  const rootChips = (probesAt(r.log, 3000, '[data-testid="inspector-chips"] .chip') ?? []).map((p) => [p.data['data-tool'], p.data['data-state']]);
+  expect(rootChips.length > 0 && rootChips.some((c) => c[0] === 'delegate' && c[1] !== 'not used'), `the run-level agent's chips at 3 s: ${JSON.stringify(rootChips)} (REQ-MONITOR-060)`);
+  expect(!rootChips.some((c) => ['write_file', 'haet_edit', 'haet', 'terminal', 'git_commit'].includes(c[0])), `the running coordinator lists a tool its policy withholds: ${JSON.stringify(rootChips)} (REQ-MONITOR-061)`);
   const tag45 = probesAt(r.log, 4500, '[data-testid="inspector-tag"]')?.[0]?.text; const name45 = probesAt(r.log, 4500, '[data-testid="inspector-name"]')?.[0]?.text;
   expect(tag45 === 'Pinned by selection' && name45 === 'alpha', `pinned at 4.5 s: tag "${tag45}", name "${name45}"`);
   const chips45 = (probesAt(r.log, 4500, '[data-testid="inspector-chips"] .chip') ?? []).map((p) => [p.data['data-tool'], p.data['data-state']]);
@@ -333,13 +505,13 @@ const s6 = scenario('inspector');
   const box = personaProbesAt(r.log, 12000, '[data-testid="persona-steer"]')?.[0]?.text ?? null;
   expect(box === '', `the accepted steer did not clear the box: "${box}" (REQ-MONITOR-070)`);
   expect(/persona-steer-at 11000 → sent/.test(r.log), 'the steer card was not driven');
-  results.inspector = { following: { tag: tag3, name: name3 }, pinned: { tag: tag45, name: name45 }, chipsBefore: chips45, chipsAfter: chips85, meta, note, ring, steer: steered ? JSON.parse(steered.metadata) : null, png: join(output, 'inspector-live.png') };
+  results.inspector = { following: { tag: tag3, name: name3, chips: rootChips }, pinned: { tag: tag45, name: name45 }, chipsBefore: chips45, chipsAfter: chips85, meta, note, ring, steer: steered ? JSON.parse(steered.metadata) : null, png: join(output, 'inspector-live.png') };
 }
 
 // 7. The strategy selector and the depth control write their keys; Settings shows the same values; the pop-out toggle writes its preference.
 const s7 = scenario('settings');
 {
-  const r = launch('settings', s7, {
+  const r = await launch('settings', s7, {
     ROTARIS_CAPTURE_VIEWS: '3@1200;;7@4200',
     ROTARIS_CAPTURE_SELECT: '[data-testid="mission-strategy"]>>swarm@2200;;[data-testid="mission-depth"]>>2@3000',
     ROTARIS_CAPTURE_CLICKS: '.nav-list__item>>Interface@4800;;[data-testid="agent-pop-out-toggle"]@5200;;.nav-list__item>>Runtime@5700',
@@ -362,7 +534,7 @@ const s7 = scenario('settings');
   dbw.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, spawned_at, tool_calls)
     VALUES (?, 'bg_0000dead', 'zombie', 'Zombie', 'coding-agent', 'running', 'root:1', 1, 1, 'scripted', 'quick', 1, 'a child the run left running', '[]', '[]', '["read_file"]', '{}', '2026-09-05T10:00:00.000Z', 0)`).run(row.session_id);
   dbw.close();
-  const r = launch('reconcile', s1, {
+  const r = await launch('reconcile', s1, {
     ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: '3@2500',
     ROTARIS_CAPTURE_CLICKS: '[data-agent-id="bg_0000dead"]@3500;;[data-testid="mission-open"]@4000;;.inspector__actions .btn>>Pop out@5000',
     ROTARIS_CAPTURE_PROBE_AT: '[data-agent-id="bg_0000dead"]@3800;;.agent-table__row@3800;;[data-testid="inspector-name"]@4600;;[data-testid="inspector-meta"]@4600;;.agent-row[data-task-id="bg_0000dead"]@4600',

@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   PROPOSAL_STATUSES,
@@ -182,7 +183,7 @@ function RollbackDialog({ preview, busy, onConfirm, onCancel }: { preview: Impro
         {preview.blocked_reason !== null && <p className="dialog-body proposal-dialog__warning" role="alert">{preview.blocked_reason}</p>}
         {preview.entries.length === 0 && preview.blocked_reason === null
           ? <p className="dialog-body">This rollback would change nothing.</p>
-          : preview.entries.length > 0 && <div className="proposal-dialog__paths"><span className="field-label">Workspace changes</span>{preview.entries.map((entry) => <div key={entry.path}><DesignTag className="tag tag-outline">{entry.action}</DesignTag><span className="mono">{entry.path}</span></div>)}</div>}
+          : preview.entries.length > 0 && <div className="proposal-dialog__paths"><span className="field-label">Workspace changes</span>{preview.entries.map((entry) => <div key={entry.path}><DesignTag kind="outline">{entry.action}</DesignTag><span className="mono">{entry.path}</span></div>)}</div>}
         {preview.dirty.length > 0 && <div className="proposal-dialog__paths"><span className="field-label">Work made since the run ({preview.dirty.length})</span>{preview.dirty.map((path) => <div key={path}><span className="mono">{path}</span></div>)}</div>}
         {preview.dirty_only && <DesignCheckbox checked={force} onChange={(event) => setForce(event.currentTarget.checked)} label="Overwrite work made since the improvement run" />}
         <div className="dialog-actions">
@@ -319,7 +320,7 @@ export function ProposalsTab(props: ProposalsTabProps) {
                 <DesignTable className="table library-proposals__table" aria-label="Improvement proposals">
                   <thead><tr><th>Summary</th><th>Category</th><th>Risk</th><th>Status</th><th>Created</th></tr></thead>
                   <tbody>{visibleRows.map((row) => <tr key={`${row.artifactId}:${row.proposal.id}`} ref={row.proposal.id === chosenRow?.proposal.id ? selectedRowRef : undefined} className={row.proposal.id === chosenRow?.proposal.id ? 'is-selected' : ''} aria-selected={row.proposal.id === chosenRow?.proposal.id} onClick={() => setSelectedProposal(row.proposal.id)} onDoubleClick={() => setEditing(true)}>
-                    <td title={row.proposal.recommended_action}>{row.proposal.summary}</td><td>{categoryLabel(row.proposal.category)}</td><td><DesignTag className={`tag tag-${row.proposal.risk === 'high' ? 'failure' : row.proposal.risk === 'medium' ? 'outline' : 'neutral'}`}>{row.proposal.risk}</DesignTag></td><td>{statusLabel(row.proposal.status)}</td><td className="mono">{relativeCreatedLabel(row.proposal.created_at)}</td>
+                    <td title={row.proposal.recommended_action}>{row.proposal.summary}</td><td>{categoryLabel(row.proposal.category)}</td><td><DesignTag kind={row.proposal.risk === 'high' ? 'fail' : row.proposal.risk === 'medium' ? 'outline' : 'neutral'}>{row.proposal.risk}</DesignTag></td><td>{statusLabel(row.proposal.status)}</td><td className="mono">{relativeCreatedLabel(row.proposal.created_at)}</td>
                   </tr>)}</tbody>
                 </DesignTable>
               </div>
@@ -338,7 +339,7 @@ export function ProposalsTab(props: ProposalsTabProps) {
             <dl className="library-proposals__facts">
               <div><dt>Generated</dt><dd>{new Date(chosenRecord.artifact.generated_at).toLocaleString()}</dd></div>{/* PD-LIBRARY-002: a retrospective belongs to no session, so the cell says what it DOES belong to — an empty
                   cell would read as a session the record failed to name rather than as a pass that never had one. */}
-              <div><dt>Source</dt><dd className="mono" data-testid="library-proposal-source">{chosenRecord.artifact.source_kind === 'retrospective' ? `This workspace's history · ${chosenRecord.artifact.considered_session_ids.length} session(s)` : chosenRecord.artifact.source_session_id}</dd></div>
+              <div><dt>Source</dt><dd className="mono" data-testid="library-proposal-source">{chosenRecord.artifact.source_kind === 'retrospective' ? `This workspace's history · ${countNoun(chosenRecord.artifact.considered_session_ids.length, 'session')}` : chosenRecord.artifact.source_session_id}</dd></div>
               <div><dt>Proposals</dt><dd>{artifactCounts(chosenRecord)}</dd></div><div><dt>Rollback</dt><dd>{checkpoint ? `${checkpoint.ref} · ${checkpoint.commit.slice(0, 12)}` : 'No rollback point recorded.'}{chosenRecord.artifact.rolled_back_at ? ` Rolled back ${new Date(chosenRecord.artifact.rolled_back_at).toLocaleString()}.` : ''}</dd></div>
             </dl>
             <div className="library-proposals__detail-actions">

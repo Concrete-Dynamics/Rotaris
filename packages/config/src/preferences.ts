@@ -2,7 +2,7 @@ import { isPlainMap, type PlainMap } from './merge.js';
 import { MODEL_SLOTS, PERSONA_SYNTHETIC_PREFIX, STARTUP_SLOT_PREFIX, thinkingKeyOf, type ModelSlot } from './keys.js';
 import type { LoadedConfiguration } from './load.js';
 import { BUILT_IN_ROLE_TIERS } from './defaults.js';
-import { unwrapSynthetic } from './slots.js';
+import { syntheticOriginOf } from './slots.js';
 
 /**
  * What an editor reads back (REQ-CONFIG-253..255): a slot from the RAW file first — a raw string naming
@@ -56,9 +56,14 @@ export function slotPreferences(config: LoadedConfiguration): readonly SlotPrefe
     if (fromWorkspace !== undefined) return { slot, value: fromWorkspace, origin: 'workspace', thinking: thinkingRaw };
     if (fromGlobal !== undefined) return { slot, value: fromGlobal, origin: 'global', thinking: thinkingRaw };
     const resolved = config.slots[slot];
-    // REQ-CONFIG-341: a value the snapshot layer supplied is `discovered`.
-    const origin: Origin = resolved !== null && config.discoveredSlots[slot] === resolved ? 'discovered' : 'built-in';
-    return { slot, value: resolved === null ? null : unwrapSynthetic(resolved, config.models), origin, thinking: thinkingRaw };
+    // REQ-CONFIG-253: a synthetic copy unwraps to the `models:` key the loader recorded it was copied from — never to another
+    // key that happens to name the same provider model (REQ-CONFIG-094: two keys are two entries).
+    const value = resolved === null ? null : syntheticOriginOf(resolved, config.syntheticOrigins);
+    // REQ-CONFIG-341: a value the snapshot layer supplied is `discovered`. The comparison is made against the unwrapped
+    // value: a reasoning level a file states wraps the snapshot's key in the loader's synthetic copy (REQ-CONFIG-076),
+    // and that copy still carries the value the snapshot contributed.
+    const origin: Origin = value !== null && config.discoveredSlots[slot] === value ? 'discovered' : 'built-in';
+    return { slot, value, origin, thinking: thinkingRaw };
   });
 }
 
@@ -96,7 +101,8 @@ export function rolePreferences(config: LoadedConfiguration): readonly RolePrefe
     const gModel = wsModel === undefined ? rawRoleField(g, role, 'model') : undefined;
     const wsThinking = rawRoleField(ws, role, 'thinking');
     const gThinking = wsThinking === undefined ? rawRoleField(g, role, 'thinking') : undefined;
-    const effective = persona.model.startsWith(PERSONA_SYNTHETIC_PREFIX) ? unwrapSynthetic(persona.model, config.models) : persona.model;
+    // REQ-CONFIG-255: the role-level synthetic unwrapped to the key it was copied from, as the slot read-back does.
+    const effective = persona.model.startsWith(PERSONA_SYNTHETIC_PREFIX) ? syntheticOriginOf(persona.model, config.syntheticOrigins) : persona.model;
     const builtIn = (BUILT_IN_ROLE_TIERS as Readonly<Record<string, string>>)[role] ?? null;
     return {
       role,

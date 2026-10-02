@@ -3,7 +3,7 @@ import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, ty
 import { projectSidebarSection } from './settings/project-init.js'; // Part AS
 import { err, ok } from '@rotaris/kernel';
 import {
-  clampComposerHeight, composerChipReason, composerPlaceholderFor, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
+  clampComposerHeight, composerChipReason, composerPlaceholderFor, composerReclaimsFocus, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
   DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel,
   pausePendingAfter, REASONING_LEVELS, runStateOf, sendRefusal,
   type HistoryWalk, type PauseScope, type RunState,
@@ -883,7 +883,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const suggestions = useMemo(() => (slashPopupShouldOpen(text) ? registry.filter(slashNameToken(text)) : []), [text, registry]);
   const popupOpen = suggestions.length > 0 && dismissedFor !== text;
   const current = Math.min(rowIndex, Math.max(0, suggestions.length - 1));
-  /** REQ-CHAT-027: the token's state and the four colours of the active theme, each cleared to 4.5:1 on the input's ground. */
+  /** REQ-CHAT-027: the token's state and the four colours of the active theme, each cleared to 4.5:1 on the ground the field is painted on — the dock's (`COMPOSER_GROUND`). */
   const tokenState = useMemo(() => slashTokenState(text, registry), [text, registry]);
   const themeName = useThemeName();
   const roleColours = useMemo(() => slashRoleColours(resolveTheme(themeName)), [themeName]);
@@ -901,12 +901,21 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const activate = (command: SlashCommand) => { if (text === `/${command.name}`) void submit(); else complete(command); };
 
   /**
+   * After an awaited submission settles: focus back to the composer, unless something else took it while the
+   * submission was in flight — a dialog opened meanwhile keeps it (`composerReclaimsFocus`).
+   */
+  const reclaimFocus = (focusAtSubmit: Element | null) => {
+    if (composerReclaimsFocus({ now: document.activeElement, atSubmit: focusAtSubmit, body: document.body, composer: area.current })) area.current?.focus();
+  };
+
+  /**
    * REQ-CHAT-019/020/021/023: a recognised slash submission. The popup is hidden and the composer cleared BEFORE the
    * command runs; exactly one outcome is reported; every outcome but `not-a-command` is handled here and the text never
    * reaches an agent; a non-executed outcome restores the exact typed text with the caret at its end and raises the
    * persistent "Command not run" notice. Nothing here records to prompt history (REQ-LIBRARY-137/142).
    */
   const runSlash = async (value: string, name: string, argument: string) => {
+    const focusAtSubmit = document.activeElement;
     setDismissedFor(value);
     setRowIndex(0);
     setText('');
@@ -932,8 +941,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     if (outcome.kind === 'executed') {
       // The composer keeps focus, unless the command opened a dialog that has already taken it (the stash dialog
       // mounts and focuses Pop between the command's resolution and this line — measured on the first execution).
-      const active = document.activeElement;
-      if (active === null || active === document.body || active === area.current) area.current?.focus();
+      reclaimFocus(focusAtSubmit);
       return;
     }
     setText(value);
@@ -956,6 +964,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   };
   /** The ordinary submission — a queue during a run, else a start or a continue — of `value`, which is the composer's text or a prompt file's expanded body. */
   const submitPrompt = async (value: string) => {
+    const focusAtSubmit = document.activeElement;
     setSetupSubmitRefused(false);
     /*
      * REQ-CHAT-007: refused with its reason readable, and nothing sent; the typed text is untouched.
@@ -979,7 +988,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
       if (q.ok) { setError(null); setStatus('Message queued for the next iteration.'); onRecordPrompt?.(value); }
       else { setText(value); setError('Message could not be queued because the run is no longer active.'); }
       flushDraft(q.ok ? '' : value);
-      area.current?.focus();
+      reclaimFocus(focusAtSubmit);
       return;
     }
     setStopRequested(false);
@@ -1005,7 +1014,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     // REQ-CHAT-014 / REQ-SHELL-159: submit is a flush point — an emptied composer empties the stored draft at once,
     // and a restored one stores exactly what was restored rather than what was typed before it.
     flushDraft(r.ok ? '' : value);
-    area.current?.focus();
+    // REQ-MONITOR-137: the run's events draw "Steer the run" before the start's reply lands here, so its dialog may
+    // already hold the focus; the composer takes it back only when nothing else took it meanwhile.
+    reclaimFocus(focusAtSubmit);
   };
 
   /** The send control's label and accessible name, by composer mode (PD-CHAT-001 revision 2, R-040).
@@ -1031,7 +1042,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     // REQ-MONITOR-006: on a refusal the state is rolled back and the refusal named.
     if (!r.ok) { setStopRequested(false); setError(r.reason); }
   };
-  // REQ-MONITOR-127: on confirmation the run is shown cancelling at once; a refusal restores it and says why.
+  // REQ-MONITOR-127: on confirmation the run is shown cancelling at once — by the renderer's `cancelRun`, through the window's
+  // overlay, as from every surface (acceptance A35, OQ-165); `stopRequested` arms the stop's force. A refusal says why.
   const cancelRun = async () => {
     if (!onCancelRun) return;
     setStopRequested(true);
@@ -1127,7 +1139,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const todoPlan = selected !== null && selected.id !== RUN_AGENT_ID ? session?.childTodos[selected.id] ?? session?.todo ?? null : session?.todo ?? null;
   // REQ-CHAT-069: "This task" keeps the run-owned kinds plus the selected agent's rows; with no agent selected it is
   // unavailable with that as its stated reason, so the transcript is never filtered to nothing.
-  const shownRows = useMemo(() => (scope === 'task' && selected !== null ? scopedRows(rows, selected) : rows), [scope, selected, rows]);
+  // PD-ORCH-005 clause 4 with OQ-97: the run-level agent's rows include those its roots wrote under another persona's name.
+  const entryRoots = session?.entryRoots;
+  const shownRows = useMemo(() => (scope === 'task' && selected !== null ? scopedRows(rows, selected, entryRoots) : rows), [scope, selected, rows, entryRoots]);
   /**
    * PD-CHAT-005: how deep a row's agent sits in the delegation tree, which is what indents a delegated agent's
    * rows in the transcript. The tree is the run's (REQ-MONITOR-036/037) and the record already carries the
@@ -1187,7 +1201,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
       compressionThresholdPercent={compressionThresholdPercent} runActive={runActive} resting={resting} nowIso={nowIso}
       onSteer={(agent) => { if (onOpenPersona) onOpenPersona(agent, true); else setSteering({ id: agent.id, name: agent.name }); }}
       onCancel={inspectorCancel} onPopOut={(agent) => onOpenPersona?.(agent, false)} onSetModel={onSetModel} onSetReasoning={onSetReasoning}
-      drawer={narrow} onCloseDrawer={narrow ? () => setDrawer(null) : undefined} />
+      drawer={narrow} onCloseDrawer={narrow ? () => setDrawer(null) : undefined}
+      // REQ-MONITOR-052 / REQ-LIBRARY-102 (live-run finding K1): a link deep-links to the Library, which opens the artifact.
+      onOpenArtifact={(id) => useShellState.getState().openLibrary('artifacts', id)} />
   );
   /*
    * REQ-ORCH-153 / REQ-NOTIFY-049: a session held at the plan gate presents as paused, so the paused read takes it

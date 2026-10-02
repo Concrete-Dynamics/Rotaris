@@ -1,5 +1,5 @@
 import type { InitializationView } from '@rotaris/contracts';
-import { isApplicable, type InitializationTask, type TaskRegistry } from './registry.js';
+import { isApplicable, type ApplicabilityContext, type InitializationTask, type TaskRegistry } from './registry.js';
 import { isNeverInitialized, type InitializationState } from './state.js';
 
 /**
@@ -27,9 +27,10 @@ export interface TaskSets {
   readonly consent: readonly InitializationTask[];
 }
 
-export async function deriveSets(registry: TaskRegistry, state: InitializationState, log: (message: string) => void, workspaceRoot?: string): Promise<TaskSets> {
+/** `context` names the workspace the sets are derived for; every predicate is asked about that workspace and no other. */
+export async function deriveSets(registry: TaskRegistry, state: InitializationState, log: (message: string) => void, context: ApplicabilityContext): Promise<TaskSets> {
   const applicable: InitializationTask[] = [];
-  for (const task of registry.all()) if (await isApplicable(task, log, workspaceRoot)) applicable.push(task);
+  for (const task of registry.all()) if (await isApplicable(task, log, context)) applicable.push(task);
   const completed = new Set(state.completed);
   const skipped = new Set(state.skipped);
   const pending = applicable.filter((t) => !completed.has(t.id) && !skipped.has(t.id));
@@ -76,10 +77,12 @@ export function viewOf(state: InitializationState, sets: TaskSets, running: bool
   };
 }
 
-/** REQ-WORKSPACE-105: the prompt is due exactly when a consent-requiring task is pending and no run is in progress. */
-export function promptDue(view: InitializationView): boolean {
-  return view.consentPending.length > 0 && !view.running;
-}
+/*
+ * REQ-WORKSPACE-105's "the setup prompt SHALL be due exactly when …" is read in one place, `setupPromptDue` in
+ * `packages/ui/src/ProjectSetupDialog.tsx`, because which run "no run is in progress" means is OQ-123 and the reading
+ * built needs the published `backgroundRun` beside the nine values. The "any run" reading that stood here was retired
+ * with it, so the codebase holds one.
+ */
 
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false;

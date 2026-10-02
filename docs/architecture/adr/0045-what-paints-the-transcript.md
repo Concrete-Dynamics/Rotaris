@@ -225,9 +225,13 @@ floor and only the mechanism transfers.**
 Further specifics:
 
 - **Pool capacity is a declared product constant, not a function of the window as constructed.** Capacity
-  is `ceil(H_max ÷ 30 px)` plus overscan, where 30 px is the minimum row height `REQ-CHAT-057` fixes and
+  is `ceil(H_max ÷ 20 px)` plus overscan, where 20 px is the shortest a row can draw and
   `H_max` is a **declared maximum supported transcript viewport height** written down once as a product
-  constant. It is derived from the *window's* content height, not from the transcript pane's, so a
+  constant. **Falsified 2026-10-01, kept beside its replacement: "`ceil(H_max ÷ 30 px)` plus overscan, where 30 px is
+  the minimum row height `REQ-CHAT-057` fixes".** `PD-CHAT-003` lifted that minimum off the row's box, and a one-line
+  system notice inside a block drew 23.8 px, so a viewport inside `H_max` could show more rows than the pool bound. The
+  rule is unchanged — the declared maximum over the minimum row height — and the minimum is now what the stylesheet can
+  draw: `.row`'s 4 px top margin, its border and the 14 px continuation bar (see the report of that date below). It is derived from the *window's* content height, not from the transcript pane's, so a
   divider drag (`REQ-SHELL-069`) cannot force growth either. The earlier formulation — size at
   construction for "the largest viewport the window can reach" — is not determinable in the live
   application, where a user can maximise onto a larger display or attach a monitor after the window
@@ -421,7 +425,8 @@ caches and the four-part reuse predicate), `project.ts` (ADR-0046 step 4), `sear
 slots and step 5). `TranscriptRows.tsx`'s row-per-article list is gone from the Workspace view.
 
 **`H_max` is declared at 4,320 CSS pixels**, the height of a 4320p panel in its ordinary orientation — so the pool
-is **154 slots** (`ceil(4320 / 30) + 10`), allocated once and never added to. The record asked for the number to be
+is **154 slots** (`ceil(4320 / 30) + 10`), allocated once and never added to. *(226 since 2026-10-01 —
+`ceil(4320 / 20) + 10`; the 30 px unit was taller than a row `PD-CHAT-003` draws, reported below.)* The record asked for the number to be
 chosen and reviewable rather than imagined, and that is the number. The one growth branch (`capacityFor`) exists in
 the product's own rendering path, is not conditioned on being under measurement, and is unreachable at every size
 REQ-UIBENCH-060's sweep visits.
@@ -663,3 +668,77 @@ that a frame carrying it was presented. And one reading the round surfaced is on
 — whether REQ-CHAT-055's comparison is read on the update as it arrived or on one that arrived alone, and what "an empty
 transcript" holds once the run has appended to it — **OQ-89**, with the reading the proof takes: both cuts, one frame
 of slack at the cadence it measured.
+
+**A new row before its first measurement, 2026-09-29 and 2026-09-30 (R-067) — repaired in the second round.** The pool
+positions a row that has not been measured by `estimateHeight`, and `pool.ts` justified a coarse estimate by "a wrong
+estimate below the viewport is never seen". Falsified at the tail, kept beside its replacement in `pool.ts`: a row
+appended while the pane follows is inside the viewport for the frames before the `ResizeObserver` delivers its height,
+and the state that delivery sets renders a frame later. `transcript-proof`'s geometry stage reads those frames directly:
+the boxes on each of the twelve animation frames after the pool first binds a key, before that frame's layout and
+observer delivery. **First round, falsified and kept:** it read the 3.4 px it found (`row:28` / `row:29`) as the 12 px
+block gap, added the block gap to the estimate, and recorded 0 px in three runs of three. The verifier's runs of that build
+read 3.4 px again in two of four, on the same pair: `row:28` is an agent message INSIDE a block, and the clean runs were
+the timing of a watch that saw the overlap in some runs only. **Second round:** a planted transcript of every row kind,
+measured in the built app, showed the estimate short on four terms besides the block gap — a Markdown body's 8 px block
+margins (a one-line agent message inside a block drew 33.4 px into 30), a user row's 8 px padding above and below (11.4 px
+short), a drawn line of 19.44 px counted as 18, and the row's own 46 px inline box left in the wrapping width — and an
+activity line wrapping whole segments. `estimateBox` now builds the estimate from those parts and errs long; for every
+row kind measured it is at or above what the row drew (`transcript.test.ts` holds the figures). Making it err long
+exposed a second cause the geometry had hidden: the measurement pass re-observed its slots only when the displayed rows
+changed, so a slot a SCROLL rebound to a row of the height its previous row drew delivered nothing, and the row sat at its
+estimate on screen until the next displayed change — two rows drawn 3.4 px through their neighbours 800 ms after a
+scroll, on the first round's build, three runs of three. The pane now observes a slot again whenever it is bound under a
+key it was not observed under (`observeAgain`). The pool, its capacity and the anchor rule are as they were; the proof's
+paging check now holds the anchor row itself to 4 px, because a row measured below the reader moves the transcript's
+height and not the reader, and fails on any bound row positioned by its estimate once the pool has settled
+(`docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`). Noticed
+on the way and recorded, not repaired: the capacity rule's 30 px unit is larger than a row PD-CHAT-003 draws inside a
+block — a one-line system notice drew 23.8 px (`docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`, repaired 2026-10-01 below);
+and a row that GROWS is positioned by the height its identity drew last until it is measured again, which drew the
+planted activity line 21.8 px through the row beneath it for a frame in one run of six when it turned live again
+(`docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`, repaired 2026-10-01 below) — the proof's new-row
+watch records such a pair of rows already drawn and holds only the pairs with a new row to 1 px.
+
+**The capacity unit, 2026-10-01 (R-067, acceptance finding A38) — the capacity rule's 30 px reason falsified, kept beside its
+replacement above.** The pool's capacity was counted in REQ-CHAT-057's 30 px minimum row height, which PD-CHAT-003 lifted
+off the row's box; for capacity a unit TALLER than the shortest row is the opposite of conservative. `transcript-proof`'s new
+stage 3c measured what the note had computed: 400 planted one-line system notices (23.8 px each) in a window resized to
+1440x4300 under Xvfb — a 3,890 px viewport, inside `H_max`, showing 164 rows — bound 144 of them through a 154-slot pool and
+left the viewport blank from 3,414.5 px down while the pane followed the tail. **The capacity unit moved, not the growth
+condition**: the only event that changes the slot count is still a viewport taller than `H_max`, so REQ-UIBENCH-054 holds as
+before. The unit is `SHORTEST_ROW_HEIGHT`, 20 px — a row's 4 px top margin, its 1 px border either side and the continuation
+bar's 14 px `min-height`, the shortest a row's slot holds whatever it carries (`transcript.test.ts` reads the three from
+`shell.css`) — and the pool is **226 slots**. `ROW_MIN_HEIGHT` stays 30 px as the estimate's floor. And the visible span now
+sheds its overscan, below and then above, before it cuts a visible row: a viewport shows up to one row more than
+`ceil(H ÷ h)` (one partly at either edge), which the rule does not count and the old rail cut first. On the repair the stage
+is green — 226 slots, the bound rows covering the viewport with no gap at the tail and in the middle. A larger pool is more
+empty containers allocated at construction, which the memory tripwire subtracts away; nothing else this record decided
+moved (`docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`; OQ-166 asks whether
+PD-CHAT-003's cost paragraph, which describes the capacity arithmetic as keeping 30 px, needs a revision).
+
+**A row that grows, 2026-10-01 (R-067, acceptance finding A37).** "Heights are measured" held for every row the observer had
+reached, and a row whose content changed was placed by the height its identity drew last until the observer's delivery
+rendered, a frame after the commit: a row that GREW was painted through the row beneath it for that frame. The note saw
+21.8 px in one run of six; `transcript-proof`'s geometry stage now asks deterministically, expanding the planted activity
+line by a click, and on the build before the repair the first frame after the click placed the row beneath 1,146 px inside
+it. **The measurement now also happens at the commit**: after every commit and before the browser paints it, the pane reads
+the drawn height of each bound slot whose measurement key has none yet, files it as the observer would, and renders again
+inside the commit when it differs from what placed the row (`measureAtCommit`). The observer stays, for a size that changes
+under an unchanged key. **Corrected in fix round 1 (2026-10-01), the sentence kept beside its replacement: "the observer
+stays, for a size that changes under an unchanged key" did not keep that size off the painted frame** — the observer's render
+was a default-lane update, rendered after the paint, so a user row whose image attachment was opened (a native `<details>`,
+no commit, no new key) painted 30.7 px through the row beneath it on the first frame in `transcript-proof`'s new attachment
+reading. The observer's delivery comes after layout and before the paint, and it now renders synchronously there
+(`flushSync`); the reading is 0 px on every frame in four runs of four. Its cost is the same render moved before the paint,
+and, where that render rebinds or re-observes a slot, a slot's size deferred to the next frame with Chromium's "loop completed
+with undelivered notifications" line in the renderer console — once in the proof's eleven launches
+(`docs/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`). The identity's last height still places the row for the render that binds it, so a streaming row
+is never placed by an estimate; what changed is that the render is not the one painted. The read forces layout of the slots
+the update bound or changed, before a paint that would have laid them out anyway, and walks the pool's slots rather than the
+rows held (REQ-CHAT-055); what it costs is that a new row's first painted frame carries the second render the delivery used
+to cause a frame later, and the append comparison passed in four runs of five on the repair, red in the one taken at a host
+load of 4.5 to 5.5. On the repair the stage reads 0 px on all twelve frames after the click and holds the pairs of
+rows already drawn, which it had recorded and not held, to 1 px: 0 in three runs of three
+(`docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`). Nothing else this
+record decided moved.
+

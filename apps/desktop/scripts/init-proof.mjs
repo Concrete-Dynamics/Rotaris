@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { ensureBundle, withSetupFailure } from './lib/code-intelligence-bundle.mjs';
 
 /**
  * ADR-0064's first execution in the BUILT app (Part AS): project initialization resolved once per
@@ -35,6 +37,10 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
+// Scenarios 1, 3, 4 and 5 expect the shipped task recorded completed, and it runs the bundled runtime, which git ignores:
+// built here when the proof builds, refused at once under --skip-build naming `pnpm code-intel:bundle`.
+const bundle = ensureBundle({ skipBuild: process.argv.includes('--skip-build') });
+console.log(`init-proof: the code-intelligence bundle is ${bundle}`);
 
 const GLOBAL = [
   'models:',
@@ -81,10 +87,10 @@ function scenario(name, files, { code = false } = {}) {
   return { root, workspace, local, configDir, workspaceFile: join(workspace, '.rotaris', 'agents.yaml') };
 }
 
-function launch(name, s, extra, timeout = 120_000) {
+async function launch(name, s, extra, timeout = 120_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs: timeout, windowsHide: true,
     env: {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ local: s.local, preferences: join(s.root, 'preferences') }),
@@ -96,6 +102,7 @@ function launch(name, s, extra, timeout = 120_000) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   return log;
@@ -117,7 +124,7 @@ const results = {};
  *    every other line of the file survives.
  * --------------------------------------------------------------------------------------------- */
 const s1 = scenario('background', WORKSPACE);
-const log1 = launch('background', s1, {
+const log1 = await launch('background', s1, {
   ROTARIS_CAPTURE_VIEW: '2',
   ROTARIS_CAPTURE_EVAL_AT: [
     'JSON.stringify({probe:"gate",dialog:!!document.querySelector(\'[data-testid="project-setup-dialog"]\'),send:document.querySelector(\'[data-testid="composer-send"]\')?.disabled??null})>>[data-testid="composer-send"]@~10000',
@@ -129,8 +136,8 @@ if (gate1.dialog) throw new Error('a fresh workspace with the default task set r
 // `null` would mean the composer never mounted and the reading proved nothing; the gate must be OFF, seen.
 if (gate1.send !== false) throw new Error(`the composer Send control read ${JSON.stringify(gate1.send)}; a fresh workspace with the default task set must leave it enabled (REQ-WORKSPACE-104/142)`);
 const ws1 = readFileSync(s1.workspaceFile, 'utf8');
-if (!/initialization:/.test(ws1)) throw new Error(`the background task recorded nothing:\n${ws1}`);
-if (!/completed:\s*\n?\s*(-\s*code-intelligence-setup|\[\s*code-intelligence-setup\s*\])/.test(ws1.replace(/\r/g, ''))) throw new Error(`code-intelligence-setup was not recorded completed:\n${ws1}`);
+if (!/initialization:/.test(ws1)) throw new Error(withSetupFailure(`the background task recorded nothing:\n${ws1}`, log1));
+if (!/completed:\s*\n?\s*(-\s*code-intelligence-setup|\[\s*code-intelligence-setup\s*\])/.test(ws1.replace(/\r/g, ''))) throw new Error(withSetupFailure(`code-intelligence-setup was not recorded completed:\n${ws1}`, log1));
 if (!/last_run:/.test(ws1)) throw new Error(`last_run was not stamped:\n${ws1}`);
 if (!/classification:\s*non-code/.test(ws1)) throw new Error(`the documentation-only tree was not classified non-code:\n${ws1}`);
 if (!ws1.startsWith('# workspace configuration — this header must survive the marker write\n')) throw new Error('the marker write lost the comment header');
@@ -143,7 +150,7 @@ results.background = { workspaceFile: ws1, dialogRaised: gate1.dialog, sendDisab
  *    applicable task: it is marked initialized silently, with both lists empty and `last_run` alone.
  * --------------------------------------------------------------------------------------------- */
 const s2 = scenario('nothing-applicable', WORKSPACE_NO_TASK);
-const log2 = launch('nothing-applicable', s2, { ROTARIS_CAPTURE_AFTER_MS: '12000' }, 120_000);
+const log2 = await launch('nothing-applicable', s2, { ROTARIS_CAPTURE_AFTER_MS: '12000' }, 120_000);
 const ws2 = readFileSync(s2.workspaceFile, 'utf8').replace(/\r/g, '');
 if (!/last_run:/.test(ws2)) throw new Error(`a workspace with nothing applicable was not marked:\n${ws2}`);
 if (/code-intelligence-setup/.test(ws2)) throw new Error(`an inapplicable task was recorded:\n${ws2}`);
@@ -156,17 +163,21 @@ results.nothingApplicable = { workspaceFile: ws2 };
  *    REQ-WORKSPACE-112's exact reason, and Escape records a skip that does not re-prompt on reopen.
  * --------------------------------------------------------------------------------------------- */
 const s3 = scenario('consent', WORKSPACE);
-const log3 = launch('consent', s3, {
+const log3 = await launch('consent', s3, {
   ROTARIS_INIT_TEST_TASK: 'consent',
   ROTARIS_CAPTURE_VIEW: '2',
   ROTARIS_CAPTURE_EVAL_AT: [
     // `visible` is not decoration: the dialog was in the DOM and off screen, and every DOM assertion
     // beside it passed on that. A box that exists and cannot be seen is UIR-014's class.
-    'JSON.stringify({probe:"dialog",headline:document.querySelector(\'[data-testid="project-setup-headline"]\')?.textContent??null,intro:document.querySelector(\'[data-testid="project-setup-intro"]\')?.textContent??null,word:document.querySelector(\'[data-setup-task-word]\')?.textContent??null,visible:(()=>{const d=document.querySelector(\'[data-testid="project-setup-dialog"]\');if(!d)return null;const r=d.getBoundingClientRect();return r.width>0&&r.height>0&&r.top<window.innerHeight&&r.bottom>0&&r.left<window.innerWidth&&r.right>0&&document.elementFromPoint(r.left+r.width/2,r.top+8)!==null&&d.contains(document.elementFromPoint(r.left+r.width/2,r.top+8));})(),send:document.querySelector(\'[data-testid="composer-send"]\')?.disabled??null,reason:document.querySelector(\'[data-testid="composer-send"]\')?.title??document.querySelector(\'.composer__refusal\')?.textContent??null})>>[data-testid="project-setup-dialog"]@~15000',
+    // The reading marks the document once taken, and the Escape below waits for that mark, so the dialog is read
+    // before it is answered rather than in whichever order two matches of one selector fall (a harness order, no
+    // assertion changed: `docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`).
+    // It waits for the composer as well as the dialog: under load the dialog matched before the composer had mounted,
+    // and `send` read null (a harness order, no assertion changed; 2026-10-01).
+    '(()=>{const r=JSON.stringify({probe:"dialog",headline:document.querySelector(\'[data-testid="project-setup-headline"]\')?.textContent??null,intro:document.querySelector(\'[data-testid="project-setup-intro"]\')?.textContent??null,word:document.querySelector(\'[data-setup-task-word]\')?.textContent??null,visible:(()=>{const d=document.querySelector(\'[data-testid="project-setup-dialog"]\');if(!d)return null;const r=d.getBoundingClientRect();return r.width>0&&r.height>0&&r.top<window.innerHeight&&r.bottom>0&&r.left<window.innerWidth&&r.right>0&&document.elementFromPoint(r.left+r.width/2,r.top+8)!==null&&d.contains(document.elementFromPoint(r.left+r.width/2,r.top+8));})(),send:document.querySelector(\'[data-testid="composer-send"]\')?.disabled??null,reason:document.querySelector(\'[data-testid="composer-send"]\')?.title??document.querySelector(\'.composer__refusal\')?.textContent??null});document.documentElement.setAttribute(\'data-proof-read\',\'dialog\');return r;})()>>body:has([data-testid="project-setup-dialog"]):has([data-testid="composer-send"])@~15000',
   ].join(';;'),
-  // The dialog can paint from the first read before the open-time resolution starts. Wait for the
-  // background task's outcome, then Escape answers only the consent task this scenario measures.
-  ROTARIS_CAPTURE_KEYS: 'Escape>>[data-testid="project-setup-dialog"][data-setup-state="prompt"] [data-testid="project-setup-log"]@~18000',
+  // Pressed as soon as the dialog has been read, not at a clock: the run reaches it when it reaches it.
+  ROTARIS_CAPTURE_KEYS: 'Escape>>[data-proof-read="dialog"] [data-testid="project-setup-dialog"]@~18000',
   ROTARIS_CAPTURE_AFTER_MS: '32000',
 }, 120_000);
 const dialog3 = JSON.parse(evalOf(log3, 'probe:"dialog"'));
@@ -180,7 +191,13 @@ results.consent = { headline: dialog3.headline, intro: dialog3.intro, word: dial
 /* 3b. REQ-WORKSPACE-111: once skipped, reopening the workspace never re-prompts. */
 const ws3 = readFileSync(s3.workspaceFile, 'utf8').replace(/\r/g, '');
 if (!/verification-consent/.test(ws3)) throw new Error(`Escape did not record the skip:\n${ws3}`);
-const log3b = launch('consent-reopen', s3, {
+// REQ-WORKSPACE-083/084/088: the background task starts by itself whenever the prompt is answered, so Escape skips the
+// consent task only. The dialog can open from the window's mount read before the resolution 800 ms after the workspace
+// opens; a skip answered first performs that resolution first (OQ-122). On Linux the Escape used to come first and skip
+// both (`docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
+if (!/initialization: running code-intelligence-setup[^\n]*\(background\)/.test(log3)) throw new Error('the background task did not start by itself beside the consent prompt (REQ-WORKSPACE-083)');
+if (!/completed:\s*\n?\s*(-\s*code-intelligence-setup|\[\s*code-intelligence-setup\s*\])/.test(ws3)) throw new Error(withSetupFailure(`the background task beside the consent prompt was not recorded completed (REQ-WORKSPACE-088):\n${ws3}`, log3));
+const log3b = await launch('consent-reopen', s3, {
   ROTARIS_INIT_TEST_TASK: 'consent',
   ROTARIS_CAPTURE_VIEW: '2',
   ROTARIS_CAPTURE_EVAL_AT: 'JSON.stringify({probe:"reopen",dialog:!!document.querySelector(\'[data-testid="project-setup-dialog"]\'),send:document.querySelector(\'[data-testid="composer-send"]\')?.disabled??null,section:document.querySelector(\'[data-testid="project-section-hint"]\')?.textContent??null})>>[data-testid="project-section"]@~12000',
@@ -198,10 +215,10 @@ results.skipHolds = { dialogReturned: reopen.dialog, sendDisabled: reopen.send, 
  *    while the shipped task beside it still runs and IS recorded.
  * --------------------------------------------------------------------------------------------- */
 const s4 = scenario('failure', WORKSPACE);
-const log4 = launch('failure', s4, { ROTARIS_INIT_TEST_TASK: 'fail', ROTARIS_CAPTURE_AFTER_MS: '30000' }, 180_000);
+const log4 = await launch('failure', s4, { ROTARIS_INIT_TEST_TASK: 'fail', ROTARIS_CAPTURE_AFTER_MS: '30000' }, 180_000);
 const ws4 = readFileSync(s4.workspaceFile, 'utf8').replace(/\r/g, '');
 if (/verification-fail/.test(ws4)) throw new Error(`a failed task recorded an outcome:\n${ws4}`);
-if (!/code-intelligence-setup/.test(ws4)) throw new Error(`the task after the failure was not attempted:\n${ws4}`);
+if (!/code-intelligence-setup/.test(ws4)) throw new Error(withSetupFailure(`the task after the failure was not attempted:\n${ws4}`, log4));
 if (!/initialization: verification-fail → failure/.test(log4)) throw new Error(`the failure was not reported:\n${log4}`);
 if (!/Project setup did not finish/.test(log4)) throw new Error(`the background banner was not raised:\n${log4}`);
 results.failure = { workspaceFile: ws4 };
@@ -211,13 +228,13 @@ results.failure = { workspaceFile: ws4 };
  *    the classification sentence, after a completed background run.
  * --------------------------------------------------------------------------------------------- */
 const s5 = scenario('settings-card', WORKSPACE, { code: false });
-const log5 = launch('settings-card', s5, {
+const log5 = await launch('settings-card', s5, {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Project',
   ROTARIS_CAPTURE_EVAL_AT: 'JSON.stringify({probe:"card",state:document.querySelector(\'[data-project-init]\')?.getAttribute(\'data-init-state\')??null,headline:document.querySelector(\'[data-init-headline]\')?.textContent??null,lines:[...document.querySelectorAll(\'[data-init-detail]\')].map(n=>n.textContent),reason:document.querySelector(\'[data-init-reason]\')?.textContent??null})>>[data-init-state="completed"]@~40000',
   ROTARIS_CAPTURE_AFTER_MS: '45000',
 }, 180_000);
 const card = JSON.parse(evalOf(log5, 'probe:"card"'));
-if (card.state !== 'completed') throw new Error(`the Project card read state ${JSON.stringify(card.state)}, expected completed`);
+if (card.state !== 'completed') throw new Error(withSetupFailure(`the Project card read state ${JSON.stringify(card.state)}, expected completed`, log5));
 if (card.headline !== 'Project initialized') throw new Error(`the card headline read ${JSON.stringify(card.headline)}`);
 if (!card.lines.some((l) => /every initialization task/i.test(l))) throw new Error(`the completed sentence is missing: ${JSON.stringify(card.lines)}`);
 if (!card.lines.includes('No code memories were created — this workspace is a documentation-only project.')) throw new Error(`REQ-WORKSPACE-101's sentence is missing: ${JSON.stringify(card.lines)}`);

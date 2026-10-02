@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripRunItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripRunItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -23,7 +23,7 @@ import '@phosphor-icons/web/fill';
 // the theme — everything this window has before a surface mounts (`shell.ts`).
 import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
-import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
+import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery, useShownSession } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
 import { bootApproval, bootHookReview, bootPause, bootPersona, bootProvider, bootTerminal } from './windows.js';
 /**
@@ -177,14 +177,15 @@ bindRetrospectiveStarter(() => { void bridge.command({ kind: 'improvements.retro
 const slashOpeners: { newSession?: () => Promise<{ ok: true } | { ok: false; reason: string }>; openSessions?: () => void } = {};
 
 function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenStash, groupTools, layout, onLayout, onOpenTrailer }: { models: readonly string[]; modelsLoaded: boolean; workspace: string; popOut: boolean; prompts: PromptsApi; onOpenStash: () => void; groupTools: boolean; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; onOpenTrailer: (trailer: TrailerRow) => void }) {
-  const session = useStore(replica, (s) => s.session);
+  // REQ-MONITOR-128 / REQ-MONITOR-296: the record under this window's optimistic cancels of one agent.
+  const session = useShownSession();
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
   const reachedOldest = useStore(replica, (s) => s.reachedOldest);
   const snapshot = useConfigSnapshot(workspace);
   // REQ-CONFIG-472: what the settings screen currently holds wins over what the file says, until Save says otherwise.
   const pendingCaps = useStore(pendingDisplay, (s) => s.caps);
   const personas = useMemo(() => personasOf(snapshot), [snapshot]);
-  const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
+  const entry = useMemo(() => entryOf(snapshot, rows, session), [snapshot, rows, session]);
   const nowIso = useElapsedTick(session);
   const display = useStore(displayPrefs, (s) => s);
   const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
@@ -273,7 +274,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
    * (REQ-WORKSPACE-105) and otherwise only when the user asks for it from the sidebar's Project section.
    */
   const init = useInitialization();
-  const promptDue = init.state !== null && init.state.view.consentPending.length > 0 && !init.state.view.running;
+  // REQ-WORKSPACE-105/112: a background run in progress does not lift the gate (OQ-123; `setupPromptDue`).
+  const promptDue = setupPromptDue(init.state);
   const openProjectSetup = useShellState((s) => s.openProjectSetup);
   return <>
     {worktreeOpen && (
@@ -333,13 +335,14 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
  * the per-field path (REQ-CONFIG-321, REQ-CONFIG-112); pause is the existing `pause` control, and cancel is `cancelAgent` — for the run row the reserved run id, final (`cancelRun`, PD-ORCH-005 clause 15).
  */
 function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) {
-  const session = useStore(replica, (s) => s.session);
+  // REQ-MONITOR-128 / REQ-MONITOR-296: the record under this window's optimistic cancels of one agent.
+  const session = useShownSession();
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
   const selectedAgentId = useShellState((st) => st.selectedAgentId);
   const selectAgent = useShellState((st) => st.selectAgent);
   const snapshot = useConfigSnapshot(workspace);
   const refresh = useStore(refreshStats, (st) => st);
-  const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
+  const entry = useMemo(() => entryOf(snapshot, rows, session), [snapshot, rows, session]);
   // PD-ORCH-005 clauses 13 and 16 (OQ-100, OQ-101): in REQ-CHAT-008's recovery state the run-level agent presents `paused`,
   // as its agents do, and a paused child offers "Cancel selection" while its session rests — both from `restingView`,
   // the one call the Workspace makes too.
@@ -377,7 +380,8 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
  */
 const UNREAD_REPOSITORY: RepositoryState = { gitAvailable: false, isRepository: false, branch: null, base: null, ahead: 0, behind: 0, touched: 0, uncommitted: 0, failed: ['request'], readMs: 0 };
 function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, onOpenSession, onNewSession, libraryRevision }: { workspace: string; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; reducedMotion: boolean; onListSessions: () => void; onOpenSession: (id: string) => Promise<{ ok: true } | { ok: false; reason: string }>; onNewSession: () => Promise<{ ok: true } | { ok: false; reason: string }>; libraryRevision: number }) {
-  const session = useStore(replica, (s) => s.session);
+  // REQ-MONITOR-128 / REQ-MONITOR-296: the record under this window's optimistic cancels of one agent.
+  const session = useShownSession();
   const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
   const [sessionsState, setSessionsState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [sessionsError, setSessionsError] = useState<string | null>(null);
@@ -470,6 +474,13 @@ function Library({ prompts, layout, onLayout }: { prompts: PromptsApi; layout: P
       : [...current, { id, raised: 1 }]));
   }, []);
   const focusedProposalId = useShellState((state) => state.libraryProposalId);
+  // REQ-LIBRARY-102 / REQ-MONITOR-052 (live-run finding K1): an agent surface's artifact link deep-links here — the Artifacts
+  // tab, and the inspector opened (or re-raised, REQ-LIBRARY-131) for that artifact. Derived during render when the request
+  // arrives, then consumed, so the same link followed again opens it again.
+  const focusedArtifactId = useShellState((state) => state.libraryArtifactId);
+  const [seenArtifactFocus, setSeenArtifactFocus] = useState<string | null>(null);
+  if (focusedArtifactId !== seenArtifactFocus) { setSeenArtifactFocus(focusedArtifactId); if (focusedArtifactId !== null) inspect(focusedArtifactId); }
+  useEffect(() => { if (focusedArtifactId !== null) useShellState.getState().takeLibraryArtifactId(); }, [focusedArtifactId]);
   const readImprovements = useCallback(async () => {
     const result = await bridge.command({ kind: 'improvements', command: { action: 'list' } });
     return result.ok ? { ok: true as const, records: result.value as ImprovementArtifactRecord[] } : { ok: false as const, reason: result.detail ?? result.headline };
@@ -877,7 +888,7 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       onTheme={onTheme}
       onReducedMotion={onMotion}
       onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
-      config={{ ...config, providersCard, confinement: confinement.verdict, onRecheckConfinement: confinement.onRecheck }}
+      config={{ ...config, providersCard, confinement: confinement.verdict, onRecheckConfinement: confinement.onRecheck, planReleased: session?.planReleased === true }}
       mcp={mcp}
       display={{
         autoCollapseTools: display.autoCollapseTools,
@@ -982,6 +993,9 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   const groupTools = useStore(displayPrefs, (s) => s.groupTools);
   const changePopOut = useCallback((value: boolean) => { setPopOut(value); void bridge.command({ kind: 'prefs.set', key: 'interface/agentPopOut', value }); }, []);
   const session = useStore(replica, (s) => s.session);
+  // REQ-MONITOR-127/130 (acceptance A35, OQ-165): the strip names the run's state as this window's surfaces show it — a
+  // confirmed run cancel reads `cancelling` from the confirmation, as the run header and the Mission view do.
+  const shownStatus = useShownSession()?.executionStatus ?? null;
   const notice = useStore(notices, (s) => s.current);
   const [theme, setTheme] = useState(initialTheme);
   const [reducedMotion, setReducedMotion] = useState(() => initialReducedMotion ?? motionReduced());
@@ -1170,19 +1184,22 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   const branchItem = useMemo(() => branchStripItem(git.state, session?.worktreeBranch ?? null), [git.state, session]);
   // REQ-CHAT-008's recovery fact for the strip's run item, from the one liveness predicate the Workspace and Mission read.
   const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
+  // REQ-TOOLS-184: the configured preset, re-read on every configuration change, for the strip's mode with no session focused.
+  const configuredMode = useConfigSnapshot(workspace)?.runtime.permission_mode ?? null;
   const status = useMemo<readonly StatusItem[]>(
     () => [
       // REQ-NOTIFY-048/049: the presentation vocabulary, never a raw persisted string; in REQ-CHAT-008's recovery state the
       // synthetic label, as the run header and the Mission view read it (PD-ORCH-005 clause 13, OQ-100).
-      statusStripRunItem(session?.executionStatus ?? null, needsRecovery),
+      statusStripRunItem(shownStatus, needsRecovery),
       // REQ-SHELL-038 / REQ-GIT-122/161: the checked-out branch, the focused session's worktree branch first.
       { text: branchItem.text, name: 'Checked-out branch', title: branchItem.title, state: branchItem.state, testId: 'strip-branch' },
       // REQ-TOOLS-184: text, never colour alone — the mode, the workspace-scope flag (REQ-TOOLS-131), redaction (REQ-TOOLS-174), background sessions.
-      `mode: ${session?.permissionMode ?? 'ask'}`, 'workspace-scoped', 'redaction: always on', `bg sessions: ${session?.backgroundSessions ?? 0}`,
+      // With no session focused the mode is the configured preset the next run starts from, never a literal (live-run finding L7).
+      statusStripModeItem(session?.permissionMode ?? null, configuredMode), 'workspace-scoped', 'redaction: always on', `bg sessions: ${session?.backgroundSessions ?? 0}`,
       ...(circuitBreakerArmed ? ['● CB armed'] : []),
       theme.label, ...processes, `applied ${counters.applied} · reset ${counters.reset} · refused ${counters.refused}`,
     ],
-    [processes, counters, session, needsRecovery, theme, circuitBreakerArmed, branchItem],
+    [processes, counters, session, shownStatus, needsRecovery, theme, circuitBreakerArmed, branchItem, configuredMode],
   );
   // Part W: Ctrl+L (REQ-CHAT-002) and every other chord of REQ-SHELL-049 are the command registry's, bound once by the
   // shell's `useCommandShortcuts`; the Ctrl+L effect that lived here is gone. ADR-0048's application modality: the palette
@@ -1223,11 +1240,13 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   const projectSetup = useShellState((s) => s.projectSetup);
   const autoOpenProjectSetup = useShellState((s) => s.autoOpenProjectSetup);
   const closeProjectSetup = useShellState((s) => s.closeProjectSetup);
-  const setupPromptDue = initialization.state !== null && initialization.state.view.consentPending.length > 0 && !initialization.state.view.running;
+  // REQ-WORKSPACE-105: due on the same reading as the composer gate, so a background run in progress does not hold the
+  // automatic opening back until it ends (OQ-123).
+  const promptDueNow = setupPromptDue(initialization.state);
   const autoOpened = useRef(false);
   useEffect(() => {
-    if (setupPromptDue && !autoOpened.current) { autoOpened.current = true; autoOpenProjectSetup(); }
-  }, [setupPromptDue, autoOpenProjectSetup]);
+    if (promptDueNow && !autoOpened.current) { autoOpened.current = true; autoOpenProjectSetup(); }
+  }, [promptDueNow, autoOpenProjectSetup]);
   return (<>
     <AppShell
       onModality={onModality}

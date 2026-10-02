@@ -61,12 +61,17 @@
  *                 mid-answer with the socket held open (is that reported as a user cancellation, which is
  *                 the eighty-second defect's signature?). Neither injected refusal reaches the endpoint,
  *                 so the ladder half costs nothing but retries.
- *   8. terminal  — the TERMINAL under duress, one run, six named shapes replayed from the record: a
- *                 multi-line here-string, forty lines of long output, a wedge with no `timeout` supplied,
+ *   8. terminal  — the TERMINAL under duress, one run, the named shapes replayed from the record: a
+ *                 multi-line here-string, forty lines of long output, off Windows an `exec bash` that replaces the
+ *                 session's shell (acceptance A9), a bash-ism `/bin/sh` cannot expand (live-run L1) and an `exit 3`
+ *                 that ends the session's shell (OQ-144's sibling case), a wedge
+ *                 with no `timeout` supplied, one poll of it and a `C-c` with a poll after it (OQ-147), a second wedge
+ *                 and a command issued while it is soft-paused (OQ-164),
  *                 an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` with
  *                 differences exiting 1, and a read-only git pipeline through a pipe. Asserted from
  *                 `tool_calls`, never from the model's prose; a shape the model never attempted is a NOTE,
- *                 not a failure.
+ *                 not a failure, but a run that ended `failed` before any terminal call is a FAILURE (one that
+ *                 stopped otherwise before any is a NOTE), so a dead run never reads green.
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -90,7 +95,9 @@
  *   session.log        the product's own per-session log, at `--session-log-level` (default INFO)
  *   transcript.md      every transcript row in full, not the 400 characters `results.json` keeps
  *   model-traffic.jsonl  what the model was SENT and what came back — bodies, status and duration per call,
- *                      recorded by a loopback proxy the sandbox is pointed at (`--no-record-traffic` skips it).
+ *                      recorded by a loopback proxy the sandbox is pointed at (`--no-record-traffic` skips it),
+ *                      into the file of the scenario that made the call, each naming how it ended (`outcome`:
+ *                      `complete`, `aborted` when the product let go, `in-flight at close`, …).
  *                      The product logs a method and a URL and nothing else, so this exists nowhere else.
  *   *.png              the end of the scenario, plus a fifth and three fifths of the way through its wait
  *   node-test.log, diff.txt, changed/   where the scenario produces them
@@ -102,7 +109,7 @@
  *
  * The run is unattended and its window is hidden; `--gui` shows it, for watching rather than using.
  */
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
@@ -110,7 +117,11 @@ import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes } from './lib/terminal-shapes.mjs';
+import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
+import { restatedFacts } from './lib/restated-facts.mjs';
+import { refusalIssues } from './lib/refusal-issues.mjs';
+import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -584,7 +595,6 @@ if (!has('skip-build')) {
 if (!existsSync(electron)) throw new Error(`the Electron executable is absent: ${electron}`);
 
 const SANDBOX_ROOT = join(tmpdir(), 'rotaris-live-run');
-const KEPT = 'KEPT';
 /**
  * The sandbox holds a real credential — the app writes the leased key into its own store, exactly as it would on
  * the owner's machine — so the credential directory is deleted on every exit path there is, including `--keep`,
@@ -593,25 +603,25 @@ const KEPT = 'KEPT';
 const dropCredentials = (dir) => rmSync(tokensDirFor(join(dir, 'local')), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 function cleanup(keep) {
   dropCredentials(sandbox);
-  if (keep) writeFileSync(join(sandbox, KEPT), `kept by --keep at ${new Date().toISOString()}; its credential store was deleted.\n`);
+  if (keep) writeFileSync(join(sandbox, KEPT_FILE), `kept by --keep at ${new Date().toISOString()}; its credential store was deleted.\n`);
   else rmSync(sandbox, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 }
 // Whatever a previous run left behind loses its credentials now, and loses everything unless it was kept on purpose.
-// A locked handle (measured 2026-09-19: a Serena language server kept the prior sandbox's workspace open past
-// process exit, so `rmSync` threw EPERM out of the sweep and the run died before starting) must never kill the
-// run: the sweep reports the leftover and continues, and the startup of THIS run re-sweeps it next time.
-for (const old of existsSync(SANDBOX_ROOT) ? readdirSync(SANDBOX_ROOT) : []) {
-  const dir = join(SANDBOX_ROOT, old);
-  try {
-    dropCredentials(dir);
-    if (!existsSync(join(dir, KEPT))) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-  } catch (cause) {
-    console.error(`warning: the previous sandbox could not be swept (${dir}): ${cause instanceof Error ? cause.message : String(cause)} — continuing with a fresh one.`);
-  }
+// A sandbox whose `OWNER` is a live process is a concurrent live run's, and is left alone with its key: the sweep
+// used to take every directory here for a leftover, and a run that started second deleted a running sibling's
+// workspace, store and key (`docs/defects/fixed/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`; the rule is
+// `lib/sandbox-sweep.mjs`'s). A locked handle (measured 2026-09-19: a Serena language server kept the prior sandbox's
+// workspace open past process exit, so `rmSync` threw EPERM out of the sweep and the run died before starting) must
+// never kill the run: the sweep reports the leftover and continues, and the startup of THIS run re-sweeps it next time.
+for (const left of sweepSandboxes(SANDBOX_ROOT, { dropCredentials })) {
+  if (left.action === 'leave') console.log(`sandbox sweep: left ${left.dir} — ${left.reason}`);
 }
 const sandbox = join(SANDBOX_ROOT, stamp);
 const workspace = join(sandbox, 'workspace');
 const local = join(sandbox, 'local');
+// `OWNER` first, before anything else goes in: from here on a concurrent run's sweep reads this sandbox as live.
+mkdirSync(sandbox, { recursive: true });
+writeOwner(sandbox);
 mkdirSync(workspace, { recursive: true });
 mkdirSync(local, { recursive: true });
 // An interrupt or a crash is an exit path too: it may not strand the key in the temp directory.
@@ -772,6 +782,10 @@ async function launch(name, extra, timeoutMs = 180_000) {
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${join(dir, 'app.log')}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   assertNoCredential(`${name}/app.log`, log);
+  // PD-MONITOR-002, live-run finding a71-9: no launch's log carries one of the four restatements `restated-facts.mjs`
+  // knows (main's repository, Git view and lease lines, `runSetupSteps`' success). A duplicate of another fact passes.
+  const restated = restatedFacts(log);
+  check(restated.length === 0, `${name}: none of the four known restatements reaches the application log`, restated.map((r) => `app.log line ${r.line}, ${r.fact} restated (its owner is the ${r.owner}): ${r.text}`).join(' | ') || undefined);
   return log;
 }
 /** The store as the run left it: the newest session, its rows, its events, and the totals across every session. */
@@ -828,7 +842,8 @@ function readSession() {
   } finally { db.close(); }
 }
 /**
- * Every tool call of one session with its `entry` parsed — `{ ordinal, tool_name, agent_name, status, args, result }`.
+ * Every tool call of one session with its `entry` parsed — `{ ordinal, tool_name, agent_name, status, args, result,
+ * elapsedMs, endedAt }`.
  *
  * The scenarios below assert from THIS and never from the model's prose. A run that says it ran a command and a
  * run that ran one are different facts, and only one of them is in the store.
@@ -841,16 +856,37 @@ function readToolCalls(sessionId) {
       .map((call) => {
         let entry = {};
         try { entry = JSON.parse(call.entry); } catch { /* a row that will not parse is still a call that happened */ }
-        return { ...call, args: entry.args ?? {}, result: String(entry.result ?? '') };
+        // `elapsed_ms` is the call's own duration and `timestamp` its end, both as the product recorded them.
+        // `call_id` and `failure_kind` are what an issue's `evidence_ref` and REQ-SESSION-136's mapping read (a71-6).
+        return { ...call, args: entry.args ?? {}, result: String(entry.result ?? ''), callId: typeof entry.call_id === 'string' ? entry.call_id : null, failureKind: typeof entry.failure_kind === 'string' ? entry.failure_kind : null, elapsedMs: typeof entry.elapsed_ms === 'number' ? entry.elapsed_ms : null, endedAt: typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : null };
       });
   } finally { db.close(); }
+}
+/**
+ * One session's own log (REQ-SESSION-142), read from the sandbox's store beside the database — the file `preserveRun`
+ * copies into the pack. Empty when the run wrote none at the sandbox's `session_log_level`.
+ */
+function readSessionLog(sessionId) {
+  const file = join(dirname(oneDatabase()), 'sessions', sessionId, 'session.log');
+  try { return existsSync(file) ? readFileSync(file, 'utf8') : ''; } catch { return ''; }
 }
 /** One session's `issues` rows — what the product itself recorded as having gone wrong, in its own words. */
 function readIssues(sessionId) {
   const Database = require('better-sqlite3');
   const db = new Database(oneDatabase(), { readonly: true });
-  try { return db.prepare('SELECT ordinal, id, kind, severity, actor, message FROM issues WHERE session_id = ? ORDER BY ordinal').all(sessionId); }
+  try { return db.prepare('SELECT ordinal, id, kind, severity, actor, message, evidence_ref FROM issues WHERE session_id = ? ORDER BY ordinal').all(sessionId); }
   finally { db.close(); }
+}
+/**
+ * REQ-SESSION-136 for the tool gate's own refusals (live-run finding a71-6): every call the gate refused as
+ * `invalid_request` — an unknown tool, unreadable arguments, a schema violation — is a failure in the record, and files
+ * a `tool_error` issue referencing it. The duress run of 2026-10-01 held two that no issue named. A run with no such
+ * call asked nothing, which is a NOTE, not a pass.
+ */
+function checkRefusalIssues(scenario, sessionId, calls) {
+  const { refused, unfiled } = refusalIssues(calls, readIssues(sessionId));
+  if (refused.length === 0) noted(`${scenario}: no call was refused at the tool gate as invalid_request`, 'REQ-SESSION-136\'s issue for such a refusal was not observed this run');
+  else check(unfiled.length === 0, `${scenario}: every call refused at the tool gate as invalid_request filed a tool_error issue referencing it`, unfiled.length === 0 ? `${refused.length} refusal(s), e.g. ordinal ${refused[0].ordinal} (${refused[0].tool_name})` : `${unfiled.length} of ${refused.length} filed none, e.g. ordinal ${unfiled[0].ordinal} (${unfiled[0].tool_name})`);
 }
 
 /**
@@ -949,8 +985,12 @@ function finish(code) {
   // including the budget gate's early stop, because a run that stopped early is exactly the one worth reading.
   results.store = preserveStore();
   results.evidence = scenarioEvidence;
-  results.traffic = proxy === null ? { recorded: false, reason: RECORD_TRAFFIC ? 'the proxy could not start' : '--no-record-traffic' } : { recorded: true, proxy: proxy.url, ...proxy.stats() };
+  // Closed BEFORE its figures are read: a call still in flight is written `in-flight at close` into its own
+  // scenario's file as the proxy closes, and the count below includes it (live-run finding H-g).
   closeProxy();
+  // The RUN's figures (`totals`), never the last launch's (`stats`): the `faults` scenario's closing `setFaults([])`
+  // empties the per-launch pair, and reading it here reported no fault fired in a run where three had (finding H4).
+  results.traffic = proxy === null ? { recorded: false, reason: RECORD_TRAFFIC ? 'the proxy could not start' : '--no-record-traffic' } : { recorded: true, proxy: proxy.url, ...proxy.totals() };
   results.passed = code === 0 && checks.every((c) => c.passed);
   writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
   // A red names the assertion, never the run.
@@ -1018,7 +1058,10 @@ const signIn = await launch('sign-in', {
   ROTARIS_CAPTURE_PROVIDER_EMPTY_OK: '1',
   ROTARIS_CAPTURE_WAIT: `file:${tokensFile}`, ROTARIS_CAPTURE_WAIT_MS: String(SIGN_IN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
 }, SIGN_IN_WAIT_MS + 90_000);
-const added = /providers: (Added .+?; discovered (\d+) model\(s\)\.)/.exec(signIn);
+// REQ-SHELL-044 (live-run L11): the count's noun agrees with it, and the literal "(s)" is never the product's.
+const added = /providers: (Added .+?; discovered (\d+) models?\.)/.exec(signIn);
+const literal = /providers: Added .+?; discovered \d+ model\(s\)\./.exec(signIn);
+check(literal === null, 'the sign-in notice words its model count without a literal "(s)" (REQ-SHELL-044)', literal?.[0] ?? added?.[1] ?? 'no outcome logged');
 check(existsSync(tokensFile), 'the credential file was written', tokensFile);
 if (!check(added !== null, 'the endpoint was added and its catalogue discovered', added?.[1] ?? (/provider dialog "Continue anyway" pressed/.test(signIn) ? 'the endpoint discovered no models and the zero-model recovery was taken' : 'the outcome was not logged'))) finish(1);
 const snapshot = existsSync(snapshotFile) ? readFileSync(snapshotFile, 'utf8') : '';
@@ -1061,9 +1104,12 @@ if (wanted.includes('ask')) {
   const log = await launch('ask', {
     ROTARIS_CAPTURE_PROMPT: 'Read src/todos.js in this workspace and reply, in one sentence, with the names of the functions it exports.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
+    // Acceptance A36: the inspector's ring caption, which `ask.png` showed denying the reading it stated one line above.
+    ROTARIS_CAPTURE_PROBE: '.inspector__ring-caption',
   }, RUN_WAIT_MS + 90_000);
   const requests = [...new Set((log.match(/model request POST (\S+)/g) ?? []).map((line) => line.replace('model request POST ', '')))];
-  check(log.includes(`credentials leased: ${PROVIDER_ID}`), 'main leased the bearer to the run host');
+  // The lease's report is the run host's (REQ-PROVIDER-068, `LeaseReportLog`); main no longer restates it (a71-9).
+  check(log.includes(`credentials: leased for ${PROVIDER_ID}`), 'main leased the bearer to the run host');
   // `appBaseUrl`, not the endpoint: the assertion is about what the PRODUCT did, and when the proxy is recording
   // the product was given the proxy. The traffic file below is what says the call reached the endpoint itself.
   check(requests.some((url) => url.startsWith(`${appBaseUrl}/chat/completions`)), 'a request reached the endpoint', requests.join(', '));
@@ -1077,6 +1123,9 @@ if (wanted.includes('ask')) {
   check(tools.length > 0 && tools.every((row) => row.settled === 1), 'every tool call settled', tools.map((row) => `${row.tool_name}:${row.tool_status}`).join(', '));
   check(/addTodo/.test(answer) && /toggleTodo/.test(answer), 'the answer names the functions the file exports', answer.trim().slice(0, 200));
   check(usage.length > 0, 'usage figures were recorded', JSON.stringify(usage[usage.length - 1] ?? null));
+  // Acceptance A36 (REQ-MONITOR-089/065): the run-level agent's caption states its own context window and never denies it.
+  const caption = JSON.parse(/capture: probe \.inspector__ring-caption → (\[.*\])\s*$/m.exec(log)?.[1] ?? '[]')[0]?.text ?? '';
+  check(/This agent's own context window: [\d,.\s]+ of [\d,.\s]+ tokens\./.test(caption) && !/does not carry/.test(caption), 'the inspector\'s ring caption states the reading and does not deny it', caption);
   /*
    * The recording is itself asserted, not assumed. A proxy that forwarded but recorded nothing would leave the
    * run green and the pack empty — the exact shape of gap this whole change exists to close — so the first
@@ -1103,7 +1152,7 @@ if (wanted.includes('edit')) {
   const log = await launch('edit', {
     // One run, several mechanisms at once: the implementation and its tests are written by two children working in
     // PARALLEL, each under a declared write scope (PD-TOOLS-006), and priced at configured rates (PD-MONITOR-001).
-    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js and export it, and add tests for it to src/todos.test.js. Do the two in parallel: in ONE turn, delegate two coding-agent children in the background, one for the implementation with write_scope ["src/todos.js"] and one for the tests with write_scope ["src/todos.test.js"], then wait for both with wait_for_tasks. Afterwards run `node --test` in the terminal yourself and tell me whether it passed. Delegate nothing else, and answer as soon as the suite has run.',
+    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js and export it, and add tests for it to src/todos.test.js. Do the two in parallel: in ONE turn, delegate two coding-agent children in the background, one for the implementation with write_scope ["src/todos.js"] and one for the tests with write_scope ["src/todos.test.js"], then wait for both with wait_for_tasks. You hold no terminal, so tell each child to run `node --test` in the terminal before it reports, and tell me whether the suite passed. Delegate nothing else, and answer as soon as both have reported.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
   }, EDIT_WAIT_MS + 90_000);
   check(!/capture: wait for result timed out/.test(log), 'the run reached its result inside the wait');
@@ -1115,7 +1164,19 @@ if (wanted.includes('edit')) {
   const suite = readFileSync(join(workspace, 'src', 'todos.test.js'), 'utf8');
   check(read?.session.execution_status === 'completed', 'the session completed', `${read?.session.execution_status} (${read?.session.stop_reason})`);
   check(tools.length > 0 && tools.every((row) => row.settled === 1), 'every tool call settled', names.join(', '));
-  check(names.includes('terminal'), 'the agent ran the suite through the terminal tool', names.join(', '));
+  /*
+   * Who ran the suite, read from the store. The orchestrator is `coordinator_only` (REQ-ORCH-029), and that control
+   * removes `terminal` from its tool set (REQ-TOOLS-006), so the prompt asks the CHILDREN to run it. This check once
+   * read "the agent ran the suite through the terminal tool" over a prompt asking the orchestrator to run it
+   * "yourself", and passed on the children's calls while the thing it named never happened (live-run finding H3).
+   */
+  const calls = read ? readToolCalls(read.session.session_id) : [];
+  const suiteCalls = calls.filter((c) => c.tool_name === 'terminal' && /\bnode\s+--test\b/.test(String(c.args.command ?? '')));
+  const ROOT = 'orchestrator';
+  check(suiteCalls.some((c) => c.agent_name !== ROOT), 'a child ran `node --test` through the terminal tool', suiteCalls.length === 0 ? `no terminal call ran node --test; tools used: ${names.join(', ')}` : [...new Set(suiteCalls.map((c) => c.agent_name))].join(', '));
+  // At least one call by ROOT is required too: a renamed entry agent would otherwise pass this vacuously.
+  const rootCalls = calls.filter((c) => c.agent_name === ROOT);
+  check(rootCalls.length > 0 && !rootCalls.some((c) => c.tool_name === 'terminal'), 'the orchestrator made no terminal call (REQ-TOOLS-006 coordinator_only)', `${rootCalls.length} orchestrator call(s)`);
   // REQ-MONITOR-102: the session's own counter is SESSION-wide, so it must agree with the ring the gate wrote
   // across every agent that dispatched. The first live run found it holding the entry agent's calls alone, which
   // left the Overview card short and the synthetic run row reading zero on any run that delegated.
@@ -1138,7 +1199,6 @@ if (wanted.includes('edit')) {
    * A write the gate refused for a scope is RECORDED rather than required — whether a model tries to cross a claim is
    * its choice — but every such refusal must name its holder, in the directive's words.
    */
-  const calls = read ? readToolCalls(read.session.session_id) : [];
   const scoped = calls.filter((c) => c.tool_name === 'delegate' && Array.isArray(c.args.write_scope) && c.args.write_scope.length > 0);
   const scopedIds = scoped.map((c) => /task_id: (bg_[0-9a-f]{8})/.exec(c.result)?.[1]).filter((id) => id !== undefined);
   check(scopedIds.length >= 2, 'two children were delegated with a write scope each (PD-TOOLS-006)', scoped.map((c) => `${c.args.task_name}: ${JSON.stringify(c.args.write_scope)}`).join('; ') || 'no delegate carried a write_scope');
@@ -1523,11 +1583,27 @@ if (wanted.includes('frictions')) {
   const resultOf = (call) => String(entryOf(call).result ?? '');
   const argsOf = (call) => entryOf(call).args ?? {};
   const writeOp = calls.filter((call) => call.tool_name === 'write_file' && call.status !== 'ok' && resultOf(call).includes('requires an operation'));
+  if (read) checkRefusalIssues('frictions', read.session.session_id, readToolCalls(read.session.session_id));
   check(writeOp.length === 0, 'write_file needed no operation repair on first use', writeOp.length === 0 ? 'no refusal in the record' : `${writeOp.length} refusal(s), e.g. ordinal ${writeOp[0].ordinal} (${writeOp[0].agent_name})`);
+  // Live-run finding L6: `probe-ok\n` was reported "2 line(s) created". A final newline ends a line, so every create
+  // reports the lines its content holds as `wc -l` counts them, plus an unterminated last line.
+  const linesIn = (text) => (text === '' ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0));
+  const creates = calls.filter((call) => call.tool_name === 'write_file' && call.status === 'ok' && argsOf(call).operation === 'create' && typeof argsOf(call).content === 'string');
+  const miscounted = creates.filter((call) => { const reported = /: (\d+) line\S* created/.exec(resultOf(call)); return reported === null || Number(reported[1]) !== linesIn(argsOf(call).content); });
+  if (creates.length === 0) noted('no write_file create settled ok, so its line count was not observed', names.join(', '));
+  else check(miscounted.length === 0, 'every write_file create reported the lines its content holds (a final newline ends a line)', miscounted.length === 0 ? `${creates.length} settled, e.g. ${JSON.stringify(resultOf(creates[0]).split(' (sha256')[0])} for ${JSON.stringify(argsOf(creates[0]).content)}` : `ordinal ${miscounted[0].ordinal}: ${JSON.stringify(resultOf(miscounted[0]).slice(0, 120))} for ${JSON.stringify(argsOf(miscounted[0]).content)}`);
   const signalled = calls.some((call) => call.tool_name === 'terminal' && argsOf(call).session_action === 'send_signal');
   check(signalled, 'the probe run attempted the SIGINT stop', signalled ? 'send_signal dispatched' : 'no send_signal in the record — the model did not attempt it');
   const sigint = calls.filter((call) => call.tool_name === 'terminal' && resultOf(call).includes('cannot be delivered'));
   check(sigint.length === 0, 'SIGINT was delivered without a platform refusal', sigint.length === 0 ? 'no refusal in the record' : `${sigint.length} refusal(s), e.g. ordinal ${sigint[0].ordinal} (${sigint[0].agent_name})`);
+  // Live-run finding L4 (OQ-133): the session the agent stopped with its own signal read `failed (exit -1)`, an error
+  // that filed a tool_error. It reads `killed` now; a `failed (exit -1)` anywhere in the record is the old shape.
+  const signalDeath = calls.filter((call) => call.tool_name === 'terminal' && /is failed \(exit -1\)/.test(resultOf(call)));
+  const readKilled = calls.filter((call) => call.tool_name === 'terminal' && /is killed \(exit -1\)/.test(resultOf(call)));
+  // Neither shape in the record means the model never read the session back after its signal: nothing was observed
+  // about the product, so it is a NOTE, not a pass.
+  if (signalDeath.length === 0 && readKilled.length === 0) noted("no background session's end was read back after the agent's signal", signalled ? 'the model did not query the session after send_signal, so the status of its signal death was not observed' : 'no send_signal in the record');
+  else check(signalDeath.length === 0, "no background session read failed (exit -1) after the agent's signal", signalDeath.length === 0 ? `${readKilled.length} observation(s) read killed (exit -1)` : `ordinal ${signalDeath[0].ordinal} (${signalDeath[0].agent_name})`);
   // The probe file served its purpose in the record above; the sandbox stays clean for the scenarios after it.
   if (read) {
     check(existsSync(join(workspace, 'friction-probe.txt')), 'the probe file landed in the workspace', 'friction-probe.txt');
@@ -1550,8 +1626,10 @@ if (wanted.includes('frictions')) {
  * evidence about anything:
  *
  *   faults-ladder — a 429 on the second completion and a 500 on the third. Neither reaches the endpoint, so
- *                   this costs the owner nothing but the retries. The question is REQ-ORCH-092's: does the
- *                   ladder wait, fall back, and still finish?
+ *                   this costs the owner nothing but the retries. The question: does the run survive both, and
+ *                   does each leave the trace of the layer that retried it? OQ-110 (2026-09-29) ruled the
+ *                   dispatch layer's retries (REQ-CONFIG-086) come before the ladder's (REQ-ORCH-091/092), so
+ *                   with its default budget of 5 the ladder is not reached and the trace is the session log's.
  *   faults-stall  — the bytes stop mid-stream on the second completion and the socket stays open. The question
  *                   is the eighty-second defect's: a model timeout once collapsed into the same `aborted` flag
  *                   a user's stop sets, and the run reported itself `user_cancelled` with nobody having
@@ -1580,10 +1658,33 @@ if (wanted.includes('faults')) {
     checkPricing('faults-ladder', ladderRead?.session);
     check(ladderFired.length === 2, 'both injected refusals reached the product', `${ladderFired.length} of 2 fired; statuses recorded: ${injected.join(', ') || 'none'}`);
     check(ladderRead?.session.execution_status === 'completed', 'the run completed despite a 429 and a 500', `${ladderRead?.session.execution_status} (${ladderRead?.session.stop_reason})`);
-    // A ladder that waited and retried made MORE calls than the faults it was given; one that gave up made fewer.
-    check(ladderTraffic.length > injected.length, 'the ladder retried past the refusals rather than giving up', `${ladderTraffic.length} call(s) for ${injected.length} refusal(s)`);
+    /*
+     * WHO retried each refusal, read from the product's own record — never from the traffic alone.
+     *
+     * This check once read "the ladder retried past the refusals rather than giving up" and passed on the call count:
+     * more calls than refusals. The first live run's 429 and 500 were retried by the model client's dispatch layer
+     * before the ladder saw either, so it passed with the ladder never reached (live-run finding H3). OQ-110 ruled
+     * that order the specification's — REQ-CONFIG-086's `num_retries` (default 5) first, REQ-ORCH-091/092's ladder
+     * when they are exhausted — and made the dispatch layer's retries visible: one WARNING line per absorbed retry in
+     * the session log, naming the status it met. So each injected refusal must be answered by a trace one of the two
+     * layers leaves: that session-log line, or the ladder's own `issues` row (`model_wait` for a 429,
+     * `transient_llm_error` for a 500). Which layer it was is noted, not required.
+     */
+    const ladderLog = ladderRead === null ? '' : readSessionLog(ladderRead.session.session_id);
+    const absorbed = [...ladderLog.matchAll(/model request retried by the dispatch layer: .*? met HTTP (\d{3}) and waited (\d+) ms before retry (\d+) of (\d+)/g)]
+      .map((m) => ({ status: Number(m[1]), waitedMs: Number(m[2]), attempt: Number(m[3]), of: Number(m[4]) }));
+    const ladderIssues = ladderRead === null ? [] : readIssues(ladderRead.session.session_id).filter((issue) => issue.kind === 'model_wait' || issue.kind === 'transient_llm_error');
+    const unanswered = [...injected];
+    for (const retry of absorbed) { const at = unanswered.indexOf(retry.status); if (at !== -1) unanswered.splice(at, 1); }
+    const byLadder = { 429: 'model_wait', 500: 'transient_llm_error' };
+    for (const issue of ladderIssues) { const at = unanswered.findIndex((status) => byLadder[status] === issue.kind); if (at !== -1) unanswered.splice(at, 1); }
+    check(injected.length > 0 && unanswered.length === 0, 'each injected refusal was retried, read from the session log\'s dispatch-layer lines or the ladder\'s issues (OQ-110)',
+      `${injected.length} refusal(s) (${injected.join(', ') || 'none'}); dispatch layer: ${absorbed.map((r) => `HTTP ${r.status} waited ${r.waitedMs} ms, retry ${r.attempt} of ${r.of}`).join('; ') || 'no line'}; ladder: ${ladderIssues.map((issue) => issue.kind).join(', ') || 'no issue'}${unanswered.length === 0 ? '' : `; no trace for ${unanswered.join(', ')}`}; ${ladderTraffic.length} call(s) recorded`);
+    noted('which layer retried the refusals', ladderIssues.length === 0
+      ? `the dispatch layer alone (${absorbed.length} absorbed retr${absorbed.length === 1 ? 'y' : 'ies'}); the ladder was not reached, as OQ-110 rules for a budget that was not exhausted`
+      : `the ladder recorded ${ladderIssues.map((issue) => issue.kind).join(', ')} after the dispatch layer's ${absorbed.length} retr${absorbed.length === 1 ? 'y' : 'ies'}`);
     if (ladderRead) preserveRun('faults-ladder', ladderRead.session.session_id);
-    results.scenarios['faults-ladder'] = { fired: ladderFired, injected, calls: ladderTraffic.length, status: ladderRead?.session.execution_status, stopReason: ladderRead?.session.stop_reason };
+    results.scenarios['faults-ladder'] = { fired: ladderFired, injected, calls: ladderTraffic.length, dispatchRetries: absorbed, ladderIssues: ladderIssues.map((issue) => ({ kind: issue.kind, message: issue.message })), status: ladderRead?.session.execution_status, stopReason: ladderRead?.session.stop_reason };
     await budgetGate();
 
     /*
@@ -1596,7 +1697,16 @@ if (wanted.includes('faults')) {
      */
     const HOLD_MS = Number(process.env['LIVE_RUN_STALL_HOLD_MS'] ?? 300_000);
     proxy.setFaults([{ kind: 'stall', at: 2, afterChunks: 2, holdMs: HOLD_MS }]);
+    /*
+     * A third photograph between the entry agent's stall threshold (90 s of silence) and the product's idle bound (120 s),
+     * so the pack shows what a surface drew while the root was stalled — the inspector follows it, and its meta line ends
+     * with the watch's figure (REQ-ORCH-089, OQ-153). The other two are `launch`'s own fifth and three fifths.
+     */
+    const stallDir = scenarioDir('faults-stall');
+    const stallShots = [['early', Math.round(RUN_WAIT_MS * 0.2)], ['stalled', 115_000], ['mid', Math.round(RUN_WAIT_MS * 0.6)]]
+      .map(([tag, at]) => `${join(stallDir, `faults-stall.${tag}.png`)}@${at}`).join(';;');
     const stalled = await launch('faults-stall', {
+      ROTARIS_CAPTURE_PNG_AT: stallShots,
       ROTARIS_CAPTURE_PROMPT: PROMPT,
       ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
     }, RUN_WAIT_MS + 120_000);
@@ -1625,6 +1735,14 @@ if (wanted.includes('faults')) {
       // The eighty-second defect's signature: nobody pressed stop, so nothing may say the user cancelled.
       check(stallRead.session.stop_reason !== 'user_cancelled', 'a stalled stream is not reported as a user cancellation', `stop_reason ${stallRead.session.stop_reason} (${stallRead.session.execution_status})`);
       if (noticed.length > 0) check(noticed.every((issue) => issue.kind !== 'fatal_llm_error'), 'the stalled stream was classified transient, not fatal', noticed.map((issue) => issue.kind).join(', '));
+      /*
+       * REQ-MONITOR-117/119 (the repair of `a-stalled-child-is-never-shown-stalled.md`): the stalled call is the entry
+       * agent's, and "each agent is evaluated for a stall". Its watch's threshold (90 s by default) falls inside the product's
+       * idle bound (120 s), so before the call is given up on the watch must have written REQ-MONITOR-119's `stall` issue for
+       * the root, in its own words. Until 2026-09-30 the root had no watch, and nothing was written until the bound fired.
+       */
+      const rootStall = issues.filter((issue) => issue.kind === 'stall' && /^agent appears stalled: no model event or token for \d+ seconds/.test(String(issue.message ?? '')));
+      check(rootStall.length > 0, 'the entry agent\'s stall watch reported the stalled stream before the idle bound (REQ-MONITOR-117/119)', rootStall.length > 0 ? `${rootStall.length} \`stall\` issue(s) for ${rootStall[0].actor ?? '?'}; first: ${String(rootStall[0].message).slice(0, 120)}` : `no \`stall\` issue among ${issues.length}`);
       noted('what the stalled run settled as', `${stallRead.session.execution_status} / ${stallRead.session.stop_reason} after ${stallRead.session.iterations_completed} iteration(s)`);
       preserveRun('faults-stall', stallRead.session.session_id);
       results.scenarios['faults-stall'] = { fired: stallFired, holdMs: HOLD_MS, status: stallRead.session.execution_status, stopReason: stallRead.session.stop_reason, issues: issues.map((issue) => ({ kind: issue.kind, severity: issue.severity, message: issue.message })) };
@@ -1637,7 +1755,7 @@ if (wanted.includes('faults')) {
 
 // ── 8. The terminal under duress ─────────────────────────────────────────────────────────────────────────
 /**
- * Six shapes the record NAMES, replayed; never a plausible family resembling them.
+ * The shapes the record NAMES, replayed; never a plausible family resembling them.
  *
  * `codebase.md` states why that distinction is the whole scenario: sixty real-PTY runs at four geometries could
  * not reproduce a concatenation the live run had shown, and the trigger the sixty missed was narrow — an empty
@@ -1650,7 +1768,13 @@ if (wanted.includes('faults')) {
  * |---|---|
  * | `here-string`   | a multi-line command lost its newlines in the PTY, so a here-string never terminated |
  * | `long-output`   | the concatenation above, and the agent's capture VT-stripped where the window's was not |
+ * | `replaces-shell` | acceptance finding A9 — `a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`: `exec bash` kept the pid and never returned to the end frame, so it read as a soft pause and every later call ran under bash (POSIX only; OQ-144) |
+ * | `unexpandable`  | live-run finding L1 — `a-posix-command-that-fails-to-expand-loses-its-end-marker.md`: a bash-ism dash cannot expand abandoned the wrapper's end frame, so a finished command read as a soft pause (POSIX only) |
+ * | `ends-shell`    | `a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md` (OQ-144's sibling case): `exit 3` ended the shell, so no end frame printed and it read as a soft pause, and the next call ran in a fresh shell reporting `session_reinitialized` false (POSIX only) |
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
+ * | `poll`          | live-run finding L2 — `an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md`: an empty poll returned at once and said thirty seconds had passed |
+ * | `interrupt`     | `a-poll-after-c-c-says-the-interrupted-command-is-still-running.md` (OQ-147): `C-c` with `is_input`, REQ-TOOLS-098's other advice, and the poll after it read "still running" over a process the interrupt had ended |
+ * | `wedge-again`, `behind-paused` | `a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md` (live-run finding a71-8, OQ-164): a command issued while another is soft-paused waited behind it and said only its own exit, and the paused command's end was never reported |
  * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — PD-TOOLS-003's capitals-only marker, and a real regression guard |
  * | `diff-exit-1`   | `git-diff-with-differences-read-as-a-failure.md` — ESC-41's carve-out, and a real regression guard |
  * | `pipe-to-shell` | `a-read-only-git-pipeline-was-withheld-by-the-pipe-to-shell-rule.md` — also cost, not contradiction |
@@ -1674,7 +1798,7 @@ if (wanted.includes('terminal')) {
     'Do not rewrite them, do not split them, do not add a timeout argument, and do not skip one because you',
     'expect it to fail — a failure is the answer for some of them. Report what each did in one line.',
     '',
-    ...SHAPES.map((shape, i) => `${i + 1}. ${shape.command}`),
+    ...SHAPES.map((shape, i) => `${i + 1}. ${shape.prompt ?? shape.command}`),
   ].join('\n');
   const log = await launch('terminal', {
     ROTARIS_CAPTURE_PROMPT: PROMPT,
@@ -1687,6 +1811,12 @@ if (wanted.includes('terminal')) {
   const terminals = calls.filter((call) => call.tool_name === 'terminal');
   const shapeOf = (id) => SHAPES.find((shape) => shape.id === id);
   const attempted = (id) => terminals.filter((call) => shapeOf(id).match.test(String(call.args.command ?? '')));
+  // Reaching a result is not reaching the terminal: a run that ended `failed` before any terminal call asked none of the
+  // questions below, and each would read as a NOTE over a green run (`terminalRunEndReading`).
+  const runEnd = terminalRunEndReading(read?.session ?? null, terminals.length);
+  check(runEnd.kind === 'ended' || runEnd.kind === 'failed-later' || runEnd.kind === 'ended-early', 'the terminal run did not end failed before any terminal call', runEnd.detail);
+  if (runEnd.kind === 'failed-later') noted('the terminal run ended failed after reaching the terminal', `${runEnd.detail}; the shapes it did not reach read as not attempted`);
+  if (runEnd.kind === 'ended-early') noted('the terminal run ended before any terminal call', `${runEnd.detail}; every shape reads as not attempted`);
   const seen = {};
   for (const shape of SHAPES) seen[shape.id] = attempted(shape.id).length;
   noted('what the model attempted', SHAPES.map((s) => `${s.id}×${seen[s.id]}`).join(', '));
@@ -1718,6 +1848,82 @@ if (wanted.includes('terminal')) {
     check(!reading.escaped, 'the agent read a VT-stripped capture', reading.escaped ? 'an escape sequence survived into the recorded result' : 'no escape sequence in the recorded result');
   }
 
+  // Acceptance A9 (OQ-144): a command that replaces the session's shell ends at once as an execution_error, and the session
+  // is restarted on its own shell. POSIX only (`terminalShapes`); on Windows nothing is asked: not applicable, not a NOTE.
+  const replaced = shapeOf('replaces-shell') === undefined ? undefined : attempted('replaces-shell')[0];
+  const replacedReading = replaced === undefined ? null : replacedShellReading(replaced.result, replaced.elapsedMs ?? NaN);
+  if (shapeOf('replaces-shell') !== undefined) {
+    if (replaced === undefined) noted('the shell replacement was not attempted', 'no terminal call carried `exec bash`; the watch is unasked');
+    else {
+      const d = diagnosticOf(replaced.result);
+      const elapsed = replaced.elapsedMs ?? NaN;
+      const said = `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}, ${Number.isFinite(elapsed) ? Math.round(elapsed) : '?'} ms`;
+      if (replacedReading.kind === 'not-replaced') noted('`exec bash` replaced nothing', `the watch is unasked this run: ${said}`);
+      else {
+        check(replacedReading.kind !== 'paused', 'a command that replaced the shell did not read as a soft pause', said);
+        check(replacedReading.kind === 'restarted', 'it ended at once as an execution_error that says the shell was replaced', said);
+        if (replacedReading.kind === 'restarted') check(replacedReading.killStatus === 'session_reset', 'the session was restarted on its own shell', `kill_status ${replacedReading.killStatus ?? 'none'}`);
+      }
+    }
+  }
+
+  // Live-run L1: the command ends at once with the shell's own error status, never a soft pause after the window. The
+  // shape exists only off win32 (`terminalShapes`), so on Windows nothing is asked here: not applicable, not a NOTE.
+  // The guard is credited only where a shell refused the expansion (`unexpandableReading`). Until the verifier's second
+  // round the three checks ran on any result, and a line bash had expanded (the model had run `exec bash` first) passed
+  // all three with the guard never asked.
+  if (shapeOf('unexpandable') !== undefined) {
+    const unexpandable = attempted('unexpandable')[0];
+    if (unexpandable === undefined) noted('the unexpandable bash-ism was not attempted', 'no terminal call carried it; the wrapper\'s guard is unasked');
+    else {
+      const d = diagnosticOf(unexpandable.result);
+      const elapsed = unexpandable.elapsedMs ?? NaN;
+      const reading = unexpandableReading(unexpandable.result, elapsed);
+      const said = `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}, output ${JSON.stringify(reading.printed.slice(0, 120))}`;
+      // Acceptance A9: after a replacement the product restarted, the next command meets `/bin/sh` again. Where that is
+      // dash, a bash-ism expanded after it means the session stayed in bash — the verifier's live run of 2026-09-29.
+      // Only the SAME agent's next command asks it: each agent has its own foreground session (REQ-TOOLS-187), so a
+      // bash-ism another agent ran met a shell nothing had replaced, and the pack of 2026-09-30T16-57 passed this check
+      // with no restart observed (acceptance round 1's second verifier). Another agent's command is a NOTE.
+      const followed = replacedReading?.kind === 'restarted' && replaced.ordinal < unexpandable.ordinal && !/bash$/.test(realpathSync('/bin/sh'));
+      if (followed && replaced.agent_name === unexpandable.agent_name) check(reading.kind !== 'expanded', 'the command after the shell was replaced ran in /bin/sh, not in the program that replaced it', said);
+      else if (followed) noted('the restart was not observed by a later command', `\`exec bash\` ran in ${replaced.agent_name} and the bash-ism in ${unexpandable.agent_name}, whose foreground session is its own (REQ-TOOLS-187)`);
+      if (reading.kind === 'expanded') noted('the shell expanded the bash-ism', `the guard is unasked this run: ${said}`);
+      else if (reading.kind === 'other') noted('the bash-ism met neither a refusal nor an expansion', `the guard is unasked this run: ${said}`);
+      else {
+        check(reading.kind === 'refused', 'the shell refused to expand the line, and the call ended with its nonzero status', said);
+        check(d?.outcome_kind !== 'soft_pause' && d?.exit_code !== -1, 'a command sh could not expand ended with its own status, not a soft pause', `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}`);
+        check(Number.isFinite(elapsed) && elapsed < 30_000, 'it ended inside the no-output window rather than after it', `${Number.isFinite(elapsed) ? Math.round(elapsed) : '?'} ms`);
+        check(/\bran\b/.test(reading.printed), 'what the line printed before its error came back', `output ${JSON.stringify(reading.printed.slice(0, 120))}`);
+      }
+    }
+  }
+
+  // OQ-144's sibling case: a command that ends the session's shell ends at once as an execution_error, the shell is
+  // respawned, and the same agent's next call says the session was reinitialized. POSIX only (`terminalShapes`).
+  if (shapeOf('ends-shell') !== undefined) {
+    const ended = attempted('ends-shell')[0];
+    if (ended === undefined) noted('the shell exit was not attempted', 'no terminal call carried `exit 3`; the exit watch is unasked');
+    else {
+      const d = diagnosticOf(ended.result);
+      const elapsed = ended.elapsedMs ?? NaN;
+      const reading = endedShellReading(ended.result, elapsed);
+      const said = `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}, ${Number.isFinite(elapsed) ? Math.round(elapsed) : '?'} ms`;
+      if (reading.kind === 'other') noted('`exit 3` met neither a respawn nor a pause', said);
+      else {
+        check(reading.kind !== 'paused', 'a command that ended the shell did not read as a soft pause', said);
+        check(reading.kind === 'restarted', 'it ended at once as an execution_error that says the shell ended', said);
+        if (reading.kind === 'restarted') {
+          check(reading.killStatus === 'session_reset', 'the shell was respawned', `kill_status ${reading.killStatus ?? 'none'}`);
+          // Only the SAME agent's next call ran in the respawned shell: each agent's foreground session is its own (REQ-TOOLS-187).
+          const next = terminals.find((call) => call.ordinal > ended.ordinal && call.agent_name === ended.agent_name && call.args.is_input !== true && call.args.background !== true && call.args.session_action === undefined && String(call.args.command ?? '') !== '');
+          if (next === undefined) noted('no later command of the same agent followed the shell exit', 'what the next call reports is unasked');
+          else check(diagnosticOf(next.result)?.session_reinitialized === true, 'the next command the same agent issued reported the session reinitialized', `ordinal ${next.ordinal}: session_reinitialized ${String(diagnosticOf(next.result)?.session_reinitialized ?? 'absent')}`);
+        }
+      }
+    }
+  }
+
   const wedge = attempted('wedge')[0];
   if (wedge === undefined) noted('the wedge was not attempted', 'no terminal call carried it; the hard cap is unasked');
   else {
@@ -1732,6 +1938,61 @@ if (wanted.includes('terminal')) {
       // PD-TOOLS-001: the reset must say what it lost AND what it put back, never be silent about the shell.
       check(/restored|failed|no earlier shell state/.test(wedge.result), 'the reset reported what it restored', 'the detail names the shell state');
     } else noted('the wedge did not reach the hard cap', 'it soft-paused first; the hard bound is unmeasured this run');
+  }
+
+  // Live-run L2: the first poll after the wedge. What it says it waited must be no more than the time between the wedge's
+  // end and its own, both as the product recorded them; the no-output window it never waited out must not be claimed.
+  const poll = wedge === undefined ? undefined
+    : terminals.find((call) => call.ordinal > wedge.ordinal && String(call.args.command ?? '') === '' && call.args.is_input !== true && call.args.session_action === undefined && call.args.background !== true);
+  if (poll === undefined) noted('no poll followed the wedge', 'no empty-command call after it; what a poll states is unasked');
+  else {
+    const d = diagnosticOf(poll.result);
+    const since = /No new output in (under 0\.1|\d+\.\d) seconds since the previous observation/.exec(poll.result);
+    const gapMs = poll.endedAt !== null && wedge.endedAt !== null ? poll.endedAt - wedge.endedAt : null;
+    if (d?.outcome_kind !== 'soft_pause' || (outputOf(poll.result) ?? '').trim() !== '(no output)') noted('the poll did not find the wedge silent', `outcome ${d?.outcome_kind ?? 'none'}; what an empty poll states is unasked`);
+    else {
+      check(!/No output for 30 seconds/.test(poll.result), 'an empty poll did not claim the no-output window it never waited out', /No output for 30 seconds/.test(poll.result) ? 'it said "No output for 30 seconds"' : 'no window claimed');
+      const claimed = since === null ? null : since[1] === 'under 0.1' ? 0 : Number(since[1]) * 1000;
+      check(claimed !== null && gapMs !== null && claimed <= gapMs + 100, 'what the poll said it waited is no more than the time that passed', `stated ${since?.[1] ?? 'nothing'} s, ${gapMs === null ? '?' : Math.round(gapMs)} ms between the wedge's end and the poll's`);
+    }
+  }
+
+  // OQ-147: the interrupt and the first poll after it. The poll must hand the interrupted wedge over as ended — exit −1,
+  // an execution_error saying it ended without a status of its own — and never as still running.
+  const interrupt = wedge === undefined ? undefined
+    : terminals.find((call) => call.ordinal > wedge.ordinal && call.args.is_input === true && shapeOf('interrupt').match.test(String(call.args.command ?? '')));
+  const interruptPoll = interrupt === undefined ? undefined
+    : terminals.find((call) => call.ordinal > interrupt.ordinal && String(call.args.command ?? '') === '' && call.args.is_input !== true && call.args.session_action === undefined && call.args.background !== true);
+  if (interrupt === undefined) noted('the interrupt was not attempted', 'no C-c with is_input followed the wedge; what a poll after it reads is unasked');
+  else if (interruptPoll === undefined) noted('no poll followed the interrupt', 'no empty-command call after the C-c; what it reads is unasked');
+  else {
+    const reading = interruptedPollReading(interruptPoll.result);
+    const said = `outcome ${reading.outcome ?? 'none'}, exit ${reading.exit ?? 'none'}, ${interruptPoll.endedAt !== null && interrupt.endedAt !== null ? Math.round(interruptPoll.endedAt - interrupt.endedAt) : '?'} ms after the interrupt`;
+    if (reading.kind === 'ended-own') noted('the wedge had ended before the interrupt', `the interrupt reached nothing still running: ${said}`);
+    else if (reading.kind === 'other') noted('the poll after the interrupt met neither an end nor a pause', said);
+    else {
+      check(reading.kind !== 'still-running', 'a poll after C-c did not read the interrupted command as still running', said);
+      check(reading.kind === 'ended', 'it handed the command over as ended without an exit status of its own (OQ-147)', said);
+    }
+  }
+
+  // OQ-164: the command issued while `wedge-again` was soft-paused reports the paused command's end — never the autopsy's
+  // silence. Only when the second wedge did soft-pause first and the same agent issued the command behind it.
+  const again = attempted('wedge-again')[0];
+  const behindPaused = attempted('behind-paused')[0];
+  if (again === undefined || behindPaused === undefined) noted('the command behind a soft-paused one was not attempted', `wedge-again×${seen['wedge-again']}, behind-paused×${seen['behind-paused']}; OQ-164's report is unasked`);
+  else if (diagnosticOf(again.result)?.outcome_kind !== 'soft_pause') noted('the second wedge did not soft-pause', `outcome ${diagnosticOf(again.result)?.outcome_kind ?? 'none'}; nothing was paused when the next command came`);
+  else if (again.agent_name !== behindPaused.agent_name || behindPaused.ordinal < again.ordinal) noted('the command behind the second wedge ran elsewhere', `wedge-again in ${again.agent_name}, behind-paused in ${behindPaused.agent_name}; each agent's foreground session is its own (REQ-TOOLS-187)`);
+  else {
+    const reading = pausedBehindReading(behindPaused.result);
+    const said = `${reading.kind}, ${String(diagnosticOf(behindPaused.result)?.detail ?? '').slice(0, 240)}`;
+    if (reading.kind === 'still-running') noted('the command behind the second wedge soft-paused in turn', said);
+    else if (reading.kind === 'other') noted('the command behind the second wedge carried no diagnostic', said);
+    else {
+      check(reading.kind !== 'silent', 'a command issued behind a soft-paused one did not leave the paused command\'s end unreported (OQ-164)', said);
+      check(reading.kind === 'reported', 'its observation named the paused command and how it ended', said);
+      if (reading.kind === 'reported') check(/slept/.test(String(behindPaused.result)), 'what the paused command wrote came with its end', /slept/.test(String(behindPaused.result)) ? '`slept` present' : '`slept` absent');
+    }
   }
 
   const failedWord = attempted('failed-word')[0];
@@ -1774,7 +2035,7 @@ if (wanted.includes('terminal')) {
     platform: process.platform, status: read?.session.execution_status, stopReason: read?.session.stop_reason,
     attempted: seen, terminalCalls: terminals.length,
     diagnostics: SHAPES.map((shape) => {
-      const call = attempted(shape.id)[0];
+      const call = shape.id === 'poll' ? poll : shape.id === 'interrupt' ? interruptPoll : attempted(shape.id)[0];
       return { id: shape.id, command: shape.command, ...(call === undefined ? { attempted: false } : { attempted: true, ordinal: call.ordinal, status: call.status, diagnostic: diagnosticOf(call.result) }) };
     }),
   };
@@ -1799,7 +2060,9 @@ if (wanted.includes('terminal')) {
  * scenario cheap to write and hard to fool. What the model produced is NOT asserted: a weak model doing the work
  * badly is a fact about the model.
  *
- * Its wall clock is `LIVE_RUN_DURESS_MS` (default 40 minutes, the owner's figure of 2026-09-22).
+ * Its wall clock is `LIVE_RUN_DURESS_MS` (default 40 minutes, the owner's figure of 2026-09-22). An overrun says where
+ * the time went, and one the endpoint held while the run was still progressing is a NOTE that the window was the bound,
+ * not a failure of the product (live-run finding H-h; `lib/duress-checks.mjs`, AGENTS.md "`LIVE_RUN_DURESS_MS`").
  *
  * **The fixture question, ruled rather than left open (2026-09-22, delegated by the owner): the default stays
  * `todo-app`, and the LENGTH comes from the work asked for rather than from the tree's weight.** A bigger
@@ -1845,8 +2108,27 @@ if (wanted.includes('duress')) {
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(DURESS_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
   }, DURESS_MS + 180_000);
   const elapsed = Date.now() - startedAt;
-  check(!/capture: wait for result timed out/.test(log), 'the long run reached its result inside the wait', `${Math.round(elapsed / 1000)} s of ${Math.round(DURESS_MS / 1000)} s`);
   const read = readSession();
+  /*
+   * Where the wait went, from the traffic (each call's interval at the endpoint) and the store (each tool call's), so
+   * an overrun says whose it was (live-run finding H-h). The first execution failed at 2,406 s of 2,400 s with nothing
+   * beside the two figures, and a request was open at the endpoint for all but seven seconds of it. An overrun while
+   * the run was still progressing and the product held almost none of the wait is the WINDOW's bound — a NOTE, and
+   * `LIVE_RUN_DURESS_MS` is what asks the longer question; the owner's forty minutes stay the default (AGENTS.md).
+   * "Still progressing" is read only from what ENDED ON ITS OWN before the wait ran out — a request the quit cut off
+   * ends at the quit whatever it was doing, so a stream hung from early in the wait would otherwise read as progress.
+   */
+  const durTraffic = readTraffic('duress').map(trafficCall);
+  const durCalls = read === null ? [] : readToolCalls(read.session.session_id);
+  const attribution = attributeWait({
+    startedAt, endedAt: startedAt + elapsed, quitAt: waitRanOutAt(log),
+    requests: durTraffic,
+    tools: durCalls.filter((c) => c.endedAt !== null && c.elapsedMs !== null).map((c) => ({ start: c.endedAt - c.elapsedMs, end: c.endedAt })),
+  });
+  const usage = { completionTokens: durTraffic.reduce((t, c) => t + (c.completionTokens ?? 0), 0), reasoningTokens: durTraffic.reduce((t, c) => t + (c.reasoningTokens ?? 0), 0) };
+  const deadline = deadlineReading({ timedOut: /capture: wait for result timed out/.test(log), attribution, budgetMs: DURESS_MS, traffic: proxy !== null && durTraffic.length > 0, usage });
+  if (deadline.outcome === 'window') noted('the long run was bounded by the window, not by the product', deadline.detail);
+  else check(deadline.outcome === 'inside', 'the long run reached its result inside the wait', deadline.detail);
   checkPricing('duress', read?.session);
   if (read === null) check(false, 'the long run left a session row', 'no session was recorded at all');
   else {
@@ -1855,20 +2137,21 @@ if (wanted.includes('duress')) {
     preserveRun('duress', sessionId);
     const autopsyFile = join(scenarioDir('duress'), 'autopsy.txt');
     const autopsy = existsSync(autopsyFile) ? readFileSync(autopsyFile, 'utf8') : '';
-    const coherent = (label) => new RegExp(`${label}: (true|false)`).exec(autopsy)?.[1] ?? null;
+    const coherent = (label) => new RegExp(`${label}: (true|false|unasked)`).exec(autopsy)?.[1] ?? null;
     if (autopsy === '') check(false, 'the autopsy reader produced a reading of the long run', 'autopsy.txt is absent or empty');
     else {
-      check(coherent('null summary on stopped run') === 'false', 'a stopped run did not end with a null summary', `autopsy says ${coherent('null summary on stopped run')}`);
+      // A session that never stopped is not a stopped run, so the question is unasked rather than passed (H-c).
+      const nullSummary = coherent('null summary on stopped run');
+      if (nullSummary === 'unasked') noted('the null-summary question is unasked: the long run never stopped', `execution_status ${read.session.execution_status}, stop_reason ${read.session.stop_reason ?? 'none'}`);
+      else check(nullSummary === 'false', 'a stopped run did not end with a null summary', `autopsy says ${nullSummary}`);
       /*
-       * "Zero cost with tokens" is only incoherent where a cost COULD have been computed. On an endpoint
-       * registered `--unmetered` with no prices, the product has no figure to record and `cost` is correctly
-       * `0` — asserting otherwise would report a product fault that is not one. Caught before it was spent:
-       * the 2026-09-22 `faults` pack shows this line reading `true` on katalyst against 18,810 tokens, with
-       * nothing wrong. Where a money figure DOES exist, the original question stands.
+       * "Zero cost with tokens" is only incoherent where a cost COULD have been computed. This check used to condition
+       * itself on the endpoint's accounting kind, because the reader answered `true` for any zero cost beside tokens —
+       * on katalyst, unpriced, that read `true` against 18,810 tokens with nothing wrong (the 2026-09-22 `faults` pack).
+       * The reader now reads the session's own `cost_qualifier` and answers `false` where no request had a figure
+       * (`lib/autopsy-coherence.mjs`, live-run finding K2(b), 2026-09-29), so the question is asked as it stands.
        */
-      const priceable = accountingKind === 'provider' || accountingKind === 'priced';
-      if (priceable) check(coherent('zero cost with tokens') === 'false', 'tokens were not recorded against a zero cost', `autopsy says ${coherent('zero cost with tokens')}`);
-      else noted('the zero-cost reading is not a question on this endpoint', `accounting is ${accountingKind}: no money figure exists, so cost 0 against real tokens is correct (autopsy says ${coherent('zero cost with tokens')})`);
+      check(coherent('zero cost with tokens') === 'false', 'tokens were not recorded against a zero cost where a figure existed', `autopsy says ${coherent('zero cost with tokens')}`);
     }
 
     const Database = require('better-sqlite3');
@@ -1877,12 +2160,12 @@ if (wanted.includes('duress')) {
     let compressed = 0;
     let aggregate = null;
     try {
-      children = db.prepare('SELECT given_name, persona, state, tool_calls, report FROM children WHERE session_id = ? ORDER BY spawned_at').all(sessionId);
+      children = db.prepare('SELECT canonical_name, given_name, persona, state, tool_calls, report FROM children WHERE session_id = ? ORDER BY spawned_at').all(sessionId);
       compressed = db.prepare("SELECT COUNT(*) AS n FROM timeline WHERE session_id = ? AND name = 'context_compressed'").get(sessionId)?.n ?? 0;
       aggregate = db.prepare('SELECT compressions FROM sessions WHERE session_id = ?').get(sessionId)?.compressions ?? null;
     } finally { db.close(); }
     const reportOf = (child) => { try { return JSON.parse(child.report ?? '{}'); } catch { return {}; } };
-    const calls = readToolCalls(sessionId);
+    const calls = durCalls;
 
     // A run that commissioned nobody asked none of the questions below. That is a fact about the model and the
     // fixture, not a fault of the product, so it is a NOTE — and the checks that depend on it say so too.
@@ -1895,21 +2178,35 @@ if (wanted.includes('duress')) {
       noted('what the long run commissioned', children.map((c) => `${c.given_name} [${c.persona}] ${c.state}, ${c.tool_calls} calls`).join('; '));
       // The eighty-second defect's shape at the child level: four of eleven children died with an empty
       // `final_response` because a model timeout was read as a user abort. An empty report from a failed child
-      // is the observable, whatever the cause underneath it.
-      const silent = children.filter((c) => c.state === 'failed' && String(reportOf(c).final_response ?? '') === '');
+      // is the observable, whatever the cause underneath it — but an empty `final_response` alone is not one:
+      // REQ-ORCH-110 leaves it empty for a child cut off mid-work, whose `last_response` and `cut_off` say what it
+      // did (H-a). An error entry alone says nothing: the product writes one on every failed child, and the
+      // eighty-second's children carried one naming the abort and nothing else.
+      const silent = silentFailedChildren(children, reportOf);
       check(silent.length === 0, 'no child ended failed with nothing to say', silent.length === 0 ? 'every failed child reported' : `${silent.length}: ${silent.map((c) => c.given_name).join(', ')}`);
       // The eighty-eighth: `commands: []` was hardcoded at all three construction sites, so a child that ran
       // eight commands reported none. Derived from the transcript now; this is the live reading of that.
-      const ranCommands = children.filter((c) => c.tool_calls > 0 && calls.some((call) => call.agent_name === c.given_name && call.tool_name === 'terminal'));
-      const mute = ranCommands.filter((c) => (reportOf(c).commands ?? []).length === 0);
-      if (ranCommands.length === 0) noted('no child ran a terminal command', 'the report.commands reading is unasked this run');
+      // A call names its agent by the canonical name, never the given one (H-b).
+      // And only a child with a report is asked: one paused at the deadline or still running has none yet.
+      const { asked: ranCommands, mute, unsettled } = commandsReading(children, calls, reportOf);
+      if (unsettled.length > 0) noted('a child that ran commands had not settled, so has no report to list them in', unsettled.map((c) => `${c.given_name} (${c.state})`).join('; '));
+      if (ranCommands.length === 0) noted('no settled child ran a terminal command', 'the report.commands reading is unasked this run');
       else check(mute.length === 0, 'every child that ran a command reported its commands', mute.length === 0 ? `${ranCommands.length} child(ren) reported theirs` : `${mute.length} reported none, e.g. ${mute[0].given_name}`);
     }
 
     // The eighty-seventh: the session `compressions` aggregate was declared, rehydrated, copied into every save
     // and never added to — three `context_compressed` entries against a persisted 0 (REQ-SESSION-139, ADR-0008).
-    if (compressed === 0) noted('the long run never compressed its context', `${read.session.iterations_completed} iteration(s) was not long enough; the compressions aggregate is unasked`);
+    // Why not is the size of the largest prompt against the trigger, never the iteration count (H-d).
+    if (compressed === 0) {
+      const yaml = existsSync(agentsFile) ? readFileSync(agentsFile, 'utf8') : '';
+      const setting = (key) => { const m = new RegExp(`^\\s+${key}:\\s*(\\d+)\\s*$`, 'm').exec(yaml); return m === null ? undefined : Number(m[1]); };
+      const prompts = durTraffic.map((c) => c.promptTokens).filter((t) => t !== null);
+      const trigger = compressionTrigger({ contextTokens: endpoint.contextTokens ?? null, thresholdPercentage: setting('threshold_percentage'), defaultThreshold: setting('default_threshold') });
+      noted('the long run never compressed its context', compressionNote({ largestPrompt: prompts.length === 0 ? null : Math.max(...prompts), trigger, calls: { withUsage: prompts.length, total: durTraffic.length } }));
+    }
     else check(aggregate === compressed, 'the compressions aggregate counted what the timeline recorded', `aggregate ${aggregate} against ${compressed} timeline entr${compressed === 1 ? 'y' : 'ies'}`);
+
+    checkRefusalIssues('duress', sessionId, calls);
 
     const leaked = calls.filter((call) => call.tool_name === 'terminal' && /__rot_/.test(call.result));
     check(leaked.length === 0, 'no end marker leaked into what the model read', leaked.length === 0 ? 'no __rot_ in any terminal result' : `${leaked.length} call(s), e.g. ordinal ${leaked[0].ordinal}`);

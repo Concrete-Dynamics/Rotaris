@@ -8,7 +8,7 @@ const clocks = {} as Parameters<typeof toAgentRecord>[1];
 const row = (over: Partial<ChildRow> = {}): ChildRow => ({
   session_id: 's', task_id: 'bg_00000001', canonical_name: 'helper', given_name: 'Helper', persona: 'coding-agent', state: 'running', parent_id: 'root:1', depth: 1, iteration: 1,
   launch_generation: 0, model_key: 'scripted/alpha', category: 'quick', background: 1, task: 'do the thing', depends_on: '[]', inherited_context: '["a","b"]', granted_tools: '["read_file","grep"]', granted_mcp: '{}',
-  todo: null, spawned_at: '2026-09-05T10:00:00.000Z', completed_at: null, report: null, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, continuation_of: null, interruption: null, resume_state: null, write_scope: '[]', ...over,
+  todo: null, spawned_at: '2026-09-05T10:00:00.000Z', completed_at: null, report: null, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, continuation_of: null, interruption: null, resume_state: null, write_scope: '[]', suppress_auto_context: 0, attach_artifacts: '[]', inherited_context_block: '', ...over,
 });
 
 describe('AgentActivity — REQ-MONITOR-044/049/060 kept incrementally (Part R)', () => {
@@ -52,6 +52,20 @@ describe('toAgentRecord — the new fields of REQ-MONITOR-044 (Part R)', () => {
     expect(r).toMatchObject({ reasoning: 'high', contextUsed: 4321, contextLimit: DEFAULT_CONTEXT_CAPACITY, grantedTools: ['read_file', 'grep'], calledTools: ['grep'], activeTools: ['grep'], delegationSessionId: null, inheritedContext: 'a\nb', toolCalls: 1 });
     expect(toAgentRecord(row(), clocks).reasoning).toBe('medium');
     expect(toAgentRecord(row({ model_key: 'k' }), clocks, { contextLimitFor: (k) => (k === 'k' ? 200_000 : null) }).contextLimit).toBe(200_000);
+  });
+  /*
+   * REQ-MONITOR-049/060 with REQ-MCP-065 and REQ-TOOLS-006
+   * (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md): whether a grant was recorded is
+   * read from the row's MCP evidence, which the grant's writer marks `recorded`, and not from the native list's length —
+   * an empty native list is a grant the controls left empty. A row written before the marker keeps the reading it had:
+   * an empty list is no grant recorded, a non-empty one is the grant.
+   */
+  it('REQ-MONITOR-049 / REQ-MCP-065: a recorded empty native grant reads as recorded; an unmarked empty list as no grant recorded', () => {
+    const recorded = toAgentRecord(row({ granted_tools: '[]', granted_mcp: JSON.stringify({ granted: { alpha: ['echo'] }, servers: [{ name: 'alpha', transport: 'stdio', origin: 'global', fate: 'connected' }], recorded: true }) }), clocks);
+    expect(recorded).toMatchObject({ grantedTools: [], grantRecorded: true, grantedMcp: { alpha: ['echo'] } });
+    expect(toAgentRecord(row({ granted_tools: '[]', granted_mcp: JSON.stringify({ granted: {}, servers: [] }) }), clocks)).toMatchObject({ grantedTools: [], grantRecorded: false });
+    expect(toAgentRecord(row({ granted_tools: '[]', granted_mcp: '{}' }), clocks).grantRecorded).toBe(false);
+    expect(toAgentRecord(row({ granted_tools: '["read_file"]', granted_mcp: '{}' }), clocks).grantRecorded).toBe(true);
   });
   it('a settled agent carries no active tool whatever the ring holds (REQ-MONITOR-211/213), and the count is the larger figure', () => {
     const activity = new AgentActivity();

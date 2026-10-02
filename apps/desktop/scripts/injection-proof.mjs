@@ -61,6 +61,7 @@ import { cpus, platform as hostPlatform, release } from 'node:os';
 import { dirname, join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { app, buildDesktop, configDirFor, electron, evidenceDirectory, hostSwitches, launchOptions, readProbes, repo } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const output = evidenceDirectory('injection-proof');
 rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
@@ -91,12 +92,12 @@ const scratchHome = process.platform !== 'win32';
  * One launch of the built product. `profile` names the scratch roots; the model-call file is the launch's own, so a
  * record is never read from a previous launch.
  */
-function launch(name, profile, workspace, extra, timeoutMs = 120_000) {
+async function launch(name, profile, workspace, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
   const calls = join(output, `${name}.model-calls.jsonl`);
   rmSync(calls, { force: true });
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...launchOptions({ local: profile.local, preferences: profile.preferences, ...(scratchHome ? { home: profile.home } : {}) }),
       ROTARIS_CAPTURE_INSTRUCTIONS_HOME: profile.home,
@@ -109,6 +110,7 @@ function launch(name, profile, workspace, extra, timeoutMs = 120_000) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) fail(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) fail(`${name} exited ${result.status ?? result.signal ?? 'unknown'}`);
   if (!existsSync(png)) fail(`${name} produced no screenshot`);
   const records = existsSync(calls) ? readFileSync(calls, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l)) : [];
@@ -213,7 +215,7 @@ function assertReceived(name, system, expected, absent, textOf = (id) => baseTex
 }
 
 // ── 1. all-on ───────────────────────────────────────────────────────────────────────────────────────────────────────
-const allOn = launch('all-on', profile, workspace, runPrompt, 180_000);
+const allOn = await launch('all-on', profile, workspace, runPrompt, 180_000);
 const allOnSystem = contextCalls(allOn.records, 'all-on')[0].system;
 // Discovery order, with the one suppression PD-WORKSPACE-002 keeps: an ON override suppresses its own base alone.
 const allOnExpected = PRESENT.filter((id) => id !== 'workspace:AGENTS.md');
@@ -233,7 +235,7 @@ results.push({ launch: 'all-on', received: sourcesOf(allOnSystem), suppressed: '
 // ── 2. switch ───────────────────────────────────────────────────────────────────────────────────────────────────────
 const SWITCHED_OFF = 'user-agents:CLAUDE.md';
 const OVERRIDE_OFF = 'workspace:AGENTS.override.md';
-const switched = launch('switch', profile, workspace, {
+const switched = await launch('switch', profile, workspace, {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_VIEW_MS: '900', ROTARIS_CAPTURE_SETTINGS: 'Instructions',
   ROTARIS_CAPTURE_CLICKS: `[data-testid="instruction-toggle"][data-id="${SWITCHED_OFF}"]@1800;;[data-testid="instruction-toggle"][data-id="${OVERRIDE_OFF}"]@2400;;.save-bar .btn-primary>>Save@3400`,
   ROTARIS_CAPTURE_AFTER_MS: '6000',
@@ -256,7 +258,7 @@ if (PRESENT.some((id) => id !== SWITCHED_OFF && id !== OVERRIDE_OFF && savedYaml
 results.push({ launch: 'switch', inventory: listedIds, off: [SWITCHED_OFF, OVERRIDE_OFF], agentsYaml: savedYaml });
 
 // ── 3. switched ─────────────────────────────────────────────────────────────────────────────────────────────────────
-const after = launch('switched', profile, workspace, runPrompt, 180_000);
+const after = await launch('switched', profile, workspace, runPrompt, 180_000);
 const afterSystem = contextCalls(after.records, 'switched')[0].system;
 // ABSENCE for the switched-off file; OQ-64 AS RULED — the override off returns its base, `AGENTS.md`, to the merge.
 const afterExpected = PRESENT.filter((id) => id !== SWITCHED_OFF && id !== OVERRIDE_OFF);
@@ -265,7 +267,7 @@ if (!afterSystem.includes(blockOf(files['workspace:AGENTS.md'], baseText('worksp
 results.push({ launch: 'switched', received: sourcesOf(afterSystem), absent: [SWITCHED_OFF, OVERRIDE_OFF], oq64: 'switching the override off returned workspace:AGENTS.md to the merge' });
 
 // ── 4. isolated ─────────────────────────────────────────────────────────────────────────────────────────────────────
-const isolated = launch('isolated', profile, workspace, {
+const isolated = await launch('isolated', profile, workspace, {
   ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Say hello from the worktree.>>composer@4400',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '600',
@@ -382,7 +384,7 @@ if (!skipLatency) {
     const residency = evictable ? residentPages() : null;
     if (residency !== null && residency.resident > 0) fail(`latency: ${residency.resident} of ${residency.pages} fixture pages were still resident after the eviction, so the run would not be cold`);
     const name = `latency-${String(i).padStart(2, '0')}`;
-    const run = launch(name, lprofile, lworkspace, runPrompt, 180_000);
+    const run = await launch(name, lprofile, lworkspace, runPrompt, 180_000);
     const m = /workspace context: the enabled set of (\d+) instruction file\(s\) merged into (\d+) bytes in ([\d.]+) ms \(policy read ([\d.]+) ms, discovery ([\d.]+) ms, merge ([\d.]+) ms\)/.exec(run.log);
     if (!m) fail(`${name}: the run host logged no timed merge`);
     /*

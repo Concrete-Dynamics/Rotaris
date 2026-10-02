@@ -146,6 +146,13 @@ Invariants:
 
 - **A declared name with no executor is removed from the persona**, not offered and failed. One resolution
   feeds both the prompt listing and the gate, so what the model is told it has is what the gate will allow.
+  Each removal is logged with the persona and the control (REQ-TOOLS-006) by `createToolPort`: a narrowing
+  control's (`run_allow_list`, `coordinator_only`, `read_only`, `tool_restrictions`) at `info` through
+  `ToolPortContext.info`, a prerequisite's (REQ-TOOLS-004's reason codes, `executor_absent` among them) at `warning`.
+  `tool_restrictions` binds by the allowed-tool lists `toolRestrictionsFor` reads (OQ-145): the entry naming the persona
+  in its own map and in the map of `ToolPortContext.parentPersona`, the persona that delegated the agent. A public tool
+  and an MCP tool alike survive only when every list names it (`restrictionsAllow`); an MCP tool is taken off the
+  surface before the executors and the prompt section are drawn from it, so what is printed is what is callable (REQ-MCP-062).
 - The gate decides; the executor never asks. An approval travels `gate → presenter → main → dialog` — see
   [`06-sequences.md` §2](06-sequences.md#2-a-permission-approval-end-to-end).
 - A tool that reaches the filesystem states its read roots; a tool that reaches the network reads the egress
@@ -245,7 +252,7 @@ The design language's pair — consult before, match after (`docs/design/README.
 | 3 | Cite tokens by name | never a literal colour or pixel value |
 | 4 | Publish a contract on the root — `layoutContractAttributes` from `design-system/layout-contract.ts` | it marks the box with `data-ui` / `data-ui-contract` (the relations **array**), which is what `pnpm ui-audit` evaluates against live geometry after layout settles. It is the only publisher: `tools/check-ui-language.mjs` (`tools/ui-contract-publisher.mjs`) fails `pnpm lint` on a `data-ui-contract` written anywhere else in the drawing roots, the design system included — a hand-written object on the window controls once made the audit throw on every view |
 | 5 | `pnpm build`, then `pnpm app:drive shot` | a PNG an agent can read is the cheapest way to meet "match after drawing" |
-| 6 | `pnpm ui-audit`, then `pnpm ui-review` | `shrunkBoxes` (`apps/desktop/scripts/lib/layout-relations.mjs`) is the deterministic guard for UIR-014's whole class — a box standing smaller than its content on an axis that does not scroll — and it asks that of **every marked box**, not only of one that published a relation. An audit expression that throws in the renderer is reported as an **`AUDIT-ERROR`** finding naming the view, the size and the expression (`lib/audit-answer.mjs`), and the sweep goes on, so `report.json` is written for every view; a contract that is not a relations array is a `schema` finding for its own box. The critic is report-only, at most three iterations |
+| 6 | `pnpm ui-audit`, then `pnpm ui-review` | `shrunkBoxes` (`apps/desktop/scripts/lib/layout-relations.mjs`) is the deterministic guard for UIR-014's whole class — a box standing smaller than its content on an axis that does not scroll — and it asks that of **every marked box**, not only of one that published a relation. An audit expression that throws in the renderer is reported as an **`AUDIT-ERROR`** finding naming the view, the size and the expression (`lib/audit-answer.mjs`), and the sweep goes on, so `report.json` is written for every view; a contract that is not a relations array is a `schema` finding for its own box. Every failing contract is filed under `CONTRACT` with the relation that failed under `relation` (`lib/audit-finding.mjs`), so `report.json`, the summary line and `manifest.json`'s `byKind` never read a failing `containment` contract as the whole-document `CONTAINMENT` sweep; the manifest counts contract failures per relation in `contractsByRelation`. The critic is report-only, at most three iterations |
 
 Tokens alone are not compliance, and a plausible invention is not a third option where the design material
 decides.

@@ -130,6 +130,88 @@ function plantSessions(root, workspaceRoot, count) {
   } finally { db.close(); }
 }
 
+/**
+ * The run-header indicator's visible label, word by word (L10): each word's Range boxes against the indicator's own
+ * box, whether the box scrolls (overflow), whether it runs under the next control in the header, and how many lines the
+ * label takes. The accessible description (`.visually-hidden`) is not drawn and is left out.
+ */
+const RUN_HEADER_LABEL_GEOMETRY = `(() => {
+  const tag = document.querySelector('[data-testid="improvement-activity-run-header"]');
+  if (!tag) return null;
+  const header = tag.closest('.run-header');
+  const box = tag.getBoundingClientRect();
+  const walker = document.createTreeWalker(tag, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement && n.parentElement.closest('.visually-hidden') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+  const words = []; const tops = new Set(); let label = '';
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    label += node.data;
+    for (const match of node.data.matchAll(/\\S+/g)) {
+      const range = document.createRange(); range.setStart(node, match.index); range.setEnd(node, match.index + match[0].length);
+      const rects = [...range.getClientRects()];
+      const inside = rects.length > 0 && rects.every((r) => r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.top >= box.top - 0.5 && r.bottom <= box.bottom + 0.5);
+      rects.forEach((r) => tops.add(Math.round(r.top)));
+      words.push({ word: match[0], inside });
+    }
+  }
+  const next = tag.nextElementSibling;
+  const nextBox = next ? next.getBoundingClientRect() : null;
+  const overlapsNext = nextBox !== null && nextBox.width > 0 && box.right > nextBox.left + 0.5 && box.bottom > nextBox.top && box.top < nextBox.bottom;
+  const hb = header ? header.getBoundingClientRect() : null;
+  return { label: label.trim(), words, lines: tops.size, box: { width: box.width, height: box.height },
+    overflows: tag.scrollWidth > tag.clientWidth + 1 || tag.scrollHeight > tag.clientHeight + 1, overlapsNext,
+    insideHeader: hb !== null && box.left >= hb.left - 0.5 && box.right <= hb.right + 0.5 };
+})()`;
+
+/**
+ * The title-bar indicator's label (L10, the verifier's fix round 1): the title bar is one fixed row, so there the label
+ * is either whole or elided on the label element itself, where `text-overflow: ellipsis` draws. It must not scroll the
+ * indicator, and must not run under the control after it.
+ */
+const TITLE_BAR_LABEL_GEOMETRY = `(() => {
+  const tag = document.querySelector('[data-testid="improvement-activity-title-bar"]');
+  if (!tag) return null;
+  const label = tag.querySelector('.improvement-activity__label');
+  if (!label) return { label: null };
+  const box = tag.getBoundingClientRect();
+  const style = getComputedStyle(label);
+  const elided = label.scrollWidth > label.clientWidth + 1;
+  const next = tag.nextElementSibling;
+  const nextBox = next ? next.getBoundingClientRect() : null;
+  const overlapsNext = nextBox !== null && nextBox.width > 0 && box.right > nextBox.left + 0.5 && box.bottom > nextBox.top && box.top < nextBox.bottom;
+  return { label: (label.textContent || '').trim(), width: box.width, elided, ellipsis: style.textOverflow === 'ellipsis' && style.overflow === 'hidden',
+    overflows: tag.scrollWidth > tag.clientWidth + 1, overlapsNext };
+})()`;
+
+/**
+ * Acceptance A40: every design Tag on screen — its foundation and its tone, and whether the loaded stylesheets define
+ * that tone. Half the Tag's kinds named classes the adopted sheet does not define, and one caller spelled `tag-failure`;
+ * a tone with no rule draws a bare tag. The walk reaches imported sheets and grouping rules.
+ */
+const TAG_TONES = `(() => {
+  const defined = new Set();
+  const walk = (rules) => { for (const r of rules) {
+    if (r.styleSheet) { try { walk(r.styleSheet.cssRules); } catch {} }
+    if (r.cssRules && !r.selectorText) walk(r.cssRules);
+    if (r.selectorText) for (const sel of r.selectorText.split(',')) { const m = sel.trim().match(/^\\.(tag-[a-z]+)$/); if (m) defined.add(m[1]); }
+  } };
+  for (const sheet of document.styleSheets) { try { walk(sheet.cssRules); } catch {} }
+  return [...document.querySelectorAll('[data-ui-component="Tag"]')].map((t) => {
+    const tones = [...t.classList].filter((c) => c.startsWith('tag-'));
+    return { text: (t.textContent || '').trim().slice(0, 40), tag: t.classList.contains('tag'), tones, undefinedTones: tones.filter((c) => !defined.has(c)) };
+  });
+})()`;
+const tagsWellFormed = (tags) => Array.isArray(tags) && tags.length > 0 && tags.every((t) => t.tag && t.tones.length === 1 && t.undefinedTones.length === 0);
+const tagsDetail = (tags) => (Array.isArray(tags) ? `${tags.length} tag(s): ${tags.map((t) => `"${t.text}" ${t.tag ? 'tag' : 'NO tag'} ${t.tones.join('+') || 'NO tone'}${t.undefinedTones.length > 0 ? ` (undefined: ${t.undefinedTones.join(', ')})` : ''}`).join('; ').slice(0, 400)}` : 'not read');
+
+/** Acceptance A40: the indicator's design StatusDot — the state it writes and the colour it is painted. */
+const INDICATOR_DOT = `(() => {
+  const dot = document.querySelector('[data-testid="improvement-activity-run-header"] [data-ui-component="StatusDot"]');
+  if (dot === null) return null;
+  // Painted means a background other than the one an unstyled span computes, so no colour is written here.
+  const bare = document.createElement('span'); document.body.append(bare); const none = getComputedStyle(bare).backgroundColor; bare.remove();
+  const background = getComputedStyle(dot).backgroundColor;
+  return { state: dot.getAttribute('data-state'), kind: dot.getAttribute('data-kind'), background, painted: background !== none };
+})()`;
+
 /** Every element matching the selector, with its text and its data/aria attributes. */
 const probe = (d, selector) => d.probe(selector);
 const one = async (d, selector) => (await d.probe(selector))[0] ?? null;
@@ -217,9 +299,10 @@ check('the seeded record holds the sessions the pass will read', planted.length 
 // The pass launch reuses the seeded profile, so it opens the store the sessions were planted into.
 const passRoot = join(output, 'seed', 'app');
 
-// ── 2. The pass itself, held open for six seconds so the indicators can be READ while it runs.
+// ── 2. The pass itself, held open for ten seconds so the indicators can be READ — and measured at two window
+//    sizes (L10, below) — while it runs. Six seconds held the reads alone; two resizes and two shots are added.
 await (async () => {
-  const started = await startApp({ root: passRoot, workspace: passWorkspace, extra: { ROTARIS_IMPROVEMENT_SCRIPT: 'wait:6000' }, timeoutMs: 90_000 });
+  const started = await startApp({ root: passRoot, workspace: passWorkspace, extra: { ROTARIS_IMPROVEMENT_SCRIPT: 'wait:10000' }, timeoutMs: 90_000 });
   const d = started.driver;
   try {
     await d.waitFor('.app-shell', { timeoutMs: 60_000 });
@@ -260,6 +343,32 @@ await (async () => {
       header !== null && header.data['data-pass'] === 'retrospective' && /Reviewing workspace history for improvements/.test(header.text),
       header === null ? 'no run-header indicator while a pass was active' : `"${header.text}" pass=${header.data['data-pass']}`);
     await d.screenshot(join(output, 'activity-run-header.png'));
+    const dot = await d.eval(INDICATOR_DOT);
+    check('the run-header indicator\'s design StatusDot writes the language\'s `run` state and is painted (A40)',
+      dot !== null && dot.state === 'run' && dot.kind === null && dot.painted,
+      dot === null ? 'no StatusDot in the indicator' : `data-state=${dot.state} data-kind=${dot.kind} background ${dot.background}${dot.painted ? '' : ' (unpainted)'}`);
+
+    // ── Live-run finding L10: the run header's label was cut mid-word at 1440 px ("Reviewing run for improvem")
+    //    with no ellipsis. REQ-LIBRARY-125 with REQ-SHELL-149: the label is carried in words. Every word of the
+    //    visible label is measured with a Range and must lie whole inside the indicator's box, the box must not
+    //    overflow, and it must not run under the control after it — at the live run's 1440 px and at the
+    //    1000×680 minimum (REQ-SHELL-022), where it may wrap between words but never cut one.
+    const initial = await d.eval('[innerWidth, innerHeight]');
+    for (const [width, height] of [[1440, 900], [1000, 680]]) {
+      await d.resize(width, height);
+      await sleep(300);
+      const g = await d.eval(RUN_HEADER_LABEL_GEOMETRY);
+      const clippedWords = g === null ? [] : g.words.filter((w) => !w.inside).map((w) => w.word);
+      check(`at ${width}×${height} the run-header indicator carries its label in whole words, none cut at its edge (REQ-LIBRARY-125, REQ-SHELL-149; L10)`,
+        g !== null && g.words.length > 0 && clippedWords.length === 0 && !g.overflows && !g.overlapsNext && g.insideHeader,
+        g === null ? 'no run-header indicator while the pass ran' : `"${g.label}" in ${Math.round(g.box.width)}×${Math.round(g.box.height)} px, ${g.lines} line(s); cut: ${clippedWords.length === 0 ? 'none' : clippedWords.join(', ')}; overflows ${g.overflows}; overlaps the next control ${g.overlapsNext}; inside the header ${g.insideHeader}`);
+      await d.screenshot(join(output, `activity-run-header-${width}.png`));
+      const t = await d.eval(TITLE_BAR_LABEL_GEOMETRY);
+      check(`at ${width}×${height} the title-bar indicator's label is whole or elided with its ellipsis drawn, never cut bare (REQ-LIBRARY-125, REQ-SHELL-149; L10)`,
+        t !== null && t.label !== null && t.label.length > 0 && (!t.elided || t.ellipsis) && !t.overflows && !t.overlapsNext,
+        t === null ? 'no title-bar indicator while the pass ran' : t.label === null ? 'the title-bar indicator has no label element' : `"${t.label}" in ${Math.round(t.width)} px; ${t.elided ? (t.ellipsis ? 'elided with an ellipsis' : 'cut without an ellipsis') : 'whole'}; overflows ${t.overflows}; overlaps the next control ${t.overlapsNext}`);
+    }
+    if (Array.isArray(initial) && initial[0] > 0 && initial[1] > 0) await d.resize(initial[0], initial[1]);
 
     // ── The outcome: the completion notice, then the proposals on the Library's tab.
     const completion = await noticeMatching(d, /retrospective proposals? ready/, 90_000);
@@ -276,6 +385,8 @@ await (async () => {
     const rowsAppeared = await until(d, '.library-proposals__proposals tbody tr', (m) => m.some((r) => /Name the build gate/.test(r.text)), 30_000);
     const summaries = (await probe(d, '.library-proposals__proposals tbody tr')).map((r) => r.text);
     check('the proposals reach the Library’s Proposals tab', rowsAppeared, `rows: ${JSON.stringify(summaries).slice(0, 300)}`);
+    const libraryTags = await d.eval(TAG_TONES);
+    check('every design Tag on the Proposals tab carries its foundation and one tone the loaded stylesheet defines (A40)', tagsWellFormed(libraryTags), tagsDetail(libraryTags));
     // The artifact row, selected, so the detail card names what a retrospective belongs to instead of a blank.
     await d.click('.library-proposals__artifacts tbody tr', { timeoutMs: 15_000 });
     const source = await one(d, '[data-testid="library-proposal-source"]');
@@ -289,6 +400,8 @@ await (async () => {
     const onCard = await until(d, '.ov-proposal', (m) => m.some((r) => /Name the build gate/.test(r.text)), 20_000);
     const gesture = await one(d, '[data-testid="overview-retrospective"]');
     check('the proposals reach the Overview card, which carries the gesture too', onCard && gesture !== null, `${(await probe(d, '.ov-proposal')).length} row(s) on the card, gesture ${gesture === null ? 'absent' : `"${gesture.text}"`}`);
+    const overviewTags = await d.eval(TAG_TONES);
+    check('every design Tag on the Overview carries its foundation and one tone the loaded stylesheet defines (A40)', tagsWellFormed(overviewTags), tagsDetail(overviewTags));
     await d.screenshot(join(output, 'overview-card.png'));
 
     // ── Review still works on a retrospective proposal: it is an ordinary proposal (ADR-0065 decision 2).

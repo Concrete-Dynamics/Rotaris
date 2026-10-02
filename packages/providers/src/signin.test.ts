@@ -48,7 +48,7 @@ describe('the API-key sign-in for an OpenAI-compatible instance (ADR-0030; REQ-P
   it('validates, discovers, persists the credential only after discovery, writes the snapshot with picks, reports the outcome', async () => {
     const { svc, credentials, settings } = service();
     const r = await svc.addInstance({ label: 'OpenRouter', baseUrl: `${OR}/`, apiKey: ` ${KEY} ` });
-    expect(r).toMatchObject({ outcome: 'signed-in', id: 'openai-compatible--openrouter', discovered: 3, message: 'Added OpenRouter; discovered 3 model(s).' });
+    expect(r).toMatchObject({ outcome: 'signed-in', id: 'openai-compatible--openrouter', discovered: 3, message: 'Added OpenRouter; discovered 3 models.' });
     const cred = credentials.load('openai-compatible--openrouter')!;
     expect(cred.access_token).toBe(KEY);
     expect(cred.expires_at).toBe(0);
@@ -103,7 +103,7 @@ describe('the rest of the provider service', () => {
   it('a built-in api-key provider signs in the same way (deepseek); the other methods are refused by name in this build', async () => {
     const seen: string[] = [];
     const { svc } = service(fetchWith((u, h) => { seen.push(u); return new Response(JSON.stringify({ data: [{ id: 'deepseek-chat' }] }), { status: h.get('authorization') ? 200 : 401 }); }));
-    expect(await svc.signInWithKey('deepseek', KEY)).toMatchObject({ outcome: 'signed-in', message: 'Login complete for DeepSeek; discovered 1 model(s).' });
+    expect(await svc.signInWithKey('deepseek', KEY)).toMatchObject({ outcome: 'signed-in', message: 'Login complete for DeepSeek; discovered 1 model.' });
     expect(seen).toEqual(['https://api.deepseek.com/models', 'https://api.deepseek.com/models']);
     expect(await svc.signInWithKey('copilot', KEY)).toMatchObject({ outcome: 'failed' });
     expect((await svc.signInWithKey('copilot', KEY) as { message: string }).message).toContain('Code shown here, entered at the provider');
@@ -143,7 +143,7 @@ describe('the rest of the provider service', () => {
     expect(await svc.health('deepseek')).toEqual({ state: 'unauthenticated', detail: 'Not authenticated.', available: true });
     expect(await svc.health('mystery')).toMatchObject({ state: 'unknown' });
     await svc.addInstance({ label: 'OpenRouter', baseUrl: OR, apiKey: KEY });
-    expect(await svc.health('openai-compatible--openrouter')).toMatchObject({ state: 'healthy', detail: 'Validated OpenRouter; discovered 3 model(s).' });
+    expect(await svc.health('openai-compatible--openrouter')).toMatchObject({ state: 'healthy', detail: 'Validated OpenRouter; discovered 3 models.' });
     status = 503;
     expect(await svc.health('openai-compatible--openrouter')).toMatchObject({ state: 'error' });
     status = 401;
@@ -166,7 +166,7 @@ describe('the rest of the provider service', () => {
     const { svc } = service();
     await svc.addInstance({ label: 'OpenRouter', baseUrl: OR, apiKey: KEY });
     expect(await svc.replaceKey('openai-compatible--openrouter', 'sk-or-other')).toEqual({ ok: false, error: 'Validation failed for OpenRouter: Authentication failed for OpenRouter: 401' });
-    expect(await svc.replaceKey('openai-compatible--openrouter', KEY)).toEqual({ ok: true, value: 'Validated OpenRouter; discovered 3 model(s).' });
+    expect(await svc.replaceKey('openai-compatible--openrouter', KEY)).toEqual({ ok: true, value: 'Validated OpenRouter; discovered 3 models.' });
     expect(await svc.replaceKey('codex', KEY)).toEqual({ ok: false, error: 'OpenAI Codex does not sign in with an API key.' });
     const lines: string[] = [];
     expect(await svc.refresh('all', (l) => lines.push(l))).toEqual({ succeeded: 1, failed: 0, skipped: 5, complete: false });

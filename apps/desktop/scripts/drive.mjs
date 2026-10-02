@@ -18,9 +18,17 @@
  *   pnpm app:drive shot screen.png
  *   pnpm app:drive resize 1000 680
  *   pnpm app:drive command '{"kind":"theme.set","name":"nocturne"}'
- *   pnpm app:drive windows
+ *   pnpm app:drive windows                              (main windows, and the persona, approval and terminal windows)
+ *   pnpm app:drive useWindow persona:coding-agent       (every later command acts on that window; no argument: the active main window)
+ *   pnpm app:drive probe "#approval-title" --window=approval    (--window= on any command: that window, for that command alone)
  *   pnpm app:drive log [--tail=40]
- *   pnpm app:drive stop
+ *   pnpm app:drive stop            (the application's quit: close guards, then the run host's shutdown)
+ *   pnpm app:drive stop --crash    (the immediate exit: a live run is left as a crash leaves it)
+ *
+ * A window is named by its index in `windows` (0 is the most recently focused main window), by a suffix of a main
+ * window's workspace path, or by a role: `persona:<persona>` (that persona's window, REQ-SHELL-072), `approval` (the
+ * open approval dialog, REQ-TOOLS-063) or `terminal` (the terminal window). A role names the first such window,
+ * main window by main window in `windows`' order; a name that matches no open window is refused with what is open.
  *
  * Nothing here is product code, and nothing here is evidence: a proof asserts, this reports.
  */
@@ -44,6 +52,8 @@ const flag = (name, fallback) => {
 };
 
 const print = (value) => console.log(typeof value === 'string' ? value : JSON.stringify(value, null, 2));
+/** `--window=<name>`: the window one command acts on, for that command alone (the seam's per-request `window`). */
+const on = typeof flag('window', undefined) === 'string' ? { window: flag('window') } : {};
 
 async function client() {
   if (!existsSync(endpointFile)) throw new Error('no app is being driven — run `pnpm app:drive start` first');
@@ -106,13 +116,32 @@ switch (command) {
     started.driver.close();
     break;
   }
+  /*
+   * `stop` sends the application's quit — what a person's quit is: every main window closed through its close guard,
+   * then the run host and each workspace service asked to `shutdown`, so a live run comes to rest (PD-ORCH-005 clause
+   * 3) — and waits for the process to end. `stop --crash` sends the immediate exit instead, which asks the run host
+   * nothing and leaves a live run as a crash leaves it. Until 2026-09-29 `stop` sent the immediate exit and said
+   * nothing of it (`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`).
+   *
+   * A quit a close guard keeps (a window with unsaved settings asks its person) leaves the application running and
+   * driven; `stop` says so and leaves the endpoint, so the dialog can be answered, or `stop --crash` sent.
+   */
   case 'stop': {
     if (!existsSync(endpointFile)) { print('nothing to stop'); break; }
+    const pidFile = join(root, 'app.pid');
+    const pid = existsSync(pidFile) ? Number(readFileSync(pidFile, 'utf8').trim()) : 0;
+    const alive = () => { if (!pid) return false; try { process.kill(pid, 0); return true; } catch { return false; } };
+    const crash = flag('crash', false) === true;
     const driver = await connect(endpointFile, { timeoutMs: 5_000 }).catch(() => null);
-    if (driver) { await driver.quit(); driver.close(); print('quit sent'); }
-    else {
-      const pidFile = join(root, 'app.pid');
-      const pid = existsSync(pidFile) ? Number(readFileSync(pidFile, 'utf8').trim()) : 0;
+    if (driver) {
+      const sent = await driver.quit({ immediate: crash });
+      driver.close();
+      const bound = Number(flag('timeout', 60_000));
+      const started = Date.now();
+      while (alive() && Date.now() - started < bound) await new Promise((r) => setTimeout(r, 200));
+      if (alive()) { print(`${crash ? 'the immediate exit' : "the application's quit"} was sent and ${pid} is still running after ${bound} ms — a close guard may be asking; answer it, or \`pnpm app:drive stop --crash\``); break; }
+      print(`${sent?.how === 'immediate' ? 'exited at once (the immediate exit)' : "quit (the application's quit)"}; ${pid ? `${pid} has ended` : 'no pid was recorded'}`);
+    } else {
       if (pid) { try { process.kill(pid); print(`killed ${pid}`); } catch { print(`no process ${pid}`); } }
       else print('no endpoint and no pid');
     }
@@ -126,45 +155,50 @@ switch (command) {
     break;
   }
   case 'waitFor':
-    await withClient((d) => d.waitFor(positional[0], { ...(flag('text', undefined) === undefined ? {} : { text: String(flag('text')) }), ...(flag('timeout', undefined) === undefined ? {} : { timeoutMs: Number(flag('timeout')) }) }));
+    await withClient((d) => d.waitFor(positional[0], { ...on, ...(flag('text', undefined) === undefined ? {} : { text: String(flag('text')) }), ...(flag('timeout', undefined) === undefined ? {} : { timeoutMs: Number(flag('timeout')) }) }));
     break;
   case 'click':
-    await withClient((d) => d.click(positional[0], { ...(flag('text', undefined) === undefined ? {} : { text: String(flag('text')) }), ...(flag('timeout', undefined) === undefined ? {} : { timeoutMs: Number(flag('timeout')) }) }));
+    await withClient((d) => d.click(positional[0], { ...on, ...(flag('text', undefined) === undefined ? {} : { text: String(flag('text')) }), ...(flag('timeout', undefined) === undefined ? {} : { timeoutMs: Number(flag('timeout')) }) }));
     break;
   case 'type':
-    await withClient((d) => d.type(positional[0] ?? '', { enter: flag('enter', false) === true }));
+    await withClient((d) => d.type(positional[0] ?? '', { ...on, enter: flag('enter', false) === true }));
     break;
   case 'chord':
-    await withClient((d) => d.chord(positional[0]));
+    await withClient((d) => d.send('chord', { ...on, chord: positional[0] }));
     break;
   case 'inspect':
-    await withClient((d) => d.inspect(positional[0]));
+    await withClient((d) => d.send('inspect', { ...on, selector: positional[0] }));
     break;
   case 'probe':
-    await withClient((d) => d.probe(positional[0]));
+    await withClient((d) => d.send('probe', { ...on, selector: positional[0] }));
     break;
   case 'eval':
-    await withClient((d) => d.eval(positional[0]));
+    await withClient((d) => d.send('eval', { ...on, expression: positional[0] }));
     break;
   case 'shot':
-    await withClient((d) => d.screenshot(join(process.cwd(), positional[0] ?? 'drive.png')));
+    await withClient((d) => d.send('screenshot', { ...on, path: resolve(process.cwd(), positional[0] ?? 'drive.png') }));
     break;
   case 'resize':
-    await withClient((d) => d.resize(Number(positional[0]), Number(positional[1])));
+    await withClient((d) => d.send('resize', { ...on, width: Number(positional[0]), height: Number(positional[1]) }));
     break;
   case 'maximize':
-    await withClient((d) => d.send('maximize'));
+    await withClient((d) => d.send('maximize', on));
     break;
   case 'command':
-    await withClient((d) => d.command(JSON.parse(positional[0] ?? '{}')));
+    await withClient((d) => d.send('command', { ...on, request: JSON.parse(positional[0] ?? '{}') }));
     break;
-  // The main windows, most recently focused first. `{ windows, selected }` — an envelope, not a bare list.
+  // The main windows, most recently focused first, and the auxiliary ones by role. `{ windows, auxiliary, selected }`.
   case 'windows':
     await withClient((d) => d.windows());
+    break;
+  // Every later command acts on the window named; with no name, on the active main window again. Held by the app.
+  case 'useWindow':
+    await withClient((d) => d.useWindow(positional[0]));
     break;
   case 'ping':
     await withClient((d) => d.ping());
     break;
   default:
-    print(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 26).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
+    // The header comment, whatever its length: every line up to the one that closes it.
+    { const lines = readFileSync(new URL(import.meta.url), 'utf8').split('\n'); print(lines.slice(1, lines.indexOf(' */')).map((l) => l.replace(/^ \* ?/, '')).join('\n')); }
 }

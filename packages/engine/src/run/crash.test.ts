@@ -2,16 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, ok, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, millis, mintMachineId, ok, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, type ChatMessage, type ModelRequest } from '@rotaris/model';
-import type { ApprovalPayload, SessionRecord } from '@rotaris/contracts';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRequest } from '@rotaris/model';
+import { RUN_AGENT_ID, type ApprovalPayload, type SessionRecord } from '@rotaris/contracts';
 import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type CheckpointPort, type Publisher, type RunConfig, type ToolPort } from '../index.js';
-import { decodeStoredTodo } from '../todo-view.js';
-import { recordCrash } from './crash.js';
-import { crashLeftOf, resumableOf } from '../sessions.js';
+import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
+import { ACCEPTED_CANCEL_REPORT, recordCrash } from './crash.js';
+import { cancelLeftOf, crashLeftOf, resumableOf, toAgentRecord, type ToolPortContext } from '../sessions.js';
 import { conversationOf } from './record.js';
 import { interruptedResult } from './interruption.js';
+import type { HookPort } from '../hooks-port.js';
 
 /**
  * PD-ORCH-005 clause 3 — "a crash is recorded when the session is next repaired or continued": what a dead run host
@@ -76,7 +77,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     const writer = created(sid);
     dieIn(writer, sid);
     const r = recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined);
-    expect(r).toEqual({ iteration: 2, paused: 3, withdrawn: 1, terminals: 1 });
+    expect(r).toEqual({ iteration: 2, paused: 3, cancelled: 0, withdrawn: 1, terminals: 1 });
     expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'open', interruption: 'crash' });
     const state = (id: string) => dal.getChild(sid, id)!;
     expect(state('bg_000000c1')).toMatchObject({ state: 'paused', interruption: 'crash', resume_state: 'running' });
@@ -100,7 +101,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_dead', 'crash'], ['ts_done', 'completed'], ['ts_live', 'running']]);
 
     const before = { messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length };
-    expect(recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined)).toEqual({ iteration: null, paused: 0, withdrawn: 0, terminals: 0 });
+    expect(recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined)).toEqual({ iteration: null, paused: 0, cancelled: 0, withdrawn: 0, terminals: 0 });
     expect({ messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length }).toEqual(before);
   });
 
@@ -129,6 +130,40 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     ]);
   });
 
+  it('REQ-SESSION-129 with ADR-0024 (the repair of a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md): the ring row of every call a dead run left running settles `failed` with the crash\'s statement, once; a settled one keeps what it returned', () => {
+    const sid = 'S-ring' as SessionId;
+    const writer = created(sid);
+    dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: ROOT, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+    writer.recordAgentMessage(ROOT, 1, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'a', name: 'write', args: '{}' }, { kind: 'tool-call', callId: 'b', name: 'grep', args: '{}' }] });
+    // Each call's two records, as the run host's gate and the turn write them: the ring row and the transcript row.
+    const call = (callId: string, agent: string, tool: string) => ({ call_id: callId, agent_name: agent, tool_name: tool, args: { pattern: callId } });
+    const a = writer.openToolCall(call('a', 'orchestrator', 'write'));
+    if (!a.ok) throw new Error('open');
+    writer.settleToolCall(a.value, call('a', 'orchestrator', 'write'), { status: 'ok', elapsed_ms: 3, is_error: false, result: 'wrote the file' });
+    writer.appendRow('tool', 'write', true, { name: 'orchestrator', toolName: 'write', toolStatus: 'ok', callKey: 'a', output: 'wrote the file' });
+    expect(writer.openToolCall(call('b', 'orchestrator', 'grep')).ok).toBe(true);
+    writer.appendRow('tool', 'grep', false, { name: 'orchestrator', toolName: 'grep', toolStatus: 'running', callKey: 'b', output: 'a.ts:1' });
+    // An agent the crash record pauses none of — another root's orphan, left to the stale-child settle — is dead as well.
+    expect(writer.openToolCall(call('b', 'c9', 'glob')).ok).toBe(true);
+    const finishes = () => dal.eventsOfKind(sid, 'tool.finish').length;
+    expect(finishes()).toBe(1);
+    recordCrash(dal, writer, sid, new Set(), () => undefined);
+    const ring = () => dal.toolCallsOf(sid).map((r) => { const e = JSON.parse(r.entry) as { result?: string; elapsed_ms: number | null }; return [r.agent_name, r.call_id, r.status, r.is_error, e.result, r.elapsed_ms]; });
+    const statement = interruptedResult('crash', true, '');
+    expect(ring()).toEqual([
+      ['orchestrator', 'a', 'ok', 0, 'wrote the file', 3],
+      // The end of a call a crash cut was observed by no process: its duration is not known.
+      ['orchestrator', 'b', 'failed', 1, statement, null],
+      ['c9', 'b', 'failed', 1, statement, null],
+    ]);
+    // Each settle is REQ-EVENTS-057's `tool.finish`, as every settled call's is; the transcript row settled as before.
+    expect(finishes()).toBe(3);
+    expect(dal.residentRows(sid).find((r) => r.call_key === 'b' && r.name === 'orchestrator')).toMatchObject({ tool_status: 'failed' });
+    // A second recording finds nothing running.
+    recordCrash(dal, writer, sid, new Set(), () => undefined);
+    expect(finishes()).toBe(3);
+  });
+
   it('clause 6 with clauses 8 and 19: the Continue action counts what a crash left unfinished, the root included, before the crash is recorded, and the same after', () => {
     const sid = 'S-count' as SessionId;
     const writer = created(sid);
@@ -140,6 +175,56 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 4 });
   });
 
+  describe('REQ-MONITOR-102: the calls a crash left uncounted join the session total (the repair of a-roots-calls-before-a-crash-never-reach-the-session-total.md)', () => {
+    const calls = (...ids: string[]): ChatMessage => ({ role: 'assistant', content: ids.map((id) => ({ kind: 'tool-call' as const, callId: id, name: 'grep', args: '{}' })) });
+    const results = (...ids: string[]): ChatMessage => ({ role: 'tool', content: ids.map((id) => ({ kind: 'tool-result' as const, callId: id, name: 'grep', isError: false, result: 'found' })) });
+    /**
+     * An iteration whose root had one call counted when an earlier execution returned (`r1`), then made two more (`r2`,
+     * and `r3`, whose row was still running at the death) and asked for a fourth it never started (`r4`, no row); a
+     * running child with one completed call its count does not hold; and five calls of other agents in the total.
+     */
+    function died(writer: SessionWriter, sid: SessionId): void {
+      dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: ROOT, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+      writer.countToolCalls({ root: { iteration: 1, add: 1 } }, 6);
+      writer.recordAgentMessage(ROOT, 1, 'message', text('user', 'work'));
+      writer.recordAgentMessage(ROOT, 1, 'message', calls('r1'));
+      writer.recordAgentMessage(ROOT, 1, 'message', results('r1'));
+      writer.recordAgentMessage(ROOT, 1, 'message', calls('r2'));
+      writer.recordAgentMessage(ROOT, 1, 'message', results('r2'));
+      writer.recordAgentMessage(ROOT, 1, 'message', calls('r3', 'r4'));
+      writer.appendRow('tool', 'grep', false, { name: 'orchestrator', toolName: 'grep', toolStatus: 'running', callKey: 'r3' });
+      writer.spawnChild({ ...child('bg_000000c1', 'running', ROOT), iteration: 1 });
+      writer.recordAgentMessage('bg_000000c1', 1, 'message', text('user', 'TASK'));
+      writer.recordAgentMessage('bg_000000c1', 1, 'message', calls('p1'));
+      writer.recordAgentMessage('bg_000000c1', 1, 'message', results('p1'));
+    }
+
+    it('the root\'s beyond its iteration\'s count and each unfinished child\'s beyond its own, with both counts, once — a call the crash cut before it started is not one', () => {
+      const sid = 'S-uncounted' as SessionId;
+      const writer = created(sid);
+      died(writer, sid);
+      expect(dal.getSession(sid)!.tool_calls).toBe(6);
+      recordCrash(dal, writer, sid, new Set(), () => undefined);
+      // The root's r2 and r3 (r1 was counted; r4 never started) and the child's p1.
+      expect(dal.getSession(sid)!.tool_calls).toBe(9);
+      expect(dal.getIteration(sid, 1)!.root_tool_calls).toBe(3);
+      expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'paused', tool_calls: 1 });
+      // A second recording finds nothing more to count.
+      recordCrash(dal, writer, sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(9);
+    });
+
+    it('a root whose count is not known — an iteration opened before store v26 — adds nothing; its children are still counted', () => {
+      const sid = 'S-unknown' as SessionId;
+      const writer = created(sid);
+      died(writer, sid);
+      dal.db.prepare('UPDATE iterations SET root_tool_calls = NULL WHERE session_id = ?').run(sid);
+      recordCrash(dal, writer, sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(7);
+      expect(dal.getIteration(sid, 1)!.root_tool_calls).toBeNull();
+    });
+  });
+
   it('an iteration a rest left open is not a crash\'s: its interruption and its agents are left as they are', () => {
     const sid = 'S-rested' as SessionId;
     const writer = created(sid);
@@ -147,9 +232,125 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     dal.setIterationInterruption(sid, 1, 'pause');
     writer.spawnChild({ ...child('bg_000000c1', 'running', ROOT), iteration: 1 });
     writer.restChild('bg_000000c1', 'pause', 'running');
-    expect(recordCrash(dal, writer, sid, new Set(), () => undefined)).toEqual({ iteration: null, paused: 0, withdrawn: 0, terminals: 0 });
+    expect(recordCrash(dal, writer, sid, new Set(), () => undefined)).toEqual({ iteration: null, paused: 0, cancelled: 0, withdrawn: 0, terminals: 0 });
     expect(dal.getIteration(sid, 1)!.interruption).toBe('pause');
     expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'paused', interruption: 'pause' });
+  });
+
+  /**
+   * OQ-103's last question, ruled 2026-09-29 (R-067): clause 3's "those are never resumed" governs a run whose explicit
+   * cancel was accepted and not carried out when its host died. The mark `Run.cancelAgent` writes when the cancel is
+   * accepted is what tells it apart (store v27); the repair of
+   * docs/defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md.
+   */
+  describe('PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103 ruled): an explicit cancel accepted and never carried out', () => {
+    /** The residue of a host that died in iteration 2 after the explicit cancel was accepted, its todo task in progress. */
+    function cancelledThenDied(writer: SessionWriter, sid: SessionId): void {
+      dieIn(writer, sid);
+      writer.save('cancelling', { todo: encodeStoredTodo({ planner: { schema_version: 1, phases: [{ name: 'main', tasks: [{ id: 't', text: 't', state: 'in_progress', consecutiveRetries: 0 }] }] }, agent: null }) });
+      expect(writer.recordCancelAccepted()).toEqual({ ok: true, value: true });
+    }
+
+    it('the store marks the open iteration only, and keeps the first acceptance', () => {
+      const sid = 'S-mark' as SessionId;
+      const writer = created(sid);
+      expect(writer.recordCancelAccepted()).toEqual({ ok: true, value: false });
+      dieIn(writer, sid);
+      expect(dal.getIteration(sid, 2)!.cancel_accepted_at).toBeNull();
+      expect(writer.recordCancelAccepted()).toEqual({ ok: true, value: true });
+      const first = dal.getIteration(sid, 2)!.cancel_accepted_at;
+      expect(first).not.toBeNull();
+      clock.advance(millis(5_000));
+      expect(writer.recordCancelAccepted()).toEqual({ ok: true, value: false });
+      expect(dal.getIteration(sid, 2)!.cancel_accepted_at).toBe(first);
+    });
+
+    it('before it is recorded, no agent is crash-left, the Continue action counts nothing, and every unfinished agent is named cancel-left', () => {
+      const sid = 'S-before' as SessionId;
+      const writer = created(sid);
+      cancelledThenDied(writer, sid);
+      const row = dal.getSession(sid)!;
+      expect(crashLeftOf(dal, row, () => true)).toEqual(new Set());
+      expect(resumableOf(dal, row)).toBeNull();
+      expect(cancelLeftOf(dal, row, () => true)).toEqual(new Set(['bg_000000c1', 'bg_000000c2', 'bg_000000c3']));
+      // Only while no run carries the cancel out, and not under a store failure.
+      expect(cancelLeftOf(dal, row, () => false)).toEqual(new Set());
+      expect(cancelLeftOf(dal, row, () => true, true)).toEqual(new Set());
+      // Presented as the record will leave them: cancelled, never paused by a crash.
+      const shown = toAgentRecord(dal.getChild(sid, 'bg_000000c1')!, clock, { session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft: crashLeftOf(dal, row, () => true), cancelLeft: cancelLeftOf(dal, row, () => true) });
+      expect(shown).toMatchObject({ state: 'cancelled', presentationState: 'cancelled', interruption: null, live: false, activeTools: [] });
+    });
+
+    it('the record ends every unfinished agent cancelled with its report and closes the iteration cancelled — the calls answered, the approval withdrawn, the dead background sessions ended, the task back to pending — and only once', () => {
+      const sid = 'S-cancel' as SessionId;
+      const writer = created(sid);
+      cancelledThenDied(writer, sid);
+      const r = recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined);
+      expect(r).toEqual({ iteration: 2, paused: 0, cancelled: 3, withdrawn: 1, terminals: 1 });
+      expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', outcome: 'cancelled', interruption: null });
+      for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) {
+        expect(dal.getChild(sid, id), id).toMatchObject({ state: 'cancelled', interruption: null, resume_state: null });
+        expect(JSON.parse(dal.getChild(sid, id)!.report!), id).toMatchObject({ status: 'cancelled', summary: ACCEPTED_CANCEL_REPORT });
+      }
+      expect(dal.getChild(sid, 'bg_000000c4')).toMatchObject({ state: 'succeeded' });
+      // Another root's orphan is the stale-child settle's, as before.
+      expect(dal.getChild(sid, 'bg_000000x1')).toMatchObject({ state: 'running' });
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_paused')).toEqual([]);
+      // The root's calls, which never started, are answered so no conversation or row is left open.
+      expect(conversationOf(dal.agentConversation(sid, ROOT)).at(-1)).toMatchObject({ role: 'tool', content: [{ callId: 'a', isError: true }, { callId: 'b', isError: true }] });
+      expect(dal.getSession(sid)!.pending_approvals).toBe('[]');
+      expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_dead', 'crash'], ['ts_done', 'completed'], ['ts_live', 'running']]);
+      // REQ-ORCH-135: the task stays anchored; the count moves past the closed iteration.
+      expect(decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases[0]!.tasks).toMatchObject([{ id: 't', state: 'pending' }]);
+      expect(dal.getSession(sid)!.iterations_completed).toBe(2);
+      // The close is the vocabulary's `iteration.end`; REQ-ORCH-139's closed timeline vocabulary gains no word for it.
+      expect(dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; outcome: string })).toMatchObject([{ iteration: 2, outcome: 'cancelled' }]);
+      expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('iteration_cancelled');
+      expect(resumableOf(dal, dal.getSession(sid)!)).toBeNull();
+
+      const before = { messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length };
+      expect(recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined)).toEqual({ iteration: null, paused: 0, cancelled: 0, withdrawn: 0, terminals: 0 });
+      expect({ messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length }).toEqual(before);
+    });
+
+    it('REQ-ORCH-098 (the repair of a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries): every agent the record ends cancelled is torn down once, in its report\'s words; a second record writes none', () => {
+      const sid = 'S-cancel-teardown' as SessionId;
+      const writer = created(sid);
+      cancelledThenDied(writer, sid);
+      recordCrash(dal, writer, sid, new Set(), () => undefined);
+      const teardown = ['child_end', 'child_result', 'child_conversation_closed'];
+      const ownOf = (taskId: string) => dal.timelineOf(sid).filter((t) => teardown.includes(t.name) && (JSON.parse(t.metadata) as { task_id?: string }).task_id === taskId);
+      for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) {
+        const name = id.slice(-2);
+        expect(ownOf(id).map((t) => [t.name, t.message]), id).toEqual([
+          ['child_end', `Child ${name} (${id}) ended cancelled.`],
+          ['child_result', `Child ${name} reported cancelled: ${ACCEPTED_CANCEL_REPORT.slice(0, 120)}`],
+          ['child_conversation_closed', `Child ${name}'s conversation closed.`],
+        ]);
+        expect(JSON.parse(ownOf(id)[0]!.metadata), id).toEqual({ task_id: id, state: 'cancelled', at: expect.any(String) });
+      }
+      // The finished child and another root's orphan are not this record's to end.
+      expect(ownOf('bg_000000c4')).toEqual([]);
+      expect(ownOf('bg_000000x1')).toEqual([]);
+      const before = dal.timelineOf(sid).length;
+      recordCrash(dal, writer, sid, new Set(), () => undefined);
+      expect(dal.timelineOf(sid).length).toBe(before);
+    });
+
+    it('a cancel that overtook a rest: the iteration a stop had left open is closed too, and the agent the stop paused ends cancelled', () => {
+      const sid = 'S-overtaken' as SessionId;
+      const writer = created(sid);
+      dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: ROOT, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+      dal.setIterationInterruption(sid, 1, 'stop');
+      writer.spawnChild({ ...child('bg_000000c1', 'running', ROOT), iteration: 1 });
+      writer.restChild('bg_000000c1', 'stop', 'running');
+      expect(writer.recordCancelAccepted()).toEqual({ ok: true, value: true });
+      expect(resumableOf(dal, dal.getSession(sid)!)).toBeNull();
+      expect(recordCrash(dal, writer, sid, new Set(), () => undefined)).toMatchObject({ iteration: 1, paused: 0, cancelled: 1 });
+      expect(dal.getIteration(sid, 1)).toMatchObject({ state: 'closed', outcome: 'cancelled' });
+      // As clause 6's decline leaves a paused agent it cancels (`Run.cancelPausedAgents`): terminal, never resumed.
+      expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'cancelled' });
+    });
   });
 
   describe('when it is recorded (Sessions)', () => {
@@ -261,6 +462,288 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(personas).toEqual(['orchestrator', undefined]);
     });
 
+    it('clauses 3 and 4 with OQ-97: a root resumed as the entry role because its persona is no longer configured writes its rows under the persona its iteration was opened with, so a crash in its step still keeps the call that completed (docs/defects/fixed/a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record.md)', async () => {
+      const sid = await crashed();
+      // The continue's run is set up as the entry role, `coding-agent`: 'orchestrator' is no longer configured (the run
+      // host's `prepareRun` falls back so, OQ-97). Its step asks for two calls; the first completes, the second never returns.
+      // The children resume beside it and answer; the root's request is the one carrying the continue's message.
+      const client = new ScriptedModelClient([]);
+      const original = client.stream.bind(client);
+      let asked = false;
+      client.stream = (req) => {
+        const root = !asked && req.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text === 'second'));
+        if (root) asked = true;
+        client.push(root ? toolCalls([{ callId: 'k1', name: 'write', args: {} }, { callId: 'k2', name: 'grep', args: {} }], 'Two more.') : answer('Answered.'));
+        return original(req);
+      };
+      const port = (): ToolPort => ({
+        specs: () => ['write', 'grep'].map((name) => ({ name, description: name, parameters: { type: 'object' } })),
+        dispatch: (c) => (c.callId === 'k1'
+          ? Promise.resolve({ text: 'wrote the file', isError: false, status: 'ok' as const, durationMs: 1, label: 'write', args: {} })
+          : new Promise(() => undefined)),
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
+      const personas: (string | undefined)[] = [];
+      const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, persona: 'coding-agent', model: MODEL, credentialFor: () => async () => 'k' };
+      const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
+      const next = new Sessions({
+        clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+        tools: () => port(),
+        configure: (_ws, ctx) => { personas.push(ctx.entryPersona); return ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }); },
+      });
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.prompt(sid, 'second').ok).toBe(true);
+      const running = () => dal.residentRows(sid).some((r) => r.call_key === 'k2' && r.tool_status === 'running');
+      for (let i = 0; i < 400 && !running(); i++) await new Promise((r) => setTimeout(r, 5));
+      expect(running()).toBe(true);
+      expect(personas).toEqual(['orchestrator']);
+      // The root runs as the entry role and keeps its name: every row of its step carries the persona it was opened with.
+      expect(dal.residentRows(sid).filter((r) => r.call_key === 'k1' || r.call_key === 'k2').map((r) => [r.name, r.persona, r.tool_status])).toEqual([
+        ['orchestrator', 'coding-agent', 'ok'],
+        ['orchestrator', 'coding-agent', 'running'],
+      ]);
+      // A steer for the root is announced under that same name, the one its injection and its rows carry.
+      expect(next.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } }).ok).toBe(true);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'steering_submitted').map((t) => t.message)).toEqual([expect.stringMatching(/^A steering prompt was submitted for orchestrator \(/)]);
+      // The host dies in that step; the next repair or continue records the crash from the store alone.
+      const w = SessionWriter.open({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { pid: 99, host: HOST, isProcessAlive: () => false });
+      if (!w.ok) throw new Error('writer');
+      expect(recordCrash(dal, w.value, sid, new Set(), () => undefined).iteration).toBe(2);
+      // Clause 3: the call that completed keeps what it returned; only the call cut off is recorded as interrupted.
+      expect(conversationOf(dal.agentConversation(sid, ROOT)).at(-1)).toEqual({ role: 'tool', content: [
+        { kind: 'tool-result', callId: 'k1', name: 'write', isError: false, result: 'wrote the file' },
+        { kind: 'tool-result', callId: 'k2', name: 'grep', isError: true, result: interruptedResult('crash', true, '') },
+      ] });
+      // REQ-SESSION-129: no row is left running.
+      expect(dal.residentRows(sid).find((r) => r.call_key === 'k2')).toMatchObject({ tool_status: 'failed', output: interruptedResult('crash', true, '') });
+    });
+
+    it('clause 4 with OQ-97 (found by the review of the repair of a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record): a steer for a root resumed as the entry role, submitted before its first step, is announced under the persona its iteration was opened with', async () => {
+      const sid = await crashed();
+      // The continue's run is set up as the entry role, `coding-agent` (OQ-97); its `session_start` hook is held, so the
+      // steer lands before the resumed root's turn begins.
+      let releaseHook!: () => void;
+      const hookHold = new Promise<void>((r) => { releaseHook = r; });
+      let starting = false;
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event) => { if (event === 'session_start') { starting = true; await hookHold; } return []; }, advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      const client = new ScriptedModelClient([]);
+      const original = client.stream.bind(client);
+      client.stream = (req) => { client.push(answer('Answered.')); return original(req); };
+      const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, persona: 'coding-agent', model: MODEL, credentialFor: () => async () => 'k' };
+      const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
+      const next = new Sessions({
+        clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+        hooks: () => hooks,
+        configure: () => ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }),
+      });
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.prompt(sid, 'second').ok).toBe(true);
+      for (let i = 0; i < 400 && !starting; i++) await new Promise((r) => setTimeout(r, 5));
+      expect(starting).toBe(true);
+      expect(next.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } }).ok).toBe(true);
+      releaseHook();
+      await next.running(sid);
+      // Announced and injected under the one name its rows carry, not the entry role it runs as.
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'steering_submitted').map((t) => t.message)).toEqual([expect.stringMatching(/^A steering prompt was submitted for orchestrator \(/)]);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'steering_injected').map((t) => t.message)).toEqual([expect.stringMatching(/orchestrator/)]);
+    });
+
+    describe('REQ-MONITOR-133/134 with clause 4 and OQ-97 (the repair of a-root-steer-after-a-resumed-iteration-closes-is-announced-under-the-resumed-roots-name.md): a root steer submitted after the resumed iteration closes is announced under the root that will take it', () => {
+      /**
+       * The continue's run is set up as the entry role, `coding-agent` (OQ-97); the resumed root, `orchestrator`, answers and
+       * its iteration closes. Its `iteration_end` hook is held: `during` runs in that window, after the resumed root finished
+       * and before any next iteration's turn begins.
+       */
+      async function steerAfterTheResumedIterationCloses(during: (next: Sessions, sid: SessionId) => void): Promise<SessionId> {
+        const sid = await crashed();
+        let releaseHook!: () => void;
+        const hookHold = new Promise<void>((r) => { releaseHook = r; });
+        let closing = false;
+        const hooks: HookPort = {
+          auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+          fireLifecycle: async (event, fields) => { if (event === 'iteration_end' && fields['iteration'] === 2) { closing = true; await hookHold; } return []; }, advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+        };
+        const client = new ScriptedModelClient([]);
+        const original = client.stream.bind(client);
+        client.stream = (req) => { client.push(answer('Answered.')); return original(req); };
+        const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, persona: 'coding-agent', model: MODEL, credentialFor: () => async () => 'k' };
+        const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
+        const next = new Sessions({
+          clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+          model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+          hooks: () => hooks,
+          configure: () => ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }),
+        });
+        expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(next.prompt(sid, 'second').ok).toBe(true);
+        for (let i = 0; i < 400 && !closing; i++) await new Promise((r) => setTimeout(r, 5));
+        expect(closing).toBe(true);
+        during(next, sid);
+        releaseHook();
+        await next.running(sid);
+        return sid;
+      }
+      const messages = (sid: SessionId, name: string) => dal.timelineOf(sid).filter((t) => t.name === name).map((t) => t.message);
+
+      it('an iteration follows: announced and injected under the fresh root\'s name, the entry role', async () => {
+        const sid = await steerAfterTheResumedIterationCloses((next, s) => {
+          // A queued prompt gives the run another iteration, whose root is fresh and runs as the entry role.
+          expect(next.control({ op: 'createQueuedPrompt', sessionId: s, args: { text: 'then this' } }).ok).toBe(true);
+          expect(next.control({ op: 'submitSteeringPrompt', sessionId: s, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } }).ok).toBe(true);
+        });
+        expect(dal.iterationsOf(sid).filter((r) => r.iteration >= 2).map((r) => [r.iteration, r.root_persona])).toEqual([[2, 'orchestrator'], [3, 'coding-agent']]);
+        expect(messages(sid, 'steering_submitted')).toEqual([expect.stringMatching(/^A steering prompt was submitted for coding-agent \(/)]);
+        expect(messages(sid, 'steering_injected')).toEqual([expect.stringMatching(/^A steering prompt reached coding-agent \(/)]);
+      });
+
+      it('no iteration follows: announced, and reported not delivered, under the same name', async () => {
+        const sid = await steerAfterTheResumedIterationCloses((next, s) => {
+          expect(next.control({ op: 'submitSteeringPrompt', sessionId: s, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } }).ok).toBe(true);
+        });
+        expect(dal.iterationsOf(sid).map((r) => r.iteration)).toEqual([1, 2]);
+        expect(messages(sid, 'steering_submitted')).toEqual([expect.stringMatching(/^A steering prompt was submitted for coding-agent \(/)]);
+        expect(messages(sid, 'steering_not_delivered')).toEqual([expect.stringMatching(/^The steering prompt for coding-agent \(.*before coding-agent took another step\.$/)]);
+      });
+
+      it('a stop rests the resumed root: a steer after its turn ended, while the rest waits on a child, is announced and delivered under its name', async () => {
+        const sid = await crashed();
+        // The resumed root answers at once; every child's step is held and ignores its abort, so the stop's rest waits on
+        // the children for the grace — after the root's turn has ended, before the rest leaves it `paused`.
+        const client = new ScriptedModelClient([]);
+        const original = client.stream.bind(client);
+        let childAsked = false;
+        client.stream = (req) => {
+          const root = req.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text === 'second'));
+          if (root) { client.push(answer('Answered.')); return original(req); }
+          childAsked = true;
+          client.push({ parts: [{ hold: new Promise<void>(() => undefined) }, ...answer('late').parts] });
+          return original({ ...req, signal: new AbortController().signal });
+        };
+        const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, persona: 'coding-agent', model: MODEL, credentialFor: () => async () => 'k' };
+        const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
+        const next = new Sessions({
+          clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+          model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+          tools: () => ({ specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed' as const, durationMs: 0, label: '', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false }),
+          configure: () => ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }),
+        });
+        expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(next.prompt(sid, 'second').ok).toBe(true);
+        for (let i = 0; i < 400 && !childAsked; i++) await new Promise((r) => setTimeout(r, 5));
+        expect(childAsked).toBe(true);
+        expect(next.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+        // The root's turn ends on the stop's abort; its children hold the rest until the grace runs out.
+        await new Promise((r) => setTimeout(r, 50));
+        expect(next.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } }).ok).toBe(true);
+        clock.advance(30_000);
+        await next.running(sid);
+        expect(dal.iterationsOf(sid).find((r) => r.iteration === 2)).toMatchObject({ state: 'open', interruption: 'stop' });
+        expect(messages(sid, 'steering_submitted')).toEqual([expect.stringMatching(/^A steering prompt was submitted for orchestrator \(/)]);
+        expect(messages(sid, 'steering_injected')).toEqual([expect.stringMatching(/^A steering prompt reached orchestrator \(/)]);
+      });
+    });
+
+    /*
+     * Found by the fourth review of the repair of a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record
+     * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md): the root's rows and calls carry the
+     * persona its iteration was opened with, and the surfaces knew the run-level agent by the entry persona alone.
+     */
+    it('clause 4 with OQ-97 (REQ-MONITOR-060/061/071): the session names a root resumed as the entry role among its roots, and the run-level agent\'s tools are the calls it made under that name', async () => {
+      const sid = await crashed();
+      const client = new ScriptedModelClient([]);
+      const original = client.stream.bind(client);
+      let asked = false;
+      client.stream = (req) => {
+        const root = !asked && req.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text === 'second'));
+        if (root) asked = true;
+        client.push(root ? toolCalls([{ callId: 'k1', name: 'write', args: {} }, { callId: 'k2', name: 'grep', args: {} }], 'Two more.') : answer('Answered.'));
+        return original(req);
+      };
+      // The root's second call is held until the test has read the session as the surfaces would. Each call is recorded
+      // through the writer as the run host's gate records it (`openToolCall`, `settleToolCall`), which is what the
+      // run-level agent's tool history is read from.
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const port = (writer: SessionWriter): ToolPort => ({
+        specs: () => ['write', 'grep'].map((name) => ({ name, description: name, parameters: { type: 'object' } })),
+        dispatch: async (c) => {
+          const open = { call_id: c.callId, agent_name: c.agentName, tool_name: c.name, args: {} };
+          const ordinal = writer.openToolCall(open);
+          if (c.callId === 'k2') await held;
+          if (ordinal.ok) writer.settleToolCall(ordinal.value, open, { status: 'ok', elapsed_ms: 1, is_error: false, result: 'done' });
+          return { text: 'done', isError: false, status: 'ok' as const, durationMs: 1, label: c.name, args: {} };
+        },
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
+      const snapshots: SessionRecord[] = [];
+      const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, persona: 'coding-agent', model: MODEL, credentialFor: () => async () => 'k' };
+      const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
+      const next = new Sessions({
+        clocks: clock, publisher: { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } }, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+        tools: (ctx) => port(ctx.writer),
+        configure: () => ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }),
+      });
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.prompt(sid, 'second').ok).toBe(true);
+      const running = () => dal.residentRows(sid).some((r) => r.call_key === 'k2' && r.tool_status === 'running');
+      for (let i = 0; i < 400 && !running(); i++) await new Promise((r) => setTimeout(r, 5));
+      expect(running()).toBe(true);
+      next.owner(sid)!.reconcile();
+      const seen = snapshots.at(-1)!;
+      // Every root the session recorded, by the name its rows carry and its canonical name: iteration 1's and the one resumed.
+      expect(seen.entryRoots).toEqual([{ name: 'orchestrator', canonical: 'orchestrator' }]);
+      // The calls of its step, recorded under that name, are the run-level agent's history, the held one active.
+      expect(seen.entryTools.called).toEqual(['write', 'grep']);
+      expect(seen.entryTools.active).toEqual(['grep']);
+      release();
+      await next.running(sid);
+    });
+
+    it('clause 4 with OQ-97 (REQ-SESSION-092): a root resumed as the entry role that the stop\'s grace gives up on is named in the warning by the name its rows carry', async () => {
+      const sid = await crashed();
+      const client = new ScriptedModelClient([]);
+      const original = client.stream.bind(client);
+      let asked = false;
+      client.stream = (req) => {
+        const root = !asked && req.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text === 'second'));
+        if (root) asked = true;
+        client.push(root ? toolCalls([{ callId: 'k1', name: 'hang', args: {} }], 'Hanging.') : answer('Answered.'));
+        return original(req);
+      };
+      // The resumed root's call never returns, whatever the stop does.
+      const port = (): ToolPort => ({
+        specs: () => [{ name: 'hang', description: 'hang', parameters: { type: 'object' } }],
+        dispatch: () => new Promise(() => undefined),
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
+      const warnings: string[] = [];
+      const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, persona: 'coding-agent', model: MODEL, credentialFor: () => async () => 'k' };
+      const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
+      const next = new Sessions({
+        clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+        tools: () => port(),
+        configure: () => ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }),
+      });
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.prompt(sid, 'second').ok).toBe(true);
+      const hanging = () => dal.residentRows(sid).some((r) => r.call_key === 'k1' && r.tool_status === 'running');
+      for (let i = 0; i < 400 && !hanging(); i++) await new Promise((r) => setTimeout(r, 5));
+      expect(hanging()).toBe(true);
+      expect(next.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(30_000);
+      await next.running(sid);
+      const given = warnings.filter((w) => /did not return within the stop's 30 s grace/.test(w));
+      expect(given).toEqual([expect.stringMatching(/the root orchestrator did not return/)]);
+    });
+
     it('clause 6 (found by phase 4\'s second review): a continue that declines the open iteration is set up as the entry role — its root is not restored', async () => {
       const sid = await crashed(() => undefined, 'paused');
       const personas: (string | undefined)[] = [];
@@ -290,6 +773,40 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       const its = asked.filter((r) => r.messages.some((m) => m.content.some((p) => p.kind === 'tool-result' && p.callId === 'p1')));
       expect(its.length).toBeGreaterThan(0);
       expect(its.filter((r) => r.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text.startsWith('Carry out the task now'))))).toEqual([]);
+    });
+
+    it('REQ-MONITOR-102 (the repair of a-roots-calls-before-a-crash-never-reach-the-session-total.md): the calls the root and a child made before the crash reach the session total when it is repaired, and a continue counts none of them twice', async () => {
+      const worked = (w: SessionWriter): void => {
+        // A call the root completed before the crash, after dieIn's two it never started (answered by the crash first).
+        w.recordAgentMessage(ROOT, 2, 'message', { role: 'tool', content: [{ kind: 'tool-result', callId: 'a', name: 'grep', isError: false, result: 'x' }, { kind: 'tool-result', callId: 'b', name: 'glob', isError: false, result: 'y' }] });
+        w.recordAgentMessage(ROOT, 2, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'r1', name: 'grep', args: '{}' }] });
+        w.recordAgentMessage(ROOT, 2, 'message', { role: 'tool', content: [{ kind: 'tool-result', callId: 'r1', name: 'grep', isError: false, result: 'found' }] });
+        w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'p1', name: 'grep', args: '{}' }] });
+        w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'tool', content: [{ kind: 'tool-result', callId: 'p1', name: 'grep', isError: false, result: 'found' }] });
+      };
+      const repaired = await crashed(worked);
+      expect(dal.getSession(repaired)!.tool_calls).toBe(0);
+      sessionsAs(88).repair(dal, 'C:/ws', { sessionId: repaired });
+      // The root's a, b and r1, and the child's p1.
+      expect(dal.getSession(repaired)!.tool_calls).toBe(4);
+      expect(dal.getIteration(repaired, 2)!.root_tool_calls).toBe(3);
+      expect(dal.getChild(repaired, 'bg_000000c1')!.tool_calls).toBe(1);
+    });
+
+    it('REQ-MONITOR-102: a continue after the crash counts what the crash left once — the resumed agents add only their own new calls', async () => {
+      const sid = await crashed((w) => {
+        w.recordAgentMessage(ROOT, 2, 'message', { role: 'tool', content: [{ kind: 'tool-result', callId: 'a', name: 'grep', isError: false, result: 'x' }, { kind: 'tool-result', callId: 'b', name: 'glob', isError: false, result: 'y' }] });
+        w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'p1', name: 'grep', args: '{}' }] });
+        w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'tool', content: [{ kind: 'tool-result', callId: 'p1', name: 'grep', isError: false, result: 'found' }] });
+      });
+      const next = sessionsAs(88);
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.prompt(sid, 'second').ok).toBe(true);
+      expect((await next.running(sid))!.status).toBe('completed');
+      // Every agent answers without a call here: the total is the crash's three, counted once.
+      expect(dal.getSession(sid)!.tool_calls).toBe(3);
+      expect(dal.getIteration(sid, 2)!.root_tool_calls).toBe(2);
+      expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'succeeded', tool_calls: 1 });
     });
 
     describe('PD-ORCH-005 clauses 13 and 18 (OQ-100): before the crash is recorded, what it left presents as the record will leave it', () => {
@@ -807,6 +1324,415 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
         expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
       });
+    });
+
+    /**
+     * OQ-103's last question, ruled 2026-09-29 (R-067): the explicit cancel is made durable when it is accepted, and the next
+     * repair or continue ends its agents `cancelled` and closes the iteration; clause 18's Continue resumes none of them.
+     * The repair of docs/defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md.
+     */
+    describe('PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103 ruled): a run whose explicit cancel was accepted and never carried out', () => {
+      /** A process whose root's first model call holds until `release`, then answers. */
+      function holding() {
+        let release!: () => void;
+        const hold = new Promise<void>((r) => { release = r; });
+        const client = new ScriptedModelClient([{ parts: [{ hold }, ...answer('never').parts] }]);
+        const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
+        const sessions = new Sessions({
+          clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-held',
+          model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
+        });
+        return { sessions, release: () => release() };
+      }
+      const cancelRun = (s: Sessions, sid: SessionId) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } });
+
+      it('the cancel is marked on the open iteration when it is accepted, before the run carries it out, and the run\'s own close keeps the mark', async () => {
+        const { sessions, release } = holding();
+        const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+        await vi.waitFor(() => { expect(dal.openIterationOf(sid)).toBeDefined(); });
+        expect(dal.getIteration(sid, 1)!.cancel_accepted_at).toBeNull();
+        expect(cancelRun(sessions, sid)).toEqual({ ok: true });
+        // Durable at once: a host that died here would leave the mark for the next repair or continue.
+        expect(dal.getIteration(sid, 1)).toMatchObject({ state: 'open', cancel_accepted_at: expect.any(String) });
+        release();
+        await sessions.running(sid);
+        expect(dal.getIteration(sid, 1)).toMatchObject({ state: 'closed', outcome: 'cancelled', cancel_accepted_at: expect.any(String) });
+      });
+
+      it('a cancel accepted as the iteration begins, before it is recorded open, marks it when it opens', async () => {
+        const { sessions, release } = holding();
+        const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+        let cancelled = false;
+        sessions.bus.attach(sid, { mode: 'blocking', deliver: (e) => {
+          if (e.event === 'iteration.start' && !cancelled) { cancelled = true; expect(dal.openIterationOf(sid)).toBeUndefined(); expect(cancelRun(sessions, sid)).toEqual({ ok: true }); }
+          return undefined;
+        } });
+        release();
+        await sessions.running(sid);
+        expect(cancelled).toBe(true);
+        expect(dal.getIteration(sid, 1)).toMatchObject({ state: 'closed', outcome: 'cancelled', cancel_accepted_at: expect.any(String) });
+      });
+
+      const cancelledThenDied = () => crashed((w) => { expect(w.recordCancelAccepted()).toEqual({ ok: true, value: true }); }, 'running');
+
+      it('loading the session records nothing; its agents present cancelled, none crash-left, and the Continue action counts nothing (clause 8)', async () => {
+        const sid = await cancelledThenDied();
+        const snapshots: SessionRecord[] = [];
+        const viewer = sessionsAs(88, undefined, { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } });
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        viewer.owner(sid)!.attach();
+        const seen = snapshots.at(-1)!;
+        expect(seen.resumable).toBeNull();
+        expect(['bg_000000c1', 'bg_000000c2', 'bg_000000c3'].map((id) => seen.agents.find((a) => a.id === id)!.presentationState)).toEqual(['cancelled', 'cancelled', 'cancelled']);
+        expect(seen.agents.filter((a) => a.interruption !== null)).toEqual([]);
+        expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'open', interruption: null });
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+      });
+
+      it('the repair ends them cancelled and closes the iteration; the session is left with nothing to resume', async () => {
+        const sid = await cancelledThenDied();
+        const warned: string[] = [];
+        const report = sessionsAs(88, undefined, NONE, () => false, (m) => { warned.push(m); }).repair(dal, 'C:/ws', { sessionId: sid });
+        expect(report.repaired).toHaveLength(1);
+        expect(dal.getSession(sid)!.execution_status).toBe('interrupted');
+        expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', outcome: 'cancelled', interruption: null });
+        expect(['bg_000000c1', 'bg_000000c2', 'bg_000000c3'].map((id) => dal.getChild(sid, id)!.state)).toEqual(['cancelled', 'cancelled', 'cancelled']);
+        // REQ-LIBRARY-092: each report is materialised, as every terminal child's is.
+        expect(dal.artifactsOf(sid).filter((a) => a.source_task_id !== null && ['bg_000000c1', 'bg_000000c2', 'bg_000000c3'].includes(a.source_task_id)).map((a) => a.status).sort()).toEqual(['cancelled', 'cancelled', 'cancelled']);
+        expect(resumableOf(dal, dal.getSession(sid)!)).toBeNull();
+        expect(warned.some((m) => m.includes('was closed cancelled'))).toBe(true);
+      });
+
+      for (const how of ['the Continue action', '"continue without them"', 'a continue by message'] as const) {
+        for (const state of ['recovery', 'interrupted'] as const) {
+          it(`${state}: ${how} resumes none of them — they end cancelled, the iteration closes cancelled, and the session goes on as a new iteration`, async () => {
+            const sid = await cancelledThenDied();
+            const personas: (string | undefined)[] = [];
+            const next = sessionsAs(88, (p) => personas.push(p));
+            expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+            if (state === 'interrupted') expect(next.checkpointListing(dal, 'C:/ws', sid).ok).toBe(true);
+            const rootBefore = dal.agentConversation(sid, ROOT).length;
+            if (how === 'the Continue action') expect(next.continueSession(sid, 'continue').ok).toBe(true);
+            else if (how === '"continue without them"') expect(next.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+            else expect(next.prompt(sid, 'second').ok).toBe(true);
+            expect((await next.running(sid))!.status).toBe('completed');
+            expect(['bg_000000c1', 'bg_000000c2', 'bg_000000c3'].map((id) => dal.getChild(sid, id)!.state)).toEqual(['cancelled', 'cancelled', 'cancelled']);
+            for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) expect(JSON.parse(dal.getChild(sid, id)!.report!), id).toMatchObject({ status: 'cancelled', summary: ACCEPTED_CANCEL_REPORT });
+            expect(dal.timelineOf(sid).filter((t) => t.name === 'child_paused' || t.name === 'iteration_resumed')).toEqual([]);
+            expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'succeeded'], [2, 'closed', 'cancelled'], [3, 'closed', 'succeeded']]);
+            // The cancelled root was not restored: its record gained only the answers to its cut calls, and the run was set up as the entry role.
+            expect(dal.agentConversation(sid, ROOT).length).toBe(rootBefore + 1);
+            expect(dal.iterationsOf(sid)[2]!.root_task_id).not.toBe(ROOT);
+            expect(personas).toEqual([undefined]);
+          });
+        }
+      }
+    });
+  });
+
+  /*
+   * REQ-MONITOR-102 with REQ-ORCH-153 (the repair of a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md):
+   * a plan cycle is not an iteration and has no `iterations` row, so the count the crash record reads for an execution root
+   * never reached a plan cycle's root, and a crash during one lost the calls its root had made.
+   */
+  describe('REQ-MONITOR-102 with REQ-ORCH-153: a plan cycle\'s root calls before a crash reach the session total', () => {
+    const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
+    const settle = async (until: () => boolean) => { for (let i = 0; i < 400 && !until(); i++) await new Promise((r) => setTimeout(r, 5)); };
+    /**
+     * A plan-mode session (REQ-ORCH-153) whose plan cycle's root makes one call that completes (`g1`), then one that never
+     * returns (`g2`) — or, `parks`, answers with its plan after `g1`. `alive` is the process probe the session's own
+     * process answers to.
+     */
+    function planSession(parks = false) {
+      const client = new ScriptedModelClient([
+        toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Reading.'),
+        parks ? answer('Step 1: change it.') : toolCalls([{ callId: 'g2', name: 'grep', args: {} }], 'Reading more.'),
+      ]);
+      const port = (): ToolPort => ({
+        specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }],
+        dispatch: (c) => (c.callId === 'g1' ? Promise.resolve({ text: 'a.ts:1', isError: false, status: 'ok' as const, durationMs: 1, label: 'grep', args: {} }) : new Promise(() => undefined)),
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
+      const sessions = new Sessions({
+        clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan', isProcessAlive: () => true,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s), tools: () => port(),
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runStartMode: 'plan' },
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+      return { sessions, sid };
+    }
+    const cutRow = (sid: SessionId) => dal.residentRows(sid).find((r) => r.call_key === 'g2');
+    /** The plan cycle's root: the one agent whose record the session holds. */
+    const planRootOf = (sid: SessionId): string => (dal.db.prepare('SELECT DISTINCT task_id FROM agent_messages WHERE session_id = ?').all(sid) as { task_id: string }[]).map((r) => r.task_id)[0]!;
+    /** The next process: every other is dead, so the session's run is a crash's. */
+    const next = () => new Sessions({
+      clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan', isProcessAlive: () => false,
+      model: { backend: new DefaultAgentBackend(new ScriptedModelClient([])), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+    });
+    const writerAs = (sid: SessionId): SessionWriter => {
+      const w = SessionWriter.open({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { pid: 99, host: HOST, isProcessAlive: () => false });
+      if (!w.ok) throw new Error('writer');
+      return w.value;
+    };
+
+    it('the repair adds the calls the plan cycle\'s root made — the one that completed and the one the crash cut — once, and settles the cut call\'s row', async () => {
+      const { sessions, sid } = planSession();
+      await settle(() => cutRow(sid)?.tool_status === 'running');
+      expect(sessions.run(sid)!.isPlanGateHeld).toBe(true);
+      // Nothing counted them: the root's turn never returned, and a plan cycle has no iteration row. The session names it.
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 0, plan_root_task_id: planRootOf(sid), plan_root_persona: 'orchestrator' });
+      expect(dal.iterationsOf(sid)).toEqual([]);
+      expect(next().repair(dal, 'C:/ws', { sessionId: sid }).repaired).toHaveLength(1);
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 2, plan_root_task_id: null, plan_root_persona: null });
+      // REQ-SESSION-129: the call the crash cut is answered as a crash's, and its row settles `failed`.
+      expect(conversationOf(dal.agentConversation(sid, planRootOf(sid))).at(-1)).toEqual({ role: 'tool', content: [{ kind: 'tool-result', callId: 'g2', name: 'grep', isError: true, result: interruptedResult('crash', true, '') }] });
+      expect(cutRow(sid)).toMatchObject({ tool_status: 'failed', output: interruptedResult('crash', true, '') });
+      // A second recording finds nothing more to count.
+      recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(2);
+    });
+
+    it('a plan cycle whose root returned — the run parked at the gate — counted its calls once and names no root, so a crash recorded after adds nothing', async () => {
+      const { sessions, sid } = planSession(true);
+      expect((await sessions.running(sid))!.execution_status).toBe('awaiting_plan_decision');
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 1, plan_root_task_id: null });
+      recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(1);
+    });
+
+    it('a plan cycle\'s root the stop\'s grace gave up on is counted from its record and released, so a crash recorded after adds nothing', async () => {
+      const { sessions, sid } = planSession();
+      await settle(() => cutRow(sid)?.tool_status === 'running');
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(30_000);
+      expect(await Promise.race([sessions.running(sid)!.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 1_000))])).toBe(true);
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 2, plan_root_task_id: null });
+      recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(2);
+    });
+
+    /*
+     * The give-up path's own release (the verifier's review of the repair): a root given up on is released in the transaction
+     * that adds its calls to the total, not by a later write apart from it. A store that drops every release written once the
+     * total already holds the calls stands in for a process death between two such writes: with the release made apart — the
+     * total first, the marker cleared after — the marker stays set, and a later crash record counts the calls a second time.
+     */
+    it('a plan cycle\'s root the stop\'s grace gave up on is released in the transaction that adds its calls, not by a write apart from it', async () => {
+      const { sessions, sid } = planSession();
+      dal.db.exec(`CREATE TEMP TRIGGER drop_release_apart BEFORE UPDATE OF plan_root_task_id ON sessions
+        WHEN OLD.plan_root_task_id IS NOT NULL AND NEW.plan_root_task_id IS NULL AND OLD.tool_calls > 0 BEGIN SELECT RAISE(IGNORE); END`);
+      await settle(() => cutRow(sid)?.tool_status === 'running');
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(30_000);
+      expect(await Promise.race([sessions.running(sid)!.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 1_000))])).toBe(true);
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 2, plan_root_task_id: null });
+      dal.db.exec('DROP TRIGGER drop_release_apart');
+      recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(2);
+    });
+
+    /*
+     * REQ-MONITOR-102 / REQ-SESSION-129 with REQ-ORCH-053 and OQ-96 (the repair of
+     * a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md): a plan cycle's child a
+     * crash ended mid-call. A plan cycle has no iteration row, so the crash record pauses none of its agents, and the next
+     * continue's stale-child settle ends the child `cancelled`.
+     */
+    describe('a plan cycle\'s child a crash ended mid-call', () => {
+      /** The root delegates `look`, then waits; `look` makes one call that completes (`c1`), then one that never returns (`c2`). */
+      function planWithChild() {
+        const client = new ScriptedModelClient([]);
+        const original = client.stream.bind(client);
+        const turns = { root: 0, child: 0 };
+        client.stream = (req) => {
+          const root = /^You are the orchestrator/.test(req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '');
+          const n = root ? ++turns.root : ++turns.child;
+          if (root) client.push(n === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'look', task: 'TASK: look' } }], 'Delegating.') : { parts: [{ hold: new Promise<void>(() => undefined) }, ...answer('never').parts] });
+          else client.push(n === 1 ? toolCalls([{ callId: 'c1', name: 'grep', args: {} }], 'Reading.') : toolCalls([{ callId: 'c2', name: 'grep', args: {} }], 'Reading more.'));
+          return original(req);
+        };
+        const port = (ctx: ToolPortContext): ToolPort => ({
+          specs: () => (ctx.delegation ? [{ name: 'delegate', description: 'delegate', parameters: { type: 'object' } }] : [{ name: 'grep', description: 'search', parameters: { type: 'object' } }]),
+          dispatch: async (c) => {
+            if (c.name === 'delegate' && ctx.delegation) {
+              const a = JSON.parse(c.rawArgs) as Record<string, string>;
+              const r = await ctx.delegation.delegate(ctx.parentId ?? 'root', { persona: a['persona']!, taskName: a['task_name']!, task: a['task']!, dependsOn: [], inheritedContext: [], category: '', runInBackground: true, writeScope: [] });
+              return { text: `Task '${r.canonicalName}': ${r.status}`, isError: r.status === 'rejected', status: r.status === 'rejected' ? 'failed' as const : 'ok' as const, durationMs: 1, label: 'delegate', args: a };
+            }
+            return c.callId === 'c1' ? { text: 'a.ts:1', isError: false, status: 'ok' as const, durationMs: 1, label: 'grep', args: {} } : new Promise(() => undefined);
+          },
+          cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+        });
+        const sessions = new Sessions({
+          clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan', isProcessAlive: () => true,
+          model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s), tools: port,
+          runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runStartMode: 'plan' },
+        });
+        const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+        return { sessions, sid };
+      }
+      const look = (sid: SessionId) => dal.childrenOf(sid).find((c) => c.canonical_name === 'look');
+      const childCut = (sid: SessionId) => dal.residentRows(sid).find((r) => r.call_key === 'c2');
+      const toolRows = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'tool');
+      /** The next process, which answers every request at once. */
+      const continuing = () => new Sessions({
+        clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan', isProcessAlive: () => false,
+        model: { backend: new DefaultAgentBackend((() => { const c = new ScriptedModelClient([]); const o = c.stream.bind(c); c.stream = (req) => { c.push(answer('Planned.')); return o(req); }; return c; })()), config },
+        sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+      });
+
+      it('the repair answers its cut call and settles the row, and counts its calls; the continue\'s settle ends it cancelled and counts none twice', async () => {
+        const { sessions, sid } = planWithChild();
+        await settle(() => childCut(sid)?.tool_status === 'running');
+        expect(sessions.run(sid)!.isPlanGateHeld).toBe(true);
+        expect(look(sid)).toMatchObject({ iteration: 0, state: 'running', tool_calls: 0 });
+        expect(next().repair(dal, 'C:/ws', { sessionId: sid }).repaired).toHaveLength(1);
+        // REQ-SESSION-129: a repair alone leaves no transcript row `running`; the cut call is answered as a crash's.
+        expect(toolRows(sid).filter((r) => r.tool_status === 'running')).toEqual([]);
+        expect(childCut(sid)).toMatchObject({ tool_status: 'failed', output: interruptedResult('crash', true, '') });
+        expect(conversationOf(dal.agentConversation(sid, look(sid)!.task_id)).at(-1)).toEqual({ role: 'tool', content: [{ kind: 'tool-result', callId: 'c2', name: 'grep', isError: true, result: interruptedResult('crash', true, '') }] });
+        // REQ-MONITOR-102: the root's delegate and the child's two calls are in the total, and the child's count is its record's.
+        expect(look(sid)!.tool_calls).toBe(2);
+        expect(dal.getSession(sid)!.tool_calls).toBe(toolRows(sid).length);
+        expect(toolRows(sid)).toHaveLength(3);
+        // The continue: the stale-child settle ends it `cancelled`, and nothing is counted twice.
+        const next2 = continuing();
+        expect(next2.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(next2.prompt(sid, 'again').ok).toBe(true);
+        await next2.running(sid);
+        expect(look(sid)).toMatchObject({ state: 'cancelled', tool_calls: 2 });
+        expect(toolRows(sid).filter((r) => r.tool_status === 'running')).toEqual([]);
+        expect(dal.getSession(sid)!.tool_calls).toBe(toolRows(sid).length);
+      });
+
+      it('a continue with no repair before it does the same: no row left `running`, the child counted once from its record', async () => {
+        const { sid } = planWithChild();
+        await settle(() => childCut(sid)?.tool_status === 'running');
+        const next2 = continuing();
+        expect(next2.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(next2.prompt(sid, 'again').ok).toBe(true);
+        await next2.running(sid);
+        expect(look(sid)).toMatchObject({ state: 'cancelled', tool_calls: 2 });
+        expect(toolRows(sid).filter((r) => r.tool_status === 'running')).toEqual([]);
+        expect(dal.getSession(sid)!.tool_calls).toBe(toolRows(sid).length);
+      });
+    });
+  });
+
+  describe('REQ-MONITOR-105 with ADR-0024: the crash record\'s ring settle at a continue', () => {
+    const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
+    /*
+     * REQ-MONITOR-105 with ADR-0024 (the review of the repair of a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md):
+     * a run of this process closes its tool ports only at its teardown, and one that parked at the plan gate closed none, so a
+     * call of its that ignored its abort may still be under way with its ring row `running`. The continue records a crash
+     * (clause 3) on every launch; it must not settle that row as a crash's, which would drop the call's real settle.
+     */
+    it('a continue after a run of this process parked at the plan gate leaves a ring row its call may still hold `running`', async () => {
+      const client = new ScriptedModelClient([toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Reading.'), answer('Step 1: change it.'), answer('Done.')]);
+      const call = (callId: string, agent: string) => ({ call_id: callId, agent_name: agent, tool_name: 'grep', args: {} });
+      const port = (ctx: ToolPortContext): ToolPort => ({
+        specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }],
+        dispatch: (c) => {
+          // The gate's sink: the call's ring row, settled when it returns — and, beside it, the ring row of another agent's
+          // call that ignored its abort and is still under way when the run parks.
+          const own = ctx.writer.openToolCall(call(c.callId, 'orchestrator'));
+          if (own.ok) ctx.writer.settleToolCall(own.value, call(c.callId, 'orchestrator'), { status: 'ok', elapsed_ms: 1, is_error: false, result: 'a.ts:1' });
+          if (c.callId === 'g1') ctx.writer.openToolCall(call('stray', 'c9'));
+          return Promise.resolve({ text: 'a.ts:1', isError: false, status: 'ok' as const, durationMs: 1, label: 'grep', args: {} });
+        },
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
+      const sessions = new Sessions({
+        clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-park', isProcessAlive: () => true,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s), tools: (ctx) => port(ctx),
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runStartMode: 'plan' },
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid))!.execution_status).toBe('awaiting_plan_decision');
+      const stray = () => dal.toolCallsOf(sid).find((r) => r.call_id === 'stray');
+      expect(stray()).toMatchObject({ status: 'running' });
+      // The approval launches the continuation, which records a crash before its run is built.
+      expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+      expect(stray()).toMatchObject({ status: 'running', is_error: 0 });
+      await sessions.running(sid);
+      expect(stray()).toMatchObject({ status: 'running' });
+    });
+
+    /*
+     * Residual 2 of a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md: the skip read only the session's
+     * current run, so once a later run of this process had torn down (its ports closed), the next continue settled `failed`,
+     * as a crash's, the ring row the earlier parked run's call may still hold. Every run of this process on the session
+     * that parked with its ports open is read, not only the last.
+     */
+    it('a later run of this process that tore down does not re-arm the settle over an earlier parked run\'s ring row', async () => {
+      const client = new ScriptedModelClient([toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Reading.'), answer('Step 1: change it.'), answer('Done.'), answer('Done again.')]);
+      const call = (callId: string, agent: string) => ({ call_id: callId, agent_name: agent, tool_name: 'grep', args: {} });
+      const port = (ctx: ToolPortContext): ToolPort => ({
+        specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }],
+        dispatch: (c) => {
+          const own = ctx.writer.openToolCall(call(c.callId, 'orchestrator'));
+          if (own.ok) ctx.writer.settleToolCall(own.value, call(c.callId, 'orchestrator'), { status: 'ok', elapsed_ms: 1, is_error: false, result: 'a.ts:1' });
+          if (c.callId === 'g1') ctx.writer.openToolCall(call('stray', 'c9'));
+          return Promise.resolve({ text: 'a.ts:1', isError: false, status: 'ok' as const, durationMs: 1, label: 'grep', args: {} });
+        },
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
+      const sessions = new Sessions({
+        clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-park2', isProcessAlive: () => true,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s), tools: (ctx) => port(ctx),
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runStartMode: 'plan' },
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid))!.execution_status).toBe('awaiting_plan_decision');
+      const stray = () => dal.toolCallsOf(sid).find((r) => r.call_id === 'stray');
+      expect(stray()).toMatchObject({ status: 'running' });
+      // Run 2, the approved continuation, completes and tears down: its own ports are closed.
+      expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+      expect((await sessions.running(sid))!.execution_status).not.toBe('awaiting_plan_decision');
+      expect(stray()).toMatchObject({ status: 'running' });
+      // Run 3's continue records a crash again; run 1 is still parked with its ports open, so its call's row is left to it.
+      expect(sessions.prompt(sid, 'again').ok).toBe(true);
+      expect(stray()).toMatchObject({ status: 'running', is_error: 0 });
+      await sessions.running(sid);
+      expect(stray()).toMatchObject({ status: 'running' });
+    });
+
+    /*
+     * The other half of residual 2's repair: a run leaves the set once it has closed its ports. A run of this process that
+     * completed and tore down holds no call that may still settle, so a continue after it settles `failed`, as a crash's,
+     * the ring row no live call holds (here one its port opened and never settled, as a dead process's call leaves it). Were
+     * the run kept in the set after its teardown, every later continue in this process would skip the settle and the row
+     * would stay `running` for good.
+     */
+    it('a continue after a run of this process that completed and tore down settles a ring row no live call holds', async () => {
+      const client = new ScriptedModelClient([toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Reading.'), answer('Done.'), answer('Done again.')]);
+      const call = (callId: string, agent: string) => ({ call_id: callId, agent_name: agent, tool_name: 'grep', args: {} });
+      const port = (ctx: ToolPortContext): ToolPort => ({
+        specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }],
+        dispatch: (c) => {
+          const own = ctx.writer.openToolCall(call(c.callId, 'orchestrator'));
+          if (own.ok) ctx.writer.settleToolCall(own.value, call(c.callId, 'orchestrator'), { status: 'ok', elapsed_ms: 1, is_error: false, result: 'a.ts:1' });
+          if (c.callId === 'g1') ctx.writer.openToolCall(call('dead', 'c9'));
+          return Promise.resolve({ text: 'a.ts:1', isError: false, status: 'ok' as const, durationMs: 1, label: 'grep', args: {} });
+        },
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
+      const sessions = new Sessions({
+        clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-torn', isProcessAlive: () => true,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s), tools: (ctx) => port(ctx),
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runStartMode: 'auto' },
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid))!.execution_status).not.toBe('awaiting_plan_decision');
+      const dead = () => dal.toolCallsOf(sid).find((r) => r.call_id === 'dead');
+      expect(dead()).toMatchObject({ status: 'running' });
+      // The continue records a crash before its run is built; the run that completed closed its ports, so nothing of this
+      // process may still settle the row and it is settled as a crash's.
+      expect(sessions.prompt(sid, 'again').ok).toBe(true);
+      expect(dead()).toMatchObject({ status: 'failed', is_error: 1 });
+      await sessions.running(sid);
+      expect(dead()).toMatchObject({ status: 'failed', is_error: 1 });
     });
   });
 });

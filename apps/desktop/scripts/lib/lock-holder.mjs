@@ -5,8 +5,9 @@
  * A proof that leaves a session `running` behind a lock, and then asks the next launch to repair it (REQ-GIT-094,
  * REQ-SESSION-060), measures the repair only if the lock's pid probes dead by then (REQ-SESSION-056, REQ-GIT-093).
  * The pid is the launch's RUN HOST. Since `endBeforeMain` (`apps/desktop/src/main/exit.ts`), main has been gone only
- * after the run host, so the pid is dead when `spawnSync` returns. Before that, the run host outlived main by up to
- * 1.8 s, and a repair launch started inside that window found the holder alive and correctly made no repair
+ * after the run host, so the pid is dead when the launch returns (`spawnSync`'s until 2026-09-29, `spawnBounded`'s
+ * since). Before that, the run host outlived main by up to 1.8 s, and a repair launch started inside that window found
+ * the holder alive and correctly made no repair
  * (`docs/defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`).
  * `checkpoint-proof` then reported that as the repair failing
  * (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`).

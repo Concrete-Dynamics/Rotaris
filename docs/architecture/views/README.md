@@ -43,9 +43,733 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-29**
+## Last reconciled with the code: **2026-10-01**
 
-**Project initialization across a workspace switch (R-068).** The run host's code-intelligence setup state is keyed by workspace root. Its `mcp.setupStatus` event names the root so main routes progress to the matching task and window. Closing a workspace window cancels its setup; the replacement starts independently. The process view's initialization paragraph names the new event shape.
+**A dialog opened while the composer's send is settling keeps its focus (REQ-MONITOR-137, REQ-CHAT-002).** The
+composer's awaited submissions (a queue, a start or continue, an executed slash command) return the focus through one
+rule, `composerReclaimsFocus` (`ui/src/composer.ts`): to the composer only when the focus is nowhere, in the composer, or
+still on what held it when the submission began. Main's `session.subscribe` gains a verification seam,
+`ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS`, which holds its reply after the attach; the **process view**'s subscription
+paragraph says both. This repairs `a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`;
+`part-j-proof`'s steer-early launch (scenario 2b) shows it. No package, edge, process, message kind, channel, command or
+store column changed.
+
+**The intent status after a continue is the continuation's (REQ-ORCH-014, OQ-162).** The record's `intent` reads the
+newest `run_continuation_intent` entry's payload, else the launch audit's (`intentPayloadOf`, `sessions.ts`, over the
+new `StoreDal.latestTimelineEntry`, a read under the timeline's primary key whose plan `store.test.ts` asserts), and
+reads `classifying` while the live run's pre-flight classification is in flight (`Run.intentClassifying`), a
+continuation's included, so the previous run's intent is not shown meanwhile. This
+repairs the header half of `continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`,
+whose other half stays OQ-162's. The **runtime view**'s `Run.start()` order says so. No package, edge, process, message
+kind, channel, command or store column changed.
+
+**A wait the run imposes is not a stall (REQ-MONITOR-117..119, REQ-ORCH-091, REQ-ORCH-092, REQ-ORCH-093, ADR-0060,
+OQ-173).** `StallWatch.imposedWait` (`children/stall.ts`) holds a stall watch's evaluation off the silence while the run
+holds the agent between two model steps: `resilientStep`'s backoff and suspended wait (`LadderDeps.imposedWait`) and a
+compression's own model call (`runTurn`'s `compressing`), both through `TurnDeps.onImposedWait`, which `Run.turn` wires to
+the root's watch and `execute` to each child's. Such a silence is logged as the wait it is (`stallImposedWaitLine`), and
+the release restarts the silence. This repairs `a-provider-wait-or-a-compression-is-counted-as-a-stall.md`. The
+**runtime view**'s stall-watch paragraph says so. No package, edge, process, message kind, channel, command or store
+column changed.
+
+**The run host's shutdown ends the setup, and a step's termination reaches what it started (REQ-WORKSPACE-092/109,
+ADR-0035, ADR-0064).** On POSIX each code-intelligence setup step now leads a process group, and its ask and force-kill
+go to the group. The run host's `shutdown` ends a setup under way with a 2 s grace (`McpHost.endSetup`) before it exits.
+The initialization coordinator says a cancellation undelivered at a quit at `info`, reading `QuitState`. See the process
+view, `mcp.setup` and `initialization.*`, and the runtime view's paragraph on the application's end; the 2 s grace
+overrides REQ-MCP-099's 5 s at a close, the build's reading of OQ-172. This repairs
+`an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`. No package, edge,
+process, message kind, channel, command or store column changed.
+
+**Initialization is each window's own workspace's (REQ-WORKSPACE-013/102/105, PD-SHELL-001, ADR-0064).** The
+`initialization.*` commands answer for the sending window's workspace. The coordinator keys every method by root and
+publishes channel 12 to the windows holding that root (`MainWindows.holding`). Its setup port addresses the run host by
+the run's own workspace identifier, and `config`'s registry tells an applicability predicate which workspace it is
+judged for (`ApplicabilityContext`). See the process view, `mcp.setup`, `initialization.*` and channel 12. This repairs
+`initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`. No package, edge, process, message
+kind, channel, command or store column changed.
+
+**Every task and phase id the engine assigns is 8 lowercase hexadecimal characters (REQ-CHAT-089, REQ-CHAT-040).**
+`mintTodoId` (`run/todo.ts`) mints each, unique within the todo and, for a planner task, among the task ids the session's
+iterations recorded: the first run's task (was `<session>:main:1`), a continue's (`continuedTaskId`, was
+`<session>:continued:<n>`), a queued prompt's (`Run.consumeQueued`, was the prompt's UUID — the prompt is found by its
+task's name and the `prompt_triggered` entry), a planner todo edit's added task (the id a request sends is no longer
+recorded), an improvement run's tasks and phase (`Todo.seeded`, at the run's creation of its todo from main's plan; they were
+the proposals' `imp_…` ids and no phase id — the proposal stays named in each task's payload), and a user's add to an
+agent's or a child's todo (`editAgentTodo`, now minted against the document's ids). A planner phase gains an optional `id`
+(`Phase.id`), minted where `Todo` creates the phase; the plan shows it (`projectPlannerTodo`), and an edit names a phase by
+it or, for a phase an earlier build created with none, by its name. Records under the old forms read back unchanged.
+This repairs `a-queued-prompts-task-id-is-not-eight-hex-characters.md`; `part-j-proof`'s queue scenario asserts it. The
+**runtime view**'s loop diagram and §2 iteration paragraph say so. No package, edge, process, message kind, channel,
+command or store column changed (the todo column's JSON gains the phase's `id`).
+
+**A later run's teardown no longer re-arms the crash record's ring settle over an earlier parked run's rows
+(REQ-MONITOR-105, REQ-MONITOR-228, REQ-SESSION-129, REQ-ORCH-153, REQ-ORCH-087, ADR-0024, OQ-170).** `Sessions` keeps, per
+live session, every run of this process that parked without closing its tool ports (`Live.portsOpen`); a continue passes
+`ownCallsMayRun` while any of them has its ports open, and a run leaves the set once it has closed them. Before, only the
+session's current run was read. This repairs residual 2 of `a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`,
+which stays open for residuals 1 and 3 (OQ-170). The **runtime view**'s §2 crash paragraph says so. No package, edge,
+process, message kind, channel, command or store column changed.
+
+**One fact, one emitter in the application log (PD-MONITOR-002, live-run finding a71-9).** Main's `repository.read` and
+`git.read` handlers no longer restate the workspace service's repository and Git-view lines, main's credentials ask no
+longer writes "credentials leased: …" beside the run host's `LeaseReportLog`, and `runSetupSteps` no longer writes
+"succeeded in N ms" beside the run host's step reporter. The **process view**'s application-log paragraph names each
+fact's owner. This repairs `the-repository-git-view-and-setup-step-lines-are-each-logged-twice.md`. No package, edge,
+process, message kind, channel, command or store column changed.
+
+**A paused child cancelled while `session_end` runs fires no `child_completed` (REQ-HOOKS-076, REQ-HOOKS-081,
+REQ-HOOKS-003, REQ-ORCH-133, OQ-154, R-067).** `Run`'s teardown calls `IterationChildren.endLifecycle` once it has awaited
+the outside hooks (`childCompletionsSettled`) and before it fires `session_end`; from then `completedOutside` queues none,
+so the user's cancel of one paused child, still accepted until the run has ended, ends it `cancelled` with no hook after
+`session_end` — OQ-154's built reading, recorded there as its fifth path. The defect note
+`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md` stays open for the ruling. The **runtime
+view**'s hooks paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child the explicit cancel's grace gave up on is counted (REQ-MONITOR-102, REQ-SESSION-092, REQ-SESSION-094,
+REQ-SESSION-129, OQ-96, R-067).** `IterationChildren.closeGivenUpOn` answers the open calls of every child a stop's grace
+gave up on that no rest left `paused` as cut off, naming no rest, and counts it from its record (`countGivenUpOn`), terminal
+or not. `Run.turn` calls it after the explicit cancel's `outlast` gives up; `rest` calls it in its early return (which it
+replaces) and after it pauses, for a child the user had already cancelled on its own. This repairs
+`a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`. The **runtime view**'s §4 rest paragraph and its
+`children` row say so. No package, edge, process, message kind, channel, command or store column changed.
+
+**The MCP section prints only what the agent can call (REQ-MCP-062, REQ-ORCH-153).** While the plan gate held, the port's MCP
+loop withheld every server tool from the callable map and the listing, and the section, rendered from the surface the loop
+was given, still printed it; a tool dropped for colliding with a native name was printed the same way. `ready()` now renders
+the section, and draws the grant, from the surface narrowed to the tools that joined the callable map. Approval launches a
+new run whose ports are built with the gate released (pinned in `run/plan-gate.test.ts`). This repairs
+`an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`; the **runtime view**'s MCP surface says so. No
+package, edge, process, message kind, channel, command or store column changed.
+
+**The run-level agent is drawn as the latest root's persona, not the first root's (REQ-MONITOR-060/069, PD-ORCH-003,
+OQ-97).** The renderer's `entryOf` named the run-level agent, and chose the declared tools standing in for its chips, its
+model and its reasoning, from the transcript's first agent row no child carries, while its chips were marked from the
+latest root's history. It now hands to `packages/ui`'s new `entryRole`: while a run is live, the persona its root runs as,
+`SessionRecord.entryPersona` (new, from `Run.entryPersona`; null with no live run), so the name is the root's from the run's
+start, before that root has written a row; at rest, the last row a root authored of any kind a turn writes under its
+agent's name (`agent`, `tool`, `thinking`, `diff`), a row named for one of `SessionRecord.entryRoots` preferred. (The first
+repair read the last `agent` row alone, and a live root whose first steps were tool calls was drawn as the root before it:
+the verifier's finding.) This repairs
+`after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`; the **runtime view**'s
+`entryTools` paragraph says so, and the reading is recorded beside OQ-97. `SessionRecord` gains one nullable field; no
+package, edge, process, message kind, channel, command or store column changed.
+
+**A grant the controls left empty of native tools is drawn as none, not as the declared tools (REQ-MONITOR-049/060,
+REQ-TOOLS-006, REQ-MCP-065).** `recordChildGrant` adds `recorded: true` to the `granted_mcp` object it writes, and the
+projection carries it as the new `AgentRecord.grantRecorded` (a contract field); `resolvedTools` lets the declared tools
+stand in only where no grant was recorded. A row without the marker — the spawn's, and every row written before
+2026-10-01 — keeps the old reading, `[]` as no grant recorded. This repairs
+`a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md`; the **runtime view**'s `AgentRecord` passage and its
+`children` row say so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child's row records the grant its port put in force, not its persona's declared tools (REQ-MCP-065, REQ-TOOLS-006,
+REQ-MCP-114).** The spawn wrote `children.granted_tools` from the persona's declared tools and `granted_mcp` from its MCP
+surface before any control, so a tool `coordinator_only`, `read_only`, `tool_restrictions`, the `restricted` preset or the
+plan gate removed was recorded as granted. The spawn now writes neither, and the child's execution records the port's
+`ToolPort.grant` once the port is ready (`ChildLedger.recordGrant` → `SessionWriter.recordChildGrant`, a `save`
+republished; `McpHost.evidenceFor` and `Persona.mcpEvidence` removed for the run host's `grantEvidence`). The recording is
+started beside the child's first turn, not ahead of it, so the payload is in the conversation record while readiness is
+pending. This repairs `a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`; the **runtime view**'s MCP
+surface and its `children` row say so, and ADR-0034's evidence passages are corrected in place. No package, edge, process,
+message kind, channel, command or store column changed.
+
+**A setup step reads in REQ-WORKSPACE-091/092's words (ADR-0064, OQ-175).** `McpSetupStep` gained three optional facts
+set by the run host's `runSetupSteps` — `skipped`, `output` and `startError` — and the initialization coordinator writes the
+requirements' fixed sentences and the output's last 400 bytes from them, the MCP category keeping the run host's `detail`
+(process view, `mcp.setup`). This repairs `the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`. No
+package, edge, process, message kind, channel, command or store column changed.
+
+**A setup start the run host never answers fails in REQ-WORKSPACE-093's words (REQ-WORKSPACE-084/093/103, OQ-169, ADR-0064).**
+The initialization coordinator catches a `setup.start()` that rejects and reports it as a retryable failure in this
+domain's summary rather than as a task with no outcome (process view, `initialization.*`). This repairs
+`a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`. No package, edge, process, message
+kind, channel, command or store column changed.
+
+**A setup whose finished status never arrives still ends (REQ-WORKSPACE-084/109, OQ-169, ADR-0064).** Main tells the
+initialization coordinator when the run host exits (`onRunHostExit`), and a follow is bounded by the stage budgets plus
+REQ-WORKSPACE-092's 5 s each (`SETUP_FOLLOW_BOUND_MS`); either ends it as a retryable failure and the next setup's turn
+comes (process view, `initialization.*`). This repairs
+`nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`. No package, edge, process, message kind,
+channel, command or store column changed.
+
+**A closed workspace's failed resolution raises no banner (REQ-WORKSPACE-013/102, OQ-141, ADR-0064).** The initialization
+coordinator's resolution, failing after its workspace was closed, says so in the log at info level and raises no
+"Project setup could not be checked" banner, as `publish` already showed nothing of it (process view, `initialization.*`).
+This repairs `a-closed-workspaces-resolution-can-still-raise-the-resolution-failed-banner.md`. No package, edge, process,
+message kind, channel, command or store column changed.
+
+**A stopped setup step reads in REQ-WORKSPACE-092's words (ADR-0064, R-067).** `McpSetupStep` gained an optional `stopped`
+(`cancelled` or `budget`) set by the run host's `runSetupSteps`; the initialization coordinator writes the requirement's two
+sentences from it and the MCP category keeps the run host's `detail` (process view, `mcp.setup`).
+
+**A refused setup start is a retryable failure, not "not a local launch" (REQ-WORKSPACE-093/094, ADR-0064, R-067).** Main's
+setup port carries the run host's refusal code with its words, and the initialization coordinator keeps REQ-WORKSPACE-094's
+non-retryable words for the `unavailable` status alone (process view, `mcp.setup`; runtime view, the project setup; OQ-167).
+
+**A child the stale settle ends, or a plan cycle's child a crash ends, is counted and its cut rows settle (REQ-MONITOR-102,
+REQ-SESSION-129, REQ-ORCH-053, OQ-96, R-067).** `recordCutChild` (`run/crash.ts`) answers one child's open calls and adds
+the calls its record holds to the session total. `recordPlanRootCrash` runs it for the plan cycle's unfinished children,
+and `settleStaleChildren` runs it for each child before the `cancelled` move. This repairs
+`a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md`. The **runtime view**'s crash
+paragraph and its launch sequence say so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child cancelled outside its execution is torn down (REQ-ORCH-098, REQ-ORCH-133, REQ-ORCH-053, PD-ORCH-005 clauses 6
+and 16, OQ-152, R-067).** The user's cancel of one child and its live descendants, the cancel of a paused child at rest,
+"continue without them", the crash record of an accepted cancel and the stale-child settle each write `child_end`,
+`child_result` and `child_conversation_closed` after the report they store (`writeCancelledTeardown`). `writeTeardown`
+moved from `children/orchestration.ts` to `children/ledger.ts`, beside `storeChildReport`, and stamps its `child_end` with
+the writer's clock (`SessionWriter.wall`, a new read-only accessor). This repairs
+`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`. The **runtime view**'s "A child settled
+without its turn" paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A plan cycle's chips after an iteration read the plan cycle root's history (REQ-MONITOR-060, REQ-MONITOR-069,
+REQ-ORCH-153, PD-ORCH-003).** With no run live and an iteration recorded, `entryToolsOf` reads the tracker under the latest
+plan cycle root's persona when that root opened after the latest iteration (`plan_roots`, store v30), and under the
+iteration root's otherwise. This repairs `a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md`.
+The **runtime view**'s `entryTools` paragraph says so. No package, edge, process, message kind, channel, command or store
+column changed.
+
+**A todo edit at rest and the quit's terminal record hold the lock (ADR-0005, REQ-EVENTS-098, REQ-CHAT-090, PD-ORCH-005
+clause 10).** `editStoredTodo` claims through `claimHold` before it writes and is refused `session_locked` (REQ-SESSION-048's
+words) or `store_failed` with nothing written; `closeAll`'s quit record of a resting session's background sessions
+(`recordQuitTerminals`) claims the same way and records nothing of a session another live process holds. This repairs
+`a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md`. The **runtime view**'s §6 lock paragraph, the
+`announceShutdown` control row and the `session_locks` row, and the **state-ownership view**'s session-lock row say so. No
+package, edge, process, message kind, channel, command or store column changed.
+
+**A row that grows is measured at the commit, before it is painted (PD-CHAT-003, REQ-CHAT-058, ADR-0045, R-067).** A row whose
+content changed was placed by the height its identity drew last until the observer's delivery rendered a frame later, and a
+row that grew was painted through the row beneath it. The pane now reads every bound slot with no measurement of its present
+key after the commit and renders again inside it when the height differs (`measureAtCommit`), and a size that changes under an
+unchanged key, with no commit, is rendered synchronously from the observer's delivery, before the paint (fix round 1). This repairs
+`a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md` (acceptance A37); the **runtime view**'s
+"What paints it" says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**The transcript pool counts its capacity in the shortest row a slot holds (REQ-CHAT-165, PD-CHAT-003, ADR-0045, R-067).**
+The 30 px unit was taller than a one-line system notice inside a block (23.8 px), so a tall viewport of them inside `H_max`
+was blank below the 154th slot. `SHORTEST_ROW_HEIGHT` (20 px) makes the pool 226 slots, and `visibleRange` sheds its
+overscan before a visible row. This repairs `the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md` (acceptance
+A38); the **runtime view**'s "What paints it" says so. No package, edge, process, message kind, channel, command or store
+column changed.
+
+**A confirmed run cancel is shown cancelling on every surface of the window that sent it (REQ-MONITOR-127/130/296, OQ-165,
+R-067).** The renderer's `cancelRun` lays a run overlay (`cancel-overlay.ts`, `beginRun`) over the window's record before it
+sends the reserved run id's `cancelAgent`: the session's status reads `cancelling` in the run header, the composer, the
+status strip, the Mission view's subtitle and run row, and a persona window's run instance (its state label and tab
+tooltip, `agentStateLabel`: the agent vocabulary has no `cancelling`, and as first built the window read `running`
+throughout — corrected at the second verification). A refusal removes it; an acceptance keeps it
+over the run's active records until its first record at rest, because the engine writes no `cancelling` for the explicit
+cancel. That end is the first record of the session at rest the window takes after the confirmation (`witness`), not the
+run's `runStartedAt`, which the next run's pre-flight still carries until the engine writes its own (corrected at the
+verification: keyed on it alone, the next run read `Cancelling` through its pre-flight), or the first record of another
+session it takes. Until then only the Workspace set anything — its stop button's "Force stop" — and no surface read `cancelling`. This
+repairs `the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md` (acceptance A35). The
+**runtime view**'s `cancelAgent` row and the **state ownership** view's optimistic-cancel row say so. No package, edge,
+process, message kind, channel, command or store column changed.
+
+**The run-level agent's tool-call count is its own while its turn runs (REQ-MONITOR-044/052, R-067).** The surfaces derived
+it as the session's total less the children's, and a root's calls join the total only when its turn returns, so the meta
+line read `0 tool calls` beside the root's used chips. `SessionRecord.entryToolCalls` now carries it: the roots' share of
+the persisted total plus the live root's calls not yet counted (`entryToolCallsOf`, `Run.entryUncountedToolCalls`) — the
+agent's own count, where REQ-MONITOR-101 gives the synthetic root the run's aggregate; **OQ-159** asks which, open. This
+repairs `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md` (acceptance A20). The **runtime view**'s §3
+entry-record paragraph and the **state-ownership view**'s tool-call row say so. One `SessionRecord` field was added on the
+existing snapshot channel; no package, edge, process, message kind, channel, command or store column changed.
+
+**A plan cycle's root is recorded for good when it starts (REQ-MONITOR-044/052/069, REQ-LIBRARY-093/099, REQ-ORCH-153,
+R-067).** A plan cycle has no `iterations` row, so the session named its root through its live run and, after a park or an
+end, through its publishes alone; one that only read an artifact was no agent's, and the run-level agent lost that received
+link at the gate. `plan_roots` (store **v30**) records each plan cycle's root — task id, canonical name, the name its rows
+carry — in `SessionWriter.openPlanRoot`'s transaction, never released, and `entryRootsOf` names it from there. This repairs
+`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md` (acceptance A22). The **runtime view**'s
+§3 `entryRoots` paragraph, its §7 heading (the store is now v30) and a new §7 `plan_roots` row, and the **state-ownership
+view**'s new plan-root row, say so. One table was added (store v30); no package, edge, process, message kind, channel or
+command changed.
+
+**The design Tag's kinds are the language's tones, and StatusDot paints its state (acceptance A40, R-067).** `Tag`
+takes the design Tag's seven kinds (`TAG_KINDS`: `accent`, `neutral`, `outline`, `run`, `wait`, `done`, `fail`) and joins a
+caller's class to `tag tag-<kind>` instead of letting it replace them; every caller names its tone by `kind`, and
+`tools/check-ui-language.mjs` refuses a Tag class that spells `tag` or a tone. `StatusDot` takes the design StatusDot's
+states (`STATUS_DOT_STATES`) and writes `data-state`, which `shell.css` paints at `.status-dot`'s own specificity. This
+repairs `the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`. The **component view**'s
+`ui/design-system` section says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child's name is never a root's (REQ-ORCH-044, OQ-158, acceptance A23, R-067).** `ChildLedger.spawn` keeps every child,
+at every depth, off its root's canonical name and entry persona and off every recorded root's two names
+(`recordedRootNames`), which the surfaces give the run-level agent; only the root's direct children were kept off its
+canonical name before. This repairs `a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`. The **runtime
+view**'s §4 says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A queued prompt's task is named "Queued Prompt: <id>" (REQ-CHAT-040, REQ-ORCH-071, OQ-117, R-067).** A planner todo
+task carries an optional `name` beside its text (`run/todo.ts`), and `consumeQueued` names a queued prompt's task
+`Queued Prompt: <first 8 characters of the prompt id>` with the prompt as its text. The pane and the handoff's todo list
+(REQ-SESSION-115's display titles) draw the name (`taskTitle`), and so does the plan gate's implied-task list
+(`planTodoLines` in `packages/ui/src/PlanGate.tsx`, which reads the stored todo itself), the compression's todo lines carry the name and then the
+content (`taskLine`), and a rename renames the name. This repairs
+`a-queued-prompts-task-is-not-named-queued-prompt.md` (acceptance A28). The **runtime view**'s iteration-boundary diagram
+says so. No package, edge, process, message kind, channel, command or store column changed; the todo document gains an
+optional field inside its existing column.
+
+**The fallbacks are named by REQ-ORCH-139's vocabulary, and the vocabulary is checked (REQ-ORCH-139, REQ-NOTIFY-090,
+OQ-157, R-067).** The ladder's same-tier change writes `quota_fallback_model` and the `quota_fallback` issue, its
+unresponsive-model fallback `llm_unresponsive` (entry and issue), and the children's hard-timeout retry `fallback_model`
+and the `timeout_fallback` issue, where they wrote `model_fallback`, `unresponsive_model_fallback`/`unresponsive_model`
+and `child_timeout_fallback`. `tools/check-timeline-vocabulary.mjs`, in `pnpm lint`, fails on a timeline name in no
+vocabulary; the names the product writes that no list has are held there by OQ-157. This partly repairs
+`the-run-writes-timeline-events-outside-its-closed-vocabulary.md` (acceptance A29). The **runtime view**'s ladder paragraph
+and its `timeline` row say so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A crash settles its cut call's ring row (REQ-SESSION-129, REQ-MONITOR-105, ADR-0024, R-067).** An orderly end settles
+every open `tool_calls` row when the run's ports close; a crash closes none, so after the crash record settled a call's
+transcript row its ring row stayed `running` for good. `recordCrash` now settles every ring row still `running`
+(`settleDeadToolCalls`) through `SessionWriter.settleToolCall`, `failed` with the crash's statement and a NULL duration
+(`ToolCallSettle.elapsed_ms` admits null for this case) — except at a continue after a run of this process that parked
+without closing its tool ports (`Run.closedItsPorts`), whose call may still be under way. This repairs
+`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md` (acceptance A30), and corrects ADR-0024's first-execution
+claim that such a row "needs no repair" in place. The **runtime view**'s §2 crash paragraph and its §7 rings row say so. No
+package, edge, process, message kind, channel, command or column changed.
+
+**A plan cycle's root calls before a crash reach the session total (REQ-MONITOR-102, REQ-ORCH-153, R-067).** A plan cycle
+has no `iterations` row, so the crash record never reached its root. `sessions.plan_root_task_id` / `plan_root_persona`
+(store **v29**) name the plan cycle's root while its turn runs and none of its calls is counted: `Run.turn` records it when
+the plan cycle starts (`SessionWriter.openPlanRoot`) and releases it in the transaction that adds its calls to the total
+(`countToolCalls`'s `planRoot`), or with none counted when its turn raises. `recordCrash` answers the open calls of one still
+recorded and adds its record's calls (`recordPlanRootCrash`). This repairs
+`a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md` (acceptance A19). The **runtime view**'s §2 crash
+paragraph, its §7 `sessions` row and its §7 heading (the store is now v29), and the **state-ownership view**'s tool-call
+row, say so. Two `sessions` columns were added (store v29); no package, edge, process, message kind, channel or command
+changed.
+
+**The run-level agent's tool history at a plan gate no iteration precedes (REQ-MONITOR-060, REQ-MONITOR-069,
+REQ-ORCH-153, acceptance A21, R-067).** With no run live and no iteration recorded, `entryToolsOf` reads the run-level
+agent's history under every name the tracker holds that is no child's (`AgentActivity.calledToolsWhere`): only a root or
+a child dispatches a call, and before any iteration every root was a plan cycle's, which no row names. This repairs
+`the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md`. The **runtime view**'s
+`entryTools` paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A write through a loaded session from outside a run holds the lock (ADR-0005, REQ-EVENTS-098, REQ-SESSION-060,
+REQ-GIT-094, acceptance A14, R-067).** `Sessions.withWriter`'s live branch — the repair, the safety checkpoint and the
+restore's outcome for a session loaded here — writes under the lock `claimHold` gives (kept, or taken with the one reap
+and given back) and answers `lock-held` with nothing written while another live process holds it. This repairs
+`a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`. The **runtime view**'s §6 lock paragraphs, §6a
+and the `session_locks` row, and the **state-ownership view**'s session-lock row say so. No package, edge, process,
+message kind, channel, command or store column changed.
+
+**A root steer is announced under the root that will take it (REQ-MONITOR-133/134, PD-ORCH-005 clause 4, OQ-97, acceptance
+A24, R-067).** `Run.steer` names a root steer by `Run.rootSteerName`: `rootName` while the current root can still step, the
+run's persona once its execution is over (`rootDone`, set as each root's turn settles unless a rest leaves it `paused`), so a steer submitted after a root
+resumed as the entry role finishes is announced for the fresh root that injects it. Each pending steer keeps the name it
+was announced under, which `reportUndeliveredSteering` repeats. This repairs
+`a-root-steer-after-a-resumed-iteration-closes-is-announced-under-the-resumed-roots-name.md`. The **runtime view**'s §5
+steer row says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A root whose turn raises counts its calls (REQ-MONITOR-102, acceptance A18, R-067).** `Run.turn`'s `finally` counts a root
+whose turn never returned — raised as well as given up on — from its record, less what the record held when the execution
+began (`recordedAtStart`), once its open calls are answered; a raise that no rest paused has its open call answered as cut
+off, naming no rest (OQ-96), as the explicit cancel's give-up already did. This repairs
+`a-root-whose-turn-raises-never-counts-its-calls.md`. The **runtime view**'s §7 `iterations` row and the **state-ownership
+view**'s tool-call row say so. No package, edge, process, message kind, channel, command or store column changed.
+
+**The compressing model reads the history it replaces (REQ-MONITOR-082, REQ-MONITOR-084, REQ-ORCH-110, OQ-156, R-067).**
+`compress` reads `compressorTranscript` (`run/compression.ts`) instead of the report pass's `transcriptText`, which is
+removed: each event whole, the slice whole up to the compressing model's own threshold at `chars_per_token`
+(`CompressorDeps.inputTokens`, set by `Run.compressionFor`), its start and most recent part past it. This repairs
+`the-compressor-reads-only-the-head-of-what-it-compresses.md` (acceptance A12). The **runtime view**'s compression
+paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child waiting on its own children is not reported stalled (REQ-ORCH-089, REQ-MONITOR-119, REQ-NOTIFY-112, OQ-155,
+R-067).** `StallWatch.betweenTurns` (`children/stall.ts`), called by `execute`'s `turn` closure as each turn settles,
+holds the watch's evaluation off the silence until the run starts the child's next turn, and `execute` calls it as the
+watch is armed for an execution resumed into waiting (PD-ORCH-005 clause 4; added 2026-09-30, the first reading having
+missed that path), so the wait inside `runWithChildren` writes no `stall` issue and no warning. This repairs
+`a-child-waiting-on-its-own-children-is-reported-stalled.md` (acceptance A7). The **runtime view**'s stall-watch paragraph
+says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child settled outside its execution fires `child_completed` (REQ-HOOKS-003, REQ-ORCH-048, REQ-ORCH-052,
+REQ-ORCH-053, REQ-ORCH-133, PD-ORCH-005 clause 6, R-067).** The cascade, the finalize sweep and the user's cancel of one
+child now fire it through `IterationChildren.completedOutside`, in line, and the run waits for them after the sweep
+(`completionsSettled`); the stale settle's and the decline's fire after the run's `session_start`
+(`RunDeps.settledBeforeStart`, `Run.childCompleted`). An outside hook's fields are taken as the scheduler is told, not
+when a queued hook starts (the second verification). `beginSettle`'s own-entry guard keeps a followed-up child settling
+to a parent's `settlesOf` until the later end's hook is done, corrected in §4 from "fires the hook once for each end" (the
+third verification). A rest's wait on the executions looks again until none is left (`IterationChildren.drained`), and
+the run waits for the outside hooks once more before `session_end` (`Run.childCompletionsSettled`), corrected in §4 from
+"awaited as executions" over a snapshot (the fourth verification). Three paths outside a run's hooks fire none, raised as OQ-154. This
+repairs `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`. The **runtime view**'s §4 gains the
+paragraph after the one on a settle's hook. No package, edge, process, message kind, channel, command or store column
+changed.
+
+**A report's edited files are the writes that landed (REQ-ORCH-108, REQ-ORCH-109, PD-TOOLS-006, OQ-111, R-067).**
+`editedFilesFrom` now skips a write call the record answers as refused — a sibling's claim, the permission gate or a
+pre-tool hook refusing it, a `haet_edit` whose find text matched nothing — or as cut before it started, and the
+summariser's own list cannot bring such a path back. A write cut off while under way (the pause's tool deadline, the
+stop's abort, a crash) is still listed, since it may have landed: `run/interruption.ts`'s `ranBeforeItWasCut` reads the
+statement the turn records for it. The report's `edited_files`, the fallback's "Files touched" and the facts the pass is told never to deny all
+read it. This repairs `a-reports-edited-files-counts-refused-writes.md`. The **runtime view**'s §4 report sentence says
+so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A stalled agent is shown stalled; the root is watched; a stall evaluation lands a steer (REQ-ORCH-089, REQ-MONITOR-117..122,
+REQ-MONITOR-135, R-067).** `AgentRecord.stalledSeconds` and `SessionRecord.entryStalledSeconds` carry each stall watch's
+figure, kept in `AgentActivity` and republished by `ProjectionOwner.refreshRecord` when it changes; the agent trees, the
+Mission table, the persona window and the inspector draw it. `Run.turn` arms a `StallWatch` for the root. An evaluation wakes
+an agent waiting on its own children for a pending steer (`IterationChildren.wakeForSteering`, `ChildrenDeps.steeringPending`).
+This repairs `a-stalled-child-is-never-shown-stalled.md` (acceptance A6; OQ-153). The **runtime view**'s stall-watch
+paragraph and its `entryTools` paragraph say so. No package, edge, process, message kind, channel, command or store column
+changed; the snapshot channel's `SessionRecord` gained the two fields.
+
+**A child the scheduler settles is torn down (REQ-ORCH-098, REQ-ORCH-048, REQ-ORCH-052, R-067).** `Scheduler.cascadeBlocked`
+and `Scheduler.finalizeIncomplete` call `SchedulerDeps.teardown`, which `IterationChildren` answers with `writeTeardown`
+(`children/orchestration.ts`; in `children/ledger.ts` since 2026-10-01), so a blocked child and one the finalize sweep cancels get `child_end`, `child_result` and
+`child_conversation_closed` as a settled execution's child does (OQ-152). This repairs
+`a-child-that-never-started-gets-no-teardown-timeline-entries.md` (acceptance A16). The **runtime view**'s "A child settled
+without its turn" paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**`delegate`'s admission resolves an alias on the built-in table's path (REQ-ORCH-034, REQ-ORCH-153, PD-TOOLS-006,
+R-067).** `personaOf` (`children/orchestration.ts`) resolves through `resolveRole` where no persona catalogue is configured,
+as `ChildLedger.spawn` does, so the plan gate's admission refusal, the grant and the write-scope refusal read the role the
+ledger will spawn. This repairs `delegate-reads-no-alias-on-the-built-in-table.md` (acceptance A27). The **runtime view**'s
+plan-gate paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child's attachments and inherited-context block are stored with its record (REQ-TOOLS-154, REQ-LIBRARY-098,
+REQ-TOOLS-152, PD-ORCH-005, R-067).** Store **v28** appends `children.attach_artifacts` and
+`children.inherited_context_block`, written by `ChildLedger.spawn`; `IterationChildren`'s two in-memory maps are gone, and
+`execute`'s and `startingPayload`'s payloads read the row, so a child resumed in a later run carries both into its
+REQ-ORCH-088 retry, with REQ-ORCH-047's prior-agent-context block rendered again. This repairs
+`a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md` (acceptance A25). The **runtime view**'s
+inherited-context paragraph and §7 `children` row, and the **state-ownership view**'s row, say so. No package, edge,
+process, message kind, channel or command changed.
+
+**The per-model cap counts every child in the process (REQ-CONFIG-094, REQ-MONITOR-020, REQ-ORCH-050, acceptance A13,
+R-067).** `ChildLedger.slotsInUse` counted one iteration's children, so two sessions under way in one run host could each
+fill a `max_parallel`. `Sessions` now holds a `ModelSlots` each session joins while a run of it is under way or while it
+rests with a paused child keeping its place (PD-ORCH-005 clause 4, OQ-149); the ledger adds the other sessions' slots to
+its own, and a child's end, a run's end, a decline or a cancel at rest wakes the other sessions' runs. This repairs
+`the-per-model-cap-counts-only-one-iterations-children.md`. The **runtime view**'s §4 and a **state-ownership view** row
+say so; OQ-148 asks the release order across sessions, OQ-150 whether one key in two workspaces is one entry. No package, edge, process, message kind, channel, command or store
+column changed.
+
+**A child the stop's grace gave up on is counted at the rest (REQ-MONITOR-102, REQ-SESSION-092, PD-ORCH-005 clause 6,
+R-067).** `IterationChildren.outlast` now keeps which children it gave up on (`givenUpOn`), and `rest` counts each one's
+calls from its record once its open calls are answered (`countGivenUpOn`, through the run's `countToolCalls`). A continue
+that declines it therefore loses none of its calls. So does a rest that the explicit cancel reaches while it waits: it
+pauses nothing, but first answers such a child's open calls as cut off, naming no rest (OQ-96), and counts it before the
+child ends `cancelled` (found by the repair's verifier). This repairs
+`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`. A child given up on by the
+explicit cancel's own `outlast`, which no rest follows, or already terminal when given up on, was still not counted
+(`a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`, repaired 2026-10-01: see the entry above). The **runtime view**'s §4 rest
+paragraph and its `children` row say so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A settle tells the scheduler whatever raised before it (REQ-ORCH-048, REQ-ORCH-052, REQ-TOOLS-156, REQ-HOOKS-079,
+R-067).** Both settles of a child — the end of `IterationChildren.execute` and `settleRaised` — now end through
+`afterTerminal`, which writes the teardown, runs the `child_completed` hook and then calls `scheduler.settled` in a
+`finally`. A raise out of the hook port is a warning. This repairs
+`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`. The **runtime view**'s §4 paragraph on the
+settle's hook says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**The post-run improvement capture never rejects (REQ-ORCH-137, REQ-LIBRARY-032, R-067).** `onRunResult`'s detached
+closure moved into `captureAfterRun` (`run-host/improvement-capture.ts`): a skip-list stop reason yields no job before main
+is asked for the history, the store is re-read after that ask, and a store closed meanwhile or a throwing capture yields
+no job with a log line rather than an unhandled rejection. This repairs
+`an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md`. The **process view**'s
+improvement-analyst paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A persona's `tool_restrictions` narrow its grant (REQ-TOOLS-006 (4), REQ-CONFIG-103, OQ-145, R-067).** The engine
+`Persona` carries the map (`toolRestrictions`), and every child's `ToolPortContext` names its delegating persona
+(`parentPersona`, from `IterationChildren.parentPersonaOf`). The run host passes the lists `toolRestrictionsFor` reads to the
+registry's fourth stage, which now takes allowed-tool lists, and takes an MCP tool no list names off the surface
+before its executors and its prompt section are drawn from it (REQ-MCP-062). `writesFiles`
+reads the same lists. The **seams view**'s §4 and the **runtime view**'s write-scopes paragraph say so. This repairs
+[`a-personas-tool-restrictions-never-narrow-its-grant.md`](../../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md).
+No package, edge, process, message kind, channel, command or store column changed.
+
+**A session delete cascades to nineteen tables, and `sessions-proof` reads that from the schema (REQ-SESSION-166, PD-ORCH-005,
+R-067).** The **runtime view**'s §6a delete said "the fifteen dependent tables"; v20's `plan_cycles` and v23–v24's
+`iterations`, `agent_messages`, `agent_terminals` and `agent_fingerprints` make every table whose `session_id` references
+`sessions` nineteen, with `delivery_runs` the one kept as a fact. The proof's count pin gave way to the shape
+(`apps/desktop/scripts/lib/session-cascade.mjs`). This repairs [`sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`](../../defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md).
+No package, edge, process, message kind, channel, command or store column changed.
+
+**The initialization coordinator runs its setups one at a time (REQ-WORKSPACE-109, REQ-WORKSPACE-084, R-067).** The run
+host holds one setup and its `mcp.setupStatus` carries no workspace, so `InitializationCoordinator` now starts a run's
+`code-intelligence-setup` only once the setup before it has ended (`setupTurn`), and the one step sink is cleared only by
+the follow that set it; a run's `finally` no longer clears it, and a follow drops its abort listener once its setup has
+ended, so an earlier run's close or Cancel never reaches the next run's setup. This repairs
+`a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`. The **process view**'s
+`initialization.*` paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A workspace switch cancels the outgoing workspace's initialization run (REQ-WORKSPACE-013, R-067).** `MainWindows`
+gained `workspaceClosed`, called once the last live main window holding a workspace has closed, and main answers it with
+`InitializationCoordinator.close`, which nothing called before: the run is cancelled, nothing is recorded or published
+for it, and a return to the root resolves again (REQ-WORKSPACE-102); a close landing while the setup's start request is
+in flight is sent to the run host once the start answers. This repairs
+`a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`. The **process view**'s `initialization.*`
+paragraph says so, and the **runtime view**'s `initialization:` bullet says a closed workspace's recordings are refused
+inside their turn of the marker queue. The same rule for a close that is not a switch's is a reading, raised as OQ-141.
+No package, edge, process, message kind, channel, command or store column changed.
+
+**The update shape answers `extend` (REQ-CHAT-053, R-067).** `updateShape` in `ui/transcript/pool.ts` reads the
+content of one row besides the keys — the last row before the update — so an extension of that row with rows appended
+after it is `extend` rather than `append`; the first form's `extend` branch could not be reached. The pane still records
+the shape on the element and branches on nothing. This repairs `the-update-shape-never-answers-extend.md`. The **runtime
+view**'s step-5 row says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A row not yet measured is not positioned short of what it draws, and a row on screen is measured (PD-CHAT-003, R-067).**
+`estimateHeight` in `ui/transcript/pool.ts` builds the estimate from the parts of the row's box the stylesheet draws —
+the row or block gap (`readHeight` hands it `places[at].blockStart`), the border, a user row's padding, a Markdown body's
+block margins, one 19.5 px line per drawn line, an activity line laid out segment by segment — and errs long; the first
+form of this repair counted the block gap alone, and a one-line agent message inside a block went on drawing 33.4 px into
+30. `TranscriptPane.tsx` observes a slot again whenever it is bound under a measurement key it was not observed under
+(`observeAgain`): a slot a scroll rebound to a row of its previous row's height used to keep the new row at its estimate.
+This repairs `a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`. The **runtime
+view**'s transcript paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A failing layout contract is filed under `CONTRACT` in the evidence pack (R-067).** `ui-audit` builds each finding
+through `apps/desktop/scripts/lib/audit-finding.mjs`, which spreads the measured detail first and moves a contract row's
+own `kind` to `relation`, so `report.json`, the summary line and `ui-review`'s `manifest.json` (`deterministic.byKind`)
+count a failing contract as `CONTRACT`; the manifest also carries `deterministic.contractsByRelation`. This repairs
+`a-contract-finding-in-ui-audit-is-filed-under-its-relation-kind.md`. The **seams view**'s §8 step 6 says so. No
+package, edge, process, message kind, channel, command or store column changed.
+
+**A count's noun agrees with it everywhere, from one kernel helper (REQ-SHELL-044, R-067).** `countNoun` moved from
+`ui/agents.ts` (which re-exports it) to `kernel/count-noun.ts`, since `providers`, `engine`, `agent-tools`, `contracts`,
+`platform` and `workspace` cannot import `ui`; the sign-in messages, the checkpoint dialogs and notices, the run's
+timeline and notices, the Library, Settings and the tool results the tool row draws now use it, as do the local
+`plural` helpers it replaced. `tools/check-plural-markers.mjs`, a new step of `pnpm lint`, fails on a literal `(s)`
+in a string the product can draw; log lines and four requirement-fixed tool results pass (OQ-138). This repairs
+`a-literal-plural-marker-is-rendered-in-sign-in-notices.md`. The **component view**'s kernel box says so. No package,
+edge, process, message kind, channel, command or store column changed.
+
+**The driver addresses persona, approval and terminal windows (R-067).** `driver.ts` resolves a role selector —
+`persona:<persona>`, `approval`, `terminal` — over `DriverDeps.auxiliary`, which main fills from each main window's
+persona-window registry, open approval dialog and terminal window; `windows` lists them, `useWindow` and each op's own
+`window` reach them (the per-request override, claimed since A4, is now read), and an unmatched selector is still
+refused. This repairs `the-driver-cannot-address-persona-or-approval-windows.md`. The **process view**'s main row says
+so. No package, edge, process, message kind, channel, command or store column changed.
+
+**The driver's `quit` is the application's quit, a capture whose wait timed out ends the same way, and the driver's
+shot waits for a presented frame (R-067).** `driver.ts`'s `quit` sends `app.quit()` — the close guards, then
+`window-all-closed`'s `shutdown` — unless it names the immediate exit (`immediate`; `pnpm app:drive stop --crash`), and
+its seam stays up until `will-quit`; `capture/probe.ts` ends a capture whose wait timed out through the new
+`CaptureHost.quit` rather than `exitCleanly`; `screenshot` waits `PAINT_FRAMES` (four) of the renderer's frames before
+`capturePage()`. This repairs `the-drivers-quit-skips-the-applications-shutdown.md` and
+`the-drivers-shot-can-return-a-stale-frame.md`. The **process view**'s quit paragraph and main row, and the **runtime
+view**'s application's-end paragraph, say so. No package, edge, process, message kind, channel, command or store column
+changed.
+
+**Every proof launch is bounded (R-067).** `package.mjs` launches the packaged application through
+`scripts/lib/bounded-launch.mjs`'s `spawnBounded`, as every launch a proof script starts itself now does (but for the two
+`scripts/lib/launch-sites.test.ts` names with their reasons), so the **component view**'s paragraph
+on the modules `package.mjs` shares names that one too. No edge moves: a script reaching a script module under
+`apps/desktop/scripts/`, outside the boundary rule. This repairs `proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`.
+
+**The run-start mode hint says what `plan` does and states a session's release (REQ-ORCH-152, REQ-CONFIG-320,
+PD-ORCH-003, R-067).** The Settings Runtime category's hint no longer says the plan gate is not built: `runStartModeHint`
+(`ui/settings/ConfigSettings.tsx`) says what `plan` does and, when the followed session's `SessionRecord.planReleased` is
+true, that the session is released and that Plan first on the composer's chip re-arms it; the selector itself re-arms
+nothing (OQ-137). This repairs `the-run-start-setting-says-the-plan-gate-is-not-built.md`. The **runtime view**'s
+plan-gate paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**The Windows global configuration directory is REQ-CONFIG-001's `%LOCALAPPDATA%\rotaris\rotaris\` (R-067).**
+`resolveUserDirs`'s `win32` case answered `rotaris\config` until now; the data directory stays the sibling `rotaris\data`
+(D-04), and no earlier directory is adopted (REQ-STARTUP-145). The proof harness's `configDirFor` moved with it. This
+repairs `the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`. The **process view**'s
+diagram and files-on-disk table and the **state-ownership view**'s configuration rows spell the new directory, and the
+process view says that on Windows it is also the directory the preference store's `Rotaris\Rotaris` root names. No
+package, edge, process, message kind, channel, command or store column changed.
+
+**A by-design tool removal is logged at `info`, and a persona's MCP lines once per spawn (REQ-TOOLS-006, PD-MONITOR-002,
+R-067, live-run findings L14 and D7).** `ToolPortContext` gains `info` — the application log at `info` and the session
+log at `INFO` — which `Sessions` fills on a start and a continuation; `createToolPort` logs a REQ-TOOLS-006 narrowing
+control's removal through it and a REQ-TOOLS-004 prerequisite's through `warn`, as before. `McpHost.surfaceFor` keeps
+what each persona's resolutions have written (`announced`, keyed without the reserved names), so the spawn evidence's
+resolution and the port's no longer write the surface line and the grant count twice. This repairs
+`coordinator-only-removals-are-logged-as-warnings.md` and `a-personas-mcp-lines-are-logged-twice-on-first-spawn.md`.
+The **runtime view**'s MCP-surface paragraph and the **seams view**'s tool invariants say so. No package, edge, process,
+message kind, channel, command or store column changed.
+
+**The application log survives the loss of its reader (REQ-MONITOR-131, R-067).** Main's log writes through
+`standardStreamWriter` (`main/app-log.ts`) instead of `console.log`: the stream's `error` event is listened for, and from
+its first failure nothing more is written to it; standard error gets the same listener. A quit whose standard output
+has been closed no longer loops on its own EPIPE. This repairs `a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`.
+The **process view**'s application-log paragraph says so. No package, edge, process, message kind, channel, command or
+store column changed.
+
+**A child main ended itself is not a loss in the application log (PD-MONITOR-002, R-067, live-run finding L13).** The
+run host's `kill` that `endBeforeMain` sends goes through `ChildrenEndedByMain` (`main/exit.ts`), which records it by
+service name, and the `child-process-gone` handler writes Electron's `killed` report of that end at `info`, saying main
+ended it; every other end but `clean-exit` stays `error`. This repairs `an-orderly-quit-logs-the-run-host-gone-at-error.md`.
+The **process view**'s application-log paragraph says so. No package, edge, process, message kind, channel, command or
+store column changed.
+
+**What is asked of a person in the quit's gap is held for the quit to withdraw (PD-ORCH-005 clause 9, R-067, OQ-132).**
+`presenter.revoke` gains an optional `quitting`, which main sets from `QuitState`; the run host's `PresenterRegistry.quitting`
+holds from such a revoke until a window registers. Meanwhile the gate holds an ask unshown in `pending_approvals` instead
+of denying it headless, a present answered "not shown" is held too, `ask_questions` records its prompt pending, and
+`PendingApprovals` and `PendingQuestions` arm an expiring budget again; the shutdown withdraws every one by `quit`. This
+repairs `an-approval-asked-after-the-last-window-closes-is-denied.md`. The **sequences view**'s §2 (the diagram and a new
+paragraph) and the **process view**'s message list say so. No package, edge, process, channel, command or store column
+changed.
+
+**A small non-zero cost renders as the floor `< 0.0001`, never as zero (ESC-42 ruled option (b) under R-067, 2026-09-29).**
+`formatAmount` (`kernel/money.ts`) returns `AMOUNT_FLOOR` where REQ-PROVIDER-121's half-up rounding brings an amount
+greater than zero to zero; `costLabelOf` is unchanged and every label takes the floor as its `<amount>`. This repairs
+`a-cost-below-five-hundred-thousandths-renders-as-zero.md`. The **runtime view**'s §3 ("What a step costs") says so. No
+package, edge, process, channel, message kind, command or store column changed.
+
+**A retry the dispatch layer absorbs is written to the session log (OQ-110 ruled under R-067, 2026-09-29).** REQ-CONFIG-086's
+`num_retries` stay the dispatch layer's, spent inside the model client before the ladder; the client's decorated fetch
+now reports each retry as it is sent (`ModelRequest.onRetry`, with the status met and the delay waited on the monotonic
+clock `AiSdkClientOptions` now takes), `DefaultAgentBackend` forwards it to `TurnSink.retried`, and the turn writes
+`dispatchRetryLine` through the run's `warn` to the session log. This repairs `a-retry-the-dispatch-layer-absorbs-leaves-no-trace.md`.
+An exhausted budget now reaches the ladder as the last attempt's error (`fromError` unwraps the SDK's `RetryError`), which
+repairs `an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md`. The **runtime view**'s §3 (the ladder's paragraph) says so. No package, edge, process, channel, message kind, command or
+store column changed.
+
+**A follow-up by `session_id` resumes a settled child from its record (PD-ORCH-005 clause 22, PD-TOOLS-006 revision 3,
+2026-09-29, R-067; OQ-131, raised as OQ-130 on its branch and renumbered at the merge).** `delegate` forwards `session_id`. `IterationChildren.followUp` refuses an id that is no
+settled child of the caller, and waits for a cancelled child's execution to wind down. It re-claims the stored write
+scope and answers a call left open. The writer's new `followUpChild` makes the one exit from a terminal state
+(`isLegalFollowUp`), to `queued`, in one transaction with the follow-up's message in `agent_messages`; `StoreDal.reopenChild`
+clears the completion time, the report and the observation, over existing columns. The scheduler starts the child, and
+`execute` carries on from its record. The **runtime view** gains the follow-up paragraph beside the continuations one,
+and its §7 rows for `children` and `agent_messages` name the new writer. The **state-ownership view**'s conversation-record
+row names it as a writer and a reader. No package, edge, process, channel, message kind, command or store table changes,
+and no migration is appended.
+
+**An explicit cancel is durable across a crash (PD-ORCH-005 clause 3 with REQ-MONITOR-126, OQ-103's last question ruled
+under R-067, 2026-09-29).** `iterations.cancel_accepted_at` (store **v27**, appended) is written the moment the reserved run
+id's `cancelAgent` is accepted (`SessionWriter.recordCancelAccepted`), and by `Run.turn` for an iteration it opens after. An
+open iteration carrying it is closed `cancelled` by the next repair or continue, its unfinished agents ended `cancelled`
+(`recordCrash` → `recordAcceptedCancel`), never paused by a crash; `crashLeftOf` and `resumableOf` read it, the new
+`cancelLeftOf` presents those agents `cancelled` meanwhile, and a continue is set up as the entry role; the run-level
+agent (`runLevelAgent`) is presented `cancelled` and not live in REQ-CHAT-008's recovery state with nothing to resume.
+The record writes no timeline word of its own (REQ-ORCH-139); its close is the vocabulary's `iteration.end`. This repairs
+`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`. The **runtime view**'s §2 (the paragraph "An
+explicit cancel the host died before carrying out"), §4 (the run-level agent) and §7 (`iterations`), and the
+**state-ownership view**'s rest rows say so. One store column is added; no package, edge, process, channel, message kind or command changed.
+
+**A confirmed cancel of one agent is shown at once (REQ-MONITOR-128/296, 2026-09-29, R-067; OQ-129).** The renderer's
+`cancelAgent` lays a per-window overlay (`packages/ui/src/cancel-overlay.ts`, the store `cancelOverlays` in `shell.ts`)
+over the session before it sends `cancelAgent`. The agent and every unfinished descendant show `cancelled` with an
+activity line saying the user cancelled them. A refusal removes the overlay, and the first whole-session update the
+replica takes after an acceptance overwrites it; the store numbers each record the replica takes (`witness`), so a
+persona window's coalesced copy, up to 120 ms behind, keeps the overlay until its own later delivery. The Workspace, Mission and Overview roots read `useShownSession` and a persona window
+`useCancelOverlaid`; the replica keeps its two writers. The **runtime view**'s `cancelAgent` row and the
+**state-ownership view**'s volatile table name it. No package, edge, process, message kind, channel, command or store
+table changes.
+
+**The run-level agent owns every row, call and artifact its roots carry (REQ-MONITOR-071, REQ-CHAT-069, REQ-MONITOR-053,
+REQ-MONITOR-060, REQ-MONITOR-044 with PD-ORCH-005 clause 4, OQ-97 and REQ-LIBRARY-093, 2026-09-29, R-067).**
+`SessionRecord` gains `entryRoots`: each root of the session once, by the name its rows and calls carry and its canonical
+name, every iteration's, then each root no iteration records that published — a plan cycle's, by its publish
+(`StoreDal.rootPublishersOf`, a new read at every snapshot; found by the repair's fifth review, since the session lets go
+of the run at the plan gate's park) — then the live run's (`entryRootsOf`, `Run.currentRoot`). The surfaces own a named row for the
+run-level agent by the entry persona or a root's name (`ownRow`, shared by `rowsOf`, `scopedRows` and `followedAgent`),
+and its artifact links by those or a root's canonical name; `Run.entryTools` reads the tracker under `rootName`. This
+repairs `the-run-level-agent-is-known-by-its-entry-persona-alone.md`. The **runtime view**'s §3 paragraph on the entry
+role's snapshot fields (`entryContext`, `entryTools`, `artifacts`) says so. No package, edge, process, channel, message
+kind, command or store column changed.
+
+**A steering prompt pending at a rest is kept (REQ-MONITOR-134 with PD-ORCH-005 clause 4, OQ-128, 2026-09-29, R-067).**
+`Run.turn`'s rest delivers every prompt still pending for a `paused` agent with a record into that record, as the marked
+message its next step would have injected, marked injected once (`deliverSteeringAtRest`); a child resumed `summarizing`
+whose record ends on one resumes `running` (`IterationChildren.resumePaused`). Steering closes once no agent takes another
+step — when the rest is recorded, when teardown begins, at the message-limit pause or at the plan-gate park (only a run
+that parks: a plan cycle stopped, quit or failed ends in teardown) — so a later steer is refused; that close records what
+is left as not delivered (`closeSteering`: a `steering_not_delivered` entry and a transcript line naming the end). This
+repairs `a-steering-prompt-pending-at-a-rest-is-lost.md`. The **runtime view**'s §5 steer row says so. No package, edge,
+process, channel, message kind or store column changed.
+
+**A root resumed as the entry role keeps its rows' name (PD-ORCH-005 clauses 3 and 4, OQ-97, 2026-09-29, R-067).**
+`Run.turn` names the root's rows, its tool port and its open calls by the persona its iteration was opened with
+(`rootName`: `iterations.root_persona` for a resumed root), not by the persona the run is set up as, so a root resumed as
+the entry role because its persona is no longer configured writes where `recordCrash` reads. This repairs
+`a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record.md`. The **runtime view**'s §6 crash
+paragraph says so. No package, edge, process, channel, message kind or store column changed.
+
+**A delegated child is watched for a stall, and one that produced no output gets its corrective message
+(REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112, 2026-09-29, R-067; OQ-127).** `children/stall.ts` is new in
+`engine`. `TurnSink` gains an optional `event` for every streamed part, and `TurnDeps` gains `onModelEvent` and
+`onToolStarted`, and `ConversationRecord` gains `everRecorded`, which a resumed child reads so that its one corrective
+message stays one per task. The watch writes a `stall` issue at every stall evaluation; the wait on tools, the recovery
+and the corrective message are session-log lines through the run's `warn`, since REQ-ORCH-139's vocabulary has no
+timeline word for them (OQ-127). The **runtime view**'s §4 names it. No package, edge, process, channel,
+command or store table changes.
+
+**A child settled without its turn gets its report (REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-108, 2026-09-29, R-067).**
+The scheduler's blocking cascade stores each blocked child's `blocked` report and artifact before its parent is told.
+A child whose execution raises outside its turn, on either start path, is settled `failed` with its report by
+`IterationChildren.executeSettling` and `settleRaised`, instead of being left `running`. So is a resumed child whose
+record cannot be decoded. A settle's `child_completed` hook now runs in line (REQ-HOOKS-076/080). A parent takes a
+child as ended only once its settle is done (`IterationChildren.settles`), and an agent does not return while one of
+its children's settles still runs. Each wait looks again until none of its children is settling, since another can end
+while it waits (`settlesOf`, the verifier's fifth round). So the hook comes before `iteration_end` and `session_end`.
+The **runtime view**'s §4 names all three. No package, edge, process, channel, command or store table changes.
+
+**The inspector shows the run-level agent's tools and every agent's artifact links (REQ-MONITOR-052/060/061/068/069,
+live-run finding K1, R-067, 2026-09-29).** `SessionRecord` gains `entryTools` (the root port's resolution — a new optional
+`ToolPort.resolvedTools` — and the tracker's history) and `artifacts` (the session's artifacts not superseded, a body-free
+read per snapshot, `StoreDal.artifactLinksOf`); the config snapshot's role view gains `declaredTools`, by the rule
+(`declaredToolsOf`) the run host's persona resolver applies, which moved with the built-in roles' tool declarations to
+`contracts/src/roles.ts`. A link in the main window deep-links to the Library (`openLibrary('artifacts', id)`), which opens
+the artifact inspector; in a persona window it opens the inspector there. The **runtime view**'s compression paragraph and
+the **component view**'s `roles.ts` line name them; no package, edge, message kind, command, column or process changes.
+At its verification the runtime view gained that a live run-level agent with no resolution yet lists nothing
+(`runLevelGrant`) rather than its declared tools.
+
+**A root's calls before a crash reach the session total (REQ-MONITOR-102, R-067, 2026-09-29).** The root had no persisted
+tool-call count, so a crash — which ends its turn without returning — lost its calls. `iterations.root_tool_calls` (store
+**v26**) holds the calls of the root the total holds; `SessionWriter.countToolCalls` writes the total with the root's or a
+child's count in one transaction; the crash record adds what the root's and each unfinished child's record hold beyond their
+counts, and a root the stop's grace gave up on — one that never returned — is counted from its record. REQ-ORCH-097's
+cadence is unchanged. The **runtime view**'s §2 crash paragraph (the counting step), its §7 `iterations` row and its §7
+`children` row (`countToolCalls` among the writers of `tool_calls`: a resumed child's credit, its settle or rest, and the
+crash record) and a **state-ownership view** row name it.
+
+**A child is recorded under its model's `models:` key (REQ-CONFIG-094, REQ-MONITOR-020/049, live-run finding D5, R-067,
+2026-09-29).** `children.model_key` was the model's bare id, so `modelCapFor` and `contextLimitFor`, keyed by the
+`models:` key, never matched a qualified key. `childModelKey` now records the role's `Persona.modelKey` (set by the run
+host's persona resolver, a synthetic copy mapped to the key the loader recorded it was copied from —
+`LoadedConfiguration.syntheticOrigins`, never a guess by provider and model id, since two keys may name the same provider
+model) or the run's `RunConfig.modelKey`. The **runtime view**'s agent-record paragraph names it; no package, edge, message,
+column or process changes.
+
+**`delegate`'s `suppress_auto_context` reaches the child (REQ-TOOLS-152, REQ-CONFIG-107, R-067, 2026-09-29).** The tool
+forwards the flag, `ChildLedger.spawn` stores it (`children.suppress_auto_context`, store **v25**), and
+`IterationChildren.artifactContext` omits the sibling-artifact index when the row carries it or the role's
+`skip_auto_sibling_context` (now `Persona.skipAutoSiblingContext`, mapped by the run host) forces it. The **runtime view**'s
+§7 `children` row and its children section name it, and the **state-ownership view** has a row for the persisted flag
+beside the in-memory inherited-context block; no package, edge, message or process changes.
+
+**A detached call writes nothing through its tool gate or its stream (REQ-SESSION-094, 2026-09-29, R-067).** `ToolPort`
+gains `close(cutOff)`, and `Run.teardown` closes every port the run built before anything terminal is written: the
+run host's `writerSink` settles each call its gate still has open, as failed with the rest's interrupted statement, and
+drops every write after it, and the port's gate fires no `post_tool` hook after it. A model step whose `detached` reads true streams no row, settles none and counts no usage; a stop that rests nothing (the explicit cancel) detaches the child executions still running past the grace (`IterationChildren.outlast`), as a rest does.
+This repairs `a-detached-call-still-writes-through-its-tool-gate.md`. The **runtime view**'s §2 and §6 say so. No
+package, edge, process, channel, message kind or store column changed.
+
+**A root call that ignores the stop no longer holds the run open (REQ-SESSION-092, REQ-MONITOR-129, REQ-SESSION-094,
+2026-09-29, R-067).** `Run.turn` awaits the root's turn no longer than the stop's 30 s grace, counted from the first
+stop request (`stopGraceSpent`); a root still in a call then is detached as a child execution is, left `paused` by a
+stop or a quit with its open call answered, and the rest that follows gives the children only what is left of that
+grace (`Run.stopGraceLeft`, `IterationChildren.rest`'s `grace`). Under the explicit cancel a root given up on still
+drains (REQ-ORCH-080, OQ-121). This repairs `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. The
+**runtime view**'s §2 says so. No package, edge, process, channel, message kind or store column changed.
+
+**`delegate` refuses a write scope for a persona that cannot write files (`PD-TOOLS-006` revision 3, OQ-112,
+2026-09-29).** `IterationChildren.delegate` rejects the delegation before any record exists when its `write_scope` names
+patterns and the persona — resolved as the ledger resolves it, an alias included — holds no `write_file`, `haet_edit`
+or `haet` after `coordinator_only` and `read_only` (`writesFiles`). The reason names the catalogue's personas that can (`fileWriters`). The **runtime view**'s write-scopes
+paragraph names it; no package, edge, message or store table changes.
+
+**The report's pass reads the task and the most recent part, beside the facts (OQ-111, REQ-ORCH-110, 2026-09-29).**
+`produceReport` gives the summarising pass `reportTranscript`: the task as given (`ReportInput.task`, the ledger row's;
+the blocks the payload puts ahead of it marked omitted) and the most recent part, within 12,000 characters, with
+`… [N characters omitted] …` between them. It also gives `reportFacts`, the
+edited files and each command with its exit code, derived from the whole transcript. The head-only `transcriptText`
+remains the compressor's alone (removed 2026-09-30 with the compressor's own reader, OQ-156). The **runtime view**'s children paragraph names it; no package, edge, message or store
+table changes.
 
 **A continue in the process that ran the session takes the lock back (ADR-0005, REQ-SESSION-047/048/083, 2026-09-29,
 R-067).** `prompt`, `continueSession` and `planDecision` claim the session's lock before their first write
@@ -307,6 +1031,24 @@ beginning or ending. The **runtime view**'s step-4 and step-5 rows and its pool 
 `pool.ts` entry, say so. The proof's side is `transcript-proof.mjs` and `lib/trace-summary.mjs` (the CPU profile's
 attribution), which no view describes. No package, edge, process, channel, message kind, store column or owner of state
 changed.
+
+**A skip before the open's resolution (2026-09-28, R-062).** The **process view**'s `initialization.*` paragraph says
+which listed ids a skip leaves out (only one the live run is attempting) and that a skip arriving before the open's
+one automatic resolution performs that resolution first (OQ-122). No package, edge, process, channel, message kind,
+store column or owner of state changed. **Its second round (2026-09-29):** the same paragraph now names the
+`backgroundRun` field the initialization state carries on its existing channel. The window reads it to keep a
+background run out of the setup dialog and to keep the prompt due beside it (REQ-WORKSPACE-103/110, OQ-123). It is one
+more field on an existing message; no message kind changed. **Its third round (2026-09-29):** the paragraph adds that a
+skip leaves an id already recorded completed where it is, and that a skip after the resolution reads nothing more before
+it records; nothing else in any view moved. **Its fourth round (2026-09-29):** the paragraph adds that main makes every
+marker write through one queue and builds each patch inside its turn from the file as it stands, and that a skip decides
+what it leaves out in that turn. No message, channel or owner of state changed; the writer is still main's coordinator.
+The **runtime view**'s `initialization:` / `project_init:` bullet still described the first execution's re-read before
+each recording, with the reason this round falsified; it was corrected in place in the repair round that followed, the
+old sentence kept and marked superseded beside a statement of the queue (`ExecuteDeps.commit` replaces `reread`).
+**Its fifth round (2026-09-29):** the queue is one per workspace root rather than one for the coordinator, so a
+workspace just opened does not wait behind the last marker write of the one it replaced (REQ-WORKSPACE-013); the
+process view's paragraph and the runtime view's bullet say so. Nothing else in any view moved.
 
 **The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
 `apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of

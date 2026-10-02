@@ -1,8 +1,8 @@
-import { CONTRACT_SCHEMA_VERSION, type ImprovementArtifactRecord, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
+import { CONTRACT_SCHEMA_VERSION, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
 import { millis, toIsoUtc, type Millis } from '@rotaris/kernel';
 import { dataLayout, environmentWithout, installedProductVersion, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import type { PromptLists, StoreDal, StoreHandle } from '@rotaris/store';
-import { captureImprovementJob, meteredBackend, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
+import { meteredBackend, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
 import { ConfinementService, PresenterRegistry, renderUnavailability, spawnTrial, type AvailabilityVerdict, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { createTerminalHost } from './terminal.js';
@@ -14,13 +14,14 @@ import { McpHost } from './mcp.js';
 import { CHECKPOINTS_DEFAULTS, INSTRUCTIONS_DEFAULTS, loadConfiguration, RUNTIME_DEFAULTS, SKILLS_DEFAULTS, type LiveState } from '@rotaris/config';
 import { codeIntelligenceLaunchFor } from './code-intelligence-launch.js';
 import { SkillHost } from './skills.js'; // ADR-0063
+import { captureAfterRun, dalWhileOpen } from './improvement-capture.js';
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { leaseForContinuation, LeaseReportLog } from './launch.js';
 import { randomUUID } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
-import { scriptedClient, type ScriptedCallRecord } from './scripted-client.js';
+import { fileLedger, scriptedClient, type ScriptedCallRecord } from './scripted-client.js';
 
 /**
  * RUN HOST — one utilityProcess, forked after `app.ready`, living exactly as
@@ -143,7 +144,7 @@ export function createRunHost() {
     // Part V: REQ-MCP-044's warning is a transient on the acknowledgement channel (REQ-NOTIFY-040 forbids the timed clear it had) — and the issue record it also writes.
     acknowledge: (a) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'acknowledgement.publish', kindOf: a.kind, title: a.title, ...(a.body === undefined ? {} : { body: a.body }) } }),
     // Part AS (ADR-0064): every step and the end, pushed — what ADR-0064's task runner follows instead of a cadence.
-    publishSetup: (workspaceRoot, status) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'mcp.setupStatus', workspaceRoot, status } }),
+    publishSetup: (status) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'mcp.setupStatus', status } }),
   });
   // REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — this application's own executable, built in
   // `code-intelligence-launch.ts`; the sandbox switch main forked this process with rides along (OQ-82's reading).
@@ -189,11 +190,18 @@ export function createRunHost() {
   const recordModelCall = modelCallFile === undefined || modelCallFile === '' ? undefined : (call: ScriptedCallRecord): void => {
     try { appendFileSync(modelCallFile, `${JSON.stringify(call)}\n`); } catch (cause) { log(`capture: the model call could not be recorded (${String(cause)})`, 'warn'); }
   };
+  /*
+   * Verification only, and compiled out of a packaged build: where the scripted client keeps each agent's place between
+   * the client of one run and the next — a continue in this process, or after a relaunch — for the call that ends with
+   * no message and so leaves no mark in the record (`StandingLedger`; the repair of
+   * `docs/defects/fixed/the-scripted-client-places-a-root-resumed-before-its-first-reply-as-a-fresh-agent.md`). It sits in
+   * the data directory, which a proof's root isolates; a real provider's client never reads or writes it.
+   */
+  const standing = __ROTARIS_SEAMS__ ? fileLedger(join(resolveUserDirs().data, 'scripted-standing.json'), (m) => log(m, 'warn')) : undefined;
   const configurationDeps = {
-    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks, log, recordModelCall), codeIntelligenceLaunch,
+    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks, log, recordModelCall, standing), codeIntelligenceLaunch,
     onRequest: (i: { method: string; url: string; headers: Record<string, string> }) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`),
     log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {},
-    mcpEvidence: (cfg: ConfiguredRun['cfg'], root: string, role: string) => mcp.evidenceFor(cfg, root, role),
     confinement: () => confinement.peek(),
   };
   /**
@@ -361,17 +369,19 @@ export function createRunHost() {
       const locatedStore = [...stores.entries()].find(([, candidate]) => candidate.root === run.cfg.workspaceRoot && candidate.dal !== null);
       if (!locatedStore?.[1].dal) return;
       const [workspaceId, store] = locatedStore;
-      void (async () => {
-        const historyReply = await ask({ kind: 'improvements.command', workspaceRoot: run.cfg.workspaceRoot, command: { action: 'list' } }, millis(10_000)).catch((cause: Error) => {
-          log(`improvements: history capture failed for ${sessionId}: ${cause.message}`, 'warn');
-          return null;
-        });
-        const prior = historyReply?.kind === 'improvements.result' ? (historyReply.value as ImprovementArtifactRecord[]).map((record) => record.artifact) : [];
-        const job = captureImprovementJob(store.dal!, { workspaceId, workspaceRoot: run.cfg.workspaceRoot, sessionId, generatedAt: toIsoUtc(clocks.wall.instant()), timeoutSeconds: run.cfg.runtime.improvement_collector_timeout, collectorModel: collector.key, priorArtifactsAvailable: historyReply?.kind === 'improvements.result', priorArtifacts: prior });
+      // REQ-ORCH-137 / REQ-LIBRARY-032: detached, and it never rejects — the store is read again after the history's
+      // await, which a quit may have closed it under (`improvement-capture.ts`).
+      void captureAfterRun({
+        stopReason: result.stop_reason,
+        input: { workspaceId, workspaceRoot: run.cfg.workspaceRoot, sessionId, generatedAt: toIsoUtc(clocks.wall.instant()), timeoutSeconds: run.cfg.runtime.improvement_collector_timeout, collectorModel: collector.key },
+        history: () => ask({ kind: 'improvements.command', workspaceRoot: run.cfg.workspaceRoot, command: { action: 'list' } }, millis(10_000)),
+        currentDal: () => dalWhileOpen(stores.get(workspaceId), store),
+        log,
+      }).then((job) => {
         if (job === null) return;
         improvementContexts.set(job.artifact_id, { run });
         send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'improvement.job', job } });
-      })();
+      });
     },
     // REQ-ORCH-085: the host told the run paused at the message limit.
     onRunPaused: (sessionId, info) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.paused', sessionId, count: info.count, limit: info.limit, tokens: info.tokens } }),
@@ -380,6 +390,8 @@ export function createRunHost() {
     planWithholds: withheldUnderPlanGate,
     tools: (ctx) => createToolPort(ctx, {
       clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal, mcp, configured: () => configuredRuns.get(ctx.sessionId) ?? null,
+      // PD-ORCH-005 clause 9: the quit closed the last window and its shutdown is still to come (`PresenterRegistry.quitting`).
+      quitting: () => presenters.quitting,
       runtime: () => configuredRuns.get(ctx.sessionId)?.runtime ?? configureRunFallback(),
       personas: () => configuredRuns.get(ctx.sessionId)?.personas ?? null,
       // REQ-WORKSPACE-059 (ADR-0063): the cataloged skill directories as additional READ roots, so an agent can

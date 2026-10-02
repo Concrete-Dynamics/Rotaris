@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -49,12 +50,11 @@ function scratchAgentsYaml(workspace) {
   ].join('\n'));
 }
 
-function launch(name, workspace, local, preferences, extra) {
+async function launch(name, workspace, local, preferences, extra) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app,
-    encoding: 'utf8',
-    timeout: 120_000,
+    timeoutMs: 120_000,
     windowsHide: true,
     env: {
       ...cleanEnvironment(),
@@ -67,6 +67,7 @@ function launch(name, workspace, local, preferences, extra) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   return { png, log };
@@ -79,7 +80,7 @@ mkdirSync(loopWorkspace, { recursive: true });
 mkdirSync(loopLocal, { recursive: true });
 writeFileSync(join(loopWorkspace, 'README.md'), '# loop proof\n');
 scratchAgentsYaml(loopWorkspace);
-launch('loop-supervisor', loopWorkspace, loopLocal, join(loopRoot, 'preferences'), {
+await launch('loop-supervisor', loopWorkspace, loopLocal, join(loopRoot, 'preferences'), {
   ROTARIS_SCRIPT: 'loop:read:20',
   ROTARIS_LOOP_SCRIPT: 'detected',
   ROTARIS_CAPTURE_PROMPT: 'exercise the loop supervisor',
@@ -104,7 +105,7 @@ mkdirSync(resumeWorkspace, { recursive: true });
 mkdirSync(resumeLocal, { recursive: true });
 writeFileSync(join(resumeWorkspace, 'README.md'), '# resume proof\n');
 scratchAgentsYaml(resumeWorkspace);
-launch('resume-before', resumeWorkspace, resumeLocal, resumePreferences, {
+await launch('resume-before', resumeWorkspace, resumeLocal, resumePreferences, {
   ROTARIS_CAPTURE_PROMPT: 'finish the first run',
   ROTARIS_CAPTURE_AFTER_MS: '11000',
 });
@@ -123,7 +124,7 @@ planted.close();
 
 // REQ-SESSION-114: the carry-over is measured on its own path — the fresh classification is made unusable
 // (`garbage` → the fallback intent) so the previous run's intent is what the status row must name.
-launch('resume-after', resumeWorkspace, resumeLocal, resumePreferences, {
+await launch('resume-after', resumeWorkspace, resumeLocal, resumePreferences, {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_INTENT_SCRIPT: 'garbage',
   ROTARIS_CAPTURE_PROMPT: 'continue after restart',

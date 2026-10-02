@@ -9,7 +9,7 @@
  *   1. compress-two     a root that delegates and then waits on a model call, a child that reads twice and waits: TWO
  *                       live conversations. "Compress context" pressed in the run header → the button relabels
  *                       "Compressing…" and disables, "Compressing active agent contexts…" is toasted, then "Compressed
- *                       context for 2 active agent(s)." and the label is back (REQ-CHAT-079/080, REQ-MONITOR-093/094);
+ *                       context for 2 active agents." and the label is back (REQ-CHAT-079/080, REQ-MONITOR-093/094);
  *                       the store holds one `context_compressed` entry PER AGENT, `trigger: manual`, no threshold figure
  *                       (REQ-CHAT-081, REQ-MONITOR-096), and both conversations shrank (REQ-MONITOR-092).
  *   2. compress-partial the same run with the scripted compressor failing on the child's slice alone (`fail-if:`): the root
@@ -36,6 +36,8 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-marker.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -100,15 +102,19 @@ function scenario(name) {
     'default_persona: orchestrator',
     'runtime:', '  permission_mode: autonomous', '  max_depth: 3', '  max_active_children: 4',
     'compressor:', '  threshold_percentage: 60', '  preserve_recent_turns: 0',
-    'mcp_servers:', '  code_intelligence: { enabled: false }', '',
+    'mcp_servers:', '  code_intelligence: { enabled: false }',
+    // The project-setup task answered (REQ-WORKSPACE-081/111): `enabled: false` above does not make it inapplicable
+    // (REQ-WORKSPACE-090), and without the bundled runtime its background run fails and publishes "Project setup did not
+    // finish" into the ONE notice slot this proof reads (REQ-NOTIFY-024) — read by compress-two as its own pass's notice.
+    ...SETUP_ANSWERED, '',
   ].join('\n'));
   return { root, workspace, local, preferences };
 }
 
-function launch(name, s, extra, timeoutMs = 150_000) {
+async function launch(name, s, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: s.preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -117,7 +123,10 @@ function launch(name, s, extra, timeoutMs = 150_000) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}\n${log.split('\n').slice(-40).join('\n')}`);
+  // The precondition the marker establishes, checked rather than assumed: a background setup's notice is not this proof's subject.
+  if (backgroundSetupStarted(log)) throw new Error(`${name}: the workspace's initialization started code-intelligence-setup in the background, so its notice may stand in the slot this proof reads; see ${name}.log`);
   const inspects = {};
   for (const line of log.split('\n')) {
     const m = /capture: inspect-at (\d+) (.+?) → (\{.*\})\s*$/.exec(line);
@@ -180,11 +189,11 @@ const readCompressObserved = `window.__rotarisCompress ?? null`;
 const T1 = { arm: 13900, press: 14000, pressing: 14300, done: 15500 };
 {
   const s = scenario('compress-two');
-  const r = launch('compress-two', s, {
+  const r = await launch('compress-two', s, {
     ...TWO,
     ROTARIS_CAPTURE_CLICKS: `[data-testid="run-compress"]@${T1.press}`,
     ROTARIS_CAPTURE_EVAL_AT: [`${readCompress}@${T1.press - 200}`, `${armCompressObserver}@${T1.arm}`, `${readCompressObserved}@${T1.pressing}`, `${readCompress}@${T1.done}`, `${readNotice}@${T1.done + 50}`].join(';;'),
-    ROTARIS_CAPTURE_TEXT_AT: `Compressing active agent contexts…@${T1.pressing};;Compressed context for 2 active agent(s).@${T1.done}`,
+    ROTARIS_CAPTURE_TEXT_AT: `Compressing active agent contexts…@${T1.pressing};;Compressed context for 2 active agents.@${T1.done}`,
   });
   const before = evalAt(r, T1.press - 200);
   const observed = evalAt(r, T1.pressing);
@@ -194,7 +203,7 @@ const T1 = { arm: 13900, press: 14000, pressing: 14300, done: 15500 };
   const pressing = Array.isArray(observed) ? observed.find((o) => o.text === 'Compressing…') ?? null : null;
   expect(pressing !== null && pressing.disabled === true && pressing.pending === '1', `on activation the control relabels "Compressing…" and disables (REQ-CHAT-079, REQ-MONITOR-093): ${JSON.stringify(observed)}`);
   expect(text(r, 'Compressing active agent contexts…', T1.pressing), 'the start toast "Compressing active agent contexts…" was not shown');
-  expect(text(r, 'Compressed context for 2 active agent(s).', T1.done), '"Compressed context for 2 active agent(s)." was not shown (REQ-CHAT-080)');
+  expect(text(r, 'Compressed context for 2 active agents.', T1.done), '"Compressed context for 2 active agents." was not shown (REQ-CHAT-080)');
   expect(done?.text === 'Compress context' && done.pending === '0', `on completion the label is restored: ${JSON.stringify(done)}`);
   expect(evalAt(r, T1.done + 50) === null, `no persistent notice on a complete pass: ${JSON.stringify(evalAt(r, T1.done + 50))}`);
   const db = openStore(s.local);
@@ -212,14 +221,14 @@ const T1 = { arm: 13900, press: 14000, pressing: 14300, done: 15500 };
     expect(m.after_messages < m.before_messages, `${m.agent}'s conversation did not shrink: ${JSON.stringify(m)}`);
   }
   // The run host's own `manual compression:` line is the SESSION log's; main's stdout carries the acknowledgement it relayed and the control's answer.
-  expect(/acknowledgement from the run host: ok "Compressed context for 2 active agent\(s\)\."/.test(r.log) && /control forceCompression on \S+ → ok/.test(r.log), 'main did not relay the settled pass');
+  expect(/acknowledgement from the run host: ok "Compressed context for 2 active agents\."/.test(r.log) && /control forceCompression on \S+ → ok/.test(r.log), 'main did not relay the settled pass');
   results.compressTwo = { agents: metas.map((m) => ({ agent: m.agent, before: m.before_messages, after: m.after_messages, latencyMs: m.latency_ms })), pressing, done };
 }
 
 // ═══ 2. compress-partial — the child's pass fails; the root's succeeds; the notice lists the child ═══════════════════
 {
   const s = scenario('compress-partial');
-  const r = launch('compress-partial', s, {
+  const r = await launch('compress-partial', s, {
     ...TWO, ROTARIS_COMPRESSOR_SCRIPT: 'fail-if:CHILD-SLICE-MARKER',
     ROTARIS_CAPTURE_CLICKS: `[data-testid="run-compress"]@${T1.press}`,
     ROTARIS_CAPTURE_EVAL_AT: [`${readNotice}@${T1.done}`, `${readCompress}@${T1.done + 20}`].join(';;'),
@@ -227,7 +236,7 @@ const T1 = { arm: 13900, press: 14000, pressing: 14300, done: 15500 };
   });
   const notice = evalAt(r, T1.done);
   expect(notice?.title === 'Context compression incomplete' && notice.severity === 'error', `the persistent incomplete notice: ${JSON.stringify(notice)}`);
-  expect(notice.message === '1 of 2 active agent context(s) compressed; 1 failed.', `the notice's message: ${JSON.stringify(notice.message)}`);
+  expect(notice.message === '1 of 2 active agent contexts compressed; 1 failed.', `the notice's message: ${JSON.stringify(notice.message)}`);
   expect(typeof notice.detail === 'string' && /child-a/.test(notice.detail) && /scripted compressor failure/.test(notice.detail), `the detail block should list the failing agent with its reason (REQ-MONITOR-094): ${JSON.stringify(notice.detail)}`);
   expect(!notice.inComposer, 'the notice must be the shell\'s one slot, not a composer-drawn banner');
   expect(!text(r, 'Compressed context for', T1.done), 'a partial pass must not toast the completion count');
@@ -258,7 +267,7 @@ const T3 = {
 };
 const controls = scenario('controls');
 {
-  const r = launch('controls', controls, {
+  const r = await launch('controls', controls, {
     ROTARIS_SCRIPT: 'glob,wait:6000,answer', ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_VIEW_MS: '1000',
     ROTARIS_CAPTURE_CHORDS: `Ctrl+K@${T3.palette}`,
     ROTARIS_CAPTURE_TYPE_AT: `compress@${T3.paletteType}`,
@@ -361,7 +370,7 @@ const controls = scenario('controls');
 
 // ═══ 4. restart — the same store, the session resumed: the snapshot is empty ═════════════════════════════════════════
 {
-  const r = launch('restart', controls, {
+  const r = await launch('restart', controls, {
     ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_VIEW_MS: '1000', ROTARIS_CAPTURE_RESUME: 'latest',
     ROTARIS_CAPTURE_EVAL_AT: `${readRows}@5200;;${readRunState}@5250`,
     ROTARIS_CAPTURE_AFTER_MS: '6000',

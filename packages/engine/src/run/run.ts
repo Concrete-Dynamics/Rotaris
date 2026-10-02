@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { IterationRow, SessionRow } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -8,10 +8,10 @@ import type { Committed, SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
 import { classifyStop, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
-import { Todo, type Task, type TodoDocument } from './todo.js';
+import { mintTodoId, taskLine, Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
-import { runTurn, type ToolPort, type TurnOutcome } from './turn.js';
-import { IterationChildren } from '../children/orchestration.js';
+import { recordSteeringInjected, runTurn, steeringMessage, type ToolPort, type TurnOutcome } from './turn.js';
+import { childCompletedFields, IterationChildren, refreshing } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
 import { canonicaliseName, mintTaskId, takenTaskIds } from '../children/naming.js';
@@ -23,7 +23,7 @@ import type { HookPort, RunNotice } from '../hooks-port.js';
 import type { CheckpointPort } from '../checkpoint-port.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
-import { clampBudget, storeChildReport } from '../children/ledger.js';
+import { clampBudget, storeChildReport, writeCancelledTeardown } from '../children/ledger.js';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
 import type { Persona, PersonaResolver } from '../children/personas.js';
@@ -34,9 +34,12 @@ import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
 import { ConversationRecord } from './record.js';
 import { answerOpenCalls, iterationAgents } from './crash.js';
+import { callsRun, interruptedResult } from './interruption.js';
 import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
 import { offersForFirstMessage } from './offers.js';
 import { randomUUID } from 'node:crypto';
+import { StallWatch, stallImposedWaitLine, stallRecoveredLine, stallWaitingLine, stallWarning } from '../children/stall.js';
+import { CHILD_STALL_TIMEOUT_MS } from '../children/cut-off.js';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
 /**
@@ -60,6 +63,12 @@ export interface RunConfig {
   readonly persona: string;
   readonly systemPrompt: string;
   readonly model: ModelRef;
+  /**
+   * REQ-CONFIG-094 / REQ-MONITOR-049: the `models:` key `model` was resolved from — what a child that runs on the run's
+   * model is recorded under, so its cap and its context limit are found. Absent where no configuration names one (a
+   * test, the process-wide model); the model's id then stands in.
+   */
+  readonly modelKey?: string | undefined;
   readonly thinking: ThinkingLevel;
   readonly modelTimeoutMs: number;
   readonly modelRetries: number;
@@ -145,13 +154,25 @@ export interface RunDeps {
   readonly config: RunConfig;
   /** Null: no tool surface — the model is offered no tool and a requested call ends the turn. */
   readonly tools: ToolPort | null;
-  /** Part B: the tool surface for an agent with a delegation identity (the root and every child). Absent: no delegation. */
-  readonly toolsFor?: ((persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => ToolPort | null) | undefined;
+  /**
+   * Part B: the tool surface for an agent with a delegation identity (the root and every child). Absent: no delegation.
+   * `canonicalName` is the instance name its publishes record as `created_by` (REQ-LIBRARY-093) — the root's, whose
+   * `agentName` is its persona; absent for a child, whose `agentName` is its canonical name. `parentPersona` is the persona of
+   * the agent that delegated a child (REQ-TOOLS-006 (4), OQ-145); absent for the root.
+   */
+  readonly toolsFor?: ((persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => ToolPort | null) | undefined;
   readonly dal?: StoreDal | undefined;
   /** Part Y (REQ-ORCH-149): the session artifact store, shared across iterations; absent means no artifacts exist. */
   readonly artifacts?: ArtifactStore | undefined;
   readonly budget?: ChildBudget | undefined;
   readonly modelCap?: ((modelKey: string) => number | null) | undefined;
+  /**
+   * REQ-CONFIG-094: the process-wide half of the per-model count — the slots the process's other sessions hold on a key,
+   * a paused child's kept place among them (PD-ORCH-005 clause 4) — and the signal that one of this run's children ended or
+   * gave its place up, so another run's held child can be promoted (`ModelSlots`, joined by `Sessions` while the session
+   * runs or rests holding a place). Absent: this run is the only one counted.
+   */
+  readonly modelSlots?: { readonly heldElsewhere: (modelKey: string) => number; readonly freed: () => void } | undefined;
   readonly summariser?: SummariserDeps | null | undefined;
   /** Part AH (ADR-0060): what an agent needs to compress its own context; null or absent means neither trigger fires. */
   readonly compression?: RunCompression | null | undefined;
@@ -182,6 +203,12 @@ export interface RunDeps {
   readonly permission: PermissionPosture;
   /** ADR-0015: the session's hooks; null or absent means none exist and nothing about hooks is observable (REQ-HOOKS-041). */
   readonly hooks?: HookPort | null | undefined;
+  /**
+   * REQ-HOOKS-003 with REQ-ORCH-053: the `child_completed` fields of each child this run settled before it existed — the
+   * stale settle (`settleStaleChildren`), made once the run has the session's lock and before its first iteration. The
+   * run fires them once its own `session_start` has, so they keep REQ-HOOKS-076's order.
+   */
+  readonly settledBeforeStart?: readonly Readonly<Record<string, unknown>>[] | undefined;
   /** The host's notice channel (REQ-HOOKS-054/086/087). */
   readonly notice?: ((n: RunNotice) => void) | undefined;
   /** ADR-0039 / REQ-GIT-024/051: the session's checkpoint port; null or absent means no capture at any iteration close. */
@@ -316,6 +343,16 @@ export class Run {
   private ended = false;
   private startedAt: Millis | null = null;
   private hardCancel: Budget | null = null;
+  /**
+   * REQ-SESSION-092 / REQ-MONITOR-129: settles when the stop's 30 s grace has run out, counted from the first stop request
+   * whether or not it was forced. The root's turn is awaited no longer than this (`withinStopGrace`): a root whose call
+   * ignores its abort is given up on here, as a rest gives up on a child's execution, so it cannot hold the run and its
+   * lock open (the repair of `a-root-call-that-ignores-the-stop-holds-the-run-open.md`).
+   */
+  private readonly stopGraceSpent: Promise<void>;
+  private spendStopGrace: (() => void) | null = null;
+  /** When `stopGraceSpent` settles, on the monotonic clock: what is left of the grace is read from it (`stopGraceLeft`). */
+  private stopGraceDeadline: Millis | null = null;
   private iterationsCompleted = 0;
   private initialIterations = 0;
   private lastFailure: string | null = null;
@@ -341,6 +378,24 @@ export class Run {
   private rootId = 'root';
   private rootIterationId = 'root:1';
   private rootRecord: RootExecutionRecord | null = null;
+  /**
+   * REQ-MONITOR-044/052 (acceptance A20): the tracker's call count under the current root's name when its execution began,
+   * while none of that execution's calls has joined the session total; null once they have, or with no root running.
+   */
+  private rootUncountedFrom: number | null = null;
+  /**
+   * PD-ORCH-005 clauses 3 and 4: the name the current root's rows carry — the persona its iteration was opened with
+   * (`iterations.root_persona`), so a root resumed as the entry role because that persona is no longer configured (OQ-97)
+   * keeps writing under the name its earlier rows and the crash record read (the repair of
+   * `a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record.md`). It is the run's persona otherwise.
+   */
+  private rootName: string;
+  /**
+   * Whether the current root's execution is over — its turn returned, raised or was given up on, and no rest left it
+   * `paused` to be resumed — so it takes no other step. Set as each root's turn settles and cleared as the next begins;
+   * false before the run's first root.
+   */
+  private rootDone = false;
 
   /** REQ-ORCH-072: the current iteration's root execution record. */
   get rootExecutionRecord(): RootExecutionRecord | null {
@@ -358,9 +413,26 @@ export class Run {
   }
   /** Every tool port this run created — the root's and each child's — so an answer, a cancel or a mode change reaches all of them (REQ-TOOLS-030). */
   private readonly ports = new Set<ToolPort>();
+  private portsClosed = false;
+  /**
+   * REQ-MONITOR-105 with ADR-0024: whether this run closed its tool ports (`closePorts`, its teardown). A run that parked —
+   * at the message-limit pause or the plan gate — closed none, so a call of its that ignored its abort may still be under
+   * way, and its `tool_calls` ring row `running` is that call's, not a dead run's (the crash record's ring settle).
+   */
+  get closedItsPorts(): boolean { return this.portsClosed; }
+  /** Live-run finding K1: the port the current iteration's root dispatches through — the one resolution `entryTools` reports. */
+  private rootPort: ToolPort | null = null;
   /** REQ-HOOKS-087: the session's hook attachment, removed at the end of the run. */
   private hooks: HookPort | null;
   private preflight: Preflight | null = null;
+  /**
+   * REQ-ORCH-014: true while this run's pre-flight classification is in flight, so the status reads `classifying` before
+   * the call and is replaced in place by its result. Derived from the live run, as `currentWait` is: a continuation's
+   * pre-flight runs with the previous run's intent already on the record (OQ-162), which the status must not go on
+   * showing as the intent in effect while the new one is decided.
+   */
+  private classifying = false;
+  get intentClassifying(): boolean { return this.classifying; }
   /** REQ-MONITOR-123: a graceful pause requested; honoured at the next model step and at the iteration boundary. */
   private pauseRequested = false;
   /**
@@ -390,8 +462,18 @@ export class Run {
    * launching the next segment (ADR-0062) rather than by flipping a flag under a running turn.
    */
   private planHeld = false;
-  /** REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child). */
-  private readonly steering = new Map<string, { id: string; text: string }[]>();
+  /**
+   * REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child), each with
+   * the name it was announced under, which the not-delivered line repeats (`reportUndeliveredSteering`).
+   */
+  private readonly steering = new Map<string, { id: string; text: string; name: string }[]>();
+  /**
+   * REQ-MONITOR-133 with OQ-128: set once no agent of this run will take another step — when the iteration's rest is
+   * recorded (after `deliverSteeringAtRest`), or when the run stops stepping (`closeSteering`: teardown, the pause at the
+   * message limit, the park at the plan gate) — so a later steer is refused rather than acknowledged for a step nothing
+   * would take.
+   */
+  private steeringClosed = false;
   /** REQ-MONITOR-142: the entry model/reasoning switched mid-run; applied from the next iteration. */
   private entryOverride: { model?: ModelRef; thinking?: ThinkingLevel } = {};
   /** Part Q: the waits parked on a provider limit (REQ-NOTIFY-263 reads `current()`), the memory, the catalogue. */
@@ -431,6 +513,7 @@ export class Run {
 
   constructor(private readonly deps: RunDeps) {
     this.sessionId = deps.sessionId;
+    this.rootName = deps.config.persona;
     this.hooks = deps.hooks ?? null;
     this.record = new ConversationRecord(deps.writer, deps.dal, deps.sessionId);
     this.memory = deps.resilience?.memory ?? new ResilienceMemory();
@@ -439,7 +522,7 @@ export class Run {
     const stored = deps.readSession();
     this.agentTodo = decodeStoredTodo(stored?.todo ?? null).agent;
     this.todo = deps.initialTodo
-      ? Todo.fromDocument(deps.initialTodo, deps.config.consecutiveRetryLimit)
+      ? Todo.seeded(deps.initialTodo, deps.config.consecutiveRetryLimit, new Set([deps.taskId]))
       : deps.resumeTodo
         ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit)
         : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
@@ -450,6 +533,9 @@ export class Run {
     if (deps.dal) settleClosedIterations(this.todo, deps.dal, deps.sessionId, openRow);
     const open = deps.openIteration === undefined ? null : openRow;
     this.resumeFrom = deps.openIteration?.resume === true ? open : null;
+    // Clause 4 with OQ-97: a run built to resume an open iteration names its root as that iteration was opened, from the
+    // start — a steer before the resumed root's first turn is announced under the name its injection and rows carry.
+    if (this.resumeFrom !== null) this.rootName = this.resumeFrom.root_persona;
     this.restedIteration = open?.iteration ?? null;
     /*
      * PD-ORCH-005 clause 17: a continue that resumes an open iteration delivers its message to the resumed root (clause 4)
@@ -473,6 +559,7 @@ export class Run {
     const closedIterations = deps.dal?.iterationsOf(deps.sessionId).filter((i) => i.state === 'closed').map((i) => i.iteration) ?? [];
     this.iterationsCompleted = Math.max(stored?.iterations_completed ?? 0, ...closedIterations);
     this.initialIterations = this.iterationsCompleted;
+    this.stopGraceSpent = new Promise<void>((resolve) => { this.spendStopGrace = resolve; });
     // Sticky and observable: a request before the loop exists replays here (REQ-SESSION-092).
     this.stop.onRequested((s) => {
       // REQ-MONITOR-012: whatever is blocked on a person is released first, then the run stops. PD-ORCH-005 clause 9: a
@@ -484,6 +571,14 @@ export class Run {
       try { if (withdrawBy !== null) this.withdrawPending(withdrawBy); else this.cancelPending(); } catch (cause) { this.deps.warn(`releasing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
       if (rest !== null) this.children?.beginRest();
       this.abort.abort();
+      // The root's bound: the grace counted from the first request, forced at its first activation or not, so a root that
+      // honours the abort a moment after a forced stop still records what its step did.
+      const spend = this.spendStopGrace;
+      if (spend !== null) {
+        this.spendStopGrace = null;
+        this.stopGraceDeadline = millis(this.deps.clocks.monotonic.now() + STOP_GRACE);
+        this.deps.clocks.timers.after(STOP_GRACE, spend);
+      }
       if (s.forced || this.hardCancel) return;
       // REQ-SESSION-092 / REQ-MONITOR-129: graceful first; the 30 s deadline hard-cancels and sweeps again.
       this.hardCancel = Budget.begin(this.deps.clocks.monotonic.now(), STOP_GRACE);
@@ -564,6 +659,10 @@ export class Run {
   get isPlanGateHeld(): boolean {
     return this.planHeld;
   }
+  /** REQ-MONITOR-020: a slot freed in another run — this run's scheduler passes, so a child it holds can be promoted. */
+  wakeForFreedSlot(): void {
+    this.children?.scheduler.pass();
+  }
   /**
    * PD-TOOLS-006: the live write-scope claim that refuses the agent `callerId` a write to the workspace-relative
    * `rel`, or null. Read through the iteration's children on every call, so a claim lapses the moment its child
@@ -605,7 +704,58 @@ export class Run {
   get entryContext(): { readonly used: number; readonly limit: number } {
     const model = this.entryOverride.model ?? this.deps.config.model;
     const advertised = this.deps.compression?.triggerFor(model).advertisedInputLimit ?? null;
-    return { used: this.deps.writer.activity.contextUsed(this.deps.config.persona), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
+    return { used: this.deps.writer.activity.contextUsed(this.rootName), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
+  }
+  /**
+   * REQ-MONITOR-117/119/120: the entry agent's stalled figure — the seconds of silence its stall watch's latest evaluation
+   * found while it finds the root stalled, else null — kept beside its tools in the writer's activity tracker.
+   */
+  get entryStalledSeconds(): number | null {
+    return this.deps.writer.activity.stalledSeconds(this.rootName);
+  }
+  /**
+   * REQ-MONITOR-044/052 (the repair of `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`, acceptance
+   * A20, R-067): the calls the current root has started in this execution that the session's total does not hold yet. A
+   * root's calls join the total only when its turn returns, or from its record when it never does (REQ-ORCH-097's cadence,
+   * OQ-116); until then they are the tracker's count under the name it dispatches as (`rootName`) less that count when the
+   * execution began. Zero once they are counted, so the run-level agent's figure (`entryToolCallsOf`) never holds a call
+   * twice.
+   */
+  get entryUncountedToolCalls(): number {
+    return this.rootUncountedFrom === null ? 0 : Math.max(0, this.deps.writer.activity.callCount(this.rootName) - this.rootUncountedFrom);
+  }
+  /**
+   * REQ-MONITOR-060/061 (live-run finding K1, R-067): the entry role's tools as the run-level agent presents them — the native
+   * set its port's one resolution kept (policy narrowing applied), and its called and in-flight tools from the tracker the
+   * writer feeds, keyed by the name the root dispatches under (`rootName`, as `entryContext` reads it). Not the run's
+   * persona: a root resumed as the entry role keeps the persona its iteration was opened with (OQ-97), and read by the entry
+   * role's name its calls were never found (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+   * Like `entryContext`, the entry role has no `children` row.
+   */
+  get entryTools(): EntryToolsPayload {
+    const name = this.rootName;
+    const activity = this.deps.writer.activity;
+    return { resolved: [...(this.rootPort?.resolvedTools?.() ?? [])], called: activity.calledTools(name), active: activity.activeTools(name) };
+  }
+  /**
+   * PD-ORCH-005 clause 4 with OQ-97, and REQ-LIBRARY-093: the root this run executes, or executed last, by the name its rows
+   * and calls carry (`rootName`) and its canonical instance name — what `SessionRecord.entryRoots` adds, while the run is
+   * live, for a root with no iteration row, a plan cycle's. The session lets go of the run once it parks or ends, and such
+   * a root is then named by the record its turn's start wrote (`plan_roots`, store v30) — before v30 by its publishes alone,
+   * so one that only read was no agent's at the gate (`entryRootsOf`). Null before the run's first turn.
+   */
+  get currentRoot(): EntryRoot | null {
+    return this.rootRecord === null ? null : { name: this.rootName, canonical: this.rootRecord.canonicalName };
+  }
+  /**
+   * REQ-MONITOR-057/060 with PD-ORCH-003: the persona this run's root runs as — the persona its rows carry and its port
+   * resolves `entryTools` for, a resumed root's included (it keeps its name, `rootName`, and runs as the entry role, OQ-97).
+   * `SessionRecord.entryPersona`, so the run-level agent is named from the root whose tools its chips show before that root
+   * has written a row (the second repair of
+   * `after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`).
+   */
+  get entryPersona(): string {
+    return this.deps.config.persona;
   }
   /** REQ-MONITOR-048 (Part R): the persona's configured thinking level as this run resolved it; null when the persona is unknown or states none. */
   reasoningFor(persona: string): string | null {
@@ -647,11 +797,14 @@ export class Run {
 
       // REQ-SESSION-087, in order and observably. PD-ORCH-005 clause 17: the todo with it, so a continue's message task
       // survives a process that dies during the pre-flight, as the message itself does in the resumed root's record.
+      // REQ-ORCH-014: set before the save that publishes `starting`, so that snapshot already reads `classifying`.
+      this.classifying = this.deps.preflight !== undefined;
       writer.save('starting', { todo: this.todoJson() });
       this.startedAt = clocks.monotonic.now();
       // REQ-ORCH-005: the intent is in effect before the first iteration; while it is being decided the session reads `classifying`.
       if (this.deps.preflight) {
         try { this.preflight = await this.deps.preflight(this.abort.signal); } catch (cause) { this.deps.warn(`the pre-flight raised and the run continues on the fallback intent: ${String(cause)}`); }
+        finally { this.classifying = false; }
       }
       if (this.deps.continuation) {
         const intent = this.preflight?.intent ?? NO_PREFLIGHT_INTENT;
@@ -708,10 +861,17 @@ export class Run {
       await this.drain();
       // REQ-HOOKS-003/081: session_start once, ahead of the first iteration, in line with the loop (REQ-HOOKS-080).
       if (this.hooks) await this.hooks.fireLifecycle('session_start', { task: this.deps.task });
+      // REQ-HOOKS-003 / REQ-ORCH-053: the children this run's stale settle ended, each in line, before anything else runs.
+      for (const fields of this.deps.settledBeforeStart ?? []) await this.childCompleted(fields);
 
       // PD-ORCH-005 clauses 4 and 6: an iteration a previous run left open resumes before anything else runs, as the
       // loop's first iteration below; declined, it closes here.
-      if (this.resumeFrom === null) await this.closeLeftOpenIteration();
+      if (this.resumeFrom === null) {
+        await this.closeLeftOpenIteration();
+        // REQ-CONFIG-094 with PD-ORCH-005 clause 6: a declined iteration's paused agents gave up the places they kept, so
+        // another session's child held on one may start (OQ-149).
+        this.deps.modelSlots?.freed();
+      }
       // REQ-ORCH-153: a held run produces its plan and parks; it never enters the iteration loop, so it selects no
       // task, judges no completion and runs no check suite — the prohibition is structural rather than a branch.
       if (this.planHeld) return await this.parkAtPlanGate();
@@ -942,7 +1102,7 @@ export class Run {
     // what left the agents paused as its agents' reports do. Every run that reaches here was told to decline: a run is
     // told nothing only when it opens a new session (`Sessions.start`), where no iteration is open (`RunDeps.openIteration`).
     const closed = await this.closeOpenIteration((open) => `the session was continued without the agents ${interruptionPhrase(open.interruption ?? 'crash')} had left paused`,
-      (c) => `Cancelled: the session was continued without this agent, which ${interruptionPhrase(c.interruption ?? '')} had left paused.`);
+      (c) => `Cancelled: the session was continued without this agent, which ${interruptionPhrase(c.interruption ?? '')} had left paused.`, undefined, true);
     if (!closed) return;
     this.initialIterations = this.iterationsCompleted;
     this.saveRunning({});
@@ -953,12 +1113,16 @@ export class Run {
    * back to `pending` and `iteration.end` and the row's close with that todo in one transaction, its capture, and the
    * count moved past it.
    * `only` names the one iteration the caller may close. False when none is open, or the open one is not that one.
+   * `completed`: each agent it cancels fires `child_completed` (REQ-HOOKS-003), in line, before the iteration closes — the
+   * decline's close, which runs after this run's `session_start`. The explicit cancel's close after the run's
+   * `session_end` fires none (OQ-154).
    */
-  private async closeOpenIteration(summary: (open: IterationRow) => string, agentReport: (c: ChildRow) => string, only?: number | null): Promise<boolean> {
+  private async closeOpenIteration(summary: (open: IterationRow) => string, agentReport: (c: ChildRow) => string, only?: number | null, completed = false): Promise<boolean> {
     const dal = this.deps.dal;
     const open = dal?.openIterationOf(this.sessionId);
     if (!dal || !open || (only !== undefined && open.iteration !== only)) return false;
-    this.cancelPausedAgents(dal, open, agentReport);
+    const cancelled = this.cancelPausedAgents(dal, open, agentReport);
+    if (completed) for (const c of cancelled) await this.childCompleted(childCompletedFields(dal.getChild(this.sessionId, c.task_id) ?? c));
     this.todo.reopen(open.todo_task_id);
     // PD-ORCH-005 clause 17: a continue's message the iteration held is left pending, so the next iteration takes it up.
     this.todo.releaseHeld(open.iteration, false);
@@ -977,14 +1141,30 @@ export class Run {
    * report saying so, before the iteration closes as cancelled. Until the resume is built this is what every continue
    * does with an iteration a rest left open; once it is, only the user's declining does.
    */
-  private cancelPausedAgents(dal: StoreDal, open: IterationRow, report: (c: ChildRow) => string): void {
+  private cancelPausedAgents(dal: StoreDal, open: IterationRow, report: (c: ChildRow) => string): ChildRow[] {
+    const cancelled: ChildRow[] = [];
     for (const c of iterationAgents(dal, this.sessionId, open)) {
       if (c.state !== 'paused') continue;
       const r = this.deps.writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
       if (!r.ok) { this.deps.warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling paused ${c.task_id} failed: ${r.error.code}`); continue; }
       // REQ-LIBRARY-092: the report is materialised as every terminal child's is.
-      storeChildReport({ writer: this.deps.writer, artifacts: this.deps.artifacts, warn: this.deps.warn }, c.task_id, c, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: report(c), key_findings: [], last_response: '', final_response: '', errors: [] });
+      const stored = { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: report(c), key_findings: [], last_response: '', final_response: '', errors: [] };
+      storeChildReport({ writer: this.deps.writer, artifacts: this.deps.artifacts, warn: this.deps.warn }, c.task_id, c, stored);
+      // REQ-ORCH-098: torn down as every terminal child is (OQ-152).
+      writeCancelledTeardown(this.deps.writer, c, stored);
+      cancelled.push(r.value);
     }
+    return cancelled;
+  }
+
+  /**
+   * REQ-HOOKS-003: one `child_completed`, in line (REQ-HOOKS-080), for a child this run ended outside an iteration's
+   * children — the stale settle's and the decline's. A raise out of the port reduces to a warning (REQ-HOOKS-079).
+   */
+  private async childCompleted(fields: Readonly<Record<string, unknown>>): Promise<void> {
+    if (!this.hooks) return;
+    try { await this.hooks.fireLifecycle('child_completed', fields); }
+    catch (cause) { this.deps.warn(`the child_completed hooks raised for child ${String(fields['child_name'])} (${String(fields['child_id'])}): ${String(cause instanceof Error ? cause.message : cause)}`); }
   }
 
   /** REQ-GIT-051 / REQ-GIT-045: the one capture an iteration that closes is owed, which never raises and never aborts the run. */
@@ -1027,7 +1207,8 @@ export class Run {
     if (!c) return undefined;
     const chosen = c.model ?? { model: choice.model, thinking: choice.thinking };
     return {
-      compressor: { backend: c.backend, model: chosen.model, thinking: chosen.thinking, timers: c.timers, credentialFor: c.credentialFor, timeoutMs: c.timeoutMs },
+      // OQ-156: the compressing model is given the history it condenses up to its own threshold (REQ-MONITOR-078).
+      compressor: { backend: c.backend, model: chosen.model, thinking: chosen.thinking, timers: c.timers, credentialFor: c.credentialFor, timeoutMs: c.timeoutMs, inputTokens: c.triggerFor(chosen.model).tokens },
       trigger: c.triggerFor(choice.model), charsPerToken: c.charsPerToken, preserveRecentTurns: c.preserveRecentTurns, todoLines,
       // Part AO: every turn of this run — the root's and each child's — registers its conversation for the manual pass.
       registry: this.conversations,
@@ -1086,7 +1267,7 @@ export class Run {
 
   /** REQ-MONITOR-084 (4): the run-level plan as lines, for the entry agent's own compression. */
   private plannerTodoLines(): readonly string[] {
-    return this.todo.toDocument().phases.flatMap((phase) => phase.tasks.map((task) => `[${task.state}] ${phase.name} — ${task.text}`));
+    return this.todo.toDocument().phases.flatMap((phase) => phase.tasks.map((task) => `[${task.state}] ${phase.name} — ${taskLine(task)}`));
   }
 
   /** The per-agent ladder deps shared by the root and every child (the cell is the agent's own). */
@@ -1127,6 +1308,10 @@ export class Run {
     // PD-ORCH-005 clause 4: a resumed iteration's root is restored with its identity — its task id and canonical name.
     const rootTaskId = resume?.root_task_id ?? mintTaskId(takenTaskIds(this.deps.dal, this.sessionId));
     const rootCanonical = resume?.root_canonical_name ?? canonicaliseName(config.persona);
+    // Clause 4 with OQ-97: a resumed root keeps the name its rows carry, even when it runs as the entry role now.
+    const rootName = resume?.root_persona ?? config.persona;
+    this.rootName = rootName;
+    this.rootDone = false;
     const rootRecord: RootExecutionRecord = {
       taskId: rootTaskId,
       canonicalName: rootCanonical,
@@ -1142,12 +1327,25 @@ export class Run {
     if (iterationOverride === undefined && resume === undefined) {
       const opened = writer.openIteration({ iteration, root_task_id: rootTaskId, root_canonical_name: rootCanonical, root_persona: config.persona, todo_task_id: this.iterationTask?.id ?? '', task });
       if (opened.ok && !opened.value) this.deps.warn(`iteration ${iteration} of ${this.sessionId} was not recorded open: its number is taken or another iteration is open`);
+      // OQ-103 (R-067): a cancel accepted before this iteration was recorded open marks it as well.
+      if (opened.ok && opened.value && this.stop.final) this.markCancelAccepted();
+    }
+    /*
+     * REQ-MONITOR-102 with REQ-ORCH-153 (the repair of `a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`):
+     * a plan cycle's root has no iteration row to carry its count, so the session records it as under way, none of its calls
+     * counted, until they join the total below. A crash that ends its turn leaves it recorded, which is how the crash record
+     * finds it (`recordCrash`).
+     */
+    const planRoot = iterationOverride !== undefined && resume === undefined ? rootTaskId : null;
+    if (planRoot !== null) {
+      const r = writer.openPlanRoot(planRoot, rootName, rootCanonical);
+      if (!r.ok) this.deps.warn(`the plan cycle's root ${rootName} (${planRoot}) of ${this.sessionId} was not recorded under way: ${r.error.code}`);
     }
     const children = this.deps.toolsFor && this.deps.dal
       ? new IterationChildren({
         rootRecord,
         // REQ-GIT-019: the children are told the root they work in — the worktree for an isolated run.
-        sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, thinking: config.thinking,
+        sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, ...(config.modelKey === undefined ? {} : { modelKey: config.modelKey }), thinking: config.thinking,
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
         // Part Q: each child gets its own cell over the shared memory, catalogue and wait registry.
         resilience: { forChild: (persona, current, bound) => { const effective = this.memory.effective(withSettings(this.catalogue, current), this.catalogue); return this.resilienceFor(agentCell(effective, this.fallbackFor(persona, effective)), bound); } },
@@ -1155,8 +1353,10 @@ export class Run {
         compressionFor: this.compressionFor,
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
-        // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below.
-        countToolCalls: (n) => this.aggregates.addToolCalls(n),
+        ...(this.deps.modelSlots ? { slotsHeldElsewhere: this.deps.modelSlots.heldElsewhere, onSlotFreed: this.deps.modelSlots.freed } : {}),
+        // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below. The
+        // child's own count is persisted with the total, in one transaction, so a crash leaves the two agreeing.
+        countToolCalls: (n, child) => { this.aggregates.addToolCalls(n); if (child) this.persistToolCalls({ children: [child] }); },
         // REQ-EVENTS-053, PD-MONITOR-001: a child's provider requests are the run's, counted where the entry agent's are.
         onRequestUsage: this.onRequestUsage,
         summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), ...(this.deps.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: this.deps.childStallTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
@@ -1166,7 +1366,7 @@ export class Run {
         ...(this.deps.contextUnits ? { contextUnits: this.deps.contextUnits } : {}),
         ...(this.deps.supervisorFor ? { supervisorFor: this.deps.supervisorFor } : {}),
         ...(this.deps.personas ? { personas: this.deps.personas } : {}),
-        steeringFor: (id: string) => this.steeringFor(id), shouldPause: () => this.pauseRequested,
+        steeringFor: (id: string) => this.steeringFor(id), steeringPending: (id: string) => this.steeringPending(id), shouldPause: () => this.pauseRequested,
         // PD-ORCH-005: the rest the run is coming to, and the pause's tool deadline every child's calls run under.
         restCause: () => this.restCause, cutCalls: this.toolCut.signal, resumeNotice: (taskId: string) => this.resumeNotice(taskId),
         // PD-ORCH-005 clause 1: every child's conversation is recorded under its task id.
@@ -1179,7 +1379,8 @@ export class Run {
       }, iteration)
       : null;
     this.children = children;
-    const tools = children && this.deps.toolsFor ? this.portFor(config.persona, config.persona, children, this.rootId, 0) : this.register(this.deps.tools);
+    const tools = children && this.deps.toolsFor ? this.portFor(config.persona, rootName, children, this.rootId, 0, rootCanonical) : this.register(this.deps.tools);
+    this.rootPort = tools;
     // PD-ORCH-005 clause 4: a resumed iteration's agents are restored first, so the root resumes among them.
     // The timeline records each agent resumed (`child_resumed`), so a resume is not a warning (phase 4's review).
     if (resume && children) children.resumePaused();
@@ -1189,13 +1390,39 @@ export class Run {
     const compression = this.compressionFor(this.rootResilience().cell.model, () => this.plannerTodoLines());
     // PD-ORCH-005 revision 4 clause 14: one check per execution of the root, at its first model step.
     const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration);
+    /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
+    let rootDetached = false;
+    /*
+     * REQ-MONITOR-117 ("each agent is evaluated for a stall"), the repair of `a-stalled-child-is-never-shown-stalled.md`: the
+     * entry agent has a stall watch too, over its whole execution, as a child's has over each attempt. Its threshold is the
+     * one REQ-MONITOR-118 names — the role's own `stall_timeout`, else `runtime.child_stall_timeout`, else 90 s (OQ-153). It
+     * is visibility only (REQ-MONITOR-121); it writes what a child's watch writes, naming the agent, and its callback carries
+     * the root's figure to the session record and wakes a root waiting on its children for a steer (REQ-MONITOR-135). Between
+     * its turns — while it waits on its own children — no silence is counted against it (`betweenTurns`). No corrective
+     * message: REQ-NOTIFY-112's is a child task's.
+     */
+    const rootWatch = new StallWatch(this.deps.clocks, millis(this.deps.personas?.resolve(config.persona)?.persona.stallTimeoutMs ?? this.deps.childStallTimeoutMs ?? CHILD_STALL_TIMEOUT_MS), {
+      stalled: (r) => {
+        if (rootDetached) return;
+        const message = stallWarning(rootName, rootTaskId, r.silentS, 'agent');
+        if (r.warn) this.deps.warn(message);
+        writer.recordIssue({ kind: 'stall', severity: 'warning', actor: rootName, message, metadata: { task_id: rootTaskId, silent_seconds: r.silentS, active_tools: r.activeTools, recent_tool_calls: r.recentCalls, last_model_event: r.lastModelEvent } });
+      },
+      waiting: (w) => { if (!rootDetached) this.deps.warn(stallWaitingLine(rootName, rootTaskId, w.activeCalls, w.silentS, 'agent')); },
+      // OQ-173: a backoff, a provider-limit wait or a compression the run holds the root in is a wait, not a stall.
+      imposed: (w) => { if (!rootDetached) this.deps.warn(stallImposedWaitLine(rootName, rootTaskId, w.wait, w.silentS, 'agent')); },
+      recovered: () => { if (!rootDetached) this.deps.warn(stallRecoveredLine(rootName, rootTaskId, 'agent')); },
+      evaluated: (stalled) => { if (!rootDetached) this.rootStallEvaluated(rootName, stalled ? rootWatch.silentSeconds : null); },
+    });
     const turnFn = (text: string | null, history: readonly ChatMessage[]) => {
       const content = launching ? this.firstMessage(text ?? task, contentOverride ?? this.deps.taskContent, iterationOverride === undefined) : undefined;
       const initialCall = initial;
       launching = false;
       initial = false;
+      // The run hands the root something to answer: its silence counts from here (as a child's, OQ-127).
+      rootWatch.activity();
       return runTurn({
-      writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
+      writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: rootName,
       // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
       // REQ-WORKSPACE-060 (ADR-0063): then the session's always-active context units, read at THIS construction
       // so a skill force-loaded since the last turn reaches this agent (REQ-CONFIG-166).
@@ -1207,7 +1434,8 @@ export class Run {
       // the user. Read here rather than captured once because `turnFn` is built once per segment and called per
       // turn; the hold itself is settled once and never cleared in place (REQ-ORCH-153), so the two agree.
       ...(this.deps.supervisorFor && !this.planHeld ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
-      steering: this.steeringFor('root'), shouldPause: () => this.pauseRequested,
+      // REQ-MONITOR-135: a steer delivered refreshes the root's last activity, as a child's (`refreshing`).
+      steering: refreshing(this.steeringFor('root'), () => rootWatch.activity()), shouldPause: () => this.pauseRequested,
       // PD-ORCH-005: the pause's tool deadline, and what the root's interrupted calls are recorded as interrupted by.
       cutCalls: this.toolCut.signal, interruption: () => this.restCause,
       resilience: this.rootResilience(),
@@ -1222,18 +1450,70 @@ export class Run {
       recorder: this.record.recorder(rootTaskId, iteration),
       // PD-ORCH-005 revision 4 clause 14: the fingerprint of the instructions and tools the root started with.
       fingerprint,
-      }, text, history, this.abort.signal, content);
+      // REQ-SESSION-094: a root the stop's grace gave up on writes nothing more when its call returns.
+      detached: () => rootDetached,
+      // REQ-MONITOR-117: the root's stall watch is fed as a child's is — every streamed part, every call's start and end.
+      onModelEvent: (kind) => rootWatch.modelEvent(kind),
+      onToolStarted: (call) => rootWatch.toolStarted(call.callId, call.name),
+      onToolCompleted: (call) => rootWatch.toolCompleted(call.callId),
+      // OQ-173: and told of each wait the run holds it in between its steps, which is not its silence.
+      onImposedWait: (wait) => rootWatch.imposedWait(wait),
+      }, text, history, this.abort.signal, content).finally(() => rootWatch.betweenTurns());
     };
     let outcome: TurnOutcome | null = null;
+    /**
+     * REQ-MONITOR-102: the calls the root's record held when this execution began — every one of them already counted, when
+     * its earlier execution returned, raised or was given up on, or by the crash record — so a root given up on, or whose
+     * turn raises, counts only what its record gained.
+     */
+    const recordedAtStart = resume ? callsRun(this.record.load(rootTaskId)) : 0;
+    /**
+     * An execution iteration's root has a count on its row (`iterations.root_tool_calls`); a plan cycle's has no row, and its
+     * calls joining the total release it from the session instead (store v29).
+     */
+    const rootCount = iterationOverride === undefined ? iteration : null;
+    const rootCounts = (add: number): Parameters<SessionWriter['countToolCalls']>[0] => (rootCount !== null ? { root: { iteration: rootCount, add } } : planRoot !== null ? { planRoot: { taskId: planRoot, add } } : {});
+    // REQ-MONITOR-044/052 (acceptance A20): from here until they join the total, the root's calls are counted live.
+    this.rootUncountedFrom = writer.activity.callCount(rootName);
+    rootWatch.start();
     try {
       const start: TurnStart = resume ? this.resumedRootStart(rootTaskId) : { kind: 'fresh', task };
-      outcome = children ? await children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : await firstTurn(turnFn, start);
-      this.aggregates.addToolCalls(outcome.toolCallCount);
-      // REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
-      // cancels them (the explicit cancel); a stop that brings the run to rest leaves them paused (PD-ORCH-005).
+      // OQ-153 with PD-ORCH-005 clause 4: a root resumed into waiting takes no step until a child's report — it is between
+      // its turns from the start, and no silence is counted against it while it waits (found by the verifier's review).
+      if (start.kind === 'resumed' && start.waiting) rootWatch.betweenTurns();
+      const running = children ? children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : firstTurn(turnFn, start);
+      /*
+       * REQ-SESSION-092 / REQ-MONITOR-129: a stop bounds how long the root is awaited, as a rest bounds a child's execution
+       * (`IterationChildren.rest`). Past the grace the root is detached: it is left where it stood — paused by a rest, its
+       * open call answered as interrupted, below — and a turn that returns after that writes nothing more.
+       */
+      const settled = await Promise.race([running, this.stopGraceSpent.then(() => { rootDetached = true; return null; })]);
+      if (settled === null) {
+        // The turn's end is no longer awaited, so its raise must be handled here or it is an unhandled rejection.
+        running.catch(() => undefined);
+        // Named as its rows and calls name it (`rootName`): a root resumed as the entry role keeps its own persona (OQ-97).
+        this.deps.warn(`iteration ${iteration}: the root ${rootName} did not return within the stop's 30 s grace and was given up on (REQ-SESSION-092)`);
+      } else {
+        outcome = settled;
+        this.aggregates.addToolCalls(outcome.toolCallCount);
+        // REQ-MONITOR-102: the root's count on its iteration moves with the total, in one transaction (REQ-ORCH-097's
+        // cadence: when its turn returns).
+        this.persistToolCalls(rootCounts(outcome.toolCallCount));
+        this.rootUncountedFrom = null;
+      }
+      /*
+       * REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
+       * cancels them (the explicit cancel); a stop that brings the run to rest leaves them paused (PD-ORCH-005). A root
+       * given up on drains them as one that returned does: the drain is bounded by its own timeout, not by the stop's
+       * grace (OQ-121).
+       */
       if (children && this.stop.requested && this.restCause === null && children.scheduler.hasNonTerminal) await children.drain(this.deps.drainTimeoutMs ?? millis(120_000));
-      return outcome.report;
+      // A root given up on reports nothing of its own: `iterate` reads the stop before the report (REQ-SESSION-092).
+      return outcome?.report ?? { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };
     } finally {
+      // The root's execution is over, or given up on: its watch is disarmed and its figure cleared (REQ-MONITOR-120).
+      rootWatch.stop();
+      this.rootStallEvaluated(rootName, null);
       /*
        * PD-ORCH-005 clause 2 (narrowing REQ-ORCH-052): an iteration that comes to rest with work unfinished — the root
        * stopped where it stood, or a child is not terminal — leaves every unfinished agent `paused` and the iteration
@@ -1241,8 +1521,17 @@ export class Run {
        */
       const rest = iterationOverride === undefined ? this.restCause : null;
       const rootFinished = outcome !== null && outcome.paused !== true && !this.abort.signal.aborted && outcome.report.status !== 'failed';
-      if (rest !== null && (!rootFinished || (children?.scheduler.hasNonTerminal ?? false))) {
-        if (children) { const n = await children.rest(rest); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) left paused by ${rest} (PD-ORCH-005)`); }
+      /** Whether the root's open calls were answered as interrupted by a rest. */
+      let answered = false;
+      const resting = rest !== null && (!rootFinished || (children?.scheduler.hasNonTerminal ?? false));
+      // A root the rest leaves `paused` is the root a continue resumes, and a root steer pending at the rest is delivered to
+      // it (`deliverSteeringAtRest`): it can still step. Every other root's execution is over (`rootSteerName`).
+      this.rootDone = !resting;
+      if (resting) {
+        // Every child's execution had the stop's grace beside the root's, counted from the same first request: the rest
+        // is given what is left of it — none after a root given up on, and never a fresh 30 s after a root that returned
+        // late — so the stop stays bounded at the one 30 s (REQ-SESSION-092).
+        if (children) { const n = await children.rest(rest, this.stopGraceLeft()); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) left paused by ${rest} (PD-ORCH-005)`); }
         /*
          * Clause 3: the explicit cancel is final even when it arrives while the run is coming to rest — the rest waits on
          * every execution, which can take the pause's whole tool deadline. Read again once the rest is done: cancelled
@@ -1250,18 +1539,119 @@ export class Run {
          */
         if (this.restCause === null) {
           rootRecord.state = 'cancelled';
-          if (children) children.finalize('cancelled: the run was cancelled while it was coming to rest');
+          // REQ-HOOKS-003 / REQ-HOOKS-080: the sweep's `child_completed` hooks finish before the iteration's own.
+          if (children) { children.finalize('cancelled: the run was cancelled while it was coming to rest'); await children.completionsSettled(); }
         } else {
           this.iterationRest = this.restCause;
           rootRecord.state = 'paused';
-          // Clauses 3 and 4: a root that raised out of a call has that call answered as interrupted, as a child's is.
-          if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, this.restCause);
+          // Clauses 3 and 4: a root that raised out of a call, or was given up on in one, has that call answered as
+          // interrupted, as a child's is.
+          if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: rootName }, iteration, this.restCause);
+          answered = true;
+          // REQ-MONITOR-134 with clause 4: a steering prompt still pending reaches the record its agent resumes from.
+          this.deliverSteeringAtRest({ taskId: rootTaskId, name: rootName }, iteration, this.restCause);
         }
+        // OQ-128: the rest is recorded and no agent of this run takes another step, so no steer is accepted from here — one
+        // acknowledged now would reach no record while its agent sits `paused`, to resume on the continue without it.
+        this.steeringClosed = true;
       } else if (children) {
         // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
         const n = children.finalize(this.stop.requested ? 'cancelled: the run was stopped while this child was in flight' : 'cancelled during iteration cleanup');
         if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) settled cancelled at exit (REQ-ORCH-052)`);
+        // REQ-HOOKS-003 / REQ-HOOKS-080: the sweep's `child_completed` hooks finish before the iteration's own.
+        await children.completionsSettled();
+        /*
+         * REQ-SESSION-092 / REQ-SESSION-094: a stop that rests nothing — the explicit cancel, a stop the run raises itself,
+         * a plan cycle's — aborted every child execution with the root. Each is awaited within what is left of the grace
+         * (none after a root given up on), and what still executes then is detached, so a child's step or call that
+         * ignored the stop writes nothing into the finished session when it returns.
+         */
+        if (this.stop.requested && await children.outlast(this.stopGraceLeft())) {
+          this.deps.warn(`iteration ${iteration}: child executions still running at the stop's 30 s grace were given up on (REQ-SESSION-092)`);
+          // REQ-MONITOR-102 / REQ-SESSION-129: no rest counts them — each one's open calls are answered as cut off, naming
+          // no rest (OQ-96), and it is counted from its record (the repair of
+          // `a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`).
+          children.closeGivenUpOn();
+        }
       }
+      // A root given up on, or whose turn raised, that no rest paused — the explicit cancel, an iteration that closes
+      // failed — still leaves no call row running (REQ-SESSION-129): its open call is recorded cut off, naming no rest
+      // (OQ-96, "A call cut by no rest").
+      if ((rootDetached || outcome === null) && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: rootName }, iteration, null);
+      /*
+       * REQ-MONITOR-102 (the repairs of `a-roots-calls-before-a-crash-never-reach-the-session-total.md` and
+       * `a-root-whose-turn-raises-never-counts-its-calls.md`): a root given up on, or whose turn raised, never returns its
+       * count, so its calls are counted from its record — once its open calls are answered, so a call it asked for and
+       * never started is not one — less what the record held when this execution began. Only a root that never returned:
+       * the grace's timer still sets `rootDetached` when it runs out after the root returned — while the rest waits for its
+       * children — and that root's calls were counted with its outcome above.
+       */
+      if (outcome === null && this.deps.dal) {
+        const gained = Math.max(0, callsRun(this.record.load(rootTaskId)) - recordedAtStart);
+        this.aggregates.addToolCalls(gained);
+        this.persistToolCalls(rootCounts(gained));
+      }
+      // The root's execution is over: its calls are in the total, or — with no store record to count from — never will be.
+      this.rootUncountedFrom = null;
+      /*
+       * A plan cycle's root is released with its calls above — returned, given up on, or whose turn raised (the repair of
+       * `a-root-whose-turn-raises-never-counts-its-calls.md`) — in the transaction that adds them; this release, of a root
+       * already released, writes nothing. It is the one for a run with no store record to count from; only a crash leaves
+       * the root recorded.
+       */
+      if (planRoot !== null) {
+        const r = writer.countToolCalls({ planRoot: { taskId: planRoot, add: 0 } });
+        if (!r.ok) this.deps.warn(`the plan cycle's root ${rootName} (${planRoot}) of ${this.sessionId} was not released: ${r.error.code}`);
+      }
+    }
+  }
+
+  /**
+   * REQ-MONITOR-102: the run's tool-call total as its aggregates hold it, written with the per-agent counts that now hold
+   * the calls just added (`SessionWriter.countToolCalls`) — so a process death after this never finds a call one of them
+   * counts and the other does not. The next save publishes it.
+   */
+  private persistToolCalls(counts: Parameters<SessionWriter['countToolCalls']>[0]): void {
+    const r = this.deps.writer.countToolCalls(counts, this.aggregates.figures.toolCalls);
+    if (!r.ok) this.deps.warn(`the tool-call count of ${this.sessionId} was not persisted: ${r.error.code}`);
+  }
+
+  /**
+   * REQ-HOOKS-076 / REQ-HOOKS-080 (the fourth verification of the repair of
+   * `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`): every `child_completed` hook the last
+   * iteration's children queued from outside a settle (`IterationChildren.completedOutside`) is awaited — after a stop,
+   * only within what is left of its 30 s grace (REQ-SESSION-092), so one the grace gave up on may still finish after
+   * `session_end`, bounded by its own per-hook timeout (REQ-HOOKS-033).
+   */
+  private async childCompletionsSettled(): Promise<void> {
+    const children = this.children;
+    if (!children || !this.hooks) return;
+    if (!this.stop.requested) { await children.completionsSettled(); return; }
+    const grace = this.stopGraceLeft();
+    if (grace <= 0) return;
+    let timer: TimerHandle | undefined;
+    await Promise.race([children.completionsSettled(), new Promise<void>((r) => { timer = this.deps.clocks.timers.after(grace, r); })]);
+    timer?.cancel();
+  }
+
+  /**
+   * REQ-SESSION-092: what is left of the stop's 30 s grace, counted from the first stop request — the whole of it when no
+   * stop has been requested.
+   */
+  private stopGraceLeft(): Millis {
+    return this.stopGraceDeadline === null ? STOP_GRACE : millis(Math.max(0, this.stopGraceDeadline - this.deps.clocks.monotonic.now()));
+  }
+
+  /**
+   * REQ-SESSION-094: closes every port this run built (`ToolPort.close`) — the root's and each child's, not a port the
+   * caller handed it — its open calls settled with what cut them off: the rest the run came to, or none named.
+   */
+  private closePorts(): void {
+    this.portsClosed = true;
+    const cutOff = interruptedResult(this.restCause, true, '');
+    for (const p of this.ports) {
+      if (p === this.deps.tools) continue;
+      try { p.close?.(cutOff); } catch (cause) { this.deps.warn(`closing a tool port of ${this.sessionId} failed: ${String(cause)}`); }
     }
   }
 
@@ -1269,26 +1659,114 @@ export class Run {
     if (port) this.ports.add(port);
     return port;
   }
-  private readonly portFor = (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number): ToolPort | null => {
-    const p = this.deps.toolsFor ? this.deps.toolsFor(persona, agentName, delegation, parentId, depth) : null;
+  private readonly portFor = (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string): ToolPort | null => {
+    const p = this.deps.toolsFor ? this.deps.toolsFor(persona, agentName, delegation, parentId, depth, canonicalName, parentPersona) : null;
     return this.register(p);
   };
 
   /** REQ-MONITOR-133: a steer is pending until its conversation's next step; the id is the control's string value. */
   steer(agentId: string, text: string): string | null {
-    if (this.ended || text.trim() === '' || agentId.trim() === '') return null;
+    if (this.ended || this.steeringClosed || text.trim() === '' || agentId.trim() === '') return null;
     const key = this.isRootAgent(agentId) ? 'root' : agentId;
     if (key !== 'root' && !this.children?.ledger.get(key)) return null;
     const id = randomUUID();
+    // Named as its injection names it: the root by the name of the root that will take it (`rootSteerName`), a child by its
+    // instance name (the metadata keeps the key).
+    const who = key === 'root' ? this.rootSteerName() : this.children?.ledger.get(key)?.canonical_name ?? key;
     const list = this.steering.get(key) ?? [];
-    list.push({ id, text });
+    list.push({ id, text, name: who });
     this.steering.set(key, list);
-    this.deps.writer.appendTimeline('steering_submitted', 'user', `A steering prompt was submitted for ${key === 'root' ? this.deps.config.persona : key} (${id.slice(0, 8)}).`, { prompt_id: id, agent: key });
+    this.deps.writer.appendTimeline('steering_submitted', 'user', `A steering prompt was submitted for ${who} (${id.slice(0, 8)}).`, { prompt_id: id, agent: key });
     return id;
+  }
+  /**
+   * The name a root steer is announced under: the root that will take it (the repair of
+   * `a-root-steer-after-a-resumed-iteration-closes-is-announced-under-the-resumed-roots-name.md`). While the current root
+   * can still step — its turn running, or a resumed root before its first turn — that is `rootName`, which for a root
+   * resumed as the entry role is the persona its iteration was opened with (PD-ORCH-005 clause 4, OQ-97). Once its
+   * execution is over, the next root is a fresh one and runs as the run's persona, so the steer is named for that.
+   */
+  private rootSteerName(): string {
+    return this.rootDone ? this.deps.config.persona : this.rootName;
+  }
+
+  /**
+   * The host's stall callback for the entry agent (REQ-MONITOR-119/120/122): its figure beside its tools, the record
+   * republished when it changed; then REQ-MONITOR-135's injection — a root waiting on its children with a steer pending is
+   * woken to take its next step. Neither may block or fail the run.
+   */
+  private rootStallEvaluated(rootName: string, seconds: number | null): void {
+    try {
+      if (this.deps.writer.activity.stalled(rootName, seconds)) this.deps.owner.refreshRecord();
+      if (this.children !== null && this.steeringPending('root')) this.children.wakeForSteering(this.rootId);
+    } catch (cause) {
+      this.deps.warn(`the stall evaluation of ${rootName} could not reach its host: ${String(cause instanceof Error ? cause.message : cause)}`);
+    }
+  }
+  /** REQ-MONITOR-135: whether a steer is pending for `conversationId`, read without taking it (a stall evaluation asks). */
+  private steeringPending(conversationId: string): boolean {
+    const key = this.isRootAgent(conversationId) ? 'root' : conversationId;
+    return (this.steering.get(key)?.length ?? 0) > 0;
   }
   private steeringFor(conversationId: string): () => readonly { id: string; text: string }[] {
     const key = this.isRootAgent(conversationId) ? 'root' : conversationId;
     return () => { const list = this.steering.get(key) ?? []; this.steering.delete(key); return list; };
+  }
+
+  /**
+   * REQ-MONITOR-134 with PD-ORCH-005 clause 4, the repair of `a-steering-prompt-pending-at-a-rest-is-lost.md`: a steering
+   * prompt still pending when the iteration comes to rest — its agent stopped before the step that would have injected it —
+   * is delivered into the conversation record of the agent it names, when that agent is left `paused` with a record to
+   * carry on from: as the marked message its next step would have injected, after the answers to the calls the rest cut,
+   * and marked injected then, once. The resumed agent reads it at its first step. A prompt for an agent with no record — a
+   * child that never started — stays pending, and the run's end reports it not delivered (`closeSteering`,
+   * OQ-128). Once this has run, the rest closes steering: a steer after it is refused.
+   */
+  private deliverSteeringAtRest(root: { readonly taskId: string; readonly name: string }, iteration: number, cause: Interruption | null): void {
+    for (const [key, pending] of [...this.steering]) {
+      const child = key === 'root' ? null : this.children?.ledger.get(key) ?? null;
+      const agent = key === 'root' ? { ...root, iteration } : child?.state === 'paused' ? { taskId: child.task_id, name: child.canonical_name, iteration: child.iteration } : null;
+      if (agent === null || pending.length === 0 || this.record.load(agent.taskId).length === 0) continue;
+      this.steering.delete(key);
+      const recorder = this.record.recorder(agent.taskId, agent.iteration);
+      // Unlike `injectSteering`, no supervisor is told of the instruction here (REQ-MONITOR-134, "reported to the run"):
+      // the agent steps again only in the continue's run, whose supervisors are a fresh `SupervisorRegistry` with no
+      // consecutive series for a new user instruction to restart. A change that carried supervisors across a rest owes
+      // the `noteUserInstruction` call here.
+      for (const s of pending) {
+        recorder.appended(steeringMessage(s));
+        recordSteeringInjected(this.deps.writer, agent.name, s, { interruption: cause });
+      }
+    }
+  }
+
+  /**
+   * REQ-MONITOR-133/134 at the run's end (OQ-128): no steer is accepted from here, and a prompt no step injected and no rest
+   * delivered — its agent never started, ended first, or was cancelled — is recorded as not delivered: a
+   * `steering_not_delivered` timeline entry and a transcript line, so an acknowledged submission is never lost without a
+   * word. The specification has no word for such a prompt; the entry takes REQ-MONITOR-134's "delivered".
+   *
+   * Every way a run stops stepping reaches this before it awaits anything: teardown, and the two ends that are not
+   * terminations and never enter it — the pause at the message limit (`pauseAtLimit`) and the park at the plan gate
+   * (`parkAtPlanGate`, on the path that parks), each of which names itself in `ending` (found by the third review of the
+   * repair of a-steering-prompt-pending-at-a-rest-is-lost: both ended the run with a root steer still pending and said
+   * nothing). An end is named only on the path that takes it: a plan cycle that ends in teardown is teardown's to record.
+   */
+  private closeSteering(ending?: string): void {
+    try { this.reportUndeliveredSteering(ending); } catch (cause) { this.steeringClosed = true; this.deps.warn(`recording the undelivered steering of ${this.sessionId} failed: ${String(cause)}`); }
+  }
+  private reportUndeliveredSteering(ending = 'the run ended'): void {
+    this.steeringClosed = true;
+    for (const [key, pending] of this.steering) {
+      for (const s of pending) {
+        // Under the name it was announced with: a root steer announced while a resumed root ran keeps that root's name.
+        const who = s.name;
+        const message = `The steering prompt for ${who} (${s.id.slice(0, 8)}) was not delivered: ${ending} before ${who} took another step.`;
+        this.deps.writer.appendTimeline('steering_not_delivered', 'rotaris', message, { prompt_id: s.id, agent: key });
+        this.deps.writer.appendRow('system', message, true);
+      }
+    }
+    this.steering.clear();
   }
 
   /**
@@ -1313,11 +1791,17 @@ export class Run {
     return this.pauseRequested;
   }
 
-  /** REQ-CHAT-040: every QUEUED prompt becomes a task in phase "Queued Prompts"; the supervisor sees a user instruction. */
+  /**
+   * REQ-CHAT-040 / REQ-ORCH-071: every QUEUED prompt becomes a task in phase "Queued Prompts", named "Queued Prompt: <first 8
+   * characters of the prompt id>" and carrying the prompt text as its content (acceptance A28); the supervisor sees a user
+   * instruction.
+   */
   private consumeQueued(): void {
     const r = this.deps.writer.triggerQueuedPrompts();
     if (!r.ok || r.value.length === 0) return;
-    for (const p of r.value) this.todo.appendTask('Queued Prompts', p.prompt_id, p.content);
+    // REQ-CHAT-089: the task's id is the backend's own, never the prompt's; the prompt is found by the task's name and by
+    // the `prompt_triggered` timeline entry, which carries its full id.
+    for (const p of r.value) this.todo.appendTask('Queued Prompts', this.mintTaskId(), p.content, `Queued Prompt: ${p.prompt_id.slice(0, 8)}`);
     this.deps.supervisorFor?.(this.rootId).noteUserInstruction();
     this.saveRunning({});
   }
@@ -1327,12 +1811,13 @@ export class Run {
     if (this.ended) return { changed: false };
     let result: { changed: boolean; id?: string } = { changed: false };
     if (source === 'planner') {
-      const assigned = op === 'add' ? (id || randomUUID().replaceAll('-', '').slice(0, 8)) : id;
+      // REQ-CHAT-089: an added task takes the backend's id, never one the caller sent (a temporary id is never recorded).
+      const assigned = op === 'add' ? this.mintTaskId() : id;
       result = this.todo.editTask(op, assigned, text, phaseId) ? { changed: true, ...(op === 'add' ? { id: assigned } : {}) } : { changed: false };
     } else {
       const current = source === 'agent' ? this.agentTodo : this.agentTodoFor(ownerId, false);
       if (current !== null) {
-        const edited = editAgentTodo(current, op, id, text, phaseId, () => randomUUID().replaceAll('-', '').slice(0, 8));
+        const edited = editAgentTodo(current, op, id, text, phaseId);
         if (edited.changed) {
           result = { changed: true, ...(edited.id === undefined ? {} : { id: edited.id }) };
           if (source === 'agent') this.agentTodo = edited.document;
@@ -1345,6 +1830,16 @@ export class Run {
     this.deps.supervisorFor?.(this.rootId).noteUserInstruction();
     this.saveRunning({});
     return result;
+  }
+
+  /**
+   * REQ-CHAT-089: a new planner task's id — 8 lowercase hexadecimal characters, unique within the todo and among the ids
+   * the session's iterations recorded as their task (`todo_task_id`), so no iteration's record names a later task.
+   */
+  private mintTaskId(): string {
+    const taken = this.todo.ids();
+    for (const r of this.deps.dal?.iterationsOf(this.sessionId) ?? []) taken.add(r.todo_task_id);
+    return mintTodoId(taken);
   }
 
   /** The tool port calls these for the exact root or child conversation it belongs to. */
@@ -1402,7 +1897,7 @@ export class Run {
       for (const w of this.waits.all()) this.memory.setOverride(w.provider, w.model, { key, choice });
       writer.appendTimeline('model_override', 'user', `The user chose ${key} (${provider}/${choice.model.modelId}) during the wait on ${waiting.provider}/${waiting.model}; it stands for the rest of the session.`, { provider: waiting.provider, model: waiting.model, model_key: key, to_provider: provider, to_model: choice.model.modelId });
       writer.appendRow('system', `Model changed to ${key} during the wait; the run resumes on it now and keeps it for the rest of the session.`, true);
-      if (waiting.agent === this.deps.config.persona) this.entryOverride = { ...this.entryOverride, model: choice.model };
+      if (waiting.agent === this.rootName) this.entryOverride = { ...this.entryOverride, model: choice.model };
       this.waits.resolveWithModel(key, choice);
       return true;
     }
@@ -1433,6 +1928,9 @@ export class Run {
     const { writer, owner, bus } = this.deps;
     const count = this.iterationsCompleted;
     this.pausedAtLimit = { count, limit };
+    // REQ-MONITOR-133/134 with OQ-128: no agent of this run steps again, so steering closes before anything is awaited and
+    // a prompt still pending — for the entry role, whose iteration has closed — is recorded as not delivered.
+    this.closeSteering('the run paused at the message limit');
     writer.appendRow('system', `Paused: ${count} message${count === 1 ? '' : 's'} reached the limit of ${limit}. Continue, double the limit, or cancel the run.`, true);
     this.sampler?.cancel();
     this.sampleTokens(false);
@@ -1510,6 +2008,8 @@ export class Run {
     } catch (cause) {
       this.lastFailure = String(cause);
     }
+    // A stopped cycle, and one whose turn produced no plan, end the run in teardown, whose own close records a prompt still
+    // pending as not delivered because the run ended — reached before anything is awaited, as the park's close below is.
     if (this.stop.requested) return await this.teardown(this.stop.reason ?? 'user_cancelled');
     if (plan === '') {
       // Nothing to put a decision on. A gate with no plan would offer three answers over an empty surface, so the
@@ -1517,6 +2017,14 @@ export class Run {
       this.lastFailure = this.lastFailure ?? 'the entry role produced no plan text while the run was held at the plan gate';
       return await this.teardown('agent_session_aborted');
     }
+    /*
+     * REQ-MONITOR-133/134 with OQ-128: the run parks, and no agent of it steps again — the gate's release starts the next
+     * run — so steering closes here, as the park begins and before anything is awaited, and a prompt still pending is
+     * recorded as not delivered because the run was held at the plan gate. Only here, on the path that parks: the close
+     * sat above the two branches that end the run instead, and named a gate that never opened for a stopped cycle or a
+     * failed one (found by the fourth review of the repair of a-steering-prompt-pending-at-a-rest-is-lost).
+     */
+    this.closeSteering('the run was held at the plan gate');
     writer.appendRow('system', `A plan is ready for your decision (cycle ${cycle}). Approve to release execution, revise to ask for another plan, or cancel the run.`, true);
     this.sampler?.cancel();
     this.sampleTokens(false);
@@ -1588,9 +2096,23 @@ export class Run {
       // Clause 3: a cancel that lands after teardown can no longer close what the rest left open is refused, not lost.
       if (this.cancelWindowClosed) return false;
       this.stop.request('user_cancelled', false, true);
+      // OQ-103's last question, ruled (R-067): the cancel is made durable when it is accepted, so a host that dies before
+      // this run carries it out leaves the next repair or continue to end its agents `cancelled`, never to resume them.
+      this.markCancelAccepted();
       return true;
     }
     return this.children?.cancel(taskId) ?? false;
+  }
+
+  /**
+   * PD-ORCH-005 clause 3 (OQ-103, R-067): the explicit cancel's durable mark, on the iteration open in the store — the one
+   * this run works in, or resumes, or an earlier run left open for it to resume. Written again when this run opens an
+   * iteration after the cancel was accepted (`turn`), so no iteration the cancel ends is left open unmarked. A failed write
+   * is warned of: the cancel itself stands, and only its durability across a crash is lost.
+   */
+  private markCancelAccepted(): void {
+    const r = this.deps.writer.recordCancelAccepted();
+    if (!r.ok) this.deps.warn(`the explicit cancel of ${this.sessionId} was accepted but could not be recorded durably: ${r.error.code}`);
   }
 
   /**
@@ -1713,6 +2235,14 @@ export class Run {
   /** REQ-SESSION-094: the ordered pipeline, each step guarded, the whole of it run even on exception. */
   private async teardown(reasonIn: StopReason): Promise<RunResult> {
     const { writer, owner, bus, clocks } = this.deps;
+    // REQ-SESSION-094: every agent's turn has returned or been given up on, so nothing of this run's tool ports is owed
+    // from here. Each is closed before anything terminal is written: a call still open settles now, and one that returns
+    // later writes nothing through its gate into the finished session, or into a later run's.
+    this.closePorts();
+    // REQ-MONITOR-133/134 with OQ-128: no agent takes another step from here, so steering closes before anything is awaited
+    // — a steer while the hooks run is refused, not acknowledged for nothing to deliver — and what is still pending is
+    // recorded as not delivered.
+    this.closeSteering();
     // PD-ORCH-005 clause 10: a run that comes to rest records its agents' background sessions — a stop and a quit end them,
     // and so does the explicit cancel, which is a stop the user made final (OQ-96). Guarded like every teardown step.
     const ended = this.terminalsEndedBy();
@@ -1731,6 +2261,14 @@ export class Run {
     const elapsed = this.startedAt === null ? null : (clocks.monotonic.now() - this.startedAt) / 1000;
     // REQ-NOTIFY-093: a wait the user cancelled ends the run with the limit condition as its error, so main classifies it (REQ-NOTIFY-063).
     const error = this.lastFailure ?? this.waits.cancelledReason;
+    // REQ-HOOKS-076 / REQ-HOOKS-080: a `child_completed` the user's cancel of one child queued once the iteration's own
+    // waits were done — a paused child cancelled while the rest was being recorded — ends before `session_end`.
+    await this.childCompletionsSettled();
+    // REQ-HOOKS-076 / REQ-HOOKS-081 with OQ-154 (the repair of
+    // `a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`): the user's cancel of one paused child is
+    // accepted until the run has ended (`cancelAgent`), but one accepted from here, while `session_end` runs or after it,
+    // ends the child and fires no `child_completed`, which would follow `session_end`.
+    this.children?.endLifecycle();
     // REQ-HOOKS-003/081: session_end on every exit path, after the status is decided and before shutdown; `classified.result`
     // is the one string the payload, the result and the session.end event below all carry.
     if (this.hooks) {

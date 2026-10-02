@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -5,7 +6,7 @@ import type { Clocks } from '@rotaris/kernel';
 import { errorObservation, observation, type Observation, type ToolContext, type ToolExecutor } from '../tools/types.js';
 import { BackgroundManager, DEFAULT_BACKGROUND_TIMEOUT_S, type BackgroundOwner, type BackgroundSession } from './background.js';
 import { classifyOutcome, diagnosticBlock, outputSection, outputWarnings, renderAction, type FailureKind } from './classify.js';
-import { ForegroundSession, keystroke, type PtyFactory, type ShellBackend } from './foreground.js';
+import { ForegroundSession, keystroke, type PausedEnd, type PtyFactory, type RestoreOutcome, type ShellBackend } from './foreground.js';
 import { backgroundStreamId, foregroundStreamId, streamDisplayName } from '@rotaris/contracts';
 import { TerminalStreams } from './streams.js';
 import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
@@ -89,11 +90,20 @@ export class TerminalManager {
   constructor(private readonly deps: TerminalManagerDeps) {
     this.streams = new TerminalStreams({ clocks: deps.clocks, emulator: deps.emulator ?? xtermEmulatorFactory, warn: deps.warn });
   }
+  /** The shell every session of this manager runs — what the tool description names (live-run L1). */
+  get backend(): ShellBackend {
+    return this.deps.backend;
+  }
 
   /**
    * Part AL: a foreground command begins on the agent's stream (`fg:<agent>`, REQ-TOOLS-127). The tap feeds the
-   * registry every byte the PTY produces ahead of the capture; the registry does nothing at all when streaming is
-   * off (REQ-TOOLS-126). Returns false when no stream was opened.
+   * registry what the command wrote, ahead of the capture: the session's `CommandRegion` span, from after the printed
+   * start marker to before the end frame, and nothing between calls. The registry does nothing at all when streaming
+   * is off (REQ-TOOLS-126). Returns false when no stream was opened.
+   *
+   * Falsified reading, kept beside its replacement (live-run L9, 2026-09-29): "the tap feeds the registry every byte
+   * the PTY produces". Every byte included the shell's echo of the wrapper with both markers, the prompt, and the
+   * PD-TOOLS-001 environment snapshot after each command, so the preview showed them above and below the output.
    */
   beginForeground(key: string, session: ForegroundSession, spec: { sessionId: string; agentId: string; persona: string; command: string; workspaceRoot: string }): boolean {
     const streamId = foregroundStreamId(spec.agentId);
@@ -113,7 +123,7 @@ export class TerminalManager {
     return true;
   }
   /** The command's final result arrived (not a soft pause): the closing frame, the exit code, the tap released. */
-  endForeground(key: string, agentId: string, outcome: { exitCode: number; finalText: string }): void {
+  endForeground(key: string, agentId: string, outcome: { exitCode: number | null; finalText: string }): void {
     this.taps.get(key)?.();
     this.taps.delete(key);
     this.streams.end(foregroundStreamId(agentId), outcome);
@@ -180,6 +190,68 @@ export class TerminalManager {
     this.taps.clear();
     this.streams.dispose();
   }
+}
+
+/**
+ * A measured span as the observation states it: tenths of a second, and "under 0.1 seconds" below that (live-run L2).
+ * Truncated to the tenth, never rounded, so what an observation says it waited is never more than was measured: the
+ * verifier's live run of 2026-09-29 read "1.7 seconds" for 1,686 ms under rounding.
+ */
+/**
+ * PD-TOOLS-001's sentence for what a restart re-applied, with a leading space: the directory and the variables restored and
+ * the boundary that is not (aliases, functions, background jobs), a restore that failed, or nothing to restore.
+ */
+function restoreSentence(o: RestoreOutcome): string {
+  return o.status === 'restored'
+    ? ` The working directory and ${o.vars} exported variable${o.vars === 1 ? '' : 's'} were restored (${o.cwd}); aliases, functions and background jobs were not.`
+    : o.status === 'failed'
+      ? ' Restoring the working directory and variables failed; the session is at its defaults.'
+      : ' There was no earlier shell state to restore.';
+}
+
+/**
+ * OQ-164: the sentence an observation gives a soft-paused command other than its own subject (`ForegroundResult.earlier`) —
+ * on a call, whether the call waited behind it and when it ended relative to the call's submission; on a poll, that it was
+ * ahead of the polled command and how long ago it ended. Under OQ-164's recorded reading; the question is the owner's.
+ */
+export function earlierSentence(e: PausedEnd, polled: boolean): string {
+  const name = `the soft-paused command \`${e.label}\``;
+  const how = e.end === 'exit' ? `with exit code ${e.exitCode}`
+    : e.end === 'no-status' ? 'with no exit status of its own (the shell abandoned the rest of its line, as an interrupt (C-c) makes it do)'
+      : e.end === 'shell' ? 'by ending the session\'s shell, with no exit code'
+        : 'when the terminal session was reset, with no exit code';
+  if (e.end === 'running') {
+    return polled
+      ? `${capital(name)} ahead of the polled one is still running, so the shell has not started the polled command yet.`
+      : `This command was submitted while ${name} was still running, and that command is still running: the shell has not started this command yet, and runs it once that command ends.`;
+  }
+  // The verifier's finding on OQ-164's repair: a line the terminal discarded unread never ran — no status, no wait behind it.
+  if (e.end === 'discarded') {
+    return `${capital(name)}${polled ? ' ahead of the polled one' : ''} never ran, so it has no exit code: its line was gone before the shell reached it (an interrupt (C-c) discards a line the shell has not read yet, and a command that reads its input takes it).`;
+  }
+  // The same form for a line whose shell went first — the command ahead of it ended the shell, or the session was reset. It
+  // was never "still running", and nothing it did ended it.
+  // FALSIFIED, kept beside its replacement (OQ-164's second verification, 2026-10-01): the "waited behind it: that command
+  // ended N seconds after …, without having run, the session's shell being gone before it" form. It called a command that
+  // never ran "still running", and blamed the shell where the session's reset had ended it.
+  if (e.end === 'never-ran' || e.end === 'reset-before') {
+    const why = e.end === 'never-ran' ? 'the session\'s shell was gone before it reached that line' : 'the terminal session was reset before its shell reached that line';
+    return `${capital(name)}${polled ? ' ahead of the polled one' : ''} never ran, so it has no exit code: ${why}.`;
+  }
+  if (polled || e.endedAfterSubmitMs === null) return `${capital(name)} ahead of the polled one ended ${seconds(e.endedAgoMs ?? 0)} ago, ${how}.`;
+  if (e.endedAfterSubmitMs < 0) return `${capital(name)} had ended ${seconds(-e.endedAfterSubmitMs)} before this command was submitted, ${how}, and no poll had reported it.`;
+  // Interrupted before this command was submitted: it may have ended at the interrupt, and the product learns of it only when
+  // the shell starts a later line, so what is measured is when the shell was past it — never that this command waited.
+  if (e.interruptedBefore) return `An interrupt (C-c) had been sent to ${name} before this command was submitted; that command ended ${how}, and the shell was past its line when it started this command, ${seconds(e.endedAfterSubmitMs)} after this command was submitted.`;
+  return `This command was submitted while ${name} was still running, and waited behind it: that command ended ${seconds(e.endedAfterSubmitMs)} after this command was submitted, ${how}.`;
+}
+
+function capital(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+export function seconds(ms: number): string {
+  return ms < 100 ? 'under 0.1 seconds' : `${(Math.floor(ms / 100) / 10).toFixed(1)} seconds`;
 }
 
 function invalid(message: string, a: { readonly command: string }): Observation {
@@ -251,10 +323,30 @@ export interface BackgroundAttribution {
   readonly onEnded?: ((session: BackgroundSession) => void) | undefined;
 }
 
+/**
+ * The tool description names the shell the host actually runs (REQ-TOOLS-104 for Windows; ADR-0020's `/bin/sh` else the
+ * login shell elsewhere). Live-run finding L1: on Linux it named only Windows' shell, never that the POSIX shell is
+ * `/bin/sh` — dash on the host of the run — so a model wrote bash (`${PIPESTATUS[0]}`, `<(…)`) for a shell without it.
+ * With no backend known, both sentences stand.
+ */
+const POWERSHELL_SHELL = 'On Windows the shell is PowerShell, not bash: `&&`, `;`, `2>&1` and `$env:VAR` work; a bash heredoc never returns, and bash arrays, `[[ … ]]` and `source` are unavailable.';
+/**
+ * OQ-144: the consequence of `exec <program>` is stated as the host meets it. The watch that notices the replacement
+ * reads `/proc` (`processIdentity`), so only on Linux does such a call fail and the shell come back; elsewhere the call
+ * reads as still running and the program stays in the shell's place (acceptance round 1's verifier). "Normally", because
+ * on Linux too the watch is off where the handshake went unanswered or a soft-paused command holds the shell (OQ-144).
+ */
+const posixShell = (file: string, platform: NodeJS.Platform): string => `The shell is \`${file}\`, a POSIX shell that may not be bash: write POSIX syntax — bash arrays, \`\${PIPESTATUS[…]}\`, \`[[ … ]]\`, process substitution \`<(…)\` and \`source\` may be unavailable, and a command that uses them fails with a nonzero exit code. Do not replace the shell with \`exec <program>\`: ${platform === 'linux' ? 'such a call normally fails, and the program is ended and the shell restarted.' : 'such a call reads as still running, and every later call runs in that program.'}`;
+const TERMINAL_USE = 'One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; a new command issued meanwhile waits behind it, and its result reports how the paused one ended; stdout and stderr share the captured terminal stream. failure_kind is one of `timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`; `sandbox_unavailable` means the command never executed because this host could not apply the OS-level confinement the session requires — the cause is the host\'s configuration, neither a retry nor a reformulated command helps, and the detail and output should be relayed to the user.';
+export function terminalDescription(backend: ShellBackend | null | undefined, platform: NodeJS.Platform = process.platform): string {
+  const shell = backend?.kind === 'powershell' ? POWERSHELL_SHELL : backend?.kind === 'posix' ? posixShell(backend.file, platform) : `${POWERSHELL_SHELL} ${posixShell('/bin/sh', platform)}`;
+  return `Run a command in a persistent shell session (working directory and variables persist across calls). ${shell} ${TERMINAL_USE}`;
+}
+
 export function terminalTool(manager: TerminalManager, config: TerminalConfig, confinement?: ConfinementPort, attribution?: BackgroundAttribution): ToolExecutor<TerminalArgs> {
   return {
     name: 'terminal',
-    description: 'Run a command in a persistent shell session (working directory and variables persist across calls). On Windows the shell is PowerShell, not bash: `&&`, `;`, `2>&1` and `$env:VAR` work; a bash heredoc never returns, and bash arrays, `[[ … ]]` and `source` are unavailable. One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; stdout and stderr share the captured terminal stream. failure_kind is one of `timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`; `sandbox_unavailable` means the command never executed because this host could not apply the OS-level confinement the session requires — the cause is the host\'s configuration, neither a retry nor a reformulated command helps, and the detail and output should be relayed to the user.',
+    description: terminalDescription(manager.backend),
     schema: terminalSchema,
     validationError: (a, detail) => invalid(`Invalid terminal request: ${detail}`, { command: typeof a['command'] === 'string' ? a['command'] : '' }),
     label: (a) => renderAction({ command: a.command, timeout: a.timeout, reset: a.reset, background: a.background, session_id: a.session_id, session_action: a.session_action }),
@@ -320,35 +412,66 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
       if (a.command !== '') manager.beginForeground(key, session, { sessionId: ctx.sessionId, agentId: ctx.agentName, persona: ctx.persona, command: a.command, workspaceRoot: cwd });
       // REQ-SANDBOX-086: the confining invocation is what the shell runs; every observation below
       // still shows the command as the agent submitted it.
-      const r = a.command === '' ? await session.poll() : await session.run(wrapped.line, { timeoutMs: softEligible ? null : timeoutMs, signal: ctx.signal, ...(softEligible ? { hardMs: timeoutMs } : {}) });
+      const r = a.command === '' ? await session.poll() : await session.run(wrapped.line, { timeoutMs: softEligible ? null : timeoutMs, signal: ctx.signal, label: a.command, ...(softEligible ? { hardMs: timeoutMs } : {}) });
       if (!r.softPaused) manager.endForeground(key, ctx.agentName, { exitCode: r.exitCode, finalText: r.output });
       const label = `${resetNote ? '[RESET] ' : ''}${a.command}`;
-      const warnings = r.exitCode === 0 || r.exitCode > 0 ? outputWarnings(a.command, r.output, r.exitCode) : [];
+      const warnings = r.exitCode !== null && r.exitCode >= 0 ? outputWarnings(a.command, r.output, r.exitCode) : [];
       const assigned: FailureKind | null = r.timedOut ? 'timeout' : r.error && !r.softPaused ? 'execution_error' : null;
       const failureKind = relabelIfLauncherFailed(wrapped.confined, assigned, r.exitCode, r.output);
       const { outcomeKind, severity } = classifyOutcome({ failureKind, exitCode: r.exitCode, output: r.output, command: a.command }, warnings);
       let detail: string;
+      // PD-TOOLS-001 narrows what "lost" means after a reset: the cwd and exported variables snapshotted after the
+      // last completed command are re-applied to the fresh shell, and the detail says so, plus the boundary:
+      // aliases, functions and background jobs are not restored.
+      const restoreNote = restoreSentence(r.restore);
       if (failureKind === 'sandbox_unavailable') {
         detail = LAUNCHER_FAILED_DETAIL;
       } else if (r.timedOut) {
-        // PD-TOOLS-001 narrows what "lost" means: the cwd and exported variables snapshotted after the
-        // last completed command are re-applied to the fresh shell. The REQ-TOOLS-099 contract stands —
-        // 124, session_reset, state lost — and the detail says both, plus the boundary: aliases, functions
-        // and background jobs are not restored.
-        const restoreNote = r.restore.status === 'restored'
-          ? ` The working directory and ${r.restore.vars} exported variable${r.restore.vars === 1 ? '' : 's'} were restored (${r.restore.cwd}); aliases, functions and background jobs were not.`
-          : r.restore.status === 'failed'
-            ? ' Restoring the working directory and variables failed; the session is at its defaults.'
-            : ' There was no earlier shell state to restore.';
+        // The REQ-TOOLS-099 contract stands — 124, session_reset, state lost — and the detail says both.
         detail = `The command exceeded its timeout of ${timeoutMs / 1000} seconds; the terminal session was forcibly restarted to terminate the process tree, and shell state (working directory, variables, aliases, background jobs) was lost${r.killStatus === 'reset_failed' ? ' — restarting the session failed' : ''}.${restoreNote}${r.error ? ` (${r.error})` : ''}`;
       } else if (r.softPaused) {
-        detail = r.output === ''
-          ? `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds in the merged terminal stream; stdout and stderr are both captured. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`
-          : 'The command is still running; this is the output so far. Poll again with an empty command.';
+        // REQ-TOOLS-098: an empty capture states the elapsed no-output window. For the soft pause that is the window it
+        // waited out; for a poll — which returns at once — it is what the poll measured (live-run L2): a poll that said
+        // "No output for 30 seconds" after under a millisecond had the model counting thirty seconds per poll.
+        detail = r.output !== ''
+          ? 'The command is still running; this is the output so far. Poll again with an empty command.'
+          : r.waited
+            ? `No new output in ${seconds(r.waited.sinceObservedMs)} since the previous observation, and none for ${seconds(r.waited.silentMs)} in the merged terminal stream; stdout and stderr are both captured. A poll returns at once rather than waiting for output. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`
+            : `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds in the merged terminal stream; stdout and stderr are both captured. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`;
+      } else if (r.replaced) {
+        // OQ-144 (acceptance A9): REQ-TOOLS-103's failure before completion, and what became of the session, so the agent
+        // knows the shell the description names is the one its next call runs in (REQ-TOOLS-104).
+        const restarted = r.killStatus === 'session_reset' ? `the terminal session was restarted with \`${manager.backend.file}\`, the shell this tool runs commands in.` : 'restarting the terminal session failed.';
+        detail = `Terminal execution failed before completion: ${r.error} (as \`exec <program>\` does), so the command never returned and has no exit code. The program was ended and ${restarted}${r.killStatus === 'session_reset' ? restoreNote : ''} Run a program without \`exec\`, or with background=true if it keeps running.`;
+      } else if (r.shellEnded) {
+        // OQ-144 (the shell-exit case): REQ-TOOLS-103's failure before completion, as for a replaced shell, and what became
+        // of the session. A poll whose session a later call had respawned already restarts nothing (`killStatus` null).
+        const restarted = r.killStatus === 'session_reset'
+          ? ` The terminal session was restarted with \`${manager.backend.file}\`.${restoreNote}`
+          : r.killStatus === 'reset_failed' ? ' Restarting the terminal session failed.' : ' The terminal session has been restarted since.';
+        detail = r.shellEnded === 'before'
+          ? `Terminal execution failed before completion: ${r.error} (a soft-paused command ahead of it ended the shell), so the command never ran and has no exit code.${restarted}`
+          : `Terminal execution failed before completion: ${r.error} (as \`exit\` or a signal to the shell does), so the command never returned and has no exit code.${restarted}`;
       } else if (r.error) {
         detail = `Terminal execution failed before completion: ${r.error}`;
       } else {
         detail = `${resetNote ? `${resetNote} ` : ''}The command exited with code ${r.exitCode}.${warnings.length ? ` ${warnings.join(' ')}` : ''}`;
+      }
+      // OQ-164: the soft-paused commands reported beside this outcome — what this call waited behind, or what ended unreported.
+      // Their sentences open the detail; what each wrote since it was last observed follows the detail, ahead of this
+      // call's own output section, so the diagnostic block stays one line per sentence.
+      let earlierOutput = '';
+      if (r.earlier && r.earlier.length > 0) {
+        const polled = a.command === '';
+        detail = `${r.earlier.map((e) => earlierSentence(e, polled)).join(' ')} ${detail}`;
+        for (const e of r.earlier) {
+          if (e.output !== '') earlierOutput += `\nOutput of the soft-paused command \`${e.label}\` since it was last observed${e.truncated ? ' (truncated)' : ''}:\n${e.output}`;
+        }
+      }
+      if (r.respawned) {
+        // OQ-144 (the shell-exit case): the session's shell had ended between calls, so this call respawned it before its
+        // command ran, and says what that cost; `session_reinitialized` is true below.
+        detail = `The session's shell had ended since the previous call, so this command ran in a fresh shell.${restoreSentence(r.respawned)} ${detail}`;
       }
       const diag = diagnosticBlock({
         backend: BACKEND_NAME, command: a.command, detail, exit_code: r.exitCode, failure_kind: failureKind, kill_status: r.killStatus, outcome_kind: outcomeKind, outcome_severity: severity,
@@ -357,7 +480,7 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
       });
       const isError = severity === 'error';
       return {
-        text: `${detail}\n${outputSection(r.output, r.timedOut)}\n${diag}`, isError, outcomeKind, exitCode: r.exitCode, failureKind, warnings, label: `$ ${label}`,
+        text: `${detail}${earlierOutput}\n${outputSection(r.output, r.timedOut)}\n${diag}`, isError, outcomeKind, exitCode: r.exitCode, failureKind, warnings, label: `$ ${label}`,
       };
     },
   };
@@ -394,7 +517,7 @@ function startBackground(a: TerminalArgs, manager: TerminalManager, ctx: ToolCon
   });
   if (opened) {
     const untap = s.onOutput((chunk) => manager.streams.data(streamId, chunk));
-    void s.whenExited().then(() => { untap(); manager.streams.end(streamId, { exitCode: s.exitCode ?? -1, finalText: s.readAll().replace(/\s+$/, '') }); });
+    void s.whenExited().then(() => { untap(); manager.streams.end(streamId, { exitCode: s.exitCode, finalText: s.readAll().replace(/\s+$/, '') }); });
   }
   const diag = diagnosticBlock({ backend: BACKEND_NAME, command: a.command, detail: `Background session started: ${s.id}`, exit_code: 0, outcome_kind: 'background_running', outcome_severity: 'info', session_id: s.id, session_status: 'running', warnings: [] });
   return observation(`Background session started: ${s.id}\ncommand: ${a.command}\nsession_status="running"\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'background_running', exitCode: 0, warnings: [] });
@@ -407,7 +530,7 @@ function sessionAction(a: TerminalArgs, bg: BackgroundManager): Promise<Observat
     const glyph = (s: string) => (s === 'running' ? '▶' : s === 'completed' ? '✓' : '✗');
     const table = rows.length === 0 ? '(no background sessions)' : rows.map((s) => `${glyph(s.status)} ${s.id}  ${s.status.padEnd(9)}  ${s.exitCode ?? '-'}  ${s.startedAt}  ${s.command}`).join('\n');
     const entries = rows.map((s) => ({ session_id: s.id, command: s.command, status: s.status, exit_code: s.exitCode, started_at: s.startedAt }));
-    const diag = diagnosticBlock({ backend: BACKEND_NAME, command: '[list]', detail: `${rows.length} background session(s).`, exit_code: 0, outcome_kind: 'success', outcome_severity: 'info', sessions: entries, warnings: [] });
+    const diag = diagnosticBlock({ backend: BACKEND_NAME, command: '[list]', detail: `${countNoun(rows.length, 'background session')}.`, exit_code: 0, outcome_kind: 'success', outcome_severity: 'info', sessions: entries, warnings: [] });
     return observation(`${table}\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'success', exitCode: 0, warnings: [] });
   }
   if (!a.session_id) return invalid(`session_action '${action}' requires session_id.`, a);
@@ -416,10 +539,13 @@ function sessionAction(a: TerminalArgs, bg: BackgroundManager): Promise<Observat
   const finish = (text: string, output: string) => {
     // REQ-SANDBOX-085: a background spawn returns before a launcher failure is visible, so the test
     // is made here, on the whole captured stream, at the poll or the termination that first sees it.
-    const failureKind = relabelIfLauncherFailed(s.confined, null, s.exitCode, s.readAll());
-    const detail = failureKind === 'sandbox_unavailable' ? LAUNCHER_FAILED_DETAIL : text;
+    // REQ-TOOLS-103 (OQ-143): a process Node could not start is an `execution_error` whose detail quotes the cause.
+    const failureKind = relabelIfLauncherFailed(s.confined, s.spawnError === null ? null : 'execution_error', s.exitCode, s.readAll());
+    const detail = failureKind === 'sandbox_unavailable' ? LAUNCHER_FAILED_DETAIL
+      : failureKind === 'execution_error' ? `${text} Terminal execution failed before completion: the background command could not be started: ${s.spawnError ?? ''}`
+        : text;
     const { outcomeKind, severity } = classifyOutcome({ failureKind, exitCode: s.exitCode, output, command: s.command, backgroundStatus: s.status }, []);
-    const diag = diagnosticBlock({ backend: BACKEND_NAME, command: s.command, detail, exit_code: s.exitCode, failure_kind: failureKind, outcome_kind: outcomeKind, outcome_severity: severity, session_id: s.id, session_status: s.status, warnings: [], error_class: failureKind === 'sandbox_unavailable' ? SANDBOX_ERROR_CLASS : null });
+    const diag = diagnosticBlock({ backend: BACKEND_NAME, command: s.command, detail, exit_code: s.exitCode, failure_kind: failureKind, outcome_kind: outcomeKind, outcome_severity: severity, session_id: s.id, session_status: s.status, warnings: [], error_class: failureKind === 'sandbox_unavailable' ? SANDBOX_ERROR_CLASS : failureKind === 'execution_error' ? 'ExecutionError' : null });
     return observation(`${detail}\n${outputSection(output, false)}\n${diag}`, { outcomeKind, exitCode: s.exitCode, warnings: [], isError: severity === 'error', ...(failureKind === null ? {} : { failureKind }) });
   };
   switch (action) {
@@ -427,8 +553,15 @@ function sessionAction(a: TerminalArgs, bg: BackgroundManager): Promise<Observat
       const out = s.readNew();
       return finish(`Session ${s.id} is ${s.status}${s.exitCode !== null ? ` (exit ${s.exitCode})` : ''}.`, out === '' ? '(no new output since last poll)' : out);
     }
-    case 'kill':
+    case 'kill': {
+      // REQ-TOOLS-110: a kill returns the final output whatever the session's state. Only a running session is ended, and
+      // only it reads `was killed.`: one that had already ended — completed, failed, timed out, killed, or never started
+      // (OQ-143) — is left as it was, and the detail says so with the status and exit code its diagnostic block reports
+      // (REQ-TOOLS-109), rather than claiming an end the status denies
+      // (docs/defects/fixed/a-kill-of-a-background-session-that-has-already-ended-says-it-was-killed.md).
+      if (s.status !== 'running') return finish(`Session ${s.id} had already ended; nothing was killed. It is ${s.status}${s.exitCode !== null ? ` (exit ${s.exitCode})` : ''}.`, s.readAll());
       return s.end('killed').then(() => finish(`Session ${s.id} was killed.`, s.readAll()));
+    }
     case 'send_input': {
       const data = a.input_data ?? '';
       const ok = s.sendInput(data);

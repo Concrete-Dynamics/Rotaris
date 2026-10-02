@@ -12,17 +12,35 @@
  * design rests on hold — a wait bounded by a deadline reports the selector it gave up on, and a request without
  * the launch secret is refused without taking the window down with it.
  *
- * Evidence under `.proof/driver-proof/`: `app.log`, `screen.png`, `results.json`. `--skip-build` skips the build.
+ * Since 2026-09-29 it is evidence of three repairs as well. A shot taken right after a navigation shows the view the
+ * navigation opened: each of the seven views is shot straight after its click, and every shot must differ from the one
+ * before it, and the second launch's first navigation to the Workspace — the heaviest first paint, where the frame
+ * before it was returned in a fifth of launches or more — is shot the same way
+ * (`docs/defects/fixed/the-drivers-shot-can-return-a-stale-frame.md`). And the driver's `quit` is the application's quit: a SECOND launch
+ * starts a scripted run that holds its model call, quits through the driver while the run is live, and reads the store
+ * afterwards — the session is at rest with the quit's stop reason, not `running`
+ * (`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`; before the repair it was `running` with no
+ * stop reason). And the driver reaches the windows beside a main window: in that second launch the run's approval
+ * dialog is answered with its own button and a persona window is probed through a role selector
+ * (`docs/defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md`).
+ *
+ * Evidence under `.proof/driver-proof/`: `app.log`, `screen.png`, `shots/`, `run-app.log`, `results.json`.
+ * `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { connect as connectSocket } from 'node:net';
 import { join } from 'node:path';
-import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
-import { connect, startApp } from './lib/driver.mjs';
+import { buildDesktop, evidenceDirectory, oneDatabase } from './lib/harness.mjs';
+import { startApp, until } from './lib/driver.mjs';
+import { exitWithin } from './lib/bounded-launch.mjs';
+
+const require = createRequire(import.meta.url);
+const Database = require('better-sqlite3');
 
 const output = evidenceDirectory('.driver-proof');
 rmSync(output, { recursive: true, force: true });
-mkdirSync(output, { recursive: true });
+mkdirSync(join(output, 'shots'), { recursive: true });
 if (!process.argv.includes('--skip-build')) buildDesktop(output);
 
 const workspace = join(output, 'workspace');
@@ -36,6 +54,9 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
   'mcp_servers:', '  code_intelligence: { enabled: false }',
   'rotaris:', '  delegation_strategy: single', '',
 ].join('\n'));
+
+/** Whether the composer holds the document's focus — read from `activeElement`, which does not need the window focused. */
+const COMPOSER_FOCUSED = "document.activeElement?.classList.contains('composer__input') === true";
 
 const results = [];
 let failures = 0;
@@ -81,6 +102,9 @@ try {
   await d.chord('Ctrl+2');
   await d.waitFor('.composer__input', { timeoutMs: 10_000 });
   await d.chord('Ctrl+L');
+  // The chord's focus is the product's to give, and it can come frames later (`focusComposer` retries after two); a
+  // character sent before it lands nowhere. Wait for the focus the typing needs, as every other step waits.
+  await until(() => d.eval(COMPOSER_FOCUSED), (v) => v === true, { timeoutMs: 10_000, what: 'the composer holding focus' });
   await d.type('driver proof draft');
   const composer = await d.eval(`document.querySelector('.composer__input')?.value ?? ''`);
   check('typed characters reach the focused control', composer === 'driver proof draft', JSON.stringify(composer));
@@ -100,9 +124,21 @@ try {
 
   // 10. The photograph.
   const shot = join(output, 'screen.png');
-  await d.screenshot(shot);
+  const taken = await d.screenshot(shot);
   const signature = existsSync(shot) ? readFileSync(shot).subarray(0, 8).toString('hex') : '';
-  check('a screenshot is written', signature === '89504e470d0a1a0a', `${shot} (${signature || 'absent'})`);
+  check('a screenshot is written', signature === '89504e470d0a1a0a', `${shot} (${signature || 'absent'}), paint confirmed ${taken.painted}`);
+
+  // 10b. A shot straight after a navigation shows the view the navigation opened — never the frame before it.
+  const views = rail.matches.map((m) => m.text);
+  const shots = [];
+  for (const [i, view] of [...views, views[0]].entries()) {
+    await d.click('.nav-item', { text: view });
+    const path = join(output, 'shots', `${i}-${view.toLowerCase()}.png`);
+    const reply = await d.screenshot(path);
+    shots.push({ view, bytes: readFileSync(path), painted: reply.painted });
+  }
+  const stale = shots.slice(1).filter((s, i) => Buffer.compare(s.bytes, shots[i].bytes) === 0).map((s) => s.view);
+  check('a shot straight after a navigation differs from the shot before it', stale.length === 0 && shots.every((s) => s.painted === true), `${shots.length - 1} navigations across ${views.join(', ')}; ${stale.length === 0 ? 'every shot new' : `identical to the previous shot after: ${stale.join(', ')}`}; paint confirmed ${shots.filter((s) => s.painted).length}/${shots.length}`);
 
   // 11. The secret. A request without it is refused, the connection dropped — and the window survives it.
   const endpoint = JSON.parse(readFileSync(started.endpointFile, 'utf8'));
@@ -119,18 +155,120 @@ try {
   check('a request without the launch secret is refused', /secret/.test(intruder.text) && intruder.closed, `reply ${JSON.stringify(intruder.text.trim())}, connection closed ${intruder.closed}`);
   check('the refusal does not take the window down', stillAlive, 'the seam still answers after dropping the intruder');
 
-  // 12. The quit, and the endpoint file with it.
-  await d.quit();
-  const gone = await (async () => {
-    for (let i = 0; i < 50; i += 1) { if (!existsSync(started.endpointFile)) return true; await new Promise((r) => setTimeout(r, 200)); }
-    return !existsSync(started.endpointFile);
-  })();
-  check('quit closes the app and removes the endpoint', gone, `${started.endpointFile} ${gone ? 'removed' : 'still present'}`);
+  // 12. The quit — the application's quit, which the driver sends unless asked for the immediate exit — and the
+  // endpoint file with it.
+  const quitting = await d.quit();
+  const exited = await exitWithin(started.child, 30_000);
+  const gone = !existsSync(started.endpointFile);
+  check("quit is the application's quit: the app exits and removes the endpoint", quitting?.how === 'quit' && exited?.code === 0 && gone, `reply ${JSON.stringify(quitting)}; ${exited === null ? 'still running after 30 s' : `exited ${exited.code ?? exited.signal}`}; ${started.endpointFile} ${gone ? 'removed' : 'still present'}`);
 } finally {
   d.close();
-  try { if (started.child.pid) process.kill(started.child.pid); } catch { /* already gone, which is the expected case after `quit` */ }
+  try { if (started.child.exitCode === null && started.child.pid) process.kill(started.child.pid); } catch { /* already gone, which is the expected case after `quit` */ }
   const log = existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '';
   writeFileSync(join(output, 'app.log'), log);
+  writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);
+}
+
+/*
+ * 13. The second launch: a live run, its approval dialog and a persona window driven in their own windows, and the
+ * driver's quit in the middle of it.
+ *
+ * The scripted orchestrator delegates one `coding-agent` child, `alpha`, and then holds its model call for two minutes
+ * on the clock port (`wait:120000`), aborted by a stop, so the run is `running` for as long as the proof needs. Under
+ * `permission_mode: ask` the child's `write_file` raises REQ-TOOLS-063's dialog, which is found by `windows`, probed,
+ * photographed and answered with its own Approve once button through `window: 'approval'`; the child's persona window
+ * (REQ-SHELL-072) is opened with the Mission view's Pop out and probed through `useWindow('persona:coding-agent')`
+ * (`docs/defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md`). Then the quit is sent while the root
+ * still waits; the store is read once the process is gone. PD-ORCH-005 clause 3: an application quit leaves the run at
+ * rest — the stop reason is the quit's (`application_shutdown`), and the session is not left `running`, which is what a
+ * crash leaves until repair.
+ */
+const runWorkspace = join(output, 'run-workspace');
+mkdirSync(join(runWorkspace, '.rotaris'), { recursive: true });
+writeFileSync(join(runWorkspace, 'README.md'), '# driver proof, a live run\n');
+writeFileSync(join(runWorkspace, '.rotaris', 'agents.yaml'), [
+  'models:', '  scripted: { provider: scripted, model_id: scripted }',
+  'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+  'runtime:', '  permission_mode: ask', '  max_depth: 3', '  max_active_children: 4',
+  'mcp_servers:', '  code_intelligence: { enabled: false }', '',
+].join('\n'));
+const run = await startApp({
+  root: join(output, 'run-app'), workspace: runWorkspace, timeoutMs: 90_000,
+  extra: { ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,wait:120000,answer', ROTARIS_CHILD_SCRIPT: 'write,answer' },
+});
+const r = run.driver;
+try {
+  await r.waitFor('.nav-item', { timeoutMs: 30_000 });
+  // The shot the stale-frame note measured: the launch's FIRST navigation to the Workspace, its heaviest first paint,
+  // shot straight after the click. Before the repair it returned the Overview's bytes in a fifth of launches or more.
+  const overviewShot = join(output, 'shots', 'run-0-overview.png');
+  const workspaceShot = join(output, 'shots', 'run-1-workspace.png');
+  await r.screenshot(overviewShot);
+  await r.click('.nav-item', { text: 'Workspace' });
+  const firstPaint = await r.screenshot(workspaceShot);
+  const same = Buffer.compare(readFileSync(overviewShot), readFileSync(workspaceShot)) === 0;
+  check("a shot straight after the launch's first navigation to the Workspace shows the Workspace", !same && firstPaint.painted === true, `${same ? 'identical to the Overview shot' : 'differs from the Overview shot'}; paint confirmed ${firstPaint.painted}`);
+  await r.waitFor('.composer__input', { timeoutMs: 10_000 });
+  await r.chord('Ctrl+L');
+  await until(() => r.eval(COMPOSER_FOCUSED), (v) => v === true, { timeoutMs: 10_000, what: 'the composer holding focus' });
+  await r.type('hold the run while the driver quits', { enter: true });
+  const live = await r.waitFor('[data-testid="run-header"][data-state="running"]', { timeoutMs: 30_000 }).then(() => true).catch(() => false);
+  check('a run is live before the quit', live, 'the run header reports data-state="running"');
+
+  // 13a. Every approval the run raises is answered in its own dialog, by its own button, until the child's write lands.
+  const notes = join(runWorkspace, 'NOTES.md');
+  const answered = [];
+  let dialogListed = null;
+  await until(async () => {
+    if (existsSync(notes)) return true;
+    const open = await r.windows();
+    const dialog = open.auxiliary.find((a) => a.selector === 'approval');
+    if (dialog === undefined) return false;
+    dialogListed ??= dialog;
+    await r.waitFor('button', { text: 'Approve once', window: 'approval', timeoutMs: 10_000 });
+    const [headline] = await r.send('probe', { selector: '#approval-title', window: 'approval' });
+    if (answered.length === 0) await r.send('screenshot', { path: join(output, 'shots', 'run-2-approval.png'), window: 'approval' });
+    await r.send('click', { selector: 'button', text: 'Approve once', window: 'approval' });
+    answered.push(headline?.text ?? '(no headline)');
+    // The next dialog, if any, is presented once this one has closed; wait for the close before looking again.
+    await until(() => r.windows(), (w) => !w.auxiliary.some((a) => a.selector === 'approval' && a.wcId === dialog.wcId), { timeoutMs: 10_000, what: 'the answered dialog closing' });
+    return existsSync(notes);
+  }, (done) => done === true, { timeoutMs: 60_000, what: "the child's write, approved in its dialog" }).catch((cause) => { answered.push(`gave up: ${cause.message}`); });
+  check('the approval dialog is listed, probed and answered in its own window (REQ-TOOLS-063)', dialogListed !== null && dialogListed.role === 'approval' && answered.some((h) => /write_file/.test(h)) && existsSync(notes), `listed ${JSON.stringify(dialogListed)}; answered ${JSON.stringify(answered)}; NOTES.md ${existsSync(notes) ? 'written' : 'absent'}`);
+
+  // 13b. The child's persona window, opened by the Mission view's own Pop out, addressed and probed as a window.
+  await r.chord('Ctrl+3');
+  // The table lists the delegated agents; `alpha` is the one.
+  await r.click('.agent-table__row .btn', { text: 'Pop out', timeoutMs: 15_000 });
+  const personaListed = await until(() => r.windows(), (w) => w.auxiliary.some((a) => a.selector === 'persona:coding-agent'), { timeoutMs: 15_000, what: 'the persona window listed' }).then((w) => w.auxiliary.find((a) => a.selector === 'persona:coding-agent')).catch(() => null);
+  let personaState = null;
+  let personaName = null;
+  if (personaListed) {
+    await r.useWindow('persona:coding-agent');
+    await r.waitFor('[data-testid="persona-agent-state"]', { timeoutMs: 15_000 });
+    [personaState] = await r.probe('[data-testid="persona-agent-state"]');
+    [personaName] = await r.probe('[data-testid="persona-agent-name"]');
+    await r.screenshot(join(output, 'shots', 'run-3-persona.png'));
+    await r.useWindow();
+  }
+  check('a persona window is listed and its document probed through useWindow (PD-ORCH-005 clause 13\'s surface)', personaListed?.role === 'persona' && personaName?.text === 'alpha' && typeof personaState?.text === 'string' && personaState.text !== '', `listed ${JSON.stringify(personaListed)}; name ${JSON.stringify(personaName?.text)}, state ${JSON.stringify(personaState?.text)}`);
+  const refused = await r.useWindow('persona:nobody').then(() => null).catch((cause) => cause.message);
+  const stillMain = await r.eval("document.querySelector('.app-shell') !== null");
+  check('a role selector naming no open window is refused, and the selection stays', /^no window matches "persona:nobody"; open: /.test(refused ?? '') && stillMain === true, refused ?? 'it was accepted');
+  const quitting = await r.quit();
+  const exited = await exitWithin(run.child, 60_000);
+  check('the quit during a live run exits', quitting?.how === 'quit' && exited?.code === 0, `reply ${JSON.stringify(quitting)}; ${exited === null ? 'still running after 60 s' : `exited ${exited.code ?? exited.signal}`}`);
+  const db = new Database(oneDatabase(run.local), { readonly: true });
+  const sessions = db.prepare('SELECT execution_status, stop_reason FROM sessions').all();
+  db.close();
+  const session = sessions[0];
+  check('the quit leaves the live run at rest, not running (PD-ORCH-005 clause 3)', sessions.length === 1 && session.execution_status !== 'running' && session.stop_reason === 'application_shutdown', JSON.stringify(sessions));
+  const log = existsSync(run.logFile) ? readFileSync(run.logFile, 'utf8') : '';
+  check("the quit went through the application's shutdown", /quit: closing 1 main window\(s\) through their close guards first/.test(log) && !/did not complete its shutdown/.test(log), log.split('\n').filter((l) => /\bquit:/.test(l)).map((l) => l.replace(/^.*?(quit:)/, '$1')).join(' / '));
+} finally {
+  r.close();
+  try { if (run.child.exitCode === null && run.child.pid) process.kill(run.child.pid); } catch { /* already gone after the quit */ }
+  writeFileSync(join(output, 'run-app.log'), existsSync(run.logFile) ? readFileSync(run.logFile, 'utf8') : '');
   writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);
 }
 

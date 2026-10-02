@@ -24,9 +24,9 @@
  * `"[object Object]" is not valid JSON` at the first assertion, before anything has been measured.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { app as appDirectory, buildDesktop, cleanEnvironment, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
+import { exitWithin, overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { startApp } from './lib/driver.mjs';
 
 const output = evidenceDirectory('.workspace-proof');
@@ -80,12 +80,111 @@ const D = project('project-d');
 const MARKUP_NAME = 'project-&lt;b&gt;-and-{x}';
 const MARKUP = project(MARKUP_NAME);
 
+/**
+ * REQ-WORKSPACE-013's switch-time cancellation needs a `code-intelligence-setup` still under way when the switch lands,
+ * and the bundled runtime's `project create` on a documentation tree ends in well under a second. So these two projects
+ * name a stand-in runtime as their `code_intelligence` entry: a local launch of this Node with the launch subcommand,
+ * from which REQ-MCP-036 derives the setup invocation `node <stand-in> project create <root>` and the rest. The stand-in
+ * writes its pid beside the project, holds `create` for 90 s in a project carrying `SLOW` — and, asked to terminate
+ * there, takes 2 s to go, inside REQ-WORKSPACE-092's 5 s, so the outgoing setup is still ending when the replacement
+ * resolves — and ends every other step at once; anything else (a server launch) exits 1. Nothing about the product is changed by it: the entry is an ordinary
+ * workspace configuration, read through the ordinary resolution.
+ */
+const STAND_IN = join(output, 'code-intelligence-stand-in.mjs');
+/** REQ-MCP-116: the runtime's marker file, as the binding manifest generated into the configuration package names it. */
+const MARKER_FILE = readFileSync(join(appDirectory, '..', '..', 'packages', 'config', 'src', 'mcp', 'code-intelligence-manifest.generated.ts'), 'utf8').match(/markerFile: '([^']+)'/)[1];
+/**
+ * The pid a stand-in wrote to `file`, or 0 while there is none. Read as a positive integer only: an empty file read as
+ * `Number('')` is 0, and pid 0 names the proof's own process group (`process.kill(0, 0)` always succeeds), which once made
+ * a check read a stand-in as running when it had not been read at all. The stand-in writes each file whole besides.
+ */
+const pidIn = (file) => {
+  let text;
+  try { text = readFileSync(file, 'utf8').trim(); } catch { return 0; }
+  return /^[1-9]\d*$/.test(text) ? Number(text) : 0;
+};
+writeFileSync(STAND_IN, [
+  "import { spawn } from 'node:child_process';",
+  "import { existsSync, renameSync, writeFileSync } from 'node:fs';",
+  "import { join } from 'node:path';",
+  'const [group, verb, root] = process.argv.slice(2);',
+  "if (group === 'project' && verb === 'create') {",
+  '  // Each pid file is written whole (a temporary file, then a rename): a reader never sees one created and still empty.',
+  "  writeFileSync(join(root, '.stand-in-create.pid.tmp'), String(process.pid));",
+  "  renameSync(join(root, '.stand-in-create.pid.tmp'), join(root, '.stand-in-create.pid'));",
+  '  // In a project carrying FAILS (8g) creation writes to both streams, non-ASCII included, and exits 3.',
+  "  if (existsSync(join(root, 'FAILS'))) {",
+  "    process.stdout.write('stand-in: Sprache nicht erkannt — ä\\n');",
+  "    process.stderr.write('stand-in: no language could be configured\\n');",
+  '    process.exitCode = 3;',
+  '  }',
+  '  // In a project carrying STUBBORN (8f) the step, and a process it starts, ignore the ask to terminate: only the force-kill ends them.',
+  "  else if (existsSync(join(root, 'STUBBORN'))) {",
+  "    process.on('SIGTERM', () => undefined);",
+  "    const pidFile = JSON.stringify(join(root, '.stand-in-descendant.pid'));",
+  "    const pidTmp = JSON.stringify(join(root, '.stand-in-descendant.pid.tmp'));",
+  "    spawn(process.execPath, ['-e', `process.on('SIGTERM', () => undefined); const fs = require('node:fs'); fs.writeFileSync(${pidTmp}, String(process.pid)); fs.renameSync(${pidTmp}, ${pidFile}); setInterval(() => undefined, 1_000);`], { stdio: 'ignore' });",
+  '    setInterval(() => undefined, 1_000);',
+  '  }',
+  "  else if (existsSync(join(root, 'SAYS'))) { process.stdout.write('stand-in: project created\\n'); process.exitCode = 0; }",
+  "  else if (!existsSync(join(root, 'SLOW'))) process.exit(0);",
+  '  // Asked to terminate, it takes 2 s to go: the outgoing setup is still ending when the replacement resolves.',
+  "  else {",
+  "    process.on('SIGTERM', () => setTimeout(() => process.exit(143), 2_000));",
+  '    setTimeout(() => process.exit(0), 90_000);',
+  '  }',
+  "} else if ((group === 'project' && verb === 'index') || (group === 'memories' && verb === 'initialize')) {",
+  '  process.exit(0);',
+  '} else {',
+  '  process.exit(1);',
+  '}',
+  '',
+].join('\n'));
+function initProject(name, { slow = false, stubborn = false, fails = false, says = false, marker = false, code = false } = {}) {
+  const root = join(output, name);
+  mkdirSync(join(root, '.rotaris'), { recursive: true });
+  writeFileSync(join(root, 'README.md'), `# ${name}\n`);
+  if (slow) writeFileSync(join(root, 'SLOW'), 'the stand-in holds project create here\n');
+  if (stubborn) writeFileSync(join(root, 'STUBBORN'), 'the stand-in and a process it starts ignore the ask to terminate here\n');
+  if (fails) writeFileSync(join(root, 'FAILS'), 'the stand-in fails project create here\n');
+  if (says) writeFileSync(join(root, 'SAYS'), 'the stand-in reports its project create here\n');
+  if (code) writeFileSync(join(root, 'main.py'), 'print("hello")\n');
+  // The runtime's own per-project marker, its name read from the binding manifest (REQ-MCP-116), never written out here.
+  if (marker) { const at = join(root, ...MARKER_FILE.split('/')); mkdirSync(join(at, '..'), { recursive: true }); writeFileSync(at, 'languages: []\n'); }
+  writeFileSync(join(root, '.rotaris', 'agents.yaml'), AGENTS.replace('  code_intelligence: { enabled: false }',
+    `  code_intelligence: { command: ${JSON.stringify(process.execPath)}, args: [${JSON.stringify(STAND_IN)}, start-mcp-server] }`));
+  return root;
+}
+const INIT_SLOW = initProject('init-slow', { slow: true });
+const INIT_QUICK = initProject('init-quick');
+const INIT_HELD = initProject('init-held', { slow: true });
+const INIT_LOST = initProject('init-lost', { slow: true });
+const INIT_QUEUED = initProject('init-queued');
+const INIT_TWO_A = initProject('init-two-a', { slow: true });
+const INIT_TWO_B = initProject('init-two-b');
+const INIT_QUIT = initProject('init-quit', { stubborn: true });
+const INIT_FAILS = initProject('init-fails', { fails: true });
+/*
+ * The marker's project holds a source file: in a documentation-only project carrying the marker every step ends without
+ * waiting, and the coordinator never sees that setup finish
+ * (`docs/defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`).
+ */
+const INIT_MARKER = initProject('init-marker', { marker: true, code: true });
+const INIT_SAYS = initProject('init-says', { says: true });
+// The second window's workspace has been initialized before, so the two windows' states tell apart by `lastRun` alone;
+// its setup is still pending, as no list names it.
+writeFileSync(join(INIT_TWO_B, '.rotaris', 'agents.yaml'), `${readFileSync(join(INIT_TWO_B, '.rotaris', 'agents.yaml'), 'utf8')}initialization:\n  completed: []\n  skipped: []\n  last_run: "2026-09-01T00:00:00.000+00:00"\n  classification: code\n`);
+
 const launches = [];
 /** Quit every app still running, keeping its log as evidence. Idempotent, so `finally` may call it again. */
 async function closeAll() {
   for (const { name, started } of launches.splice(0)) {
-    writeFileSync(join(output, `app-${name}.log`), existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '');
     await started.driver.quit().catch(() => undefined);
+    // The quit answers before the app has ended; a kill at once cut its orderly end short, and a code-intelligence setup
+    // the run host's shutdown was ending outlived the launch (8b's stand-in, found 2026-10-01). Wait for the exit first,
+    // and keep the log once the quit's own lines are in it.
+    await exitWithin(started.child, 15_000);
+    writeFileSync(join(output, `app-${name}.log`), existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '');
     started.driver.close();
     try { if (started.child.pid) process.kill(started.child.pid); } catch { /* already gone after quit */ }
   }
@@ -118,15 +217,20 @@ async function launch(name, { workspace, folders = [], extra = {}, preferences }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let handOverSequence = 0;
-/** Launch the same profile again and wait for the secondary process to hand its request to the owner. */
+/**
+ * Launch the same profile again and wait for the secondary process to hand its request to the owner. The launch is
+ * `spawnBounded`'s since 2026-09-30: its own 30 s bound sent SIGTERM alone and rejected at once, so a secondary that
+ * did not answer SIGTERM outlived the proof, and the failure carried none of its log
+ * (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`).
+ */
 async function handOver(started, workspace) {
   const sequence = ++handOverSequence;
   // `hostSwitches` as the driver's launch carries them: as root this second instance died with SIGTRAP and the proof's
   // two hand-over checks were red for the host, not the product (`fixed/a-driven-launch-dies-as-root-on-linux.md`).
-  const child = spawn(electron, [mainEntry, ...hostSwitches, ...(workspace ? [workspace] : [])], {
+  const result = await spawnBounded(electron, [mainEntry, ...hostSwitches, ...(workspace ? [workspace] : [])], {
+    timeoutMs: 30_000,
     cwd: appDirectory,
     windowsHide: false,
-    stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ local: started.local, preferences: started.preferences }),
@@ -134,16 +238,11 @@ async function handOver(started, workspace) {
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
     },
   });
-  let outputText = '';
-  child.stdout?.on('data', (chunk) => { outputText += String(chunk); });
-  child.stderr?.on('data', (chunk) => { outputText += String(chunk); });
-  const exit = await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => { child.kill(); reject(new Error('the hand-over launch did not exit within 30 s')); }, 30_000);
-    child.on('error', (cause) => { clearTimeout(timeout); reject(cause); });
-    child.on('exit', (code, signal) => { clearTimeout(timeout); resolve({ code, signal }); });
-  });
+  const outputText = `${result.stdout}${result.stderr}`;
   writeFileSync(join(output, `hand-over-${sequence}.log`), outputText);
-  return exit;
+  if (result.error) throw result.error;
+  if (result.overran) throw new Error(overrunMessage(`the hand-over launch ${sequence}`, result, outputText));
+  return { code: result.status, signal: result.signal };
 }
 async function waitForWindowCount(driver, count, timeoutMs = 30_000) {
   const began = Date.now();
@@ -593,6 +692,385 @@ try {
     check('REQ-STARTUP-163: hand-over for a different workspace adds a main window',
       addedExit.code === 0 && added.some((window) => String(window.workspace).toLowerCase() === B.toLowerCase()) && logOf(s).includes('origin hand-over'),
       `secondary exit ${addedExit.code ?? addedExit.signal}; windows ${JSON.stringify(added)}`);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 8b — a switch away from a workspace whose initialization run is under way (REQ-WORKSPACE-013).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * Before the repair nothing in main cancelled the outgoing workspace's run: its setup went on for its whole 90 s, the
+     * replacement's own setup was refused as already running, and a return to the first project resolved nothing
+     * (`docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`). And with the
+     * cancellation alone, the replacement's setup could still meet the outgoing one ending in the run host's one slot,
+     * whose statuses carry no workspace (`docs/defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`).
+     */
+    const s = await launch('init-switch', { workspace: INIT_SLOW, folders: [INIT_QUICK, INIT_SLOW] });
+    const startedFor = (name) => (logOf(s).match(new RegExp(`mcp setup: started for [^\\n]*${name}`, 'g')) ?? []).length;
+    const waitUntil = async (predicate, timeoutMs) => {
+      const began = Date.now();
+      while (!predicate()) {
+        if (Date.now() - began > timeoutMs) return false;
+        await sleep(100);
+      }
+      return true;
+    };
+    const slowStarted = await waitUntil(() => startedFor('init-slow') === 1 && pidIn(join(INIT_SLOW, '.stand-in-create.pid')) > 0, 30_000);
+    if (!slowStarted) {
+      skip('REQ-WORKSPACE-013: a switch cancels the outgoing workspace\'s initialization run', `the first project's setup never started within 30 s, so there was no run to cancel (log tail: ${JSON.stringify(logOf(s).slice(-600))})`);
+    } else {
+      const pid = pidIn(join(INIT_SLOW, '.stand-in-create.pid'));
+      await s.driver.command({ kind: 'workspace.choose' });
+      // The switch has closed the outgoing window by the time the command answers, so the cancellation was asked before now.
+      const answeredAt = Date.now();
+      const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
+      const ended = await waitUntil(() => !alive(), 5_000);
+      const endedAfter = Date.now() - answeredAt;
+      await waitUntil(() => /mcp setup: (cancelled|completed|failed) /.test(logOf(s)), 10_000);
+      let log = logOf(s);
+      check('REQ-WORKSPACE-013 / REQ-WORKSPACE-109: switching away cancels the outgoing workspace\'s initialization run',
+        /initialization: [^\n]*init-slow was closed while its run was under way/.test(log) && log.includes('mcp setup: cancellation requested') && log.includes('mcp setup: cancelled'),
+        `closed-while-running ${/init-slow was closed while its run was under way/.test(log) ? 'logged' : 'NOT logged'}; cancellation ${log.includes('mcp setup: cancellation requested') ? 'requested' : 'NEVER requested'}; setup ${log.match(/mcp setup: (cancelled|completed|failed) /)?.[1] ?? 'still running'}`);
+      check('REQ-WORKSPACE-092: nothing the cancelled step launched is still running 5 s later',
+        ended,
+        ended ? `the stand-in's project create (pid ${pid}) had ended ${endedAfter} ms after the switch answered` : `pid ${pid} was still running 5 s after the switch answered`);
+      const slowFile = readFileSync(join(INIT_SLOW, '.rotaris', 'agents.yaml'), 'utf8');
+      check('REQ-WORKSPACE-013: nothing is recorded for the cancelled run, so its task stays pending',
+        !slowFile.includes('code-intelligence-setup') && !slowFile.includes('last_run'),
+        `the outgoing workspace's file ${slowFile.includes('initialization:') ? `carries ${JSON.stringify(slowFile.slice(slowFile.indexOf('initialization:')))}` : 'carries no initialization section'}`);
+      const quickRecorded = await waitUntil(() => readFileSync(join(INIT_QUICK, '.rotaris', 'agents.yaml'), 'utf8').includes('code-intelligence-setup'), 30_000);
+      // The coordinator logs a run's outcome once the run has ended, which is after its recording has landed, so the file
+      // can carry the outcome a few ms before the log says it: wait for the log line too before reading it.
+      const quickLogged = () => { const l = logOf(s); const at = l.search(/mcp setup: started for [^\n]*init-quick/); return at >= 0 && /code-intelligence-setup → (success|failure)/.test(l.slice(at)); };
+      await waitUntil(quickLogged, 10_000);
+      log = logOf(s);
+      check('REQ-WORKSPACE-013 / REQ-WORKSPACE-084 / REQ-WORKSPACE-109: the replacement resolves its own workspace, and its run is followed to its own recorded outcome',
+        quickRecorded && startedFor('init-quick') === 1 && /code-intelligence-setup → success/.test(log.slice(log.search(/mcp setup: started for [^\n]*init-quick/))),
+        `the replacement's setup ${startedFor('init-quick') === 1 ? 'started' : `started ${startedFor('init-quick')} time(s)`}${/init-quick waits for the setup under way to end/.test(log) ? ', once the outgoing setup had ended' : ''}; its outcome is ${quickRecorded ? 'recorded' : 'NOT recorded'}${/code-intelligence-setup → success/.test(log.slice(log.search(/mcp setup: started for [^\n]*init-quick/))) ? '' : ', and the log after its start says no success'}${/not a local launch/.test(log) ? '; a start was refused and reported as "not a local launch"' : ''}`);
+      await s.driver.command({ kind: 'workspace.choose' });
+      const resolvedAgain = await waitUntil(() => startedFor('init-slow') === 2, 30_000);
+      check('REQ-WORKSPACE-102: a return to the first project is a new open, with its own automatic resolution',
+        resolvedAgain,
+        resolvedAgain ? 'the pending task started again when the first project was opened again' : `the first project's setup started ${startedFor('init-slow')} time(s)`);
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 8c — a start the run host refuses, its one setup slot taken by the MCP category's setup (REQ-WORKSPACE-093/094).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * The coordinator's own setups are one at a time (8b), but the MCP settings category's setup (REQ-MCP-112) takes the
+     * run host's one slot too, and a coordinator run starting beside it is refused `mcp.setup.running`. Before the repair
+     * every refusal was reported as REQ-WORKSPACE-094's non-retryable "not a local launch", for an entry that is one
+     * (`docs/defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md`). The order: the open's background
+     * run holds `create`; Cancel ends it; the category's setup starts and holds `create`; Initialize starts the task.
+     * The Cancel is read for REQ-WORKSPACE-092's words on the step it stopped.
+     */
+    const s = await launch('init-held', { workspace: INIT_HELD });
+    const startedFor = () => (logOf(s).match(/mcp setup: started for [^\n]*init-held/g) ?? []).length;
+    const outcomes = () => logOf(s).match(/initialization: code-intelligence-setup → [^\n]*/g) ?? [];
+    const waitUntil = async (predicate, timeoutMs) => {
+      const began = Date.now();
+      while (!predicate()) {
+        if (Date.now() - began > timeoutMs) return false;
+        await sleep(100);
+      }
+      return true;
+    };
+    const backgroundStarted = await waitUntil(() => startedFor() === 1 && pidIn(join(INIT_HELD, '.stand-in-create.pid')) > 0, 30_000);
+    if (!backgroundStarted) {
+      skip('REQ-WORKSPACE-093 / REQ-WORKSPACE-094: a refused setup start is a retryable failure', `the open's background setup never started within 30 s (log tail: ${JSON.stringify(logOf(s).slice(-600))})`);
+    } else {
+      await s.driver.command({ kind: 'initialization.cancel' });
+      const cancelled = await waitUntil(() => outcomes().length === 1, 15_000);
+      // The run host wrote its own sentence for the step it stopped; this domain reports REQ-WORKSPACE-092's
+      // (`docs/defects/fixed/a-stopped-setup-step-is-not-reported-in-req-workspace-092s-words.md`).
+      check('REQ-WORKSPACE-092 / REQ-WORKSPACE-093: a step stopped by Cancel is reported as "Setup was stopped before this step finished."',
+        (outcomes()[0] ?? '').endsWith("→ failure — Code intelligence could not create this project's configuration: Setup was stopped before this step finished.")
+          && /mcp setup: create failed — cancelled while running/.test(logOf(s)),
+        cancelled ? `the cancelled run ended: ${JSON.stringify((outcomes()[0] ?? '').slice(0, 320))}` : 'the background run never ended after Cancel');
+      const categoryStart = await s.driver.command({ kind: 'mcp.setup', action: 'start' });
+      const categoryHolds = await waitUntil(() => startedFor() === 2, 15_000);
+      if (!cancelled || !categoryHolds) {
+        skip('REQ-WORKSPACE-093 / REQ-WORKSPACE-094: a refused setup start is a retryable failure', `the background run ${cancelled ? 'was cancelled' : 'never ended after Cancel'}, and the category's setup ${categoryHolds ? 'started' : `did not start (${JSON.stringify(categoryStart).slice(0, 300)})`}`);
+      } else {
+        const initialize = await s.driver.command({ kind: 'initialization.start' });
+        const ended = await waitUntil(() => outcomes().length === 2, 15_000);
+        const line = outcomes()[1] ?? '';
+        const read = await s.driver.command({ kind: 'initialization.read' });
+        const task = read?.value?.report?.tasks?.find((t) => t.id === 'code-intelligence-setup');
+        check('REQ-WORKSPACE-093 / REQ-WORKSPACE-094: a start refused because the MCP category\'s setup holds the slot fails retryably, in the refusal\'s own words, and not as "not a local launch"',
+          ended && /refused code-intelligence-setup's setup start [^\n]*\(mcp\.setup\.running: /.test(logOf(s))
+            && line.includes("→ failure — Code intelligence could not complete this project's setup: A code-intelligence setup is already running")
+            && !/not a local launch/.test(logOf(s)) && task?.retryable === true && task?.summary === 'Code intelligence setup did not complete for this project. It runs again the next time this workspace is opened.',
+          `Initialize answered ${JSON.stringify(initialize).slice(0, 120)}; the task ${ended ? `ended: ${JSON.stringify(line.slice(0, 320))}` : 'never ended'}; retryable ${String(task?.retryable)}; summary ${JSON.stringify(task?.summary ?? null)}${/not a local launch/.test(logOf(s)) ? '; the log says "not a local launch"' : ''}`);
+      }
+      await s.driver.command({ kind: 'mcp.setup', action: 'cancel' });
+      await waitUntil(() => (logOf(s).match(/mcp setup: cancelled /g) ?? []).length >= 2, 10_000);
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 8d — the run host lost while a setup is under way, another workspace's setup queued behind it (REQ-WORKSPACE-084/109).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * The coordinator's setups are one at a time, and a follow ended only on the run host's `finished` status. Main never
+     * forks the run host again, so with the run host gone that status could never come: the run under way never ended and
+     * every later workspace's setup waited behind it for the life of the process
+     * (`docs/defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`). The run host is
+     * found as the nearest Electron utility process above the stand-in's `project create`, and killed.
+     */
+    const s = await launch('init-host-lost', { workspace: INIT_LOST, folders: [INIT_QUEUED] });
+    const startedFor = (name) => (logOf(s).match(new RegExp(`mcp setup: started for [^\\n]*${name}`, 'g')) ?? []).length;
+    const outcomes = () => logOf(s).match(/initialization: code-intelligence-setup → [^\n]*/g) ?? [];
+    const waitUntil = async (predicate, timeoutMs) => {
+      const began = Date.now();
+      while (!predicate()) {
+        if (Date.now() - began > timeoutMs) return false;
+        await sleep(100);
+      }
+      return true;
+    };
+    /** The nearest ancestor of `pid` that is an Electron utility process — the run host, which launched the setup step. */
+    const utilityAbove = (pid) => {
+      let at = pid;
+      for (let depth = 0; depth < 8; depth += 1) {
+        let stat;
+        try { stat = readFileSync(`/proc/${at}/stat`, 'utf8'); } catch { return null; }
+        const parent = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1]);
+        if (!(parent > 1)) return null;
+        let cmdline = '';
+        try { cmdline = readFileSync(`/proc/${parent}/cmdline`, 'utf8'); } catch { return null; }
+        if (cmdline.includes('--type=utility')) return parent;
+        at = parent;
+      }
+      return null;
+    };
+    const lostStarted = await waitUntil(() => startedFor('init-lost') === 1 && pidIn(join(INIT_LOST, '.stand-in-create.pid')) > 0, 30_000);
+    const createPid = lostStarted ? pidIn(join(INIT_LOST, '.stand-in-create.pid')) : 0;
+    let queued = false;
+    if (lostStarted) {
+      await s.driver.command({ kind: 'workspace.choose', newWindow: true });
+      queued = await waitUntil(() => /init-queued waits for the setup under way to end/.test(logOf(s)), 30_000);
+    }
+    const host = lostStarted && process.platform === 'linux' ? utilityAbove(createPid) : null;
+    if (!lostStarted || !queued || host === null) {
+      skip('REQ-WORKSPACE-084 / REQ-WORKSPACE-109: a setup whose run host is lost ends, and the setup queued behind it is attempted',
+        !lostStarted ? `the first project's setup never started within 30 s (log tail: ${JSON.stringify(logOf(s).slice(-600))})`
+          : !queued ? 'the second window\'s setup never queued behind the first'
+            : `no run host was found above the stand-in's project create (pid ${createPid}${process.platform === 'linux' ? '' : `; /proc is Linux's, and this is ${process.platform}`})`);
+    } else {
+      process.kill(host, 'SIGKILL');
+      const killedAt = Date.now();
+      const lostEnded = await waitUntil(() => outcomes().length >= 1, 10_000);
+      const lostAfter = Date.now() - killedAt;
+      // The queued run's start then goes to a run host that is gone, and ends within the request's own 15 s bound.
+      const queuedEnded = await waitUntil(() => outcomes().length >= 2, 30_000);
+      const log = logOf(s);
+      const [lost = '', next = ''] = outcomes();
+      check('REQ-WORKSPACE-084 / REQ-WORKSPACE-093 / REQ-WORKSPACE-109: a setup whose run host is lost ends as a retryable failure, and the setup queued behind it is then attempted',
+        lostEnded && queuedEnded && /initialization: the run host exited \(\d+\) while code-intelligence-setup's setup was under way/.test(log)
+          && lost.endsWith("→ failure — Code intelligence could not create this project's configuration: the run host exited before the setup finished.")
+          && next.includes('→ failure'),
+        `run host pid ${host} killed; the lost setup's run ${lostEnded ? `ended ${lostAfter} ms later: ${JSON.stringify(lost.slice(0, 260))}` : 'NEVER ended'}; the queued run ${queuedEnded ? `ended: ${JSON.stringify(next.slice(0, 260))}` : 'NEVER ended'}`);
+      // The queued run's start goes unanswered: REQ-WORKSPACE-093's retryable failure in this task's own words, its summary
+      // the banner's (REQ-WORKSPACE-103), never REQ-WORKSPACE-084's generic "ended without reporting an outcome"
+      // (`docs/defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
+      await s.driver.useWindow('init-queued');
+      const queuedRead = await s.driver.command({ kind: 'initialization.read' });
+      await s.driver.useWindow();
+      const queuedTask = queuedRead?.value?.report?.tasks?.find((t) => t.id === 'code-intelligence-setup');
+      check('REQ-WORKSPACE-084 / REQ-WORKSPACE-093 / REQ-WORKSPACE-103: a setup start the run host never answers fails retryably in REQ-WORKSPACE-093\'s summary, not as a task with no outcome',
+        queuedEnded && next.includes("→ failure — Code intelligence could not complete this project's setup: the run host did not answer the setup's start (")
+          && !/ended without reporting an outcome/.test(log) && queuedTask?.retryable === true
+          && queuedTask?.summary === 'Code intelligence setup did not complete for this project. It runs again the next time this workspace is opened.',
+        `the queued run ${queuedEnded ? `ended: ${JSON.stringify(next.slice(0, 260))}` : 'NEVER ended'}; its report reads retryable ${String(queuedTask?.retryable)}, summary ${JSON.stringify(queuedTask?.summary ?? null)}${/ended without reporting an outcome/.test(log) ? '; the log says "ended without reporting an outcome"' : ''}`);
+    }
+    // Nothing in main ends a step's processes when the run host that launched them is killed (OQ-169): end the stand-in here.
+    if (createPid > 0) { try { process.kill(createPid, 'SIGKILL'); } catch { /* already gone */ } }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 8e — two main windows, one per project (PD-SHELL-001): each window's initialization is its own (REQ-WORKSPACE-013/105).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * The coordinator held one "active" root, the one opened last, and answered every window's `initialization.*` with it;
+     * channel 12 reached every window; and main addressed the setup port by the focused window's workspace
+     * (`docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`). Here the first
+     * window's setup holds `create`, the second window opens on another project, focused and opened last, and its setup
+     * queues behind the first. The first window then reads its state and presses Cancel: before the repair the read
+     * answered the second project's state, and the Cancel cancelled the second project's queued run while the first
+     * project's setup ran on for its 90 s.
+     */
+    const s = await launch('init-two-windows', { workspace: INIT_TWO_A, folders: [INIT_TWO_B] });
+    const startedFor = (name) => (logOf(s).match(new RegExp(`mcp setup: started for [^\\n]*${name}`, 'g')) ?? []).length;
+    const waitUntil = async (predicate, timeoutMs) => {
+      const began = Date.now();
+      while (!predicate()) {
+        if (Date.now() - began > timeoutMs) return false;
+        await sleep(100);
+      }
+      return true;
+    };
+    const firstStarted = await waitUntil(() => startedFor('init-two-a') === 1 && pidIn(join(INIT_TWO_A, '.stand-in-create.pid')) > 0, 30_000);
+    const pid = firstStarted ? pidIn(join(INIT_TWO_A, '.stand-in-create.pid')) : 0;
+    let queued = false;
+    if (firstStarted) {
+      await s.driver.command({ kind: 'workspace.choose', newWindow: true });
+      queued = await waitUntil(() => /init-two-b waits for the setup under way to end/.test(logOf(s)), 30_000);
+    }
+    if (!firstStarted || !queued) {
+      skip('PD-SHELL-001 / REQ-WORKSPACE-013 / REQ-WORKSPACE-105: each of two windows reads and cancels its own workspace\'s initialization',
+        !firstStarted ? `the first project's setup never started within 30 s (log tail: ${JSON.stringify(logOf(s).slice(-600))})` : 'the second window\'s setup never queued behind the first');
+    } else {
+      const windows = await windowsOf(s.driver);
+      await s.driver.useWindow('init-two-a');
+      const readA = await s.driver.command({ kind: 'initialization.read' });
+      await s.driver.useWindow('init-two-b');
+      const readB = await s.driver.command({ kind: 'initialization.read' });
+      // `lastRun` is null for a workspace never initialized, so absence is told from it by the view itself.
+      const lastRunA = readA?.value?.view === undefined ? 'absent' : readA.value.view.lastRun;
+      const lastRunB = readB?.value?.view === undefined ? 'absent' : readB.value.view.lastRun;
+      check('PD-SHELL-001 / REQ-WORKSPACE-105: each window reads its own workspace\'s initialization state, whichever was opened last',
+        windows.length === 2 && lastRunA === null && lastRunB === '2026-09-01T00:00:00.000+00:00',
+        `${windows.length} main window(s), the second opened last${windows[0]?.workspace?.endsWith('init-two-b') ? ' and focused' : ''}; the first window read lastRun ${JSON.stringify(lastRunA)} (its project was never initialized), the second ${JSON.stringify(lastRunB)}`);
+      // The first window's Cancel, pressed while the second window is the one opened last.
+      await s.driver.useWindow('init-two-a');
+      await s.driver.command({ kind: 'initialization.cancel' });
+      const answeredAt = Date.now();
+      const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
+      const ended = await waitUntil(() => !alive(), 5_000);
+      const endedAfter = Date.now() - answeredAt;
+      const recorded = await waitUntil(() => readFileSync(join(INIT_TWO_B, '.rotaris', 'agents.yaml'), 'utf8').includes('code-intelligence-setup'), 30_000);
+      const log = logOf(s);
+      const fileA = readFileSync(join(INIT_TWO_A, '.rotaris', 'agents.yaml'), 'utf8');
+      const fileB = readFileSync(join(INIT_TWO_B, '.rotaris', 'agents.yaml'), 'utf8');
+      check('PD-SHELL-001 / REQ-WORKSPACE-013 / REQ-WORKSPACE-092 / REQ-WORKSPACE-109: the first window\'s Cancel cancels the first workspace\'s run and setup, and the second workspace\'s queued setup then runs to its own recorded outcome',
+        ended && recorded && log.includes('mcp setup: cancellation requested') && startedFor('init-two-b') === 1
+          && fileB.includes('code-intelligence-setup') && !fileA.includes('code-intelligence-setup'),
+        `the first project's create (pid ${pid}) ${ended ? `ended ${endedAfter} ms after the Cancel answered` : 'was STILL running 5 s after the Cancel'}; cancellation ${log.includes('mcp setup: cancellation requested') ? 'requested' : 'NEVER requested'}; the second project's setup started ${startedFor('init-two-b')} time(s) and its outcome is ${recorded ? `recorded (${JSON.stringify(fileB.slice(fileB.indexOf('initialization:')).slice(0, 160))})` : 'NOT recorded'}${/init-two-b was closed|cancelled before it started/.test(log) ? '; the second project\'s run was cancelled instead' : ''}`);
+    }
+    if (pid > 0) { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 8f — an orderly quit while a setup step, and a process it started, are running (REQ-WORKSPACE-092/109).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * The run host's `shutdown` never reached the setup: the host exited with the step still running, and the step and
+     * what it had launched outlived the application, while the close's cancellation, sent to a run host already going,
+     * was logged as a warning
+     * (`docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+     * Here the stand-in holds `create` and has started a process of its own, and both ignore the ask to terminate, so
+     * only the shutdown's force-kill of the step's process group ends them. Measured with `dispatch`'s call to
+     * `McpHost.endSetup` replaced by `Promise.resolve()`: the quit took 144 ms and both were still running 5 s after it.
+     */
+    const s = await launch('init-quit', { workspace: INIT_QUIT });
+    const waitUntil = async (predicate, timeoutMs) => {
+      const began = Date.now();
+      while (!predicate()) {
+        if (Date.now() - began > timeoutMs) return false;
+        await sleep(100);
+      }
+      return true;
+    };
+    const createFile = join(INIT_QUIT, '.stand-in-create.pid');
+    const descendantFile = join(INIT_QUIT, '.stand-in-descendant.pid');
+    const running = await waitUntil(() => /mcp setup: started for [^\n]*init-quit/.test(logOf(s)) && pidIn(createFile) > 0 && pidIn(descendantFile) > 0, 30_000);
+    const pids = running ? [pidIn(createFile), pidIn(descendantFile)] : [];
+    /** Whether a process still runs: present, and not a zombie (one ended whose parent has not reaped it yet). */
+    const alive = (pid) => {
+      if (process.platform === 'linux') {
+        let stat;
+        try { stat = readFileSync(`/proc/${pid}/stat`, 'utf8'); } catch { return false; }
+        return stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3) !== 'Z';
+      }
+      try { process.kill(pid, 0); return true; } catch { return false; }
+    };
+    if (!running || !pids.every(alive)) {
+      skip('REQ-WORKSPACE-092 / REQ-WORKSPACE-109: an orderly quit during a setup step ends the step and what it started',
+        !running ? `the stand-in's create and its descendant never both ran within 30 s (log tail: ${JSON.stringify(logOf(s).slice(-600))})` : `of the stand-in's pids ${JSON.stringify(pids)} one had already ended before the quit`);
+    } else {
+      const quitAt = Date.now();
+      await s.driver.quit();
+      const exit = await exitWithin(s.child, 15_000);
+      const exitedAfter = Date.now() - quitAt;
+      if (exit !== null) await sleep(5_000);
+      const left = pids.filter(alive);
+      const log = logOf(s);
+      const undelivered = log.split('\n').filter((l) => /\] warning /.test(l) && l.includes('could not be delivered'));
+      check('REQ-WORKSPACE-092 / REQ-WORKSPACE-109: an orderly quit during a setup step completes within 5000 ms, and neither the step nor a process it started is running 5 s later',
+        exit !== null && exitedAfter <= 5_000 && left.length === 0 && log.includes("mcp setup: ended by the run host's shutdown"),
+        `the quit ${exit === null ? 'did NOT end the app within 15 s' : `ended the app in ${exitedAfter} ms (${exit.code ?? exit.signal})`}; the run host's shutdown ${log.includes("mcp setup: ended by the run host's shutdown") ? 'ended the setup' : 'NEVER reached the setup'}; 5 s after the exit ${left.length === 0 ? `neither the step (pid ${pids[0]}) nor its descendant (pid ${pids[1]}) is running` : `still running: ${JSON.stringify(left)}`}`);
+      check('PD-MONITOR-002: the close\'s cancellation, undeliverable at the quit, is not reported as a fault',
+        undelivered.length === 0,
+        undelivered.length === 0 ? `no warning that a cancellation could not be delivered${/did not reach the run host at the quit/.test(log) ? ' (it was said at info, as expected at a quit)' : ''}` : `warned: ${JSON.stringify(undelivered[0].slice(0, 300))}`);
+    }
+    for (const pid of pids) { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 8g — the setup's step details in this domain's words (REQ-WORKSPACE-091/092/093), the run host's kept for the MCP category.
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * The coordinator passed the run host's own sentences through as the steps' details: "the project already exists (its
+     * marker file is present); …", "skipped: the workspace contains no file the runtime indexes" and "exited with code N;
+     * its last output: …" (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`).
+     * Three projects: one carrying the runtime's marker (and a source file, so its other steps run), one holding
+     * documentation only whose stand-in creation reports itself, and one whose creation writes to both streams and exits 3.
+     */
+    const waitUntil = async (predicate, timeoutMs) => {
+      const began = Date.now();
+      while (!predicate()) {
+        if (Date.now() - began > timeoutMs) return false;
+        await sleep(100);
+      }
+      return true;
+    };
+    const outcome = (s) => logOf(s).match(/initialization: code-intelligence-setup → [^\n]*/)?.[0] ?? null;
+    const NO_SYMBOLS = 'No source files found, so there are no symbols to index.';
+    const NO_MEMORY = 'No source files found, so no memory layout was seeded.';
+    {
+      const s = await launch('init-marker', { workspace: INIT_MARKER });
+      const ended = await waitUntil(() => outcome(s) !== null, 30_000);
+      const read = await s.driver.command({ kind: 'initialization.read' });
+      const task = read?.value?.report?.tasks?.find((t) => t.id === 'code-intelligence-setup');
+      const details = (task?.steps ?? []).map((step) => step.detail);
+      check('REQ-WORKSPACE-091 / REQ-WORKSPACE-092: creation with the marker present reports "project file already exists; left as is", and a step that wrote nothing an empty detail',
+        ended && task?.status === 'success' && JSON.stringify(details) === JSON.stringify(['project file already exists; left as is', '', ''])
+          && /mcp setup: create succeeded — the project already exists/.test(logOf(s)),
+        `the run ${ended ? `ended: ${JSON.stringify(outcome(s))}` : 'NEVER ended'}; its step details ${JSON.stringify(details)}; the run host's own words ${/mcp setup: create succeeded — the project already exists/.test(logOf(s)) ? 'kept in its log line' : 'NOT in its log line'}`);
+    }
+    {
+      const s = await launch('init-says', { workspace: INIT_SAYS });
+      const ended = await waitUntil(() => outcome(s) !== null, 30_000);
+      const read = await s.driver.command({ kind: 'initialization.read' });
+      const task = read?.value?.report?.tasks?.find((t) => t.id === 'code-intelligence-setup');
+      const details = (task?.steps ?? []).map((step) => step.detail);
+      check('REQ-WORKSPACE-091 / REQ-WORKSPACE-092: a succeeded step reads as its output, and the two stages a non-code workspace skips read their fixed sentences',
+        ended && task?.status === 'success' && JSON.stringify(details) === JSON.stringify(['stand-in: project created', NO_SYMBOLS, NO_MEMORY])
+          && /mcp setup: index skipped-no-code — skipped: the workspace contains no file the runtime indexes/.test(logOf(s)),
+        `the run ${ended ? `ended: ${JSON.stringify(outcome(s))}` : 'NEVER ended'}; its step details ${JSON.stringify(details)}; the run host's own words ${/mcp setup: index skipped-no-code — skipped: the workspace/.test(logOf(s)) ? 'kept in its log line' : 'NOT in its log line'}`);
+    }
+    {
+      const s = await launch('init-fails', { workspace: INIT_FAILS });
+      const ended = await waitUntil(() => outcome(s) !== null, 30_000);
+      const read = await s.driver.command({ kind: 'initialization.read' });
+      const task = read?.value?.report?.tasks?.find((t) => t.id === 'code-intelligence-setup');
+      const create = task?.steps?.[0]?.detail ?? '';
+      const line = outcome(s) ?? '';
+      check('REQ-WORKSPACE-092 / REQ-WORKSPACE-093: a stage that exits non-zero reads as its output\'s tail, non-ASCII intact and with no prefix, in its row and in the error',
+        ended && task?.status === 'failure' && task?.retryable === true
+          && create.includes('Sprache nicht erkannt — ä') && create.includes('no language could be configured') && !create.includes('exited with')
+          && line.includes("→ failure — Code intelligence could not create this project's configuration: ") && !line.includes('exited with')
+          && /mcp setup: create failed — exited with code 3; its last output: /.test(logOf(s)),
+        `the run ${ended ? `ended: ${JSON.stringify(line.slice(0, 320))}` : 'NEVER ended'}; the creation row reads ${JSON.stringify(create.slice(0, 200))}; the run host's own words ${/mcp setup: create failed — exited with code 3/.test(logOf(s)) ? 'kept in its log line' : 'NOT in its log line'}`);
+    }
   }
 
   // ───────────────────────────────────────────────────────────────────────────────────────────────────────────

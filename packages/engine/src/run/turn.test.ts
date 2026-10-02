@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
+import { AiSdkModelClient, answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type FetchLike, type ModelClient, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type ModeChange, type PortToolCall, type PortToolResult, type Publisher, type RunConfig, type SessionsDeps, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
 import { interruptedResult } from './interruption.js';
@@ -63,13 +63,13 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
 
   const config = (over: Partial<RunConfig> = {}): RunConfig => ({ ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', ...over });
 
-  function sessionsWith(calls: ScriptedCall[], port: ToolPort | null, extra: { attended?: boolean; runtime?: { permissionMode: string; pauseToolDeadlineMs?: number }; terminals?: SessionsDeps['terminals']; hooks?: HookPort } = {}) {
+  function sessionsWith(calls: ScriptedCall[], port: ToolPort | null, extra: { attended?: boolean; runtime?: { permissionMode: string; pauseToolDeadlineMs?: number }; terminals?: SessionsDeps['terminals']; hooks?: HookPort; wrap?: (c: ModelClient) => ModelClient } = {}) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
     const logLines: string[] = [];
     const sessions = new Sessions({
       clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++n}`,
-      model: { backend: new DefaultAgentBackend(client), config: config() }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
+      model: { backend: new DefaultAgentBackend(extra.wrap ? extra.wrap(client) : client), config: config() }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       ...(port ? { tools: () => port } : {}), attended: () => extra.attended ?? true,
       runtime: { permissionMode: extra.runtime?.permissionMode ?? 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', ...(extra.runtime?.pauseToolDeadlineMs === undefined ? {} : { pauseToolDeadlineMs: extra.runtime.pauseToolDeadlineMs }) },
       sessionLogAppender: () => (line) => { logLines.push(line); },
@@ -124,6 +124,47 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     const toolMsg = second.messages.find((m) => m.role === 'tool')!;
     expect(toolMsg.content[0]).toMatchObject({ kind: 'tool-result', callId: 'c1', isError: true });
     expect((toolMsg.content[0] as { result: string }).result).toMatch(/^Permission denied by rule/);
+  });
+
+  it('REQ-TOOLS-032: a call whose arguments are a JSON string (encoded twice) is refused recoverably, its replay carries a mapping, and the run continues', async () => {
+    /*
+     * The 2026-10-01 live run (docs/defects/fixed/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md):
+     * the model's `arguments` text was a JSON string literal holding the object. The client stands where the run host
+     * puts it, the AI SDK adapter, against an endpoint that refuses a request whose replayed arguments are not a mapping
+     * (HTTP 400, as that endpoint's chat template did). The port answers as the gate does for an unreadable payload.
+     */
+    const doubly = JSON.stringify(JSON.stringify({ pattern: '**/*.ts' }));
+    const refusal = "The arguments for 'glob' could not be read as JSON even after repair. Re-issue the call with a well-formed object.";
+    const chunk = (delta: Record<string, unknown>, finish: string | null) => JSON.stringify({ id: 'r', object: 'chat.completion.chunk', created: 0, model: 'm', choices: [{ index: 0, delta, finish_reason: finish }] });
+    const sse = (lines: string[]) => new Response(lines.map((l) => `data: ${l}\n\n`).join(''), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    const bodies: { messages: { role: string; content?: unknown; tool_calls?: { function: { arguments: string } }[] }[] }[] = [];
+    const endpoint: FetchLike = async (_input, init) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as (typeof bodies)[number];
+      bodies.push(body);
+      const replayed = body.messages.flatMap((m) => m.tool_calls ?? []).map((c) => JSON.parse(c.function.arguments) as unknown);
+      if (replayed.some((a) => typeof a !== 'object' || a === null || Array.isArray(a))) {
+        return new Response(JSON.stringify({ error: { message: 'Can only get item pairs from a mapping.', type: 'BadRequestError', code: 400 } }), { status: 400, headers: { 'content-type': 'application/json' } });
+      }
+      if (bodies.length === 1) {
+        return sse([chunk({ tool_calls: [{ index: 0, id: 'c1', type: 'function', function: { name: 'glob', arguments: doubly } }] }, null), chunk({}, 'tool_calls'), '[DONE]']);
+      }
+      return sse([chunk({ content: 'I will re-issue it as an object.' }, null), chunk({}, 'stop'), '[DONE]']);
+    };
+    const { port } = fakePort();
+    const seenRaw: string[] = [];
+    const gateLike: ToolPort = { ...port, dispatch: async (c) => { seenRaw.push(c.rawArgs); return { text: refusal, isError: true, status: 'failed', durationMs: 0, label: 'glob()', args: {} }; } };
+    const wrap = (): ModelClient => new AiSdkModelClient({ baseUrl: 'https://endpoint.example/v1', fetch: endpoint, timers: clock, monotonic: clock });
+    const { sessions } = sessionsWith([], gateLike, { wrap });
+    const sid = (sessions.start(dal, 'C:/ws', 'find the ts files') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    // the gate was handed the model's own text, unchanged
+    expect(seenRaw).toEqual([doubly]);
+    // the second request reached the model: the refusal travelled as the call's result, beside a replay that is a mapping
+    expect(bodies).toHaveLength(2);
+    const second = bodies[1]!.messages;
+    expect(JSON.parse(second.find((m) => m.role === 'assistant')!.tool_calls![0]!.function.arguments)).toEqual({ _raw: doubly });
+    expect(JSON.stringify(second.find((m) => m.role === 'tool')!.content)).toContain('could not be read as JSON even after repair');
+    expect(dal.residentRows(sid).at(-2)).toMatchObject({ kind: 'agent', body: 'I will re-issue it as an object.' });
   });
 
   it('REQ-ORCH-141: a replayed call id is not dispatched again', async () => {
@@ -254,6 +295,27 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     sessions.control({ op: 'cancel', sessionId: sid, args: {} });
     expect(logLines.length).toBe(before);
     expect(logLines.every((l) => /^\d{4}-\d\d-\d\dT.*(WARNING|ERROR)/.test(l))).toBe(true);
+  });
+
+  it('OQ-110 (REQ-CONFIG-086, REQ-SESSION-142): a retry the dispatch layer absorbed is written to the session log with the status it met and the delay it waited', async () => {
+    const { port } = fakePort();
+    // The client stands where the AI-SDK adapter stands: it absorbed a 429 and a 500 before the answer it streams.
+    const wrap = (inner: ModelClient): ModelClient => ({
+      stream: (req) => {
+        req.onRetry?.({ attempt: 1, of: req.retries, status: 429, delayMs: 2_008 });
+        req.onRetry?.({ attempt: 2, of: req.retries, status: 500, delayMs: 4_008 });
+        return inner.stream(req);
+      },
+    });
+    const { sessions, logLines } = sessionsWith([answer('recovered')], port, { wrap });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const retried = logLines.filter((l) => /retried by the dispatch layer/.test(l));
+    expect(retried).toHaveLength(2);
+    expect(retried[0]).toMatch(/^\d{4}-\d\d-\d\dT\S+ WARNING .* on p\/m met HTTP 429 and waited 2008 ms before retry 1 of 5 \(REQ-CONFIG-086/);
+    expect(retried[1]).toMatch(/met HTTP 500 and waited 4008 ms before retry 2 of 5/);
+    // The ladder was never reached: no issue and no timeline entry claims it (OQ-110 adds nothing to it).
+    expect(dal.eventsFrom(sid, 1, 10_000).map((e) => e.kind).filter((k) => /issue|wait/.test(k))).toEqual([]);
   });
 
   describe('PD-ORCH-005 clauses 2, 9 and 10: what a pause does, and what becomes of the background sessions', () => {
@@ -489,6 +551,27 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
       expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'running'], ['ts_build', 'completed']]);
       await sessions.closeAll();
       expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'quit'], ['ts_build', 'completed']]);
+      // The pause's teardown released the lock; the quit took it for the record and gave it back.
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+
+    it('clause 10 with REQ-EVENTS-098 / ADR-0005: the quit records nothing of a session another live process holds, and leaves that holder\'s lock', async () => {
+      const { terminals } = withTerminals();
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port, { terminals, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'pause', sessionId: sid, args: {} });
+      clock.advance(5_000);
+      await sessions.running(sid)!;
+      expect(dal.getLock(sid)).toBeUndefined();
+      expect(dal.claimLock(sid, 999, HOST, '2026-10-01T00:00:00.000Z').claimed).toBe(true);
+      const events = dal.eventsFrom(sid, 1, 10_000).length;
+      await sessions.closeAll();
+      expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'running'], ['ts_build', 'completed']]);
+      expect(dal.eventsFrom(sid, 1, 10_000)).toHaveLength(events);
+      expect(dal.getLock(sid)).toMatchObject({ pid: 999 });
+      expect(warnings.some((w) => w.includes('ts_serve') && w.includes('pid 999'))).toBe(true);
     });
   });
 });

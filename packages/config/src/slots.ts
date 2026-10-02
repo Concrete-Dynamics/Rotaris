@@ -19,6 +19,12 @@ export interface SlotDraft {
 export interface SlotResolution {
   /** REQ-CONFIG-071: which roles referenced a tier before substitution. */
   readonly resolvedPersonaModelTiers: Readonly<Record<string, TierAlias>>;
+  /**
+   * REQ-CONFIG-081 / REQ-CONFIG-094: each loader-owned synthetic name mapped to the `models:` key it was copied from,
+   * recorded when the copy is made — the only place the origin is known, since two keys may name the same provider
+   * model (live-run finding D5, verifier round 1).
+   */
+  readonly syntheticOrigins: Readonly<Record<string, string>>;
   readonly warnings: readonly string[];
 }
 
@@ -48,6 +54,7 @@ export function resolveSlotBase(slots: Readonly<Record<ModelSlot, string | null>
 
 export function resolveSlotsAndReasoning(draft: SlotDraft): SlotResolution {
   const warnings: string[] = [];
+  const origins: Record<string, string> = {};
   // REQ-CONFIG-067: an unset fallback resolves to whatever small_model resolves to, before referential validation.
   if (draft.slots.fallback_model === null || draft.slots.fallback_model === '') draft.slots.fallback_model = draft.slots.small_model;
 
@@ -77,6 +84,7 @@ export function resolveSlotsAndReasoning(draft: SlotDraft): SlotResolution {
     if (!base) { warnings.push(`${slot}_thinking skipped: ${slot} names '${resolved.base}', which is not a configured model`); continue; }
     const name = `${STARTUP_SLOT_PREFIX}${slot}`;
     draft.models[name] = { ...base, thinking: level };
+    origins[name] = resolved.base;
     draft.slots[slot] = name;
   }
 
@@ -88,20 +96,27 @@ export function resolveSlotsAndReasoning(draft: SlotDraft): SlotResolution {
     if (!base) { warnings.push(`thinking for role ${role} skipped: '${persona.model}' is not a configured model`); continue; }
     const name = `${PERSONA_SYNTHETIC_PREFIX}${role}`;
     draft.models[name] = thinking === 'provider_default' ? { ...base, thinking: null, reasoning_effort: null } : { ...base, thinking };
+    origins[name] = syntheticOriginOf(persona.model, origins);
     draft.personas[role] = { ...persona, model: name };
   }
 
-  return { resolvedPersonaModelTiers: tiers, warnings };
+  return { resolvedPersonaModelTiers: tiers, syntheticOrigins: origins, warnings };
 }
 
-/** REQ-CONFIG-253/255: a synthetic name unwrapped to the model it was copied from. */
-export function unwrapSynthetic(name: string, models: Readonly<Record<string, ModelEntry>>): string {
-  if (!name.startsWith(STARTUP_SLOT_PREFIX) && !name.startsWith(PERSONA_SYNTHETIC_PREFIX)) return name;
-  const entry = models[name];
-  if (!entry) return name;
-  for (const [candidate, other] of Object.entries(models)) {
-    if (candidate === name || candidate.startsWith(STARTUP_SLOT_PREFIX) || candidate.startsWith(PERSONA_SYNTHETIC_PREFIX)) continue;
-    if (other.provider === entry.provider && other.model_id === entry.model_id) return candidate;
+/**
+ * REQ-CONFIG-094: the `models:` key a name counts against — a loader-owned synthetic copy (REQ-CONFIG-081) is the key
+ * the loader recorded it was copied from; every other name is its own key. Never a guess by provider and model id.
+ * REQ-CONFIG-253/255: the same unwrap is what an editor reads back for a synthetic slot or role value.
+ *
+ * A slot whose chain passes through an earlier slot's copy records that copy as its origin, so the walk follows the
+ * recorded origins to the end — as many hops as there are slots — and stops on a name it has already visited.
+ */
+export function syntheticOriginOf(name: string, origins: Readonly<Record<string, string>>): string {
+  let current = name;
+  const seen = new Set<string>([current]);
+  while (origins[current] !== undefined && !seen.has(origins[current]!)) {
+    current = origins[current]!;
+    seen.add(current);
   }
-  return name;
+  return current;
 }

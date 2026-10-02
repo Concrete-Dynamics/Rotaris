@@ -191,8 +191,10 @@ items (Workspace view-2 contrast, focus) — which is stated in Part AM's handof
 argument in a fourth, each taken from a named role of the active theme — the readable accent shade, that shade blended
 toward the surface behind it, the `fail` state colour, the secondary text colour — and each then lightened or darkened
 until it clears 4.5:1 on the surface it is painted on, with no two rendering the same. `packages/ui/src/slash/highlight.ts`
-derives the four from the theme's own tokens (`--rt-accent-300`, `--rt-fail`, `--rt-text-secondary`, against `--rt-bg`,
-which is what the design's `.input` paints on), blends in OKLCH (lightness and chroma toward the surface, the accent's
+derives the four from the theme's own tokens (`--rt-accent-300`, `--rt-fail`, `--rt-text-secondary`, ~~against `--rt-bg`,
+which is what the design's `.input` paints on~~ against `--rt-bg`, which is what the design's `.input` paints on — **falsified
+by the composer dock of 2026-09-18**, whose field is transparent on `--rt-surface`; since 2026-09-29 the four are derived
+against the dock's ground, `COMPOSER_GROUND` — see the fifth execution), blends in OKLCH (lightness and chroma toward the surface, the accent's
 hue kept), corrects with this record's lightness-only correction — `raiseLightness` on a dark theme and its mirror on
 a light one — and steps the partial shade away from any coincidence. A unit test measures all three built-in themes;
 the proof measured the painted colours in the built application on the default theme: resolved `oklch(83% 0.1 292)`
@@ -295,9 +297,158 @@ everywhere (9.2 to 16.0:1). The colours are still derived against `--rt-bg` — 
 `oklch(0.60404 0.05 292)` and unknown `oklch(0.64 0.2 25)` are the second execution's values, at 4.50:1 and 4.79:1 on
 `oklch(0.21 0 0)` — so the corrector is right and the surface it is given is not the one painted. The palette check "the painted ground is the
 palette's `--rt-bg`" fails on all three for the same reason. Recorded, not repaired
-(`../../defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`). Everything else
+(`../../defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`; repaired 2026-09-29, the fifth execution below). Everything else
 the proof asserts after it passed in a diagnostic run with its checks made non-fatal (not committed): the chip's
 catalogue and REQ-CHAT-032's messages, `/stop` idle and during a run, the stash and both Pops, `/model scripted-2`,
 Escape, `/theme` both ways, `/logout`, `/sessions`, `/new`, `/worktree`, the `/ ` escape, `/compress`, the stored theme
 and the restart painting the same ground, `/logout` against the real registry and credential store, and REQ-CHAT-028's
 two live rebuilds. Not shown: any of it on Windows or macOS (IC-3).
+
+## Fifth execution — 2026-09-29 (R-067), the four derived on the ground the dock paints
+
+*The proof is `pnpm slash-proof --skip-build`, as root under Xvfb on Linux, Node 24, after one `pnpm build` in the
+branch's worktree, with other agents' Electron proofs running on the host.*
+
+**The repair the fourth execution recorded.** The product moved, not the dock: the docked strip is PD-CHAT-001
+revision 2's and the owner's choice, so `highlight.ts` names the ground the composer paints under its transparent field
+once — `COMPOSER_GROUND = '--rt-surface'` — and `slashRoleColours` derives on it by default. The partial shade is still
+the accent blended toward the surface behind it; that surface is now the one behind it. `slash.test.ts` reads the dock's
+background token out of `shell.css` and measures the four against it on every built-in theme, so the stylesheet and the
+derivation cannot part again without a red (on the old default the test failed at `rotaris-dim partial on --rt-surface
+4.06:1`). The proof's palette check now reads "the painted ground is the palette's `--rt-surface`".
+
+**Measured.** Green end to end — the catalogue launch, the palette launch, the restart and the wired launch. On the dock
+(`composer__dock`, the first opaque ground from the input up): `rotaris-dim` on `oklch(0.25 0 0)` — partial
+`oklch(0.62939 0.05 292)` 4.50:1, unknown `oklch(0.64999 0.2 25)` 4.50:1 (both lightened further than the fourth
+execution's `--rt-bg` values), resolved 9.20:1, argument 8.56:1; `nocturne` on `oklch(0.18 0 0)` — partial 4.50:1,
+unknown 9.94:1, resolved 10.82:1, argument 11.14:1; `high-contrast` on `oklch(0.12 0 0)` — partial 4.50:1, unknown
+13.91:1, resolved 15.07:1, argument 16.02:1. Four distinct colours on each palette, the weights unchanged. Repaired note:
+`../../defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`. Not
+shown: any of it on Windows or macOS (IC-3).
+
+**The design material.** *(Added 2026-09-30, the verifier's fix round 1.)* The mockup (`pnpm mockup`, its
+`<!-- queue + composer -->` block) draws the composer as the design's `.input` textarea on its own `--rt-bg`
+(`docs/design/system/components.css`), inside a block that paints nothing. The built dock paints `--rt-surface` behind a
+transparent field. That departure is PD-CHAT-001 revision 2's, and the directive governs over the mockup's structure
+(`docs/design/README.md` §2). So the mockup confirms where the second execution's `--rt-bg` came from, and changes
+nothing in this repair.
+
+**`theme-proof` beside it.** The slash colours are painted only while a slash command is typed, and `theme-proof` types
+none. ~~Its full matrix on the branch failed only on `rotaris-dim` at 150 % and 175 %, both times on status-strip text and
+never on a slash role. Rebuilt with `highlight.ts` reverted, the 150 % case still failed. The same case passed on
+origin/main built in a checkout whose path is five characters longer, which shifts the elided strip item across the
+device-pixel grid.~~ *(Corrected 2026-09-30, the verifier's fix round 1. The first reading is falsified: the path's length
+moves nothing, and the matrix it described did not reproduce on the final tree.)* Its first run on the branch failed on
+`rotaris-dim` at 150 % and 175 %, and rebuilt with `highlight.ts` reverted the 150 % case still failed. On the final
+build, in the same checkout, the full matrix fails only `nocturne` at 150 %, and `rotaris-dim` passes at every scale.
+Every red is on status-strip text and none is on a slash role. The strip is wider than the 1066 px window at 150 % and
+scrolls, and the failing item lies 1.2 px inside the window's right edge. The proof's `visible()` admits it, and
+`textContrast` reads two device-pixel columns of its first glyph's anti-aliased edge (3.25:1; the same item measured
+whole reads 6.74:1). Whether an item lands in that position depends on the widths the strip draws ahead of it: the
+branch label with its ahead count, which is the checkout's branch because the scratch workspace sits inside it, and the
+theme's name. The elided `svc:` path stays at its 48 px floor. Recorded as a proof defect
+(`../../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`, corrected in place), and not
+absorbed here.
+
+## Sixth execution — 2026-09-30 (R-067), `theme-proof` reads a text only where it is on screen
+
+REQ-SHELL-160 (a) measures contrast from the pixels painted behind a rendered label. The proof had been reading pixels
+the label does not paint. It read a text's whole box even where the window or a scroll container cut the text off. The
+status strip scrolls past the window's right edge at 150 %, and its last item could be admitted with 1.2 px on screen
+and read as its first glyph's anti-aliased edge (the fifth execution's `theme-proof` paragraph). Acceptance finding A53
+reopened that note, and it is repaired in the proof, not in the palette:
+- The probe records each admitted text's on-screen part: its box cut by the window and by every ancestor that clips
+  it.
+- `apps/desktop/scripts/lib/text-sample.mjs` reads only that part.
+- A fragment under one em along either axis is reported as skipped, with its size, and is not measured.
+- `visible()`'s admission is unchanged. A hit test at the on-screen part's centre was tried and dropped, because it
+  admitted Settings rows half scrolled out of their pane and read one as its padding (1.24:1).
+- An admitted text with no part on screen keeps its record, and `textSample` reports it skipped ("no part of it is on
+  screen"). The first form dropped it inside the probe, so it was neither measured nor counted; since the verifier's
+  fix round 1 every admitted text is counted, measured or skipped.
+
+**Coverage boundary.** The cut is conservative, so it can hide a text from the proof but cannot fail one falsely:
+- `clipsOf` cuts a text by every ancestor that clips, up to a fixed-position ancestor. An absolutely positioned
+  descendant whose containing block lies outside a clipping ancestor (a popover inside a scroller) is not clipped by
+  that ancestor in the page, but the probe cuts it anyway. Such a text is read in part, or skipped with its size; it is
+  never read against pixels that are not its own. Its loss of coverage shows only as a skip line.
+- The one-em rule skips any fragment under the font size. At high device-pixel ratios that is stricter than needed:
+  7.8 CSS px at a ratio of 2 can hold a whole glyph. At 150 % and above, whether the status strip's trailing items are
+  measured depends on where the strip's layout leaves them, and so on the branch label. In the builder's matrix the
+  last item on `high-contrast` lay 5.8 to 7.8 CSS px inside the window at 150 %, 175 % and 200 % and was skipped. In
+  the fix round's matrix it lay 1.2 CSS px inside at 150 % (skipped), and at 175 % the `svc:` item before it was the
+  1.2 px sliver (skipped). So the strip's trailing strings are covered with certainty only at 100 % and 125 %, where
+  they are on screen whole on every theme.
+- The one-em rule also skips rows that a pane cuts vertically with most of their glyphs showing. It compares the shown
+  height of the text's box with the font size, and the box is the line box, not the glyphs. At 125 % on every theme,
+  Settings' "Compression threshold", "Iteration cap" and their units "%" and "iterations" (14 px, line box 22.7 px) are
+  cut by their pane at 12.8 of 22.7 CSS px, from below. If the leading is split evenly, the em box starts about 4.3 px
+  into the line box, so what shows is roughly the upper 8.5 px of the 14 px em box. All four are skipped. At 175 %, "No
+  hooks are declared." is skipped the same way at 11.8 of 22.7 px. A threshold below one em for the vertical axis alone,
+  such as cap height, would keep these rows measured. It is not taken here. How much of the glyphs a cut leaves depends
+  on where it falls against the baseline and the leading, and the probe measures neither. A height threshold on the line
+  box cannot ensure a whole stroke. The loss is recorded, row by row, rather than closed by a guess.
+
+**Measured**, as root under Xvfb on Linux, Node 24:
+- **Before the change: FAIL.** With the item placed at x = 1064.83 by a scratch repository's branch label, `rotaris-dim`
+  at 150 % read 3.05:1 on that item.
+- **After the change: PASS.** The same setup gave a minimum of 3.71:1, with that item skipped in each of its 20
+  captures.
+- **The full matrix: 14 of 15 PASS on the builder's first run.** Its minimums at 100 % were 3.68:1 on `rotaris-dim`,
+  4.62:1 on `nocturne` and 5.25:1 on `high-contrast`. `high-contrast` at 100 % failed on one incoherent capture with
+  another workflow's live run on the host, and passed re-run alone.
+- **The full matrix after the verifier's fix round 1: 15 of 15 PASS in one run**, with no incoherent capture. The
+  lowest ratios at any scale were 3.07:1 on `rotaris-dim`, 4.08:1 on `nocturne` and 4.92:1 on `high-contrast`, all at
+  125 %; the first two are on texts whose floor is 3:1. The skips were the strip's 1.2 px slivers and texts cut
+  vertically by the pane that scrolls them (Settings rows, a tools list). No admitted text had no part on screen.
+- **The full matrix after origin/main merged into the branch: 15 of 15 PASS, twice** (after `6f80d5f`, and again after
+  `8574828`). The lowest ratios were 3.68:1 on `rotaris-dim` and 4.62:1 on `nocturne`, both at 100 %, and 4.92:1 (then
+  5.57:1) on `high-contrast`. The skips were the ones the coverage boundary above names: the strip's trailing item, 7.8
+  or 5.8 CSS px on screen at 150 % and above, and the Settings rows cut vertically at 125 % and 175 %. The second run
+  also skipped "Session checkpoints" (10 px, 9.1 of a 16.2 px line box) in one `rotaris-dim` capture at 150 %, a
+  vertical cut of the same kind.
+- **The text counterfactual stays red**, at 1.52:1.
+- **`discovered` is not comparable between runs.** It is the number of admitted texts summed over a cell's captures, and
+  it varies between runs of the same build. `rotaris-dim` at 100 % counted 1384 in one run and 1263 in another, as the
+  verification of `8f79daf` reported them, and 1264 and then 1376 in the two merged-branch runs. Nothing in this
+  execution explains the variation. So two matrices are compared by verdict, minimum and the skips named, not by count.
+
+The palette is unchanged, and OQ-56's disabled-text question is untouched. The repaired note is
+`../../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`. Not shown: Windows or macOS
+(IC-3).
+
+## Seventh execution — 2026-10-01 (fin2 round), the contrast verdict bounded by what it measured
+
+The sixth execution made every admitted text counted, measured or skipped, and its coverage boundary named the texts a
+skip hides. Nothing read the skips as a failure: the contrast item passed with no text below its floor, one text
+measured in the whole cell and no incoherent capture. A regression that pushed one surface's text off the screen, or left
+it animating at capture, passed on the rail and the status strip, which every capture shows
+(`../../defects/fixed/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`). Repaired in the proof:
+- The probe marks each admitted text `inSurface` when it sits inside the capture's own surface: the primary view's root
+  element (`.overview`, `.workspace`, `.mission`, `.req`, `.git`, `.library`), or the Settings view's (`.settings`).
+- `apps/desktop/scripts/lib/contrast-coverage.mjs` fails a capture with no measured text inside its surface, a capture
+  with more than 25% of the texts inside its surface skipped, and a cell with more than 10% of every admitted text
+  skipped. The skips are counted by reason (`tiny`, `animating`, `offscreen`, `sliver`), per cell and per capture.
+- A text pushed wholly off the screen is not admitted at all (`visible()` needs its box on screen), so it never shows as
+  a skip; the per-surface measured count is what catches it.
+
+**Measured**, as root under Xvfb on Linux, Node 24, `--skip-build` after one `pnpm build`, with another plan's agents on
+the host:
+- **The full matrix with the bound: 15 of 15 PASS.** The largest share skipped in a cell was 1.42% (`rotaris-dim` at
+  150 %, the status strip's `svc:` item, 5.8 CSS px on screen, in each of 15 captures, none inside a surface). The
+  largest share inside one surface was 9.5% (`settings-03` at 125 % on every theme: the four rows the sixth execution
+  names, cut vertically by their pane, 4 of 42). The fewest measured texts inside a surface was 7 (`view-1`, the
+  Overview, in every cell). The bounds sit well above all three.
+- **`--counterfactual=offscreen` (new): red.** It moves the Workspace view one window-width to the right and clips the
+  pane that holds it. `rotaris-dim` at 100 % failed `contrast` on `view-2: no text inside the surface was measured (0
+  discovered there, 0 skipped)`, while 1232 texts were measured, none below its floor, and no capture was incoherent:
+  the verdict before this execution passes that cell. The first forms moved the view without clipping the pane; the
+  pane scrolled the view back into sight to show the focused composer, and the cell passed. The clipped form is kept.
+- **Again, by the builder who finished the round**, on the same build, with the other plan's agents on the host (load
+  average 3.3 to 3.9): the full matrix 15 of 15 PASS, the largest share skipped in a cell 1.51% (`high-contrast` at
+  175 %, 17 status-strip slivers), the largest inside one surface 9.5% (`settings-03` at 125 %, 4 of 42), the fewest
+  measured inside a surface 7 (`view-1`); `--counterfactual=offscreen` exit 1 on `contrast` alone, with the same
+  `view-2` failure, 1366 texts measured, none below its floor and no capture incoherent.
+- **Not run here:** the `text` and `focus` counterfactuals (their code is unchanged), and Windows or macOS (IC-3).
+
+The palette is unchanged.

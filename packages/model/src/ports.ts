@@ -133,6 +133,26 @@ export type OutputSpec =
   | { readonly kind: 'json_schema'; readonly name: string; readonly schema: Readonly<Record<string, unknown>> }
   | { readonly kind: 'json_object' };
 
+/**
+ * OQ-110 (ruled 2026-09-29, R-067): one retry the DISPATCH LAYER absorbed. REQ-CONFIG-086's `num_retries` are spent
+ * inside the model client, before the resilience ladder (REQ-ORCH-091/092) sees any failure, and the ladder takes over
+ * only once they are exhausted. A retry absorbed there is invisible to everything above the client, so the client reports
+ * each one as it sends it, with what the attempt before it met and how long it waited, and the turn writes it to the
+ * session log (REQ-SESSION-142). The first live run's finding L3: a 429 and a 500 absorbed this way left no trace.
+ */
+export interface DispatchRetry {
+  /** Which retry this is, from 1. */
+  readonly attempt: number;
+  /** The request's `retries` — how many the dispatch layer may absorb. */
+  readonly of: number;
+  /** The HTTP status the attempt before it met; null when it met no response (a connection failure). */
+  readonly status: number | null;
+  /** The connection failure's message, cut to 200 characters, when `status` is null. */
+  readonly failure?: string | undefined;
+  /** How long the dispatch layer waited between that failure and this retry, in ms, on the monotonic clock. */
+  readonly delayMs: number;
+}
+
 export interface ModelRequest {
   readonly model: ModelRef;
   readonly messages: readonly ChatMessage[];
@@ -146,7 +166,10 @@ export interface ModelRequest {
    * `signal` produces `aborted`, which is fatal (REQ-ORCH-092).
    */
   readonly timeoutMs: number;
+  /** REQ-CONFIG-086's `num_retries` (REQ-PROVIDER-089: unset means 5) — the dispatch layer's own, spent before the caller sees a failure. */
   readonly retries: number;
+  /** OQ-110: told of each retry the dispatch layer absorbs, as it is sent; absent means nobody is listening. */
+  readonly onRetry?: ((retry: DispatchRetry) => void) | undefined;
   /** Invoked inside the request path, per request (REQ-PROVIDER-092). */
   readonly resolveCredential: () => Promise<string>;
   readonly headers?: Readonly<Record<string, string>>;
@@ -184,6 +207,13 @@ export interface TurnSink {
   usage(u: Usage): void;
   /** REQ-ORCH-090: the FIRST part of any kind the provider streamed — the unresponsive-model timer disarms on it. */
   started?(): void;
+  /** OQ-110: a retry the dispatch layer absorbed inside this step's call (`ModelRequest.onRetry`). */
+  retried?(retry: DispatchRetry): void;
+  /**
+   * REQ-ORCH-089: EVERY part the provider streamed, by its kind, `error` for an error it answered with — the stall
+   * watch's "model event or token". Called before the part's own callback.
+   */
+  event?(kind: StreamPart['kind'] | 'error'): void;
 }
 
 export type TurnReport =

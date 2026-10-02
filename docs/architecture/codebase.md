@@ -40,7 +40,7 @@ kernel     pure: Result, ids, time, the clock ports, generated requirement symbo
 |---|---|---|---|
 | `@rotaris/kernel` | any | `Result`, branded ids, `Millis`/`Instant`/`Budget`, `MonotonicClock`/`WallClock`/`Timers`, `FakeClock`, `REQ` (generated) | ADR-0006 |
 | `@rotaris/contracts` | any | channel schemas (zod), command envelope, 21 control ops, `PRIMARY_VIEWS`, process protocols, the status vocabularies and presentation mapping (`status.ts`), `CONTRACT_SCHEMA_VERSION`, the requirements seam (`requirements.ts`: the engine's record types, the board vocabularies, the `requirements.*` commands, channel 10 — Part AK), the terminal seam (`terminal.ts`: `TerminalStreamMeta`, the seven `terminal.*` commands — Part AL) and the closed key vocabulary (`terminal-keys.ts`, one table shared by the grid and the PTY writer — Part AM) | ADR-0010, ADR-0044, REQ-SHELL-023, REQ-SESSION-073, REQ-NOTIFY-048/049/050 |
-| `@rotaris/platform` | main, run host, workspace service | clocks, per-user dirs (local-not-roaming), atomic document, liveness probe + lock predicate, machine id, canonical path, instance record + claim, spawn; the installed product version (`version.ts`, the one reader main's About and the run host's MCP handshake share — REQ-STARTUP-007/158) | ADR-0004, ADR-0055, REQ-STARTUP-145, REQ-SESSION-046/051–054 |
+| `@rotaris/platform` | main, run host, workspace service | clocks, per-user dirs (local-not-roaming), atomic document, liveness probe + lock predicate, machine id, canonical path, instance record + claim, spawn; the Linux process table a background session's SIGINT is checked against (`process-group.ts`, OQ-135); the installed product version (`version.ts`, the one reader main's About and the run host's MCP handshake share — REQ-STARTUP-007/158) | ADR-0004, ADR-0055, REQ-STARTUP-145, REQ-SESSION-046/051–054 |
 | `@rotaris/config` | run host, workspace service | ADR-0036's loader, first slice: the YAML document tree over a tri-state model (`yaml@2.9`), the `hooks:` section read per scope and merged with the displaced lists kept, REQ-HOOKS-025's one command-pattern definition; takes no database handle; since 2026-09-28 the setup-manifest schema (`setup-manifest.ts`, zod, strict — what the shipped `apps/desktop/resources/setup-manifest.json` must be, validated by the test beside it and read by the pre-build guard; its product consumer, machine setup, is not built) | ADR-0036, REQ-HOOKS-007–018, REQ-HOOKS-025, REQ-STARTUP-058/059 |
 | `@rotaris/hooks` | run host | ADR-0015: the matcher, the payload builder over kernel's one redaction pass, the runner (fresh process per invocation, resolve on exit plus a grace, kill the started process only), the verdicts and every message text, the trust gate and fingerprint, the external import, the policy file, the per-session `HookEngine`, the tab summary; the engine's `HookPort` and the gate's `ToolHooks` are filled at the run-host root | ADR-0015, REQ-HOOKS-019–139 |
 | `@rotaris/store` | run host, workspace service | open (WAL read back, write probe, one canonical spelling), schema v2 + migrations, the DAL (rows with residency, events with the derived envelope and three declared indexes, the truncation record), identifier + resolution, backup, the corrected restore; **`delivery/`** — store v15's seven delivery tables and the one DAL that writes them in one transaction (ADR-0041, Part AK) | ADR-0058, ADR-0005, ADR-0009 |
@@ -107,6 +107,20 @@ plain process with no React and the restore run against a fake run host with a c
   one fails, and a paid-off one fails too until the baseline is lowered (`--write-baseline`), so an allowance
   freed in one file cannot be re-spent in another. A textarea, a file input, a canvas, an SVG and the terminal
   grid keep their own markup and consume the shared classes and tokens.
+- **A count's noun agrees with it, and a literal "(s)" is never drawn** — `REQ-SHELL-044`. `countNoun` lives in
+  `kernel/count-noun.ts` so that every package can word a count one way (`ui/agents.ts` re-exports it), and
+  `tools/check-plural-markers.mjs` (in `pnpm lint`, beside `check-ui-language.mjs`) fails on a `(s)`, `(es)` or `(ies)`
+  marker in any string literal, template or JSX text of the product's source. A log line passes, and so do the four
+  tool results a requirement spells with the marker, named with their reason in its `ALLOWED` list (OQ-138). An
+  entry that excuses nothing fails too (since 2026-09-29, live-run L11, R-067).
+- **A timeline name is a vocabulary's word** — `REQ-ORCH-139`. `tools/check-timeline-vocabulary.mjs` (in `pnpm lint`)
+  reads every timeline write in the product's source — the writer's calls, a sink's `timeline`, the store's
+  `insertTimeline`, main's `timeline.append` — and fails on a name in no vocabulary. Its `VOCABULARY` cites the
+  requirement fixing each word, and domain 01's list is read from the specification so the two cannot drift. Its
+  `FORBIDDEN` fails a name a directive withdrew though the displaced requirement still states it (PD-TOOLS-002's
+  `permission_mode_downgraded`). **Owed:** twenty-eight names the product writes have no word in any list; they are held
+  in its `AWAITING` by OQ-157 — an entry nothing writes fails the gate, and the test pins the list's names, so adding one
+  is a deliberate test edit (since 2026-10-01, acceptance A29, R-067).
 - **A whole-session update keeps the transcript rows** — `REQ-MONITOR-216` omits the transcript from it, so
   it cannot say which rows survived; the increment after an attach or a reconcile upserts by index. The
   first run loop's status saves emptied a transcript still being written before this was so (ADR-0043
@@ -326,7 +340,8 @@ in `configuration.ts`'s header.)
    timeline entry rehydrated on resume (the wire-event catalogue is closed at 23, so no event); the unresponsive-model
    fallback after `llm_response_timeout` on the first model event; the hard child timeout's one retry on the role's
    fallback; per-model `timeout` and `num_retries` (the dispatch layer's retries, which come before the ladder's — ruled
-2026-09-29, OQ-110). The record's `wait` and the Workspace header that counts down and
+2026-09-29, OQ-110; each one it absorbs is a WARNING line in the session log, `ModelRequest.onRetry` → `TurnSink.retried`
+→ `dispatchRetryLine`, and an exhausted budget hands the ladder the last attempt's error, built the same day). The record's `wait` and the Workspace header that counts down and
    offers keep waiting (no operation), change model (`setModel`) and cancel — REQ-MONITOR-004's enumeration stays at
    twenty-two. `pnpm resilience-proof` drives nine launches through scripted fault steps. **Found — four defects in
    existing code:** the transient retry re-ran the whole turn and would have replayed executed tool calls under fresh ids
@@ -377,7 +392,9 @@ in `configuration.ts`'s header.)
    the normalised description, the byte-exact prompt section) returning `{ value, diagnostics }` at every stage with
    ONE sink fanning out to the 8 s notice and the `mcp_config` issue; MCP tools as executors outside the registry
    through the ONE gate (fail-closed per ADR-0016: withheld under `restricted`/`read_only`, asked under `ask`); the
-   per-child evidence in `children.granted_mcp`; the session override held in the run host; the Settings category
+   per-child evidence in `children.granted_mcp` (since 2026-10-01 the grant the child's port put in force, recorded once it
+   is ready, with `children.granted_tools` — the spawn recorded the persona's declared set before any control until then —
+   and marked `recorded`, so an empty native grant is drawn as none, `AgentRecord.grantRecorded`); the session override held in the run host; the Settings category
    (`McpSettings.tsx`: every configured row with its four-state health as text, origin, the switch and its wording, the
    secrets read side masked). **Placement read against the record:** every path lives in the **run host**, the one
    holder REQ-MCP-047 now asks for — ADR-0034 consequence 3 falsified and kept. OQ-22 read as overlay on the parent
@@ -442,8 +459,9 @@ in `configuration.ts`'s header.)
    creates `.serena/project.yml` in the workspace root whenever it starts with a project, so every first run left an
    untracked directory in the user's repository — the Git proof's isolated launch found the base tree dirty; the load's
    `.gitignore` amendment (REQ-CONFIG-013 / REQ-MCP-089) now keeps the marker's directory ignored beside `.rotaris/`,
-   the name from the manifest, a reading flagged for the owner; and the 4.5 s discovery pushed five proofs' fixed
-   windows, which now switch the entry off in their scratch configuration (Part J, resilience, fetch, mission) or carry
+   the name from the manifest, a reading flagged for the owner (*replaced 2026-10-01 under OQ-161*: `.rotaris/` alone
+   in `.gitignore`, the marker's directory in the repository's own `info/exclude`, so no tracked file changes); and
+   the 4.5 s discovery pushed five proofs' fixed windows, which now switch the entry off in their scratch configuration (Part J, resilience, fetch, mission) or carry
    the cost (config); IC-6's packaged launch reads `session running` at its 9 s capture where it read `completed`. A
    stray `builtin/` directory in the main checkout dated from the branch spike: the pre-sentinel build launched here took
    the token for a workspace path and Windows's stream syntax made a directory of it — unreachable once the sentinel
@@ -538,7 +556,8 @@ in `configuration.ts`'s header.)
    gated on provenance (a workspace's list runs only under a stored approval keyed by its fingerprint; withheld
    hooks are announced once and the displaced global entries reinstated), narrowed by the policy toggles, joined
    by the enabled Claude Code imports, and fixed for the run. `session_start` fires ahead of iteration 1,
-   `iteration_end` before the next iteration, `child_completed` once a child settles, `session_end` with the one
+   `iteration_end` before the next iteration, `child_completed` once a child settles (whichever path settles it inside
+   a run, since 2026-09-30; OQ-154 asks about the paths outside one), `session_end` with the one
    status string; a permitted tool call passes the `pre_tool` slot (a stop is a `blocked` row with REQ-HOOKS-049's
    text) and, having run, the `post_tool` slot (feedback in the same result, or a following user message).
    Every invocation is one `hook.start`/`hook.finish` pair and one `hook_run` entry written before the event;
@@ -590,12 +609,14 @@ and never honoured (ADR-0022 has no backend here). **The persona table** (`engin
 REQ-ORCH-028's thirteen roles, the two aliases, our own system prompts) is the built-in layer `personas:` overlays —
 stated fields win, `system_prompt`/`system_prompt_file` replace the prompt, a configured role is a new role
 (decision 3 of the plan); **the delegation strategy** is `rotaris.delegation_strategy` (`single` grants the entry
-role the direct-work bundle and withholds `delegate`); **the per-model cap** is each entry's `max_parallel`. **A bound
+role the direct-work bundle and withholds `delegate`); **the per-model cap** is each entry's `max_parallel`, counted across every session the run host holds a place for, a paused child's kept place included
+(`children/model-slots.ts`, since 2026-09-30 — acceptance A13; OQ-148, OQ-149, OQ-150). **A bound
 of 100 model steps per turn** (`RUN_CONFIG_DEFAULTS.maxStepsPerTurn`) is a final belt behind the loop supervisor
 (`REQ-ORCH-099..107`, built 2026-09-05 — ADR-0059). `ROTARIS_CHILD_SCRIPT` and the
 `delegate:<persona>:<name>[:after]` and `fail` steps drive the scripted client's children for verification only. The `todo` tool's list is per session in memory; its persistence waits on the
 per-child record of Part B (`REQ-ORCH-043`). `ROTARIS_SCRIPT` drives the scripted client's tool calls for
-verification only. **The hooks read their two file scopes for real** (`<config>/agents.yaml` and
+verification only; each agent keeps its own place in its list, and an agent resumed from its record (PD-ORCH-005, in the
+same process or after a relaunch) carries on with the step after the ones that record holds (repaired 2026-09-29). **The hooks read their two file scopes for real** (`<config>/agents.yaml` and
 `<workspace>/.rotaris/agents.yaml`, REQ-CONFIG-001) through `@rotaris/config`; `ROTARIS_CONFIG_DIR` and
 `ROTARIS_CLAUDE_SETTINGS_PATH` are the specification's own variables (REQ-HOOKS-110/115), not stopgaps.
 `ROTARIS_CAPTURE_HOOK_REVIEW`, `ROTARIS_CAPTURE_REVIEW_PNG`, `ROTARIS_CAPTURE_SETTINGS` and
@@ -620,8 +641,17 @@ The theme write is synchronous and flushed. `ROTARIS_CAPTURE_THEME`, `ROTARIS_CA
 at scale factors 1, 1.25, 1.5, 1.75 and 2. Each process captures all seven views, all thirteen Settings
 categories, keyboard focus positions and a live theme switch. The script samples painted PNG pixels, checks
 focus bands, rail-label fit, vector-icon scale, complete recolouring, preserved composer/view state and
-renderer errors, then writes its result table under `.proof/theme-proof/`. Two counterfactual commands lower text or
-focus contrast and must exit non-zero. The first execution and its coverage boundary are
+renderer errors, then writes its result table under `.proof/theme-proof/`. Since 2026-09-30 a text's contrast is read
+only from its on-screen part: its box cut by the window and by every ancestor that clips it. A text with less than one
+em on screen is reported as skipped, with its size, and is not measured (`apps/desktop/scripts/lib/text-sample.mjs`).
+Before that, a status-strip item scrolled 1.2 px onto the screen was read as a glyph's edge
+(`../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`). Since 2026-10-01 the contrast
+verdict is bounded by what it measured (`apps/desktop/scripts/lib/contrast-coverage.mjs`): every capture needs at least
+one measured text inside its own surface (the view's root, or the Settings view's) and at most 25% of that surface's
+texts skipped, and the run at most 10% of all its texts skipped; the skips are counted by reason. Before, a surface whose
+own text was gone passed on the shell around it
+(`../defects/fixed/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`). Three counterfactual commands
+lower text or focus contrast, or push the Workspace view off the screen, and must exit non-zero. The first execution and its coverage boundary are
 `spikes/theme-proof.md`.
 
 **The loop supervisor and `continue`.** `packages/engine/src/run/supervisor.ts` (ADR-0059) and
@@ -684,7 +714,10 @@ stored credential; (3b, Part L) three more real runs, one prompt per intent fami
 slot and never fall back, the answering rung recorded; (5) sign-out from the card — the file gone, the snapshot kept, a prompt refused. `--resume` keeps
 the profile and skips the paste; `--skip-build` skips the build. Evidence lands under `.proof/slice-proof/`. `--from=<scenario>` replays the
 earlier scenarios from their evidence. On 2026-09-05 every scenario passed on the owner's re-run with an OpenRouter
-key (`.proof/slice-proof/results.json`), after two runs that each found a defect.
+key (`.proof/slice-proof/results.json`), after two runs that each found a defect. Since 2026-09-29 (R-067) it reads the
+credential file where the product writes it on the running platform (`tokensDirFor`): the Windows spelling it used
+everywhere left the first launch's wait, the strays check and the sign-out check with nothing to read off Windows
+([note](../defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md)).
 
 **What `pnpm live-run` does.** It is the only check here that answers to a real model rather than a scripted one,
 and the only one that spends money, so it never runs on its own: `pnpm check` does not reach it and without
@@ -734,7 +767,15 @@ it is a raw pipe, forwarding chunks as they arrive, because a buffering proxy wo
 loop is built on and leave every assertion green — the harness measuring a product that exists only while it is
 measured, which is the shape of the two false-symptom repairs above. `model-traffic.test.ts` pins that property
 with a case that hangs if the pipe ever buffers, verified by making it buffer. Credentials are replaced in the
-record before it is written and the `ask` scenario asserts it.
+record before it is written and the `ask` scenario asserts it. *Since 2026-09-29 (R-067, live-run findings H1 and H-g)
+a call the product aborts is let go at the endpoint too and written `aborted`, a record lands in the file of the scenario
+that made the call rather than the one current when it ended, and a call still open when the proxy closes is written
+`in-flight at close`: the first live run had nine aborted calls finish upstream and land `complete` in the next scenario's
+file, and the duress pack was one record short of its log
+(`docs/defects/fixed/the-recording-proxy-does-not-pass-a-client-abort-upstream.md`,
+`docs/defects/fixed/the-recording-proxy-writes-nothing-for-a-call-in-flight-at-close.md`). Shown live the same day
+(pack `2026-09-29T21-11-24-678Z`): `faults-stall`'s stalled call was let go at 120.5 s, the product's own idle bound,
+not the rule's 300 s hold, and every scenario's records matched its log's `model request POST` lines.*
 
 **The proxy's own first execution found that it could not answer a single call, and the reason is kept beside
 its replacement.** The script launched every scenario with `spawnSync`, which blocks the Node event loop until
@@ -761,13 +802,23 @@ what the checks claim about the product is unverified, and that first execution 
 `first-executions.md`. *Both ran live on 2026-09-22 (the row is there). The ladder half is corrected 2026-09-29 (R-067, OQ-110): the
 429 and the 500 are retried by the model client's dispatch layer (REQ-CONFIG-086's `num_retries`, default 5) before the
 ladder sees them, which the owner ruled is the specification's order; the scenario shows the run surviving the refusals,
-not the ladder waiting or falling back.*
+not the ladder waiting or falling back. Its check once passed on the call count alone; since 2026-09-29 it reads, for each
+injected refusal, the session log's dispatch-layer line or the ladder's own issue, and names which layer it was
+(`docs/defects/fixed/two-live-run-checks-cannot-see-what-they-claim.md`).*
 
 **Two scenarios enter the gap this page names below** — "short tasks against an unmetered endpoint, so no
 generation near the model timeout, no multi-line command, and no re-spawn", where all seven of one session's
-defects lived. `terminal` issues **six commands the record names verbatim**: the multi-line here-string that lost
+defects lived. `terminal` issues **the commands the record names verbatim** (six when it was written; since
+2026-09-29 seven on Windows and eight elsewhere, nine elsewhere since 2026-09-30, and eight on Windows and ten elsewhere since 2026-10-01, then eleven elsewhere, then ten on Windows and thirteen elsewhere): the multi-line here-string that lost
 its newlines in the PTY, forty long lines for the concatenation the sixty runs missed and the VT strip the
-agent's capture was left out of, a wedge supplying no `timeout` for the `hardMs` that was read nowhere, an exit-0
+agent's capture was left out of, off Windows an `exec bash` that replaced the session's shell and read as a soft
+pause, with every later call left in bash (acceptance A9, OQ-144, 2026-09-30), then a bash-ism `/bin/sh` cannot expand (`${PIPESTATUS[0]}`), which lost
+its end marker live and read as a soft pause (live-run L1, 2026-09-29), then an `exit 3` that ends the session's shell,
+which read as a soft pause with the next call's respawn unreported (OQ-144's sibling case, 2026-10-01), a wedge supplying no `timeout` for the
+`hardMs` that was read nowhere, one empty poll of that wedge, whose answer once said thirty seconds had passed
+after under a millisecond (live-run L2, 2026-09-29), then `C-c` with `is_input` and one poll after it, which read the
+interrupted wedge as still running until the agent's next command (OQ-147, 2026-10-01), then a second wedge and a
+command issued while it is soft-paused, which waited behind it and said only its own exit (OQ-164, 2026-10-01), an exit-0
 output carrying `FAILED`, a `git diff` exiting 1 for ESC-41's carve-out, and a read-only pipeline through a pipe.
 The shapes, their patterns and the two readers live in `apps/desktop/scripts/lib/terminal-shapes.mjs` and are
 pinned by `terminal-shapes.test.ts` **because that is the part of the scenario that can be wrong silently**: a
@@ -789,7 +840,16 @@ defect's shape at the child level), a child that ran commands and reported none 
 **reports whether it was long at all**, including when it stopped at `--max-iterations` and was bounded by the
 harness rather than by the work. `--duress-fixture` replaces the workspace for the whole run and is refused
 alongside any other scenario, because one sandbox holds one store and every other prompt names `todo-app`'s
-files.
+files. *Corrected 2026-09-29 (live-run findings H-a to H-d, H-h; R-067), with the reading above kept as it was written:
+"a failed child with an empty `final_response`" was the wrong observable. REQ-ORCH-110 leaves that field empty for every
+child cut off mid-work, and the first execution flagged exactly such a child, `d`, whose `last_response`, `cut_off` and
+timeout error said what it did. A failed child is now silent only when none of the four speaks. *(Corrected
+2026-09-30, the verifier's fix round 1: of the three that can speak — `final_response`, `last_response`, `cut_off` — since an
+error entry alone is on every failed child's report, and counting it passed the eighty-second defect's own shape.)* Two other readings
+were also wrong. The commands question compared a call's canonical agent name with a child's given name, so it was
+never asked. The autopsy's null-summary boolean answered `false`, and passed, for a session that never stopped; it
+answers `unasked` now. The readings live in `scripts/lib/duress-checks.mjs`, pinned by `duress-checks.test.ts`, and the
+deadline check now says where the time went.*
 
 **`failed-word` stopped being a NOTE on 2026-09-27 (`PD-TOOLS-003`), and the paragraph above is kept as it was
 written.** The shape printed `FAILED` in capitals, and its warning was faithful to `REQ-TOOLS-113`'s marker. The
@@ -803,7 +863,9 @@ the one faithful behaviour still measured as a NOTE. **The guard has not run aga
 live run of `terminal` is its first.
 
 **The five decisions this scenario was held on were taken on 2026-09-22**, four by the owner and one delegated:
-the endpoint is the unmetered `katalyst`, the wall clock is **40 minutes**, it stays **opt-in**, its assertions
+the endpoint is the unmetered `katalyst`, the wall clock is **40 minutes** (*2026-09-29: the first execution overran it
+by 6 s with the endpoint generating for 99 % of the wait; the figure stands, and an overrun the endpoint held while
+the run progressed is now reported as the window's bound, a NOTE — `AGENTS.md`, "`LIVE_RUN_DURESS_MS`"*), it stays **opt-in**, its assertions
 stay coherence-shaped, and **`--max-iterations` rises from 15 to 500**. That last one is a bound being loosened
 and is recorded as such. Fifteen was a bound while every scenario here was a short task; the long run turned it
 into the thing being measured — a delegating run reaches 15 while it is still commissioning and then reports its
@@ -830,7 +892,10 @@ positive half read from the product's own `issues` table — the stall must be s
 what it was classified as must not be fatal. Two smaller ones: the wedge **soft-paused before the hard cap**,
 so `hardMs`'s own question is still unmeasured live and now says so; and `duress`'s `zero cost with tokens`
 check would have reported a fault on an unmetered endpoint that has no cost to record, so it is conditioned on
-the accounting kind — caught before the forty-minute scenario was run rather than after. ~~`duress` has not been
+the accounting kind — caught before the forty-minute scenario was run rather than after. *Corrected 2026-09-29 (live-run
+finding K2(b)): the condition is gone. The reader was wrong, not the endpoint: `autopsy.mjs` now reads the session's
+`cost_qualifier` and answers `false` where no request had a figure (`scripts/lib/autopsy-coherence.mjs`), and `duress`
+asks the question unconditionally.* ~~`duress` has not been
 executed; it owes its row.~~ *`duress` was executed on 2026-09-29 and has its row in `first-executions.md`.*
 
 **What the board's live path found on its first execution — 2026-09-11, and the eighty-first defect.** The fifth
@@ -1020,7 +1085,7 @@ lands in `.rotaris/worktrees/<sid>` and not in the base; the manual worktree del
 against Git's real refusal; a relaunch restoring the split; `PATH` without Git (the empty header, the notice, no
 dialog); a plain folder in the OS temp directory (no notice). Evidence under `.proof/git-proof/`.
 
-**What `pnpm checkpoint-proof` does.** It builds Electron and launches the app twelve times against a scratch repository:
+**What `pnpm checkpoint-proof` does.** It builds Electron and launches the app thirteen times against a scratch repository:
 two scripted iterations capture checkpoints 1 and 2 (the refs, the fixed identity, the message, HEAD and the index bytes
 unchanged, the card's rows); a read-only run records nothing; a hand edit then a restore of checkpoint 1 through the
 preview-first dialog (the warning, the checkbox, the safety checkpoint holding the edit, `last_restored_sequence`, the
@@ -1031,7 +1096,11 @@ restore — land in `.proof/checkpoint-proof/results.json`. The Git proof's isol
 empty sentence: an isolated run records a checkpoint by REQ-GIT-044's default, which the merge found by failing that launch. The live
 run's lock is probed dead the moment that launch returns, so a lock that outlived its application fails there, naming
 REQ-SESSION-047/056, and not one launch later as a failed repair (2026-09-28, R-062;
-[the note](../defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md)).
+[the note](../defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md)). The
+thirteenth launch, `loaded-restore`, restores a session that stays loaded after its run released the lock, once a second
+holder naming another machine has taken it: the restore stops at gate 5 with the file untouched and that lock kept
+(ADR-0005, REQ-EVENTS-098; 2026-09-29, R-067, acceptance A14;
+[the note](../defects/fixed/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md)).
 
 **What `pnpm resilience-proof` does.** It builds Electron and launches the app nine times with scripted fault steps: a 429
 with `retry-after: 2` (the countdown, the auto-resume); a 429 with no header (the 60 s local wait, cancelled from the
@@ -1045,7 +1114,8 @@ through `lib/bounded-launch.mjs` by SIGTERM, a grace, then SIGKILL and reporting
 scenario runs to its end with its failure listed in `results.json`
 ([note](../defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md)).
 `spawnSync`'s own timeout could not bound a launch: it closes the pipes as it signals, and the application's quit then
-loops on its own EPIPE ([note](../defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), open).
+loops on its own EPIPE ([note](../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md); repaired
+2026-09-29 under R-067 — the application log's writer, `standardStreamWriter`, absorbs a failed write and stops).
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong
@@ -1062,8 +1132,9 @@ instead — an appointment moved to 300 ms reproduces the original error text ve
 screen 1.7 s into the run`, and the deadline form passes on the same machine in the same minute. An absence still
 cannot be waited FOR, so the one probe that reads the header GONE stays an appointment and was moved out to 9 s.
 
-**What `pnpm mission-proof` does.** It builds Electron and launches the app ten times for eight items: the Mission view
-painted with the run row, the tree and the table, elapsed advancing between two probes; the three trees' parity and a
+**What `pnpm mission-proof` does.** It builds Electron and launches the app eleven times for nine items: the Mission view
+painted with the run row, the tree and the table, elapsed advancing between two probes; two children waiting behind a
+model slot cap of one showing their elapsed time in the table and the tree, advancing (since 2026-09-29, OQ-124); the three trees' parity and a
 23-agent republish timed against the 250 ms budget; a pause refused with a child selected and honoured with the run
 selected; a cancel naming the agent and its cascade; open-agent under both preferences — the inspector pinned, then one
 persona window per persona reused, hidden on close, shown again, destroyed on a new session; the inspector following the
@@ -1095,7 +1166,14 @@ capped history — every file parsed by a SEPARATE node process holding no produ
 and deleted; the backup disclosure panel. Evidence under `.proof/sessions-proof/`. The planted locks name this machine through the
 identifier where the product mints it on the running platform (`machineIdFileFor`), and a "dead" pid is chosen per platform
 (`plantedDeadPid`: one the script saw exit on Linux and macOS, `4242` on Windows, where a freed pid is soon reissued); until 2026-09-28 the Windows spelling made the proof crash at `repair-all` on Linux (R-062;
-[the note](../defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md)).
+[the note](../defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md)). The delete's
+premise — every reference to `sessions` is `session_id` → `session_id` `ON DELETE CASCADE`, and `delivery_runs` alone
+carries the column as a fact — is read from the schema by `scripts/lib/session-cascade.mjs`; the count pin of sixteen it
+replaced stopped the proof before the delete on every run once v23–v24 made the cascading tables twenty (R-067;
+[the note](../defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md)). The delete now
+also asserts that A's agent record (`iterations`, `agent_messages`, `agent_terminals`, `agent_fingerprints`) was there and
+leaves with it (PD-ORCH-005 clause 12); the scripted runs start no background terminal, so A's `agent_terminals` row is
+planted, as its `plan_cycles` row is.
 
 **What `pnpm code-intel-proof` does.** After `pnpm code-intel:bundle` (once per checkout; the tree is git-ignored), it
 launches the app seven times: the branch guard on the dev entry and, under `ROTARIS_CODE_INTEL_PACKAGED=1`, on
@@ -1104,9 +1182,18 @@ propagated); discovery of the real runtime through the token with the tier's nam
 block; the workspace binding on the launch line; a real `get_symbols_overview` call; the three-step project setup —
 completed, skipped on the marker, `skipped-no-code`, a launch-less entry refused, a cancel mid-step; the manifest's
 drift refused; the packaged binary with outbound traffic blocked, which names the fetch it needs (IC-7). Evidence under
-`.proof/code-intel-proof/`. Its branch client is `scripts/lib/line-rpc-client.mjs` (2026-09-28, R-062): every pending
+`.proof/code-intel-proof/`. The runtime's home, which it keeps across runs, is the product's own on the running platform
+(`join(dataDirFor(local), 'code-intelligence')`, as `main/sentinel.ts` joins it) since 2026-09-29 (R-067; the Windows
+spelling kept a directory the product never used off Windows,
+[note](../defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md)). Its branch client is `scripts/lib/line-rpc-client.mjs` (2026-09-28, R-062): every pending
 request rejects when the child exits, errors or is killed by the guard, with the exit status and standard error's tail,
-so a branch that dies fails the launch in seconds instead of hanging it (`line-rpc-client.test.ts`, 12 cases).
+so a branch that dies fails the launch in seconds instead of hanging it (`line-rpc-client.test.ts`, 12 cases). It launches the token first and the sandbox switch after it, the
+product's order, which `lib/launch-sites.test.ts` holds for every token launch; its workspace file records
+`code-intelligence-setup` as skipped so ADR-0064's background task does not collide with section 5; off Windows it builds
+with `pnpm` and records the no-window check not measured; its setup launches open Settings with the Ctrl+7 chord rather than
+the shared category seam, and press the category, Start and Cancel only once the open's notice has drawn and the
+control is there (2026-09-28, R-062; repaired again 2026-09-29 after the fix round's verifier found `setup-cancel` red
+three times in seven runs: four `--steps=5` runs and then three whole runs in a row green as root on Linux).
 
 **What `pnpm config-proof` does.** It builds Electron and launches the app five times against commented files at
 both scopes: Settings → Runtime toggles "Allow outside workspace" through its confirmation and saves (every other
@@ -1129,11 +1216,25 @@ header's selectors. Decisions taken here for the owner: a manual pause ends the 
 set has no `paused`); the pause at the limit writes no terminal pair; operations with no mechanism answer false.
 `ROTARIS_CAPTURE_TYPE`, `ROTARIS_CAPTURE_PAUSE_ANSWER` and `ROTARIS_CAPTURE_QUIT_MS` are verification seams.
 
-**What `pnpm part-j-proof` does.** It builds Electron and launches the app six times against scratch stores: a
+**What `pnpm part-j-proof` does.** It builds Electron and launches the app eleven times against scratch stores (seven
+until scenario 6 and the steer-early launch were added): a
 message typed during a run is queued and consumed once as a completed task; a steer is submitted from the composer's
-card and injected; Pause then the composer's Continue run leave the pause row and two run starts, and a worker thread
+card and injected — since 2026-10-01 with the steer-rest launch's steer (`STEER_CLICKS` in `lib/steer-rest.mjs`: Steer
+the run waits for its control and the settled send, and the launch fails by name on a step it never pressed), where it
+had pressed at fixed appointments a late run start misses
+(`../defects/fixed/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md`); a steer whose dialog opened while the composer's send was still settling reaches the root's record
+with the text typed into it — since 2026-10-01 the composer takes the focus back after a submission only when nothing
+else took it meanwhile (`composerReclaimsFocus`), and main holds the `session.subscribe` reply under
+`ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS` so the launch opens the dialog inside that window every time
+(`apps/desktop/scripts/lib/steer-early.mjs`,
+`../defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`); Pause then the composer's Continue run leave the pause row and two run starts, and a worker thread
 sampling the store while the app runs shows the pause released the lock and the continued run held it throughout
-(ADR-0005, 2026-09-29, R-067) and the paused session's summary naming no stop (REQ-ORCH-082 rule 1, OQ-118); a `message_limit`
+(ADR-0005, 2026-09-29, R-067) and the paused session's summary naming no stop (REQ-ORCH-082 rule 1, OQ-118); a steer
+submitted while the entry role's step is held, then a pause, reaches the root's record at the rest, injected once, and
+the Continue's resumed root reads it (REQ-MONITOR-134, OQ-128, 2026-09-29, R-067) — since 2026-10-01 its Pause
+waits for the steer dialog to close (`apps/desktop/scripts/lib/steer-rest.mjs`, the capture grammar's `@from~ms`), the
+launch fails by name on a step it never pressed, and the store must show the steer pending when the pause was asked for
+(`../defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`); a `message_limit`
 of one pauses the run, the dialog answers "double" and the doubled limit persists; a session left paused at the limit
 is resumed on relaunch through the one reap and its dialog answers "cancel"; a user-initiated close during a run
 records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.proof/part-j-proof/`. The queue
@@ -1201,6 +1302,32 @@ is green for the same reason after it, which is why the move was made mechanical
 extracted**: twenty-six scripts define one and twenty are genuinely different, so a common form would be a rewrite
 of the evidence rather than a move of it, and the driver below removes the pressure that produced the variants.
 
+**Every launch a proof starts itself is bounded (2026-09-29, R-067).** Each script still keeps its own `launch`; what
+changed is the one call inside it. `spawnSync(electron|exe, …, { timeout })` stood at thirty-five sites in thirty-four
+scripts (`terminal-proof/packaged.mjs` among them). ~~Its timeout could not end a launch: Node signals the child and
+closes its ends of the pipes at the same moment, then waits for an exit without a bound.~~ That was true until the
+application's EPIPE loop was repaired (2026-09-29); re-measured on 2026-09-30, the timeout does end the launch (SIGTERM,
+and the quit path runs), but `spawnSync` then reports the overrun as `status` 0 with only `error.code` `ETIMEDOUT` to
+show it, having closed the pipes before the quit path wrote, and every `launch` checked only `status`, so an overrun
+passed as a clean exit with no log tail. Every one of them is now
+`lib/bounded-launch.mjs`'s `spawnBounded` (SIGTERM with the pipes open and read, a grace, SIGKILL to the launch's process
+group), and an overrun is a failure named by `overrunMessage` with the launch's last thirty log lines — thrown by a
+`launch`, recorded as a failed check by `updater-proof`, `terminal-proof` and the packaged terminal launch, which report
+rather than throw. The packaged section's checks threw on its other early return — a launch that found no workspace store,
+which carried no `terminal` or `probe` field — and lost both launches' evidence until 2026-09-29; its checks are
+`packagedChecks`, which reads either field absent or `null` as absent evidence
+([note](../defects/fixed/the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md)). Each `launch` became `async` and each call site awaits it (`transcript-proof`'s `appendRun`,
+`package.mjs`'s app step as `stepAsync`, and `terminal-proof/packaged.mjs`'s `packagedTerminalStreaming` with it).
+`lib/launch-sites.test.ts` fails a `spawnSync` launch of Electron anywhere under `scripts/` (its rule 4), and a launch
+with `ELECTRON_RUN_AS_NODE`, which starts no application, stays exempt
+([note](../defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)). Three launches that were
+never `spawnSync`'s had bounds of their own that passed an overrun the same way or not at all, and are `spawnBounded`'s
+since 2026-09-30: `fetch-proof`'s (a bare `child.kill()` at 150 s, whose SIGTERM the application answers with exit
+status 0), `workspace-proof`'s hand-over launch (SIGTERM alone at 30 s, no log) and `mcp-console-spike`'s (no bound).
+Since then the same test also fails a bare `spawn` of Electron outside three it names with their reasons: the driver's,
+`code-intel-proof`'s branch (a stdio server guarded by its RPC client) and `live-run`'s `runElectron` (SIGKILL at its
+bound, reported as a signal). And it checks each `spawnBounded` site, not each file, for its `.overran`.
+
 **The driver.** `apps/desktop/src/main/driver.ts`, reached only when `ROTARIS_DRIVER` names an endpoint file at
 launch, opens a loopback listener and answers newline-delimited JSON: `waitFor`, `click` (by selector, optionally
 by the name on screen), `type`, `chord`, `inspect`, `probe`, `eval`, `screenshot`, `resize`, `command` (relayed to
@@ -1228,8 +1355,9 @@ connection dropped. The proof asserts both halves — the refusal, and that the 
 down with it.
 
 **What the first execution found.** The endpoint file **outlived the process it described**. Cleanup hung on
-`app.on('will-quit')`, and `app.exit()` — how the `quit` op ends the process, and how every capture seam beside it
-ends one — emits neither `will-quit` nor `quit`. The next `pnpm app:drive` command therefore read a live-looking
+`app.on('will-quit')`, and `app.exit()` — how the `quit` op ended the process until 2026-09-29 (it is now the
+immediate exit the op sends only when asked; see below), and how every capture seam beside it ends one — emits neither
+`will-quit` nor `quit`. The next `pnpm app:drive` command therefore read a live-looking
 port nothing was listening on and failed with a connection error where it should have said "no app is being
 driven". The falsified assumption is kept beside its replacement in `driver.ts`: an Electron exit path is not one
 path, and a cleanup that matters is called by the op that knows it is ending as well as hung on the event that
@@ -1331,6 +1459,37 @@ the modal's hit test and its confirmation — and the second of those failed on 
 correct behaviour, asserting an empty transcript where the product had legitimately rewritten the record under a
 live run. The assertion is the user row's absence now, and the reason is kept beside it.
 
+**The quit and the shot, repaired (2026-09-29, R-067).** Two claims this section made by omission were falsified by
+use. *The `quit` op ended the process the way a person's quit does*: it did not — it was the immediate exit
+(`exitCleanly`), which asks the run host nothing, so a driven quit during a live run left the session `running` with no
+stop reason, as a crash does (phase 7's rehearsal of `PD-ORCH-005`, and the duress live run's deadline quit through the
+capture seam's same exit; re-measured on the build before the repair: `running`, `stop_reason` NULL). `quit` now sends
+`app.quit()` — the close guards, then `window-all-closed`'s `shutdown` — and the seam stays up until `will-quit`, so a
+quit a close guard keeps can still be seen and answered; `{ immediate: true }` (`pnpm app:drive stop --crash`) is the old
+exit, kept for a drive that means to leave a crash. A capture whose wait timed out ends through the same quit
+(`CaptureHost.quit`), one whose wait was satisfied by the immediate exit as before. *A shot shows the window as it
+is*: `capturePage()` copies the frame last submitted, and straight after the first navigation to the Workspace it
+returned the Overview's bytes although the document already showed the Workspace — in 16 launches of 20 after one
+frame, 12 of 52 after two, 1 of 20 after three with three cores busy, none of 55 after four. `screenshot` now waits
+four of the renderer's frames (`PAINT_FRAMES`), bounded at 1 s for a window that presents none, and says in its reply
+whether the paint was confirmed; `theme-proof`, which measured a view's texts and then shot it, now reads the texts on
+both sides of the shot and retakes it until they agree, because a surface mounting in those four frames (the startup
+notice) moved the picture away from the metadata. `driver.test.ts` and `capture/probe.test.ts` pin both; `driver-proof` adds a live run
+quit through the driver (the session at rest, `application_shutdown`) and shots straight after each navigation. The
+register row is in `first-executions.md`
+([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md),
+[`the-drivers-shot-can-return-a-stale-frame.md`](../defects/fixed/the-drivers-shot-can-return-a-stale-frame.md)).
+
+**The windows beside a main window (2026-09-29, R-067).** A4 gave the driver main windows and nothing else, so the
+revision 4 drive read persona windows' `paused` state from X11 captures and answered approvals through
+`session.control` rather than in their dialog. A selector may now name a role — `persona:<persona>`, `approval`,
+`terminal` — resolved over `DriverDeps.auxiliary`, which main fills from each main window's registries; `windows`
+lists them, and a selector naming no open window is refused with what is open. The per-request `window` A4's comment
+promised was read by no op until now; each op resolves `request.window ?? selected`. `pnpm app:drive` gains
+`useWindow` and `--window=`. `driver.test.ts` pins the resolution; `driver-proof`'s second launch answers both of its
+run's approvals with the dialog's own button and probes the child's persona window
+([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md)).
+
 **What is still owed.** No existing proof has been rewritten onto the driver — the protocol is proved by its own
 proof and not yet by a migrated one. And the strip covers **main only**: the renderer bundle still carries Part AA's
 `rows-proof` role, which is a fixture surface with no input injection, named here so its survival is a decision
@@ -1413,7 +1572,13 @@ obvious implementation has each:
 
 **Three obligations have nothing in this codebase to stand on, and are stated rather than passed silently.**
 `REQ-WORKSPACE-109`'s initialization-cancellation machinery does not exist — three literal occurrences, all in
-`docs/spec` — so `REQ-WORKSPACE-013` is **not** reported complete. No in-flight worktree integration is
+`docs/spec` — so `REQ-WORKSPACE-013` is **not** reported complete. *(Superseded 2026-09-30 under R-067, the sentence
+above kept as it stood on 2026-09-12: the cancellation clause is now built. `MainWindows` reports a workspace no live
+main window holds any more (`workspaceClosed`) and main calls `InitializationCoordinator.close`, which cancels the run
+on `REQ-WORKSPACE-109`'s terms and records nothing for it — [ADR-0064](adr/0064-the-project-initialization-registry.md)'s
+sixth round, [the fixed note](../defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md),
+shown by `workspace-proof`'s scenario 8b. The same rule for a close that is not a switch's is a reading, and
+[OQ-141](open-questions.md) stays open for it.)* No in-flight worktree integration is
 observable from main (`worktree.integrate`: none; `'integrating'`: one occurrence, an unread member of
 `MERGE_STATUSES`), so `REQ-SHELL-021`'s second gate is written in its place in the fixed order as an explicit
 no-op that names the state it would read. And this product has **no session name**: `SessionRecordSchema`
@@ -1849,7 +2014,7 @@ its own box. First run of the whole sweep with the controls' contract in it: 14 
 Settings category, not a view, so no pack reaches it and the owed critique of the About caption is still owed
 (`../defects/fixed/the-window-controls-contract-is-an-object-and-kills-every-ui-audit.md`). One more defect in the same
 script was found by the counterfactual and recorded, not repaired: a `CONTRACT` finding's own `kind` is overwritten by
-the relation's (`../defects/a-contract-finding-in-ui-audit-is-filed-under-its-relation-kind.md`).
+the relation's (`../defects/fixed/a-contract-finding-in-ui-audit-is-filed-under-its-relation-kind.md`) — repaired 2026-09-29 (R-067): the finding keeps `CONTRACT` and names the failed relation under `relation`.
 
 ### The third cycle's critique, recovered from the reader rather than from the disk
 
@@ -2062,15 +2227,15 @@ free to change.
 | ~~the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions~~ **done 2026-09-03**; spike 6 taken in its structural half | `engine`, `model`, `contracts`, `ui-core`, `ui` | ~~spike 6's live half~~ **taken 2026-09-05** (OpenRouter, four of four; ADR-0027's fallback withdrawn); ADR-0026's parameterised conformance suite once a second backend exists |
 | ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`), ~~the control channel~~ **done 2026-09-05** (ADR-0010; `pnpm part-j-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | ~~the fallback-model and rate-limit paths~~ **built 2026-09-05** (Part Q), `REQ-ORCH-030`, ~~the session browser's repair, delete, export and store actions (`REQ-SESSION-182`)~~ **built 2026-09-06** (Part U), ~~the delegation-context header and scope toggle (`REQ-CHAT-068/069`)~~ **built 2026-09-07** (Part AA); ~~the export of the four records (`REQ-SESSION-199`)~~ **built 2026-09-06** (Part U), ~~`fetch` (ADR-0023 over ADR-0036)~~ **built 2026-09-05** (Part N; `pnpm fetch-proof`; owes the egress settings surface REQ-SANDBOX-113..118 and OQ-37), ~~the terminal's live streaming (ADR-0021) and its four control operations~~ **built 2026-09-09** (Parts AL and AM), OQ-39's sizing under load; ~~`REQ-ORCH-093`'s context-window condensation~~ **built 2026-09-08** (Part AH; ADR-0060; `pnpm compression-proof`); for the control channel (~~the operations~~ **built 2026-09-05**; `pnpm part-j-proof`): ~~structured questions~~ **built 2026-09-07** (Part AC), compression (§10's manual arm — the engine half is Part AH's), the verification skip, the transcript clear, the stall-evaluation injection leg (REQ-MONITOR-135), ~~the inspector and persona windows~~ **built 2026-09-05** (Part R), REQ-MONITOR-132's quit warning, a todo-edit surface (Part AD's, batch 3); for hooks: ~~worktree working directories~~ **built 2026-09-05** (Part O), `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049); for configuration (~~ADR-0036~~ **built 2026-09-05**; `pnpm config-proof`): ~~the auto-discovered-server layer and `mcp_servers`~~ **built 2026-09-05** (Part S), secrets, REQ-CONFIG-183's strict `requirements:` block, the security policy card, the Display/Skills/MCP/Plugins/Tools categories, the write path's timing; for providers (~~ADR-0028/0029/0030/0032~~ **built 2026-09-05**, the OpenAI-compatible instance; `pnpm slice-proof`): the device-code and PKCE authenticators with the loopback listener, Copilot's and codex's discovery and bridges, the usage and credit tiles, keep-fresh renewal, the configuration editor of REQ-PROVIDER-097, the model picker's live per-provider loading (145), the runtime `/model` override (146), `unavailable_models`, the shipped capability metadata (OQ-18), `warning` health; for the intent (~~the classifier prompt a real small model answers as asked~~ **built 2026-09-05**, Part L): REQ-ORCH-012's prior-response route, plan mode (REQ-ORCH-152..154); ~~per-slot credential resolution~~ **built 2026-09-05** |
 | ~~the restore behind a real run host~~ **done 2026-09-03** | `workspace`, `workspace-service`, `main`, `contracts`, `shell`, `ui` | IC-5 discharged; IC-4 half 1 discharged, **half 2 awaits the owner's rename and reboot** (`spikes/machine-identifier-rename.md`); the kill-in-the-gap case; ADR-0005's reap-and-repair for a stale session a backup carried |
-| ~~the agent surfaces~~ **done 2026-09-05** (Part R; `pnpm mission-proof`; ADR-0048 first executed, ADR-0043 fourth; built in parallel with Part S) | `ui` (`MissionView`, `AgentTable`, `Inspector`, `PersonaWindow`, `agents.ts`), `contracts` (`children.ts`, `commands.ts`), `engine` (`children/activity.ts`, the projection), `main` (`windows.ts`), `renderer` (the `persona` role), `platform` (the preference) | application-modality across windows (ADR-0048's registry disabling input routing — no application-modal surface exists); the persona window's terminal-preview parity (REQ-SHELL-075 b, ADR-0021); artifact links from the agent inspector (the store exists since Part Y; the inspector does not link into it yet); the compression count (REQ-MONITOR-281 — the record has none); REQ-MONITOR-067's withheld models (no provider reports one); the run-level agent's own prompt reading and tool history (no channel field); a declined raise induced; the Overview card's tree on the shared selection; the Mission table's width at 1264 px (its last column clips) |
+| ~~the agent surfaces~~ **done 2026-09-05** (Part R; `pnpm mission-proof`; ADR-0048 first executed, ADR-0043 fourth; built in parallel with Part S) | `ui` (`MissionView`, `AgentTable`, `Inspector`, `PersonaWindow`, `agents.ts`), `contracts` (`children.ts`, `commands.ts`), `engine` (`children/activity.ts`, the projection), `main` (`windows.ts`), `renderer` (the `persona` role), `platform` (the preference) | application-modality across windows (ADR-0048's registry disabling input routing — no application-modal surface exists); the persona window's terminal-preview parity (REQ-SHELL-075 b, ADR-0021); ~~artifact links from the agent inspector (the store exists since Part Y; the inspector does not link into it yet)~~ **built 2026-09-29** (live-run finding K1, R-067: the inspector drew "No artifacts yet — this build has no artifact store." beside a store holding seven reports; `SessionRecord.artifacts`, the inspector's produced and received links deep-linking to the Library's artifact inspector, the persona window's persona-wide card and instance links; `pnpm artifacts-proof` item 2 follows one while the run is active, item 5 reads the links and the declared tools at rest); the compression count (REQ-MONITOR-281 — ~~the record has none~~ *corrected 2026-10-01: false since Part AH, which carries `AgentRecord.compressions`; the Mission table still draws `not recorded`, [`the-mission-table-says-the-record-carries-no-compression-count.md`](../defects/the-mission-table-says-the-record-carries-no-compression-count.md)*); REQ-MONITOR-067's withheld models (no provider reports one); ~~the run-level agent's own prompt reading and tool history (no channel field)~~ — the prompt reading carried since Part AH (`entryContext`) — and the inspector's caption sentence denying it, "The record does not carry the run-level agent's prompt reading in this build.", removed **2026-10-01** (acceptance A36, R-067; `pnpm artifacts-proof` item 2 reads the caption) — the tool set and history **since 2026-09-29** (live-run finding K1: `SessionRecord.entryTools`, the root port's resolution with the declared tools standing in when no run is live — and nothing while a live run's root port has not resolved yet, which as first built also let the declared tools, withheld ones included, stand in (found at verification) — the inspector had drawn "No tools resolved." beside fifteen orchestrator calls; `pnpm mission-proof` item 6 reads the running coordinator's chips); a declined raise induced; the Overview card's tree on the shared selection; the Mission table's width at 1264 px (its last column clips) |
 | ~~the MCP client and its configuration pipeline~~ **done 2026-09-05** (Part S; `pnpm mcp-proof`; ADR-0033 and ADR-0034 first executed, ADR-0016 fourth; spikes 3 and 4 taken; built in parallel with Part R) | `mcp`, `config` (`mcp/`, the section), `agent-tools` (executors outside the registry), `run-host` (`mcp.ts`), `main`, `contracts` (`mcp.ts`), `ui` (`settings/McpSettings.tsx`), `platform` (`findExecutable`, `windowsLaunchOf`), `kernel` (`order.ts`) | ~~**ADR-0035 entirely**~~ **built 2026-09-06** (Part T; the machine-setup half of 112 and 095/096 still owed, IC-7 proposed); the secrets write surface (REQ-MCP-084/110/111); the palette entry (REQ-MCP-108); a real third-party server and the two remote transports against a live endpoint; `web_search` and `browser` live; a per-session `closeSession` once the engine releases a lock per session; the environment scrub before the overlay (OQ-22, the owner's); ~~`pnpm package`'s `EMFILE` refusal~~ **gated 2026-09-05** (`scripts/fd-gate.cjs`) |
 | ~~the session browser's actions~~ **done 2026-09-06** (Part U; `pnpm sessions-proof`; ADR-0005/0003/0024/0058 executed, ADR-0039 second; built in parallel with Part T) | `engine` (`export.ts`, `sessions.ts`), `store` (the delete, the readers), `run-host` (`session-actions.ts`), `workspace-service` (the fourth checkpoint ask), `main` (the save dialogs), `contracts`, `ui` (`SessionBrowser.tsx`) | ~~REQ-SESSION-134's timeline `id` and `severity` (the thirty-second defect — a migration)~~ **repaired 2026-09-06** (store v10; the ADR-0024 note; a pre-v10 entry keeps an empty id and the export omits the field); the palette entries (REQ-SHELL-048); ~~the artifact bodies of REQ-SESSION-002 (no library)~~ **built 2026-09-07** (Part Y; named flat, `artifact-<id>.md`, and Part U's `SESSION_ARTIFACTS_DIR` was the thirty-third defect); the multi-session host's focus switch; REQ-EVENTS-172's JSON-lines export (the event view's); an isolated session's worktree directory on delete (REQ-GIT-111) |
 | ~~the notice pipeline and the one transient acknowledgement surface~~ **done 2026-09-06** (Part V; `pnpm notice-proof`; ADR-0049 executed in full, its "Revisit if" answered; built in parallel with Part W) | `main` (`notices.ts`), `contracts` (`notices.ts`, channel 8), `ui-core` (the acknowledgement stack), `ui` (`Notice.tsx`, `Acknowledgements.tsx`), `run-host` (`timeline.append`), `engine` (the notice's session) | the application diagnostics for a warning with no session (the diagnostics store of REQ-STARTUP-130ff is not built, so it is a log line); REQ-SHELL-118's update-offer notice updated in place; the seven action members with no target in this build (update, restart, cloud, project init, retry, proposal revert, settings save); ~~`open-library` until the Library view exists~~ **dispatching 2026-09-07** (Part X; the named tab selects itself, measured by both proofs); **the two open questions were ruled 2026-09-06 as ESC-33 and ESC-34** (`owner-decisions.md`; the tenth amendment round in `../clean-room/specification-gate.md`), and what ESC-34 leaves owed is navigating between workspaces from a notice — a review action naming a workspace other than the open one opens nothing — and `REQ-WORKSPACE-152` (1)'s re-authenticate entry, which no notice names |
 | ~~the command palette, keyboard help and application modality~~ **done 2026-09-06** (Part W; `pnpm palette-proof`; REQ-SHELL-048's one vocabulary; ADR-0048's modality first executed; built in parallel with Part V) | `ui` (`commands/`), `main` (`windows.ts` the family modality, `index.ts` the command), `contracts` (`window.modality`), `renderer` | ~~Ctrl+F (no transcript search panel)~~ **built 2026-09-07** (Part Z; the panel is the pane's, REQ-CHAT-074), Ctrl+Shift+T (the window component exists since Part AM; its role, mounting and the entry are AL′'s), the demo entry (REQ-SHELL-162), REQ-CHAT-167's reasoning toggle (the preference key is unregistered); ~~the composer's slash catalogue consuming this registry (REQ-SHELL-056, REQ-CHAT-028 — the CHAT domain's)~~ **built 2026-09-09** (Part AN); the palette in auxiliary windows |
-| ~~the bundled code-intelligence runtime~~ **done 2026-09-06** (Part T; `pnpm code-intel-proof`; ADR-0035 first executed; spikes 5 and the bundle taken; **IC-7 proposed**; built in parallel with Part U) | `main` (`sentinel.ts`), `config` (`mcp/code-intelligence*.ts`, the generated manifest), `mcp` (`setup.ts`, the probe), `run-host` (`mcp.ts`), `ui` (`McpSettings.tsx`), `contracts` (`mcp.ts`), `apps/desktop/scripts/code-intelligence/`, `electron-builder.yml`, `package.mjs`, `build-hooks.cjs` | ~~**IC-7** — the language servers (the owner's)~~ **adopted 2026-09-06, option 2 (ESC-32)** — declared in the manifest against the runtime's defaults, disclosed on the MCP category (`REQ-MCP-118`); ~~the notices generator's section (`REQ-STARTUP-141/142/143`) is IC-7's owed half~~ **discharged 2026-09-27** (`pnpm notices` lists them); macOS/Linux bundles (IC-3); the machine-setup half of REQ-MCP-112 and the warm steps of 095/096 (with the onboarding task registry, REQ-MCP-045/098); the ONBOARDING tier's grantee (`project-initializer` is not a built-in role); REQ-MCP-034's isolated-tree root (the configuration resolves per workspace); nested `.gitignore` files in the contains-code walk; the runtime's stderr volume and its 4.5 s discovery per process (stated, not changed); the `.serena/` reading confirmed by the owner |
+| ~~the bundled code-intelligence runtime~~ **done 2026-09-06** (Part T; `pnpm code-intel-proof`; ADR-0035 first executed; spikes 5 and the bundle taken; **IC-7 proposed**; built in parallel with Part U) | `main` (`sentinel.ts`), `config` (`mcp/code-intelligence*.ts`, the generated manifest), `mcp` (`setup.ts`, the probe), `run-host` (`mcp.ts`), `ui` (`McpSettings.tsx`), `contracts` (`mcp.ts`), `apps/desktop/scripts/code-intelligence/`, `electron-builder.yml`, `package.mjs`, `build-hooks.cjs` | ~~**IC-7** — the language servers (the owner's)~~ **adopted 2026-09-06, option 2 (ESC-32)** — declared in the manifest against the runtime's defaults, disclosed on the MCP category (`REQ-MCP-118`); ~~the notices generator's section (`REQ-STARTUP-141/142/143`) is IC-7's owed half~~ **discharged 2026-09-27** (`pnpm notices` lists them); macOS/Linux bundles (IC-3); the machine-setup half of REQ-MCP-112 and the warm steps of 095/096 (with the onboarding task registry, REQ-MCP-045/098); the ONBOARDING tier's grantee (`project-initializer` is not a built-in role); REQ-MCP-034's isolated-tree root (the configuration resolves per workspace); nested `.gitignore` files in the contains-code walk; the runtime's stderr volume and its 4.5 s discovery per process (stated, not changed); the `.serena/` reading confirmed by the owner (OQ-161; since 2026-10-01 the marker's directory goes to the repository's `info/exclude`, not the user's `.gitignore`) |
 | ~~the Overview view~~ **done 2026-09-05** (Part M; `pnpm overview-proof`; ADR-0038 first executed) | `ui`, `engine` (the sampler), `store` (v7), `workspace` (`git/`), `workspace-service`, `main`, `contracts`, `platform` | ~~the Mission view the tree card links to~~ **built 2026-09-05** (Part R); ~~REQ-SHELL-125's start-session dialog (worktree and sandbox choices)~~ **built 2026-09-05** (Part O); ~~the Git view — its notice when Git is missing (ADR-0038 c.1), worktrees, the history table~~ **built 2026-09-05** (Part O), checkpoints; the credit tile and the limits card once Part K's usage tiles exist; the proposals card with the Proposals surface; a cost label with a configured rate (REQ-MONITOR-166's other two qualifiers); a requirement tag on a session (REQ-MONITOR-172) once traceability exists |
 | ~~checkpoints~~ **done 2026-09-05** (Part P; `pnpm checkpoint-proof`; ADR-0039 first executed; built in parallel with Part Q) | `workspace` (`git/checkpoints.ts`), `store` (v9), `engine` (the port, the writer's two units), `contracts`, `workspace-service`, `main`, `run-host`, `ui`, `config` (the `checkpoints` section) | ~~REQ-GIT-069's ref cleanup when a session is deleted~~ **built 2026-09-06** (Part U); `manual` checkpoints (no surface asks); REQ-HOOKS-082 with checkpoints; the two events in REQ-SESSION-199's export; ~~improvement checkpoints (`REQ-LIBRARY-*`)~~ **built 2026-09-15** under `refs/rotaris/improvements/` with independent retention and rollback safety; a non-UTF-8 path and a submodule, read not measured |
-| ~~the model resilience paths~~ **done 2026-09-05** (Part Q; `pnpm resilience-proof`; ADR-0027 third, ADR-0012 fourth, ADR-0010 third execution) | `engine` (`run/resilience.ts`, `ladder.ts`, `waits.ts`), `model`, `contracts` (`wait`), `run-host`, `main`, `ui` | REQ-ORCH-093's context-window condensation; REQ-ORCH-089's stall watchdog and its badge; a real provider's 429 (a slice-proof scenario for the owner); REQ-NOTIFY-062's hosted-credit branch; REQ-ORCH-146's native loop; rate-limit-reset headers |
+| ~~the model resilience paths~~ **done 2026-09-05** (Part Q; `pnpm resilience-proof`; ADR-0027 third, ADR-0012 fourth, ADR-0010 third execution) | `engine` (`run/resilience.ts`, `ladder.ts`, `waits.ts`), `model`, `contracts` (`wait`), `run-host`, `main`, `ui` | REQ-ORCH-093's context-window condensation; ~~REQ-ORCH-089's stall watchdog~~ **built 2026-09-29** with REQ-NOTIFY-111/112's corrective message (R-067, OQ-127), and ~~its badge still owed~~ its badge, the root's watch and REQ-MONITOR-135's evaluation leg **built 2026-09-30** (R-067, OQ-153; `docs/defects/fixed/a-stalled-child-is-never-shown-stalled.md`); a real provider's 429 (a slice-proof scenario for the owner); REQ-NOTIFY-062's hosted-credit branch; REQ-ORCH-146's native loop; rate-limit-reset headers |
 | ~~the Git view and the worktrees~~ **done 2026-09-05** (Part O; `pnpm git-proof`; ADR-0038 second executed; built in parallel with Part N) | `ui`, `workspace` (`git/`), `workspace-service`, `main`, `contracts`, `store` (v8), `engine` (the effective root), `platform` | ~~checkpoints (ADR-0039)~~ **built 2026-09-05** (Part P); integration and "Merge selected" (REQ-GIT-083, 125..135); REQ-GIT-084's focus requests; the set-up-Git-here offer (REQ-GIT-113/114, in the Requirements area); requirement-execution worktrees; `git_commit` (REQ-GIT-144); `worktree_storage_subpath` read from configuration (REQ-GIT-073 / REQ-CONFIG-068); REQ-SANDBOX-119's probe-driven checkbox; a notice queue so the Git notice and the first-launch notice coexist (ADR-0049) |
 | ~~the build's load proof~~ **done 2026-09-04** — `pnpm package` (`apps/desktop/scripts/`), **IC-6 discharged**; the first packaged window was blank (the ninth defect) | `apps/desktop/electron-builder.yml`, `scripts/build-hooks.cjs`, `scripts/native-load-probe.cjs`, `scripts/package.mjs` | the portable's stub (ADR-0054), signing, the release gate, an icon; IC-3 item 3 |
 | ~~a terminal save's durability~~ **harness built 2026-09-04** (`packages/store/spike/`, `power-loss.spike.test.ts`) | `store` (the settings are the store's; the writer's raise-and-lower is `dal.ts`'s) | **the power-loss test's fault half — the owner's power cut or kernel crash** (`spikes/power-loss.md` §4) |
@@ -2086,11 +2251,11 @@ free to change.
 | ~~the four Settings categories that could be reached~~ **done 2026-09-08** (Part AG; `pnpm settings-proof`; ADR-0036 third and ADR-0037 second execution; two defects, both about a null meaning "no limit") | `ui` (`settings/{DisplaySettings,Inventories,About}.tsx`, `config-state.ts`), `config` (`display-section.ts` — the key names REQ-CONFIG-172 states), `contracts` + `main` (`shell.openThirdPartyLicenses`, `shell.hello`) | Skills waits on portable-skill discovery and Plugins on REQ-TOOLS-161's loader, each saying which mechanism it waits for; REQ-SHELL-140's build identifier and REQ-SHELL-142's notices bundle have no asset in any build here and are owed to ADR-0054 — *2026-09-27: the notices bundle has its generator (`pnpm notices`) and the About page reads it under REQ-STARTUP-141's name, the lowercase lookup repaired; carrying both assets into the artifact is `first-release-plan.md` §4.4* — *later that day: §4.4 built; `pnpm build-id` writes the identifier, `pnpm package` runs both steps and `extraResources` carries both, and `settings-proof` measures the present branch of each (launch 1′)* |
 | ~~context compression~~ **done 2026-09-08** (Part AH; `pnpm compression-proof`; **ADR-0060 first executed**; five defects, the forty-first to the forty-fifth, three of them found only on the first live run against a real provider) | `engine` (`run/conversation.ts`, `run/compression.ts`, `run/{turn,ladder,run}.ts`, `children/{orchestration,activity}.ts`, `session-writer.ts`, `todo-view.ts`, `sessions.ts`), `contracts` (`channels.ts`, `children.ts`), `run-host` (`compressorOf`, `compressionTriggerFor`, `contextLimitsOf`, the scripted faults), `ui` | **§10's manual compression is a part of its own** — `forceCompression`'s arm, the run-header control (REQ-CHAT-078..081) and REQ-MONITOR-090..097's concurrent pass over every live conversation, which ADR-0060 decision 1 exists to make buildable; **OQ-53** on the venue REQ-CONFIG-135 names; REQ-MONITOR-088's context-card caption and REQ-MONITOR-089's fall measured on a surface; a real provider's context rejection; a child's own compression in the app; `compressor.timeout_seconds` expiring; a compression during a parent resume, so `parent_resume_bad_request` is implemented and unmeasured |
 | ~~the delivery store, the board projection and the requirements contracts~~ **done 2026-09-09** (Part AK; `pnpm delivery-proof`; **ADR-0041 first executed**; the forty-sixth defect, and the sixtieth at the merge-1 proof pass — `sessions-proof`'s fifteen-table cascade pin; built in parallel with Parts AJ, AL, AM and AN) | `store` (v15, `delivery/`), `workspace` (`delivery/`), `contracts` (`requirements.ts`, channel 10), `ui-core` (`requirements/display.ts`), `workspace-service` (`delivery.ts`), `main` (`requirements.ts`), `preload`, `shell` (the counter) | the board itself (AK′); runs from the board and the queue's persistence (AP: ~~`requirements.scheduling.*` unregistered, the controls are in memory at `manual`/2~~ **registered 2026-09-10** (Part AP); ~~`start` on `requirements.queue.set`~~ **added** (Part AP); REQ-TRACE-514's export; eight relation tokens with no data source in the document format; `superseded` health unreachable; ~~`edit`/`create` (AP)~~ **built 2026-09-10** (`requirements.source.write`, the create/edit pane); `accept-proposal`/`accept-change-work` remain stated refusals — **OQ-45 is closed (ADR-0061, 2026-09-11) and these now wait on the store being built rather than on the record being written**; ~~the five panes mounted and reachable~~ **hosted and closed 2026-09-11** (Part R″: the board hosts Part AP's five panes through a registry that proves REQ-TRACE-369's reuse rather than mere presence, the elevation's disclosure stands between the first action of a launch and any write, and `pnpm requirements-proof` drives REQ-TRACE-499 — release, run, review, accept, then an edit on disk and `needs-update` — over the shipped composition, with the transition times read from the store's own history rows rather than from the moments the proof looked); the relationship graph is **built as a presentation, not an axis** (REQ-TRACE-322..333, 505) |
-| ~~the traceability engine~~ **done 2026-09-09** (Part AJ; `pnpm traceability-proof`; **ADR-0040 first executed**; spike 7 taken — `spikes/traceability-scale.md`; defects forty-seven to forty-nine) | `workspace` (`traceability/`), `workspace-service` (`traceability.ts`, `traceability-worker.ts`), `contracts` (`traceability.*` protocol), `apps/desktop/scripts/fixtures/requirements-store/` | the syntax-tree parser for REQ-TRACE-104 rule 1 and 109/110 (OQ-24, AJ′ — measured against the spike's 1,000-file tree); the consumer package the artifact imports from (`rotaris-traceability`; REQ-TRACE-176/182/183); the orphan-test baseline's first real write once the parser exists; a contended replace (OQ-41); ~~the Settings card and the `requirements.operation` relay (AJ′)~~ **built 2026-09-10**; ~~AK's `compareReqIds` adopted for the engine's own ordering (REQ-TRACE-289)~~ **adopted**; the published consumer package stays not-built with its reason (REQ-TRACE-152); **the growth assertion made honest 2026-09-11** (Part R″, answering OQ-24: the linear-growth ratio was a quotient of two single wall-clock readings and had gone red once at 3.06 against 3.0; it is now the minimum of three readings on each side, with a work-count ratio asserted unconditionally beside it and the timing recorded rather than asserted below a 25 ms floor — the threshold was not moved) |
+| ~~the traceability engine~~ **done 2026-09-09** (Part AJ; `pnpm traceability-proof`; **ADR-0040 first executed**; spike 7 taken — `spikes/traceability-scale.md`; defects forty-seven to forty-nine) | `workspace` (`traceability/`), `workspace-service` (`traceability.ts`, `traceability-worker.ts`), `contracts` (`traceability.*` protocol), `apps/desktop/scripts/fixtures/requirements-store/` | the syntax-tree parser for REQ-TRACE-104 rule 1 and 109/110 (OQ-24, AJ′ — measured against the spike's 1,000-file tree); the consumer package the artifact imports from (`rotaris-traceability`; REQ-TRACE-176/182/183); the orphan-test baseline's first real write once the parser exists; a contended replace (OQ-41); ~~the Settings card and the `requirements.operation` relay (AJ′)~~ **built 2026-09-10**; ~~AK's `compareReqIds` adopted for the engine's own ordering (REQ-TRACE-289)~~ **adopted**; the published consumer package stays not-built with its reason (REQ-TRACE-152); **the growth assertion made honest 2026-09-11** (Part R″, answering OQ-24: the linear-growth ratio was a quotient of two single wall-clock readings and had gone red once at 3.06 against 3.0; it is now the minimum of three readings on each side, with a work-count ratio asserted unconditionally beside it and the timing recorded rather than asserted below a 25 ms floor — the threshold was not moved); *corrected 2026-10-01 (R-067), with the reading above kept as it was written: "the minimum of three readings on each side" was not how the readings were taken. The parse and the parser read the full tree first and the half tree afterwards, on a hotter JIT, and the sweep's full side was a single reading against a minimum of three, so the parse ratio went red at 3.04 to 3.37 against a work ratio of 2.14. Each pair is now read by `interleavedMinima` (`workspace`, `traceability/growth-readings.ts`), seven readings a side after one warm-up each, interleaved and alternating which side goes first, and `growthVerdict` (`apps/desktop/scripts/lib/growth-verdict.mjs`) prints each side's readings as that side's; the ceiling, the floor and the work-ratio range did not move — [`../defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`](../defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md)* |
 | ~~the terminal stream in the run host~~ **done 2026-09-09** (Part AL; `pnpm terminal-stream-proof`; **ADR-0021 first executed** against a real PTY; defects fifty to fifty-two, the last being two registered keys nothing read, and fifty-nine at the merge — the default imports the bundler refused; *its real-PTY half first run on a POSIX shell 2026-09-28 (R-062): it had spoken PowerShell to `/bin/sh` and measured nothing off Windows. It is now spelled in the host's shell, and it passed three times on Linux, `../defects/fixed/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md`*) | `agent-tools` (`terminal/streams.ts`, the emulator port, the taps), `engine` (the row's `streamId`, published never recorded), `contracts` (`terminal.ts`, `TerminalFrameSchema` with `sessionId` and `seq`), `shell` (`subscribersOf`), `run-host` (`terminal.ts`, `tools.ts` reads the background limits), `main` (`terminal.ts`: the per-window `FrameDeliveryLimiter` under REQ-MONITOR-306, merged never dropped) | the window role and its lifecycle, the toolbar control, Ctrl+Shift+T, `terminal/autoOpen`, session-focus and new-session clearing (AL′); ~~REQ-SHELL-166 against the real PTY through the window (AL′)~~ **measured 2026-09-10**; REQ-MONITOR-306 across two windows (T″); ~~a stated maximum on `shell_max_background_sessions` (OQ-55)~~ **set 2026-09-11: `REQ-CONFIG-116` makes the key `int 1–64`**; the audit entry's vocabulary (OQ-54); a mid-run `meta` delivered after a merged delta under saturation carries a lower `seq` (a regression test owed); **defect T2-1, 2026-09-11** (Part T″) — REQ-MONITOR-306's bound was enforced on each window's own ledger, and the requirement bounds every window **taken together**, so one session shown in two main windows delivered **2,000 frames/s against a bound of 1,000** while each window's ledger read a compliant 1,000; one shared ledger now, drained a segment per window so a saturating window cannot starve its neighbour, and the falsified reading is kept beside its replacement in the file that meets it; ~~`runtime.shell_max_background_sessions` has no stated maximum~~ ~~**priced, not set**~~ **SET 2026-09-11 at 1–64, and ADR-0021's obligation 2 is discharged with it** (OQ-55 closed) |
 | ~~the terminal grid, the pop-out window's content and the transcript preview~~ **done 2026-09-09** (Part AM; `pnpm terminal-proof`; **ADR-0047 first executed** over a scripted frame source; defects fifty-three to fifty-five; the sixteen ANSI colours as `--rt-term-*` tokens in all three palettes with their own contrast floor; *its live section first run on a POSIX shell 2026-09-28 (R-062): three commands had spoken PowerShell to `/bin/sh`. They are now spelled in the host's shell, and the proof passed 116/116 three times on Linux, `../defects/fixed/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md`*) | `ui` (`terminal/`), `contracts` (`terminal-keys.ts`, `theme/themes.ts`, `static-contrast.ts`), `transcript/Row.tsx` (the preview block), `apps/desktop/scripts/terminal-proof/` | ~~the window role, title and lifecycle, the toolbar control, Ctrl+Shift+T, the auto-open preference, session focus and new-session clearing (REQ-SHELL-080/081/086/108..111, AL′)~~ **built 2026-09-10**; REQ-SHELL-166 against a real PTY and REQ-SHELL-102 on a live stream (AL′/T″); REQ-SHELL-107's write is the run host's; **closed 2026-09-11** (Part T″: REQ-SHELL-102's three surfaces measured equal on a live stream, the packaged `runtime.terminal_stream_enabled=false` section, and ADR-0021's obligation 2 measured rather than argued). **Three things remain and each is stated, not silent:** defect AL2-3's mid-command resize is measured and NOT repaired because the repair is an ADR-0020 revision; REQ-SHELL-166's full-screen-program limb has no such program in the harness; and the terminal WINDOW is not opened under a packaged launch |
 | ~~the composer's slash-command catalogue~~ **done 2026-09-09** (Part AN; `pnpm slash-proof`; ADR-0050 second, ADR-0049 third, ADR-0048 second execution; defects fifty-six to fifty-eight; `RunHeader.tsx` extracted with the two slots AL′ and AO fill) | `ui` (`slash/`, `RunHeader.tsx`, `WorkspaceView.tsx`, `library/StashDialog.tsx`), `renderer` (the `slash` host wiring), `contracts/theme/colour.ts` (the corrector no longer settles below its floor) | `notice.report` so a renderer can raise the one persistent notice (ADR-0049 defect fifty-seven — the composer draws its own banner meanwhile; AO); `/model`'s withheld-by-provider limb (no per-model verdict reaches the composer); ~~skill commands (REQ-CHAT-034/162 wait on REQ-WORKSPACE-056..064)~~ **built** — the generated commands and `/skill <path>` 2026-09-15 (ADR-0063), `/skills` 2026-09-27 (`first-release-plan.md` §2.2; see the portable-skills row); ~~prompt files (REQ-CHAT-160/161, AO)~~ **built 2026-09-10**, registered where `buildCatalogue` builds the registry because an effect-time registration can never be seen by the popup's memo; ~~`/compress` and `/clear` reach the run host and meet its default refusal until AO arms the two ops~~ **both armed 2026-09-10**; ~~REQ-CHAT-028's rebuild, `/theme`, `/logout` and REQ-CHAT-027's three palettes~~ **measured live 2026-09-11** (Part C″; ADR-0050's third and ADR-0060's fourth execution). Owes: `/model`'s withheld-by-provider limb (no per-model verdict reaches the composer), ~~skill commands (REQ-CHAT-034/162, waiting on REQ-WORKSPACE-056..064)~~ **built**, as above, REQ-CHAT-084's busy-transcript limb (no producer), REQ-MONITOR-091's refusal (unreachable by a scripted run), `/logout` against a provider with a validated key (no credential on this machine), ~~and **defect C2-1's draft race**, which is silent loss of a user's composer text and whose repair belongs in `WorkspaceView.tsx`'s draft adoption~~ **repaired 2026-09-11** — `adoptDraft` composes a draft that lands after a load instead of discarding it, so both orders of the race leave the same text (ADR-0042's seventh execution note carries the shape and the one design reading the linter corrected) |
-| ~~opening a project from inside the application~~ **built 2026-09-12** (the builder and the registry over MAIN windows deepened into `MainWindows`, then startup resolution, the deferred first-paint offer, the gated replacement and the title-bar chip; ADR-0048 and ADR-0055 report in place, both finding the sequencing sound; defects eighty-six to eighty-eight; the first two product directives, `PD-SHELL-001` and `PD-WORKSPACE-001`, were minted beside it) | `main` (`MainWindows`, `createElectronMainWindowAdapter`, `workspace.choose`, `switchWorkspace`, `raiseTransient`, the driver seam's window selector), `contracts` (`workspace.choose`), `platform` (`workspace/lastOpened`, main-only by construction), `ui` (`WorkspaceChip.tsx`, `workspace-label.ts`, `AppShell.tsx`, `shell.css`), `renderer` (`home` from `shell.hello`, the chip's handler) | **`pnpm workspace-proof` verified** — multi-window, add/replace, attribution, hand-over, and per-window deferred cancellation paths confirmed passing; **Stage C** — `PD-SHELL-001`'s palette entry and modifier-click and `PD-WORKSPACE-001`'s `start-session` notice action; and the five things the specification asks for that nothing here can yet meet: `REQ-WORKSPACE-013`'s cancellation clause (`REQ-WORKSPACE-109`'s machinery does not exist), `REQ-SHELL-021`'s worktree gate (no such state is observable from main), `REQ-WORKSPACE-017`'s session name (the product has none), `REQ-STARTUP-166`'s workspace-storage determination, and `REQ-SHELL-124`'s dialog as a standalone surface — gate 1 reuses `__rotarisCloseGuard`, not a new dialog. Demo mode (`REQ-SHELL-162`) is a construction parameter the builder does not take yet |
+| ~~opening a project from inside the application~~ **built 2026-09-12** (the builder and the registry over MAIN windows deepened into `MainWindows`, then startup resolution, the deferred first-paint offer, the gated replacement and the title-bar chip; ADR-0048 and ADR-0055 report in place, both finding the sequencing sound; defects eighty-six to eighty-eight; the first two product directives, `PD-SHELL-001` and `PD-WORKSPACE-001`, were minted beside it) | `main` (`MainWindows`, `createElectronMainWindowAdapter`, `workspace.choose`, `switchWorkspace`, `raiseTransient`, the driver seam's window selector), `contracts` (`workspace.choose`), `platform` (`workspace/lastOpened`, main-only by construction), `ui` (`WorkspaceChip.tsx`, `workspace-label.ts`, `AppShell.tsx`, `shell.css`), `renderer` (`home` from `shell.hello`, the chip's handler) | **`pnpm workspace-proof` verified** — multi-window, add/replace, attribution, hand-over, and per-window deferred cancellation paths confirmed passing; **Stage C** — `PD-SHELL-001`'s palette entry and modifier-click and `PD-WORKSPACE-001`'s `start-session` notice action; and the five things the specification asks for that nothing here can yet meet: `REQ-WORKSPACE-013`'s cancellation clause (`REQ-WORKSPACE-109`'s machinery does not exist — *built 2026-09-30 under R-067: `workspaceClosed` → `InitializationCoordinator.close`, ADR-0064's sixth round, `workspace-proof`'s scenario 8b; OQ-141 open for a close that is not a switch's*), `REQ-SHELL-021`'s worktree gate (no such state is observable from main), `REQ-WORKSPACE-017`'s session name (the product has none), `REQ-STARTUP-166`'s workspace-storage determination, and `REQ-SHELL-124`'s dialog as a standalone surface — gate 1 reuses `__rotarisCloseGuard`, not a new dialog. Demo mode (`REQ-SHELL-162`) is a construction parameter the builder does not take yet |
 | ~~the adopted language drawn once, and the evidence a critic reads~~ **built 2026-09-12** (`packages/ui/src/design-system/`, the twenty-seven briefs; `tools/check-ui-language.mjs`; `pnpm ui-review`; `theme-proof` moved onto the driver; the three portable skills under `.agents/skills/`; defects ninety-one to ninety-seven, **five of them in the measuring code**) | `ui` (`design-system/`, and sixty-nine drawing files migrated onto it), `renderer` (`main.tsx`'s one remaining raw control), `apps/desktop/scripts` (`ui-audit.mjs`, `ui-review.mjs`, `theme-proof.mjs`, `lib/layout-relations.mjs`, `composer-proof.mjs`), `tools` (`check-ui-language.mjs`, `ui-language-debt.mjs`, `ui-language-baseline.json`, `migrate-ui-primitives.mjs`), `.agents/skills/{build-ui,debug-ui,review-ui}` | **OQ-56 — the adopted `--rt-text-disabled` misses REQ-SHELL-145's 3:1 floor on every surface but the page ground in `rotaris-dim`**, and `pnpm theme-proof`'s `contrast` section stays red there until the owner rules between amending the design material and amending the requirement; 163 normalized legacy geometry entries remain as a burn-down baseline (`shell.css` holds 157 of them); the critic is **report-only and opt-in** — it edits evidence files alone and a finding becomes code only when the implementation lead applies it; product-side image transport for the built-in `ui-verifier` persona is a **separate future request** (it reads the textual manifest and the deterministic findings meanwhile); keyboard, pointer and focus BEHAVIOUR of the shared components is proven against the built product and not in vitest, because this repository has no DOM there and a fake one is a second opinion about a document that does not exist; `docs/design/mockup/` is still read for craft and never for structure (`REQ-SHELL-023` governs) |
 | ~~portable skill discovery~~ **built 2026-09-15** (ADR-0063 first executed; `pnpm skills-proof`, 8 checks over 7 launches; defects **101** and **102**, the first in the code the feature had to correct to be buildable) | `config` (`skills/`, `sections/skills.ts`, `writers.ts`, `snapshot.ts`, `load.ts`), `contracts` (`skills.ts`, `config.ts`, `commands.ts`, `process-protocol.ts`), `engine` (`withContextUnits`, `RunSetup.contextUnits`, `ChildrenDeps.contextUnits`), `agent-tools` (`files.ts` — the fence per tool), `run-host` (`skills.ts`, `tools.ts`, `index.ts`), `main` (the relay and the chooser), `ui` (`settings/SkillsSettings.tsx`, `slash/skills.ts`, `slash/registry.ts`'s `unregister`, `shell-state.ts`) | REQ-WORKSPACE-051..069, 072, 073, 151 are met. **Three ESCs and two OQs were raised before any code** (ESC-37 the per-prompt payload against the session-long block, ESC-38 five columns against seven, ESC-39 a taken command name skipped against suffixed; OQ-58 whose session "the current session" names, OQ-59 a chooser restricted to a file *or* a directory), each with the reading the build proceeds under. ~~**`/skills`, REQ-CHAT-162's listing command, is NOT built** and says so where it would register (`SKILLS_LISTING_NOT_BUILT`): it writes a saved system row, which only the run host can do and no renderer command reaches; every fact it would carry is in the Settings tab, which that requirement requires anyway.~~ **`/skills` built 2026-09-27** (`first-release-plan.md` §2.2; `pnpm skills-proof` gains two launches — the row drawn, the session reopened, the row still there): the renderer command `skills.list`, main naming the followed session, the run host writing ONE `system` row through that session's writer (`run-host/skills.ts`'s `writeSkillListing`), the row's text fixed once in `contracts/skills.ts` and drawn as the listing by `transcript/Row.tsx`; no store change. Building it found that a skill named `skill` took `/skill <path>`'s name or lost its own depending on effect order (`docs/defects/fixed/a-skill-named-skill-takes-the-skill-command.md`, repaired with it); its gate found the same hole in the prompt-file registrar (`a-prompt-file-named-skills-takes-the-skills-command.md`) and a description's bare URL no longer drawn as a link (REQ-CHAT-076), both repaired before merge; it raised **OQ-67** — the listing's reach from the Settings tab, whose header actions REQ-WORKSPACE-067 fixes at two, and `/skills` from a window following no session. ~~Workspace-context injection (REQ-WORKSPACE-041..050) and persona memory remain unbuilt~~ **injection built 2026-09-22** under `PD-WORKSPACE-002` (`first-executions.md`); persona memory remains unbuilt and is a **named empty slot** in REQ-WORKSPACE-060's ordered unit list rather than a shape a later part must re-cut |
 | ~~the retrospective pass~~ **built 2026-09-17** (Part AT; `PD-LIBRARY-002`, ADR-0065 first executed; `pnpm retrospective-proof`, 29 checks over six launches and four scratch profiles; defects **119** — the Proposals tab drawing a BLANK cell where a retrospective's source session would be — and **120**, REQ-LIBRARY-125/126's two activity indicators, specified in Part AF and drawn by nothing until this part; the sibling's own completion notice, wrong in three ways against `REQ-LIBRARY-124`, repaired here as **124**; the wider sweep found **121**, **122** and **123**, three proofs left red on `main` by the changes that moved what they measure, and behind them two the staleness had hidden, recorded and not repaired: **125**, `plan_cycles` has no cascade so a session delete keeps its plan text, and **126**/**127**, the Start session dialog accepting a gesture and creating neither a session nor a reason, on a surface `ui-audit` then measured as fitting no supported window) | `contracts` (`improvements.ts` — `source_kind`, the nullable `source_session_id` under a `superRefine`, `pass` and the `retrospective` sources block; `process-protocol.ts` — `retrospective.capture`; `commands.ts`; `config.ts`), `store` (**v19**: the `improvement_artifacts` rebuild and both indexes recreated with it), `engine` (`improvements/retrospective.ts` beside `capture.ts`, the analyst's second system text and per-entry attribution), `config` (the three keys the directive fixes), `run-host` (`retrospectiveOf`, the capture, `improvement.analyze`'s run-free branch), `main` (`commands/improvements.ts`, the per-gesture no-model notice, the completion notice branching on the pass), `ui` (`ImprovementActivity.tsx`, `AppShell.tsx`, `RunHeader.tsx`, `library/ProposalsTab.tsx`, `OverviewView.tsx`, `commands/registry.ts`, `shell-state.ts`), `renderer` (channel 11's first consumer) | **The lifecycle needed no change to carry a second pass**: the FIFO, the cancel, the shutdown discard, the save, the canonical reread, review, history, the executor, the checkpoints and the rollback are the objects they were, which is ADR-0065 decision 1 measured rather than argued. Owed: nothing of the directive — `REQ-LIBRARY-017`'s fence stands untouched on the per-run pass, and the retrospective's evidence bounds are constants rather than settings on REQ-LIBRARY-165's rule. The pass reads only this workspace's own record and makes no network call a run does not already make |

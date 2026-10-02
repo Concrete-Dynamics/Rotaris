@@ -38,7 +38,8 @@ function delegationPort(ops: DelegationOps, parentId: string, tool?: TestTool): 
     const own = tool?.(name, a);
     if (own) return own;
     if (name === 'delegate') {
-      const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: [], inheritedContext: [], category: '', runInBackground: true });
+      const ids = (k: string): string[] => (Array.isArray(a[k]) ? (a[k] as unknown[]).map(String) : []);
+      const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: ids('depends_on'), inheritedContext: ids('inherited_context'), category: '', runInBackground: true, ...(a['attach_artifacts'] === undefined ? {} : { attachArtifacts: ids('attach_artifacts') }) });
       if (r.status === 'rejected') return { ...ok(`rejected — ${r.message}`), isError: true, status: 'failed' };
       return ok(`Task '${r.canonicalName}': ${r.status}\ntask_id: ${r.taskId}`);
     }
@@ -232,7 +233,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const child = dal.childrenOf(sid)[0]!;
     expect(child).toMatchObject({ state: 'failed', interruption: null });
     expect(JSON.parse(child.report!)).toMatchObject({ status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 10s' }, { type: 'summary_failure', message: 'the run was coming to rest, so no summarising call was made' }] });
-    expect(timeline(sid)).not.toContain('child_timeout_fallback');
+    expect(timeline(sid)).not.toContain('fallback_model');
     expect(summaries).toBe(0);
   });
 
@@ -268,6 +269,60 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(conversation[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).toContain('TASK: be slow');
   });
 
+  it('REQ-TOOLS-154 with PD-ORCH-005 (the repair of a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context): a resumed child\'s fallback retry in a later run carries its prior-agent context, its attached artifact and its inherited context, as its first payload did', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    let sid!: SessionId;
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"surveyed the tree","key_findings":["the tree has three roots"]}');
+      if (persona === 'orchestrator') {
+        if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'survey', task: 'TASK: survey' } }]);
+        if (turn === 3) {
+          // The survey has succeeded with its report stored: the slow child depends on it, inherits it and attaches its report.
+          const survey = dal.childrenOf(sid)[0]!;
+          const report = dal.artifactByTask(sid, survey.task_id)!;
+          return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow', depends_on: [survey.task_id], inherited_context: [survey.task_id], attach_artifacts: [report.slug] } }]);
+        }
+        return answer('ok');
+      }
+      // child 1 and 2: the survey answers, and again at REQ-ORCH-095's re-prompt. child 3: the slow child's step in flight at
+      // the pause; child 4: its resumed step hangs; after that, the fallback answers.
+      if (turn <= 2) return answer('surveyed');
+      if (turn === 3) return { parts: [{ hold: held }, ...toolCalls([{ callId: 'b1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Looking.').parts] };
+      return turn === 4 ? hanging(NEVER) : answer('done on the fallback');
+    };
+    const t = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true });
+    sid = (t.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 80 && (t.counts.get('child') ?? 0) < 3; i++) await tick();
+    const text = (r: (typeof t.client.requests)[number]) => r.messages.filter((m) => m.role !== 'system').map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
+    const first = t.client.requests.filter((r) => r.model.modelId === A1.modelId && text(r).includes('TASK: be slow'))[0]!;
+    for (const block of ['[Prior agent context', 'PRIOR AGENT CONTEXT (FULL)', '[Inherited context']) expect(text(first)).toContain(block);
+    expect(t.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await t.sessions.running(sid)!;
+    // A later run: the continue resumes the slow child from its record, in a run whose memory of the launch is gone.
+    expect(t.sessions.continueSession(sid, 'continue').ok).toBe(true);
+    for (let i = 0; i < 80 && (t.counts.get('child') ?? 0) < 4; i++) await tick();
+    clock.advance(10_000);
+    await tick();
+    clock.advance(30_000);
+    await t.sessions.running(sid)!;
+    const onFallback = t.client.requests.filter((r) => r.model.modelId === F1.modelId);
+    expect(onFallback.length).toBeGreaterThan(0);
+    const retry = onFallback[0]!.messages.filter((m) => m.role !== 'system');
+    expect(retry).toHaveLength(1);
+    // REQ-TOOLS-154's order, as the first payload had it: the prior-agent context first, the attached bodies, the inherited block, the task last.
+    const payload = text(onFallback[0]!);
+    const at = (s: string) => payload.indexOf(s);
+    expect(at('[Prior agent context')).toBe(0);
+    expect(at('PRIOR AGENT CONTEXT (FULL)')).toBeGreaterThan(0);
+    expect(at('[Inherited context')).toBeGreaterThan(at('PRIOR AGENT CONTEXT (FULL)'));
+    expect(at('TASK: be slow')).toBeGreaterThan(at('[Inherited context'));
+    expect(payload).toContain('surveyed the tree');
+    expect(payload).toBe(text(first));
+  });
+
   it('the second wait on the same agent doubles the local backoff (REQ-NOTIFY-085)', async () => {
     const { sessions, pub } = sessionsWith((_p, turn) => (turn <= 2 ? failing(rateLimit()) : answer('third time')));
     const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
@@ -281,6 +336,63 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(result.status).toBe('completed');
   });
 
+  describe('REQ-MONITOR-117..119 with REQ-ORCH-091 (c) (OQ-173): a wait the run imposes is not a stall', () => {
+    const stallLines = () => warnings.filter((m) => /appears stalled/.test(m));
+    /** Advances the clock in 5 s strides, letting what each stride wakes run and publish. */
+    const stride = async (ms: number) => { for (let t = 0; t < ms; t += 5_000) { clock.advance(Math.min(5_000, ms - t)); await tick(); } };
+
+    it('the entry agent\'s 120 s suspended wait on a provider limit raises no `stall` issue and no stalled seconds; the watch logs the wait instead', async () => {
+      const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(rateLimit(120)) : answer('after the wait')));
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(lastWait(pub)).toMatchObject({ attempt: 1, agent: 'orchestrator' });
+      await stride(120_000);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests).toHaveLength(2);
+      expect(issues(sid)).toContain('model_wait');
+      expect(issues(sid)).not.toContain('stall');
+      expect(stallLines()).toEqual([]);
+      expect(pub.snapshots.every((s) => s.entryStalledSeconds === null)).toBe(true);
+      // REQ-MONITOR-118's manner: the silence is logged as the wait it is, once at entry and at each repeat the throttle allows.
+      expect(warnings.filter((m) => m.startsWith('agent waiting on a provider limit:'))).toEqual([expect.stringMatching(/^agent waiting on a provider limit: orchestrator \(bg_[0-9a-f]{8}\) has no model event or token for 90 seconds; the wait is the run's own and not a stall \(OQ-173\)$/)]);
+    });
+
+    it('a child\'s 120 s suspended wait on a provider limit raises no `stall` issue and no stalled seconds on its agent row', async () => {
+      const { sessions, pub } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'limited', task: 'TASK: wait' } }]) : answer('finished');
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        return turn === 1 ? failing(rateLimit(120)) : answer('I did it after the wait.');
+      }, { delegation: true });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+      expect(lastWait(pub)).toMatchObject({ attempt: 1 });
+      await stride(120_000);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(dal.childrenOf(sid)[0]!.state).toBe('succeeded');
+      expect(issues(sid)).not.toContain('stall');
+      expect(stallLines()).toEqual([]);
+      expect(pub.snapshots.every((s) => s.agents.every((a) => a.stalledSeconds === null))).toBe(true);
+      expect(warnings.filter((m) => m.startsWith('child waiting on a provider limit: limited'))).toHaveLength(1);
+    });
+
+    it('the wait\'s end restarts the silence: a step that then says nothing for the threshold is a stall again', async () => {
+      let speak!: () => void;
+      const spoken = new Promise<void>((r) => { speak = r; });
+      const { sessions } = sessionsWith((_p, turn) => (turn === 1 ? failing(rateLimit(120)) : { parts: [{ hold: spoken }, ...answer('late').parts] }));
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      await stride(120_000);
+      expect(issues(sid)).not.toContain('stall');
+      await stride(85_000);
+      expect(issues(sid)).not.toContain('stall');
+      await stride(5_000);
+      expect(issues(sid)).toContain('stall');
+      expect(stallLines()).toEqual([expect.stringMatching(/^agent appears stalled: no model event or token for 90 seconds/)]);
+      speak();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+    });
+  });
+
   it('quota with a same-tier candidate on another provider: the pair is marked exhausted, the fallback is transparent, the run completes on the other model (REQ-ORCH-091 a/b, REQ-NOTIFY-082/088/090)', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
     const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('from b')), { catalogue });
@@ -288,10 +400,10 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const result = await sessions.running(sid)!;
     expect(result.status).toBe('completed');
     expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
-    expect(timeline(sid)).toEqual(expect.arrayContaining(['model_exhausted', 'model_fallback']));
-    const fallback = dal.timelineOf(sid).find((t) => t.name === 'model_fallback')!;
+    expect(timeline(sid)).toEqual(expect.arrayContaining(['model_exhausted', 'quota_fallback_model']));
+    const fallback = dal.timelineOf(sid).find((t) => t.name === 'quota_fallback_model')!;
     expect(JSON.parse(fallback.metadata)).toMatchObject({ from_provider: 'a', from_model: 'a1', to_provider: 'b', to_model: 'b1', to_key: 'b1', condition: 'quota_exhausted', provider_exhausted: true });
-    const issue = dal.issuesOf(sid).find((i) => i.kind === 'model_fallback')!;
+    const issue = dal.issuesOf(sid).find((i) => i.kind === 'quota_fallback')!;
     expect(issue.severity).toBe('warning');
     expect(JSON.parse(issue.metadata)).toMatchObject({ requested_model: 'a/a1', fallback_model: 'b/b1', provider_exhausted: true });
     expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'model_exhausted')!.metadata)).toMatchObject({ provider: 'a', model: 'a1' });
@@ -423,9 +535,9 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const result = await withFallback.sessions.running(sid)!;
     expect(result.status).toBe('completed');
     expect(withFallback.client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
-    expect(timeline(sid)).toContain('unresponsive_model_fallback');
-    expect(issues(sid)).toContain('unresponsive_model');
-    expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'unresponsive_model_fallback')!.metadata)).toMatchObject({ from_model: 'a1', to_model: 'f1', threshold_seconds: 30 });
+    expect(timeline(sid)).toContain('llm_unresponsive');
+    expect(issues(sid)).toContain('llm_unresponsive');
+    expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'llm_unresponsive')!.metadata)).toMatchObject({ from_model: 'a1', to_model: 'f1', threshold_seconds: 30 });
 
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
@@ -439,7 +551,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const r2 = await without.sessions.running(sid2)!;
     expect(r2.status).toBe('completed');
     expect(without.client.requests).toHaveLength(1);
-    expect(timeline(sid2)).not.toContain('unresponsive_model_fallback');
+    expect(timeline(sid2)).not.toContain('llm_unresponsive');
   });
 
   it('the threshold is armed only below the agent bound (REQ-ORCH-090) and the role fallback is never the agent\'s own model', async () => {
@@ -495,8 +607,10 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const payloads = (ms: readonly { role: string; content: readonly { kind: string; text?: string }[] }[]) => ms.filter((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && (p.text ?? '').includes('TASK: be slow'))).length;
     expect(payloads(recorded)).toBe(1);
     expect(payloads(dal.agentMessagesOf(sid, child.task_id).filter((r) => r.kind === 'message').map((r) => JSON.parse(r.body) as { role: string; content: { kind: string; text?: string }[] }))).toBe(2);
-    expect(timeline(sid)).toContain('child_timeout_fallback');
-    expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'child_timeout_fallback')!.metadata)).toMatchObject({ from_model: 'a1', to_model: 'f1', timeout_seconds: 10 });
+    // REQ-ORCH-139 (A29): the retry is named by the vocabulary — `fallback_model` on the timeline, `timeout_fallback` as the issue.
+    expect(timeline(sid)).toContain('fallback_model');
+    expect(issues(sid)).toContain('timeout_fallback');
+    expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'fallback_model')!.metadata)).toMatchObject({ from_model: 'a1', to_model: 'f1', timeout_seconds: 10 });
     // a1 hung and timed out, f1 answered; REQ-ORCH-095's one re-prompt of a text-only implementer adds a third call, on f1 still.
     const childRequests = withFallback.client.requests.filter((r) => !/^You are the orchestrator|summarise/i.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? ''));
     expect(childRequests.slice(0, 2).map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
@@ -513,7 +627,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const c2 = dal.childrenOf(sid2)[0]!;
     expect(c2.state).toBe('failed');
     expect((JSON.parse(c2.report!) as { errors: { message: string }[] }).errors.map((e) => e.message)).toContain('Child timed out after 10s');
-    expect(timeline(sid2)).not.toContain('child_timeout_fallback');
+    expect(timeline(sid2)).not.toContain('fallback_model');
   });
 
   /*
@@ -559,7 +673,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       clock.advance(1_000); // attempt 2's limit, at 50 s
       h.open();
       expect((await s.sessions.running(sid)!).status).toBe('completed');
-      expect(timeline(sid)).toContain('child_timeout_fallback');
+      expect(timeline(sid)).toContain('fallback_model');
       expect(dal.childrenOf(sid)[0]!.state).toBe('failed');
       const report = reportOf(sid);
       expect(report.errors).toEqual(expect.arrayContaining([{ type: 'timeout', message: 'Child timed out after 10s' }]));
@@ -586,7 +700,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       clock.advance(9_000); // attempt 2's limit, at 50 s, 9 s after its read: not progressing
       h.open();
       expect((await s.sessions.running(sid)!).status).toBe('completed');
-      expect(timeline(sid)).toContain('child_timeout_fallback');
+      expect(timeline(sid)).toContain('fallback_model');
       expect(dal.childrenOf(sid)[0]!.state).toBe('failed');
       const report = reportOf(sid);
       expect(report.errors).toEqual(expect.arrayContaining([{ type: 'timeout', message: 'Child timed out after 10s' }]));
@@ -635,6 +749,54 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(await cutOffUnder(2_000)).toBeUndefined();
       // A role window of 3 s replaces it too, and the bound stays inclusive.
       expect((await cutOffUnder(3_000))?.statement).toMatch(/within the final 3s before its 10s limit/);
+    });
+  });
+
+  describe('REQ-NOTIFY-111/112 with REQ-ORCH-088 and REQ-CONFIG-108: the corrective message across the retry, and the role\'s window', () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    const gate = () => { let open!: () => void; const p = new Promise<void>((r) => { open = r; }); return { p, open }; };
+    /** A model step that says nothing until `p` is released, and then fails. */
+    const silentThenFails = (p: Promise<void>): ScriptedCall => ({ parts: [{ hold: p }, { error: modelError({ code: 'unknown', headline: 'the stream ended with no answer', transient: false }) }] });
+    const script = (child: (turn: number) => ScriptedCall) => (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quiet', task: 'TASK: quiet' } }]) : answer('finished');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      return child(turn);
+    };
+    const childRequests = (s: ReturnType<typeof sessionsWith>) => s.client.requests.filter((r) => !/^You are the orchestrator|summarise/i.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? ''));
+    const corrective = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages.some((m) => m.content.some((p) => p.kind === 'text' && (p.text ?? '').startsWith('[Corrective message]')));
+
+    it('once per child task: a child corrected on its first attempt is not corrected again on REQ-ORCH-088\'s fallback retry', async () => {
+      const g1 = gate(); const g2 = gate();
+      const s = sessionsWith(script((turn) => {
+        if (turn === 1) return silentThenFails(g1.p); // attempt 1, on a1: silent 3 s, then fails — its corrective message
+        if (turn === 2) return hanging(NEVER); // the corrected turn hangs to the limit; the backstop ends attempt 1
+        return silentThenFails(g2.p); // attempt 2, on f1: silent 3 s, then fails — no second message
+      }), { catalogue, roleFallback: F1, childTimeoutMs: 10_000, childStallTimeoutMs: 2_000, delegation: true });
+      const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(3_000); g1.open(); await tick();
+      clock.advance(7_000); await tick(); // attempt 1's limit
+      clock.advance(30_000); await tick(); // the backstop; the retry starts on f1
+      clock.advance(3_000); g2.open();
+      expect((await s.sessions.running(sid)!).status).toBe('completed');
+      expect(timeline(sid)).toContain('fallback_model');
+      const requests = childRequests(s);
+      expect(requests.map((r) => [r.model.modelId, corrective(r)])).toEqual([['a1', false], ['a1', true], ['f1', false]]);
+      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toHaveLength(1);
+      expect(dal.childrenOf(sid)[0]!.state).toBe('failed');
+    });
+
+    it('a role\'s stall_timeout is the watch\'s threshold and the message\'s window on that role\'s children', async () => {
+      const g = gate();
+      const s = sessionsWith(script((turn) => (turn === 1 ? silentThenFails(g.p) : answer('carried on'))), { childStallTimeoutMs: 60_000, roleStallTimeoutMs: 4_000, delegation: true });
+      const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(4_000);
+      // REQ-MONITOR-117: with a 4 s threshold the watch evaluates every second, and the stall is entered at 4 s.
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall').map((i) => i.message)).toEqual([expect.stringMatching(/^child appears stalled: no model event or token for 4 seconds/)]);
+      g.open();
+      expect((await s.sessions.running(sid)!).status).toBe('completed');
+      expect(corrective(childRequests(s)[1]!)).toBe(true);
     });
   });
 

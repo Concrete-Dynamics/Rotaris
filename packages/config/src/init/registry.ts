@@ -47,12 +47,22 @@ export interface TaskContext {
   readonly onStep: (step: StepResult) => void;
 }
 
+/**
+ * The workspace an applicability predicate is asked about. REQ-WORKSPACE-013/102: each window resolves initialization for
+ * its own workspace, and with two main windows open (PD-SHELL-001) two workspaces are resolved by one registry, so the
+ * predicate is told which one rather than reading a "current" workspace
+ * (`docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
+ */
+export interface ApplicabilityContext {
+  readonly workspaceRoot: string;
+}
+
 export interface InitializationTask {
   readonly id: string;
   readonly label: string;
   readonly description: string;
   /** REQ-WORKSPACE-080: raising counts as not applicable, and is logged. */
-  readonly applicable: (workspaceRoot?: string) => boolean | Promise<boolean>;
+  readonly applicable: (context: ApplicabilityContext) => boolean | Promise<boolean>;
   readonly run: (context: TaskContext) => Promise<TaskResult>;
   /** REQ-WORKSPACE-080: defaults to false. REQ-WORKSPACE-082: "a task that declares nothing about consent behaves as background". */
   readonly requiresConsent?: boolean | undefined;
@@ -89,9 +99,9 @@ export class TaskRegistry {
 }
 
 /** REQ-WORKSPACE-080: a predicate that raises is logged and treated as "not applicable". */
-export async function isApplicable(task: InitializationTask, log: (message: string) => void, workspaceRoot?: string): Promise<boolean> {
+export async function isApplicable(task: InitializationTask, log: (message: string) => void, context: ApplicabilityContext): Promise<boolean> {
   try {
-    return await task.applicable(workspaceRoot);
+    return await task.applicable(context);
   } catch (cause) {
     log(`initialization: the applicability predicate of '${task.id}' raised (${String(cause)}); treated as not applicable`);
     return false;

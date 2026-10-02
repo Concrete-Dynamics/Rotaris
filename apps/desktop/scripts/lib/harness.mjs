@@ -11,7 +11,11 @@
  * Not extracted, deliberately: `launch`. Twenty-six scripts define one and twenty are genuinely different —
  * different environments, different probes, different timeouts, different return shapes. Normalising them
  * would be a rewrite of the evidence, and the driver (`lib/driver.mjs`) replaces the reason they diverged.
- * `launchOptions` below is the part they DO share, offered to new code rather than forced on old.
+ * `launchOptions` below is the part they DO share, offered to new code rather than forced on old. The one call inside
+ * every `launch` IS shared since 2026-09-29: `lib/bounded-launch.mjs`'s `spawnBounded`, because `spawnSync`'s timeout
+ * reports a launch that overruns it as a clean exit, status 0 with only `error.code` `ETIMEDOUT`, and closes the pipes
+ * before the quit path's lines reach the log — before 2026-09-29 it did not return at all (`lib/launch-sites.test.ts`,
+ * rule 4).
  *
  * Nothing here is product code. It runs only from the proofs.
  */
@@ -113,8 +117,8 @@ export function machineIdFileFor(local, platform = process.platform, home = scra
 
 /**
  * The configuration directory (`resolveUserDirs().config`) of a launch isolated at `local`, by the same copied rule:
- * on Windows `local/rotaris/config`, on macOS `<home>/Library/Application Support/rotaris`, elsewhere
- * `<XDG_CONFIG_HOME>/rotaris`. The live run read the discovery snapshot (`project_settings.yaml`) at the Windows
+ * on Windows `local/rotaris/rotaris` (REQ-CONFIG-001's `%LOCALAPPDATA%\rotaris\rotaris\`), on macOS
+ * `<home>/Library/Application Support/rotaris`, elsewhere `<XDG_CONFIG_HOME>/rotaris`. The live run read the discovery snapshot (`project_settings.yaml`) at the Windows
  * spelling on every platform, so on Linux it reported the authenticated provider missing from a file it never
  * opened. Found by the Linux live run, 2026-09-24.
  *
@@ -123,18 +127,33 @@ export function machineIdFileFor(local, platform = process.platform, home = scra
  * a directory the product never reads on macOS
  * (`docs/defects/fixed/config-dir-for-answers-the-linux-directory-on-macos.md`). A caller that hands its launch a
  * home of its own passes the same one here; one that does not takes the default `proofIsolationEnv` sets.
+ *
+ * The Windows answer moved with the product's on 2026-09-29: `resolveUserDirs` had spelled it `rotaris\config`, a
+ * name REQ-CONFIG-001 never spells, and this copy followed it
+ * (`docs/defects/fixed/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`).
  */
 export function configDirFor(local, platform = process.platform, home = scratchHomeFor(local)) {
-  if (platform === 'win32') return win32.join(local, 'rotaris', 'config');
+  if (platform === 'win32') return win32.join(local, 'rotaris', 'rotaris');
   if (platform === 'darwin') return macosApplicationSupport(home);
   return posix.join(toPosix(local), 'rotaris', 'config', 'rotaris');
 }
 
+/**
+ * The data directory itself (`resolveUserDirs().data`) of a launch isolated at `local`, by the same copied rule: on
+ * Windows `local/rotaris/data`, on macOS `<home>/Library/Application Support/rotaris/data`, elsewhere
+ * `<XDG_DATA_HOME>/rotaris`. For a location the product joins to it directly rather than through `dataLayout` — the
+ * code-intelligence home (`src/main/sentinel.ts`). `slice-proof` and `code-intel-proof` spelled the Windows answer on
+ * every platform
+ * (`docs/defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md`).
+ */
+export function dataDirFor(local, platform = process.platform, home = scratchHomeFor(local)) {
+  if (platform === 'win32') return win32.join(local, 'rotaris', 'data');
+  if (platform === 'darwin') return posix.join(macosApplicationSupport(home), 'data');
+  return posix.join(toPosix(local), 'rotaris', 'data', 'rotaris');
+}
+
 function dataSubdirFor(local, leaf, platform, home) {
-  if (platform === 'win32') return win32.join(local, 'rotaris', 'data', leaf);
-  if (platform === 'darwin') return posix.join(macosApplicationSupport(home), 'data', leaf);
-  const data = posix.join(toPosix(local), 'rotaris', 'data');
-  return posix.join(data, 'rotaris', leaf);
+  return (platform === 'win32' ? win32 : posix).join(dataDirFor(local, platform, home), leaf);
 }
 
 /** `resolveUserDirs`'s `darwin` configuration directory below a home, spelled for the platform that reads it. */

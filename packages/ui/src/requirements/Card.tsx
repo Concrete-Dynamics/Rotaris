@@ -86,14 +86,14 @@ export const RequirementCard = memo(function RequirementCard({ card, now, localO
     >
       <div className="req-card__head">
         <span className="req-card__id mono">{card.id}</span>
-        <DesignTag className="tag tag-outline" data-testid="req-lifecycle">{card.lifecycle}</DesignTag>
+        <DesignTag kind="outline" data-testid="req-lifecycle">{card.lifecycle}</DesignTag>
         <span className={`tag ${condition === 'blocked' ? 'tag-fail' : condition === 'running' ? 'tag-run' : condition === 'needs-update' || condition === 'review' ? 'tag-wait' : condition === 'done' ? 'tag-done' : 'tag-neutral'}`} data-testid="req-condition">{columnLabel(condition).toLowerCase()}</span>
         <EvidenceIndicator card={card} onOpen={onOpenEvidence} />
       </div>
       <span className="req-card__title">{card.title}</span>
       <span className="req-card__health" data-testid="req-health" data-health={card.health} title={HEALTH_GLOSS[card.health]}>health: <span className="mono">{card.health}</span></span>
       {selected && <span className="req-card__selected" data-testid="req-selected">{SELECTED_WORD} — {SELECTED_EXPLANATION}</span>}
-      {inFlightLabel && <DesignTag className="req-card__in-flight tag tag-run" role="status" data-testid="req-in-flight">{inFlightLabel}</DesignTag>}
+      {inFlightLabel && <DesignTag kind="run" className="req-card__in-flight" role="status" data-testid="req-in-flight">{inFlightLabel}</DesignTag>}
       <span className="card-meta req-card__evidence-summary" data-testid="req-evidence-summary">{summary}</span>
       <span className="card-meta req-card__execution" data-testid="req-execution">{execution}</span>
       {(facts.length > 0 || dependencies.length > 0) && (

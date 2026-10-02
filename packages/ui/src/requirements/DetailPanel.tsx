@@ -79,9 +79,9 @@ export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onCl
       <div className="req-detail__head">
         <div className="req-detail__ids">
           <span className="req-card__id mono">{card.id}</span>
-          <DesignTag className="tag tag-outline">{card.lifecycle}</DesignTag>
-          <DesignTag className="tag tag-neutral" data-testid="req-detail-column">{columnLabel(card.column).toLowerCase()}</DesignTag>
-          {isEpic && <DesignTag className="tag tag-accent">epic</DesignTag>}
+          <DesignTag kind="outline">{card.lifecycle}</DesignTag>
+          <DesignTag kind="neutral" data-testid="req-detail-column">{columnLabel(card.column).toLowerCase()}</DesignTag>
+          {isEpic && <DesignTag kind="accent">epic</DesignTag>}
           <span className="req-detail__spacer" />
           <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={onClose} aria-label={`Close the detail of ${card.id}`}>Close</DesignButton>
         </div>

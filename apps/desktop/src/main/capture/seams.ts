@@ -3,7 +3,8 @@ import { writeFileSync } from 'node:fs';
 import { type BrowserWindow, screen } from 'electron';
 import { millis } from '@rotaris/kernel';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
-import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, releaseProbe, selectWait, settleAt, targetProbe } from './host.js';
+import { inputEvent, submitEvents, textEvents } from './probe.js';
+import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, pressCategory, releaseProbe, selectWait, settleAt, targetProbe } from './host.js';
 
 /**
  * THE SCRIPTABLE SEAMS — clicks, typed text, chords, renderer `eval`, notices, prompts, drags, OS input,
@@ -65,7 +66,8 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     });
   }
 
-  // ROTARIS_CAPTURE_VIEW=<n>: open view n and, for Settings, click the Project category.
+  // ROTARIS_CAPTURE_VIEW=<n>: open view n and, for Settings, select the category ROTARIS_CAPTURE_SETTINGS names
+  // (Project by default). The first press still lands 200 ms after the chord; it is then verified (`pressCategory`).
   const view = Number(process.env['ROTARIS_CAPTURE_VIEW'] ?? 0);
   if (view > 0) {
     clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_VIEW_MS'] ?? 600)), async () => {
@@ -74,8 +76,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       wc.sendInputEvent({ type: 'keyUp', keyCode: String(view), modifiers: ['control'] });
       if (view === 7) {
         await pause(host, 200);
-        const rect = await wc.executeJavaScript(`(() => { const b = [...document.querySelectorAll('.nav-list__item')].find((x) => x.textContent === ${JSON.stringify(process.env['ROTARIS_CAPTURE_SETTINGS'] ?? 'Project')}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
-        if (rect) clickAt(win, rect);
+        await pressCategory(host, process.env['ROTARIS_CAPTURE_SETTINGS'] ?? 'Project', 5_000);
       }
     });
   }
@@ -158,13 +159,13 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   }
 
   // ROTARIS_CAPTURE_TYPE="text@ms;;…": real key events into whatever control holds focus, then Enter (the composer's submit, REQ-CHAT-001).
+  // A line break in the text is Shift+Enter, the composer's newline, never a character (`textEvents`).
   for (const step of steps(process.env['ROTARIS_CAPTURE_TYPE'])) {
     clocks.timers.after(millis(step.at), () => {
       const wc = win.webContents;
       // `>>composer` first focuses the composer with Ctrl+L (REQ-CHAT-002); `>>no-enter` leaves the text in the focused control.
       if (step.arg === 'composer') { wc.sendInputEvent({ type: 'keyDown', keyCode: 'L', modifiers: ['control'] }); wc.sendInputEvent({ type: 'keyUp', keyCode: 'L', modifiers: ['control'] }); }
-      for (const ch of step.selector) wc.sendInputEvent({ type: 'char', keyCode: ch });
-      if (step.arg !== 'no-enter') { wc.sendInputEvent({ type: 'keyDown', keyCode: 'Return' }); wc.sendInputEvent({ type: 'char', keyCode: 'Return' }); wc.sendInputEvent({ type: 'keyUp', keyCode: 'Return' }); }
+      for (const event of step.arg === 'no-enter' ? textEvents(step.selector, 'char') : submitEvents(step.selector, 'char')) wc.sendInputEvent(inputEvent(event));
       log(`capture: typed "${step.selector}"`);
     });
   }
@@ -180,7 +181,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
    */
   for (const step of steps(process.env['ROTARIS_CAPTURE_KEYS'])) {
     void (async () => {
-      if (step.until) await settleAt(host, { selector: step.arg ?? '*', arg: null, at: step.at, until: true });
+      if (step.until) await settleAt(host, { selector: step.arg ?? '*', arg: null, at: step.at, until: true, ...(step.from === undefined ? {} : { from: step.from }) });
       else await pause(host, step.at);
       win.webContents.sendInputEvent({ type: 'keyDown', keyCode: step.selector });
       win.webContents.sendInputEvent({ type: 'keyUp', keyCode: step.selector });
@@ -194,7 +195,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     void (async () => {
       // The keys loop waits for its target; a chord does the same when `~` is used, so a press lands on a
       // state the run reaches when it reaches it rather than at an appointment the run can miss.
-      if (step.until) await settleAt(host, { selector: step.selector, arg: null, at: step.at, until: true });
+      if (step.until) await settleAt(host, { selector: step.selector, arg: null, at: step.at, until: true, ...(step.from === undefined ? {} : { from: step.from }) });
       else await pause(host, step.at);
       const { keyCode, modifiers } = chordEvent(step.selector);
       win.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
@@ -205,13 +206,10 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
 
   // ROTARIS_CAPTURE_TYPE_AT="text@ms;;…": real characters into whatever holds focus (a chord alone moves no caret and
   // inserts nothing — the renderer needs the `char` event), so the proof fills the palette's filter field as a user does.
+  // A line break is Shift+Enter, never a character (`textEvents`).
   for (const step of steps(process.env['ROTARIS_CAPTURE_TYPE_AT'])) {
     clocks.timers.after(millis(step.at), () => {
-      for (const ch of step.selector) {
-        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: ch });
-        win.webContents.sendInputEvent({ type: 'char', keyCode: ch });
-        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: ch });
-      }
+      for (const event of textEvents(step.selector, 'key')) win.webContents.sendInputEvent(inputEvent(event));
       log(`capture: type-at ${step.at} ${JSON.stringify(step.selector)}`);
     });
   }
@@ -223,7 +221,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     void (async () => {
       // The click loops wait for their element; the inspector follows the same `~` rule so a waited-for
       // measurement lands when the element exists rather than at an appointment the run may miss.
-      if (step.until) await settleAt(host, { selector: step.selector, arg: null, at: step.at, until: true });
+      if (step.until) await settleAt(host, { selector: step.selector, arg: null, at: step.at, until: true, ...(step.from === undefined ? {} : { from: step.from }) });
       else await pause(host, step.at);
       const found = await win.webContents.executeJavaScript(inspectScript(step.selector)).catch((cause: unknown) => ({ error: String(cause) })) as unknown;
       log(`capture: inspect-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
@@ -419,7 +417,9 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // logged as JSON (REQ-SHELL-072/076/078). ROTARIS_CAPTURE_PERSONA_PNG_AT="path@ms" and
   // ROTARIS_CAPTURE_PERSONA_PROBE_AT="selector@ms": a capture of, and a probe inside, the FIRST persona window.
   // ROTARIS_CAPTURE_PERSONA_CLOSE_AT="ms": the user's close of that window (hides it). ROTARIS_CAPTURE_PERSONA_STEER="text@ms":
-  // the steer card's text set and "Send steer" clicked inside it (REQ-MONITOR-070).
+  // the steer card's text set and "Send steer" clicked inside it (REQ-MONITOR-070). ROTARIS_CAPTURE_PERSONA_CLICKS="selector@ms;;…":
+  // the first element matching the selector clicked inside that window (its `click()`, so the handler has run when the
+  // line is logged) — a tab, the run instance's Cancel and its confirmation (acceptance A35, REQ-MONITOR-127/130).
   // ROTARIS_CAPTURE_VIEWS="n@ms;;n@ms": Ctrl+n at each time — a sequence of views in one launch (the parity probes of REQ-MONITOR-038).
   for (const step of steps(process.env['ROTARIS_CAPTURE_VIEWS'])) {
     clocks.timers.after(millis(step.at), () => {
@@ -464,7 +464,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
    */
   for (const step of steps(process.env['ROTARIS_CAPTURE_EVAL_AT'])) {
     void (async () => {
-      if (step.until) await settleAt(host, { selector: step.arg ?? '*', arg: null, at: step.at, until: true });
+      if (step.until) await settleAt(host, { selector: step.arg ?? '*', arg: null, at: step.at, until: true, ...(step.from === undefined ? {} : { from: step.from }) });
       else await pause(host, step.at);
       const found = await win.webContents.executeJavaScript(`(async () => { try { return await (${step.selector}); } catch (cause) { return { error: String(cause) }; } })()`).catch((cause: unknown) => ({ error: String(cause) })) as unknown;
       log(`capture: eval-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
@@ -534,6 +534,15 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       if (!e) { log(`capture: persona-steer-at ${step.at}: no persona window`); return; }
       const done = await e.win.webContents.executeJavaScript(`(() => { const el = document.querySelector('[data-testid="persona-steer"]'); if (!el) return 'no box'; const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(step.selector)}); el.dispatchEvent(new Event('input', { bubbles: true })); const b = document.querySelector('[data-testid="persona-send"]'); if (!b) return 'no send'; b.click(); return 'sent'; })()`).catch((cause: unknown) => `error: ${String(cause)}`) as string;
       log(`capture: persona-steer-at ${step.at} → ${done}`);
+    });
+  }
+
+  for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_CLICKS'])) {
+    clocks.timers.after(millis(step.at), async () => {
+      const e = firstPersona();
+      if (!e) { log(`capture: persona-click-at ${step.at} ${step.selector}: no persona window`); return; }
+      const done = await e.win.webContents.executeJavaScript(`(() => { const el = document.querySelector(${JSON.stringify(step.selector)}); if (!el) return 'absent'; el.click(); return 'clicked'; })()`).catch((cause: unknown) => `error: ${String(cause)}`) as string;
+      log(`capture: persona-click-at ${step.at} ${step.selector} → ${done}`);
     });
   }
 

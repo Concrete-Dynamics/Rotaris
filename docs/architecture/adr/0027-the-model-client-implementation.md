@@ -388,6 +388,16 @@ back as a `model_override` entry carrying `cleared: true`, `cause: 'superseded'`
 holds on the newest override's target, as both autopsy readers now do. Measured in `ladder.test.ts` (red before with the
 sequence above; after, all four on `a1`) and `resilience.test.ts`.
 
+*Third round, the same day (the verifier's repair-round-2 finding).* "Supersedes an older override that would lead the
+chosen pair back" was itself too narrow, and that reason is kept above beside this one: a chosen pair's override that led
+elsewhere stood, and `followOverride` moved the agent off the pair chosen before its first call (`a1 → c1`, then a1 chosen
+in f1's wait: root `a1, c1, f1, c1`, the row saying it resumed on a1; on the quota-retry path, the waiting pair chosen and
+the retry sent to c1). The user's newest explicit choice of a pair now supersedes any override from it:
+`Run.takeBackOverrideOf` takes it back on both wait paths (the same `cleared: true`, `cause: 'superseded'` entry, now with
+`root_cell` saying whether the root's cell had followed it, which both autopsy readers read), so no choice writes a cycle
+and `ResilienceMemory.supersededBy` is gone. Measured in `ladder.test.ts`: after, root `a1, c1, f1, a1`, and the retry on
+`a1` throughout.
+
 ## Eighth execution — 2026-10-02, an explicit choice clears an exclusion (REQ-MONITOR-194)
 
 *The repair of [`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md`](../../defects/fixed/an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md).

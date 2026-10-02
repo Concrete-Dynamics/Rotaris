@@ -73,8 +73,33 @@ child `a1`, summariser `a1`, **root `c1`** — the pair just recorded out of quo
 
 Pinned in `packages/engine/src/run/ladder.test.ts` ("a wait choice back onto a pair an earlier choice replaced takes that
 override back, so no agent returns to the pair just replaced"): red before with exactly `child a1, child a1, summariser a1,
-root c1`; in `resilience.test.ts` (`supersededBy`, and a cycle ending on the newest target, red before for an agent on y);
+root c1`; in `resilience.test.ts` (`supersededBy` — removed in the third round — and a cycle ending on the newest target, red before for an agent on y);
 and in the readers' parity table (a pin taken back; a superseded override; a cycle), two rows red in the script's copy before.
+
+**Third round, 2026-10-02 (the verifier's repair-round-2 finding).** The second round took back only an override whose
+chain led back to the waiting pair, which treated the cycle and not its cause: the user's newest explicit choice of a pair
+did not supersede an older override from that pair. With `a1 → c1` standing, a later wait on f1 (an entry switch had moved
+the root there) resolved with a1 cleared a1's exclusion and set `f1 → a1`, but the root followed `a1 → c1` before its first
+call: root requests `a1, c1, f1, c1`, while the row said "Model changed to a1 during the wait; the run resumes on it now".
+The quota-retry path had the same shape: a child's wait resolved with c1 while the root's call on a1 was in flight, the root
+then waited on a1 and the user chose a1 itself, and the retry followed `a1 → c1` although the row said "the call is retried
+on it now". The second round's reason is kept above; its replacement:
+
+- `Run.takeBackOverrideOf` (both wait branches of `setEntryModel`) takes back ANY override from the pair chosen in a wait —
+  the change-model choice's pair, or the waiting pair itself on the quota-retry path — before the new overrides are set,
+  persisted as before (`model_override`, `cleared: true`, `cause: 'superseded'`, the child's `switch_pending`). With the
+  chosen pair's own override gone, the new one can never lead back to it, so no choice writes a cycle;
+  `ResilienceMemory.supersededBy` is removed, and `follow` still ends a cycle an older store holds on its newest target.
+- An agent whose cell had already followed the override stays on its target (`followOverride` moves a cell; nothing moves
+  it back). The entry records where the root's cell is (`root_cell`: `followed`, `on_pair` or `elsewhere`), and both autopsy
+  readers read it: a root that had followed stays on the target, as after a ladder move; a root still on the pair never ran
+  on the target, so the key printed for the override is taken back.
+
+Pinned in `packages/engine/src/run/ladder.test.ts` ("a wait choice of a pair an earlier choice replaced takes that override
+back, and the agent resumes on the pair chosen": red before with root `a1, c1, f1, c1`; "choosing the waiting pair itself
+takes back the override an earlier choice set for it, and the call is retried on it": red before with root
+`a1, a1, c1, c1`), and in the readers' parity table (`apps/desktop/scripts/lib/autopsy-entry-model.test.ts`: two rows, red
+in both copies before with `root-model` printed again at the end).
 
 ## Specs
 

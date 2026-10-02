@@ -280,6 +280,9 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  *   the switch, and the switch's rebuild then resolves through it, so the choice is read before the switch and a switched
  *   key it replaced is never printed (the repair of
  *   the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it).
+ * - on an override a wait choice took back (`cleared: true`, `cause: 'superseded'`, since 2026-10-02), where the root's
+ *   cell was (`root_cell`): `followed` keeps the root on the override's target, as a ladder move does; `on_pair` takes back
+ *   the target's key printed for it, which the root never ran on.
  * A store recording no `supersedes` reads each switch as applied; one recording no `switch_pending` reads each move and
  * each child's choice where it is recorded, until a switch that supersedes places it.
  * A switch is held on its run alone (`entryOverride`; a continuation is a new `Run`), and whether it should reach the next
@@ -306,29 +309,32 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
     readonly overrides: Map<string, { readonly key: string; readonly to: string | null }>;
   }
   const clone = (s: State): State => ({ ...s, keys: [...s.keys], overrides: new Map(s.overrides) });
-  const effective = (s: State): string | null => {
+  /** The root's chain of overrides followed from `base`: the key it ends on, that key's pair, and the pairs it left. */
+  const walk = (s: State): { readonly label: string; readonly pair: string | null; readonly path: readonly string[] } | null => {
     if (s.base === null) return null;
-    if (s.base.pair === null) return s.overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : s.base.label;
+    if (s.base.pair === null) return { label: s.overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : s.base.label, pair: null, path: [] };
     let label = s.base.label;
     let pair: string = s.base.pair;
     const path: string[] = [];
     for (;;) {
       if (path.includes(pair)) {
-        // A cycle — a store written before the run took a superseded override back (`ResilienceMemory.supersededBy`): it
-        // ends on the newest override's target, as the run's memory does (`overrides` is kept in the order last set).
+        // A cycle — a store written before the run took a superseded override back (`Run.takeBackOverrideOf`): it ends on
+        // the newest override's target, as the run's memory does (`overrides` is kept in the order last set).
         const order = [...s.overrides.keys()];
         const newest = path.slice(path.indexOf(pair)).reduce((a, b) => (order.indexOf(b) > order.indexOf(a) ? b : a));
-        return s.overrides.get(newest)!.key;
+        const o = s.overrides.get(newest)!;
+        return { label: o.key, pair: o.to, path };
       }
       const o = s.overrides.get(pair);
       if (!o || o.to === pair) break;
       path.push(pair);
       label = o.key;
-      if (o.to === null) return s.overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label;
+      if (o.to === null) return { label: s.overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label, pair: null, path };
       pair = o.to;
     }
-    return label;
+    return { label, pair, path };
   };
+  const effective = (s: State): string | null => walk(s)?.label ?? null;
   const add = (s: State, key: string | null): void => { if (key !== null && key !== '' && s.keys[s.keys.length - 1] !== key) s.keys.push(key); };
   const fromSnapshot = (s: State, snapshot: unknown): void => {
     const e = snapshotEntry(snapshot);
@@ -387,8 +393,21 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
       const model = meta?.['model'];
       // REQ-NOTIFY-070/078: an entry carrying `cleared: true` takes the pin on its pair back (`ResilienceMemory.rehydrate`).
       if (typeof provider === 'string' && typeof model === 'string' && meta?.['cleared'] === true) {
-        s.overrides.delete(`${provider}|${model}`);
-        add(s, effective(s));
+        // REQ-ORCH-091 (d) / REQ-MONITOR-303: a wait choice of the pair took back an override from it (`cause: 'superseded'`,
+        // `Run.takeBackOverrideOf`). An agent that had followed it stays on its target, so a root the run records there
+        // (`root_cell: 'followed'`) keeps it, as after a ladder move; a root still on the pair (`on_pair`: its call was in
+        // flight, or it waited there, when the override was set) never ran on the target, so the key printed for it is
+        // taken back. A store recording no `root_cell` (fin6's taken-back pins, which rebuild the root) reads as before.
+        const cleared = `${provider}|${model}`;
+        const before = walk(s);
+        if (meta['root_cell'] === 'followed' && before !== null && before.path.includes(cleared)) {
+          s.base = { label: before.label, pair: before.pair };
+          s.fellBack = true;
+        }
+        s.overrides.delete(cleared);
+        const after = effective(s);
+        if (meta['root_cell'] === 'on_pair' && before !== null && before.path.includes(cleared) && s.keys.at(-1) === before.label && s.keys.at(-2) === after) s.keys.pop();
+        else add(s, after);
         return;
       }
       const key = str(meta?.['model_key']);

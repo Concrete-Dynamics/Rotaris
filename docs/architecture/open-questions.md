@@ -8826,7 +8826,12 @@ and, if it leaves it, what the row says; whether a later switch onto a pair an o
 the entry agent, or the override stands (as built) and only the row says so. REQ-MONITOR-194's clearing is in force beside
 it since 2026-10-02, which sharpens the second half: a pair a quota wait moved is both excluded and overridden, and a later
 switch onto it clears the exclusion while the override, as built, still sends the entry agent elsewhere — so the pair the
-user explicitly chose is not what runs, and only the row says so.
+user explicitly chose is not what runs, and only the row says so. The wait path is read the other way, and the two
+readings stand side by side: a choice made on a wait surface (REQ-MONITOR-303's "change model now … resolves the wait as a
+retry on the chosen model") takes back any override an earlier choice set from the pair chosen, so the agent resumes on it
+as the wait's row says (`Run.takeBackOverrideOf`, since 2026-10-02, the third round of
+[`a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md`](../defects/fixed/a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md));
+a ruling that a switch also supersedes the override would make the header and inspector path match it.
 
 **OQ-178 — Which notice offers REQ-NOTIFY-045's retry, when a notice carries one action?** *(REQ-NOTIFY-044, whose
 vocabulary includes "retry the failed run under REQ-NOTIFY-045"; REQ-NOTIFY-045; REQ-NOTIFY-030; REQ-NOTIFY-066;

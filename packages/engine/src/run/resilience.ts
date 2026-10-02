@@ -231,30 +231,6 @@ export class ResilienceMemory {
     this.overrides.set(key, override);
   }
   /**
-   * REQ-ORCH-091 (d) with REQ-MONITOR-194: the pair whose override a choice made in place of `from` supersedes — the chosen
-   * pair itself, when the chain of overrides from it leads back to `from` — or null. A wait choice back onto a pair an
-   * earlier choice replaced (a1 → c1, then c1 runs out and a1 is chosen) would otherwise leave a1 → c1 → a1 in the memory,
-   * and an agent on the cycle could "follow" it back onto the pair the newest choice replaced; the caller takes that
-   * override back (`clearOverride`, persisted as `cleared: true`) before setting its own
-   * (a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced, its second round).
-   */
-  supersededBy(fromProvider: string, fromModelId: string, choice: ModelChoice, catalogue: readonly CatalogueEntry[]): { readonly provider: string; readonly modelId: string } | null {
-    const from = pairKey(fromProvider, fromModelId);
-    const chosen = { provider: providerIdentity(catalogue, choice.model), modelId: choice.model.modelId };
-    if (pairKey(chosen.provider, chosen.modelId) === from || !this.overrides.has(pairKey(chosen.provider, chosen.modelId))) return null;
-    const seen = new Set<string>();
-    let current = choice;
-    for (;;) {
-      const key = pairKey(providerIdentity(catalogue, current.model), current.model.modelId);
-      if (key === from) return chosen;
-      if (seen.has(key)) return null;
-      seen.add(key);
-      const o = this.overrides.get(key);
-      if (!o || sameRef(o.choice.model, current.model)) return null;
-      current = o.choice;
-    }
-  }
-  /**
    * REQ-NOTIFY-070 / REQ-NOTIFY-074 / REQ-NOTIFY-076 / REQ-NOTIFY-078: the pin on a pair taken back — an authentication
    * restart (the automatic fallback's or the recovery dialog's) that could not begin, a model chosen by hand in the recovery
    * dialog, or a re-authentication that re-pins the primary. Persisted as a `model_override` entry carrying `cleared: true`,
@@ -285,7 +261,8 @@ export class ResilienceMemory {
 
   /**
    * The chain followed to its end. A chain that comes back to a pair it passed is a cycle — which no choice this run makes
-   * leaves (`supersededBy`), but a store written before 2026-10-02 can replay one — and it ends on the target of the newest
+   * leaves (a wait choice takes back any override from the pair it chooses, `Run.takeBackOverrideOf`), but a store written
+   * before 2026-10-02 can replay one — and it ends on the target of the newest
    * override in it, the choice that superseded the others. Until then the walk was bounded at eight hops and ended wherever
    * the parity of the cycle left it, on the pair just replaced as often as not.
    */

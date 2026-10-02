@@ -548,10 +548,11 @@ and never replays an executed tool call. Each agent (the root for the run, every
 choice (the session's override applied through `ResilienceMemory.effective` — where the cell is built, and again before
 **every call** (`followOverride`), so an agent already on a pair a wait's choice replaced leaves it at its next call, the
 root's resume after the waiting child's report included; the summariser, which has no ladder, carries its model through the
-same overrides at each attempt, `SummariserDeps.resolve`; a wait choice back onto a pair an earlier choice replaced first
-takes that override back — `ResilienceMemory.supersededBy`, a `model_override` entry carrying `cleared: true`, `cause:
-'superseded'` — so the chain never cycles back to the pair just replaced, and a cycle a store already holds ends on its newest
-override's target), its role's fallback (`personas.<role>.fallback_model`,
+same overrides at each attempt, `SummariserDeps.resolve`; a wait choice of a pair — a change of model, or the waiting pair
+itself chosen for a retry — first takes back any override an earlier choice set from that pair (`Run.takeBackOverrideOf`, a
+`model_override` entry carrying `cleared: true`, `cause: 'superseded'` and `root_cell`, where the root's cell then is), so the
+agent resumes on the pair chosen, an agent that had already followed the override stays on its target, the chain never
+cycles, and a cycle a store already holds ends on its newest override's target), its role's fallback (`personas.<role>.fallback_model`,
 else the run-level `fallback_model` slot, never its own model), and three once-only marks — the role fallback (shared by the
 unresponsive-model route and the hard child timeout, REQ-ORCH-144), the same-tier fallback, the wait attempt. On a failed step,
 `classifyFailure` decides in this order: **quota** (structured `insufficient_quota`, "exceeded your current quota", "check your plan

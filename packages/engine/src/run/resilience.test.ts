@@ -154,20 +154,12 @@ describe('engine/run/resilience — the session-wide memory (REQ-ORCH-091 a/d, R
   });
 
   // REQ-ORCH-091 (d) with REQ-MONITOR-194 (a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced, its second
-  // round): a choice back onto a pair an earlier choice replaced supersedes that override, and a cycle a store already holds
-  // ends on the newest override's target. Before: an eight-hop walk ending on x or y by the cycle's parity.
-  it('REQ-ORCH-091 (d): a choice whose pair leads back to the pair it replaces names the override it supersedes, and a cycle ends on the newest override\'s target', () => {
+  // round): a cycle a store already holds ends on the newest override's target. Before: an eight-hop walk ending on x or y
+  // by the cycle's parity. (The run no longer writes one: a wait choice takes back any override from the pair it chooses,
+  // `Run.takeBackOverrideOf`, pinned in ladder.test.ts; until the third round only one leading back, `supersededBy`.)
+  it('REQ-ORCH-091 (d): a cycle of overrides ends on the newest override\'s target', () => {
     const catalogue = [entry('x', 'a', ['small_model']), entry('y', 'b', ['small_model']), entry('z', 'c', ['small_model'])];
-    const [x, y, z] = catalogue.map((e) => ({ model: e.model, thinking: 'unset' as const })) as [ModelChoice, ModelChoice, ModelChoice];
-    const m = new ResilienceMemory();
-    m.setOverride('a', 'x', { key: 'y', choice: y });
-    // y replaces nothing yet: no override is superseded by choosing it for z, nor by choosing x for y (x → y leads to y).
-    expect(m.supersededBy('c', 'z', y, catalogue)).toBeNull();
-    expect(m.supersededBy('b', 'y', x, catalogue)).toEqual({ provider: 'a', modelId: 'x' });
-    expect(m.supersededBy('b', 'y', z, catalogue)).toBeNull();
-    // A longer chain: x → y → z, then z's wait chooses x — x's override leads back to z.
-    m.setOverride('b', 'y', { key: 'z', choice: z });
-    expect(m.supersededBy('c', 'z', x, catalogue)).toEqual({ provider: 'a', modelId: 'x' });
+    const [x, y] = catalogue.map((e) => ({ model: e.model, thinking: 'unset' as const })) as [ModelChoice, ModelChoice, ModelChoice];
     // A cycle written without the superseding (a store from before it): x → y (older), y → x (newer). Every agent on it ends
     // on x, the newest override's target, whatever pair it starts from and however long the walk.
     const cycle = new ResilienceMemory();

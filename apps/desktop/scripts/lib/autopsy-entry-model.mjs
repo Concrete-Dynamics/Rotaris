@@ -111,9 +111,10 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
 export function entryModelKeys(launchAuditPayload, timeline, children) {
   // `configured`: the key the configuration names (snapshot or switch); `base` departs from it only while a move is in force.
   const clone = (s) => ({ ...s, keys: [...s.keys], overrides: new Map(s.overrides) });
-  const effective = (s) => {
+  /** The root's chain of overrides followed from `base`: the key it ends on, that key's pair, and the pairs it left. */
+  const walk = (s) => {
     if (s.base === null) return null;
-    if (s.base.pair === null) return s.overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : s.base.label;
+    if (s.base.pair === null) return { label: s.overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : s.base.label, pair: null, path: [] };
     let label = s.base.label;
     let pair = s.base.pair;
     const path = [];
@@ -122,17 +123,19 @@ export function entryModelKeys(launchAuditPayload, timeline, children) {
         // A cycle (a store from before the run took a superseded override back): the newest override's target, as the engine's copy.
         const order = [...s.overrides.keys()];
         const newest = path.slice(path.indexOf(pair)).reduce((a, b) => (order.indexOf(b) > order.indexOf(a) ? b : a));
-        return s.overrides.get(newest).key;
+        const o = s.overrides.get(newest);
+        return { label: o.key, pair: o.to, path };
       }
       const o = s.overrides.get(pair);
       if (!o || o.to === pair) break;
       path.push(pair);
       label = o.key;
-      if (o.to === null) return s.overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label;
+      if (o.to === null) return { label: s.overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label, pair: null, path };
       pair = o.to;
     }
-    return label;
+    return { label, pair, path };
   };
+  const effective = (s) => walk(s)?.label ?? null;
   const add = (s, key) => { if (key !== null && key !== '' && s.keys[s.keys.length - 1] !== key) s.keys.push(key); };
   const fromSnapshot = (s, snapshot) => {
     const e = snapshotEntry(snapshot);
@@ -181,8 +184,19 @@ export function entryModelKeys(launchAuditPayload, timeline, children) {
       // choice superseded (REQ-ORCH-091 d), as the engine's copy reads it (until 2026-10-02 skipped here:
       // the-scripts-autopsy-reader-ignores-a-taken-back-pin).
       if (typeof meta?.provider === 'string' && typeof meta?.model === 'string' && meta?.cleared === true) {
-        s.overrides.delete(`${meta.provider}|${meta.model}`);
-        add(s, effective(s));
+        // A wait choice of the pair took back an override from it (`cause: 'superseded'`): a root that had followed it
+        // (`root_cell: 'followed'`) stays on its target; one still on the pair (`on_pair`) never ran on the target, so the key
+        // printed for it is taken back. None recorded (fin6's pins): as before. The engine's copy says why.
+        const cleared = `${meta.provider}|${meta.model}`;
+        const before = walk(s);
+        if (meta.root_cell === 'followed' && before !== null && before.path.includes(cleared)) {
+          s.base = { label: before.label, pair: before.pair };
+          s.fellBack = true;
+        }
+        s.overrides.delete(cleared);
+        const after = effective(s);
+        if (meta.root_cell === 'on_pair' && before !== null && before.path.includes(cleared) && s.keys.at(-1) === before.label && s.keys.at(-2) === after) s.keys.pop();
+        else add(s, after);
         return;
       }
       const key = str(meta?.model_key);

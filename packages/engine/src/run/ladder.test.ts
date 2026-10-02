@@ -688,7 +688,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const overrides = dal.timelineOf(sid).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
     expect(overrides).toEqual([
       expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1' }),
-      expect.objectContaining({ provider: 'a', model: 'a1', cleared: true }),
+      // The root ran on c1, a1 → c1's target, when a1 was chosen: the reader keeps it there until it follows c1 → a1.
+      expect.objectContaining({ provider: 'a', model: 'a1', cleared: true, cause: 'superseded', root_cell: 'followed' }),
       expect.objectContaining({ provider: 'c', model: 'c1', model_key: 'a1' }),
     ]);
     // REQ-MONITOR-194: a1, excluded and not the waiting pair, was chosen in c1's wait, which cleared its exclusion; c1 stays excluded.
@@ -700,6 +701,97 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(memory.overrideFor('a', 'a1')).toBeUndefined();
     expect(memory.overrideFor('c', 'c1')?.key).toBe('a1');
     expect([memory.isExhausted('a', 'a1'), memory.isExhausted('c', 'c1')]).toEqual([false, true]);
+  });
+
+  /*
+   * Repair round 2 of the same note: the user's newest explicit choice of a pair supersedes ANY override from it, not only
+   * one whose chain leads back to the waiting pair. Here a1 → c1 is chosen in the root's wait on a1; the next iteration
+   * runs on f1 (an entry switch), f1 runs out, and a1 is chosen in f1's wait. Before this repair a1 → c1 stood, the root
+   * followed it before its first call (`followOverride`) and called c1 while the row said it resumed on a1 — the
+   * requests were a1, c1, f1, c1.
+   */
+  it('REQ-MONITOR-303 / REQ-ORCH-091 (d): a wait choice of a pair an earlier choice replaced takes that override back, and the agent resumes on the pair chosen', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, []), entry('f1', 'f', F1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      if (persona !== 'orchestrator') return answer('child done');
+      if (turn === 1 || turn === 3) return failing(quota());
+      if (turn === 2) return { parts: [{ hold: held, part: { kind: 'text', delta: 'root 2' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+      return answer(`root ${turn}`);
+    };
+    const { sessions, client, pub } = sessionsWith(script, { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    const root = () => client.requests.filter((r) => /^You are the orchestrator/.test(systemOf(r))).map((r) => r.model.modelId);
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true, agent: 'orchestrator' });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    for (let i = 0; i < 40 && root().length < 2; i++) await tick();
+    // No wait is open while the root's turn on c1 is held: the switch to f1 applies at the next iteration's root turn.
+    expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', id: 'second', text: 'a second task' } })).toEqual({ ok: true });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'f1' } })).toEqual({ ok: true });
+    release();
+    for (let i = 0; i < 40 && lastWait(pub)?.model !== 'f1'; i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'f', model: 'f1', exhausted: true, agent: 'orchestrator' });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(root()).toEqual(['a1', 'c1', 'f1', 'a1']);
+    const rows = dal.timelineOf(sid);
+    expect(rows.filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>)).toEqual([
+      expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1' }),
+      expect.objectContaining({ provider: 'a', model: 'a1', cleared: true, cause: 'superseded', root_cell: 'elsewhere' }),
+      expect.objectContaining({ provider: 'f', model: 'f1', model_key: 'a1' }),
+    ]);
+    // The row says what the run does: it resumes on a1.
+    expect(dal.residentRows(sid).map((r) => r.body).filter((t) => /during the wait/.test(t)).at(-1)).toMatch(/Model changed to a1 during the wait; the run resumes on it now/);
+    const resolve = (key: string) => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: e.thinking } : null; };
+    const memory = ResilienceMemory.rehydrate(rows, resolve);
+    expect(memory.overrideFor('a', 'a1')).toBeUndefined();
+    expect(memory.overrideFor('f', 'f1')?.key).toBe('a1');
+    expect([memory.isExhausted('a', 'a1'), memory.isExhausted('f', 'f1')]).toEqual([false, true]);
+  });
+
+  /*
+   * The same on the quota-retry path: a child's wait on a1 is resolved with c1 (a1 → c1) while the root's call on a1 is in
+   * flight; that call then runs out too and the root waits on a1, where the user chooses a1 itself. The exclusion is cleared
+   * and a1 → c1 taken back, so the call is retried on a1, as the row says. Before: the retry followed a1 → c1 and called c1.
+   */
+  it('REQ-MONITOR-194 / REQ-MONITOR-303: choosing the waiting pair itself takes back the override an earlier choice set for it, and the call is retried on it', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]) : turn === 2 ? { parts: [{ hold: held }, { error: quota() }] } : answer(`root ${turn}`);
+      return turn === 1 ? failing(quota()) : answer('I did it.');
+    };
+    const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    const root = () => client.requests.filter((r) => /^You are the orchestrator/.test(systemOf(r))).map((r) => r.model.modelId);
+    for (let i = 0; i < 40 && (lastWait(pub) === null || root().length < 2); i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true });
+    expect(lastWait(pub)!.agent).not.toBe('orchestrator');
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    release();
+    for (let i = 0; i < 40 && lastWait(pub)?.agent !== 'orchestrator'; i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true, agent: 'orchestrator' });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(root()).toEqual(root().map(() => 'a1'));
+    expect(root().length).toBeGreaterThan(2);
+    expect(dal.residentRows(sid).map((r) => r.body).filter((t) => /during the wait/.test(t)).at(-1)).toMatch(/a1 chosen during the wait on a\/a1: .* the call is retried on it now\./);
+    const rows = dal.timelineOf(sid);
+    expect(rows.filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>)).toEqual([
+      expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1' }),
+      expect.objectContaining({ provider: 'a', model: 'a1', cleared: true, cause: 'superseded', root_cell: 'on_pair' }),
+    ]);
+    const resolve = (key: string) => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: e.thinking } : null; };
+    const memory = ResilienceMemory.rehydrate(rows, resolve);
+    expect(memory.overrideFor('a', 'a1')).toBeUndefined();
+    expect(memory.isExhausted('a', 'a1')).toBe(false);
   });
 
   /*

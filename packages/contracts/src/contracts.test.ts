@@ -226,12 +226,13 @@ describe('REQ-TOOLS-002 / REQ-MONITOR-060: declaredToolsOf', () => {
   });
 });
 
-describe('REQ-CONFIG-259: a role edit carries a per-field scope', () => {
-  it('admits a model and a reasoning edit at two scopes, and refuses a field edited with no scope', async () => {
+describe('REQ-CONFIG-259/341: a role edit is held under the scope each field was edited at', () => {
+  it('admits field edits at two scopes, the same field at both, and refuses the old one-scope shape', async () => {
     const { DesktopSaveSchema } = await import('./config.js');
-    expect(DesktopSaveSchema.safeParse({ roles: { tester: { modelScope: 'workspace', unsetModel: true, thinkingScope: 'global', unsetThinking: true } } }).success).toBe(true);
-    expect(DesktopSaveSchema.safeParse({ roles: { tester: { modelScope: 'workspace', model: 'gpt-4o' } } }).success).toBe(true);
-    expect(DesktopSaveSchema.safeParse({ roles: { tester: { unsetModel: true } } }).success).toBe(false);
-    expect(DesktopSaveSchema.safeParse({ roles: { tester: { modelScope: 'workspace', model: 'gpt-4o', thinking: 'high' } } }).success).toBe(false);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { workspace: { unsetModel: true }, global: { unsetThinking: true } } } }).success).toBe(true);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { workspace: { unsetModel: true }, global: { model: 'gpt-4o' } } } }).success).toBe(true);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { scope: 'workspace', unsetModel: true } } }).success).toBe(false);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { modelScope: 'workspace', model: 'gpt-4o' } } }).success).toBe(false);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { workspace: { model: 'gpt-4o', scope: 'global' } } } }).success).toBe(false);
   });
 });

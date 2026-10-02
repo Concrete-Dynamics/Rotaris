@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { declaredToolsOf, INSTRUCTIONS_CONFIG_DEFAULT, SKILLS_CONFIG_DEFAULT, type ConfigSnapshot, type DesktopSavePayload } from '@rotaris/contracts';
+import { declaredToolsOf, INSTRUCTIONS_CONFIG_DEFAULT, SKILLS_CONFIG_DEFAULT, type ConfigSnapshot, type DesktopSavePayload, type RoleFieldEditsPayload } from '@rotaris/contracts';
 import type { Timers } from '@rotaris/kernel';
 import { PERSONA_SYNTHETIC_PREFIX, STARTUP_SLOT_PREFIX } from './keys.js';
 import { isPlainMap, type PlainMap } from './merge.js';
@@ -9,7 +9,7 @@ import { RUNTIME_DEFAULTS } from './sections/runtime.js';
 import { DISPLAY_DEFAULTS } from './display-section.js';
 import { renderFatal } from './validate.js';
 import { discoverInstructionFiles, WORKSPACE_INSTRUCTION_FILE_NAMES } from './instructions.js';
-import { saveDesktop, writeConfigFields, type DesktopSave, type RoleEdit, type WriteRefusal } from './writers.js';
+import { saveDesktop, writeConfigFields, type DesktopSave, type RoleEdit, type RoleFieldEdits, type WriteRefusal } from './writers.js';
 
 /**
  * ADR-0037 Tier A, the workspace service's side: read the projection the Settings screen consumes
@@ -126,8 +126,9 @@ export function readSnapshot(globalDir: string, workspaceRoot: string, now?: () 
 /** The contract's save payload as the writer's argument (the two are one shape; the cast is over the runtime record). */
 function toDesktopSave(save: DesktopSavePayload): DesktopSave {
   const roles: Record<string, RoleEdit> = {};
-  // REQ-CONFIG-259: each field keeps its own scope through to the writer.
-  for (const [role, edit] of Object.entries(save.roles ?? {})) roles[role] = { ...(edit.modelScope !== undefined ? { modelScope: edit.modelScope } : {}), ...(edit.model !== undefined ? { model: edit.model } : {}), ...(edit.unsetModel ? { unsetModel: true } : {}), ...(edit.thinkingScope !== undefined ? { thinkingScope: edit.thinkingScope } : {}), ...(edit.thinking !== undefined ? { thinking: edit.thinking } : {}), ...(edit.unsetThinking ? { unsetThinking: true } : {}) };
+  // REQ-CONFIG-259/341: each field's edit keeps the scope it was made at through to the writer.
+  const fields = (f: RoleFieldEditsPayload | undefined): RoleFieldEdits | undefined => (f === undefined ? undefined : { ...(f.model !== undefined ? { model: f.model } : {}), ...(f.unsetModel ? { unsetModel: true } : {}), ...(f.thinking !== undefined ? { thinking: f.thinking } : {}), ...(f.unsetThinking ? { unsetThinking: true } : {}) });
+  for (const [role, edit] of Object.entries(save.roles ?? {})) { const w = fields(edit.workspace); const g = fields(edit.global); roles[role] = { ...(w === undefined ? {} : { workspace: w }), ...(g === undefined ? {} : { global: g }) }; }
   return {
     ...(save.slots ? { slots: save.slots } : {}),
     ...(save.slotThinking ? { slotThinking: save.slotThinking } : {}),

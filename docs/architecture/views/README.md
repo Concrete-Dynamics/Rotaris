@@ -85,12 +85,13 @@ The **process view**'s initialization paragraph says so. No package, edge, proce
 store column changed.
 
 **A role's pending edits keep each field's scope through the save (REQ-CONFIG-259, REQ-CONFIG-341).** The Personas
-table's pending entry holds `modelScope` and `thinkingScope` (`PendingRoleEdit`) and `applyChange` sets only the touched
-field's scope. `RoleEditSchema` carries the two scopes in place of one `scope`, and refuses a field edited with none.
-`saveDesktop` writes each field at its own layer (`roleEditAt`). This repairs
-`a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`; `settings-proof`'s launch 9 shows it. The **seams
-view** §5 says so. The `config.save` payload's role entry changed shape; no package, edge, process, message kind,
-channel, command or store column changed.
+table's pending edits are held per role and per scope (`PendingRoleEdit` is `{ workspace?, global? }`), and
+`applyChange` writes a change under its own scope only. `RoleEditSchema` carries the same two-scope shape in place of one
+`scope`, strictly. `saveDesktop` writes each scope's part in its own file (`roleEditAt`). The Personas row shows the
+pending edit made at the selected scope. This repairs `a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`,
+in two rounds. The first gave each field one scope, and a second edit of the same field at the other scope dropped the
+first. `settings-proof`'s launches 9 and 10 show it. The **seams view** §5 says so. The `config.save` payload's role entry
+changed shape. No package, edge, process, message kind, channel, command or store column changed.
 
 **A card resting in `ready` across a restart is disclosed and started from the queue (REQ-TRACE-472, REQ-TRACE-482,
 REQ-TRACE-464).** The delivery service's `recoverLaunch` (`workspace-service/delivery.ts`) rebuilds a launch the restart

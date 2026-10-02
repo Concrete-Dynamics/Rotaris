@@ -196,21 +196,26 @@ export type SlotView = z.infer<typeof SlotViewSchema>;
 export type RoleView = z.infer<typeof RoleViewSchema>;
 export type RuntimeView = z.infer<typeof RuntimeViewSchema>;
 
-/**
- * REQ-CONFIG-259: "Role edits carry a per-field scope". The model's edit (a value or an unset) carries `modelScope`, the
- * reasoning's carries `thinkingScope`, and a field edited without its scope is refused, so a model unset at the
- * workspace and a reasoning unset at the global layer land where each was made (defect note
- * `a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`; the edit carried one scope for both until 2026-10-02).
- */
-export const RoleEditSchema = z.object({
+/** One role's field edits at one scope: a model (null is the baseline, removing the key) or its unset, a reasoning level or its unset. */
+export const RoleFieldEditsSchema = z.object({
   model: z.string().nullable().optional(),
   unsetModel: z.boolean().optional(),
-  modelScope: z.enum(CONFIG_SCOPES).optional(),
   thinking: z.enum(ROLE_REASONING_NAMES).nullable().optional(),
   unsetThinking: z.boolean().optional(),
-  thinkingScope: z.enum(CONFIG_SCOPES).optional(),
-}).refine((e) => (e.model === undefined && e.unsetModel !== true) || e.modelScope !== undefined, { message: 'a role\'s model edit carries no scope', path: ['modelScope'] })
-  .refine((e) => (e.thinking === undefined && e.unsetThinking !== true) || e.thinkingScope !== undefined, { message: 'a role\'s reasoning edit carries no scope', path: ['thinkingScope'] });
+}).strict();
+export type RoleFieldEditsPayload = z.infer<typeof RoleFieldEditsSchema>;
+/**
+ * REQ-CONFIG-259: "Role edits carry a per-field scope"; REQ-CONFIG-341: an Unset records "a pending unset of (role, field,
+ * scope)". A role's edits are held under the scope each was made at, so a model unset at the workspace and a reasoning
+ * unset at the global layer land where each was made, and a model unset at the workspace survives a model picked at the
+ * global layer (defect note `a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`; the edit carried one
+ * scope for the whole entry until 2026-10-02). Strict, so an entry in the old one-scope shape is refused rather than read
+ * as no edit at all.
+ */
+export const RoleEditSchema = z.object({
+  workspace: RoleFieldEditsSchema.optional(),
+  global: RoleFieldEditsSchema.optional(),
+}).strict();
 /**
  * REQ-CONFIG-256: the four `display:` fields, written per field and spelled as the file spells them
  * (REQ-CONFIG-172), so a `display:` key this screen does not offer is left as the file states it.

@@ -42,27 +42,57 @@ scratch workspace's file set `personas.tester.model`, and the global file set th
 Unsets were clicked and saved, and then the workspace file still held the tester's model. The global file had been
 reduced to `{}`: its model was unset at a layer the user never edited.
 
-**What changed.** REQ-CONFIG-259 reads "Role edits carry a per-field scope", and the repair carries that through all
-three steps:
+**What changed (first repair, commit `a30ef48`).** It gave each field one scope: the pending entry held `modelScope`
+and `thinkingScope`, the contract carried them in place of the one `scope`, and the writer split each role edit by
+layer. A later edit of the same field at the other scope replaced the earlier one, scope and all.
 
-- the pending entry (`PendingRoleEdit` in `packages/ui/src/settings/config-state.ts`) holds `modelScope` and
-  `thinkingScope`, and `applyChange` sets only the scope of the field a change touches. A later edit of the same
-  field replaces that field's pending edit, scope included; the other field keeps its own.
-- `savePayload` emits each field with its own scope.
-- the contract (`RoleEditSchema` in `packages/contracts/src/config.ts`) carries `modelScope` and `thinkingScope` in place
-  of the one `scope`, and refuses a field edited without its scope. `toDesktopSave` (`packages/config/src/snapshot.ts`)
-  passes both through.
-- the writer (`saveDesktop` in `packages/config/src/writers.ts`) splits each role edit by layer (`roleEditAt`), applies
-  the workspace's part to the workspace file and the global's part to the global file, and writes each file once.
-  A field edited with no scope is refused as `invalid` before any file is touched.
+**Falsified by the verifier, 2026-10-02 (repair round 1), and kept here beside its replacement.** One scope per field
+still dropped an edit. REQ-CONFIG-341 records "a pending unset of (role, field, **scope**)", and REQ-MONITOR-149 says an
+edit at either scope "can be unset back to inherited" without mutating the other. Sequence: the tester holds a model in
+both files; at Workspace the model's Unset is clicked; at Global a model is picked. The payload carried only
+`{ modelScope: 'global', model: … }`. The workspace unset was gone, and the override the user cleared stayed in the
+workspace file, shadowing the global pick: the same harm this note names. `settings-proof`'s new launch 10 reproduced
+it over a build of the first repair. The workspace file still set `model: large_model`, and the global file held the pick.
 
-`applyRoleEdit` now takes the field edits alone (`RoleFieldEdits`), which is what the model-preference path always passed.
+**What changed (the repair that stands).** The pending edits are held per (role, scope), each field's edit within:
 
-**Pinned by** the three `config-state.test.ts` cases: the two Unsets at two scopes; a model picked at Workspace that
-survives a reasoning level picked at Global; and a later edit of the same field replacing its scope while the other
-field keeps its own. Three `writers.test.ts` cases cover the two-scope unset (the workspace's model removed, the global
-reasoning removed and the global model kept, the load reading the global model), the two-scope pick, and the refusal of
-an unscoped field. A `contracts.test.ts` case covers the schema's admission and refusals. `settings-proof`'s launch 9
-(`personas-two-scopes`) passed on the repair with the whole proof at a load average of 3.0 rising to 4.8: the workspace
-file lost the tester's `personas` entry, the global file kept `tester: model: small_model` alone, and the row read
-`model: global` and `reasoning: default` after the save.
+- the pending entry (`PendingRoleEdit` in `packages/ui/src/settings/config-state.ts`) is `{ workspace?, global? }`, each a
+  `PendingRoleFields` (a model or its unset, a reasoning level or its unset). `applyChange` writes the change under its
+  own scope and leaves the other scope's edits as they were. A later edit of the same field at the SAME scope replaces
+  it there.
+- `savePayload` emits each scope's field edits under that scope.
+- `scopeCellOf` reads a field's pending unset at the layer the field's value came from, which is the override it clears.
+  The Personas row's model and reasoning controls show the pending edit made at the selected scope
+  (`ConfigSettings.tsx`), as the scope selector's hint says ("Switching scope shows that scope's values").
+- the contract (`RoleEditSchema` in `packages/contracts/src/config.ts`) is `{ workspace?, global? }` of
+  `RoleFieldEditsSchema`. Both are strict, so an entry in either earlier shape is refused rather than read as no edit.
+  `toDesktopSave` (`packages/config/src/snapshot.ts`) passes both scopes through.
+- the writer (`saveDesktop` in `packages/config/src/writers.ts`) takes each scope's part (`roleEditAt`), applies the
+  workspace's to the workspace file and the global's to the global file, and writes each file once. A field can no
+  longer arrive without a scope, so the first repair's "no scope" refusal is gone with the shape that allowed it.
+
+`applyRoleEdit` takes the field edits alone (`RoleFieldEdits`), which is what the model-preference path always passed.
+
+**Pinned by** four `config-state.test.ts` cases. The third is the verifier's sequence. Written against the first
+repair's shape, it was red: its payload was `{ modelScope: 'global', model: 'gpt-4o-mini' }`, with no unset. The cases are:
+- the two Unsets at two scopes;
+- a model picked at Workspace that survives a reasoning level picked at Global;
+- a model Unset at Workspace that survives a model picked at Global, both reaching the save (the verifier's sequence);
+- a later edit at the same scope replacing the earlier one while the other scope keeps its own.
+
+Three `writers.test.ts` cases cover:
+- the two-scope unset: the workspace's model removed, the global reasoning removed and the global model kept, and the
+  load reading the global model;
+- the two-scope pick;
+- one field at both scopes: the workspace override removed and the global pick written, with the load reading the pick.
+
+A `contracts.test.ts` case covers the schema's admission and its refusal of both earlier shapes.
+
+`settings-proof`'s launch 9 (`personas-two-scopes`) passed on the first repair, with the whole proof at a load average
+of 3.0 rising to 4.8. The workspace file lost the tester's `personas` entry, the global file kept
+`tester: model: small_model` alone, and the row read `model: global` and `reasoning: default` after the save.
+
+Launch 10 (`personas-one-field-two-scopes`, new) clicks the model's Unset at Workspace, switches to Global, picks
+`medium_model` there, and saves. Over a build of the first repair it was red: the workspace file still held
+`model: large_model` (load 7.2). On this repair it was green: the workspace file lost its `personas` entry, the global
+file held `tester: model: medium_model`, and the row read `model: global` (load 6.9).

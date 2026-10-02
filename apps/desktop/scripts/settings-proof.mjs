@@ -37,6 +37,9 @@
  *                     Workspace and its reasoning Unset at Global, then Save; the workspace file loses the model, the
  *                     global file loses the reasoning and keeps its model, and the row reads the global model and the
  *                     default reasoning afterwards.
+ *  10. personas-one-field-two-scopes — one field's edits at both scopes (REQ-CONFIG-341, REQ-MONITOR-149): the tester's
+ *                     model Unset clicked at Workspace, then a model picked for it at Global, then Save; the workspace
+ *                     file loses its override and the global file holds the pick, which the row then reads.
  *
  * The legal links and the licence bundle are exercised through the capture seam's scripted opener
  * (`ROTARIS_CAPTURE_OPEN_EXTERNAL`), which reports success or the platform refusal without launching a browser.
@@ -585,6 +588,58 @@ results.personasTwoScopes = {
   after: twoAfter.text,
   workspaceFile: wsAfter.includes('personas') ? 'personas left' : 'personas removed',
   globalFile: globalAfter.trim().split('\n').slice(1).join(' / '),
+};
+
+// ── 10. One field's edits at both scopes, both saved (REQ-CONFIG-341, REQ-MONITOR-149) ────────────────────────────
+// The tester's model is set in both files, so it reads `model: workspace`. With Workspace selected the model's Unset is
+// clicked; the edit scope is switched to Global and a model is picked there for the same role; Save. REQ-CONFIG-341
+// records "a pending unset of (role, field, scope)", so the workspace unset must survive the global pick: the first
+// repair held one scope per field, the global pick replaced the workspace unset, and the override the user cleared
+// stayed in the workspace file, shadowing the pick (the verifier's finding on 2026-10-02).
+const sameRoot = join(output, 'personas-one-field-two-scopes');
+const sWorkspace = join(sameRoot, 'workspace');
+const sLocal = join(sameRoot, 'local');
+const sPreferences = join(sameRoot, 'preferences');
+const sGlobalDir = configDirFor(sLocal);
+mkdirSync(join(sWorkspace, '.rotaris'), { recursive: true });
+mkdirSync(sGlobalDir, { recursive: true });
+const sWorkspaceFile = join(sWorkspace, '.rotaris', 'agents.yaml');
+const sGlobalFile = join(sGlobalDir, 'agents.yaml');
+writeFileSync(sWorkspaceFile, [
+  '# scratch configuration written by the proof script',
+  'models:', '  scripted: { provider: scripted, model_id: scripted }',
+  'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+  'personas:', '  tester:', '    model: large_model', '',
+].join('\n'));
+writeFileSync(sGlobalFile, ['# the global scope, written by the proof script', 'personas:', '  tester:', '    model: small_model', ''].join('\n'));
+const oneField = await launch('personas-one-field-two-scopes', sWorkspace, sLocal, sPreferences, {
+  ...openCategory('Personas'),
+  ROTARIS_CAPTURE_PROBE_AT: [`.settings__scope@2400`, `${UNSET_MODEL}@2400`, `.settings__scope@5400`, `.save-bar__status@5400`].join(';;'),
+  ROTARIS_CAPTURE_SELECT: '[aria-label="Edit scope"]>>global@3800;;[aria-label="Model for tester"]>>medium_model@4600',
+  ROTARIS_CAPTURE_CLICKS: `${UNSET_MODEL}@3000;;.save-bar .btn-primary>>Save@6000`,
+  ROTARIS_CAPTURE_PROBE: [...PROBES, '.settings__scope'].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '8000',
+});
+const oneAt = (ms, selector) => JSON.parse(new RegExp(`probe-at ${ms} ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])`).exec(oneField.log)?.[1] ?? 'null');
+const oneBefore = (oneAt(2400, '.settings__scope') ?? []).find((c) => c.text.startsWith('model: workspace'));
+if (!oneBefore) throw new Error(`the tester did not read a workspace model before the edits: ${JSON.stringify((oneAt(2400, '.settings__scope') ?? []).map((c) => c.text))}`);
+if ((oneAt(2400, UNSET_MODEL) ?? []).length !== 1) throw new Error('the tester\'s model Unset was not offered at Workspace');
+if (!oneField.log.includes(`capture: clicked "${UNSET_MODEL}"`)) throw new Error('the model Unset was not clicked');
+if (!/capture: select \[aria-label="Model for tester"\] = medium_model → chosen/.test(oneField.log)) throw new Error(`the model was not picked at Global:\n${oneField.log.split('\n').filter((l) => /capture: (clicked|select)/.test(l)).join('\n')}`);
+if (!(oneAt(5400, '.save-bar__status') ?? []).some((c) => c.text === 'Unsaved changes')) throw new Error('the two pending edits did not dirty the form');
+const sWsAfter = readFileSync(sWorkspaceFile, 'utf8');
+const sGlobalAfter = readFileSync(sGlobalFile, 'utf8');
+// REQ-CONFIG-341/MONITOR-149: the unset at the workspace cleared the workspace's override, and the pick at Global landed there.
+if (/tester:/.test(sWsAfter)) throw new Error(`the model unset made at Workspace did not survive the model picked at Global; the workspace file still holds the override:\n${sWsAfter}`);
+if (!/tester:\n {4}model: medium_model\n/.test(sGlobalAfter)) throw new Error(`the model picked at Global did not reach the global file:\n${sGlobalAfter}`);
+if ((text(oneField.probes, '.save-bar__status')[0] ?? '') !== 'All changes saved') throw new Error('the save did not leave the form clean');
+const oneAfter = rows(oneField.probes, '.settings__scope').find((c) => c.text.startsWith('model: global'));
+if (!oneAfter) throw new Error(`after the save the tester did not read the global model: ${JSON.stringify(rows(oneField.probes, '.settings__scope').map((c) => c.text))}`);
+results.personasOneFieldTwoScopes = {
+  before: oneBefore.text,
+  after: oneAfter.text,
+  workspaceFile: sWsAfter.includes('personas') ? 'personas left' : 'personas removed',
+  globalFile: sGlobalAfter.trim().split('\n').slice(1).join(' / '),
 };
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

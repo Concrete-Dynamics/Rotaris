@@ -187,35 +187,25 @@ export interface RoleFieldEdits {
 }
 
 /**
- * REQ-CONFIG-259: "Role edits carry a per-field scope". The model's edit is written at `modelScope` and the reasoning's at
- * `thinkingScope`, so one role's edits at two scopes each land in their own file (defect note
- * `a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`; until 2026-10-02 one `scope` routed the whole entry).
+ * REQ-CONFIG-259: "Role edits carry a per-field scope"; REQ-CONFIG-341: an Unset records "a pending unset of (role, field,
+ * scope)". One role's edits are held per scope, and each field's edit at a scope is written in that scope's file: a model
+ * unset at the workspace and a reasoning unset at the global layer each land where they were made, and so do a model
+ * unset at the workspace and a model picked at the global layer (defect note
+ * `a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`; until 2026-10-02 one `scope` routed the whole entry,
+ * and then one scope per field still dropped the first of two edits of one field at two scopes).
  */
-export interface RoleEdit extends RoleFieldEdits {
-  readonly modelScope?: RoleEditScope;
-  readonly thinkingScope?: RoleEditScope;
+export interface RoleEdit {
+  readonly workspace?: RoleFieldEdits;
+  readonly global?: RoleFieldEdits;
 }
 
-/** The part of a role edit made at `scope`, or undefined when neither field was edited there. */
+/** The part of a role edit made at `scope`, or undefined when no field was edited there. */
 function roleEditAt(edit: RoleEdit, scope: RoleEditScope): RoleFieldEdits | undefined {
-  const model = edit.modelScope === scope && (edit.model !== undefined || edit.unsetModel === true);
-  const thinking = edit.thinkingScope === scope && (edit.thinking !== undefined || edit.unsetThinking === true);
-  if (!model && !thinking) return undefined;
-  return {
-    ...(model && edit.model !== undefined ? { model: edit.model } : {}),
-    ...(model && edit.unsetModel === true ? { unsetModel: true } : {}),
-    ...(thinking && edit.thinking !== undefined ? { thinking: edit.thinking } : {}),
-    ...(thinking && edit.unsetThinking === true ? { unsetThinking: true } : {}),
-  };
-}
-
-/** A field edited with no scope to write it at: the save is refused rather than guessing a layer. */
-function unscopedRoleField(roles: Readonly<Record<string, RoleEdit>>): string | undefined {
-  for (const [role, e] of Object.entries(roles)) {
-    if ((e.model !== undefined || e.unsetModel === true) && e.modelScope === undefined) return `personas.${role}.model: the edit carries no scope`;
-    if ((e.thinking !== undefined || e.unsetThinking === true) && e.thinkingScope === undefined) return `personas.${role}.thinking: the edit carries no scope`;
-  }
-  return undefined;
+  const at = edit[scope];
+  if (at === undefined) return undefined;
+  const model = at.model !== undefined || at.unsetModel === true;
+  const thinking = at.thinking !== undefined || at.unsetThinking === true;
+  return model || thinking ? at : undefined;
 }
 
 export interface DesktopSave {
@@ -297,11 +287,9 @@ export async function saveDesktop(files: { workspace: string; global: string }, 
   if (save.compressorThresholdPercentage !== undefined && (!Number.isInteger(save.compressorThresholdPercentage) || save.compressorThresholdPercentage < 1 || save.compressorThresholdPercentage > 100)) {
     return err({ code: 'invalid', file: files.workspace, fault: 'compressor.threshold_percentage: must be an integer between 1 and 100' });
   }
-  const unscoped = unscopedRoleField(save.roles ?? {});
-  if (unscoped !== undefined) return err({ code: 'invalid', file: files.workspace, fault: unscoped });
   const ws = openDocument(files.workspace);
   if (!ws.ok) return ws.error.code === 'not-a-mapping' ? err({ ...ws.error, fault: `the workspace agents.yaml is not a mapping (${ws.error.fault})` }) : ws;
-  // REQ-CONFIG-259: each field at its own layer — the workspace's part of every role edit, then the global's.
+  // REQ-CONFIG-259/341: each field at the layer it was edited at — the workspace's part of every role edit, then the global's.
   const atScope = (scope: RoleEditScope) => Object.entries(save.roles ?? {}).flatMap(([role, e]) => { const part = roleEditAt(e, scope); return part === undefined ? [] : [[role, part] as const]; });
   const workspaceEdits = atScope('workspace');
   const globalEdits = atScope('global');

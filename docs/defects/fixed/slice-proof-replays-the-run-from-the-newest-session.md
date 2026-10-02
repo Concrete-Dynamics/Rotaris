@@ -21,5 +21,6 @@ Found by resuming the first run of `slice-proof` against the registered self-hos
 
 - Scenario 3 reads the session its own log names (`session <id> started` in `run.log`), fresh or replayed, and fails
   naming the id when the store does not hold it; the newest session stands in only for a log that names none.
+- Pinned in `apps/desktop/scripts/lib/endpoint-registry.test.ts` ("reads the run's session by the id its log names").
 - Shown by the resumed run (`--resume --from=sign-out`) that passed after it, and by the fresh run recorded in
   [`first-executions.md`](../../architecture/first-executions.md) (2026-10-02, slice-proof against a self-hosted endpoint).

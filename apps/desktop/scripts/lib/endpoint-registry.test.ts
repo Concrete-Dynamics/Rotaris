@@ -125,4 +125,19 @@ describe('slice-proof drives the controls the product draws', () => {
     // A step the seam could not drive fails the scenario at once, naming it, not five assertions later.
     expect(text).toMatch(/no such \(control\|option\)/);
   });
+  it('signs out from the provider row and its confirmation, not from a settings panel', () => {
+    const text = readFileSync(join(resolve(import.meta.dirname, '..'), 'slice-proof.mjs'), 'utf8');
+    expect(text).toContain('[data-provider="${PROVIDER_ID}"] .provider-row__actions button>>Sign out');
+    expect(text).toContain('[role="dialog"] .dialog-actions button>>Sign out');
+  });
+  it('reads the run\'s session by the id its log names, so a replay after the intents never takes the newest', () => {
+    const text = readFileSync(join(resolve(import.meta.dirname, '..'), 'slice-proof.mjs'), 'utf8');
+    expect(text).toContain('/session ([0-9a-f-]{36}) started/.exec(log3)');
+    expect(text).toMatch(/FROM sessions WHERE session_id = \?/);
+  });
+  it('runs spike 6 under the verbose reporter, so its figures reach the pack on a green run', () => {
+    const text = readFileSync(join(resolve(import.meta.dirname, '..'), 'slice-proof.mjs'), 'utf8');
+    for (const line of text.split('\n').filter((l) => l.includes('ai-sdk-live.spike.test.ts') && /spawnSync\(/.test(l))) expect(line).toContain('--reporter=verbose');
+    expect(text.split('\n').filter((l) => l.includes('ai-sdk-live.spike.test.ts') && /spawnSync\(/.test(l))).toHaveLength(2);
+  });
 });

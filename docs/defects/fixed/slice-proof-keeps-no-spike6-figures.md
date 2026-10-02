@@ -27,4 +27,6 @@ Confirmed by running the harness by hand against the same endpoint: the default 
 - Scenario 4 runs the harness with `--reporter=verbose`, so its figures reach `spike6.log` (key substituted out) and
   `results.spike6.lines`.
 - Shown end to end by the run recorded in [`first-executions.md`](../../architecture/first-executions.md) (2026-10-02,
-  slice-proof against a self-hosted endpoint); not pinned by a unit test, since only a live endpoint prints the lines.
+  slice-proof against a self-hosted endpoint). The invocation is pinned in
+  `apps/desktop/scripts/lib/endpoint-registry.test.ts` ("runs spike 6 under the verbose reporter", both spawn forms);
+  the lines themselves only a live endpoint prints.

@@ -713,7 +713,7 @@ two sign-in methods, Copilot's and codex's discovery, the bridges, the usage and
 the grant on Windows; `<data>/tokens` replacing the reserved `credentials`; the lock inside the directory (OQ-19); the
 shipped capability metadata empty (OQ-18); REQ-PROVIDER-091's override read as the named-entry overlay; the zero-model
 recovery without "edit by hand" (no configuration editor). `ROTARIS_CAPTURE_PROVIDER_FILL`, `ROTARIS_CAPTURE_WAIT`
-and `ROTARIS_CAPTURE_WAIT_MS` are verification seams; a third `>>key` segment on the fill seam fills the key field and presses the dialog's own button, which is how `pnpm live-run` signs in unattended (`AGENTS.md`); `ROTARIS_CAPTURE_PROVIDER_EMPTY_OK` takes the
+and `ROTARIS_CAPTURE_WAIT_MS` are verification seams; a third `>>key` segment on the fill seam fills the key field and presses the dialog's own button, which is how `pnpm live-run` signs in unattended (`AGENTS.md`) and how `pnpm slice-proof` gives the registered endpoint its stored key; `ROTARIS_CAPTURE_PROVIDER_EMPTY_OK` takes the
 zero-model alert's own "Continue anyway", so an endpoint whose `/models` answers with nothing does not strand a run
 that no one is watching.
 
@@ -732,7 +732,7 @@ would, lives in the system temp directory, and `credential-facts.json` records t
 token. Scenarios: (1) first launch — the notice, Settings → Models → Add endpoint, the credential file's five keys,
 the key it holds being the one the dialog was given, its exact protection, the snapshot's record and picks, the
 discovered-models count read as a count (at least one, its noun agreeing with it, REQ-SHELL-044), the bootstrapped
-`agents.yaml`, and a log free of the key; (2) the three tier slots set to the registered model and saved; (3) one real
+`agents.yaml`, and a log free of the key; (2) the three tier slots set to the registered model and saved, or, on a one-model endpoint whose discovery picks already name it, asserted through the discovered picks; (3) one real
 run — the lease, the request to the endpoint, a settled tool row, usage figures and the terminal result from the store;
 (3b, Part L) three more real runs, one prompt per intent family, each asserted to classify from the small slot and never
 fall back, the answering rung recorded; (4) spike 6's live harness against the same URL, model and key; (5) sign-out

@@ -34,7 +34,8 @@ import { proofEndpoint } from './lib/endpoint-registry.mjs';
  *                      dialog's own button pressed (or the owner pastes, `--paste-key`); the credential file, its
  *                      protection, the snapshot, the discovered-models count and the starter agents.yaml asserted;
  *                      the log holds no credential.
- *   2. slots         — the three tier slots set to the registered model and saved.
+ *   2. slots         — the three tier slots set to the registered model and saved, or, on a one-model endpoint whose
+ *                      discovery picks already name it, asserted through the discovered picks.
  *   3. run           — one real run: the leased bearer, a request to the endpoint, an agent row, a tool call
  *                      settled through the gate, usage figures, the terminal result.
  *   3b. intents      — three more real runs, one prompt per intent family: the classifier's answer is a category
@@ -44,7 +45,8 @@ import { proofEndpoint } from './lib/endpoint-registry.mjs';
  *   5. sign-out      — Sign out from the providers card; the file gone, the snapshot kept.
  *   6. refused       — a relaunch with a prompt: the run refused "Provider authentication required".
  *
- * `--resume` keeps the profile; `--from=<scenario>` (with --resume) replays the earlier scenarios from their
+ * `--resume` keeps the profile (in the system temp directory, so a host that clears it at reboot leaves `--resume`
+ * nothing to keep: sign in again with a fresh run); `--from=<scenario>` (with --resume) replays the earlier scenarios from their
  * logs and the store instead of launching them, so one scenario can be re-run without signing in again.
  * `--skip-build` trusts `apps/desktop/out`. On a host without a display, run it under
  * `xvfb-run -a -s "-screen 0 1600x1000x24" node apps/desktop/scripts/slice-proof.mjs --skip-build`.

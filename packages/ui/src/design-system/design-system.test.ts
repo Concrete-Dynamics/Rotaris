@@ -121,6 +121,24 @@ describe('production design-system layer', () => {
       expect(markup).not.toContain('aria-label="Plan first');
     });
 
+    it('names a hinted SearchableSelect row by its label and describes it by its hint, never the two run together (REQ-MONITOR-194)', () => {
+      const options = [
+        { value: 'alpha', label: 'alpha', hint: 'provider reported insufficient quota in this session' },
+        { value: 'beta', label: 'beta' },
+      ];
+      const markup = render(design.SearchableSelect, { value: '', options, ariaLabel: 'Change model', onChange: () => undefined, defaultOpen: true });
+      const alpha = markup.slice(markup.lastIndexOf('<div', markup.indexOf('data-value="alpha"')), markup.indexOf('data-value="alpha"') + 40);
+      const labelId = /aria-labelledby="([^"]+)"/.exec(alpha)?.[1];
+      const hintId = /aria-describedby="([^"]+)"/.exec(alpha)?.[1];
+      expect(labelId).toBeDefined();
+      expect(hintId).toBeDefined();
+      expect(markup).toContain(`id="${labelId}">alpha</span>`);
+      expect(markup).toContain(`id="${hintId}">provider reported insufficient quota in this session</span>`);
+      const beta = markup.slice(markup.lastIndexOf('<div', markup.indexOf('data-value="beta"')), markup.indexOf('data-value="beta"') + 40);
+      expect(beta).not.toContain('aria-labelledby');
+      expect(beta).not.toContain('aria-describedby');
+    });
+
     it('carries no description on an option with no hint', () => {
       const markup = render(design.PopoverMenu, {
         value: 'a', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }],

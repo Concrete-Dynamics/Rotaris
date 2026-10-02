@@ -44,7 +44,7 @@ model choice (REQ-NOTIFY-074, `Sessions.restartAfterAuthFailure`) is a choice fo
 wired to the exclusion either. Both are recorded in
 [a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md](../a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md),
 and the wait surface's picker, which does not list excluded pairs with their reason, in
-[the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md](../the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md).
+[the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md](the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md) (repaired since, by bundle `fin8-noticed-gaps-4`).
 
 ## Specs
 

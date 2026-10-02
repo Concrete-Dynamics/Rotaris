@@ -78,6 +78,8 @@ export interface SearchableSelectProps extends Omit<ButtonHTMLAttributes<HTMLBut
    * `triggerText` below is the only text either shell draws.
    */
   readonly strip?: { readonly icon: string; readonly labels?: Readonly<Record<string, string>> | undefined; readonly iconOnly?: boolean | undefined } | undefined;
+  /** Mounted open, as PopoverMenu's `defaultOpen`: the rows can then be read from a static render. */
+  readonly defaultOpen?: boolean | undefined;
 }
 
 export const SEARCHABLE_SELECT_MAX_ROWS = 8;
@@ -94,8 +96,8 @@ function rowSuffix(option: SearchableOption): string {
   return `${option.label} — ${option.suffix ?? 'unavailable'}`;
 }
 
-export function SearchableSelect({ value, options, ariaLabel, onChange, filterPlaceholder = 'Filter models…', emptyText = 'No matching model.', className, disabled, title, ui, children, strip, ...rest }: SearchableSelectProps) {
-  const [open, setOpen] = useState(false);
+export function SearchableSelect({ value, options, ariaLabel, onChange, filterPlaceholder = 'Filter models…', emptyText = 'No matching model.', className, disabled, title, ui, children, strip, defaultOpen, ...rest }: SearchableSelectProps) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
   const [query, setQuery] = useState('');
   const debounced = useDebouncedValue(query, FILTER_DEBOUNCE_MS);
   const filtered = filterSearchableOptions(options, debounced);
@@ -287,6 +289,10 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
                   role="option"
                   aria-selected={o.value === value}
                   aria-disabled={unavailable}
+                  // A hinted row is named by its label alone and described by its hint, as PopoverMenu's rows are, so the
+                  // name is never the label and hint run together ("alphaprovider reported…", fin8's verifier).
+                  aria-labelledby={o.hint !== undefined ? `${listId}-${index}-label` : undefined}
+                  aria-describedby={o.hint !== undefined && !unavailable ? `${listId}-${index}-hint` : undefined}
                   aria-description={o.unavailableReason ?? undefined}
                   title={o.unavailableReason ?? undefined}
                   id={`${listId}-${index}`}
@@ -297,8 +303,8 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
                   onClick={() => choose(index)}
                 >
                   {unavailable && <i className="ph ph-warning-circle chip-menu__icon" aria-hidden="true" />}
-                  <span className="chip-menu__label">{rowSuffix(o)}</span>
-                  {o.hint !== undefined && <span className="chip-menu__hint">{o.hint}</span>}
+                  <span className="chip-menu__label" id={o.hint !== undefined ? `${listId}-${index}-label` : undefined}>{rowSuffix(o)}</span>
+                  {o.hint !== undefined && <span className="chip-menu__hint" id={`${listId}-${index}-hint`}>{o.hint}</span>}
                 </div>
               );
             })}

@@ -169,6 +169,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   /** Begin following: every attach starts with a whole-session update (REQ-MONITOR-214). */
   z.object({ kind: z.literal('session.subscribe'), sessionId: z.string() }),
   z.object({ kind: z.literal('session.unsubscribe'), sessionId: z.string() }),
+  /**
+   * REQ-NOTIFY-031/032 with REQ-MONITOR-249/252: the window no longer shows the session — "New session" released it to run
+   * on in the background — so main stops counting it as focused there. The relay subscription stays, so its background
+   * notices and terminal frames still reach the window; `session.unsubscribe` is the one that drops it.
+   */
+  z.object({ kind: z.literal('session.release'), sessionId: z.string() }),
   z.object({ kind: z.literal('session.reconcile'), sessionId: z.string() }),
   z.object({ kind: z.literal('session.pageOlder'), sessionId: z.string(), beforeIndex: z.number().int() }),
   /** ADR-0010 channel 1 over channel 5: the shell resolves focus to a session id before sending (ADR-0013). */

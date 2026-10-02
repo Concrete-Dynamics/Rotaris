@@ -9123,3 +9123,77 @@ so its reading is right under either answer; a continuation whose snapshot names
 (recorded session-wide, as REQ-SESSION-026's override, and taken by the continuation unless the composer's next-run choice
 differs), or ends with its run (and its row then says so when no further iteration of the run is queued); the same for a
 reasoning switch; and, if it reaches the next run, how it stands beside the composer's next-run chip.
+
+**OQ-186 — Which models does the quota-wait surface's "change model" list: REQ-MONITOR-193's candidates or REQ-NOTIFY-074's
+list?** *(REQ-MONITOR-303, "a model picker offering the fallback candidates of REQ-MONITOR-193, listing excluded pairs with
+their reason rather than hiding them (REQ-MONITOR-194)"; REQ-MONITOR-193, "exactly the configured models … whose size tier
+equals the current model's tier, less any model excluded … in the order their models are declared"; REQ-NOTIFY-263,
+"Changing model opens the model list of REQ-NOTIFY-074 and pins the chosen model for the session under REQ-NOTIFY-089";
+REQ-NOTIFY-074, "lists models from providers other than the one that failed, ahead of any others … Where no other provider
+offers a model, every model except the one that failed is listed"; REQ-MONITOR-194, "from any model selector or from the
+quota-wait decision surface … listed there rather than hidden, annotated". Raised 2026-10-02 by the repair of
+[`the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md`](../defects/fixed/the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md)
+(fin8, bundle `fin8-noticed-gaps-4`), as OQ-185, and renumbered OQ-186 at its merge of `origin/main` because the
+ladder-overrides bundle had taken OQ-185 meanwhile. Open.)*
+
+Two requirements describe the one control. REQ-MONITOR-303 lists REQ-MONITOR-193's candidates — the same-tier configured
+models from any provider, in declaration order, less the pairs held out of quota — and beside them the excluded pairs,
+annotated; a model of another tier is not offered, and a model that resolves through no tier alias "may still be chosen
+explicitly" without saying from where. REQ-NOTIFY-263 opens REQ-NOTIFY-074's list — every model, other providers first,
+the one that failed left out, each labelled with its model name and its provider — which has no tier and lists no excluded
+pair as such, and REQ-NOTIFY-074 written for the authentication recovery dialog leaves the failed model out where
+REQ-MONITOR-194 would have the waiting pair, when it is the one held out of quota, listed and annotated. They agree on
+one thing: REQ-MONITOR-194 asks every model selector to list an excluded pair annotated with its reason, and an explicit
+choice of it to clear its exclusion.
+
+**What the build proceeds under** (`WaitHeader` and `waitModelOptions`, `packages/ui/src/WorkspaceView.tsx`; the record's
+`wait.excluded`, `excludedModelKeys` in `packages/engine/src/run/resilience.ts`): what both agree on, over the list as it
+was built. The picker lists every configured model key as the configuration snapshot gives them (alphabetical; the
+waiting model included), which holds REQ-MONITOR-193's candidates and REQ-NOTIFY-074's models alike, with neither one's
+filter nor its order applied; a key whose provider-and-model pair the session recorded out of quota is listed in place,
+annotated "provider reported insufficient quota in this session", and stays choosable. Choosing it is the run's explicit
+choice (`setEntryModel`), which clears the chosen pair's exclusion (`ResilienceMemory.clearExhausted`, plan fin8's
+ladder-overrides bundle) and, in a quota wait on that very pair, resolves the wait as a retry on it with no override
+persisted. (Built first on `origin/main` 4ae715a, where that choice cleared nothing and the waiting pair was refused as "the
+model that is waiting"; the ladder-overrides merge brought the clearing.) No model is labelled with its provider.
+
+**What a ruling decides.** Which list the picker offers — REQ-MONITOR-193's same-tier candidates beside the excluded pairs,
+REQ-NOTIFY-074's (other providers first, each labelled with its provider), or one ahead of the other — and in which order;
+whether the waiting pair is listed when it is not held out of quota (a rate-limit wait); and whether a model of no tier is
+offered here.
+
+**OQ-187 — Where does the project setup consent dialog stand: over a corner of the view, or in a region of the window that
+takes room from every view?** *(REQ-WORKSPACE-106, "a non-modal, window-level dialog (the rest of the app stays
+navigable)"; REQ-WORKSPACE-105, opened by itself once per workspace open and open until answered; ADR-0048's non-modal
+window-level level, "an in-window panel that does not trap focus and leaves the rest navigable"; REQ-SHELL-022's 1000x680
+minimum; REQ-SHELL-024's vertical order. Raised 2026-10-02 by the repair of
+[`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](../defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md)
+(fin8, bundle `fin8-noticed-gaps-4`), as OQ-186, and renumbered OQ-187 at its merge of `origin/main` because the
+ladder-overrides bundle had taken OQ-185 meanwhile. Open.)*
+
+The dialog is window-level: it belongs to no view and is shown whichever view is on screen, so the decision it waits on is
+not lost by navigating. Every placement of such a surface takes something. Fixed at the window's corner it lay over the
+title bar's Sessions, Minimize, Maximize and Close window and the notice's answers (the defect above). An overlay of the
+rail-and-view region leaves the window's chrome and the notice reachable and lies over the view's top corner instead. A
+region of the window laid out in flow — a band below the notice slot, or a column beside the view — overlays nothing but
+takes its height or width from every view, which at REQ-SHELL-022's minimum some views do not have to give (the
+Workspace view's transcript floor and composer alone are most of it). The re-authentication prompt, ADR-0048's other
+surface of this level, was moved in flow because it belongs to one view (OQ-181); this one does not. The specification
+does not say which the setup dialog takes, nor whether "the rest of the app stays navigable" is met by controls that are
+reachable from the keyboard, and from the pointer once the dialog is answered, but not by the pointer while it is open.
+
+**What the build proceeds under** (`AppShell`'s `windowDialog` slot, `packages/ui/src/AppShell.tsx`; `.project-setup` in
+`packages/ui/src/shell.css`): an overlay of the rail-and-view region, `absolute` at its top corner with the language's
+`--rt-space-4` inset, bounded by that region (scrolling, its answers pinned to its floor, when shorter than it needs). It
+begins below the title bar and the notice slot at any notice height, so no title-bar control and no notice answer is
+under it (`init-proof`'s `consent` scenario measures five, none covered). It lies over the view's top corner: measured in
+the built app on 2026-10-02, at 1440x900 the Overview's List sessions and New session and the Workspace inspector's
+Persona, Steer, Cancel and Pop out; at 1000x680 also the run header's model and reasoning switches and the composer's
+right part (its Send is disabled while this prompt is unanswered, REQ-WORKSPACE-112), and the top-right controls of the
+other views (Git's New worktree, Library's search, Settings' model rows). It traps no focus (no `aria-modal`, no backdrop),
+so they stay reachable from the keyboard (not measured), and Escape answers the dialog as a skip (REQ-WORKSPACE-107).
+
+**What a ruling decides.** Whether the dialog may lie over the view while it is open (and then which corner), or stands in
+a region of its own that every view yields room to at REQ-SHELL-022's minimum (and then which, with what bound on its
+height), or in another form — collapsed to a bar until opened, as the re-authentication prompt yields beside an expanded
+plan gate.

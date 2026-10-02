@@ -108,7 +108,13 @@ minimum. **In flow is not enough beside another panel open until answered** (the
 transcript is hidden) the prompt took the height first and left the gate's three answers unreachable at 1000x680. Decide
 which of the two yields — the one the run is not stopped on — and give it a form whose height is one row of its answers
 on the state where they meet (`.workspace[data-plan-gate='1']:not([data-plan-gate-collapsed='1']) > .reauth-prompt`, the
-prompt's bar), never a written height, then measure both panels' answers at the minimum in that state.
+prompt's bar), never a written height, then measure both panels' answers at the minimum in that state. **A window-level dialog that belongs to no view** (REQ-WORKSPACE-106's project setup consent dialog) is the exception
+the rule above cannot place: in flow it would take room from every view at the minimum. It goes in AppShell's
+`windowDialog` slot, `absolute` against the rail-and-view region (`.body`) at its top corner with the `--rt-space-4`
+inset and bounded by that region, so the title bar and the notice slot are never under it, and it lies over the view's
+corner while open (OQ-187; since 2026-10-02, when it moved off the window's corner,
+`../../defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`). Measure the chrome's and
+the notice's buttons at their centres with it open (`init-proof`'s `consent`).
 
 | # | File | What lands here |
 |---|---|---|

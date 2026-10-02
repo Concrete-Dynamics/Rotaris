@@ -18,7 +18,7 @@ import { cut } from './run/cut.js';
 export { offersToldIn, openOffersText } from './run/offers.js';
 import { planSection } from './run/plan-text.js';
 export { planRequestSection, planSection } from './run/plan-text.js';
-import { entryOf, pairKey, providerIdentity, ResilienceMemory, withSettings, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
+import { entryOf, overridesInForce, pairKey, providerIdentity, ResilienceMemory, withSettings, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
 import type { ResolvedTrigger } from './run/compression.js';
 import { SessionLog, type LogLevel } from './session-log.js';
 import { UserPresence } from './run/presence.js';
@@ -265,6 +265,14 @@ export interface SessionsDeps {
    */
   /** `code: 'confinement'` (REQ-NOTIFY-060/061): the refusal is the start-time confinement gate's, kept as its own class. */
   readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean; readonly sessionId: SessionId; readonly executionRoot: string; readonly entryPersona?: string | undefined }) => Result<RunSetup, { readonly reason: string; readonly code?: 'confinement' }>) | undefined;
+  /**
+   * REQ-CHAT-006 / REQ-SESSION-026: the model catalogue of a workspace's configuration as it stands, for READING a session no
+   * run of this process has started — which configured key a session-wide override replaces. A read, never a run start: it
+   * must not do what `configure` does for a run (the run host's MCP configuration load, its per-run maps, its log line), so
+   * a record read never calls `configure`. `null` where the configuration does not load; absent, a resting session's
+   * record names no override.
+   */
+  readonly restingCatalogue?: ((workspaceRoot: string) => readonly CatalogueEntry[] | null) | undefined;
 }
 
 /** What a run starts with once configuration resolves it. */
@@ -345,6 +353,21 @@ interface Live {
   commitTarget?: { owner?: ProjectionOwner; run?: Run } | undefined;
   /** Part Q: the session-wide memory (REQ-ORCH-091 a/d) — fresh for a new session, rehydrated from the timeline for a loaded one. */
   memory: ResilienceMemory | null;
+  /**
+   * REQ-CHAT-006 / REQ-SESSION-026: for a session no run of this process has started, the catalogue its record's
+   * `modelOverrides` are read against — resolved once, the first time its record is read, and only where its timeline holds
+   * a `model_override` entry (`null` otherwise, or where the configuration does not resolve). Absent until then.
+   * Never re-read for the life of the process: every path that writes a `model_override` (a wait choice, an
+   * authentication pin or its take-back) acts on a run this process started, and `s.run`, once set, is never cleared and
+   * is read first, so a `null` cached before an override existed never hides one written after.
+   */
+  restingCatalogue?: readonly CatalogueEntry[] | null;
+  /**
+   * The memory a resting read rehydrated against `restingCatalogue`, kept apart from `memory`: a run that starts later
+   * rehydrates its own through its configuration (`memoryOf`), so a read never decides what a run resolves. Read only
+   * while `memory` is null; once a run or an at-rest control has rehydrated `memory`, the record reads that.
+   */
+  restingMemory?: ResilienceMemory | null;
   /** Part Y (REQ-ORCH-149): the session's artifact store, one per live session, shared across iterations and continuations. */
   artifacts: ArtifactStore | null;
   /**
@@ -823,6 +846,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     toolCalls: { total: r.tool_calls, agents: Math.max(0, ...toolCalls.map((t) => t.agents)), byTool: toolCalls.map((t) => ({ tool: t.tool_name, count: t.count })) },
     worktreeBranch: parseBinding(r.worktree)?.branch ?? null,
     wait: null,
+    modelOverrides: [],
   };
 }
 
@@ -1316,7 +1340,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1376,7 +1400,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -2468,6 +2492,40 @@ export class Sessions {
     if (!row || row.plan_released === 1) return undefined;
     const cycles = dal.planCyclesOf(sessionId);
     return { plan: { cycle: (cycles[cycles.length - 1]?.cycle ?? 0) + 1, changes: '', withholds } };
+  }
+
+  /**
+   * REQ-CHAT-006 / REQ-SESSION-026 / REQ-NOTIFY-089: the session-wide overrides in force, by model key, for the record. A
+   * session a run of this process has started reads its run's catalogue and the session's memory; one opened from the store
+   * with no run here reads its workspace's catalogue once through the side-effect-free `restingCatalogue` port — only where
+   * its timeline holds an override — and rehydrates a memory of its own against it (`restingMemory`, never the session's
+   * `memory`, which the next run rehydrates through its configuration), so the chips name the override after a restart too.
+   */
+  private modelOverridesFor(sessionId: SessionId): { from: string; to: string }[] {
+    const s = this.live.get(sessionId);
+    return s ? this.modelOverridesOf(s, sessionId) : [];
+  }
+  private modelOverridesOf(s: Live, sessionId: SessionId): { from: string; to: string }[] {
+    if (s.run) return s.run.modelOverridesInForce;
+    if (s.restingCatalogue === undefined) {
+      s.restingCatalogue = null;
+      s.restingMemory = null;
+      const stored = s.dal.getSession(sessionId);
+      const timeline = stored && this.deps.restingCatalogue ? s.dal.timelineOf(sessionId) : [];
+      if (stored && timeline.some((t) => t.name === 'model_override')) {
+        // A read: the side-effect-free catalogue port, never `setupFor`/`configure`, which is a run start's (the verifier's
+        // finding: it re-loaded the run host's MCP configuration and wrote its per-run maps for a session with no run).
+        const catalogue = this.deps.restingCatalogue!(stored.workspace_root);
+        if (catalogue) {
+          s.restingCatalogue = catalogue;
+          const resolve = (key: string): ModelChoice | null => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: e.thinking } : null; };
+          // Silent: a key this catalogue cannot resolve is the run's to warn about when one starts, not a read's.
+          s.restingMemory = ResilienceMemory.rehydrate(timeline, resolve);
+        }
+      }
+    }
+    const memory = s.memory ?? s.restingMemory ?? null;
+    return s.restingCatalogue && memory ? overridesInForce(s.restingCatalogue, memory) : [];
   }
 
   /** The session's memory (REQ-ORCH-091 a/d, REQ-SESSION-026), rehydrated from its timeline once, as a continuation does. */

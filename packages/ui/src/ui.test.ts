@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRecord, CheckpointListPayload, SessionListItemPayload } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
-import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
+import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
 import type { GitViewState, GitWorktreeRow } from '@rotaris/contracts';
 import { resolveTheme, isBusy, presentationStatus } from '@rotaris/contracts';
 
 describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
-  const wait = { provider: 'openrouter', model: 'gpt-x', exhausted: false, resumeAt: '2026-09-05T10:00:42.000Z', attempt: 1, reason: 'Provider openrouter is rate limiting model gpt-x. Wait 42 s before retrying.', agent: 'orchestrator', rejection: null };
+  const wait = { provider: 'openrouter', model: 'gpt-x', exhausted: false, resumeAt: '2026-09-05T10:00:42.000Z', attempt: 1, reason: 'Provider openrouter is rate limiting model gpt-x. Wait 42 s before retrying.', agent: 'orchestrator', rejection: null, excluded: [] };
   it('names the provider and the model, states the exhausted mark, and counts down against the surface clock', () => {
     const at = Date.parse('2026-09-05T10:00:00.000Z');
     expect(waitHeaderText(wait, at)).toEqual({ headline: 'Waiting on a provider limit: openrouter / gpt-x (orchestrator) — provider not marked exhausted, attempt 1.', timing: 'Resumes automatically in 0:42.', remainingS: 42 });
@@ -15,6 +15,21 @@ describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
     expect(waitHeaderText({ ...wait, exhausted: true, resumeAt: null, attempt: 3 }, at)).toEqual({ headline: 'Waiting on a provider limit: openrouter / gpt-x (orchestrator) — provider marked exhausted, attempt 3.', timing: 'Resumes only when you decide.', remainingS: null });
     expect(formatRemaining(3_725)).toBe('1:02:05');
     expect(formatRemaining(-3)).toBe('0:00');
+  });
+  it('REQ-MONITOR-194 / REQ-MONITOR-303: the change-model list annotates each pair held out of quota with the reason, and lists it all the same', () => {
+    expect(EXCLUDED_MODEL_HINT).toBe('provider reported insufficient quota in this session');
+    expect(waitModelOptions(['alpha', 'beta', 'gamma'], [])).toEqual([
+      { value: '', label: 'Choose a model…' }, { value: 'alpha', label: 'alpha' }, { value: 'beta', label: 'beta' }, { value: 'gamma', label: 'gamma' },
+    ]);
+    // Listed in place, choosable (no unavailableReason: an explicit choice is what clears the exclusion), the reason as its hint.
+    expect(waitModelOptions(['alpha', 'beta', 'gamma'], ['gamma', 'alpha'])).toEqual([
+      { value: '', label: 'Choose a model…' },
+      { value: 'alpha', label: 'alpha', hint: EXCLUDED_MODEL_HINT },
+      { value: 'beta', label: 'beta' },
+      { value: 'gamma', label: 'gamma', hint: EXCLUDED_MODEL_HINT },
+    ]);
+    // A key the list does not carry is not added: the list is the configured keys (OQ on which list the picker offers).
+    expect(waitModelOptions(['beta'], ['alpha']).map((o) => o.value)).toEqual(['', 'beta']);
   });
   it('a waiting session is busy and presents as running, so the composer stays locked (REQ-NOTIFY-050/051)', () => {
     expect(presentationStatus('waiting')).toBe('running');

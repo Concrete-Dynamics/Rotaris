@@ -24,7 +24,7 @@ export function confinementRefusalNotice(r: { readonly headline: string; readonl
  */
 export function sessionCommands(
   ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services'>,
-): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.retry' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.reconcile' | 'session.pageOlder'> {
+): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.retry' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.release' | 'session.reconcile' | 'session.pageOlder'> {
   const { capturing, clocks, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runFailures, runHost, services } = ctx;
   return {
     'session.continue': async (req) => {
@@ -235,6 +235,12 @@ export function sessionCommands(
       relay.unsubscribe(senderId, req.sessionId);
       mainWindows.clearFollowedSession(senderId, req.sessionId);
       void runHost.request({ kind: 'session.detach', sessionId: req.sessionId }, millis(5_000)).catch(() => undefined);
+      return { ok: true };
+    },
+    // REQ-NOTIFY-031/032: the sender stops following the session in main's eyes only — the focus test then reads it as not on
+    // screen — and stays subscribed to its relay, so the run carrying on in the background still reaches this window.
+    'session.release': (req, { senderId }) => {
+      mainWindows.clearFollowedSession(senderId, req.sessionId);
       return { ok: true };
     },
     'session.reconcile': async (req) => {

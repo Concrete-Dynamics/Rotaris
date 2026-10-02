@@ -45,6 +45,33 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**The model chips name the override in force (REQ-CHAT-006, REQ-SESSION-026, REQ-NOTIFY-089; fin8).** The record gains
+`modelOverrides` (`overridesInForce` over the run's catalogue and the session's memory; for a session opened from the store,
+its workspace's catalogue read once where its timeline holds an override, through the side-effect-free
+`SessionsDeps.restingCatalogue` port the run host fills with `restingCatalogueOf` — never the per-run `configure`, whose
+MCP configuration load and run maps a read must not touch, as fin8's verifier found the first form did), and `entryRole` names the key the entry role runs on, so
+the composer's model chip, the inspector and a persona window say what the next run starts with. The **process view**'s
+`SessionRecord` sentence says so. No package, edge, process, channel, command or store column changed. Whether a mid-run
+entry switch reaches the next run is the ladder-overrides bundle's open question and is not decided here.
+
+**The project setup dialog stands below the window chrome (REQ-WORKSPACE-106, ADR-0048; fin8, OQ-187).** AppShell gains
+a `windowDialog` slot inside the rail-and-view region; `ProjectSetupDialog` is mounted there, `absolute` at the region's
+top corner, where it was `fixed` at the window's and lay over the title bar's controls and the notice's answers. The
+**seams view** §2's rule for a panel open until answered names it as the window-level exception. No package, edge, process, channel, command or
+store column changed.
+
+**A run that ends while its session is not on screen names it (REQ-NOTIFY-031, REQ-MONITOR-202; fin8).** Main's run-result
+handler routes a non-failure ending through `RunFailurePublisher.endedOtherwise`, the focus test REQ-NOTIFY-032's gate
+already used: a session no main window follows raises `unfocusedEndingNotice` (persistent, `success` or `info`, naming the
+session and its normalised state, focusing it) in place of its summary. A new renderer command, `session.release`, tells
+main a window no longer follows the session "New session" released; the **process view**'s Part R paragraph says so. No
+package, edge, process, channel or store column changed; one command was added.
+
+**The quota-wait chooser annotates the pairs held out of quota (REQ-MONITOR-194, REQ-MONITOR-303; fin8, OQ-186).** The
+record's `wait` gains `excluded`, the configured keys whose pair the run's `ResilienceMemory` holds out of quota
+(`excludedModelKeys`, read by `Run.currentWait` at every snapshot); the wait header's change-model chooser lists each with
+the reason as its hint and leaves it choosable. The **runtime view**'s `setModel` row says so. No package, edge, process,
+channel, command or store column changed.
 **A take-back records a root on any pair of the override's chain as having followed it (REQ-ORCH-091 d, REQ-MONITOR-142;
 the fourth round of `a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced`).** `Run.onChainFrom` classifies
 `root_cell: 'followed'` for a root on the taken-back override's own target or any pair past it, not only the chain's end.

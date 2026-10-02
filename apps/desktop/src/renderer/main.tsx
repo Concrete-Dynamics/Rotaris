@@ -1115,7 +1115,10 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
     useShellState.getState().setLaunchOptions(options);
     // REQ-MONITOR-249/252: multi-session host — the previous run carries on in the background. Its relay
     // subscription is kept so background notices and terminal frames still reach this window; the replica
-    // simply follows nothing until the next prompt starts the new session.
+    // simply follows nothing until the next prompt starts the new session. REQ-NOTIFY-031/032: main is told the window
+    // no longer shows it, so its ending names it (`session.release`) rather than reading as the focused run's.
+    const released = replica.getState().sessionId;
+    if (released !== null) void bridge.command({ kind: 'session.release', sessionId: released }).catch(() => undefined);
     replica.getState().follow(null);
     useShellState.getState().switchView('workspace');
     requestAnimationFrame(() => requestAnimationFrame(() => { const input = document.querySelector<HTMLTextAreaElement>('.composer__input'); if (input) { input.value = ''; input.focus(); } }));
@@ -1339,17 +1342,17 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
       onAction={dispatchNoticeAction}
       acknowledgements={acknowledgements}
       onOpenSessions={() => { void loadSessions(); }}
+      /*
+       * Part AS — ADR-0064 / REQ-WORKSPACE-106: a WINDOW-level dialog, drawn by the shell rather than inside a view, so
+       * navigating elsewhere does not dismiss a decision the product is waiting on and the rest of the application stays
+       * navigable while it is open. It opens by itself at most once per workspace open (REQ-WORKSPACE-105), and otherwise
+       * only when the user asks — from the Workspace sidebar's Project section or from Settings › Project
+       * (REQ-WORKSPACE-113). The shell's `windowDialog` slot stands it below the title bar and the notice slot.
+       */
+      windowDialog={projectSetup !== null && initialization.state !== null
+        ? <ProjectSetupDialog state={initialization.state} auto={projectSetup === 'auto'} onInitialize={initialization.onInitialize} onSkip={initialization.onSkip} onClose={closeProjectSetup} />
+        : undefined}
     />
-    {/*
-      * Part AS — ADR-0064 / REQ-WORKSPACE-106: a WINDOW-level dialog, mounted beside the shell rather than
-      * inside a view, so navigating elsewhere does not dismiss a decision the product is waiting on and
-      * the rest of the application stays navigable while it is open. It opens by itself at most once per
-      * workspace open (REQ-WORKSPACE-105), and otherwise only when the user asks — from the Workspace
-      * sidebar's Project section or from Settings › Project (REQ-WORKSPACE-113).
-      */}
-    {projectSetup !== null && initialization.state !== null && (
-      <ProjectSetupDialog state={initialization.state} auto={projectSetup === 'auto'} onInitialize={initialization.onInitialize} onSkip={initialization.onSkip} onClose={closeProjectSetup} />
-    )}
     {browserOpen && (
       <SessionBrowser sessions={browserSessions} loading={browserLoading} error={browserError} onOpen={openSession} onDismiss={() => setBrowserOpen(false)}
         onRefresh={refreshSessions}

@@ -23,3 +23,47 @@ the 401 note's part B; not repaired.
 - `packages/ui/src/Inspector.tsx` — the Model field (`inspector-model`).
 - `packages/engine/src/run/resilience.ts` — `ResilienceMemory`, where the override lives; no record field carries it to a
   surface.
+
+## Repaired in part (2026-10-02, fin8, bundle `fin8-noticed-gaps-4`)
+
+**Fixed: a session-wide override.** The requirements decide this part: REQ-CHAT-006's chips select what the next run starts
+with, and REQ-SESSION-026 / REQ-NOTIFY-089 keep the override for the rest of the session, across reloads — so the next run
+starts on the override, and the chips now name it.
+
+- The record carries `modelOverrides` (`packages/contracts/src/channels.ts`): each configured model key a session-wide
+  override replaces, with the key it runs on — the end of the override chain (`overridesInForce`,
+  `packages/engine/src/run/resilience.ts`, over `ResilienceMemory.effective`). A session a run of this process has started
+  reads its run's catalogue (`Run.modelOverridesInForce`); one opened from the store reads its workspace's catalogue once,
+  the first time its record is read and only where its timeline holds a `model_override` entry, and rehydrates a memory of
+  its own against it (`Sessions.modelOverridesOf`, `restingMemory`), so the chips name the override after an application
+  restart too.
+- That read is a read, not a run start. Its first form called `setupFor`, which is the run host's per-run `configure`: for a
+  session with no run it wrote the host's `configuredRuns`/`runBearers` entries, replaced the workspace's `configured` entry
+  and called `mcp.newConfiguration`, which could drop the MCP discovery memo and raise load-scope MCP warnings again on merely
+  opening the session (fin8's verifier, round 1). It now goes through a catalogue port of its own,
+  `SessionsDeps.restingCatalogue`, which the run host fills with `restingCatalogueOf`
+  (`apps/desktop/src/run-host/configuration.ts`: the configuration load with REQ-CONFIG-013's `.gitignore` upkeep off, the
+  live overlay and the snapshot fold that `prepareRun` does, and nothing else). The memory it rehydrates is kept apart from
+  the session's `memory`, which the next run still rehydrates through its own configuration, and it warns about nothing.
+- `entryRole` (`packages/ui/src/agents.ts`, `modelInForce`) names the key the entry role runs on, and the renderer's
+  `entryOf` hands it the record's overrides, so the composer's model chip ("Model for the next run"), the inspector's Model
+  field for the run-level agent and a persona window all read the override. The chip's image-input check reads the same
+  model, the one the next run is sent to.
+
+Pinned by `packages/engine/src/run/ladder.test.ts` (a wait choice of `c1` over the exhausted `a1`: the record names
+`[{ from: 'a1', to: 'c1' }]`, and a fresh process that only opens the session publishes the same — red before, the field
+absent; since the verifier's round, opening it calls the per-run `configure` no time and asks the catalogue port once, and
+the run then started still runs on `c1` — red before, `configure` called once by the read; and a host offering no catalogue
+port names no override and calls no `configure`), `apps/desktop/src/run-host/configuration.test.ts` (`restingCatalogueOf`
+returns `configureRun`'s catalogue with no log line and no `.gitignore` written, and `null` for a configuration that does
+not load) and `packages/ui/src/agents.test.ts` (`entryRole` with an override names its key, without one the configured
+key — red before). Shown by `resilience-proof`'s driven `override` scenario, which now reads the composer's model chip
+after the change-model resolution: `beta`, where it read `alpha` (2026-10-02, load 2.5, no failures).
+
+**Left open: a mid-run switch.** Whether a switch of the entry model or reasoning from the run header or the inspector
+(REQ-MONITOR-142) reaches the session's next run — and so whether the chips should name it after the run ends — is the
+owner's: plan fin8's ladder-overrides bundle raises it as "Does a mid-run switch of the entry model or reasoning level
+reach the session's next run?" (OQ-185 on `origin/main` since that bundle's merge, d0012a2). Under the
+reading built there, a switch ends with its run, so the chips naming the configured key (or the override in force) after
+it are consistent with what the next run does; if a ruling makes the switch reach the next run, the chips owe it too, and
+this note stays open for that.

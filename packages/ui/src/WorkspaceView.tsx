@@ -33,7 +33,7 @@ import { QuestionForm } from './QuestionStepper.js';
 import './attachments.css';
 import { AgentCancelConfirm } from './AgentCancelConfirm.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
-import { Button as DesignButton, Input as DesignInput, PopoverMenu, SearchableSelect as DesignSearchableSelect, SendPill as DesignSendPill, StripActionButton, TextArea as DesignTextArea } from './design-system/index.js';
+import { Button as DesignButton, Input as DesignInput, PopoverMenu, SearchableSelect as DesignSearchableSelect, SendPill as DesignSendPill, StripActionButton, TextArea as DesignTextArea, type SearchableOption } from './design-system/index.js';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
 // root through that module alone (`TranscriptRows.tsx` is deleted). Re-exporting them here as well would make the
@@ -431,10 +431,26 @@ export function waitHeaderText(wait: NonNullable<SessionRecord['wait']>, nowMs: 
   return { headline, timing: `Resumes automatically in ${formatRemaining(remainingS)}.`, remainingS };
 }
 
+/** REQ-MONITOR-194: the reason an excluded pair is annotated with — "the provider reported insufficient quota for it in this session". */
+export const EXCLUDED_MODEL_HINT = 'provider reported insufficient quota in this session';
+
+/**
+ * REQ-MONITOR-194 / REQ-MONITOR-303: the change-model list of the wait header. Every configured key, as the selector has
+ * always listed them (which list the picker offers — REQ-MONITOR-193's same-tier candidates or REQ-NOTIFY-074's — is an
+ * open question, OQ-186); a key whose pair the session recorded out of quota (`wait.excluded`) is listed in place,
+ * never hidden, with the reason as its hint. It stays choosable — no `unavailableReason`, which would grey it out — since
+ * choosing it explicitly is what clears the exclusion (REQ-MONITOR-194, the run's `setEntryModel` through
+ * `ResilienceMemory.clearExhausted`; in a quota wait on that very pair, a retry on it).
+ */
+export function waitModelOptions(models: readonly string[], excluded: readonly string[]): SearchableOption[] {
+  return [{ value: '', label: 'Choose a model…' }, ...models.map((m) => (excluded.includes(m) ? { value: m, label: m, hint: EXCLUDED_MODEL_HINT } : { value: m, label: m }))];
+}
+
 /**
  * The wait as the user sees it (REQ-NOTIFY-263, REQ-ORCH-091 d): the header and its exactly three choices, here and on no
  * other surface — keep waiting (the absence of a decision: the control acknowledges and changes nothing), change model
- * (the existing model list of REQ-NOTIFY-074, pinned through `setModel`, REQ-NOTIFY-089), cancel the run — the confirmed
+ * (every configured model, pinned through `setModel`, REQ-NOTIFY-089; the pairs held out of quota annotated,
+ * `waitModelOptions`, REQ-MONITOR-194/303), cancel the run — the confirmed
  * "Cancel the run?", which sends the reserved run id, the explicit cancel, never the stop (PD-ORCH-005 clause 15).
  * The countdown ticks once a second on the surface's own clock, as the Overview's runtime label does.
  */
@@ -464,7 +480,7 @@ function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<
         {onSetModel && models.length > 0 && (choosing ? (
           <DesignSearchableSelect className="input select" ariaLabel="Change model" value="" autoFocus
             filterPlaceholder="Filter models…"
-            options={[{ value: '', label: 'Choose a model…' }, ...models.map((m) => ({ value: m, label: m }))]}
+            options={waitModelOptions(models, wait.excluded)}
             onChange={(v) => { if (v !== '') void onSetModel(v).then((r) => { setError(r.ok ? null : r.reason); setChoosing(false); }); }} />
         ) : (
           <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(false); setChoosing(true); }}>Change model</DesignButton>

@@ -8977,4 +8977,12 @@ window shows a view other than the one the run is shown in.
 
 **What a ruling decides.** Whether "beside the continuing run" means the Workspace view's run column (as built), a region
 of the window shown in every view (which then has to take space from every view at REQ-SHELL-022's minimum), or a
-separate window; and whether a prompt the user has not answered should be reachable from the other views.
+separate window; and whether a prompt the user has not answered should be reachable from the other views. *Added at the
+fourth repair round (2026-10-02, the verifier's optional findings):* in the bar beside an expanded plan gate the only words
+drawn are its title, "Re-authenticate <provider>", and its answers — so while a plan awaits a decision the bar names
+neither the primary model that failed nor that the run continues on the fallback (REQ-NOTIFY-071's two statements), and
+for a provider re-authenticated elsewhere — a device-code or browser provider, whose method this build does not provide,
+or one whose key the model configuration carries — it does not say that the method is unavailable here: those sentences,
+with the provider's quoted error, are in the document and drawn again when the gate is collapsed or answered. A ruling
+may decide whether any of them must stay drawn in the bar (each one taken from the height the plan, the largest part of
+the gate under PD-ORCH-002, keeps at REQ-SHELL-022's minimum).

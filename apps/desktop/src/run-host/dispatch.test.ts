@@ -28,6 +28,51 @@ describe('session.continue carries the decline to the engine (PD-ORCH-005 clause
 });
 
 /**
+ * REQ-NOTIFY-045 with REQ-PROVIDER-066 (OQ-178's reading; the repair of
+ * `docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`): the run host's hop of the
+ * retry. A retry launches a run as a prompt does, so the continuation lease is refreshed before the engine is asked, and a
+ * lease refusal comes back without the engine ever hearing of it; the engine's refusals reach main with their codes and
+ * their words, the confinement gate's under a start's headline (REQ-NOTIFY-061). Pinned after fin8's verifier found no test
+ * of this case.
+ */
+describe('session.retry refreshes the lease, then asks the engine, and passes its refusals through (REQ-NOTIFY-045)', () => {
+  const hostFor = (order: string[], lease: unknown, answer: unknown) => ({
+    continuationLeaseForSession: async (sid: string) => { order.push(`lease ${sid}`); return lease; },
+    log: () => undefined,
+    sessions: { retry: (sid: string) => { order.push(`retry ${sid}`); return answer; } },
+  }) as unknown as RunHost;
+  const retry: RunHostRequest = { kind: 'session.retry', sessionId: 'S1' };
+
+  it('acknowledges a retry the engine took, after the lease', async () => {
+    const order: string[] = [];
+    expect(await dispatch(retry, hostFor(order, null, { ok: true, value: { index: 4 } }))).toEqual({ kind: 'ack' });
+    expect(order).toEqual(['lease S1', 'retry S1']);
+  });
+
+  it('a lease refusal comes back before the engine is asked', async () => {
+    const order: string[] = [];
+    const leaseRefused = { kind: 'refused', code: 'credentials.unavailable', headline: 'The provider credentials could not be read' };
+    expect(await dispatch(retry, hostFor(order, leaseRefused, { ok: true, value: { index: 4 } }))).toEqual(leaseRefused);
+    expect(order).toEqual(['lease S1']);
+  });
+
+  it('passes the engine\'s `no-prompt`, `attachment-unavailable` and `confinement` refusals through with their words', async () => {
+    const cases: readonly [string, string, string][] = [
+      ['no-prompt', 'No prompt has been submitted in this session, so there is nothing to retry.', 'The prompt could not be retried'],
+      ['attachment-unavailable', 'The last prompt was not retried, because its image shot.png could not be read back: it is no longer available.', 'The prompt could not be retried'],
+      ['confinement', 'Confinement is unavailable: bwrap is not on PATH. Install bubblewrap.', 'The run was refused before it started'],
+    ];
+    for (const [code, reason, headline] of cases) {
+      const order: string[] = [];
+      expect(await dispatch(retry, hostFor(order, null, { ok: false, error: { code, reason } }))).toEqual({ kind: 'refused', code: `session.${code}`, headline, detail: reason });
+      expect(order).toEqual(['lease S1', 'retry S1']);
+    }
+    // A run already active is refused in the engine's own words, as a prompt's is.
+    expect(await dispatch(retry, hostFor([], null, { ok: false, error: { code: 'run-active', reason: 'A run is already active.' } }))).toEqual({ kind: 'refused', code: 'session.run-active', headline: 'A run is already active.', detail: 'A run is already active.' });
+  });
+});
+
+/**
  * PD-ORCH-005 clause 9 (defect `an-approval-asked-after-the-last-window-closes-is-denied`, R-067): the revoke's hop. Main
  * marks the revoke its quit causes; a dropped flag would leave the run host unattended with no quit under way, and what an
  * agent asked in the quit's gap would be denied again with nothing else to notice.

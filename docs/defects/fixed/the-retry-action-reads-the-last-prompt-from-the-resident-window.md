@@ -38,4 +38,9 @@ The action stays latent in the product until OQ-178 names the notice that carrie
 Pinned by `packages/engine/src/last-prompt.test.ts` (a failed session whose prompt has `RESIDENT_ROW_CAP + 10` rows after
 it is reopened and retried: a second user row with the same text, and a run on it; nothing submitted is the only "no
 prompt" refusal) and `apps/desktop/src/renderer/session-actions.test.ts` (a blank draft sends `session.retry` and no
-prompt text, also when the replica holds no prompt at all — both cases failed on the old `retryRun`).
+prompt text, also when the replica holds no prompt at all — both cases failed on the old `retryRun`). The two hops between
+them are pinned since repair round 1 (fin8's verifier found them untested): `apps/desktop/src/run-host/dispatch.test.ts`
+(the continuation lease is refreshed before `Sessions.retry`, a lease refusal comes back without the engine being asked,
+and `no-prompt`, `attachment-unavailable`, `confinement` and `run-active` come back with their codes and words) and
+`apps/desktop/src/main/commands/session.test.ts` (a retry refused at the confinement gate raises REQ-NOTIFY-061's notice,
+as a prompt's does; another refusal raises none and returns its words). Each fails with its handler's step taken out.

@@ -1,6 +1,6 @@
 /**
  * The conflict-marker gate, over texts and over a throwaway git repository: a real three-marker block it must fail
- * (also when git is configured to colour its output), and the two lookalikes it must pass — a Markdown setext heading underlined with seven `=`, and a marker block shown
+ * (also when git is configured to colour its output, and never answered as skipped over a checkout git refuses), and the two lookalikes it must pass — a Markdown setext heading underlined with seven `=`, and a marker block shown
  * as an indented example. The markers are built with `repeat` so this file cannot trip the gate it tests.
  */
 import { execFileSync } from 'node:child_process';
@@ -148,6 +148,39 @@ describe('checkRepository — over the working copy and the index of a git check
     git('add', 'a.md');
     writeFileSync(join(root, '.git', 'index'), 'not an index');
     expect(() => checkRepository(root)).toThrow(/git grep/);
+  });
+
+  it('reads a staged path whose name begins with a digit and a colon as that path, not as an index stage', () => {
+    // `:1:x.md` is stage 1 of `x.md`; the entry is made without a working file so the case holds where a colon cannot
+    // stand in a file name.
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: root, encoding: 'utf8', input: block }).trim();
+    git('update-index', '--add', '--cacheinfo', `100644,${blob},1:x.md`);
+    expect(checkRepository(root)).toEqual([
+      { where: 'index', path: '1:x.md', line: 5, marker: OPEN },
+      { where: 'index', path: '1:x.md', line: 7, marker: SEP },
+      { where: 'index', path: '1:x.md', line: 9, marker: CLOSE },
+    ]);
+  });
+
+  it('throws, rather than answering skipped, over a checkout git refuses to read', () => {
+    // A checkout git will not operate on (here a repository format it does not know; on a host, a checkout owned by
+    // another uid, "dubious ownership") once read as "not a checkout", and the gate answered skipped over a staged
+    // block (the second verifier's finding on this gate).
+    writeFileSync(join(root, 'a.md'), block);
+    git('add', 'a.md');
+    git('config', 'core.repositoryformatversion', '99');
+    expect(() => checkRepository(root)).toThrow(/git rev-parse failed/);
+  });
+
+  it('throws over a directory whose .git names a git directory that is gone', () => {
+    const orphan = mkdtempSync(join(tmpdir(), 'conflict-markers-orphan-'));
+    try {
+      writeFileSync(join(orphan, '.git'), `gitdir: ${join(orphan, 'missing', 'worktrees', 'x')}\n`);
+      writeFileSync(join(orphan, 'a.md'), block);
+      expect(() => checkRepository(orphan)).toThrow(/git rev-parse failed/);
+    } finally {
+      rmSync(orphan, { recursive: true, force: true });
+    }
   });
 
   it('ignores an untracked file, and answers null outside a git checkout', () => {

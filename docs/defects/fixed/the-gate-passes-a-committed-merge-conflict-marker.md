@@ -29,7 +29,7 @@ inside a `<<<<<<< HEAD` / `=======` / `>>>>>>> origin/main` block left `pnpm lin
 `tools/check-conflict-markers.mjs` now runs in `pnpm lint`, second, after `check-line-endings.mjs`. One `git grep -l -I`
 over the working copy and one over the index name the candidate files (a line that begins with seven `<`, seven `|` or
 seven `>` followed by a space or the line's end); each candidate is read whole, from disk and from the index
-(`git cat-file blob :<path>`), and every marker line is reported as `<path>:<line>: <marker> (working copy | index)`. A line of
+(`git cat-file blob :0:<path>`), and every marker line is reported as `<path>:<line>: <marker> (working copy | index)`. A line of
 exactly seven `=` counts only between an opening and a closing marker, because alone it is a legal Markdown setext
 heading underline; an indented or quoted marker is an example and passes. Reading the index as well catches a block
 that was staged and then cleaned on disk without being staged again. Outside a git checkout it prints that it skipped,
@@ -48,6 +48,17 @@ the index side for a path `git ls-files -u` names as unmerged, whose working cop
 lint red with git's own message, so a broken checkout cannot read as skipped; only a directory outside git still
 skips.
 
+**Corrected after the second verification (2026-10-02).** The sentence just above, that only a directory outside git
+still skips, was false and is kept beside its replacement. `git rev-parse --is-inside-work-tree` ran inside a bare
+`catch { return false; }`, so every checkout git refuses to operate on read as "not a checkout" and the check printed
+that it skipped and exited 0 over a staged block: a checkout owned by another uid (`fatal: detected dubious
+ownership`, as a CI container or a mounted checkout meets it), one whose `core.repositoryformatversion` git does not
+know, and a `.git` file naming a git directory that is gone. Now only a genuine absence skips: git not installed
+(`ENOENT`), or git answering "not a git repository" with no `.git` at or above the root. Every other `rev-parse`
+failure, and a root inside a git directory but not a work tree, throws `git rev-parse failed: <git's message>` and the
+lint goes red. With the same correction, the index side reads a blob as `:0:<path>`: a bare `:<path>` read a tracked
+`1:x.md` as stage 1 of `x.md` and reported it unreadable (red, never green, but red for the wrong reason).
+
 Pinned by `tools/check-conflict-markers.test.ts` (twelve cases, the markers built with `repeat` so the file cannot trip
 the gate): the three-marker block is named line by line, a diff3 block's base marker and a lone opening or closing
 marker are named, a setext heading underline (alone, and after a closed block) and an indented example inside a code
@@ -58,7 +69,13 @@ Three cases were added with the correction: the staged block still fails on the 
 the throwaway repository sets `color.ui` and `color.grep` to `always`; a real merge conflict's unmerged path is read
 from its working copy (lines 3, 5 and 7) with nothing reported as unreadable; and a checkout whose index is corrupt
 throws a `git grep` failure instead of answering. The colour case and the corrupt-index case fail against the first
-form (it answered `[]` and `[]`). The test file fails without the repair (the module does not exist). Shown again after the repair: the same marker block
+form (it answered `[]` and `[]`). Three more were added with the second correction, each failing against the form
+before it: a repository whose `core.repositoryformatversion` is 99 and a directory whose `.git` file names a missing
+git directory both throw `git rev-parse failed` (the earlier form answered `null`), and a staged `1:x.md` holding the
+block is read at stage 0 and names lines 5, 7 and 9 (the earlier form reported it unreadable). Fifteen cases in all.
+The dubious-ownership case was shown by hand, not in the test file (it needs a second uid): after `chown -R
+1234:1234` of a scratch repository holding a staged block, the earlier form answered `null` and its CLI printed that
+it skipped (exit 0); the corrected one throws, and its CLI exits 1 with git's message. The test file fails without the repair (the module does not exist). Shown again after the repair: the same marker block
 committed on a scratch branch turns `pnpm lint` red at the new check, naming `docs/scratch-conflict.md` lines 5, 7 and 9,
 and removing it turns it green. On the branch itself the check is green from its first run: no tracked file on
 origin/main holds a marker.

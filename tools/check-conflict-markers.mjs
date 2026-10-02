@@ -14,8 +14,8 @@
 // (what the next commit carries), since either can hold a marker the other has lost. One `git grep` per side
 // names the candidate files; only those are read. Runs as part of `pnpm lint`.
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 
 const OPEN = '<'.repeat(7);
 const BASE = '|'.repeat(7);
@@ -73,13 +73,33 @@ function git(root, args) {
   });
 }
 
-/** True when `root` is inside a git work tree; false when git is missing or `root` is not a checkout. */
-function isCheckout(root) {
-  try {
-    return git(root, ['rev-parse', '--is-inside-work-tree']).trim() === 'true';
-  } catch {
-    return false;
+/** True when a `.git` (a directory or a gitdir file) stands in `dir` or any directory above it. */
+function hasGitAbove(dir) {
+  for (let d = resolve(dir); ; d = dirname(d)) {
+    if (existsSync(join(d, '.git'))) return true;
+    if (dirname(d) === d) return false;
   }
+}
+
+/**
+ * True when `root` is inside a git work tree; false only where there is genuinely no checkout to ask (git is not
+ * installed, or git answers "not a git repository" and no `.git` stands at or above `root`). Every other refusal
+ * throws: a checkout git will not operate on (another uid's, "dubious ownership"; a repository format it does not
+ * know; a `.git` naming a git directory that is gone) once read as "not a checkout", and the gate answered skipped
+ * over a staged block (the second verifier's finding on this gate).
+ */
+function isCheckout(root) {
+  let out;
+  try {
+    out = git(root, ['rev-parse', '--is-inside-work-tree']).trim();
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return false;
+    const reason = reasonOf(error);
+    if (/not a git repository/i.test(reason) && !hasGitAbove(root)) return false;
+    throw new Error(`git rev-parse failed: ${reason}`);
+  }
+  if (out !== 'true') throw new Error(`git rev-parse failed: ${root} is inside a git directory but not a work tree`);
+  return true;
 }
 
 /** Why a git call failed, in one line: its stderr when it wrote one, else the error's own message. */
@@ -140,7 +160,8 @@ export function checkRepository(root) {
   for (const path of index) {
     let text;
     try {
-      text = git(root, ['cat-file', 'blob', `:${path}`]);
+      // `:0:` names the stage explicitly: a bare `:${path}` reads `1:x.md` as stage 1 of `x.md`.
+      text = git(root, ['cat-file', 'blob', `:0:${path}`]);
     } catch (error) {
       if (unmerged.has(path)) continue; // no stage-0 entry; its working copy was read above
       problems.push({ where: 'index', path, unreadable: reasonOf(error) });
@@ -156,12 +177,14 @@ if (process.argv[1] && import.meta.filename === process.argv[1]) {
   try {
     problems = checkRepository(join(import.meta.dirname, '..'));
   } catch (error) {
-    // A checkout git cannot grep (a corrupt index, a broken object store) has no answer to give: red, not skipped.
+    // A checkout git refuses or cannot grep (another uid's, an unknown repository format, a corrupt index, a broken
+    // object store) has no answer to give: red, not skipped.
     console.error(`check-conflict-markers: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
   if (problems === null) {
-    // Not a git checkout (a packaged tarball, a sandbox): nothing to ask, as check-line-endings does.
+    // No git, or no `.git` at or above the root (a packaged tarball, a sandbox): nothing to ask, as
+    // check-line-endings does.
     console.log('check-conflict-markers: not a git checkout, skipped');
   } else if (problems.length > 0) {
     console.error(`check-conflict-markers: ${problems.length} problem${problems.length === 1 ? '' : 's'} in tracked files (a merge-conflict marker, or a candidate it could not read):`);

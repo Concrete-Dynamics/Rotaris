@@ -105,8 +105,9 @@ plain process with no React and the restore run against a fake run host with a c
   fails on a line git writes as a marker: seven `<`, `|` or `>` at column 0 followed by a space or the line's end, and
   a line of exactly seven `=` only between an opening and a closing marker, since alone it is a Markdown setext
   heading underline. It names the file and the line, runs git with colour off whatever the configuration says, reports
-  a candidate it cannot read and a `git grep` that fails inside a checkout, and skips only where there is no git
-  checkout. A typecheck catches a marker in TypeScript; nothing else read one in Markdown or JSON read as text
+  a candidate it cannot read, a `git grep` that fails inside a checkout and a checkout git refuses (another uid's,
+  an unknown repository format), and skips only where git is not installed or no `.git` stands at or above the
+  repository root. A typecheck catches a marker in TypeScript; nothing else read one in Markdown or JSON read as text
   (since 2026-10-02, [the note](../defects/fixed/the-gate-passes-a-committed-merge-conflict-marker.md)).
 - **A design-equivalent control is written once** — `tools/check-ui-language.mjs` (in `pnpm lint`, beside
   `check-theme-colours.mjs`) fails on a raw `button`, `input`, `textarea`, `select` or `table` anywhere under

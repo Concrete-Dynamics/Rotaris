@@ -47,7 +47,9 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 **The model chips name the override in force (REQ-CHAT-006, REQ-SESSION-026, REQ-NOTIFY-089; fin8).** The record gains
 `modelOverrides` (`overridesInForce` over the run's catalogue and the session's memory; for a session opened from the store,
-a catalogue resolved once where its timeline holds an override), and `entryRole` names the key the entry role runs on, so
+its workspace's catalogue read once where its timeline holds an override, through the side-effect-free
+`SessionsDeps.restingCatalogue` port the run host fills with `restingCatalogueOf` — never the per-run `configure`, whose
+MCP configuration load and run maps a read must not touch, as fin8's verifier found the first form did), and `entryRole` names the key the entry role runs on, so
 the composer's model chip, the inspector and a persona window say what the next run starts with. The **process view**'s
 `SessionRecord` sentence says so. No package, edge, process, channel, command or store column changed. Whether a mid-run
 entry switch reaches the next run is the ladder-overrides bundle's open question and is not decided here.

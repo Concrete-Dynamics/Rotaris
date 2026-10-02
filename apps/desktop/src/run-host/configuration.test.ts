@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import { authProvidersOf, classifierSlotsOf, configureRun, contextLimitsOf, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
+import { authProvidersOf, classifierSlotsOf, configureRun, restingCatalogueOf, contextLimitsOf, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
 import { childModelKey } from '@rotaris/engine';
 import { nodeClocks } from '@rotaris/platform';
 import { loadConfiguration, type ModelEntry } from '@rotaris/config';
@@ -359,5 +359,31 @@ personas:
     const runtime = runtimeFromConfiguration(r.value.cfg);
     expect(runtime.modelCapFor!(coder)).toBe(4);
     expect(contextLimitsOf(r.value.cfg)[coder]).toBe(131_072);
+  });
+});
+
+/*
+ * REQ-CHAT-006 / REQ-SESSION-026, fin8's verifier finding: a resting session's record reads its workspace's catalogue
+ * through `restingCatalogueOf`, which must be the catalogue a run would read and must do nothing a run start does.
+ */
+describe('a resting session reads the catalogue a run would, as a read (REQ-CHAT-006, REQ-SESSION-026)', () => {
+  it('the same catalogue as configureRun, with no log line, no bearer needed and no .gitignore written', () => {
+    mkdirSync(join(dir, 'config'), { recursive: true });
+    mkdirSync(join(dir, 'ws'), { recursive: true });
+    writeFileSync(join(dir, 'config', 'project_settings.yaml'), SNAPSHOT);
+    const logged: string[] = [];
+    const read = restingCatalogueOf(join(dir, 'ws'), { ...deps({}), log: (m: string) => { logged.push(m); } } as Parameters<typeof restingCatalogueOf>[1]);
+    expect(logged).toEqual([]);
+    expect(existsSync(join(dir, 'ws', '.gitignore'))).toBe(false);
+    const run = configureRun(join(dir, 'ws'), true, deps({}));
+    if (!run.ok) throw new Error(run.error.reason);
+    expect(read).toEqual(run.value.resilience?.catalogue);
+    expect(read!.length).toBeGreaterThan(0);
+  });
+
+  it('a configuration that does not load reads as null, never a refusal', () => {
+    mkdirSync(join(dir, 'config'), { recursive: true });
+    writeFileSync(join(dir, 'config', 'agents.yaml'), 'models: [this is: not a map');
+    expect(restingCatalogueOf(join(dir, 'ws'), deps({}))).toBeNull();
   });
 });

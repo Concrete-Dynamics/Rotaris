@@ -72,6 +72,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
 
   interface Opts {
     catalogue?: CatalogueEntry[];
+    /** The side-effect-free catalogue port a session at rest is read against (`SessionsDeps.restingCatalogue`); absent, none. */
+    restingCatalogue?: CatalogueEntry[];
     fallbackModel?: ModelChoice | null;
     entryModel?: ModelRef;
     llmResponseTimeoutMs?: number;
@@ -111,6 +113,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: { ...base, ...(opts.roleFallback ? { fallbackModel: opts.roleFallback } : {}), ...(opts.roleStallTimeoutMs === undefined ? {} : { stallTimeoutMs: opts.roleStallTimeoutMs }) }, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
     const backend = new DefaultAgentBackend(client);
     const results: string[] = [];
+    const restingReads: string[] = [];
     let configured = 0;
     const sessions = new Sessions({
       clocks: clock, publisher: pub, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++minted}`,
@@ -120,9 +123,10 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
         runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.runStartMode === undefined ? {} : { runStartMode: opts.runStartMode }), ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }), ...(opts.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: opts.childStallTimeoutMs }) },
         resilience: { catalogue, fallbackModel: opts.fallbackModel ?? null },
       } }),
+      ...(opts.restingCatalogue ? { restingCatalogue: (root: string) => { restingReads.push(root); return opts.restingCatalogue!; } } : {}),
       ...(opts.delegation ? { tools: (ctx) => (ctx.delegation ? delegationPort(ctx.delegation, ctx.parentId ?? 'root', opts.tool) : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false }) } : {}),
     });
-    return { sessions, client, pub, counts, results };
+    return { sessions, client, pub, counts, results, configures: () => configured, restingReads };
   }
   const tick = () => new Promise((r) => setTimeout(r, 5));
   const timeline = (sid: SessionId) => dal.timelineOf(sid).map((t) => t.name);
@@ -1061,11 +1065,43 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect((await sessions.running(sid)!).status).toBe('completed');
     expect(pub.snapshots.at(-1)!.modelOverrides).toEqual([{ from: 'a1', to: 'c1' }]);
     // A fresh process: no run of the session has started there; opening it reads the override from the timeline.
+    const fresh = sessionsWith(() => answer('fresh'), { catalogue, restingCatalogue: catalogue });
+    const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+    if (!resumed.ok) throw new Error(resumed.error.reason);
+    const configuresBefore = fresh.configures();
+    expect(fresh.sessions.attach(sid)).toBe(true);
+    expect(fresh.sessions.attach(sid)).toBe(true);
+    expect(fresh.pub.snapshots.at(-1)!.modelOverrides).toEqual([{ from: 'a1', to: 'c1' }]);
+    // A read is not a run start: the per-run configure (the run host's MCP load, its run maps) is never called for it, and
+    // the catalogue port is asked once.
+    expect(fresh.configures()).toBe(configuresBefore);
+    expect(fresh.restingReads).toEqual(['C:/ws']);
+    // The run that then starts still rehydrates the memory through its own configuration and runs on the override.
+    const next = fresh.sessions.prompt(sid, 'again');
+    if (!next.ok) throw new Error(next.error.reason);
+    expect((await fresh.sessions.running(sid)!).status).toBe('completed');
+    expect(fresh.client.requests.at(-1)!.model.modelId).toBe('c1');
+    expect(fresh.configures()).toBe(configuresBefore + 1);
+  });
+
+  /*
+   * The verifier's finding on the chips' repair: a read of a resting session's record must perform no configuration load
+   * with side effects. Without a catalogue port the record names no override rather than calling `configure`.
+   */
+  it('REQ-CHAT-006: a session at rest whose host offers no catalogue port reads no override and calls no configure', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+    const { sessions, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer(`answer ${turn}`)), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
     const fresh = sessionsWith(() => answer('fresh'), { catalogue });
     const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
     if (!resumed.ok) throw new Error(resumed.error.reason);
+    const configuresBefore = fresh.configures();
     expect(fresh.sessions.attach(sid)).toBe(true);
-    expect(fresh.pub.snapshots.at(-1)!.modelOverrides).toEqual([{ from: 'a1', to: 'c1' }]);
+    expect(fresh.pub.snapshots.at(-1)!.modelOverrides).toEqual([]);
+    expect(fresh.configures()).toBe(configuresBefore);
   });
 
   /*

@@ -484,6 +484,23 @@ export interface PreparedRun {
   readonly complete: (bearers: Readonly<Record<string, string>>) => ConfiguredRun;
 }
 
+/**
+ * REQ-CHAT-006 / REQ-SESSION-026: the catalogue a run of this workspace would read (`resilience.catalogue`), for READING a
+ * session no run of this process has started — which configured key a session-wide override replaces (the engine's
+ * `SessionsDeps.restingCatalogue`). The same load, live overlay and snapshot fold as `prepareRun`, and nothing of a run
+ * start: no refusal gate, no client, no log line, no `.gitignore` upkeep, and none of what the run host's per-run `configure` does around it (the
+ * MCP configuration load, the run maps). `null` where the configuration does not load or the live state does not apply.
+ */
+export function restingCatalogueOf(workspaceRoot: string, deps: Pick<ConfigureDeps, 'globalDir' | 'env' | 'liveState' | 'bearers' | 'codeIntelligenceLaunch'>): CatalogueEntry[] | null {
+  // REQ-CONFIG-013's `.gitignore` upkeep is a run start's; a read switches it off, as the loader allows a read-only surface.
+  const loaded = loadConfiguration({ globalDir: deps.globalDir, workspaceRoot, keepIgnored: false, builtinLaunch: deps.codeIntelligenceLaunch ?? null });
+  if (!loaded.ok) return null;
+  const live = overlayLiveState(loaded.value, deps.liveState());
+  if (!live.ok) return null;
+  const snapshotRead = readProjectSnapshot(join(deps.globalDir, PROJECT_SETTINGS_FILE), () => undefined);
+  return catalogueOf(live.value, deps.env['ROTARIS_MODEL_DIALECT'] === 'scripted', deps.bearers(workspaceRoot), snapshotRead.ok ? snapshotRead.value : null);
+}
+
 export function configureRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps, options?: PrepareOptions): Result<ConfiguredRun, ConfigureRefusal> {
   const prepared = prepareRun(workspaceRoot, attended, deps, undefined, options);
   return prepared.ok ? ok(prepared.value.complete(deps.bearers(workspaceRoot))) : prepared;

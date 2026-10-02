@@ -265,6 +265,14 @@ export interface SessionsDeps {
    */
   /** `code: 'confinement'` (REQ-NOTIFY-060/061): the refusal is the start-time confinement gate's, kept as its own class. */
   readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean; readonly sessionId: SessionId; readonly executionRoot: string; readonly entryPersona?: string | undefined }) => Result<RunSetup, { readonly reason: string; readonly code?: 'confinement' }>) | undefined;
+  /**
+   * REQ-CHAT-006 / REQ-SESSION-026: the model catalogue of a workspace's configuration as it stands, for READING a session no
+   * run of this process has started — which configured key a session-wide override replaces. A read, never a run start: it
+   * must not do what `configure` does for a run (the run host's MCP configuration load, its per-run maps, its log line), so
+   * a record read never calls `configure`. `null` where the configuration does not load; absent, a resting session's
+   * record names no override.
+   */
+  readonly restingCatalogue?: ((workspaceRoot: string) => readonly CatalogueEntry[] | null) | undefined;
 }
 
 /** What a run starts with once configuration resolves it. */
@@ -351,6 +359,12 @@ interface Live {
    * a `model_override` entry (`null` otherwise, or where the configuration does not resolve). Absent until then.
    */
   restingCatalogue?: readonly CatalogueEntry[] | null;
+  /**
+   * The memory a resting read rehydrated against `restingCatalogue`, kept apart from `memory`: a run that starts later
+   * rehydrates its own through its configuration (`memoryOf`), so a read never decides what a run resolves. Read only
+   * while `memory` is null; once a run or an at-rest control has rehydrated `memory`, the record reads that.
+   */
+  restingMemory?: ResilienceMemory | null;
   /** Part Y (REQ-ORCH-149): the session's artifact store, one per live session, shared across iterations and continuations. */
   artifacts: ArtifactStore | null;
   /**
@@ -2480,8 +2494,9 @@ export class Sessions {
   /**
    * REQ-CHAT-006 / REQ-SESSION-026 / REQ-NOTIFY-089: the session-wide overrides in force, by model key, for the record. A
    * session a run of this process has started reads its run's catalogue and the session's memory; one opened from the store
-   * with no run here resolves its configuration once (`restingCatalogue`) — only where its timeline holds an override — and
-   * rehydrates its memory as a continuation would, so the chips name the override after a restart too.
+   * with no run here reads its workspace's catalogue once through the side-effect-free `restingCatalogue` port — only where
+   * its timeline holds an override — and rehydrates a memory of its own against it (`restingMemory`, never the session's
+   * `memory`, which the next run rehydrates through its configuration), so the chips name the override after a restart too.
    */
   private modelOverridesFor(sessionId: SessionId): { from: string; to: string }[] {
     const s = this.live.get(sessionId);
@@ -2491,16 +2506,23 @@ export class Sessions {
     if (s.run) return s.run.modelOverridesInForce;
     if (s.restingCatalogue === undefined) {
       s.restingCatalogue = null;
+      s.restingMemory = null;
       const stored = s.dal.getSession(sessionId);
-      if (stored && s.dal.timelineOf(sessionId).some((t) => t.name === 'model_override')) {
-        const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
-        if (setup.ok) {
-          s.restingCatalogue = setup.value.resilience?.catalogue ?? [];
-          this.memoryOf(s, sessionId, setup.value);
+      const timeline = stored && this.deps.restingCatalogue ? s.dal.timelineOf(sessionId) : [];
+      if (stored && timeline.some((t) => t.name === 'model_override')) {
+        // A read: the side-effect-free catalogue port, never `setupFor`/`configure`, which is a run start's (the verifier's
+        // finding: it re-loaded the run host's MCP configuration and wrote its per-run maps for a session with no run).
+        const catalogue = this.deps.restingCatalogue!(stored.workspace_root);
+        if (catalogue) {
+          s.restingCatalogue = catalogue;
+          const resolve = (key: string): ModelChoice | null => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: e.thinking } : null; };
+          // Silent: a key this catalogue cannot resolve is the run's to warn about when one starts, not a read's.
+          s.restingMemory = ResilienceMemory.rehydrate(timeline, resolve);
         }
       }
     }
-    return s.restingCatalogue && s.memory ? overridesInForce(s.restingCatalogue, s.memory) : [];
+    const memory = s.memory ?? s.restingMemory ?? null;
+    return s.restingCatalogue && memory ? overridesInForce(s.restingCatalogue, memory) : [];
   }
 
   /** The session's memory (REQ-ORCH-091 a/d, REQ-SESSION-026), rehydrated from its timeline once, as a continuation does. */

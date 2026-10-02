@@ -15,7 +15,7 @@ import { CHECKPOINTS_DEFAULTS, INSTRUCTIONS_DEFAULTS, loadConfiguration, RUNTIME
 import { codeIntelligenceLaunchFor } from './code-intelligence-launch.js';
 import { SkillHost } from './skills.js'; // ADR-0063
 import { captureAfterRun, dalWhileOpen } from './improvement-capture.js';
-import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, type ConfiguredRun } from './configuration.js';
+import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, restingCatalogueOf, type ConfiguredRun } from './configuration.js';
 import { leaseForContinuation, LeaseReportLog } from './launch.js';
 import { randomUUID } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
@@ -328,6 +328,13 @@ export function createRunHost() {
     log: (m) => log(m),
     mintSessionId: () => randomUUID(),
     model: null,
+    /*
+     * REQ-CHAT-006 / REQ-SESSION-026: a resting session's record reads its workspace's catalogue here, never through
+     * `configure` below — that is a run start's, and called for a read it wrote `configuredRuns`/`runBearers` for a session
+     * with no run, replaced the workspace's `configured` entry and reloaded the MCP configuration (`mcp.newConfiguration`:
+     * a dropped discovery memo, its load-scope diagnostics raised again). Found by fin8's verifier.
+     */
+    restingCatalogue: (workspaceRoot) => restingCatalogueOf(workspaceRoot, configurationDeps),
     // ADR-0036/0037: the files, the live state, the loader's passes — once per run start.
     configure: (workspaceRoot, ctx) => {
       const r = configure(workspaceRoot, ctx.attended, ctx.entryPersona);

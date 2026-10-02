@@ -876,9 +876,27 @@ loops, ten runs after the repair passed at load averages of 10.4 to 14.7, the pa
 1.96 to 2.23 on the thread's CPU time while their wall ratios read 1.84 to 3.56 and 1.73 to 6.69. The half-size sweep reads
 14 to 23 ms of thread CPU, under the floor, so its ratio stays recorded and not asserted, as on an idle host's wall clock.
 The sweep's linear clause is therefore never asserted on this host. That is recorded as its own open note,
-[`traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`](../../defects/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
+[`traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`](../../defects/fixed/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
 The note is
 [`traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`](../../defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md).
+
+**Corrected 2026-10-02 (fin7): the sweep's pair has trees of its own, and its ratio is asserted.** The claim above, "the
+sweep's linear clause is therefore never asserted on this host", was too strong as written: it is not asserted at the
+reference conditions, an idle host, where the 500-file half side reads 14 to 23 ms of thread CPU. Under load the same
+side's CPU time can rise past the floor, and fin5's verifier saw the ratio asserted once, at 2.23 against a work ratio of
+2, at a load average of 11.6. Either way the proof could not fail on a sweep that grows faster than linearly while the
+host was idle.
+
+The replacement: the sweep's pair is 2,000 files against 4,000 (`SWEEP_PAIR_FILES` in `traceability.proof.test.ts`),
+generated over spike 7's store with ten sites a file, and the proof requires the sweep's verdict to be asserted
+(`mustAssert` in `traceability-proof.mjs`), so a pair under the floor goes red. The "about one second" budget is still
+read on the 10^3-file tree, the parse and the parser keep their pairs, and the floor, the ceiling and the 1.3 lower bound
+are unchanged. 10^3 against 2×10^3 was measured first: the 10^3-file side read 36 to 44 ms idle, near the floor at the
+low end its loaded figures extrapolate to (about 28 ms). At 2,000 against 4,000, seven proof runs passed at load
+averages of 2.1 to 3.3 on 4 CPUs, the sweep's ratio asserted at 1.6 to 2.3 with the half side's minimum at 76 to 94 ms of
+thread CPU. Building and reading the pair adds 4.1 to 8.0 s to the proof (`pairMs`), which ran 18 to 23 s in all. No run
+beside added busy loops was taken (the session's permission system refused launching them). The note is
+[`traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`](../../defects/fixed/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
 
 **Corrected 2026-10-01 (R-062): the second execution's busy pair raced, and is now held in flight.** The falsified
 claim was "two concurrent checks yielded exactly one `busy` (`REQ-TRACE-512`)". The proof posted two board-path checks

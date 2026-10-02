@@ -69,7 +69,9 @@ as it was on an idle host's wall clock before (18 to 23 ms); its wall ratios und
 reds it gave before the repair came from a wall clock lifted above the floor by the load. One run with no added load
 (load average 8.4) passed too (parse 2.36, parser 2.01; wall 2.5 and 2.27). The sweep's linear clause is therefore never
 asserted on this host, a gap this repair does not close. It is recorded as its own open note,
-[traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md](../traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
+[traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md](traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
+That note was repaired on 2026-10-02 (fin7): the sweep's pair has trees of its own, 2,000 against 4,000 files, and its
+ratio is now required to be asserted.
 
 Pinned by `packages/workspace/src/traceability/growth-readings.test.ts` ("on an oversubscribed host the ratio is read on the
 thread's CPU time …": every full-size reading's wall stretched 2.5× and every half-size one 1.2×, wall ratio 4.46, CPU

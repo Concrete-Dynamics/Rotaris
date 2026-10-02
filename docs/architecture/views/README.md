@@ -43,7 +43,17 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-10-01**
+## Last reconciled with the code: **2026-10-02**
+
+**One measurement observer per transcript pane, and a held scrollbar gutter (ADR-0045, REQ-CHAT-055, REQ-CHAT-058).**
+`TranscriptPane.tsx` makes its measurement observer once, at mount. Its effect no longer depends on the displayed rows or
+the capacity, so a pending passive effect flushed inside the delivery's own `flushSync` can no longer disconnect the
+delivering observer and observe every slot again. A slot that a displayed change rebinds is observed by the every-commit
+`observeAgain`. Each slot's ref callback is made once (`slotRef`, `pool.ts`); a slot whose node unmounts is unobserved and
+forgotten, so a node mounted later in that slot is observed again. `.transcript__scroll` holds its scrollbar gutter, so the
+width the rows are measured at never changes with the bar. The **runtime view**'s transcript paragraph says both. This repairs
+`the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`, and `transcript-proof` fails on the
+console line in any launch. No package, edge, process, message kind, channel, command or store column changed.
 
 **A dialog opened while the composer's send is settling keeps its focus (REQ-MONITOR-137, REQ-CHAT-002).** The
 composer's awaited submissions (a queue, a start or continue, an executed slash command) return the focus through one

@@ -238,6 +238,32 @@ export function observeAgain(observed: Map<number, string>, slot: number, key: s
 }
 
 /**
+ * Slot `slot`'s ref callback, made once and kept in `refs` for the pane's life, so React calls it only when the slot's
+ * node mounts and unmounts rather than on every commit. A node that mounts is filed in `nodes`. One that unmounts — a
+ * capacity that shrank — is removed from `nodes`, forgotten in `observed` and unobserved, so a node mounted later in that
+ * slot is observed by `observeAgain` even under the key the old node last held. The pane's one measurement observer
+ * outlives every slot (ADR-0045: heights are measured;
+ * docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md), so nothing else
+ * would observe it.
+ */
+export function slotRef<T>(
+  refs: Map<number, (node: T | null) => void>, slot: number, nodes: Map<number, T>, observed: Map<number, string>,
+  unobserve: (node: T) => void,
+): (node: T | null) => void {
+  const held = refs.get(slot);
+  if (held !== undefined) return held;
+  const ref = (node: T | null): void => {
+    if (node !== null) { nodes.set(slot, node); return; }
+    const gone = nodes.get(slot);
+    nodes.delete(slot);
+    observed.delete(slot);
+    if (gone !== undefined) unobserve(gone);
+  };
+  refs.set(slot, ref);
+  return ref;
+}
+
+/**
  * The commit's measurement (ADR-0045: heights are measured), run by the pane after every commit and before the browser
  * paints it: every bound slot whose measurement key has no measurement yet — a row first bound, or a row whose content
  * changed — is read now (`read`, the slot's drawn height), filed under its key and under its identity, and marked in the

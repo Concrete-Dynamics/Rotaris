@@ -1418,7 +1418,13 @@ the paint (`measureAtCommit`), the pane rendering again inside the commit when i
 2026-10-01 a row that grew was painted through the row beneath it for the frame before the observer's delivery rendered.
 A size that changes under an unchanged key — an image attachment's `<details>` opened, the image loading, a block start's
 margin — runs no commit, so the observer's delivery renders it synchronously (`flushSync`), after layout and before the
-paint, where it used to render a frame later. A span wider
+paint, where it used to render a frame later. One observer serves the pane's life: it is made at mount, never again on a
+displayed change, so no render inside a delivery can disconnect it and observe every slot afresh; a slot whose node
+unmounts (a capacity that shrank) is unobserved and forgotten (`slotRef`), so a node mounted later in it is observed
+again. The scroller also holds
+its scrollbar gutter (`scrollbar-gutter: stable`), so a bar that appears inside a delivery narrows no row. Until
+2026-10-01 either could leave the slots' sizes to the next frame, with Chromium's "ResizeObserver loop" error in the
+renderer console. A span wider
 than the pool sheds its overscan, below and then above, before it cuts a visible row (`visibleRange`). The anchor is
 the identity and viewport offset
 of the top visible row, restored by finding that row again, never by re-applying a stored pixel offset. A retained

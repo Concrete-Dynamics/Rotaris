@@ -9,7 +9,7 @@ import { CAP_DEFAULTS, isLive, rowKey, type DisplayCaps } from './project.js';
 import { createProjector } from './projector.js';
 import {
   beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, markMeasured, measureAtCommit, newUpdatesLabel, remeasuredSince,
-  observeAgain, readHeight, restoreAnchor, reuseOffsets, updateShape, visibleRange, type Anchor,
+  observeAgain, readHeight, restoreAnchor, reuseOffsets, slotRef, updateShape, visibleRange, type Anchor,
 } from './pool.js';
 import { isOwnScroll } from './scroll.js';
 import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
@@ -156,6 +156,8 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   /** The measurement key each slot was last observed under (`observeAgain`), and the measurement pass's observer. */
   const [observedKeys] = useState(() => new Map<number, string>());
   const observerRef = useRef<ResizeObserver | null>(null);
+  /** Each slot's ref callback, one per slot for the pane's life (`slotRef`). */
+  const [slotRefs] = useState(() => new Map<number, (node: HTMLDivElement | null) => void>());
 
   /**
    * REQ-CHAT-059 / REQ-CHAT-167: what the READER set by hand, keyed by stable identity. It is deliberately not
@@ -402,7 +404,16 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     // observer delivers a size only when it CHANGES: a slot rebound to a row that draws the height the row it held drew
     // delivered nothing, and the new row stayed at its estimate on screen until the next displayed change. The layout
     // effect below observes such a slot again, which delivers its size whatever it was.
-  }, [measurements, lastByIdentity, ledger, slotNodes, observedKeys, display, capacity]);
+    //
+    // ONE observer for the pane's life: every dependency is an identity held in state, so this runs at mount and never
+    // again. **Until 2026-10-01 `display` and `capacity` were dependencies too, and the observer was disconnected and made
+    // again, observing every slot afresh, on each displayed change.** React flushes a pending passive effect before its
+    // next render, and that render could be the delivery's own `flushSync` above: a displayed change was committed, the
+    // delivery came in the same frame, and this effect disconnected the very observer delivering and observed every slot
+    // again at the depth just delivered. The browser defers such observations to the next frame and reports "ResizeObserver
+    // loop completed with undelivered notifications" (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md).
+    // A slot that a displayed change rebinds, or that a capacity growth adds, is observed by the layout effect below.
+  }, [measurements, lastByIdentity, ledger, slotNodes, observedKeys]);
 
   // ADR-0045 (heights are measured): every commit, a slot bound under a measurement key it was not observed under is
   // observed again, so the row it now holds is measured rather than left at its estimate
@@ -633,7 +644,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
               return (
                 <div
                   key={slot}
-                  ref={(node) => { if (node) slotNodes.set(slot, node); else slotNodes.delete(slot); }}
+                  ref={slotRef(slotRefs, slot, slotNodes, observedKeys, (node) => observerRef.current?.unobserve(node))}
                   className={`transcript__slot slot${d === null ? ' slot--empty' : ''}`}
                   data-slot={slot}
                   data-measure={measured}

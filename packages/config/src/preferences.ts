@@ -1,3 +1,4 @@
+import type { CONFIG_ORIGINS } from '@rotaris/contracts';
 import { isPlainMap, type PlainMap } from './merge.js';
 import { MODEL_SLOTS, PERSONA_SYNTHETIC_PREFIX, STARTUP_SLOT_PREFIX, thinkingKeyOf, type ModelSlot } from './keys.js';
 import type { LoadedConfiguration } from './load.js';
@@ -9,8 +10,13 @@ import { syntheticOriginOf } from './slots.js';
  * another slot followed recursively with cycle detection, a concrete name returned as-is, anything else
  * from the resolved configuration with synthetic names unwrapped — and a role's preference record with
  * its origin, so a surface can show "inherited" and offer "back to default".
+ *
+ * REQ-CONFIG-341: the origin is one of exactly `workspace`, `global`, `discovered` and `default` — the contract's
+ * vocabulary, so the read-back cannot name a member the Scope column does not have. `default` marks a built-in value.
+ * Until 2026-10-02 the fourth member was `built-in`
+ * (`docs/defects/fixed/the-scope-column-names-the-built-in-origin-built-in-not-default.md`).
  */
-export type Origin = 'workspace' | 'global' | 'discovered' | 'built-in';
+export type Origin = (typeof CONFIG_ORIGINS)[number];
 
 export interface SlotPreference {
   readonly slot: ModelSlot;
@@ -62,7 +68,7 @@ export function slotPreferences(config: LoadedConfiguration): readonly SlotPrefe
     // REQ-CONFIG-341: a value the snapshot layer supplied is `discovered`. The comparison is made against the unwrapped
     // value: a reasoning level a file states wraps the snapshot's key in the loader's synthetic copy (REQ-CONFIG-076),
     // and that copy still carries the value the snapshot contributed.
-    const origin: Origin = value !== null && config.discoveredSlots[slot] === value ? 'discovered' : 'built-in';
+    const origin: Origin = value !== null && config.discoveredSlots[slot] === value ? 'discovered' : 'default';
     return { slot, value, origin, thinking: thinkingRaw };
   });
 }
@@ -107,12 +113,12 @@ export function rolePreferences(config: LoadedConfiguration): readonly RolePrefe
     return {
       role,
       rawModel: wsModel !== undefined ? wsModel : gModel !== undefined ? gModel : null,
-      modelOrigin: wsModel !== undefined ? 'workspace' : gModel !== undefined ? 'global' : 'built-in',
+      modelOrigin: wsModel !== undefined ? 'workspace' : gModel !== undefined ? 'global' : 'default',
       effectiveModel: effective.startsWith(STARTUP_SLOT_PREFIX) ? effective : effective,
       inherited: wsModel === undefined && gModel === undefined,
       builtInDefault: builtIn,
       rawThinking: wsThinking !== undefined ? wsThinking : gThinking !== undefined ? gThinking : null,
-      thinkingOrigin: wsThinking !== undefined ? 'workspace' : gThinking !== undefined ? 'global' : 'built-in',
+      thinkingOrigin: wsThinking !== undefined ? 'workspace' : gThinking !== undefined ? 'global' : 'default',
       tier: config.resolvedPersonaModelTiers[role] ?? null,
       tools: persona.tools,
     };

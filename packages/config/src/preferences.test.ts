@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadConfiguration, type LoadedConfiguration } from './load.js';
+import { CONFIG_ORIGINS } from '@rotaris/contracts';
 import { rolePreferences, slotPreferences } from './preferences.js';
 
 const dirs: string[] = [];
@@ -66,11 +67,11 @@ describe('the read-back unwraps a synthetic copy to the models: key it was copie
     expect(small).toEqual({ slot: 'small_model', value: 'openai-compatible--beta/qwen', origin: 'discovered', thinking: 'high' });
   });
 
-  it('REQ-CONFIG-341: a slot the snapshot did not supply, whose reasoning level a file states, stays built-in', () => {
+  it('REQ-CONFIG-341: a slot the snapshot did not supply, whose reasoning level a file states, stays default', () => {
     const c = loadTwoEndpoints('large_model_thinking: high\n');
     expect(c.discoveredSlots).toEqual({ small_model: 'openai-compatible--beta/qwen' });
     const large = slotPreferences(c).find((p) => p.slot === 'large_model')!;
-    expect(large).toMatchObject({ origin: 'built-in', thinking: 'high' });
+    expect(large).toMatchObject({ origin: 'default', thinking: 'high' });
   });
 
   it('REQ-CONFIG-255: a role with a reasoning level on the second endpoint reads back its effective model on that endpoint', () => {
@@ -85,5 +86,27 @@ describe('the read-back unwraps a synthetic copy to the models: key it was copie
     const c = loadTwoEndpoints('personas:\n  verifier:\n    model: openai-compatible--beta/qwen\n');
     const verifier = rolePreferences(c).find((r) => r.role === 'verifier')!;
     expect(verifier.effectiveModel).toBe('openai-compatible--beta/qwen');
+  });
+});
+
+/**
+ * Defect note `the-scope-column-names-the-built-in-origin-built-in-not-default.md`: REQ-CONFIG-341 fixes the Scope
+ * column's origin vocabulary at exactly `workspace`, `global`, `discovered` and `default`, `default` marking a built-in
+ * value. The read-back named that fourth member `built-in`, and Settings → Models drew the word as it arrived.
+ */
+describe('the origin vocabulary is the one REQ-CONFIG-341 states (REQ-CONFIG-341, REQ-CONFIG-031)', () => {
+  it('REQ-CONFIG-341: the vocabulary is exactly workspace, global, discovered and default, in the layer order', () => {
+    expect([...CONFIG_ORIGINS]).toEqual(['workspace', 'global', 'discovered', 'default']);
+  });
+  it('REQ-CONFIG-341: a slot and a role field no file and no snapshot states read back as default', () => {
+    const c = loadTwoEndpoints('small_model_thinking: high\n');
+    const slots = Object.fromEntries(slotPreferences(c).map((p) => [p.slot, p]));
+    // `large_model` is stated by no file and the snapshot supplies only `small_model`.
+    expect(slots['large_model']).toMatchObject({ origin: 'default' });
+    expect(slots['small_model']).toMatchObject({ origin: 'discovered' });
+    const tester = rolePreferences(c).find((r) => r.role === 'tester')!;
+    expect(tester).toMatchObject({ rawModel: null, modelOrigin: 'default', rawThinking: null, thinkingOrigin: 'default', inherited: true });
+    for (const p of slotPreferences(c)) expect(CONFIG_ORIGINS).toContain(p.origin);
+    for (const r of rolePreferences(c)) { expect(CONFIG_ORIGINS).toContain(r.modelOrigin); expect(CONFIG_ORIGINS).toContain(r.thinkingOrigin); }
   });
 });

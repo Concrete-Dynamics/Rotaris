@@ -22,7 +22,7 @@ import { LaunchDisclosure } from './panes/LaunchDisclosure.js';
 import { QueuePane } from './panes/QueuePane.js';
 import { ReviewPane } from './panes/ReviewPane.js';
 import { createPaneRegistry } from './panes/registry.js';
-import type { DecisionResult } from './panes/presentation.js';
+import { rereadWhenTaken, type DecisionResult } from './panes/presentation.js';
 // Defect R2-3: `PANE_TITLE` belongs in this list. It was dropped from it while the pane host's own chrome did not yet
 // exist, then used by that chrome — and a bundler does not resolve identifiers, so the renderer built cleanly and threw
 // `PANE_TITLE is not defined` the first time a pane opened, which React answers by unmounting the whole tree.
@@ -643,7 +643,9 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     const r = option === 'resume'
       ? await perform(id, 'resume', 'blocked', back === 'running' ? 'ready' : back, undefined)
       : await perform(id, 'answer-blocker', card?.column ?? 'blocked', card?.column ?? 'blocked', { option }, undefined);
-    if (r.ok) void host.readBlocker(id).then((b) => { if (b.ok) setBlockerPayload(b.value); });
+    // REQ-TRACE-453/472: a resume into `ready` is held behind the launch's disclosure and is taken only when that is
+    // accepted; the blocker is re-read then, not only when the first answer is already `ok`.
+    void rereadWhenTaken(r, () => { void host.readBlocker(id).then((b) => { if (b.ok) setBlockerPayload(b.value); }); });
     return r;
   }, [paneTarget, blockerPayload, perform, host]);
 

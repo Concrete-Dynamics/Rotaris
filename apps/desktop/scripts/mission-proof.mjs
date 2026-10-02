@@ -29,6 +29,9 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *   4c. persona    — the inspector pops out the run-level agent; the window's Cancel on the run's own instance confirmed: every
  *                    snapshot after the confirmation was handled reads the instance's state `cancelling` or the run at rest,
  *                    never `running` (acceptance A35, REQ-MONITOR-127/130, REQ-SHELL-075 (a)).
+ *   4d. inspector  — the Workspace inspector following the run-level agent, its Cancel confirmed ("Cancel the run?"): every
+ *                    snapshot after the confirmation was handled whose run header reads `Cancelling…` reads the meta line
+ *                    `cancelling · …`, never `running · …` (REQ-MONITOR-127/130/052, OQ-165's reading).
  *   5. open        — pop-out off: Open pins the agent in the Workspace inspector; on: one window per persona, 820×620,
  *                    reused for a second instance, hidden on close, shown again; a new session destroys it.
  *   6. inspector   — following the latest author, pinned on selection, chips in one order across a state change, Steer
@@ -136,16 +139,17 @@ const s1 = scenario('painted');
   const rows6 = probesAt(r.log, 6000, '.agent-table__row') ?? [];
   expect(rows6.length === 3, `the table had ${rows6.length} rows at 6 s`);
   const states6 = probesAt(r.log, 6000, '.agent-table__state-text')?.map((p) => p.text) ?? [];
-  // The scripted client's children share one step list, so only the first waits 14 s; the others finish at once (run-host/index.ts).
-  expect(states6.length === 3 && states6.every((t) => ['running', 'waiting', 'queued', 'done'].includes(t)) && states6.includes('running'), `state text at 6 s: ${JSON.stringify(states6)}`);
+  // Each child keeps its own place in the scripted client's step list (run-host/scripted-client.ts), so every child holds
+  // its own 14 s wait and all three are still running at 6 s. A row settled this early means the children took each
+  // other's steps again (docs/defects/fixed/the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md).
+  expect(states6.length === 3 && states6.every((t) => t === 'running'), `state text at 6 s: ${JSON.stringify(states6)}`);
   const tree6 = probesAt(r.log, 6000, '.mission__run-row + .agent-tree .agent-row') ?? [];
   expect(tree6.length === 3, `the tree under the run row had ${tree6.length} rows`);
   const e6 = (probesAt(r.log, 6000, '[data-testid="agent-elapsed"]') ?? []).map((p) => seconds(p.text));
   const e75 = (probesAt(r.log, 7500, '[data-testid="agent-elapsed"]') ?? []).map((p) => seconds(p.text));
-  const liveAt6 = states6.map((t, i) => (t === 'running' ? i : -1)).filter((i) => i >= 0);
-  expect(e6.length === 3 && e75.length === 3 && liveAt6.length > 0 && liveAt6.every((i) => e6[i] !== null && e75[i] !== null && e75[i] > e6[i]), `elapsed did not advance for the live rows: ${JSON.stringify(e6)} → ${JSON.stringify(e75)} at ${JSON.stringify(states6)} (REQ-MONITOR-107)`);
-  const settledAt6 = states6.map((t, i) => (t === 'done' ? i : -1)).filter((i) => i >= 0);
-  expect(settledAt6.every((i) => e6[i] === e75[i]), `a settled row's elapsed changed: ${JSON.stringify(e6)} → ${JSON.stringify(e75)} (REQ-MONITOR-107)`);
+  // Every row is live at 6 s, so every row's elapsed advances. No row settles inside these probes any more; an ended
+  // agent's fixed figure is pinned by packages/ui/src/agent-clock.test.ts.
+  expect(e6.length === 3 && e75.length === 3 && e6.every((v, i) => v !== null && e75[i] !== null && e75[i] > v), `elapsed did not advance for the live rows: ${JSON.stringify(e6)} → ${JSON.stringify(e75)} at ${JSON.stringify(states6)} (REQ-MONITOR-107)`);
   const endRows = endProbe(r.log, '.agent-table__row') ?? [];
   expect(endRows.length === 3 && endRows.every((p) => p.data['data-state'] === 'done'), `after the run the rows read ${JSON.stringify(endRows.map((p) => p.data['data-state']))}`);
   expect(endProbe(r.log, '.app-shell')?.[0]?.data?.['data-view'] === 'mission', 'the capture was not on Mission');
@@ -190,7 +194,7 @@ const s2 = scenario('parity');
 {
   const r = await launch('parity', s2, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'three trees',
-    // Probed once the two quick children have settled and the first is still waiting, so the states are steady across the three views (a state change between probes is not a parity fault).
+    // Probed while all three children are still inside their own 14 s wait, so the states are steady across the three views (a state change between probes is not a parity fault).
     ROTARIS_CAPTURE_VIEWS: '3@7000;;1@8000;;2@9000',
     ROTARIS_CAPTURE_PROBE_AT: '.agent-row@7500;;.app-shell@7500;;.agent-row@8500;;.app-shell@8500;;.agent-row@9500;;.app-shell@9500',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1000',
@@ -268,7 +272,7 @@ const s3 = scenario('pause');
 const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    model: scripted', "    purpose: 'Delegates the work, then waits for it.'", "    system_prompt: 'You are a lead. Delegate the work, then wait for it.'", '    tools: [delegate, read_file, todo]']);
 {
   const r = await launch('cancel', s4, {
-    // The children share one step list: alpha delegates `sub`, and the next two calls — alpha's and sub's, in whichever order — each wait 16 s.
+    // Each child walks this list from its own first step (run-host/scripted-client.ts): alpha delegates `sub`, and its next call waits 16 s; sub's first step names `delegate`, which a coding-agent is not granted, so the client answers instead, and sub's next call waits 16 s — both are live when the cancel lands.
     ROTARIS_SCRIPT: 'delegate:lead:alpha,answer', ROTARIS_CHILD_SCRIPT: 'delegate:coding-agent:sub,wait:16000,answer,wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel a child',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@7000;;[data-testid="mission-cancel"]@7400;;.dialog-actions .btn-danger@8200',
@@ -399,6 +403,49 @@ const s4c = scenario('cancel-run-persona');
   const cancellingSamples = samples.filter((x) => x.state === 'cancelling').length;
   expect(!['running', 'waiting', 'starting', 'pausing', 'cancelling', 'background'].includes(row.execution_status), `the cancelled run ended ${row.execution_status} (${row.stop_reason})`);
   results.cancelRunPersona = { following, window: windows[0] ?? null, before: { name: field(before, 'persona-agent-name'), state: field(before, 'persona-agent-state') }, dialog, samples, stillShowingDialog: pending, cancellingSamples, finalStatus: row.execution_status, stopReason: row.stop_reason, png: join(output, 'cancel-run-persona-window.png') };
+}
+
+// 4d. Cancel the run from the Workspace inspector (REQ-MONITOR-127/130/052, OQ-165's reading;
+// docs/defects/fixed/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md): the inspector
+// following the run-level agent, its Cancel confirmed as "Cancel the run?". The run header and the meta line are read in one
+// snapshot: whenever the header reads `Cancelling…` the meta line reads `cancelling · …`. Before the repair the meta line read
+// the agent vocabulary alone, `running · …`, beside the header's `Cancelling…` until the record at rest arrived.
+const s4d = scenario('cancel-run-inspector');
+{
+  const SAMPLES = [6610, 6620, 6630, 6640, 6660, 6700, 6800, 7000, 8000, 9000];
+  // One selector list per sample: the confirmation, the run header and the meta line read in the same instant (see 4b).
+  const SNAPSHOT = '[data-testid="cancel-run-confirm"], [data-testid="run-state"], [data-testid="inspector-meta"]';
+  const r = await launch('cancel-run-inspector', s4d, {
+    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel the run from the inspector',
+    ROTARIS_CAPTURE_CLICKS: '[data-testid="inspector-cancel"]@6000;;[data-testid="cancel-run-confirm"] .btn-danger@6600',
+    ROTARIS_CAPTURE_PROBE_AT: ['[data-testid="inspector-name"]@5800', `${SNAPSHOT}@5800`, '[data-testid="cancel-run-confirm"]@6300', ...SAMPLES.map((at) => `${SNAPSHOT}@${at}`)].join(';;'),
+    ROTARIS_CAPTURE_PNG_AT: `${join(output, 'cancel-run-inspector.png')}@6640`,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
+  }, { timeout: 200_000 });
+  const db = open(s4d); const row = session(db); db.close();
+  const following = probesAt(r.log, 5800, '[data-testid="inspector-name"]')?.[0]?.text ?? null;
+  expect(following === 'orchestrator', `the inspector did not follow the run-level agent at 5.8 s: "${following}"`);
+  const field = (snap, id) => snap?.find((p) => p.data['data-testid'] === id)?.text ?? null;
+  const before = probesAt(r.log, 5800, SNAPSHOT);
+  expect((field(before, 'inspector-meta') ?? '').startsWith('running · '), `the run-level agent's meta line before the cancel: ${JSON.stringify(before)}`);
+  const dialog = probesAt(r.log, 6300, '[data-testid="cancel-run-confirm"]')?.[0]?.text ?? '';
+  expect(/Cancel the run\?/.test(dialog), `the inspector's Cancel on the run-level agent did not ask "Cancel the run?": "${dialog}" (REQ-MONITOR-126)`);
+  const confirmed = r.log.indexOf('capture: clicked "[data-testid="cancel-run-confirm"] .btn-danger"');
+  expect(confirmed >= 0, 'the confirm click was not recorded');
+  const afterConfirm = r.log.slice(confirmed);
+  const snapshots = SAMPLES.map((at) => ({ at, snap: probesAt(afterConfirm, at, SNAPSHOT) })).filter((x) => x.snap !== null);
+  const pending = snapshots.filter((x) => field(x.snap, 'cancel-run-confirm') !== null).map((x) => x.at);
+  const samples = snapshots.filter((x) => field(x.snap, 'cancel-run-confirm') === null).map(({ at, snap }) => ({ at, header: field(snap, 'run-state'), meta: field(snap, 'inspector-meta') })).filter((x) => x.header !== null && x.meta !== null);
+  expect(samples.length >= 3, `fewer than three snapshots after the confirmation was handled: ${JSON.stringify(samples)} (still showing the dialog: ${JSON.stringify(pending)})`);
+  // REQ-MONITOR-130: whichever surface asks, the same state — the meta line never reads the run-level agent running beside it.
+  const split = samples.filter((x) => x.header === 'Cancelling…' && !x.meta.startsWith('cancelling · '));
+  expect(split.length === 0, `the inspector's meta line read another state beside the run header's Cancelling…: ${JSON.stringify(split)} (REQ-MONITOR-127/130/052)`);
+  const running = samples.filter((x) => x.meta.startsWith('running · '));
+  expect(running.length === 0, `the inspector's meta line read the cancelled run's agent running after the confirm: ${JSON.stringify(running)} (REQ-MONITOR-127/130)`);
+  // Whether a snapshot lands inside the cancel's window is host timing: recorded, not asserted.
+  const cancellingSamples = samples.filter((x) => x.header === 'Cancelling…').length;
+  expect(!['running', 'waiting', 'starting', 'pausing', 'cancelling', 'background'].includes(row.execution_status), `the cancelled run ended ${row.execution_status} (${row.stop_reason})`);
+  results.cancelRunInspector = { following, before: { header: field(before, 'run-state'), meta: field(before, 'inspector-meta') }, dialog, samples, stillShowingDialog: pending, cancellingSamples, finalStatus: row.execution_status, stopReason: row.stop_reason, png: join(output, 'cancel-run-inspector.png') };
 }
 
 // 5. Open an agent under both preferences; the window's lifecycle; a new session destroys it.

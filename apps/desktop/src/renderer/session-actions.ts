@@ -104,8 +104,8 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
    * run is no longer cancellable (REQ-MONITOR-127).
    *
    * REQ-MONITOR-127 / REQ-MONITOR-130 (acceptance A35): the session is shown `cancelling` from the moment the cancel is sent,
-   * on every surface of this window — the Workspace, the Mission view's run row and subtitle, a persona window's run instance
-   * (`agentStateLabel`, since the agent vocabulary has no `cancelling`) — through the overlay's run cancel
+   * on every surface of this window — the Workspace, its inspector's meta line on the run-level agent, the Mission view's run
+   * row and subtitle, a persona window's run instance (`agentStateLabel`, since the agent vocabulary has no `cancelling`) — through the overlay's run cancel
    * (`cancel-overlay.ts`), and its own status again on a refusal; an acceptance leaves it to the run's final read. Every confirmed "Cancel the run?" comes here, so no surface sets a state of its own for it.
    */
   async function cancelRun(): Promise<{ ok: true } | { ok: false; reason: string }> {

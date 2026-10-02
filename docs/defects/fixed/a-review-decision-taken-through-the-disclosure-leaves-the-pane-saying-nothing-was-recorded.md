@@ -61,4 +61,4 @@ No live-run scenario takes a run-starting review decision (`requirements` takes 
 this repair.
 
 Noticed while repairing it: the blockers pane's resume has the same shape and was not changed. See
-[`../a-blocker-resumed-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`](../a-blocker-resumed-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md).
+[`a-blocker-resumed-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`](a-blocker-resumed-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md).

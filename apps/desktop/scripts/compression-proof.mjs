@@ -15,6 +15,8 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *   2. automatic      — the reported prompt count crosses the threshold; compression runs BEFORE the next call.
  *   3. compressor-down— the compressing pass fails; the ORIGINAL rejection is what surfaces and the run fails.
  *   4. twice-only     — a rejection that survives two condensations fails the step (at most twice for one call).
+ *   5. child-count    — a delegated child crosses the threshold and compresses once: the Mission view's agent table draws
+ *                       that child's compression count, 1, in its Compressions column (REQ-MONITOR-281/086).
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -59,10 +61,11 @@ function scenario(name, compressorLines, opts = {}) {
     '  alpha: { provider: scripted, model_id: alpha, max_input_tokens: 1000 }',
     ...(opts.brokenCompressor ? ['  broken: { provider: scripted, model_id: broken }'] : []),
     'small_model: alpha', 'medium_model: alpha', 'large_model: alpha',
-    'runtime:', '  permission_mode: autonomous',
+    'runtime:', '  permission_mode: autonomous', ...(opts.delegates ? ['  max_depth: 2'] : []),
     'compressor:', ...compressorLines,
     'mcp_servers:', '  code_intelligence: { enabled: false }',
-    'rotaris:', '  delegation_strategy: single', '',
+    // `single` withholds `delegate` (delegation_runtime_absent); scenario 5 needs a child, so it keeps the default strategy.
+    ...(opts.delegates ? [] : ['rotaris:', '  delegation_strategy: single']), '',
   ].join('\n'));
   return { root, workspace, local };
 }
@@ -182,6 +185,34 @@ const s4 = scenario('twice-only', ['  threshold_percentage: 60', '  preserve_rec
   expect(compressorCalls === 2, `the ladder condensed ${compressorCalls} time(s), not twice`);
   expect(entries.length === 2, `${entries.length} compression entries were recorded, not two`);
   results.twiceOnly = { status: row.execution_status, compressorCalls, png: r.png, elapsedMs: r.elapsedMs };
+}
+
+// 5. A child's compression count in the Mission table (REQ-MONITOR-281/086;
+// docs/defects/fixed/the-mission-table-says-the-record-carries-no-compression-count.md): the table's cell read `not recorded`
+// whatever the record held. The child crosses the threshold once; its row reads 1 under the column that names the unit.
+const s5 = scenario('child-count', ['  threshold_percentage: 60', '  preserve_recent_turns: 1'], { delegates: true });
+{
+  const r = await launch('child-count', s5, {
+    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'glob,glob,glob,tokens:900,answer', ROTARIS_CAPTURE_PROMPT: 'a child fills its context',
+    ROTARIS_CAPTURE_VIEWS: '3@1500', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '1500',
+    ROTARIS_CAPTURE_PROBE: '.agent-table thead th;;.agent-table__row;;.agent-table__compressions',
+  });
+  const db = open(s5);
+  const row = session(db);
+  const entries = timeline(db, row.session_id).filter((t) => t.name === 'context_compressed');
+  const kids = db.prepare('SELECT task_id, canonical_name, state FROM children WHERE session_id = ?').all(row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed', `the run did not complete: ${JSON.stringify(row)}`);
+  expect(entries.length === 1, `${entries.length} compression entries were recorded, not one: ${JSON.stringify(entries)}`);
+  expect(kids.length === 1, `one child was expected: ${JSON.stringify(kids)}`);
+  const endProbe = (selector) => { const m = r.log.match(new RegExp(`capture: probe ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])`)); return m ? JSON.parse(m[1]) : null; };
+  const headers = (endProbe('.agent-table thead th') ?? []).map((p) => p.text);
+  const rows = endProbe('.agent-table__row') ?? [];
+  const cells = (endProbe('.agent-table__compressions') ?? []).map((p) => p.text);
+  expect(headers.includes('Compressions') && headers.includes('Tool calls'), `the table's headers do not name the units: ${JSON.stringify(headers)} (REQ-MONITOR-281)`);
+  expect(rows.length === 1 && rows[0].data['data-agent-id'] === kids[0].task_id, `the table's rows: ${JSON.stringify(rows.map((p) => p.data))}`);
+  expect(JSON.stringify(cells) === JSON.stringify(['1']), `the child's compressions cell reads ${JSON.stringify(cells)}, not "1" (REQ-MONITOR-281/086)`);
+  results.childCount = { status: row.execution_status, child: kids[0].canonical_name, compressionEntries: entries.length, headers, cells, png: r.png, elapsedMs: r.elapsedMs };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

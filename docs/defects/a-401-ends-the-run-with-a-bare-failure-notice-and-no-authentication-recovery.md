@@ -55,7 +55,10 @@ half, REQ-SESSION-026, REQ-CONFIG-067) is built:
   rehydrates, so the pin outlives the failed run and a reload — and re-submits the last prompt. Main raises an error
   acknowledgement naming both models. A refusal (no fallback, the fallback being the model that failed, no prompt), a
   restart that cannot begin (the pin taken back with `cleared: true`), or a second authentication failure publishes the
-  generic notice. Pinned in `packages/engine/src/run/ladder.test.ts` ("REQ-NOTIFY-070 / REQ-MONITOR-147 /
+  generic notice. The system row announcing the restart is written only once the restart has begun (every refusal
+  passed, just before the restarted prompt's user row), so a restart that cannot begin leaves no row claiming one — the
+  first build wrote it ahead of `prompt`'s refusals and left it standing beside the generic notice, which the verifier of
+  2026-10-02 found; the "cannot begin" case now asserts the rows. Pinned in `packages/engine/src/run/ladder.test.ts` ("REQ-NOTIFY-070 / REQ-MONITOR-147 /
   REQ-SESSION-026 …"), `resilience.test.ts`, `autopsy.test.ts`, and shown by `resilience-proof`'s new `auth-fallback`
   scenario (`fail:401:only=scripted`, `fallback_model: beta`). REQ-NOTIFY-068 holds: the 401 is not retried on the pair.
 - **Readings** the build proceeds under (the restart re-submits the prompt as a new row, a restart that cannot begin takes

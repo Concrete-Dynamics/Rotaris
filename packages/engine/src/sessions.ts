@@ -1385,7 +1385,11 @@ export class Sessions {
     return r;
   }
 
-  private promptHeld(sessionId: SessionId, prompt: string, inputs: readonly ImageAttachmentInput[], hold: HoldSlot): Result<TranscriptRow, { code: string; reason: string }> {
+  /**
+   * `beginning` (REQ-NOTIFY-070's restart): called once every refusal has passed, just before the prompt's user row, so a
+   * row announcing the run is written only when the run begins — never beside a refusal.
+   */
+  private promptHeld(sessionId: SessionId, prompt: string, inputs: readonly ImageAttachmentInput[], hold: HoldSlot, beginning?: () => void): Result<TranscriptRow, { code: string; reason: string }> {
     const s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
     const storeFailure = storeFailureOf(s.dal, s.writer);
@@ -1409,6 +1413,7 @@ export class Sessions {
     const payload = buildContinuationPayload(s.dal, stored, prompt, todo.value);
     const attachments = persistAttachments(this.deps.sessionFilesDir(s.dal, sessionId), inputs);
     if (!attachments.ok) return err({ code: 'attachment-invalid', reason: attachments.reason });
+    beginning?.();
     const row = s.writer.appendRow('user', prompt, true, { attachments: attachments.attachments });
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
     // PD-ORCH-003: a fresh prompt does NOT clear the release. REQ-ORCH-154's "one-way for the run that received
@@ -2167,7 +2172,7 @@ export class Sessions {
    * "no usable fallback"). Where the restart itself cannot begin, the pin is taken back (`cleared: true`) before the
    * refusal is returned, so the session is left on the model it had (REQ-NOTIFY-070's last sentence).
    *
-   * Main keeps the "first failure of the session" bookkeeping (`main/auth-recovery.ts`); this answers for one restart.
+   * Main keeps the "first failure of the session" bookkeeping (`apps/desktop/src/main/failure-recovery.ts`); this answers for one restart.
    * The restart re-submits the prompt as `prompt` does, so the transcript shows it sent again; the last prompt's
    * attachments are not re-sent (the row keeps only their metadata).
    */
@@ -2199,11 +2204,18 @@ export class Sessions {
     const memory = s.memory;
     memory.setOverride(from.provider, from.model, { key: fallbackKey, choice: withSettings(catalogue, fallback) });
     s.writer.appendTimeline('model_override', 'rotaris', `Authentication failed on ${from.provider}/${from.model}; the fallback ${fallbackKey} (${to.provider}/${to.model}) is pinned for the rest of the session and the run restarts with the same prompt.`, { provider: from.provider, model: from.model, model_key: fallbackKey, to_provider: to.provider, to_model: to.model, cause: 'authentication' });
-    s.writer.appendRow('system', `Authentication failed on ${from.provider}/${from.model}. The run restarts on the fallback model ${fallbackKey} (${to.provider}/${to.model}), which stays in use for this session.`, true);
-    const restarted = this.prompt(sessionId, lastPrompt);
+    // The transcript row is written only once the restart begins (every refusal passed), so a restart that cannot begin
+    // leaves no row claiming one; where the restart fails after it (the user row's own write), a row says so.
+    let announced = false;
+    const hold: HoldSlot = {};
+    const restarted = this.promptHeld(sessionId, lastPrompt, [], hold, () => {
+      announced = s.writer.appendRow('system', `Authentication failed on ${from.provider}/${from.model}. The run restarts on the fallback model ${fallbackKey} (${to.provider}/${to.model}), which stays in use for this session.`, true).ok;
+    });
     if (!restarted.ok) {
+      hold.release?.();
       memory.clearOverride(from.provider, from.model);
       s.writer.appendTimeline('model_override', 'rotaris', `The run could not restart on the fallback ${fallbackKey} (${restarted.error.reason}); the pin on ${from.provider}/${from.model} is taken back.`, { provider: from.provider, model: from.model, cleared: true, cause: 'authentication' });
+      if (announced) s.writer.appendRow('system', `The run could not restart on the fallback model ${fallbackKey} (${restarted.error.reason}); the session stays on ${from.provider}/${from.model}.`, true);
       return err({ code: 'restart-failed', reason: restarted.error.reason });
     }
     return ok({ failed: from, fallback: to, prompt: lastPrompt });

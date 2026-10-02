@@ -334,4 +334,7 @@ entry carrying `cleared: true`, which `rehydrate` and the autopsy reader replay 
 scenario: `scripted/alpha` refused with a 401, the override recorded `{provider: scripted, model: alpha, model_key: beta,
 cause: authentication}`, the restart's one call on `scripted-b/beta`, the session `completed`; and in
 `packages/engine/src/run/ladder.test.ts` — the pin honoured by a later prompt and by a fresh process, a fallback that
-fails too not tried again, a restart that cannot begin taken back durably.
+fails too not tried again, a restart that cannot begin taken back durably. *Corrected 2026-10-02 (the repair round):* the
+first build wrote the system row "The run restarts on the fallback …" before `prompt`'s refusals, so a restart that could
+not begin left that row standing beside the generic notice; the row is now written only once the restart has begun
+(`promptHeld`'s `beginning` hook), and the "cannot begin" case asserts that no row claims a restart.

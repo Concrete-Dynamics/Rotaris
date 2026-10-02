@@ -445,9 +445,9 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.resumed'), sessionId: z.string() }),
   z.object({ kind: z.literal('config.snapshot'), snapshot: ConfigSnapshotSchema }),
   z.object({ kind: z.literal('session.continued'), sessionId: z.string(), resumed: z.boolean(), messageLimit: z.number().int().nullable() }),
-  /** REQ-NOTIFY-070: the pair that failed and the fallback now pinned; the restart has begun. */
   /** REQ-NOTIFY-078: whether the primary applies from the live run's next iteration or from the next run. */
   z.object({ kind: z.literal('session.primaryRepinned'), sessionId: z.string(), applies: z.enum(['next-iteration', 'next-run']) }),
+  /** REQ-NOTIFY-070: the pair that failed and the fallback now pinned; the restart has begun. */
   z.object({ kind: z.literal('session.fallbackRestarted'), sessionId: z.string(), failed: z.object({ provider: z.string(), model: z.string(), key: z.string().nullable() }), fallback: z.object({ provider: z.string(), model: z.string(), key: z.string() }) }),
   /** REQ-ORCH-154: the cycle the answer settled, and whether a further segment launched (approve and revise) or not (cancel). */
   z.object({ kind: z.literal('session.planResolved'), sessionId: z.string(), cycle: z.number().int().positive(), relaunched: z.boolean() }),

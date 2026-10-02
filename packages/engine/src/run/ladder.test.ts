@@ -1039,6 +1039,9 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect((await sessions.running(sid)!).status).toBe('completed');
       expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
       expect(dal.residentRows(sid).filter((r) => r.kind === 'user').map((r) => r.body)).toEqual(['do the thing', 'do the thing']);
+      // The restart's row stands just before the restarted prompt — written once the restart began, never before.
+      const kinds = dal.residentRows(sid).map((r) => `${r.kind}:${/restarts on the fallback/.test(r.body) ? 'restart' : r.body}`);
+      expect(kinds.indexOf('system:restart')).toBe(kinds.lastIndexOf('user:do the thing') - 1);
       expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'model_override')!.metadata)).toMatchObject({ provider: 'a', model: 'a1', model_key: 'f1', to_provider: 'f', to_model: 'f1', cause: 'authentication' });
       // Session-wide, not one run's: a later prompt in this process stays on the fallback.
       const later = sessions.prompt(sid, 'again');
@@ -1133,6 +1136,10 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       const entries = dal.timelineOf(sid).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
       expect(entries).toHaveLength(2);
       expect(entries[1]).toMatchObject({ provider: 'a', model: 'a1', cleared: true });
+      // The transcript says nothing that did not happen: no row claims a restart on the fallback, and no second user row.
+      const rows = dal.residentRows(sid).map((r) => `${r.kind}: ${r.body}`);
+      expect(rows.filter((r) => /fallback/i.test(r))).toEqual([]);
+      expect(rows.filter((r) => r.startsWith('user:'))).toEqual(['user: x']);
       // A reload replays both: no override stands.
       const fresh = sessionsWith(() => answer('fresh'), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
       const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);

@@ -1174,9 +1174,12 @@ workspace service present (REQ-NOTIFY-069), asks the run host `session.restartOn
 reads the model the root's failing call was addressed to (`Run.failedEntryModel`), resolves `fallback_model`, and —
 where the fallback is configured and is another pair — pins it in the session's `ResilienceMemory` keyed by the pair that
 failed and records the `model_override` timeline entry (`cause: authentication`) that `ResilienceMemory.rehydrate`
-replays on every later run and after a reload (REQ-SESSION-026); a system row says so; then `prompt` re-submits the last
-user prompt, a new run on the fallback. A restart that cannot begin takes the pin back with a `model_override` entry
-carrying `cleared: true`, which the replay and the autopsy reader honour. Main then raises an error acknowledgement naming
+replays on every later run and after a reload (REQ-SESSION-026); then `prompt` re-submits the last user prompt, a new
+run on the fallback, and a system row says so — written by `promptHeld`'s `beginning` hook once every refusal has passed,
+just before the restarted prompt's user row, so a restart that cannot begin leaves no row claiming one. A restart that
+cannot begin takes the pin back with a `model_override` entry carrying `cleared: true`, which the replay and the autopsy
+reader honour (and, where it failed after the row — the user row's own write — a second row says the session stays on the
+model it had). Main then raises an error acknowledgement naming
 both models (REQ-NOTIFY-070) and keeps "this session's fallback was attempted" for the life of the process; a refusal, a
 missing run channel, a missing service, or a second authentication failure publishes REQ-NOTIFY-064's notice — the
 recovery dialog of REQ-NOTIFY-072 is not built (the note's part C).

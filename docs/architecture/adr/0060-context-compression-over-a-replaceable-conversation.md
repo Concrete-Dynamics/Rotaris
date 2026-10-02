@@ -471,3 +471,26 @@ the most recent part is then whole, unmarked, and the start has what it leaves. 
 regression. **Not measured:** a live run — none of the live-run scenarios reaches the compression trigger (the largest
 prompt of the duress runs was 64,038 and 77,043 tokens against a trigger of 157,286), so a real model's summary over a
 whole slice has not been read. The row is in [`../first-executions.md`](../first-executions.md).
+
+## The compressing model follows the agent's cell — 2026-10-02 (fin10)
+
+*The repair of [`the-root-compresses-on-the-model-its-turn-started-on-after-its-cell-moves.md`](../../defects/fixed/the-root-compresses-on-the-model-its-turn-started-on-after-its-cell-moves.md).
+Found a defect in the first execution's mechanism.*
+
+The first execution resolved the trigger "for the model THIS agent calls" and took the compressing model from the agent's
+own when `compressor.model` is not configured (REQ-MONITOR-080) — both once, when a turn started: the root's from its
+ladder cell, a child's from its persona's configured model. That reason is kept beside its replacement: the ladder moves a
+cell within a turn (a same-tier or unresponsive fallback, a wait's choice, a session override followed before a call,
+ADR-0027), so after a move a pass called the pair the cell had left — possibly one recorded out of quota (REQ-MONITOR-194)
+— at that pair's threshold, and a child under a session override compressed on the pair the override replaced from its
+first pass. `TurnCompression.compressor` and `trigger` are now read at each pass (`CompressionRunner.due()` and
+`runOnce`, the manual pass included) from the pair the agent's cell calls next, the session's overrides followed
+(`Run.callsOn` for the root; the child's own cell from `forChild`); a configured `compressor.model` still wins.
+
+**What was measured.** `ladder.test.ts` ("REQ-MONITOR-078/080: compression follows the model the agent's cell is on"): a
+root moved from `a1` to `b1` by a same-tier fallback compresses on `b1` at `b1`'s 100-token trigger; a root that follows a
+child's wait choice of `c1` compresses on `c1`; a child of a configured `a1` started under an override to `c1` compresses
+on `c1` from its first pass — each with no pass at all before the repair (the trigger stayed `a1`'s 1,000). In the built
+app, `compression-proof`'s new `after-a-move` scenario: the root starts on alpha (10,000 tokens), meets insufficient quota,
+moves to beta (1,000), and its 900-token step compresses on beta at beta's 600-token trigger. The row is in
+[`../first-executions.md`](../first-executions.md).

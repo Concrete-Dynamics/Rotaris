@@ -612,7 +612,12 @@ keeps what it was given. Two triggers reach the same mechanism. **Automatic** (R
 where the supervisor's `check()` sits: the count is the provider's own last-prompt reading when the history still
 matches it, else a character estimate at `chars_per_token`, and it is compared with `compressionTrigger()`'s
 resolution of REQ-CONFIG-134 — capacity from the model's `context_compression_threshold`, else min(its
-`max_input_tokens`, `compressor.default_threshold`), else the default — times `threshold_percentage`.
+`max_input_tokens`, `compressor.default_threshold`), else the default — times `threshold_percentage`. The model
+whose capacity is read, and the compressing model when `compressor.model` is not configured, are **read at each pass** from
+the pair the agent's cell calls next, the session's overrides followed (`TurnCompression.compressor()`/`trigger()`;
+`Run.callsOn` for the root, the child's own cell in `IterationChildren`), so a ladder move within the turn — a same-tier or
+unresponsive fallback, a wait's choice, an override followed — takes the compression with it (REQ-MONITOR-079/080; until
+2026-10-02, fin10, both were captured when the turn started, and a child's from its persona's configured model).
 **Recovery** (REQ-ORCH-093), in the ladder's `context_window` arm: condense and retry, **at most twice for one
 call**, the original rejection surfaced unchanged when the condensation itself fails; the issue is
 `llm_bad_request`, or `parent_resume_bad_request` on the first call of a turn resumed with child reports. A

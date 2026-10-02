@@ -94,6 +94,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     inputLimits?: Record<string, number>;
     /** A role's own model (`Persona.modelRef`, REQ-CONFIG-094), by role name — a child of that role is built on it. */
     roleModels?: Record<string, ModelRef>;
+    /** REQ-MONITOR-078: each model's compression trigger in tokens, by model id (absent: never reached). */
+    triggerTokens?: Record<string, number>;
   }
 
   function sessionsWith(script: (persona: string, turn: number, req: Parameters<ScriptedModelClient['stream']>[0]) => ScriptedCall, opts: Opts = {}) {
@@ -102,10 +104,10 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const original = client.stream.bind(client);
     client.stream = (req) => {
       const system = req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
-      const persona = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise/i.test(system) ? 'summariser' : 'child';
+      const persona = /^You are the orchestrator/.test(system) ? 'orchestrator' : /^You condense an agent conversation/.test(system) ? 'compressor' : /summarise/i.test(system) ? 'summariser' : 'child';
       const n = (counts.get(persona) ?? 0) + 1;
       counts.set(persona, n);
-      client.push(script(persona, n, req));
+      client.push(persona === 'compressor' ? answer('Work performed: some. Findings reached: some. Questions left open: none.') : script(persona, n, req));
       return original(req);
     };
     const pub = recorder();
@@ -121,7 +123,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       clocks: clock, publisher: pub, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: (_sid, r) => results.push(r.status),
       configure: () => (++configured >= (opts.configureRefusesFrom ?? Infinity) ? { ok: false as const, error: { reason: 'the configuration no longer loads' } } : { ok: true, value: {
-        model: { backend, config, ...(opts.inputLimits === undefined ? {} : { compression: { model: null, timeoutMs: 120_000, charsPerToken: 4, preserveRecentTurns: 1, triggerFor: (m: ModelRef) => ({ tokens: 10_000_000, thresholdPercentage: 60, capacity: opts.inputLimits![m.modelId] ?? 1000, advertisedInputLimit: opts.inputLimits![m.modelId] ?? null, defaultThreshold: 265_000 }) } }) }, models, personas,
+        model: { backend, config, ...(opts.inputLimits === undefined && opts.triggerTokens === undefined ? {} : { compression: { model: null, timeoutMs: 120_000, charsPerToken: 4, preserveRecentTurns: 1, triggerFor: (m: ModelRef) => ({ tokens: opts.triggerTokens?.[m.modelId] ?? 10_000_000, thresholdPercentage: 60, capacity: opts.inputLimits?.[m.modelId] ?? 1000, advertisedInputLimit: opts.inputLimits?.[m.modelId] ?? null, defaultThreshold: 265_000 }) } }) }, models, personas,
         runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.runStartMode === undefined ? {} : { runStartMode: opts.runStartMode }), ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }), ...(opts.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: opts.childStallTimeoutMs }) },
         resilience: { catalogue, fallbackModel: opts.fallbackModel ?? null },
       } }),
@@ -1378,6 +1380,90 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(memory.overrideFor('b', 'b1')?.key).toBe('a1');
       expect(memory.overrideFor('a', 'a1')).toBeUndefined();
       expect(memory.isExhausted('a', 'a1')).toBe(false);
+    });
+  });
+
+  /*
+   * The repair of the-root-compresses-on-the-model-its-turn-started-on-after-its-cell-moves (REQ-MONITOR-080: "where none is
+   * configured, compression uses the model the agent whose context is being compressed is itself using"; REQ-MONITOR-078/079:
+   * the threshold is that model's capacity, recomputed on a switch). The compressing model and the trigger are read at each
+   * pass from the pair the agent's cell calls next — the root's and a child's — not once when its turn starts. Each model here
+   * has its own trigger: a1 1,000 tokens (capacity 2,000), b1 and c1 100 (capacity 200); a step reporting 500 prompt tokens is
+   * over the second and under the first.
+   */
+  describe('REQ-MONITOR-078/080: compression follows the model the agent\'s cell is on', () => {
+    const limits = { inputLimits: { a1: 2000, b1: 200, c1: 200 }, triggerTokens: { a1: 1000, b1: 100, c1: 100 } };
+    const glob: TestTool = (name) => (name === 'glob' ? Promise.resolve({ text: 'README.md', isError: false, status: 'ok', durationMs: 1, label: 'glob', args: {} }) : undefined);
+    const compressions = (sid: SessionId) => dal.timelineOf(sid).filter((t) => t.name === 'context_compressed').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+    const compressorModels = (client: ScriptedModelClient) => client.requests.filter((r) => /^You condense an agent conversation/.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '')).map((r) => r.model.modelId);
+
+    it('a root moved from a1 to b1 by a same-tier fallback compresses on b1 at b1\'s threshold', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona !== 'orchestrator') return answer('done');
+        if (turn === 1) return failing(quota());
+        if (turn === 2) return toolCalls([{ callId: 'g1', name: 'glob', args: {} }], 'looking', { input: 20, output: 5 });
+        if (turn === 3) return toolCalls([{ callId: 'g2', name: 'glob', args: {} }], 'looking again', { input: 500, output: 5 });
+        return answer('done');
+      };
+      const { sessions, client } = sessionsWith(script, { catalogue, delegation: true, tool: glob, ...limits });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Before: no pass at all — the trigger stayed a1's 1,000 tokens, captured when the turn started on a1.
+      expect(compressorModels(client)).toEqual(['b1']);
+      expect(compressions(sid)).toEqual([expect.objectContaining({ agent: 'orchestrator', trigger: 'automatic', capacity: 200, trigger_tokens: 100, counted_tokens: 500 })]);
+    });
+
+    it('a root that follows a session override from its next call compresses on the override\'s model at its threshold', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }], 'delegating', { input: 20, output: 5 });
+          if (turn === 2) return answer('waiting on the child', { input: 500, output: 5 });
+          return answer(`root ${turn}`);
+        }
+        return turn === 1 ? failing(quota()) : answer('I did it.');
+      };
+      const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 600_000, ...limits });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 60 && lastWait(pub) === null; i++) await tick();
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1' });
+      expect(lastWait(pub)!.agent).not.toBe('orchestrator');
+      // The child's choice of c1 replaces a1 for the session; the root, on a1 until now, follows it at its resume.
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Before: no pass — the root's trigger was a1's, from its turn's start.
+      expect(compressorModels(client)).toEqual(['c1']);
+      expect(compressions(sid)).toEqual([expect.objectContaining({ agent: 'orchestrator', capacity: 200, trigger_tokens: 100 })]);
+    });
+
+    it('a child started under a session override compresses on the override\'s model from its first pass', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+      let run = 1;
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona === 'orchestrator') {
+          if (run === 1) return turn === 1 ? failing(quota()) : answer('first run');
+          return turn === 3 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]) : answer(`root ${turn}`);
+        }
+        if (turn === 1) return toolCalls([{ callId: 'c1', name: 'glob', args: {} }], 'looking', { input: 20, output: 5 });
+        if (turn === 2) return toolCalls([{ callId: 'c2', name: 'glob', args: {} }], 'looking again', { input: 500, output: 5 });
+        return answer('I did it.');
+      };
+      const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, tool: glob, childTimeoutMs: 600_000, ...limits });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 60 && lastWait(pub) === null; i++) await tick();
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      run = 2;
+      const next = sessions.prompt(sid, 'delegate now');
+      if (!next.ok) throw new Error(next.error.reason);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // The child of the configured a1 runs on c1 through the override (`forChild`); before, it compressed against a1's
+      // configured trigger and made no pass.
+      expect(compressorModels(client)).toEqual(['c1']);
+      expect(compressions(sid)).toEqual([expect.objectContaining({ agent: 'side', capacity: 200, trigger_tokens: 100 })]);
     });
   });
 

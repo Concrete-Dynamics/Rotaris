@@ -201,8 +201,15 @@ export interface ResolvedTrigger {
 
 /** What a turn is given so its agent can compress: the pass, the trigger, the section's two figures and the plan. */
 export interface TurnCompression {
-  readonly compressor: CompressorDeps;
-  readonly trigger: ResolvedTrigger;
+  /**
+   * REQ-MONITOR-080 / REQ-MONITOR-078/079: the compressing model and the trigger, read at EACH pass from the model the agent's
+   * cell calls next — a configured `compression.model` still wins for the former — because the ladder moves the cell within
+   * a turn (a same-tier or unresponsive fallback, a wait's choice, a session override followed before a call). Until
+   * 2026-10-02 (fin10) both were values captured when the turn started, so after a move a pass called the pair the cell had
+   * left at that pair's threshold (the-root-compresses-on-the-model-its-turn-started-on-after-its-cell-moves).
+   */
+  readonly compressor: () => CompressorDeps;
+  readonly trigger: () => ResolvedTrigger;
   /** `REQ-CONFIG-132`: `chars_per_token`, default 4. */
   readonly charsPerToken: number;
   /** `REQ-CONFIG-132`: `preserve_recent_turns`, default 4. */
@@ -272,7 +279,8 @@ export class CompressionRunner {
   /**
    * REQ-CHAT-081 / REQ-MONITOR-092/096: the manual pass — unconditional. It reads neither the trigger nor the latch:
    * `due()` is not consulted, `futile` is not read, and the entry it writes carries no threshold figure because none
-   * was used (REQ-MONITOR-096's "never read threshold configuration" is honoured by not touching `svc.trigger` here).
+   * was used (REQ-MONITOR-096's "never read threshold configuration" is honoured by not consulting `svc.trigger` for it; the
+   * entry it writes carries none of its figures).
    * The preserved-turn count and the characters-per-token ratio apply exactly as they do to the automatic pass
    * (REQ-MONITOR-092's second sentence) — they are the same `compress()` call. A pass already in flight for this
    * agent is joined (its outcome is this request's outcome), which is the single-flight rule above.
@@ -327,16 +335,17 @@ export class CompressionRunner {
   due(conversation: Conversation, condensed: boolean): boolean {
     // Part AO: a pass in flight (manual or automatic) is never doubled.
     if (this.inFlight !== null) return false;
-    if (this.svc.trigger.tokens <= 0 || this.futile) return false;
+    const trigger = this.svc.trigger();
+    if (trigger.tokens <= 0 || this.futile) return false;
     const counted = this.count(conversation, condensed);
-    if (counted.tokens < this.svc.trigger.tokens) return false;
+    if (counted.tokens < trigger.tokens) return false;
     // Only a provider figure can judge the previous compression: an estimate measures a different thing.
     if (this.countedAtLastCompression === null || counted.source !== 'provider') return true;
     if (counted.tokens < this.countedAtLastCompression) return true;
     this.futile = true;
     const conversationTokens = estimateTokens(conversation.snapshot(), this.svc.charsPerToken);
     this.rec.warn(
-      `${this.rec.agent}: automatic context compression is switched off for this agent. The last compression left the counted prompt at ${counted.tokens} tokens against ${this.countedAtLastCompression} before it, still over the ${this.svc.trigger.tokens} trigger, while the conversation it can rewrite is only about ${conversationTokens} tokens — the rest is the system prompt and the tool definitions, which compression must keep character for character (REQ-MONITOR-082). Compressing again would cost a model call and shorten nothing. Raise compressor.threshold_percentage or compressor.default_threshold, or reduce the tool surface.`,
+      `${this.rec.agent}: automatic context compression is switched off for this agent. The last compression left the counted prompt at ${counted.tokens} tokens against ${this.countedAtLastCompression} before it, still over the ${trigger.tokens} trigger, while the conversation it can rewrite is only about ${conversationTokens} tokens — the rest is the system prompt and the tool definitions, which compression must keep character for character (REQ-MONITOR-082). Compressing again would cost a model call and shorten nothing. Raise compressor.threshold_percentage or compressor.default_threshold, or reduce the tool surface.`,
     );
     return false;
   }
@@ -357,16 +366,18 @@ export class CompressionRunner {
   private async runOnce(conversation: Conversation, kind: 'automatic' | 'rejection' | 'manual', condensed: boolean, signal: AbortSignal): Promise<boolean> {
     const { writer, clocks, agent } = this.rec;
     const counted = this.count(conversation, condensed);
+    // One read of each per pass, so the entry reports the threshold of the model the pass ran for.
+    const compressor = this.svc.compressor();
+    const t = this.svc.trigger();
     const startedMs = clocks.monotonic.now();
     this.svc.onState?.(agent, agent);
     let outcome;
     try {
-      outcome = await compress({ conversation, preserveRecentTurns: this.svc.preserveRecentTurns, charsPerToken: this.svc.charsPerToken, todoLines: this.svc.todoLines() }, this.svc.compressor, signal);
+      outcome = await compress({ conversation, preserveRecentTurns: this.svc.preserveRecentTurns, charsPerToken: this.svc.charsPerToken, todoLines: this.svc.todoLines() }, compressor, signal);
     } finally {
       this.svc.onState?.(null, agent);
     }
     this.lastOutcome = outcome;
-    const t = this.svc.trigger;
     if (!outcome.ok) {
       const message = `${agent}'s context was not compressed (${kind}): ${outcome.reason}`;
       /**

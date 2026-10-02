@@ -1265,15 +1265,23 @@ export class Run {
    * Part AH (ADR-0060): the per-agent compression services. The trigger is resolved for the model THIS agent
    * calls, so a child on a small model compresses at its own capacity and not the run's (REQ-MONITOR-078).
    * `onState` is REQ-MONITOR-085's visible status, published with the session snapshot like `wait`.
+   *
+   * REQ-MONITOR-080 / REQ-MONITOR-079: `current` is read at each pass — the model the agent's cell calls next (`callsOn`) —
+   * so a ladder move within the turn moves the compressing model (unless `compression.model` is configured) and the
+   * trigger with it. Until 2026-10-02 (fin10) the root's were taken from its cell once when its turn started and a child's
+   * from its persona's configured model, not its cell, so a child under a session override compressed on the pair the
+   * override replaced (the-root-compresses-on-the-model-its-turn-started-on-after-its-cell-moves).
    */
-  private readonly compressionFor = (choice: ModelChoice, todoLines: () => readonly string[]): TurnCompression | undefined => {
+  private readonly compressionFor = (current: () => ModelChoice, todoLines: () => readonly string[]): TurnCompression | undefined => {
     const c = this.deps.compression;
     if (!c) return undefined;
-    const chosen = c.model ?? { model: choice.model, thinking: choice.thinking };
     return {
       // OQ-156: the compressing model is given the history it condenses up to its own threshold (REQ-MONITOR-078).
-      compressor: { backend: c.backend, model: chosen.model, thinking: chosen.thinking, timers: c.timers, credentialFor: c.credentialFor, timeoutMs: c.timeoutMs, inputTokens: c.triggerFor(chosen.model).tokens },
-      trigger: c.triggerFor(choice.model), charsPerToken: c.charsPerToken, preserveRecentTurns: c.preserveRecentTurns, todoLines,
+      compressor: () => {
+        const chosen = c.model ?? current();
+        return { backend: c.backend, model: chosen.model, thinking: chosen.thinking, timers: c.timers, credentialFor: c.credentialFor, timeoutMs: c.timeoutMs, inputTokens: c.triggerFor(chosen.model).tokens };
+      },
+      trigger: () => c.triggerFor(current().model), charsPerToken: c.charsPerToken, preserveRecentTurns: c.preserveRecentTurns, todoLines,
       // Part AO: every turn of this run — the root's and each child's — registers its conversation for the manual pass.
       registry: this.conversations,
       /**
@@ -1343,6 +1351,14 @@ export class Run {
     const s = this.deps.summariser ?? null;
     if (s === null) return null;
     return { ...s, resolve: (c) => { const e = this.memory.effective(withSettings(this.catalogue, c), this.catalogue); return { model: e.model, thinking: e.thinking }; } };
+  }
+
+  /**
+   * REQ-MONITOR-080: the model an agent's cell calls next — its pair with the session's overrides followed, as the ladder
+   * follows them before the call (`followOverride`) — which its compression uses when none is configured.
+   */
+  private callsOn(cell: AgentResilienceCell): ModelChoice {
+    return this.memory.effective(cell.model, this.catalogue);
   }
 
   /** The per-agent ladder deps shared by the root and every child (the cell is the agent's own). */
@@ -1448,7 +1464,8 @@ export class Run {
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
         // Part Q: each child gets its own cell over the shared memory, catalogue and wait registry.
         resilience: { forChild: (persona, current, bound) => { const effective = this.memory.effective(withSettings(this.catalogue, current), this.catalogue); return this.resilienceFor(agentCell(effective, this.fallbackFor(persona, effective)), bound); } },
-        // Part AH (ADR-0060): each child compresses against its own model's capacity, with its own task plan.
+        // Part AH (ADR-0060): each child compresses against its own model's capacity, with its own task plan — the model its
+        // cell calls next, read at each pass (REQ-MONITOR-080).
         compressionFor: this.compressionFor,
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
@@ -1489,7 +1506,7 @@ export class Run {
     // REQ-MONITOR-142: the root's ladder for this whole turn, the resumes after its children included — a switch made
     // while it runs applies from the next iteration, not at this iteration's next resume.
     const rootResilience = this.rootResilience();
-    const compression = this.compressionFor(rootResilience.cell.model, () => this.plannerTodoLines());
+    const compression = this.compressionFor(() => this.callsOn(rootResilience.cell), () => this.plannerTodoLines());
     // PD-ORCH-005 revision 4 clause 14: one check per execution of the root, at its first model step.
     const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration);
     /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */

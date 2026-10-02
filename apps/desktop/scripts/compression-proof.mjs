@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
@@ -20,6 +20,10 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *   6. root-and-child — the root and its child each cross the threshold and compress once: the inspector's ring caption
  *                       and the run-level agent's persona window draw the run-wide count, 2, the root's own included
  *                       (REQ-MONITOR-086/281, OQ-159's recorded reading).
+ *   7. after-a-move   — the root starts on alpha (capacity 10,000), meets insufficient quota and moves to its same-tier
+ *                       candidate beta (capacity 1,000); a 900-token step on beta compresses at beta's 600-token
+ *                       trigger (REQ-MONITOR-078/079/080; since fin10 — before, the trigger stayed alpha's 6,000 and no
+ *                       pass ran).
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -61,7 +65,7 @@ function scenario(name, compressorLines, opts = {}) {
   writeFileSync(join(workspace, 'README.md'), '# proof\n');
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
     'models:',
-    '  alpha: { provider: scripted, model_id: alpha, max_input_tokens: 1000 }',
+    `  alpha: { provider: scripted, model_id: alpha, max_input_tokens: ${opts.alphaInputTokens ?? 1000} }`,
     ...(opts.brokenCompressor ? ['  broken: { provider: scripted, model_id: broken }'] : []),
     'small_model: alpha', 'medium_model: alpha', 'large_model: alpha',
     'runtime:', '  permission_mode: autonomous', ...(opts.delegates ? ['  max_depth: 2'] : []),
@@ -70,6 +74,18 @@ function scenario(name, compressorLines, opts = {}) {
     // `single` withholds `delegate` (delegation_runtime_absent); scenario 5 needs a child, so it keeps the default strategy.
     ...(opts.delegates ? [] : ['rotaris:', '  delegation_strategy: single']), '',
   ].join('\n'));
+  if (opts.beta) {
+    // The per-user discovery snapshot names `scripted-b/beta` as that provider's pick for every tier, so beta is alpha's
+    // same-tier candidate on a different provider (REQ-NOTIFY-082), as resilience-proof's `same-tier` scenario sets it up.
+    // Its `context_window` (1,000) is the capacity the trigger reads for it (`snapshotLayer` → `max_input_tokens`).
+    const configDir = configDirFor(local);
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'project_settings.yaml'), [
+      'version: 1', 'providers:', '  scripted-b:', '    id: scripted-b', '    display_name: Scripted B', '    family: scripted', '    authenticated: true',
+      '    discovered_at: 2026-09-05T00:00:00Z', '    small_model: scripted-b/beta', '    medium_model: scripted-b/beta', '    large_model: scripted-b/beta',
+      '    models:', '      - { id: scripted-b/beta, discovered_at: 2026-09-05T00:00:00Z, capabilities: {}, limits: { context_window: 1000 }, pricing: {} }', '',
+    ].join('\n'));
+  }
   return { root, workspace, local };
 }
 async function launch(name, s, extra, opts = {}) {
@@ -258,6 +274,34 @@ const s6 = scenario('root-and-child', ['  threshold_percentage: 60', '  preserve
   expect(/^done · .+ · \d+ tool calls?$/.test(meta), `the inspector's meta line: "${meta}" (REQ-MONITOR-052)`);
   expect(personaName === 'orchestrator' && persona === RUN_WIDE, `the run-level agent's persona window: ${personaName}, "${persona}" — not "${RUN_WIDE}" (REQ-MONITOR-086/281)`);
   results.rootAndChild = { status: row.execution_status, compressedAgents: entries, sessionAggregate: row.compressions, inspector: { name: inspectorName, compressions: inspector, meta }, personaWindow: { name: personaName, compressions: persona }, png: r.png, elapsedMs: r.elapsedMs };
+}
+
+// 7. REQ-MONITOR-080 / REQ-MONITOR-078/079 (the repair of the-root-compresses-on-the-model-its-turn-started-on-after-its-cell-moves):
+// the root's compression follows its cell. Alpha (10,000 tokens: a 6,000-token trigger) refuses on quota; the root moves to
+// beta (1,000: 600), its same-tier candidate on another provider, within the same turn; the 900-token step on beta crosses
+// beta's trigger, so the next step compresses first, with beta's figures in the entry. Before the repair the trigger was
+// alpha's, captured when the turn started, and no pass ran. The compressing model is the configured `compressor.model` — its
+// default, the `small_model` alias, alpha here — which REQ-MONITOR-080 lets win over the agent's own; with none configured it
+// is the cell's (ladder.test.ts pins that). The pass's model is reported, not asserted: that a configured slot is not carried
+// through the session's exclusion of alpha is a separate note (the configured slots follow no override or exclusion).
+const s7 = scenario('after-a-move', ['  threshold_percentage: 60', '  preserve_recent_turns: 1'], { alphaInputTokens: 10_000, beta: true });
+{
+  const r = await launch('after-a-move', s7, { ROTARIS_SCRIPT: 'fail:quota,glob,glob,glob,tokens:900,answer', ROTARIS_CAPTURE_PROMPT: 'move, then fill the context', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const db = open(s7);
+  const row = session(db);
+  const entries = timeline(db, row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed', `the run did not complete: ${JSON.stringify(row)}`);
+  const moved = entries.find((t) => t.name === 'quota_fallback_model');
+  expect(moved !== undefined && JSON.parse(moved.metadata).to_model === 'beta', `the root did not move to beta: ${entries.map((t) => t.name).join(',')}`);
+  const entry = entries.find((t) => t.name === 'context_compressed');
+  expect(entry !== undefined, `no pass ran after the move (the trigger was not beta's): ${entries.map((t) => t.name).join(',')}`);
+  const meta = JSON.parse(entry.metadata);
+  expect(meta.capacity === 1000 && meta.trigger_tokens === 600 && meta.advertised_input_limit === 1000 && meta.counted_tokens === 900, `the entry does not carry beta's figures: ${entry.metadata}`);
+  const calls = modelCalls(r.log);
+  const compressor = calls.filter((c) => c.who === 'compressor').map((c) => c.model);
+  expect(compressor.length === 1, `not exactly one pass reached the compressing model: ${JSON.stringify(calls)}`);
+  results.afterAMove = { status: row.execution_status, move: JSON.parse(moved.metadata), metadata: meta, compressorModel: compressor[0], calls, png: r.png, elapsedMs: r.elapsedMs };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

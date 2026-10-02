@@ -31,7 +31,10 @@ Noticed 2026-10-01 by the verifier of acceptance A36's repair (an optional findi
 - Not in this repair: the table has no row for the run-level agent (the run row sits in the delegation graph and shows
   the run's status), so the run-wide sum `runLevelAgent` computes is drawn nowhere; and the inspector and the persona
   window display per-agent metrics without the compression count. Both are recorded as
-  [`the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md`](../the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md).
+  [`the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md`](the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md).
+- *Corrected 2026-10-02:* "`runLevelAgent` already sums it for the run-level agent" (above) was true of the children
+  only — `session.agents` holds no root, so a root's own compressions were counted nowhere, and the sum was not the
+  run-wide count. The record now carries that count (`SessionRecord.compressions`), repaired with the note above.
 
 ## Specs
 

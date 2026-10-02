@@ -17,6 +17,9 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *   4. twice-only     — a rejection that survives two condensations fails the step (at most twice for one call).
  *   5. child-count    — a delegated child crosses the threshold and compresses once: the Mission view's agent table draws
  *                       that child's compression count, 1, in its Compressions column (REQ-MONITOR-281/086).
+ *   6. root-and-child — the root and its child each cross the threshold and compress once: the inspector's ring caption
+ *                       and the run-level agent's persona window draw the run-wide count, 2, the root's own included
+ *                       (REQ-MONITOR-086/281, OQ-159's recorded reading).
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -213,6 +216,48 @@ const s5 = scenario('child-count', ['  threshold_percentage: 60', '  preserve_re
   expect(rows.length === 1 && rows[0].data['data-agent-id'] === kids[0].task_id, `the table's rows: ${JSON.stringify(rows.map((p) => p.data))}`);
   expect(JSON.stringify(cells) === JSON.stringify(['1']), `the child's compressions cell reads ${JSON.stringify(cells)}, not "1" (REQ-MONITOR-281/086)`);
   results.childCount = { status: row.execution_status, child: kids[0].canonical_name, compressionEntries: entries.length, headers, cells, png: r.png, elapsedMs: r.elapsedMs };
+}
+
+// 6. The run-wide count on the inspector and the persona window (REQ-MONITOR-086/281;
+// docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md): neither drew
+// a compression count, and the run-level agent's summed the children's alone, so the root's own compression was counted
+// nowhere. The root compresses before it delegates, the child once; the run-level agent reads 2 across the run on both. The
+// run-level agent is popped out of the inspector as soon as it is shown — the root holds its delegating call 3 s
+// (`wait:3000`), because the inspector follows the latest author and the first run of this scenario popped out the child,
+// which had written its first row in the 230 ms between the match and the click — and the orchestrator's window, which
+// keeps the run-level agent while the inspector follows the child, is read once it holds the final figure, or at the bound.
+const s6 = scenario('root-and-child', ['  threshold_percentage: 60', '  preserve_recent_turns: 1'], { delegates: true });
+{
+  const RUN_WIDE = '2 compressions across the run.';
+  const r = await launch('root-and-child', s6, {
+    ROTARIS_SCRIPT: 'glob,glob,glob,tokens:900,wait:3000,delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'glob,glob,glob,tokens:900,answer', ROTARIS_CAPTURE_PROMPT: 'the root and a child fill their contexts',
+    ROTARIS_CAPTURE_CLICKS: '.inspector__body:not(.inspector__body--empty) .inspector__actions .btn>>Pop out@~60000',
+    ROTARIS_CAPTURE_PERSONA_PROBE_AT: `[data-testid="persona-compressions"]>>${RUN_WIDE}@~60000;;[data-testid="persona-agent-name"]@~60000`,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '3000',
+    ROTARIS_CAPTURE_PROBE: '[data-testid="inspector-name"];;[data-testid="inspector-compressions"];;[data-testid="inspector-meta"]',
+  });
+  const db = open(s6);
+  const row = db.prepare('SELECT session_id, execution_status, compressions FROM sessions ORDER BY created_at DESC').get();
+  const entries = timeline(db, row.session_id).filter((t) => t.name === 'context_compressed').map((t) => JSON.parse(t.metadata).agent);
+  const kids = db.prepare('SELECT task_id, canonical_name FROM children WHERE session_id = ?').all(row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed', `the run did not complete: ${JSON.stringify(row)}`);
+  expect(kids.length === 1, `one child was expected: ${JSON.stringify(kids)}`);
+  expect(entries.length === 2 && entries.includes(kids[0].canonical_name) && entries.some((a) => a !== kids[0].canonical_name), `a compression of the root and one of the child were expected: ${JSON.stringify(entries)}`);
+  expect(row.compressions === 2, `the session's aggregate is ${row.compressions}, not 2 (REQ-SESSION-139)`);
+  const endProbe = (selector) => { const m = r.log.match(new RegExp(`capture: probe ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])`)); return m ? JSON.parse(m[1]) : null; };
+  const personaProbe = (selector) => { const m = r.log.match(new RegExp(`capture: persona-probe-at ~60000 ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\]|null)`)); return m ? JSON.parse(m[1]) : null; };
+  const inspectorName = endProbe('[data-testid="inspector-name"]')?.[0]?.text;
+  const inspector = endProbe('[data-testid="inspector-compressions"]')?.[0]?.text;
+  const meta = endProbe('[data-testid="inspector-meta"]')?.[0]?.text ?? '';
+  expect(/clicked "Pop out"/.test(r.log), 'the run-level agent was never popped out of the inspector');
+  const persona = personaProbe('[data-testid="persona-compressions"]')?.[0]?.text;
+  const personaName = personaProbe('[data-testid="persona-agent-name"]')?.[0]?.text;
+  expect(inspectorName === 'orchestrator' && inspector === RUN_WIDE, `the inspector at the end: ${inspectorName}, "${inspector}" — not "${RUN_WIDE}" (REQ-MONITOR-086/281)`);
+  // REQ-MONITOR-052's meta line keeps its form: the count is an element of its own.
+  expect(/^done · .+ · \d+ tool calls?$/.test(meta), `the inspector's meta line: "${meta}" (REQ-MONITOR-052)`);
+  expect(personaName === 'orchestrator' && persona === RUN_WIDE, `the run-level agent's persona window: ${personaName}, "${persona}" — not "${RUN_WIDE}" (REQ-MONITOR-086/281)`);
+  results.rootAndChild = { status: row.execution_status, compressedAgents: entries, sessionAggregate: row.compressions, inspector: { name: inspectorName, compressions: inspector, meta }, personaWindow: { name: personaName, compressions: persona }, png: r.png, elapsedMs: r.elapsedMs };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

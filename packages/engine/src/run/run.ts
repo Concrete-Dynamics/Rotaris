@@ -741,6 +741,14 @@ export class Run {
     return this.rootUncountedFrom === null ? 0 : Math.max(0, this.deps.writer.activity.callCount(this.rootName) - this.rootUncountedFrom);
   }
   /**
+   * REQ-MONITOR-086 with REQ-SESSION-139: the run-wide compression count as the run maintains it (ADR-0008) — rehydrated from
+   * the session's row and raised at every completion, the roots' and every child's, so it leads the stored figure until the
+   * pass's save copies it there. `runCompressionsOf` reads it for `SessionRecord.compressions` while this run is live.
+   */
+  get compressions(): number {
+    return this.aggregates.figures.compressions;
+  }
+  /**
    * REQ-MONITOR-060/061 (live-run finding K1, R-067): the entry role's tools as the run-level agent presents them — the native
    * set its port's one resolution kept (policy narrowing applied), and its called and in-flight tools from the tracker the
    * writer feeds, keyed by the name the root dispatches under (`rootName`, as `entryContext` reads it). Not the run's

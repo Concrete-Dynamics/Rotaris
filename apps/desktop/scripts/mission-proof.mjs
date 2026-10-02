@@ -586,7 +586,8 @@ const s7 = scenario('settings');
     ROTARIS_CAPTURE_CLICKS: '[data-agent-id="bg_0000dead"]@3500;;[data-testid="mission-open"]@4000;;.inspector__actions .btn>>Pop out@5000',
     ROTARIS_CAPTURE_PROBE_AT: '[data-agent-id="bg_0000dead"]@3800;;.agent-table__row@3800;;[data-testid="inspector-name"]@4600;;[data-testid="inspector-meta"]@4600;;.agent-row[data-task-id="bg_0000dead"]@4600',
     ROTARIS_CAPTURE_PERSONA_PROBE_AT: '[data-testid="persona-agent-name"]@6500;;[data-testid="persona-agent-state"]@6500',
-    ROTARIS_CAPTURE_AFTER_MS: '7500', ROTARIS_CAPTURE_PROBE: '.agent-row',
+    // The capture ends after the persona probe's paint bound (6.5 s + 5 s), so a late first paint is waited for, not cut off.
+    ROTARIS_CAPTURE_AFTER_MS: '12000', ROTARIS_CAPTURE_PROBE: '.agent-row',
   });
   // Found on this launch: opening a stored session runs REQ-ORCH-053's sweep FIRST, which settles the planted row `cancelled`
   // before any surface sees it — REQ-MONITOR-211's outcome-dictated state (`done` for a completed run) never reaches the
@@ -601,10 +602,17 @@ const s7 = scenario('settings');
   expect(probesAt(r.log, 4600, '[data-testid="inspector-name"]')?.[0]?.text === 'zombie' && meta.startsWith(`${settled} · `), `the inspector: "${meta}" against ${settled}`);
   const treeRow = probesAt(r.log, 4600, '.agent-row[data-task-id="bg_0000dead"]')?.[0];
   expect(treeRow?.data?.['data-state'] === settled, `the sidebar tree row: ${JSON.stringify(treeRow)} against ${settled}`);
+  // The persona probe reads a painted window: from 6.5 s it waits for the window's first paint (bounded at 5 s) and logs how
+  // long it waited. On 2026-10-01, at a load average of about 15, the window painted 1967 and 2093 ms after show — after a
+  // single reading at 6.5 s, which read `[]` (docs/defects/fixed/mission-proofs-reconcile-launch-probes-the-persona-window-before-its-first-paint.md).
   const pName = personaProbesAt(r.log, 6500, '[data-testid="persona-agent-name"]')?.[0]?.text; const pState = personaProbesAt(r.log, 6500, '[data-testid="persona-agent-state"]')?.[0]?.text;
+  const paintWait = (selector) => { const m = r.log.match(new RegExp(`capture: persona-probe-at 6500 ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} waited (\\d+) ms for the window's first paint(: not observed)?`)); return m ? { waitedMs: Number(m[1]), painted: m[2] === undefined } : { waitedMs: 0, painted: true }; };
+  const probeWait = paintWait('[data-testid="persona-agent-state"]');
+  const firstPaintMs = Number(/persona "coding-agent" first paint after show: (\d+) ms/.exec(r.log)?.[1] ?? NaN);
+  expect(probeWait.painted, `the persona window never painted within 5 s of the 6.5 s probe (first paint after show: ${firstPaintMs} ms)`);
   expect(pName === 'zombie' && pState === settled, `the persona window: ${pName} ${pState} against ${settled} (REQ-MONITOR-213)`);
   const sweep = /(\d+) unfinished child record/.exec(r.log)?.[1] ?? null;
-  results.reconcile = { settledBy: settled === 'cancelled' ? 'REQ-ORCH-053 sweep on open (cancelled)' : 'projection (run outcome)', sweepNotice: sweep, table: settled, inspectorMeta: meta, tree: treeRow.data['data-state'], personaWindow: pState };
+  results.reconcile = { settledBy: settled === 'cancelled' ? 'REQ-ORCH-053 sweep on open (cancelled)' : 'projection (run outcome)', sweepNotice: sweep, table: settled, inspectorMeta: meta, tree: treeRow.data['data-state'], personaWindow: pState, personaFirstPaintAfterShowMs: firstPaintMs, personaProbeWaitedForPaintMs: probeWait.waitedMs };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

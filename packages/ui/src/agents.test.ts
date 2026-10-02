@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, entryRole, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedCancelWith, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, steerOffered, tableOrder } from './agents.js';
+import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, entryRole, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedCancelWith, chipStates, compressionLine, countNoun, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, steerOffered, tableOrder } from './agents.js';
 import { personaColourToken } from './PersonaWindow.js';
 import { useShellState } from './shell-state.js';
 
@@ -13,7 +13,7 @@ const row = (over: Partial<TranscriptRow>): TranscriptRow => ({ index: 0, kind: 
 const session = (over: Partial<SessionRecord>): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-05T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-05T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
-  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryStalledSeconds: null, entryToolCalls: null, ...over,
+  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryStalledSeconds: null, entryToolCalls: null, compressions: 0, ...over,
 });
 
 describe('agents — the shared selection (REQ-MONITOR-042) and the run-level agent (REQ-MONITOR-043/057)', () => {
@@ -48,6 +48,24 @@ describe('agents — the shared selection (REQ-MONITOR-042) and the run-level ag
     expect(metaLine(runLevelAgent(live, entry, false)!, live, '8s')).toBe('running · 8s · 2 tool calls');
     // A record with no projection still derives it.
     expect(runLevelAgent(session({ agents: [agent({ toolCalls: 2 })] }), entry, false)?.toolCalls).toBe(3);
+  });
+  /*
+   * docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md: the
+   * run-level agent's compression count summed `session.agents`, which holds the children alone, so a root's own
+   * compressions were counted nowhere. It is the run-wide count the session carries (REQ-MONITOR-086, OQ-159's reading).
+   */
+  it('REQ-MONITOR-086/281: a root that compressed twice and a child that compressed once read 3 across the run and 1 on the child, each labelled', () => {
+    const entry = { persona: 'orchestrator', model: 'scripted/alpha', reasoning: 'high', tools: [] };
+    const child = agent({ compressions: 1 });
+    const s = session({ agents: [child], compressions: 3 });
+    const run = runLevelAgent(s, entry, false)!;
+    expect(run.compressions).toBe(3);
+    expect(child.compressions).toBe(1);
+    expect(compressionLine(run)).toBe('3 compressions across the run');
+    expect(compressionLine(child)).toBe("1 compression of this agent's context");
+    expect(compressionLine(agent({ compressions: 0 }))).toBe("0 compressions of this agent's context");
+    // The meta line keeps REQ-MONITOR-052's form: the count is a line of its own, never appended to it.
+    expect(metaLine(run, s, '8s')).toBe('running · 8s · 3 tool calls');
   });
 });
 

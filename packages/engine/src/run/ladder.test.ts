@@ -1149,6 +1149,32 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       await fresh.sessions.running(sid)!;
       expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
     });
+
+    it('a restart whose own user row cannot be written, after the announcement, says so and takes the pin back (REQ-NOTIFY-070)', async () => {
+      const { sessions, client } = sessionsWith(() => failing(unauthorized()), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      // Every refusal passes and the announcement is written; then the restarted prompt's user row fails to write.
+      type Writer = { appendRow: (kind: string, ...rest: unknown[]) => unknown };
+      const writer = (sessions as unknown as { live: Map<SessionId, { writer: Writer }> }).live.get(sid)!.writer;
+      const original = writer.appendRow.bind(writer);
+      writer.appendRow = (kind, ...rest) => (kind === 'user' ? { ok: false, error: { code: 'history-failed', reason: 'the disk is full' } } : original(kind, ...rest));
+      const answer = sessions.restartOnFallback(sid);
+      writer.appendRow = original;
+      expect(answer).toMatchObject({ ok: false, error: { code: 'restart-failed', reason: 'the disk is full' } });
+      expect(client.requests).toHaveLength(1);
+      // The transcript says what happened, in order: the restart announced, then that it could not begin, on the model it had.
+      const rows = dal.residentRows(sid).map((r) => `${r.kind}: ${r.body}`);
+      const fallbackRows = rows.filter((r) => /fallback/i.test(r));
+      expect(fallbackRows).toHaveLength(2);
+      expect(fallbackRows[0]).toMatch(/^system: Authentication failed on a\/a1\. The run restarts on the fallback model f1 \(f\/f1\)/);
+      expect(fallbackRows[1]).toBe('system: The run could not restart on the fallback model f1 (the disk is full); the session stays on a/a1.');
+      expect(rows.filter((r) => r.startsWith('user:'))).toEqual(['user: x']);
+      // And the pin is taken back, durably.
+      const entries = dal.timelineOf(sid).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+      expect(entries).toHaveLength(2);
+      expect(entries[1]).toMatchObject({ provider: 'a', model: 'a1', cleared: true });
+    });
   });
 
   it('REQ-ORCH-145: the per-model timeout and retry count reach the request; a catalogue entry without them leaves the run\'s', async () => {

@@ -278,6 +278,13 @@ export interface DeliveryTransitions {
   recordSpecificationMoved(id: ReqId, ctx: TransitionContext): TransitionResult;
   /** Part AP — REQ-TRACE-466/477: the stage a live unit reports (`waiting on a person`, or null); a run-row fact, no delivery state. */
   recordRunStage(id: ReqId, unit: string, stage: string | null): void;
+  /**
+   * REQ-TRACE-464: the row of a worktree the system provisioned for a unit OUTSIDE a transition — the claim of a card whose
+   * next unit no run-starting action provisioned (a reject, or a run ending `cancelled`, rests it in `ready`). Written
+   * at once, the way `beforeCommit`'s outcome and `recordRunStarted` write theirs, so a restart before the run starts
+   * takes the tree over rather than provisioning a second one. A row fact, no delivery state and no history entry.
+   */
+  recordWorktreeProvisioned(id: ReqId, worktree: { readonly ref: string; readonly unit: string; readonly path: string; readonly branch: string }): void;
   answerBlocker(id: ReqId, option: string, actor: Actor, ctx: TransitionContext): Promise<TransitionResult>;
   setQueue(automatic: boolean, concurrency: number): void;
   readonly inFlight: ReadonlySet<ReqId>;
@@ -402,6 +409,9 @@ export function createTransitions(db: StoreHandle, deps: { readonly wall: WallCl
     },
     recordRunStage(id, unit, stage) {
       dal.setRunStage(id, unit, stage);
+    },
+    recordWorktreeProvisioned(id, worktree) {
+      dal.upsertWorktree({ ref: worktree.ref, id, unit: worktree.unit, path: worktree.path, branch: worktree.branch, createdAt: at(), kept: false });
     },
     setQueue(automatic, concurrency) {
       // REQ-TRACE-480 names the workspace configuration; its keys are Part AP's (REQ-CONFIG-196). In memory until then.

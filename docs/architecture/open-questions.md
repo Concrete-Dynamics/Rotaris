@@ -8880,3 +8880,26 @@ are owed, `packages/providers/src/catalogue.ts`); that is a gap of the build, no
 **What a ruling decides.** Whether such a provider is offered a key field at all — writing the key into the configuration
 the model reads (a write into the user's project files, which REQ-NOTIFY-047 keeps out of notice actions but not out of a
 dialog), or into the credential store with the model then pointed at it — or only the sentence this build shows.
+
+**OQ-180 — Where does a board run that stops at its iteration limit rest, and does automatic scheduling start it again?**
+*(REQ-TRACE-477, a flow's ending delivered to the surface told it began; REQ-TRACE-482, "the system itself picks up the
+next candidate as capacity becomes available"; REQ-TRACE-463; REQ-TRACE-476, "without re-running completed units".
+Raised 2026-10-02 by the repair of
+[`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](../defects/fixed/a-rejected-card-back-in-ready-can-never-start-its-next-unit.md),
+bundle `fin9-queue-dispatch-and-disclosure`, as OQ-179, and renumbered OQ-180 when the bundle merged `origin/main`,
+which had taken OQ-179 meanwhile. Open.)*
+
+A board run that reaches its iteration limit persists `stopped`; main's coordinator classifies `stopped` and `cancelling`
+as `cancelled` (`outcomeOf`, `apps/desktop/src/main/requirements-runs.ts`), and a `cancelled` ending rests the card in
+`ready` (`recordRunEnded`, `packages/workspace/src/delivery/transition.ts`). The specification classifies a board run's
+ending as completed (review) or not, and says a run-time block returns to the released state; it names no state for a
+run that ended neither completed nor failed, and nothing bounds how often automatic scheduling may pick the same card up.
+
+**What the build proceeds under**: as built — the card rests in `ready` on its next unit, and under `automatic` the
+dispatch that follows every run's end starts that unit at once on a fresh worktree (the repair above), the finished
+unit's tree kept; under `manual` it waits for the queue's release. So a requirement whose runs keep reaching the limit is
+re-run, one unit after another, until a person holds it or the queue is stopped.
+
+**What a ruling decides.** Whether an iteration-limited run ends `cancelled` into `ready`, or `failed` into `blocked` with
+a `run-failure` blocker (whose resume provisions the next unit), as a stop by the user has since R-067; and, if it rests
+in `ready`, whether automatic scheduling may pick it up again without bound.

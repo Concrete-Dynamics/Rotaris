@@ -9,9 +9,14 @@ import { approvalWaitOf, createRequirementsRuns, outcomeOf } from './requirement
  * next candidate follows; the run host's exit reaps with an empty live set; a person's copy of a run command never
  * originates here (the actor is always the system).
  */
-function harness(opts: { claims?: RunClaim[]; startReply?: ProcessReply; prefs?: { runs?: boolean; suppressed?: boolean }; preview?: Record<string, unknown> } = {}) {
+function harness(opts: { claims?: RunClaim[]; startReply?: ProcessReply; prefs?: { runs?: boolean; suppressed?: boolean }; preview?: Record<string, unknown>; current?: { readonly root: string; readonly id: string } } = {}) {
   const claims = [...(opts.claims ?? [])];
   const sent: WorkspaceServiceRequest[] = [];
+  /** The workspace root each service request was addressed to, in order. */
+  const roots: string[] = [];
+  /** The focused window's workspace, which a case may move to another one mid-run (`focus`). */
+  let current = opts.current;
+  let strictRoot = opts.current === undefined;
   const hostSent: RunHostRequest[] = [];
   const broadcasts: unknown[] = [];
   const written: [string, boolean][] = [];
@@ -19,10 +24,12 @@ function harness(opts: { claims?: RunClaim[]; startReply?: ProcessReply; prefs?:
   let onExit: (code: number) => void = () => undefined;
   const prefs = { runs: opts.prefs?.runs ?? true, suppressed: opts.prefs?.suppressed ?? false };
   const runs = createRequirementsRuns({
-    currentWorkspace: () => 'C:\\ws',
-    currentWorkspaceId: () => 'ws-id',
+    // `current`: the most recently focused window's workspace, when a case puts the focus on another one.
+    currentWorkspace: () => current?.root ?? 'C:\\ws',
+    currentWorkspaceId: () => current?.id ?? 'ws-id',
     service: (root, req) => {
-      expect(root).toBe('C:\\ws');
+      if (strictRoot) expect(root).toBe('C:\\ws');
+      roots.push(root);
       sent.push(req);
       if (req.kind !== 'requirements.command') return Promise.resolve({ kind: 'refused', code: 'x', headline: 'not a requirements command' });
       expect(req.actor).toEqual({ kind: 'system' });
@@ -48,7 +55,8 @@ function harness(opts: { claims?: RunClaim[]; startReply?: ProcessReply; prefs?:
     broadcast: (p) => { broadcasts.push(p); },
     log: () => undefined,
   });
-  return { runs, sent, hostSent, broadcasts, written, event: (e: ProcessEvent) => onEvent(e), exit: (code: number) => onExit(code) };
+  const focus = (to: { readonly root: string; readonly id: string }) => { current = to; strictRoot = false; };
+  return { runs, sent, roots, focus, hostSent, broadcasts, written, event: (e: ProcessEvent) => onEvent(e), exit: (code: number) => onExit(code) };
 }
 const CLAIM: RunClaim = { id: 'REQ-101', unit: 'u1', worktree: { ref: 'REQ-101/u1', path: 'C:\\ws\\.rotaris\\requirements\\worktrees\\rotaris-req-req-101-u1', branch: 'rotaris/req/req-101/u1', baseBranch: 'main', baseRevision: 'abc' }, prompt: 'Implement REQ-101', permissions: 'permissive' };
 
@@ -82,6 +90,32 @@ describe('the dispatch (REQ-TRACE-464/470/471/463)', () => {
     await off.runs.handle({ kind: 'requirements.runs', op: 'preview', id: 'REQ-101', action: 'release' });
     expect(off.sent.every((r) => r.kind === 'requirements.command' && r.disclosure === 'off')).toBe(true);
   });
+  /**
+   * Defect note `accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md` (REQ-TRACE-472):
+   * "Accepting SHALL suppress the disclosure for the remainder of that launch". Main read only the two preferences, and a
+   * plain acceptance wrote none, so the next card's preview read `due` and the dialog came back.
+   */
+  it('REQ-TRACE-472: one plain acceptance suppresses the disclosure for the rest of the launch — the next card\'s preview reads accepted and every command carries it; the next launch reads due', async () => {
+    const h = harness({ claims: [CLAIM] });
+    expect(await h.runs.handle({ kind: 'requirements.runs', op: 'preview', id: 'REQ-101', action: 'release' })).toMatchObject({ ok: true, value: { disclosure: 'due' } });
+    expect(await h.runs.handle({ kind: 'requirements.runs', op: 'accept' })).toEqual({ ok: true, value: { accepted: true } });
+    // The service is told at once, as after a permanent acceptance (REQ-TRACE-478); no preference is written.
+    expect(h.sent.at(-1)).toMatchObject({ command: { name: 'requirements.board' }, disclosure: 'accepted' });
+    expect(h.written).toEqual([]);
+    expect(h.runs.standingDisclosure()).toBe('accepted');
+    expect(await h.runs.handle({ kind: 'requirements.runs', op: 'preview', id: 'REQ-102', action: 'release' })).toMatchObject({ ok: true, value: { disclosure: 'accepted', permissions: 'permissive' } });
+    await h.runs.dispatch();
+    expect(h.sent.every((r) => r.kind === 'requirements.command' && (r.disclosure === 'accepted' || (r.command.name === 'requirements.run.preview' && r.command.id === 'REQ-101')))).toBe(true);
+    // The elevation switched off and a permanent acceptance still read as they did.
+    expect(harness({ prefs: { runs: false } }).runs.standingDisclosure()).toBe('off');
+    const permanent = harness({ prefs: { suppressed: true } });
+    await permanent.runs.handle({ kind: 'requirements.runs', op: 'accept' });
+    expect(permanent.runs.standingDisclosure()).toBe('suppressed');
+    // A fresh coordinator is the next launch of the application: the plain acceptance is not carried into it.
+    const next = harness();
+    expect(next.runs.standingDisclosure()).toBe('due');
+    expect(await next.runs.handle({ kind: 'requirements.runs', op: 'preview', id: 'REQ-103', action: 'release' })).toMatchObject({ ok: true, value: { disclosure: 'due' } });
+  });
   it('REQ-TRACE-472/478: a permanent acceptance tells the service at once, so the queue it publishes stops asking for the disclosure', async () => {
     const h = harness();
     await h.runs.handle({ kind: 'requirements.runs', op: 'suppress', suppressed: true });
@@ -113,6 +147,30 @@ describe('the dispatch (REQ-TRACE-464/470/471/463)', () => {
     expect(h.sent.map((r) => (r.kind === 'requirements.command' ? r.command.name : r.kind))).toEqual(['requirements.run.claim', 'requirements.run.abandon', 'requirements.run.claim']);
     expect(h.runs.live()).toEqual([]);
   });
+  /**
+   * Defect note `an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md` (REQ-TRACE-476/482):
+   * nothing dispatched when a workspace opened, so after a relaunch an automatic queue started nothing until a person
+   * acted. Main's post-open slot now kicks the coordinator once per open, for the workspace just opened.
+   */
+  it('REQ-TRACE-476/482: a workspace open with a claimable candidate starts it, with no command from a renderer', async () => {
+    const h = harness({ claims: [CLAIM] });
+    const report = await h.runs.opened('C:\\ws', 'ws-id');
+    expect(report).toEqual({ started: [{ id: 'REQ-101', unit: 'u1', sessionId: 'sess-1' }], abandoned: [] });
+    expect(h.hostSent.filter((r) => r.kind === 'session.start')).toHaveLength(1);
+    expect(h.sent.map((r) => (r.kind === 'requirements.command' ? r.command.name : r.kind))).toEqual(['requirements.run.claim', 'requirements.run.started', 'requirements.run.claim']);
+  });
+  it('REQ-TRACE-482/408: a workspace open with nothing claimable starts nothing and asks the service for one claim alone', async () => {
+    const h = harness();
+    expect(await h.runs.opened('C:\\ws', 'ws-id')).toEqual({ started: [], abandoned: [] });
+    expect(h.hostSent).toEqual([]);
+    expect(h.sent.map((r) => (r.kind === 'requirements.command' ? r.command.name : r.kind))).toEqual(['requirements.run.claim']);
+  });
+  it('REQ-TRACE-476: the open\'s dispatch is for the workspace just opened, whichever window holds the focus', async () => {
+    const h = harness({ claims: [CLAIM], current: { root: 'D:\\other', id: 'other-id' } });
+    await h.runs.opened('C:\\ws', 'ws-id');
+    expect(new Set(h.roots)).toEqual(new Set(['C:\\ws']));
+    expect(h.hostSent.find((r) => r.kind === 'session.start')).toMatchObject({ workspaceId: 'ws-id' });
+  });
   it('two kicks at once share one dispatch, so a claim is never started twice', async () => {
     const h = harness({ claims: [CLAIM] });
     const [a, b] = await Promise.all([h.runs.dispatch(), h.runs.dispatch()]);
@@ -136,6 +194,36 @@ describe('the run\'s lifetime (REQ-TRACE-466/476/477)', () => {
     expect(outcomeOf('stopped')).toBe('cancelled');
     expect(outcomeOf('failed')).toBe('failed');
     expect(outcomeOf('interrupted')).toBe('failed');
+  });
+  /**
+   * Defect note `a-board-run-is-settled-against-the-focused-windows-workspace-not-its-own.md` (REQ-TRACE-477/466/476):
+   * the coordinator kept no workspace per run and settled a run's ending, its waiting-on-a-person fact, the dispatch
+   * after it and the run host's exit reap against the most recently focused window's workspace.
+   */
+  it('REQ-TRACE-477/466/476: a run is settled, marked waiting and reaped against its own workspace while another window holds the focus, and the next candidate is claimed there', async () => {
+    const h = harness({ claims: [CLAIM] });
+    await h.runs.dispatch();
+    h.focus({ root: 'D:\\other', id: 'other-id' });
+    const before = h.sent.length;
+    h.event({ kind: 'publish.snapshot', payload: { v: 1, sessionId: 'sess-1', seq: 1, session: { pendingApprovals: [{ request_id: 'r0' }], pendingQuestions: [] } as never } });
+    h.event(result('completed'));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    const after = h.sent.slice(before).map((r, i) => ({ name: r.kind === 'requirements.command' ? r.command.name : r.kind, root: h.roots[before + i] }));
+    expect(after).toEqual([
+      { name: 'requirements.run.waiting', root: 'C:\\ws' },
+      { name: 'requirements.run.ended', root: 'C:\\ws' },
+      { name: 'requirements.run.claim', root: 'C:\\ws' },
+    ]);
+    // A run of the first workspace held when the run host exits is reaped there, beside the focused one.
+    const g = harness({ claims: [CLAIM] });
+    await g.runs.dispatch();
+    g.focus({ root: 'D:\\other', id: 'other-id' });
+    const mark = g.sent.length;
+    g.exit(1);
+    await new Promise((r) => setTimeout(r, 0));
+    const reaps = g.sent.slice(mark).map((r, i) => ({ name: r.kind === 'requirements.command' ? r.command.name : r.kind, root: g.roots[mark + i] }));
+    expect(reaps).toContainEqual({ name: 'requirements.run.reap', root: 'C:\\ws' });
   });
   it('a result for a session this coordinator does not own is ignored', async () => {
     const h = harness();

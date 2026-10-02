@@ -10,7 +10,7 @@ import { cardDescription } from './Card.js';
 import { DETAIL_SECTIONS, SECTION_EMPTY } from './DetailPanel.js';
 import {
   ALERT_GLYPH, CLOSED_DROPDOWN_WIDTH, COLUMN_GAP, COLUMN_MAX, COLUMN_MIN, COLUMN_OVERSCAN_PX, CONFIRM_ACTIONS, OPEN_DROPDOWN_WIDTH, OTHER_CONTROL_HEIGHT, OVERSCAN_CARDS, PRIMARY_CONTROL_HEIGHT, PRIVATE_TRANSFER_TYPE, RAIL_CHARS, RAIL_MARGIN, RELEASED_POOL_CAP, SEARCH_DEBOUNCE_MS,
-  alertSeverity, bodyStateOf, dragRefusedOnAxisSentence, dropTargetOptions, epicSummary, epicSummaryLine, headingAccessibleName, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveRefusedSentence, moveReachableSentence, moveStartsRun, nothingSelectedSentence, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, railAccessibleName, realisedBand, rejectedDocumentsSentence, visibleColumnBand,
+  alertSeverity, bodyStateOf, dispatchesAfter, dragRefusedOnAxisSentence, dropTargetOptions, epicSummary, epicSummaryLine, headingAccessibleName, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveRefusedSentence, moveReachableSentence, moveStartsRun, nothingSelectedSentence, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, railAccessibleName, realisedBand, rejectedDocumentsSentence, visibleColumnBand,
 } from './model.js';
 
 /**
@@ -58,6 +58,15 @@ describe('the naming table (REQ-TRACE-385) and the run-starting rule (REQ-TRACE-
     expect(moveStartsRun('resume', 'review')).toBe(false);
     expect(moveStartsRun('accept', 'done')).toBe(false);
     expect(moveStartsRun('hold', 'blocked')).toBe(false);
+  });
+  it('REQ-TRACE-482/476: kicks the coordinator after every run-starting move, and after an act resting a card in ready only under automatic scheduling', () => {
+    expect(dispatchesAfter('release', 'ready', 'ready', false)).toBe(true);
+    expect(dispatchesAfter('rerun', 'ready', 'ready', false)).toBe(true);
+    // A reject returns the card to ready without starting a run (REQ-TRACE-386): the system picks it up only when it schedules on its own.
+    expect(dispatchesAfter('reject', undefined, 'ready', true)).toBe(true);
+    expect(dispatchesAfter('reject', undefined, 'ready', false)).toBe(false);
+    expect(dispatchesAfter('hold', 'blocked', 'blocked', true)).toBe(false);
+    expect(dispatchesAfter('return', 'backlog', 'backlog', true)).toBe(false);
   });
   it('confirms exactly the three run-starting actions together with the three acceptances (REQ-TRACE-383)', () => {
     expect([...CONFIRM_ACTIONS].sort()).toEqual(['accept', 'accept-change-work', 'accept-proposal', 'release', 'rerun', 'send-back']);

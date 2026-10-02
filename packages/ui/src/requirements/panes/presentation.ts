@@ -211,10 +211,14 @@ export function waitingStatement(id: string, unit: string | undefined, sessionId
 
 // ---- the disclosure (REQ-TRACE-470..474, 467/468) ----
 
-/** REQ-TRACE-472/474: the dialog is shown only when due; the other three states carry their payload silently. */
+/**
+ * REQ-TRACE-472/474: the dialog is shown only when due; the other states carry their payload silently. `accepted` is a
+ * plain acceptance given earlier in this launch, which suppresses the disclosure for the remainder of it.
+ */
 export function disclosureFor(preview: LaunchPreview): { readonly show: boolean; readonly payload: DisclosureState } {
   switch (preview.disclosure) {
     case 'due': return { show: true, payload: 'accepted' };
+    case 'accepted': return { show: false, payload: 'accepted' };
     case 'suppressed': return { show: false, payload: 'suppressed' };
     case 'off': return { show: false, payload: 'off' };
     case 'unattended': return { show: false, payload: 'suppressed' };

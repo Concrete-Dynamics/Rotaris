@@ -12,7 +12,7 @@ import { EpicCardView } from './EpicCardView.js';
 import { EvidencePane, evidenceOpenerSelector } from './EvidencePane.js';
 import { MoveControl } from './MoveControl.js';
 import { ReasonDialog } from './ReasonDialog.js';
-import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, bodyStateOf, dragRefusedOnAxisSentence, rejectedDocumentsSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable } from './model.js';
+import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, bodyStateOf, dispatchesAfter, dragRefusedOnAxisSentence, rejectedDocumentsSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable } from './model.js';
 // Part R2 — the five panes Part AP built and nothing hosted, the elevation's disclosure, and the relationship graph.
 import { GRAPH_DEPTH_DEFAULT, buildGraph, clampDepth } from './graph.js';
 import { GraphPane } from './GraphPane.js';
@@ -22,7 +22,7 @@ import { LaunchDisclosure } from './panes/LaunchDisclosure.js';
 import { QueuePane } from './panes/QueuePane.js';
 import { ReviewPane } from './panes/ReviewPane.js';
 import { createPaneRegistry } from './panes/registry.js';
-import { rereadWhenTaken, type DecisionResult } from './panes/presentation.js';
+import { disclosureFor, rereadWhenTaken, type DecisionResult } from './panes/presentation.js';
 // Defect R2-3: `PANE_TITLE` belongs in this list. It was dropped from it while the pane host's own chrome did not yet
 // exist, then used by that chrome — and a bundler does not resolve identifiers, so the renderer built cleanly and threw
 // `PANE_TITLE is not defined` the first time a pane opened, which React answers by unmounting the whole tree.
@@ -92,6 +92,8 @@ export interface RequirementsHost {
   launchPreview(id: ReqId, action: BoardAction): Promise<HostResult<LaunchPreview>>;
   /** REQ-TRACE-463/478: the coordinator claims and starts whatever the scheduler offers now. */
   dispatchRuns(): Promise<HostResult<DispatchOutcome>>;
+  /** REQ-TRACE-472: a plain acceptance, which suppresses the disclosure for the remainder of this launch (main holds it). */
+  acceptDisclosure(): Promise<HostResult<unknown>>;
   /** REQ-TRACE-472: accepting permanently suppresses the disclosure in later launches. */
   suppressDisclosure(): Promise<HostResult<unknown>>;
   onChanged(listener: (change: RequirementsChanged) => void): () => void;
@@ -448,14 +450,15 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
         // and nothing is written. `resume` is the exception the specification itself names: REQ-TRACE-463 forbids a
         // failure on the run side from stopping a blocker clearing, so it proceeds and the queue states the reason.
         if (action !== 'resume') { addFeedback(id, [`The launch of ${id} could not be disclosed, so nothing was started and nothing was written: ${p.reason}`]); return { ok: false, reason: p.reason }; }
-      } else if (p.value.disclosure === 'due') {
+      } else if (disclosureFor(p.value).show) {
         held.current?.abandon();
         const h = heldLaunch(id);
         held.current = h;
         setLaunch({ id, action, from, to, payload, preview: p.value, via: 'act', sendTarget });
         return h.result;
       } else if (p.value.disclosure !== 'unattended') {
-        // `suppressed` and `off` are disclosures too — the run's permissions are settled and the service records which.
+        // `accepted` (earlier in this launch), `suppressed` and `off` are disclosures too — the run's permissions are
+        // settled and the service records which.
         effective = { ...(effective ?? {}), disclosure: p.value.disclosure };
       }
     }
@@ -478,6 +481,10 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
       const d = await host.dispatchRuns();
       const reason = d.ok ? (d.value.started.some((s) => s.id === id) ? undefined : d.value.abandoned.find((a) => a.id === id)?.reason ?? stall) : d.reason;
       if (reason !== undefined) addFeedback(id, [DISPATCH_NOTHING_STARTED(id, reason)]);
+    } else if (dispatchesAfter(action, to, r.value.value.to, latest.current.board?.queue.automatic === true)) {
+      // REQ-TRACE-482: a card the act rested in `ready` under automatic scheduling is the system's to pick up now; the
+      // queue states any reason it is deferred, so nothing is said on the card for it.
+      void host.dispatchRuns();
     }
     const again = await host.readBoard();
     if (again.ok) adoptBoard(again.value, [id]);
@@ -663,17 +670,20 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const discloseFromQueue = useCallback(async (id: ReqId) => {
     const p = await host.launchPreview(id, 'release');
     if (!p.ok) { setNotice(`The launch of ${id} could not be disclosed, so nothing was started: ${p.reason}`); return; }
-    if (p.value.disclosure === 'due') { setLaunch({ id, action: 'release', from: 'ready', to: 'ready', payload: undefined, preview: p.value, via: 'queue', sendTarget: undefined }); return; }
-    await queueSet({ release: id, ...(p.value.disclosure === 'unattended' ? {} : { disclosure: p.value.disclosure }) });
+    const d = disclosureFor(p.value);
+    if (d.show) { setLaunch({ id, action: 'release', from: 'ready', to: 'ready', payload: undefined, preview: p.value, via: 'queue', sendTarget: undefined }); return; }
+    await queueSet({ release: id, ...(p.value.disclosure === 'unattended' ? {} : { disclosure: d.payload }) });
   }, [host, queueSet]);
 
   const acceptLaunch = useCallback(async (always: boolean) => {
     const l = launch;
     if (l === null) return;
     setLaunch(null);
-    // REQ-TRACE-472: accepting suppresses the disclosure for the rest of THIS launch; accepting permanently suppresses
-    // it in later launches too, which is main's preference to write, not the board's.
+    // REQ-TRACE-472: accepting suppresses the disclosure for the rest of THIS launch, which main holds for the launch
+    // (`accept`); accepting permanently suppresses it in later launches too, which is main's preference to write, not
+    // the board's. Main is told before the act, so the next card's preview, and the service's standing value, read it.
     if (always) void host.suppressDisclosure();
+    else await host.acceptDisclosure();
     const disclosure = always ? 'suppressed' : 'accepted';
     if (l.via === 'queue') { await queueSet({ release: l.id, disclosure }); return; }
     const h = held.current;

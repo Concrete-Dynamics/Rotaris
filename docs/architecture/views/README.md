@@ -45,6 +45,39 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A board run is settled against its own workspace (REQ-TRACE-477, REQ-TRACE-466, REQ-TRACE-476).** Main's run coordinator
+keeps each board run's workspace root and id; the run's ending, its waiting fact and the dispatch after its end address
+that workspace's service, and the run host's exit reaps every workspace that held a run. This repairs
+`a-board-run-is-settled-against-the-focused-windows-workspace-not-its-own.md`; `requirements-runs.test.ts` pins it. The
+**process view**'s requirements paragraph and the **sequences view**'s board section say so. No package, edge, process,
+message kind, channel, command or store column changed.
+
+**One acceptance suppresses the disclosure for the rest of the launch (REQ-TRACE-472).** `requirements.runs` gains the
+`accept` op: the board's plain acceptance tells main's coordinator, which holds it in memory for the launch and reads
+`accepted` — a new value of `StandingDisclosure` and of `LaunchPreview.disclosure` (`packages/contracts/src/requirements.ts`)
+— in the standing disclosure it stamps on every service command and in the preview, which the board answers without the
+dialog (`disclosureFor`). This repairs `accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md`;
+`requirements-proof`'s `disclosure-launch` stage shows it. The **process view**'s requirements contracts and the
+**sequences view**'s board section say so. No package, edge, process, message kind, channel or store column changed;
+the command gained one op value and the envelope's disclosure one value.
+
+**An automatic queue dispatches at a workspace open and after a reject (REQ-TRACE-476, REQ-TRACE-482).** Main's run
+coordinator gains `opened(root, workspaceId)`, a dispatch for the workspace just opened, kicked once from
+`openWorkspaceInner`'s post-open slot; its dispatches are serialised per workspace root rather than one at a time. The
+board kicks it after an act that rests a card in `ready` under automatic scheduling (`dispatchesAfter`). This repairs
+`an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md`; `requirements-proof`'s
+`ready-restart-automatic` stage shows it. The **sequences view**'s board section says so. No package, edge, process,
+message kind, channel, command or store column changed.
+
+**A rejected card's next unit begins on a fresh tree (REQ-TRACE-423, REQ-TRACE-464, REQ-TRACE-482).** The delivery
+service treats a launch held for an earlier unit as spent: the scheduler names the card's current unit, and the claim
+provisions it when the store records no tree for it, writing the row at once through the writer's new
+`recordWorktreeProvisioned` (`workspace/src/delivery/transition.ts`, `handles.ts`). A claim before the first pass under
+`manual` with nothing armed answers without parsing the store. This repairs
+`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`; `requirements-runs-proof`'s eighth assertion shows it.
+The **sequences view**'s board section says so. The writer gained one method (a row write, no delivery state); no
+package, edge, process, message kind, channel, command or store column changed.
+
 **A failed run's notice waits for its session to be on screen, and a pair that failed authentication is not offered again
 (REQ-NOTIFY-030/032, REQ-NOTIFY-064, REQ-NOTIFY-068; the 401 note's repair round 1).** Every run-ending notice is built by
 `main/run-failure-notice.ts`; a failed run of a session no main window follows raises REQ-NOTIFY-032's warning and holds its

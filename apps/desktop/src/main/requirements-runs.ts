@@ -33,8 +33,15 @@ export interface RequirementsRunsDeps {
 }
 export interface RequirementsRuns {
   handle(command: RequirementsRunsCommand): Promise<CommandOutcome>;
-  /** Claims and starts every dispatch the scheduler offers now; serialised, so two kicks never start one claim twice. */
+  /** Claims and starts every dispatch the scheduler offers now, for the focused window's workspace; serialised per workspace, so two kicks never start one claim twice. */
   dispatch(): Promise<DispatchReport>;
+  /**
+   * REQ-TRACE-476/482: the kick of a workspace open — the same dispatch, for THE WORKSPACE JUST OPENED rather than the
+   * focused window's, so an automatic queue resumes where it stopped with no person acting. Main's post-open slot calls
+   * it once per open, after the window is interactive; the claim's parse runs in the workspace service, off main's
+   * thread, and a `manual` workspace with nothing armed is answered without one.
+   */
+  opened(workspaceRoot: string, workspaceId: string): Promise<DispatchReport>;
   live(): readonly LiveBoardRun[];
   /** REQ-TRACE-472: what the two preferences make of a launch nobody disclosed; stamped on every requirements command main sends the service (this coordinator's and the relay's). */
   standingDisclosure(): StandingDisclosure;
@@ -63,9 +70,23 @@ export function approvalWaitOf(seconds: number): LaunchPreview['approvalWait'] {
 }
 
 export function createRequirementsRuns(deps: RequirementsRunsDeps): RequirementsRuns {
-  interface Live { readonly id: ReqId; readonly unit: string; readonly permissions: RunPermissions; waiting: boolean }
+  /**
+   * A board run this process owns, with the workspace it was started for. Its ending, its waiting-on-a-person fact, the
+   * dispatch after it and the run host's exit reap address THAT workspace's service, never the focused window's (defect
+   * note `a-board-run-is-settled-against-the-focused-windows-workspace-not-its-own.md`, REQ-TRACE-477/466/476).
+   */
+  interface Live { readonly id: ReqId; readonly unit: string; readonly permissions: RunPermissions; readonly root: string; readonly workspaceId: string; waiting: boolean }
   const runs = new Map<string, Live>();
-  let dispatching: Promise<DispatchReport> | undefined;
+  /**
+   * REQ-TRACE-472: "Accepting SHALL suppress the disclosure for the remainder of that launch". The launch is the
+   * application's — "subsequent launches" are what the permanent acceptance reaches — and main's lifetime is that launch,
+   * so the plain acceptance is held here, in memory, and the next launch reads `due` again. The board tells main of it
+   * through `requirements.runs {op: 'accept'}` (defect note
+   * `accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md`).
+   */
+  let acceptedThisLaunch = false;
+  /** One dispatch in flight per workspace root: two kicks for one workspace share it, and a kick for another is not swallowed by it. */
+  const dispatching = new Map<string, Promise<DispatchReport>>();
 
   const ask = async (root: string, command: RequirementsCommandPayload, bound: Millis = BOUND_SERVICE): Promise<{ readonly value: unknown; readonly changed?: { readonly generation: number; readonly affected: readonly ReqId[] | null } } | { readonly refused: string }> => {
     const pending = deps.service(root, { kind: 'requirements.command', workspaceRoot: root, command: { ...command, workspace: root }, actor: { kind: 'system' }, disclosure: standingDisclosure() }, bound);
@@ -84,9 +105,10 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
    * REQ-TRACE-472: what the two preferences make of a launch nobody disclosed — `off` with the elevation switched off,
    * `suppressed` once accepted permanently, else `due`. Stamped on every command main sends the service, because the
    * service cannot read them, a launch it recovered after a restart is recorded undisclosed, and the queue it publishes
-   * must read the same value its claim does (REQ-TRACE-478).
+   * must read the same value its claim does (REQ-TRACE-478). `accepted` once a person accepted it, not permanently,
+   * earlier in this launch (below).
    */
-  const standingDisclosure = (): StandingDisclosure => (!deps.preferences.read('requirements/fullPermissionRuns') ? 'off' : deps.preferences.read('requirements/fullPermissionNoticeSuppressed') ? 'suppressed' : 'due');
+  const standingDisclosure = (): StandingDisclosure => (!deps.preferences.read('requirements/fullPermissionRuns') ? 'off' : deps.preferences.read('requirements/fullPermissionNoticeSuppressed') ? 'suppressed' : acceptedThisLaunch ? 'accepted' : 'due');
 
   const preview = async (root: string, id: ReqId, action: RunLaunchPreview['action']): Promise<CommandOutcome> => {
     const a = await ask(root, { name: 'requirements.run.preview', workspace: root, id, action });
@@ -97,7 +119,7 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
     // REQ-TRACE-472/473/474: on by default; suppressed permanently by acceptance; off in settings; silent where the workspace already opted in.
     const elevationOn = deps.preferences.read('requirements/fullPermissionRuns');
     const suppressed = deps.preferences.read('requirements/fullPermissionNoticeSuppressed');
-    const disclosure: LaunchPreview['disclosure'] = !elevationOn ? 'off' : f.workspaceUnattended ? 'unattended' : suppressed ? 'suppressed' : 'due';
+    const disclosure: LaunchPreview['disclosure'] = !elevationOn ? 'off' : f.workspaceUnattended ? 'unattended' : suppressed ? 'suppressed' : acceptedThisLaunch ? 'accepted' : 'due';
     const permissions: RunPermissions = elevationOn && !f.workspaceUnattended ? 'permissive' : 'workspace';
     const value: LaunchPreview = { ...f, disclosure, permissions, approvalWait: approvalWaitOf(f.approvalTimeoutSeconds) };
     return { ok: true, value };
@@ -118,14 +140,12 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
     }
   };
 
-  const dispatch = (): Promise<DispatchReport> => {
-    if (dispatching) return dispatching;
-    dispatching = (async (): Promise<DispatchReport> => {
+  const dispatchFor = (root: string, workspaceId: string): Promise<DispatchReport> => {
+    const inFlight = dispatching.get(root);
+    if (inFlight) return inFlight;
+    const run = (async (): Promise<DispatchReport> => {
       const started: { id: ReqId; unit: string; sessionId: string }[] = [];
       const abandoned: { id: ReqId; unit: string; reason: string }[] = [];
-      const root = deps.currentWorkspace();
-      const workspaceId = deps.currentWorkspaceId();
-      if (root === undefined || workspaceId === undefined) return { started, abandoned };
       // Bounded by the scheduler: a claim comes back only while a slot is free and a disclosed launch is next (REQ-TRACE-478/481/483).
       for (let guard = 0; guard < 64; guard += 1) {
         const c = await ask(root, { name: 'requirements.run.claim', workspace: root });
@@ -134,7 +154,7 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
         if (claim === null) break;
         const s = await startOne(workspaceId, claim);
         if (s.started) {
-          runs.set(s.sessionId, { id: claim.id, unit: claim.unit, permissions: claim.permissions, waiting: false });
+          runs.set(s.sessionId, { id: claim.id, unit: claim.unit, permissions: claim.permissions, root, workspaceId, waiting: false });
           // REQ-TRACE-464: the session id onto the run row while the run executes, in the service's one transaction.
           const rec = await ask(root, { name: 'requirements.run.started', workspace: root, id: claim.id, unit: claim.unit, sessionId: s.sessionId, permissions: claim.permissions });
           if ('refused' in rec) deps.log(`requirements: ${claim.id} unit ${claim.unit} started as ${s.sessionId} but the row was not written (${rec.refused})`);
@@ -147,8 +167,15 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
         }
       }
       return { started, abandoned };
-    })().finally(() => { dispatching = undefined; });
-    return dispatching;
+    })().finally(() => { dispatching.delete(root); });
+    dispatching.set(root, run);
+    return run;
+  };
+  const dispatch = (): Promise<DispatchReport> => {
+    const root = deps.currentWorkspace();
+    const workspaceId = deps.currentWorkspaceId();
+    if (root === undefined || workspaceId === undefined) return Promise.resolve({ started: [], abandoned: [] });
+    return dispatchFor(root, workspaceId);
   };
 
   // REQ-TRACE-477: a flow that terminates on its worker delivers its ending to the surface that was told it began; the next candidate follows under the scheduler.
@@ -157,11 +184,10 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
       const live = runs.get(e.sessionId);
       if (live === undefined) return;
       runs.delete(e.sessionId);
-      const root = deps.currentWorkspace();
-      if (root === undefined) return;
+      const root = live.root;
       const outcome = outcomeOf(e.result.execution_status);
       const detail = `${e.result.summary}${e.result.error ? ` — ${e.result.error}` : ''}`.trim() || `the run ended ${e.result.execution_status}`;
-      void ask(root, { name: 'requirements.run.ended', workspace: root, sessionId: e.sessionId, outcome, detail }).then(() => dispatch()).catch((x: unknown) => deps.log(`requirements: the ending of ${e.sessionId} was not recorded (${String(x)})`));
+      void ask(root, { name: 'requirements.run.ended', workspace: root, sessionId: e.sessionId, outcome, detail }).then(() => dispatchFor(root, live.workspaceId)).catch((x: unknown) => deps.log(`requirements: the ending of ${e.sessionId} was not recorded (${String(x)})`));
     } else if (e.kind === 'publish.snapshot') {
       // REQ-TRACE-466: waiting on a person = a pending approval or question on the live run; the fact rides the run row's stage.
       const live = runs.get(e.payload.sessionId);
@@ -169,19 +195,20 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
       const waiting = e.payload.session.pendingApprovals.length > 0 || e.payload.session.pendingQuestions.length > 0;
       if (waiting === live.waiting) return;
       live.waiting = waiting;
-      const root = deps.currentWorkspace();
-      if (root === undefined) return;
+      const root = live.root;
       void ask(root, { name: 'requirements.run.waiting', workspace: root, sessionId: e.payload.sessionId, waiting }, BOUND_SHORT).catch(() => undefined);
     }
   });
   // REQ-TRACE-476 under SR-2: a run host that exited owned every board run; nothing is alive, and the reap settles the rows as interrupted with their work retained.
   deps.onRunHostExit((code) => {
-    const root = deps.currentWorkspace();
-    const held = [...runs.keys()];
+    // Every workspace that held a board run is reaped, beside the focused window's as before.
+    const roots = new Set([...runs.values()].map((l) => l.root));
+    const focused = deps.currentWorkspace();
+    if (focused !== undefined) roots.add(focused);
+    const held = runs.size;
     runs.clear();
-    if (root === undefined) return;
-    deps.log(`requirements: the run host exited (${code}) holding ${held.length} board run(s); reaping with an empty live set`);
-    void ask(root, { name: 'requirements.run.reap', workspace: root, live: [] }).catch((x: unknown) => deps.log(`requirements: the reap after the run host's exit failed (${String(x)})`));
+    deps.log(`requirements: the run host exited (${code}) holding ${held} board run(s); reaping ${roots.size} workspace(s) with an empty live set`);
+    for (const root of roots) void ask(root, { name: 'requirements.run.reap', workspace: root, live: [] }).catch((x: unknown) => deps.log(`requirements: the reap of ${root} after the run host's exit failed (${String(x)})`));
   });
 
   return {
@@ -195,6 +222,18 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
         }
         case 'dispatch':
           return { ok: true, value: await dispatch() };
+        case 'accept': {
+          // REQ-TRACE-472: a plain acceptance suppresses the disclosure for the rest of this launch. The service is told at
+          // once (a board read carries the new standing value, REQ-TRACE-478), so a launch it recovered undisclosed is
+          // claimable and the queue stops asking for the disclosure, as after a permanent acceptance.
+          const was = standingDisclosure();
+          acceptedThisLaunch = true;
+          if (standingDisclosure() !== was) {
+            const told = await ask(root, { name: 'requirements.board', workspace: root });
+            if ('refused' in told) deps.log(`requirements: the service was not told the disclosure is now ${standingDisclosure()} (${told.refused})`);
+          }
+          return { ok: true, value: { accepted: true } };
+        }
         case 'suppress': {
           // REQ-TRACE-472: accepting permanently suppresses the disclosure in subsequent launches; settings can switch the behaviour off (`fullPermissionRuns`).
           await deps.preferences.write('requirements/fullPermissionNoticeSuppressed', command.suppressed ?? true);
@@ -209,6 +248,7 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
       }
     },
     dispatch,
+    opened: (workspaceRoot, workspaceId) => dispatchFor(workspaceRoot, workspaceId),
     standingDisclosure,
     live: () => [...runs.entries()].map(([sessionId, l]) => ({ sessionId, id: l.id, unit: l.unit, waitingOnPerson: l.waiting, permissions: l.permissions })),
     /**

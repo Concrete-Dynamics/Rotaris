@@ -277,7 +277,7 @@ sequenceDiagram
   M->>B: channel 10 requirements:changed
   Note over M,B: persist before publish — channel 10 is broadcast<br/>only from a reply whose transaction committed
 
-  C->>WS: requirements.run.claim (envelope: actor system, disclosure due | suppressed | off)
+  C->>WS: requirements.run.claim (envelope: actor system, disclosure due | accepted | suppressed | off)
   WS-->>C: prompt, worktree, unit
   C->>RH: session.start {effectiveRoot, worktree, boardPermissions?}
   RH-->>C: session.started {sessionId}
@@ -310,21 +310,41 @@ sequenceDiagram
   launch (undisclosed), and on the queue's release, which records the disclosure "Disclose and start" carries and arms
   the card. A tree that cannot be taken over is stated on the entry as the last start's stall, and the claim still
   refuses the card (REQ-TRACE-472/482/464, REQ-TRACE-463; 2026-10-02).
+- **A card's next unit is provisioned at the claim.** A reject, or a run ending `cancelled` (stopped at its iteration
+  limit), rests a card in `ready` on a unit no run-starting action provisioned. The launch held for the finished unit
+  is spent: the queue names the card's current unit, and its disclosure carries over. The claim — the system's
+  dispatch, under both modes — provisions that unit when the store records no tree for it, and writes the row at once
+  (`recordWorktreeProvisioned`), so a restart before the start takes it over. The read pass, the queue's release and the
+  reject never provision; a recorded tree that is gone stays the stall (REQ-TRACE-423/464/482, REQ-TRACE-408;
+  2026-10-02). A claim before the first pass under `manual` with nothing armed answers without parsing the store.
 - **Every requirements command carries main's standing disclosure.** Only main holds the two preferences of
   REQ-TRACE-472, so main stamps what they make of an undisclosed launch on every `requirements.command` envelope, beside
-  the actor — the relay for a person's commands and the coordinator for its own: `due`, `suppressed` (accepted
-  permanently) or `off` (the elevation switched off). The service holds the last value and schedules the published
+  the actor — the relay for a person's commands and the coordinator for its own: `due`, `accepted` (accepted, not
+  permanently, earlier in this launch of the application: main holds it in memory, told by the board's
+  `requirements.runs {op: 'accept'}`, and the preview reads it too, so no dialog is shown again until the next launch;
+  2026-10-02), `suppressed` (accepted permanently) or `off` (the elevation switched off). The service holds the last value and schedules the published
   queue, the launch preview and the claim under the same one, so the queue names what the claim takes (REQ-TRACE-478); a
   value that moved republishes the queue before the answer, which carries `changed`. A launch recorded undisclosed, as a
   recovered one is, is claimed when that is not `due`, and `off` gives the run the workspace's own mode. A permanent
-  acceptance reads the board at once. (Until the second repair round of 2026-10-02 it rode the claim alone.) Nothing dispatches at launch, so an automatic
-  queue picks a recovered card up at the first kick (a defect note records that gap; 2026-10-02).
+  acceptance reads the board at once. (Until the second repair round of 2026-10-02 it rode the claim alone.)
+- **The coordinator is kicked at every workspace open.** Main's post-open slot (`openWorkspaceInner`, beside the
+  initialization's resolve, once the window is interactive) calls `requirementsRuns.opened(root, workspaceId)`, a
+  dispatch for the workspace just opened rather than the focused window's, so an automatic queue resumes where it
+  stopped with no person acting (REQ-TRACE-476/482). Dispatches are serialised per workspace root. The renderer kicks
+  after every run-starting move and, under automatic scheduling, after an act that rests a card in `ready` without
+  starting a run (a `reject`; `dispatchesAfter` in `ui/src/requirements/model.ts`). The board's own read never
+  dispatches (REQ-TRACE-408/512). (Until 2026-10-02 nothing dispatched at launch, and an automatic queue picked a
+  recovered card up only at the first kick a person or a run's end gave.)
 - The elevated grant (`boardPermissions: 'permissive'`) travels **on the `session.start` of that launch** and
   applies to the configuration captured for it. It is not a mode anything stays in.
 - A board read is bounded at 120 s because it may run the engine's three passes; everything else is a store
   read or one transaction, bounded at 30 s.
 - If the run host exits holding board runs, the coordinator **reaps with an empty live set** rather than
-  leaving rows that claim to be running.
+  leaving rows that claim to be running — every workspace that held one, beside the focused window's.
+- **A run is settled against its own workspace.** The coordinator keeps, for each board run, the workspace root and id
+  it was started for, and its ending (`run.ended`), its waiting-on-a-person fact (`run.waiting`) and the dispatch that
+  follows its end address that workspace's service, whichever window holds the focus (REQ-TRACE-477/466; until
+  2026-10-02 they read the most recently focused window's workspace).
 
 ---
 

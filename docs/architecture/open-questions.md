@@ -8536,6 +8536,14 @@ reading: a read that rejects makes the predicate raise, which REQ-WORKSPACE-080 
 applicable, and the build does that. A ruling on this question also decides whether an unanswered start has words of the
 specification's own, and whether it should be followed by a cancellation.
 
+*Extended 2026-10-02 by the repair of
+[`a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`](../defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md):*
+one case that reached the bound was not a lost status but one main dropped. The run host pushed every step and the
+`finished` status before the start was answered, and the coordinator had no sink yet. The build now keeps a status
+pushed while its own start is in flight, and asks the run host's status once where the answer has every step ended
+and still reads `running`. That one read is not this question's "ask the run host for the setup's status when the
+bound passes": the bound, and what a follow ends as when it passes, are unchanged.
+
 **What a ruling decides.** Whether these two cases have words of the specification's own; whether the bound is the right
 one (it adds nothing for the run host's own work around the stages, which the budgets do not cover); whether the
 coordinator should instead ask the run host for the setup's status when the bound passes; and whether REQ-WORKSPACE-092's

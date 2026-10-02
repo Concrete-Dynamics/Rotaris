@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, mintWorkspaceId, ok, err } from '@rotaris/kernel';
@@ -14,6 +14,7 @@ import { ENGINE_NOT_MERGED, createDeliveryService, deliveryServiceFor, type Deli
  */
 const A = mintWorkspaceId('000000000000000000000000000000ae');
 const USER: Actor = { kind: 'user', person: 'owner' };
+const SYSTEM: Actor = { kind: 'system' };
 let root: string;
 /**
  * The workspace root is a REAL directory of this test's own, not a spelling. It was the literal `C:\ws`, and
@@ -32,7 +33,7 @@ const engine: TraceabilityEngine = {
   verify: async () => ok(fixtureReport()),
 };
 // Part AP: a release now provisions a worktree inside the writer's `beforeCommit` (REQ-TRACE-464); this suite's workspace is no repository, so Git is faked here.
-const FAKE_GIT: RunGitPort = { checkRepository: async () => ({ ok: true, head: 'abc123' }), provision: async (a) => ok({ ref: `${a.id}/${a.unit}`, path: join(ws, '.rotaris', 'requirements', 'worktrees', a.unit), branch: `rotaris/req/${a.id.toLowerCase()}/${a.unit}`, baseBranch: 'main', baseRevision: 'abc123' }) };
+const FAKE_GIT: RunGitPort = { checkRepository: async () => ({ ok: true, head: 'abc123' }), takeOver: async () => err('no tree to take over in this suite'), provision: async (a) => ok({ ref: `${a.id}/${a.unit}`, path: join(ws, '.rotaris', 'requirements', 'worktrees', a.unit), branch: `rotaris/req/${a.id.toLowerCase()}/${a.unit}`, baseBranch: 'main', baseRevision: 'abc123' }) };
 const service = (e: TraceabilityEngine = engine): DeliveryService => createDeliveryService({ db: r.db, workspaceRoot: ws, engine: e, clocks: clock, log: () => undefined, configDir: root, git: FAKE_GIT });
 
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'rotaris-svc-')); ws = mkdtempSync(join(tmpdir(), 'rotaris-svc-ws-')); r = openWorkspaceStore(root, A, ws); clock = new FakeClock(); parses = 0; });
@@ -120,6 +121,70 @@ describe('createDeliveryService', () => {
     expect(c.column).toBe('blocked');
     expect(c.returnTo).toBe('ready');
     expect(c.run?.interrupted).toBe(true);
+  });
+  /**
+   * Defect note `a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md`: with the queue
+   * stopped a release provisions u1 and rests in `ready`; held out of `ready` and resumed, the resume derived the same
+   * unit and provisioned it again, the real `createWorktree` refused the existing path, the soft failure replaced the
+   * launch with one that had no worktree, and no claim could ever take the card. REQ-TRACE-464: "The run SHALL take
+   * over the worktree already provisioned for it and SHALL never provision a second one."
+   */
+  const provisioningGit = () => {
+    const made = new Set<string>();
+    const calls: string[] = [];
+    const takenOver: { path: string; branch: string }[] = [];
+    const port: RunGitPort = {
+      checkRepository: async () => ({ ok: true, head: 'abc123' }),
+      takeOver: async (a) => { takenOver.push({ path: a.path, branch: a.branch }); return made.has(a.path) ? ok({ ref: `${a.id}/${a.unit}`, path: a.path, branch: a.branch, baseBranch: 'main', baseRevision: 'abc123' }) : err(`nothing at ${a.path}`); },
+      provision: async (a) => {
+        const path = join(ws, '.rotaris', 'requirements', 'worktrees', a.unit);
+        calls.push(a.unit);
+        // REQ-GIT-140 / REQ-GIT-008, as the real unit answers it: an existing directory fails rather than being reused.
+        if (existsSync(path)) return err(`Worktree path already exists: ${path}`);
+        mkdirSync(path, { recursive: true });
+        made.add(path);
+        return ok({ ref: `${a.id}/${a.unit}`, path, branch: `rotaris/req/${a.id.toLowerCase()}/${a.unit}`, baseBranch: 'main', baseRevision: 'abc123' });
+      },
+    };
+    return { port, calls, takenOver };
+  };
+  it('REQ-TRACE-464/453/463: a card held out of ready and resumed takes over the worktree its release provisioned — one provisioning, no stall, a claimable launch on u1', async () => {
+    const { port, calls } = provisioningGit();
+    const s = createDeliveryService({ db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port });
+    await s.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    const released = await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    expect((released.value as { value: TransitionOutcome }).value).toMatchObject({ from: 'backlog', to: 'ready' });
+    const held = await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'hold', payload: { reason: 'Waiting on a vendor answer' } }, USER);
+    expect((held.value as { value: TransitionOutcome }).value).toMatchObject({ from: 'ready', to: 'blocked' });
+    const resumed = await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'resume', payload: { disclosure: 'accepted' } }, USER);
+    const outcome = (resumed.value as { ok: boolean; value: TransitionOutcome & { dispatch?: string } });
+    expect(outcome.ok).toBe(true);
+    expect(outcome.value).toMatchObject({ from: 'blocked', to: 'ready' });
+    // No "no run began": the resume took the launch over rather than stalling on a second provisioning.
+    expect(outcome.value.dispatch).toBeUndefined();
+    expect(calls).toEqual(['u1']);
+    await s.handle({ name: 'requirements.queue.set', workspace: 'x', start: true }, USER);
+    const claim = (await s.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value as { id: string; unit: string; worktree: { path: string; branch: string } } | null;
+    expect(claim).not.toBeNull();
+    expect(claim).toMatchObject({ id: 'REQ-101', unit: 'u1', worktree: { path: join(ws, '.rotaris', 'requirements', 'worktrees', 'u1'), branch: 'rotaris/req/req-101/u1' } });
+  });
+  it('REQ-TRACE-464: after a restart lost the launch, the resume takes over the tree the store recorded for the same unit rather than provisioning it again', async () => {
+    const { port, calls, takenOver } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'hold', payload: { reason: 'Waiting on a vendor answer' } }, USER);
+    // The restart: a new service over the same store, with nothing in memory (REQ-TRACE-479: the stop is not persisted).
+    const after = createDeliveryService(deps);
+    const resumed = await after.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'resume', payload: { disclosure: 'accepted' } }, USER);
+    const outcome = (resumed.value as { ok: boolean; value: TransitionOutcome & { dispatch?: string } });
+    expect(outcome.value).toMatchObject({ from: 'blocked', to: 'ready' });
+    expect(outcome.value.dispatch).toBeUndefined();
+    expect(calls).toEqual(['u1']);
+    expect(takenOver).toEqual([{ path: join(ws, '.rotaris', 'requirements', 'worktrees', 'u1'), branch: 'rotaris/req/req-101/u1' }]);
+    const claim = (await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value as { unit: string; worktree: { path: string } } | null;
+    expect(claim).toMatchObject({ unit: 'u1', worktree: { path: join(ws, '.rotaris', 'requirements', 'worktrees', 'u1') } });
   });
   it('deliveryServiceFor keeps one service per open store', () => {
     const deps = { workspaceRoot: ws, engine, clocks: clock, log: () => undefined };

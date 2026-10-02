@@ -61,7 +61,26 @@ half, REQ-SESSION-026, REQ-CONFIG-067) is built:
 - **Readings** the build proceeds under (the restart re-submits the prompt as a new row, a restart that cannot begin takes
   the pin back, the first-failure bookkeeping lives in main for the process's life): OQ-177.
 
-**Still owed:** part B, the non-modal re-authentication prompt (REQ-NOTIFY-071/078); part C, REQ-NOTIFY-072's 560 px
+## Progress — part B built 2026-10-02
+
+**Part B** (REQ-NOTIFY-071/078, ADR-0048's non-modal window-level level) is built: a successful fallback restart opens
+`packages/ui/src/ReauthPrompt.tsx` in the window that follows the session (channel 13, `reauth:prompt`). It names the
+primary that failed, states that the run continues on the fallback and that re-authenticating switches back from the next
+iteration, quotes the provider's error, and offers "Keep the fallback" (the dismissal, `reauth.dismiss`). Its submit
+(`reauth.submit`) saves a key typed for a key-based provider through the credential store (`providers.replaceKey`; a key
+that cannot be stored is acknowledged as an error naming why and the prompt stays), clears main's first-failure
+bookkeeping, and has the run host re-pin the primary (`Sessions.repinPrimary`: the pin taken back with `cleared: true`, and
+a live run rebuilding the root's cell at its next turn, `Run.rebuildEntryFromMemory`); the acknowledgement says "from the
+next iteration" or "for the next run". **A device-code or browser provider is offered no key field: the prompt states in
+the provider service's own words (`unavailableMethodMessage`) that this build does not provide that sign-in yet**, since
+those flows are owed (`packages/providers/src/catalogue.ts`); a provider the application holds no credential for (one
+configured by model configuration alone) is told where its key comes from. Switching back without a key is offered in
+every case. Pinned by `packages/ui/src/reauth-prompt.test.ts` (its copy and state), `apps/desktop/src/main/failure-recovery.test.ts`
+(the prompt's answers) and the REQ-NOTIFY-078 case in `packages/engine/src/run/ladder.test.ts` (the switch from the next
+iteration; a reload replays it); shown by `resilience-proof`'s `auth-fallback` (the prompt present, its words, and the
+composer usable behind it — the element under its own centre, focused, enabled, no `aria-modal`).
+
+**Still owed:** part C, REQ-NOTIFY-072's 560 px
 recovery dialog on a second failure or with no usable fallback (until it lands both take the generic notice, and `fatal`
 asserts that notice rather than the dialog); part D, the dialog's re-authenticate path (REQ-NOTIFY-076/077). Device-code
 and browser re-authentication can only say the method is unavailable, since those sign-in flows are still owed

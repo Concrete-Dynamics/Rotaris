@@ -1130,8 +1130,9 @@ failure text as detail) rather than only "not a provider limit"
 session and the draft were kept, `Return to the workspace` — and the new `auth-fallback` scenario (`fallback_model: beta`,
 the scripted step `fail:401:only=scripted`) asserts the pin of the fallback keyed by the failed pair, the acknowledgement
 naming both models and the restart with the same prompt completing on `scripted-b/beta` (REQ-NOTIFY-070,
-REQ-MONITOR-147, REQ-SESSION-026). `--only=<names>` runs the named scenarios alone. The recovery dialog and the
-re-authentication path are owed
+REQ-MONITOR-147, REQ-SESSION-026), and since part B the non-modal re-authentication prompt beside the continuing run
+with the composer usable behind it (REQ-NOTIFY-071, ADR-0048). `--only=<names>` runs the named scenarios alone. The
+recovery dialog and its re-authentication path are owed
 ([note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes

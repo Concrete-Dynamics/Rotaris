@@ -1,3 +1,4 @@
+import type { FailureRecovery } from '../failure-recovery.js';
 import type { BrowserWindow, UtilityProcess } from 'electron';
 import type { Clocks } from '@rotaris/kernel';
 import type {
@@ -118,6 +119,8 @@ export interface CommandContext {
    * waved-off version is recorded before the offer notice is cleared (REQ-STARTUP-116/117).
    */
   readonly updater: Updater;
+  /** REQ-NOTIFY-060..071/078: a run failure's classes and the re-authentication prompt they open (`failure-recovery.ts`). */
+  readonly failureRecovery: FailureRecovery;
 
   // The provider surface and the health it caches between asks.
   readonly providers: ProviderService;

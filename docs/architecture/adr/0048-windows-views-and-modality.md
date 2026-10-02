@@ -321,3 +321,19 @@ with two windows live, the notice store's application-wide broadcast (ADR-0049's
 *Note on deepened structure (2026-09-12):* The main window registry, per-window lifecycle state, and focus
 order now live inside `MainWindows` (`apps/desktop/src/main/main-windows.ts`) with Electron and in-memory adapter
 seams, replacing the inline records in `index.ts`. All behavior, attribution, and modality rules remain identical.
+
+## The re-authentication prompt — the non-modal level's second surface, first executed 2026-10-02
+
+*The 401 note's part B ([`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md));
+REQ-NOTIFY-071, REQ-NOTIFY-078. Found nothing wrong with the decision.*
+
+The Context names two non-modal window-level surfaces, the project-setup consent dialog and the re-authentication prompt;
+only the first had been built. The second is built the same way the Decision states the level — "an in-window panel
+that does not trap focus and leaves the rest navigable": `packages/ui/src/ReauthPrompt.tsx`, `role="dialog"` with no
+`aria-modal` and no backdrop, mounted beside the shell next to `ProjectSetupDialog` and positioned as it is (fixed, its
+own corner, z-index 40, below an application-modal backdrop). It is fed by main on its own channel (`reauth:prompt`,
+channel 13) to the one window that follows the session. Measured in the built app by `resilience-proof`'s
+`auth-fallback` scenario with the prompt open: the composer is the element under its own centre, takes the focus and is
+enabled, and the prompt carries no `aria-modal`. Not measured: Escape, which this surface does not answer (only its
+two buttons close it — the dismissal keeps the fallback, REQ-NOTIFY-071), and REQ-NOTIFY-079's rule that the modal
+recovery dialog closes it, since that dialog is not built (part C).

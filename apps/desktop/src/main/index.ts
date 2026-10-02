@@ -6,6 +6,7 @@ import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, Ma
 import { createNoticeStore } from './notices.js';
 import { classifyFailure } from './failure-class.js';
 import { createFailureRecovery } from './failure-recovery.js';
+import { reauthCommands } from './commands/reauth.js';
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
 import { startDriver, type AuxiliaryWindow } from './driver.js';
@@ -31,7 +32,7 @@ import { classifyThisInstallation, createUpdaterPorts, successorArguments, succe
 import { updateCommands } from './commands/update.js';
 import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
-import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
+import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, unavailableMethodMessage, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
 import { deliverSetupCancel, InitializationCoordinator } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
@@ -505,6 +506,7 @@ async function main(): Promise<void> {
    * REQ-NOTIFY-060..070 — the run failure's classes and their recoveries. The run channel is the run host's link; the
    * configuration service is the workspace service of the window that follows the session (REQ-NOTIFY-069).
    */
+  const reauthWindows = new Map<string, MainWindowState>();
   const failureRecovery = createFailureRecovery({
     notices,
     restartOnFallback: async (sessionId) => {
@@ -515,6 +517,36 @@ async function main(): Promise<void> {
     configurationService: (sessionId) => {
       const owner = ownerOf(sessionId) ?? activeWindow();
       return owner !== undefined && owner.workspace !== '(no workspace)' && services.has(canonicalPath(owner.workspace));
+    },
+    /**
+     * REQ-NOTIFY-071 / ADR-0048: the prompt is the window's, so it goes to the window that follows the session (the
+     * approval's rule, `ownerOf`) on channel 13 — and the close goes to the same window, wherever focus has moved since.
+     */
+    publishPrompt: (sessionId, prompt) => {
+      const owner = prompt === null ? (reauthWindows.get(sessionId) ?? ownerOf(sessionId)) : (ownerOf(sessionId) ?? activeWindow());
+      if (prompt === null) reauthWindows.delete(sessionId); else if (owner) reauthWindows.set(sessionId, owner);
+      if (owner && !owner.win.isDestroyed()) owner.win.webContents.send(CHANNEL.reauthPrompt, { v: CONTRACT_SCHEMA_VERSION, prompt });
+      log(`authentication recovery: re-authentication prompt ${prompt === null ? 'closed' : 'opened'} for session ${sessionId}${owner ? ` in main window ${owner.wcId}` : ' (no main window)'}`);
+    },
+    describeProvider: (id) => {
+      const known = providers.allKnownIds().includes(id);
+      const name = known ? providers.displayName(id) : id;
+      const method = known ? providers.method(id) : null;
+      if (method === 'api-key') return { provider: { id, name }, method: 'api-key' };
+      if (method === 'device-code' || method === 'browser-pkce') return { provider: { id, name }, method: 'unavailable', unavailableReason: unavailableMethodMessage(name, method) };
+      return { provider: { id, name }, method: 'none' };
+    },
+    saveKey: async (providerId, apiKey) => {
+      const r = await providers.replaceKey(providerId, apiKey, true);
+      if (!r.ok) return { ok: false, message: r.error };
+      healthCache.delete(providerId);
+      await afterProviderChange();
+      return { ok: true };
+    },
+    repinPrimary: async (sessionId, primary) => {
+      const r = await runHost.request({ kind: 'session.repinPrimary', sessionId, provider: primary.provider, model: primary.model }, millis(10_000));
+      if (r.kind === 'session.primaryRepinned') return { ok: true, applies: r.applies };
+      return { ok: false, reason: r.kind === 'refused' ? `${r.headline}${r.detail ? `: ${r.detail}` : ''}` : `the run host answered ${r.kind}` };
     },
     log: (m) => log(m),
   });
@@ -1463,7 +1495,7 @@ async function main(): Promise<void> {
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
     enqueueImprovement: (job) => improvementCoordinator.enqueue(job),
     chooseSave, chooseExportPath, chooseDirectory, chooseSkillFile,
-    openHookReview, restoreFlow, checkpointOp, quitting,
+    openHookReview, restoreFlow, checkpointOp, quitting, failureRecovery,
   };
   /**
    * Every command this product answers, filed under its kind. `CommandHandlers` is total over
@@ -1486,6 +1518,7 @@ async function main(): Promise<void> {
     ...shellCommands(commandContext),
     ...skillsCommands(commandContext),
     ...updateCommands(commandContext),
+    ...reauthCommands(commandContext),
     ...windowCommands(commandContext),
     ...windowsCommands(commandContext),
     ...workspaceCommands(commandContext),

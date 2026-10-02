@@ -1,12 +1,12 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload } from '@rotaris/contracts';
+import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type ReauthPrompt as ReauthPromptState, type ReauthSubmitResult } from '@rotaris/contracts';
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripRunItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripRunItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -722,6 +722,28 @@ function useConfinement() {
  * window can talk, which is exactly where SR-3 withdrew polling. The four commands answer with the whole
  * state too, so a surface that acts is never a frame behind the one that listens.
  */
+/**
+ * REQ-NOTIFY-071 / REQ-NOTIFY-078 (the 401 note's part B) — this window's non-modal re-authentication prompt, PUSHED by
+ * main on channel 13 when a fallback restart opens it and when it closes. The two answers are main's to apply: the window
+ * names the session the prompt was opened for and nothing else, and the key travels once, to the credential store.
+ */
+function useReauthPrompt() {
+  const [prompt, setPrompt] = useState<ReauthPromptState | null>(null);
+  useEffect(() => bridge.onReauthPrompt((p) => setPrompt((p as { prompt: ReauthPromptState | null }).prompt)), []);
+  const onSubmit = useCallback(async (apiKey: string): Promise<ReauthSubmitResult> => {
+    if (prompt === null) return { ok: false, message: 'No re-authentication prompt is open.' };
+    const r = await bridge.command({ kind: 'reauth.submit', sessionId: prompt.sessionId, apiKey });
+    return r.ok ? r.value as ReauthSubmitResult : { ok: false, message: r.detail ? `${r.headline} ${r.detail}` : r.headline };
+  }, [prompt]);
+  const onDismiss = useCallback(async (): Promise<void> => {
+    if (prompt === null) return;
+    const r = await bridge.command({ kind: 'reauth.dismiss', sessionId: prompt.sessionId });
+    // A prompt main no longer holds is closed here too, so a stale one never stands on screen.
+    if (!r.ok) setPrompt(null);
+  }, [prompt]);
+  return { prompt, onSubmit, onDismiss };
+}
+
 function useInitialization() {
   const [state, setState] = useState<InitializationStateView | null>(null);
   useEffect(() => bridge.onInitializationState((p) => setState(p as InitializationStateView)), []);
@@ -1237,6 +1259,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
    * same pushed state; both read, neither invents.
    */
   const initialization = useInitialization();
+  const reauth = useReauthPrompt();
   const projectSetup = useShellState((s) => s.projectSetup);
   const autoOpenProjectSetup = useShellState((s) => s.autoOpenProjectSetup);
   const closeProjectSetup = useShellState((s) => s.closeProjectSetup);
@@ -1288,6 +1311,12 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
     {projectSetup !== null && initialization.state !== null && (
       <ProjectSetupDialog state={initialization.state} auto={projectSetup === 'auto'} onInitialize={initialization.onInitialize} onSkip={initialization.onSkip} onClose={closeProjectSetup} />
     )}
+    {/*
+      * REQ-NOTIFY-071 / ADR-0048: the re-authentication prompt, window-level and non-modal like the setup dialog above
+      * it in this list — beside the shell, no backdrop — so the run continuing on the fallback, the composer and every
+      * view stay usable while it is open.
+      */}
+    {reauth.prompt !== null && <ReauthPrompt prompt={reauth.prompt} onSubmit={reauth.onSubmit} onDismiss={reauth.onDismiss} />}
     {browserOpen && (
       <SessionBrowser sessions={browserSessions} loading={browserLoading} error={browserError} onOpen={openSession} onDismiss={() => setBrowserOpen(false)}
         onRefresh={refreshSessions}

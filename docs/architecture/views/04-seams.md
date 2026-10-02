@@ -43,9 +43,9 @@ it there gives it to every window at once, because `shell.ts` makes that set one
 reads or writes for itself stays in the root that draws it: `main.tsx` for the main window's six views,
 `windows.tsx` for the approval, provider, pause, hook-review, persona and terminal windows.
 
-**Which facet.** Sixteen sit beside `commands/context.ts`, one per family: `dialogs`, `providers`, `session`,
+**Which facet.** Seventeen sit beside `commands/context.ts`, one per family: `dialogs`, `providers`, `session`,
 `hooks`, `mcp`, `initialization`, `skills`, `shell`, `git`, `checkpoints`, `library`, `improvements`, `config`,
-`requirements`, `windows`, `workspace`. Add the kind to the one whose name it already carries; a family with no
+`requirements`, `windows`, `workspace`, and `reauth` (2026-10-02, REQ-NOTIFY-071/078). Add the kind to the one whose name it already carries; a family with no
 facet yet is a new file and one more spread in the table. Each declares the slice of `CommandContext` it uses
 (`Pick<CommandContext, 'runHost' | …>`) — take what you need and nothing more, because that slice is what a
 test has to satisfy. A member that does not exist yet is added to `CommandContext` and supplied in `index.ts`.
@@ -79,7 +79,15 @@ Update the process view's **renderer → main** list.
 
 ## 2. A main → renderer channel
 
-Twelve exist. A thirteenth is a real decision — ask whether an existing one carries it first.
+Thirteen exist. A fourteenth is a real decision — ask whether an existing one carries it first. The thirteenth,
+`reauth:prompt` (2026-10-02, REQ-NOTIFY-071), was that decision taken: the re-authentication prompt is window-scoped
+state main opens and closes on its own account (after a fallback restart), which neither the notice slot (one notice,
+any session) nor channel 12 (one workspace's initialization) could carry without changing what they mean. It is the
+worked example of a **window-level non-modal surface fed by main** (ADR-0048): the payload schema and the two commands
+in `packages/contracts/src/reauth.ts`, the counter in `packages/shell/src/relay.ts`'s total record, the publisher in
+`main/index.ts` sending to the window that follows the session (`ownerOf`) and the close to that same window, the state
+in `main/failure-recovery.ts`, the facet `main/commands/reauth.ts`, the hook in `renderer/main.tsx` and the surface
+`packages/ui/src/ReauthPrompt.tsx`, mounted beside the shell next to `ProjectSetupDialog`.
 
 | # | File | What lands here |
 |---|---|---|

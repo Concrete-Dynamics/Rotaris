@@ -461,21 +461,27 @@ await scenarioRun('fatal', async () => {
 // writes its text onto the body the moment it is drawn and the probe reads it back from there.
 const s8 = scenario('auth-fallback', [], { fallback: 'beta' });
 await scenarioRun('auth-fallback', async () => {
+  // REQ-NOTIFY-071 / ADR-0048: with the prompt open the composer is still the element under its own centre, takes the
+  // focus and is enabled — the prompt traps nothing and covers nothing it leaves usable. Written onto the body for the probe.
+  const composerUsable = "(() => { const ta = document.querySelector('textarea.composer__input'); if (!ta) return false; const r = ta.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); ta.focus(); document.body.dataset.composerUsable = [hit === ta || ta.contains(hit) || (hit !== null && hit.closest('.slash-field') !== null), document.activeElement === ta, !ta.disabled, !(document.querySelector('[data-testid=\"reauth-prompt\"]')?.hasAttribute('aria-modal') ?? true)].join(':'); return true; })()";
   const ackSeen = "(document.body.dataset.ackSeen ||= [...document.querySelectorAll('[data-testid=\"acknowledgement\"]')].map((a) => a.textContent).find((t) => t.includes('Authentication failed')) ?? '')";
   const r = await launch('auth-fallback', s8, {
     // `:only=scripted`: alpha's provider refuses the key, beta's does not; the restarted root takes its script from the
     // first step again, so the fault is scoped to the provider rather than to the step.
     ROTARIS_SCRIPT: 'fail:401:only=scripted', ROTARIS_CAPTURE_PROMPT: 'bad key, then the fallback',
-    ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed'`, ROTARIS_CAPTURE_WAIT_MS: '90000',
-    ROTARIS_CAPTURE_PROBE: 'body;;.notice-slot', ROTARIS_CAPTURE_AFTER_MS: '800',
+    ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed' && document.querySelector('[data-testid="reauth-prompt"]') !== null && ${composerUsable}`, ROTARIS_CAPTURE_WAIT_MS: '90000',
+    ROTARIS_CAPTURE_PROBE: 'body;;.notice-slot;;[data-testid="reauth-prompt"];;[data-action="reauth-keep"];;[data-testid="reauth-error"]', ROTARIS_CAPTURE_AFTER_MS: '800',
   }, { timeout: 180_000 });
   const db = open(s8);
   const row = session(db);
   const list = names(db, row.session_id);
   const users = db.prepare("SELECT body FROM transcript_rows WHERE session_id = ? AND kind = 'user' ORDER BY row_index").all(row.session_id).map((u) => u.body);
   const rows = systemRows(db, row.session_id);
+  // The first run's result carries the provider's failure text, which the prompt quotes (REQ-NOTIFY-071).
+  const error0 = db.prepare("SELECT payload FROM events WHERE session_id = ? AND kind = 'result'").all(row.session_id).map((e) => JSON.parse(e.payload)?.result?.error).find((e) => typeof e === 'string') ?? null;
   db.close();
   expect(row.execution_status === 'completed', `the restarted run did not complete on the fallback: ${JSON.stringify(row)}`);
+  expect(typeof error0 === 'string' && /HTTP 401/.test(error0), `the first run's result does not carry the 401: ${error0}`);
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.length === 2 && calls[0].model === 'scripted/alpha' && calls[1].model === 'scripted-b/beta', `the 401 was not followed by one call on the fallback: ${JSON.stringify(calls)}`);
   const pin = list.find((t) => t.name === 'model_override');
@@ -488,7 +494,19 @@ await scenarioRun('auth-fallback', async () => {
   expect(/Authentication failed on scripted\/alpha/.test(ack) && /scripted-b\/beta/.test(ack), `the acknowledgement did not name both models: ${JSON.stringify(ack)}`);
   const notice = probes(r.log, 'probe').find((p) => p.selector === '.notice-slot')?.found[0];
   expect(notice === undefined || !/The run failed/.test(notice.text), `the restarted run left a failure notice on screen: ${JSON.stringify(notice)}`);
-  results.authFallback = { status: row.execution_status, calls, pin: meta, acknowledgement: ack, users, png: r.png, elapsedMs: r.elapsedMs };
+  // REQ-NOTIFY-071: the non-modal prompt beside the continuing run — the primary named, the fallback in use, the provider's
+  // error quoted, the dismissal that keeps the fallback offered — and, ADR-0048, no modality: no aria-modal, the composer usable.
+  const prompt = probes(r.log, 'probe').find((p) => p.selector === '[data-testid="reauth-prompt"]')?.found[0];
+  expect(prompt !== undefined, 'no re-authentication prompt was on screen after the restart');
+  expect(/scripted\/alpha could not authenticate/.test(prompt.text) && /continues on the fallback model scripted-b\/beta/.test(prompt.text) && /from the next iteration/.test(prompt.text), `the prompt does not say REQ-NOTIFY-071's three things: ${prompt.text}`);
+  const quoted = probes(r.log, 'probe').find((p) => p.selector === '[data-testid="reauth-error"]')?.found[0]?.text ?? '';
+  const keep = probes(r.log, 'probe').find((p) => p.selector === '[data-action="reauth-keep"]')?.found[0]?.text ?? '';
+  expect(quoted === error0 && keep === 'Keep the fallback', `the prompt does not quote the provider's error or offer the dismissal: ${JSON.stringify({ quoted, keep })}`);
+  // `scripted` is no provider the credential store holds, so the prompt offers switching back and no key field.
+  expect(prompt.data['data-method'] === 'none', `the prompt does not offer what this provider gets: ${JSON.stringify(prompt.data)}`);
+  const composer = body?.data['data-composer-usable'] ?? '';
+  expect(composer === 'true:true:true:true', `the composer is not usable behind a non-modal prompt (hit:focused:enabled:no-aria-modal = ${composer})`);
+  results.authFallback = { status: row.execution_status, calls, pin: meta, acknowledgement: ack, users, prompt: prompt.text, composerUsable: composer, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ ...results, failures }, null, 2)}\n`);

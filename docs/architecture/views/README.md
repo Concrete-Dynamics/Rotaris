@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**The non-modal re-authentication prompt (REQ-NOTIFY-071/078, ADR-0048; the 401 note's part B).** A new main → renderer
+channel, **`reauth:prompt`** (channel 13), carries one session's prompt or null to the window that follows it; two
+renderer commands answer it, **`reauth.submit {sessionId, apiKey}`** and **`reauth.dismiss {sessionId}`** (facet
+`main/commands/reauth.ts`); and the run host gains **`session.repinPrimary`** → `session.primaryRepinned {applies}`
+(`Sessions.repinPrimary`, `Run.rebuildEntryFromMemory`). The **seams view** §2 counts thirteen channels and names this one
+the worked example of a window-level non-modal surface fed by main, §1 the seventeenth facet; the **process view** lists
+the channel, the commands and the request; **state ownership** the prompt main holds; the **runtime view** the switch
+back from the next iteration. No package, edge or store column changed.
+
 **A failed run is classified in REQ-NOTIFY-060's order, and a first 401 restarts on the fallback (REQ-NOTIFY-060/064/
 067/069/070, REQ-MONITOR-147, REQ-SESSION-026; the 401 note's part A).** Main's run-result handler hands a result carrying
 failure text to `main/failure-recovery.ts` (classes in `main/failure-class.ts`), the one writer of a run failure's notice:

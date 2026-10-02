@@ -8,6 +8,7 @@ import { ConfigSnapshotSchema } from './config.js';
 import { AcknowledgementActionSchema, AcknowledgementKindSchema, NoticeSchema } from './notices.js';
 import { RequirementsChangedSchema } from './requirements.js'; // Part AK
 import { TerminalStreamMetaSchema } from './terminal.js';
+import { ReauthPromptPublishSchema } from './reauth.js';
 import { ImprovementActivitySchema, RunTypeSchema } from './improvements.js';
 import { InitializationStateSchema } from './initialization.js'; // Part AS
 
@@ -65,6 +66,7 @@ export const CHANNEL = {
   requirementsChanged: 'requirements:changed', // Part AK
   improvementActivity: 'improvement:activity',
   initializationState: 'initialization:state', // Part AS (ADR-0064)
+  reauthPrompt: 'reauth:prompt', // the 401 note's part B (REQ-NOTIFY-071, ADR-0048)
   command: 'command',
 } as const;
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -470,6 +472,7 @@ export const CHANNEL_SCHEMAS = {
   [CHANNEL.requirementsChanged]: RequirementsChangedSchema, // Part AK
   [CHANNEL.improvementActivity]: ImprovementActivityPublishSchema,
   [CHANNEL.initializationState]: InitializationStatePublishSchema, // Part AS
+  [CHANNEL.reauthPrompt]: ReauthPromptPublishSchema, // REQ-NOTIFY-071
 } as const;
 
 /** The two channels that share one per-session counter. Order across BOTH must be preserved by the relay. */

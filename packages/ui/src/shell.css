@@ -1036,6 +1036,25 @@
 .project-setup__task { padding: var(--rt-space-3); }
 .project-setup__task-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-3); }
 .project-setup__task-label { font-weight: var(--rt-weight-medium); }
+/*
+ * REQ-NOTIFY-071 / ADR-0048 — the re-authentication prompt: non-modal and window-level, positioned as the project setup
+ * dialog is (fixed, its own corner, above the shell and below an application-modal backdrop) so the composer it leaves
+ * usable is never covered. The provider's words sit in the inset block the "Provider auth modal" draws its code in: the
+ * ground, the hairline border, the medium radius. Tokens only.
+ */
+.reauth-prompt {
+  position: fixed;
+  top: var(--rt-space-4);
+  right: var(--rt-space-4);
+  z-index: 40;
+  max-width: calc(100vw - 2 * var(--rt-space-4));
+  max-height: calc(100vh - 2 * var(--rt-space-4));
+  overflow: auto;
+  border: var(--rt-hairline-width) solid var(--rt-border);
+}
+.reauth-prompt__error { display: flex; flex-direction: column; gap: var(--rt-space-1); padding: var(--rt-space-3); background: var(--rt-bg); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md); }
+.reauth-prompt__quote { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-text-secondary); overflow-wrap: anywhere; white-space: pre-wrap; }
+.reauth-prompt__caption { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
 .session-browser { width: min(920px, 100%); max-height: min(720px, calc(100vh - 2 * var(--rt-space-4))); }
 .session-browser__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--rt-space-4); }
 .session-browser__head .dialog-title, .session-browser__head .dialog-body { margin: 0; }

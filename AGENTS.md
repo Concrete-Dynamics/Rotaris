@@ -85,10 +85,10 @@ show it, which a check of the status passes as a clean exit. (Before the applica
 | | `requirements-runs-proof` | runs started from the board, against a real scratch repository; its sixth assertion stands a second workspace service in for a relaunch and starts a card resting in `ready` from the queue on its recorded tree, and its seventh has automatic scheduling pick one up after a relaunch once the disclosure is suppressed permanently, the published queue naming it `next` before the dispatch |
 | | `traceability-proof` | the traceability engine, including spike 7's scale store (ADR-0040) |
 | **The record itself** | `directive-proof` | that a directive's precedence over a requirement is machine-checked, not asserted in prose |
-| **Whole product** | `slice-proof` | sign-in through the product and one run on a real model |
+| **Whole product** | `slice-proof` | sign-in through the product and one run on a real model — since 2026-10-02 (R-068) the live-run registry's endpoint (`~/.rotaris/live-run/endpoints.json`: its default, or `--endpoint=<name>`) with its stored key; `--paste-key` for one whose key is not stored. Runs on `live-run`'s terms ([When to run it](#when-to-run-it)) |
 | | `driver-proof` | the driver seam `pnpm app:drive` depends on — and that its `quit` brings a live run to rest, its shot straight after a navigation shows the new view, and it answers an approval in its dialog and probes a persona window |
 | | `ui-audit` / `ui-review` | what the browser **built** at every size; the deterministic pack a report-only critic reads |
-| | `live-run` | the built product against a real endpoint and a real key — **money; never automatic** |
+| | `live-run` | the built product against a real endpoint and a real key — **money; never automatic** against a metered endpoint. Since 2026-10-02 ([R-068](docs/product/requests.md#r-068)) the registered default (`katalyst`) is self-hosted and registered `unmetered`, and the owner's authorization to run against it is standing ("never ask for my persmission for it. you always have my permission."): it spends nothing and is run without asking, though still never by `pnpm check`, a hook or CI |
 
 ## Repository UI skills
 
@@ -170,6 +170,14 @@ not replace the part's own proof, it follows it.
 It is **never** automatic. It is not in `pnpm check`, `pnpm test` collects nothing from it, and no hook or CI
 step may call it. It runs when the owner asks for it, or when an agent asks the owner and is told yes.
 An agent must not run it on its own initiative: it costs money the owner pays.
+
+**Against the registered self-hosted default, that last rule is already answered** ([R-068](docs/product/requests.md#r-068),
+2026-10-02). The default endpoint, `katalyst`, is the owner's own server, registered `unmetered`, and the owner's
+authorization to run against it is standing: "you may do the live run.never ask for my persmission for it. you always
+have my permission." A run against it spends nothing and is not asked about again; it is still never automatic in the
+sense above (no `pnpm check`, hook or CI step reaches it). The rule stands unchanged for every **metered** endpoint
+(one whose registry entry does not say `unmetered`, OpenRouter among them): such a run spends the owner's money and is
+asked for first. `pnpm slice-proof` signs into the same registry since that day and runs on the same terms.
 
 An owner's yes is not always enough in an agent session. On the Linux agent host, the harness's automatic permission
 classifier has refused some `live-run.mjs --confirm` launches as a real-world transaction even where the owner authorised

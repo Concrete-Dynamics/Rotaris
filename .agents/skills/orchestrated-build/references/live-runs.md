@@ -7,13 +7,17 @@ works for a user, and it can spend money. Proofs pass on a product a live run st
 
 - A live run needs the owner's explicit authorization **in the conversation**: per run, or standing ("run it as much
   as you want"). An unmetered or self-hosted endpoint still needs it. `AGENTS.md` calls the live run "never
-  automatic", and an agent asks before running one.
+  automatic", and an agent asks before running one against a metered endpoint. Here the owner's authorization for the
+  registered self-hosted default is standing (R-068, 2026-10-02: "never ask for my persmission for it. you always have
+  my permission."), and `AGENTS.md` says so beside the rule; `pnpm slice-proof` signs into the same registry since
+  that day and runs on the same terms.
 - The plan carries it: `"live": { "authorized": true, "ownerWords": "<their words>" }`. Without that field, `render`
   tells every agent live runs are not authorised, and acceptance runs no live-runner.
 - The endpoint and key live outside the repository. Here: `~/.rotaris/live-run/endpoints.json` names the default
   endpoint and marks it `unmetered`; the key sits beside it in a file only its owner can read; the environment may
   carry the key and URL in variables the owner names. Never print a key: compare with
-  `[ "$(tr -d '\n' < keyfile)" = "$VAR" ]`.
+  `[ "$(tr -d '\n' < keyfile)" = "$VAR" ]`. A record names an endpoint by its registry name (`katalyst`), never by
+  its base URL: a URL a run logged is written elided (`…/v1/chat/completions`), the host left in the registry.
 
 ## The permission system
 

@@ -357,6 +357,9 @@ interface Live {
    * REQ-CHAT-006 / REQ-SESSION-026: for a session no run of this process has started, the catalogue its record's
    * `modelOverrides` are read against — resolved once, the first time its record is read, and only where its timeline holds
    * a `model_override` entry (`null` otherwise, or where the configuration does not resolve). Absent until then.
+   * Never re-read for the life of the process: every path that writes a `model_override` (a wait choice, an
+   * authentication pin or its take-back) acts on a run this process started, and `s.run`, once set, is never cleared and
+   * is read first, so a `null` cached before an override existed never hides one written after.
    */
   restingCatalogue?: readonly CatalogueEntry[] | null;
   /**

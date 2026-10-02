@@ -659,7 +659,13 @@ less its count when the execution began, zero once its calls join the total). Nu
 derives it as the total less the children's (`runLevelAgent`). A root's calls join the total only when its turn returns
 (REQ-ORCH-097's cadence, OQ-116), so before this the meta line read `0 tool calls` while the root's turn ran. It is the
 agent's own count (REQ-MONITOR-044/052), not REQ-MONITOR-101's aggregate run count for the synthetic root; which of the two
-the run-level agent shows is **OQ-159**, open, and the figure stays the agent's own until it is ruled. A LIVE run-level agent whose root port
+the run-level agent shows is **OQ-159**, open, and the figure stays the agent's own until it is ruled. **`SessionRecord.compressions`**
+(2026-10-02) is the run-wide compression count (REQ-MONITOR-086): the live run's maintained aggregate (`Run.compressions`,
+ADR-0008) while a run is live, else the stored `sessions.compressions` (`runCompressionsOf`, `toSessionRecord`) — raised at
+the completion that raises the compressing agent's own count, a root's included. The run-level agent carries it as its
+count (OQ-159's recorded reading), and the inspector's ring caption and the persona window's context card draw it beside
+the per-agent figures (`compressionLine`, REQ-MONITOR-281); until then the run-level agent summed `SessionRecord.agents`, the
+children alone, so a root's compressions reached no surface. A LIVE run-level agent whose root port
 has not resolved yet — the pre-flight, before `Run.iterate` sets the port — lists nothing (`runLevelGrant`), never the
 declared set (REQ-MONITOR-061). **`SessionRecord.artifacts`** is the
 session's artifacts not superseded, with producer, ready flag and consumers (`artifactLinksOf`, one body-free read through

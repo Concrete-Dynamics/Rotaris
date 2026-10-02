@@ -6,6 +6,8 @@ import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotar
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRef, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, type ModelLookup, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
+import type { SessionRecord } from '@rotaris/contracts';
+import { runCompressionsOf, toSessionRecord } from '../sessions.js';
 import { Conversation, estimateTokens, preservedFrom, turnStarts } from './conversation.js';
 import { clampSummary, compress, compressionReason, compressorTranscript, rebuild, SUMMARY_LINE_CAP, type ResolvedTrigger } from './compression.js';
 
@@ -573,5 +575,30 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     expect(entries).toHaveLength(1);
     // The two records of one fact must agree: the per-agent counter and the session-wide aggregate.
     expect(dal.getSession(sid)!.compressions).toBe(entries.length);
+  });
+
+  it("REQ-MONITOR-086: the session record carries the run-wide count, a root's own compressions included", async () => {
+    /*
+     * docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md: the
+     * surfaces took the run-wide count to be the sum over `SessionRecord.agents`, which holds the children alone, so a root
+     * that compressed — the only agent of this run — was counted nowhere. The record carries the maintained aggregate.
+     */
+    const { sessions, pub } = sessionsWith((persona, turn) => {
+      if (persona === 'compressor') return answer('Work performed: a lot. Findings reached: some. Questions left open: none.');
+      if (turn === 1) return toolCalls([{ callId: 'c1', name: 'glob', args: {} }], 'looking', { input: 20, output: 10 });
+      if (turn === 2) return toolCalls([{ callId: 'c2', name: 'glob', args: {} }], 'looking again', { input: 900, output: 10 });
+      return answer('done');
+    }, { triggerTokens: 600, preserveRecentTurns: 1 });
+    const sid = (sessions.start(dal, 'C:/ws', 'do the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 60 && dal.getSession(sid)!.execution_status === 'running'; i++) await tick();
+    expect(timeline(sid).filter((t) => t.name === 'context_compressed')).toHaveLength(1);
+    sessions.owner(sid)?.reconcile();
+    const last = pub.snapshots.at(-1) as SessionRecord;
+    expect(last.agents).toHaveLength(0);
+    expect(last.compressions).toBe(1);
+    expect(toSessionRecord(dal.getSession(sid)!).compressions).toBe(1);
+    // While a run is live its maintained figure leads the stored one, which the pass's save has not copied yet.
+    expect(runCompressionsOf({ compressions: 1 }, { compressions: 3 })).toBe(3);
+    expect(runCompressionsOf({ compressions: 2 }, null)).toBe(2);
   });
 });

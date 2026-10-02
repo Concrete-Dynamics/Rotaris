@@ -8003,6 +8003,13 @@ with its lag during a pass, or the persisted total plus every live agent's calls
 agent as REQ-MONITOR-044 presents one, carrying its own count and history, and REQ-MONITOR-101's synthetic root node is
 some other surface — the run header, or the run-wide totals of REQ-MONITOR-098.
 
+*2026-10-02, the repair of
+[`the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md`](../defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md):*
+the compression reading recorded above was not what the build did — `runLevelAgent` summed `SessionRecord.agents`, which
+holds the children alone, so a root's own compressions were counted nowhere. The record now carries the run-wide count
+(`SessionRecord.compressions`, the session's maintained aggregate, the roots' included) and the run-level agent shows it, as
+the reading says; the inspector and the persona window draw it. Nothing about the tool-call figure changed, and nothing is ruled.
+
 **OQ-160 — Does the sidebar's "Last run failed: {message}" carry the failed task's whole output, or a bounded form of it?**
 *(REQ-WORKSPACE-113, "a recorded failure appends 'Last run failed: {message}' to the hint"; REQ-WORKSPACE-093, which fixes a
 failure's form as "{reason}: {detail}"; REQ-WORKSPACE-103, under which the recorded outcome is visible in Settings Project. Raised 2026-10-01 under

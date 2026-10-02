@@ -112,8 +112,11 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     id: RUN_AGENT_ID, name: entry.persona, givenName: entry.persona, persona: entry.persona, state: resting ? 'paused' : busy ? 'running' : presentationState === 'done' ? 'succeeded' : presentationState === 'failed' ? 'failed' : 'cancelled',
     presentationState, parentId: '', dependencies: [], activity: session.summary?.message ?? '', model: entry.model, depth: 0, background: false, category: '',
     spawnedAt: session.runStartedAt, completedAt: busy || resting ? null : session.updatedAt, toolCalls: session.entryToolCalls ?? Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
-    // REQ-MONITOR-086: the run-wide count is the sum of the per-agent counts, which is what the synthetic root shows.
-    compressions: session.agents.reduce((n, a) => n + a.compressions, 0),
+    // REQ-MONITOR-086: the run-wide count, which the synthetic root shows (OQ-159's recorded reading): the session's
+    // maintained aggregate, the roots' own compressions included. Until 2026-10-02 it summed `session.agents`, which holds
+    // the children alone, so a root's compressions were counted nowhere
+    // (docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md).
+    compressions: session.compressions,
     reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: runLevelGrant(session.entryTools.resolved, entry.tools, busy),
     // The run-level agent's set is already `runLevelGrant`'s choice; no row records its grant (REQ-MCP-065 is per child).
     grantRecorded: false, calledTools: [...session.entryTools.called], activeTools: busy ? [...session.entryTools.active] : [], delegationSessionId: null, inheritedContext: '', live: busy,
@@ -405,6 +408,16 @@ export function stalledText(seconds: number | null): string | null {
  * read `presentationState` alone, so beside the run header's `Cancelling…` it read `running`
  * (docs/defects/fixed/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md).
  */
+/**
+ * REQ-MONITOR-281 with REQ-MONITOR-086: the compression count the inspector's ring caption and a persona window's context card
+ * draw beside the token and tool-call counts, labelled with its unit and on a line of its own, since REQ-MONITOR-052's meta
+ * line and REQ-MONITOR-069's context line have fixed forms. The run-level agent's is the run-wide count (OQ-159's recorded
+ * reading) and says so; a child's is its own.
+ */
+export function compressionLine(agent: AgentRecord): string {
+  return `${countNoun(agent.compressions, 'compression')} ${agent.id === RUN_AGENT_ID ? 'across the run' : "of this agent's context"}`;
+}
+
 export function metaLine(agent: AgentRecord, session: Pick<SessionRecord, 'executionStatus'> | null, elapsed: string | null): string {
   const stalled = stalledText(agent.stalledSeconds);
   return `${agentStateLabel(agent, session)} · ${elapsed ?? '—'} · ${countNoun(agent.toolCalls, 'tool call')}${stalled === null ? '' : ` · ${stalled}`}`;

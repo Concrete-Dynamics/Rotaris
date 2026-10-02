@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentRecord, SessionRecord, TranscriptRow } from '@rotaris/contracts';
-import { agentArtifacts, agentStateLabel, chipStates, countNoun, instancesOf, mcpFateText, personaArtifacts, resolvedTools, rowsOf, stalledText } from './agents.js';
+import { agentArtifacts, agentStateLabel, chipStates, compressionLine, countNoun, instancesOf, mcpFateText, personaArtifacts, resolvedTools, rowsOf, stalledText } from './agents.js';
 import { AgentArtifactLinks, ArtifactLinkList } from './ArtifactLinks.js';
 import { AgentCancelConfirm } from './AgentCancelConfirm.js';
 import { elapsedLabel, elapsedShown } from './AgentTree.js';
@@ -147,6 +147,7 @@ export function PersonaWindow(props: PersonaWindowProps) {
               <div>
                 <div className="mono" data-testid="persona-context-line">{countNoun(shown.toolCalls, 'tool call')} · {elapsed ?? '-'}{shown.stalledSeconds !== null && <>{' '}<DesignTag kind="wait" className="agent-row__stalled" data-testid="agent-stalled">{stalledText(shown.stalledSeconds)}</DesignTag></>}</div>
                 <div className="text-secondary">{shown.contextUsed.toLocaleString()} of {shown.contextLimit.toLocaleString()} tokens; compression at {compressionThresholdPercent}%.</div>
+                <div className="text-secondary" data-testid="persona-compressions">{compressionLine(shown)}.</div>
               </div>
             </div>
           </section>

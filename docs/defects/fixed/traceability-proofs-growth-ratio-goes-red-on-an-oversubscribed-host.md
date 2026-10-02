@@ -67,7 +67,9 @@ Xvfb, Node 24, `node apps/desktop/scripts/traceability-proof.mjs --skip-build` a
 The sweep's half side reads 14 to 23 ms of thread CPU, under the 25 ms floor, so its ratio is recorded and not asserted,
 as it was on an idle host's wall clock before (18 to 23 ms); its wall ratios under the loops read 1.41 to 7.06, and the
 reds it gave before the repair came from a wall clock lifted above the floor by the load. One run with no added load
-(load average 8.4) passed too (parse 2.36, parser 2.01; wall 2.5 and 2.27).
+(load average 8.4) passed too (parse 2.36, parser 2.01; wall 2.5 and 2.27). The sweep's linear clause is therefore never
+asserted on this host, a gap this repair does not close. It is recorded as its own open note,
+[traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md](../traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
 
 Pinned by `packages/workspace/src/traceability/growth-readings.test.ts` ("on an oversubscribed host the ratio is read on the
 thread's CPU time …": every full-size reading's wall stretched 2.5× and every half-size one 1.2×, wall ratio 4.46, CPU

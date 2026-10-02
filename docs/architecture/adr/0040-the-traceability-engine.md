@@ -875,6 +875,8 @@ kept, now over CPU readings. Point 1, the lower bounds, the 3.0 ceiling and the 
 loops, ten runs after the repair passed at load averages of 10.4 to 14.7, the parse reading 2.06 to 2.62 and the parser
 1.96 to 2.23 on the thread's CPU time while their wall ratios read 1.84 to 3.56 and 1.73 to 6.69. The half-size sweep reads
 14 to 23 ms of thread CPU, under the floor, so its ratio stays recorded and not asserted, as on an idle host's wall clock.
+The sweep's linear clause is therefore never asserted on this host. That is recorded as its own open note,
+[`traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`](../../defects/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
 The note is
 [`traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`](../../defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md).
 

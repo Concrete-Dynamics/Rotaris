@@ -165,11 +165,12 @@ const INIT_TWO_B = initProject('init-two-b');
 const INIT_QUIT = initProject('init-quit', { stubborn: true });
 const INIT_FAILS = initProject('init-fails', { fails: true });
 /*
- * The marker's project holds a source file: in a documentation-only project carrying the marker every step ends without
- * waiting, and the coordinator never sees that setup finish
- * (`docs/defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`).
+ * The marker's project holds a source file, so its other steps run. Its documentation-only twin carries the marker and
+ * no source file: every step ends without waiting, inside the run host's start, and until 2026-10-02 the coordinator
+ * never saw that setup finish (`docs/defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`).
  */
 const INIT_MARKER = initProject('init-marker', { marker: true, code: true });
+const INIT_DOCS_MARKER = initProject('init-docs-marker', { marker: true });
 const INIT_SAYS = initProject('init-says', { says: true });
 // The second window's workspace has been initialized before, so the two windows' states tell apart by `lastRun` alone;
 // its setup is still pending, as no list names it.
@@ -1021,8 +1022,10 @@ try {
      * The coordinator passed the run host's own sentences through as the steps' details: "the project already exists (its
      * marker file is present); …", "skipped: the workspace contains no file the runtime indexes" and "exited with code N;
      * its last output: …" (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`).
-     * Three projects: one carrying the runtime's marker (and a source file, so its other steps run), one holding
-     * documentation only whose stand-in creation reports itself, and one whose creation writes to both streams and exits 3.
+     * Four projects: one carrying the runtime's marker (and a source file, so its other steps run), its documentation-only
+     * twin whose every step ends inside the run host's start (`docs/defects/fixed/a-setup-that-finishes-before-its-start-is-
+     * answered-is-never-seen-to-finish.md`), one holding documentation only whose stand-in creation reports itself, and one
+     * whose creation writes to both streams and exits 3.
      */
     const waitUntil = async (predicate, timeoutMs) => {
       const began = Date.now();
@@ -1045,6 +1048,24 @@ try {
         ended && task?.status === 'success' && JSON.stringify(details) === JSON.stringify(['project file already exists; left as is', '', ''])
           && /mcp setup: create succeeded — the project already exists/.test(logOf(s)),
         `the run ${ended ? `ended: ${JSON.stringify(outcome(s))}` : 'NEVER ended'}; its step details ${JSON.stringify(details)}; the run host's own words ${/mcp setup: create succeeded — the project already exists/.test(logOf(s)) ? 'kept in its log line' : 'NOT in its log line'}`);
+    }
+    {
+      // REQ-WORKSPACE-109/084/103: a documentation-only project carrying the marker — creation skipped on it, indexing and
+      // seeding skipped for no code — all three steps and the finished status before main's start request is answered.
+      // The run ended at SETUP_FOLLOW_BOUND_MS (2235 s) as a retryable failure before the repair; it ends at once now.
+      const began = Date.now();
+      const s = await launch('init-docs-marker', { workspace: INIT_DOCS_MARKER });
+      const ended = await waitUntil(() => outcome(s) !== null, 15_000);
+      const tookMs = Date.now() - began;
+      const read = await s.driver.command({ kind: 'initialization.read' });
+      const task = read?.value?.report?.tasks?.find((t) => t.id === 'code-intelligence-setup');
+      const details = (task?.steps ?? []).map((step) => step.detail);
+      const log = logOf(s);
+      check('REQ-WORKSPACE-109 / REQ-WORKSPACE-084: a setup whose every step ends before its start is answered is seen to finish — the three steps and the non-code summary within seconds, not at the follow\'s bound',
+        ended && task?.status === 'success' && JSON.stringify(details) === JSON.stringify(['project file already exists; left as is', NO_SYMBOLS, NO_MEMORY])
+          && task?.summary === 'Code intelligence is set up for this project. No symbols were indexed because the workspace contains documentation only.'
+          && /mcp setup: completed — /.test(log) && !/no finished status/.test(log),
+        `the run ${ended ? `ended ${tookMs} ms after the launch began: ${JSON.stringify(outcome(s))}` : `had NOT ended ${tookMs} ms after the launch began`}; its steps ${JSON.stringify(details)}; its summary ${JSON.stringify(task?.summary ?? null)}; the run host ${/mcp setup: completed — /.test(log) ? 'logged its completion' : 'logged NO completion'}`);
     }
     {
       const s = await launch('init-says', { workspace: INIT_SAYS });

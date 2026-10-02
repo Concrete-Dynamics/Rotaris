@@ -72,7 +72,7 @@ interface Harness {
 /** A hold a test can set at any moment: every setup status read taken while it is set waits on it. */
 interface StatusHold { current: Promise<void> | null }
 
-function harness(options: { applicable?: boolean; startRefusal?: { code: string; reason: string }; startStatus?: McpSetupStatus; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void; onCancel?: () => void; writeHold?: StatusHold; startHold?: StatusHold; quitting?: { current: boolean }; startRejects?: Error; statusRejects?: Error } = {}): Harness {
+function harness(options: { applicable?: boolean; startRefusal?: { code: string; reason: string }; startStatus?: McpSetupStatus; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void; onCancel?: () => void; writeHold?: StatusHold; startHold?: StatusHold; quitting?: { current: boolean }; startRejects?: Error; statusRejects?: Error; statusAnswer?: McpSetupStatus } = {}): Harness {
   const { root, agents } = workspace();
   const published: InitializationStateView[] = [];
   /** The root each entry of `published` was sent for, index for index. */
@@ -105,7 +105,7 @@ function harness(options: { applicable?: boolean; startRefusal?: { code: string;
     setup: {
       start: async (workspaceId) => { addressed.push({ call: 'start', workspaceId }); options.onStart?.(); await options.startHold?.current; if (options.startRejects) throw options.startRejects; return options.startRefusal ? { ok: false, ...options.startRefusal } : { ok: true, status: options.startStatus ?? status() }; },
       cancel: async (workspaceId) => { addressed.push({ call: 'cancel', workspaceId }); options.onCancel?.(); },
-      status: async (workspaceId) => { addressed.push({ call: 'status', workspaceId }); await options.statusGate; await options.hold?.current; if (options.statusRejects) throw options.statusRejects; return status({ applicable: options.applicable !== false }); },
+      status: async (workspaceId) => { addressed.push({ call: 'status', workspaceId }); await options.statusGate; await options.hold?.current; if (options.statusRejects) throw options.statusRejects; return options.statusAnswer ?? status({ applicable: options.applicable !== false }); },
     },
     publish: (publishedRoot, s) => { publishedTo.push(publishedRoot); published.push(s); },
     banner: (headline, detail) => banners.push({ headline, detail }),
@@ -1236,6 +1236,84 @@ describe('a setup whose finished status never arrives', () => {
     await settle();
     expect(readInitializationState(h.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
     expect(h.banners).toEqual([]);
+  });
+});
+
+/**
+ * `docs/defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`: a documentation-only
+ * workspace whose runtime marker is present skips every step without waiting, so the run host pushes the three steps and
+ * the `finished` status before main's start request is answered. The coordinator installed its sink only once the start
+ * answered, dropped every one of those pushes, drained the answer — every step done, its state still `running` — and
+ * waited for a `finished` push that had come and gone, until `SETUP_FOLLOW_BOUND_MS` (REQ-WORKSPACE-084/103/109).
+ */
+describe('a setup that finishes before its start is answered', () => {
+  const STARTED_AT = '2026-10-01T09:00:00.000Z';
+  const docsOnly = (): McpSetupStep[] => [RUN_HOST.markerPresent(), RUN_HOST.noCode('index'), RUN_HOST.noCode('memory')];
+  const pending = (id: McpSetupStep['id']): McpSetupStep => step(id, 'pending');
+  /** What the run host answers the start with: every step already ended, the state still `running` (`McpHost.startSetup`). */
+  const answered = (): McpSetupStatus => status({ startedAt: STARTED_AT, containsCode: false, steps: docsOnly() });
+  const finished = (): McpSetupStatus => status({ startedAt: STARTED_AT, state: 'finished', outcome: 'completed', containsCode: false, message: 'The project was created; indexing and the memory store were skipped because the workspace contains no code.', steps: docsOnly() });
+
+  it('ends at once on the finished status pushed while its start was in flight, with the three steps and the non-code summary, and the next setup\'s turn passes (REQ-WORKSPACE-084, REQ-WORKSPACE-103, REQ-WORKSPACE-109)', async () => {
+    const holder: { h?: Harness } = {};
+    let starts = 0;
+    const h = harness({
+      startStatus: answered(),
+      onStart: () => {
+        starts += 1;
+        if (starts !== 1) return;
+        // The run host's pushes, all before the start's answer, as `runSetupSteps` makes them when it awaits nothing.
+        const [create, index, memory] = docsOnly();
+        holder.h!.push(status({ startedAt: STARTED_AT, containsCode: false, steps: [pending('create'), pending('index'), pending('memory')] }));
+        holder.h!.push(status({ startedAt: STARTED_AT, containsCode: false, steps: [create!, pending('index'), pending('memory')] }));
+        holder.h!.push(status({ startedAt: STARTED_AT, containsCode: false, steps: [create!, index!, pending('memory')] }));
+        holder.h!.push(status({ startedAt: STARTED_AT, containsCode: false, steps: [create!, index!, memory!] }));
+        holder.h!.push(finished());
+      },
+    });
+    holder.h = h;
+    await h.coordinator.resolve(h.root, true);
+    await settle();
+    // No timer was advanced: the run ended on the status it was pushed, not at the bound.
+    expect(readInitializationState(h.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(h.banners).toEqual([]);
+    expect(h.logs).toContainEqual({ level: 'info', message: `initialization: ${CODE_INTELLIGENCE_TASK_ID} → success` });
+    const last = h.published[h.published.length - 1]!;
+    expect(JSON.stringify(last)).toContain(CODE_INTELLIGENCE_SUCCESS_NON_CODE);
+    expect(JSON.stringify(last)).toContain(MARKER_PRESENT_OUTPUT);
+    expect(JSON.stringify(last)).toContain(NO_SYMBOLS);
+    expect(JSON.stringify(last)).toContain(NO_MEMORY);
+    // The next workspace's setup is not held behind it.
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents, 'ws-other');
+    await h.coordinator.resolve(other.root, true);
+    await settle();
+    expect(starts).toBe(2);
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(other.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+  });
+
+  it('asks the run host once for the status when the answer has every step ended and still reads running, and ends on the finished one it holds (REQ-WORKSPACE-109)', async () => {
+    // Every push lost: only the answer and the status read reach the coordinator.
+    const h = harness({ startStatus: answered(), statusAnswer: finished() });
+    await h.coordinator.resolve(h.root, true);
+    await settle();
+    expect(readInitializationState(h.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(h.banners).toEqual([]);
+  });
+
+  it('ignores a status pushed while its start was in flight that belongs to another setup, and a status read of one (REQ-WORKSPACE-109)', async () => {
+    const holder: { h?: Harness } = {};
+    const stale = (): McpSetupStatus => status({ ...finished(), startedAt: '2026-10-01T08:00:00.000Z' });
+    const h = harness({ startStatus: answered(), statusAnswer: stale(), onStart: () => { holder.h!.push(stale()); } });
+    holder.h = h;
+    await h.coordinator.resolve(h.root, true);
+    await settle();
+    expect(readInitializationState(h.agents).completed).toEqual([]);
+    h.push(finished());
+    await settle();
+    expect(readInitializationState(h.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
   });
 });
 

@@ -65,6 +65,31 @@ interface ProofBridge {
  */
 interface EchoProbe { sentinel: string; eventAt: number | null; pressedAt: number | null; frameAt: number | null; paintedAt: number | null }
 
+/**
+ * REQ-SHELL-102, REQ-CHAT-063/076: the row preview and the persona card's preview sampled from a closing `screen` frame's
+ * arrival until every surface has parsed it — at once, then on every task the page gets — counting the samples whose
+ * lines were empty. The window is where a reset that had parsed before the final text read `[]`
+ * (`docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
+ */
+interface PreviewWatch {
+  streamId: string;
+  closingFrames: number;
+  samples: number;
+  emptyPreview: number;
+  emptyPersona: number;
+  firstEmpty: { readonly frame: number; readonly sample: number; readonly preview: readonly string[] | null; readonly persona: readonly string[] | null } | null;
+  /**
+   * Samples where a preview's last numbered line (`line N`) was below its own emulator's: the preview showing older output
+   * than the screen its surface had parsed, which a hold taken when the frame ARRIVED did through a backlog of deltas
+   * queued ahead of it (the fin7 verifier's finding; REQ-SHELL-102).
+   */
+  behindOwnScreen: number;
+  firstBehind: { readonly frame: number; readonly sample: number; readonly surface: 'preview' | 'persona'; readonly shown: number; readonly own: number } | null;
+  /** Each closing frame's samples and the preview's line count at the first and the last of them. */
+  frames: { samples: number; firstLines: number; lastLines: number; settled: boolean }[];
+}
+let previewWatch: PreviewWatch | null = null;
+
 const log: ProofLog = { sendKeys: [], interrupt: [], endInput: [], kill: [], resize: [], audit: [], acks: [], clipboard: [], goToWorkspace: 0, openTerminal: [], wheel: [], keydowns: 0, pointerUps: 0, outcomes: [] };
 const refusals = new Map<string, TerminalRefusal>();
 const bridge = (window as unknown as { __terminalProofBridge?: ProofBridge }).__terminalProofBridge ?? null;
@@ -158,10 +183,50 @@ function frameSummary(streamId: string) {
   };
 }
 
+function lastNumberedLine(lines: readonly string[]): number {
+  for (let i = lines.length - 1; i >= 0; i -= 1) { const m = /line (\d+)/.exec(lines[i]!); if (m) return Number(m[1]); }
+  return -1;
+}
+
+function watchClosingFrame(watch: PreviewWatch): void {
+  const streamId = watch.streamId;
+  const index = watch.closingFrames;
+  watch.closingFrames += 1;
+  const record = { samples: 0, firstLines: -1, lastLines: -1, settled: false };
+  watch.frames.push(record);
+  const sample = (): void => {
+    const preview = previewStreams.previewOf(streamId)?.lines ?? null;
+    const persona = personaStreams.previewOf(streamId)?.lines ?? null;
+    watch.samples += 1;
+    record.samples += 1;
+    const lines = preview === null ? 0 : preview.length;
+    if (record.firstLines < 0) record.firstLines = lines;
+    record.lastLines = lines;
+    const previewEmpty = preview === null || preview.length === 0;
+    const personaEmpty = persona === null || persona.length === 0;
+    if (previewEmpty) watch.emptyPreview += 1;
+    if (personaEmpty) watch.emptyPersona += 1;
+    if ((previewEmpty || personaEmpty) && watch.firstEmpty === null) watch.firstEmpty = { frame: index, sample: record.samples, preview, persona };
+    for (const [surface, set, shown] of [['preview', previewStreams, preview], ['persona', personaStreams, persona]] as const) {
+      const own = lastNumberedLine(set.get(streamId)?.emulator.snapshot().lines ?? []);
+      const seen = lastNumberedLine(shown ?? []);
+      if (own <= seen) continue;
+      watch.behindOwnScreen += 1;
+      if (watch.firstBehind === null) watch.firstBehind = { frame: index, sample: record.samples, surface, shown: seen, own };
+    }
+  };
+  sample();
+  let done = false;
+  void api.settled(streamId).then(() => { done = true; sample(); record.settled = true; });
+  const tick = (): void => { if (done) return; sample(); setTimeout(tick, 0); };
+  setTimeout(tick, 0);
+}
+
 function applyEverywhere(frame: DisplayFrame): void {
   windowStreams.apply(frame);
   previewStreams.apply(frame);
   personaStreams.apply(frame);
+  if (previewWatch && frame.streamId === previewWatch.streamId && frame.kind === 'screen' && frame.closing === true) watchClosingFrame(previewWatch);
   // REQ-SHELL-166's echo: the frame that carries the sentinel, then the paint after the grid parsed it.
   if (echo && echo.frameAt === null && frame.kind === 'delta' && frame.payload.includes(echo.sentinel)) {
     const probe = echo;
@@ -203,6 +268,11 @@ const api = {
     const displays = [windowStreams.get(streamId), previewStreams.get(streamId), personaStreams.get(streamId)].filter((d) => d !== null && d !== undefined);
     return Promise.all(displays.map((d) => parsed(d.emulator))).then(() => true);
   },
+  /** Starts (or, with `null`, stops) sampling the two previews through each closing frame's parse; `previewWatched` reads it. */
+  watchPreviews(streamId: string | null) {
+    previewWatch = streamId === null ? null : { streamId, closingFrames: 0, samples: 0, emptyPreview: 0, emptyPersona: 0, firstEmpty: null, behindOwnScreen: 0, firstBehind: null, frames: [] };
+  },
+  previewWatched() { return previewWatch === null ? null : JSON.parse(JSON.stringify(previewWatch)) as PreviewWatch; },
   /** What the input fences read: cheaper than `state`, which copies the whole log. */
   inputs() { return { keydowns: log.keydowns, pointerUps: log.pointerUps, wheels: log.wheel.length }; },
   state(streamId: string) {

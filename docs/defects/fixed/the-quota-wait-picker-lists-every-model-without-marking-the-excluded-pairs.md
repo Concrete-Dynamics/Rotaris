@@ -66,6 +66,12 @@ insufficient quota in this session" beside its name and is not `aria-disabled`; 
 beta as before (2026-10-02, load 1.6, `--only=override,quota-wait`, no failures). The `quota-wait` scenario is a
 rate-limit wait, which puts no pair out of quota, so its chooser has nothing to annotate and it is not driven.
 
+Since the verifier's first round, an annotated row is named by its key alone and described by the reason
+(`aria-labelledby` / `aria-describedby` on the design system's `SearchableSelect` hinted rows, as `PopoverMenu`'s rows
+already were); its accessible name had been the two run together ("alphaprovider reported…"). Pinned by
+`packages/ui/src/design-system/design-system.test.ts` (red on the old row markup) and read in the built app by
+`resilience-proof`'s `override` scenario (name `alpha`, description the reason).
+
 Recorded beside it: the run header's and the inspector's model selectors and the composer's next-run chip annotate no
 excluded pair either, which REQ-MONITOR-194 asks of "any model selector"
 ([the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md](../the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md)).

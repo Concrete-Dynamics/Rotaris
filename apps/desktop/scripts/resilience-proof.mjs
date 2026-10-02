@@ -168,7 +168,7 @@ async function drivenOverride(s, { boundMs = 180_000 } = {}) {
         // words, the pair held out of quota (alpha, the waiting one) annotated with the reason and still listed.
         await step('the chooser opened', d.click('.wait-header button[aria-label="Change model"]'));
         await step('the chooser\'s rows', d.waitFor('[role="option"][data-value="alpha"]'));
-        const picker = await step('the chooser read', d.eval(`[...document.querySelectorAll('[role="listbox"][aria-label="Change model"] [role="option"]')].map((o) => ({ value: o.dataset.value, text: o.textContent, disabled: o.getAttribute('aria-disabled') }))`));
+        const picker = await step('the chooser read', d.eval(`[...document.querySelectorAll('[role="listbox"][aria-label="Change model"] [role="option"]')].map((o) => { const ref = (a) => (o.getAttribute(a) ?? '').split(' ').filter(Boolean).map((id) => document.getElementById(id)?.textContent ?? '').join(' '); return { value: o.dataset.value, text: o.textContent, disabled: o.getAttribute('aria-disabled'), name: o.hasAttribute('aria-labelledby') ? ref('aria-labelledby') : o.textContent, description: ref('aria-describedby') }; })`));
         await step('the chooser picture', d.screenshot(join(output, 'override-picker.png')));
         await step('the chooser → beta', d.click('[role="option"][data-value="beta"]'));
         const chosen = { kind: 'design-system', value: 'beta' };
@@ -381,6 +381,8 @@ await scenarioRun('override', async () => {
   const pickerRow = (v) => r.value.picker.find((o) => o.value === v);
   expect(pickerRow('alpha') !== undefined && pickerRow('alpha').text.includes('provider reported insufficient quota in this session') && pickerRow('alpha').disabled !== 'true', `the excluded pair is not listed with its reason: ${JSON.stringify(r.value.picker)}`);
   expect(pickerRow('beta') !== undefined && !pickerRow('beta').text.includes('insufficient quota'), `beta is annotated as out of quota: ${JSON.stringify(r.value.picker)}`);
+  // The annotated row is named by its key alone and described by the reason, never the two run together (fin8's verifier).
+  expect(pickerRow('alpha')?.name === 'alpha' && pickerRow('alpha')?.description === 'provider reported insufficient quota in this session', `the excluded pair's accessible name and description are not the key and the reason: ${JSON.stringify(r.value.picker)}`);
   expect(!list.some((t) => t.name === 'quota_fallback_model'), 'a same-tier fallback happened with no candidate');
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted-b/beta', `the run did not resume on beta: ${JSON.stringify(calls)}`);

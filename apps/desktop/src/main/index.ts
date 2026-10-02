@@ -609,8 +609,8 @@ async function main(): Promise<void> {
       dlg.focus();
       // ROTARIS_CAPTURE_PROVIDER_FILL="label>>url[>>key]": the proof fills the two visible fields; a THIRD segment
       // fills the key field too and presses the dialog's own button with a real click, so an unattended live run
-      // (`pnpm live-run`) signs in on the product's own path. The slice proof passes two segments and the paste
-      // stays the owner's. The key is never logged: the fill reports which fields it found, nothing of what it wrote.
+      // (`pnpm live-run`, and `pnpm slice-proof` with the registry's stored key) signs in on the product's own path.
+      // `slice-proof --paste-key` passes two segments and the paste stays the owner's. The key is never logged: the fill reports which fields it found, nothing of what it wrote.
       // ROTARIS_CAPTURE_PROVIDER_EMPTY_OK=1: an endpoint that answers discovery with no models leaves an unattended
       // run at the zero-model alert, so the seam takes that dialog's own "Continue anyway" (REQ-PROVIDER-133's
       // recovery) — polled, because discovery takes as long as the endpoint takes.

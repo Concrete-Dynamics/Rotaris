@@ -85,7 +85,7 @@ show it, which a check of the status passes as a clean exit. (Before the applica
 | | `requirements-runs-proof` | runs started from the board, against a real scratch repository |
 | | `traceability-proof` | the traceability engine, including spike 7's scale store (ADR-0040) |
 | **The record itself** | `directive-proof` | that a directive's precedence over a requirement is machine-checked, not asserted in prose |
-| **Whole product** | `slice-proof` | sign-in through the product and one run on a real model |
+| **Whole product** | `slice-proof` | sign-in through the product and one run on a real model — since 2026-10-02 (R-068) the live-run registry's endpoint (`~/.rotaris/live-run/endpoints.json`: its default, or `--endpoint=<name>`) with its stored key; `--paste-key` for an endpoint whose key is not stored |
 | | `driver-proof` | the driver seam `pnpm app:drive` depends on — and that its `quit` brings a live run to rest, its shot straight after a navigation shows the new view, and it answers an approval in its dialog and probes a persona window |
 | | `ui-audit` / `ui-review` | what the browser **built** at every size; the deterministic pack a report-only critic reads |
 | | `live-run` | the built product against a real endpoint and a real key — **money; never automatic** |

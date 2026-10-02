@@ -717,16 +717,27 @@ and `ROTARIS_CAPTURE_WAIT_MS` are verification seams; a third `>>key` segment on
 zero-model alert's own "Continue anyway", so an endpoint whose `/models` answers with nothing does not strand a run
 that no one is watching.
 
-**What `pnpm slice-proof` does.** It builds Electron and carries ONE scratch profile across five launches, because
-the credential the owner pastes in the first must be the one the third leases: (1) first launch — the notice, Settings
-→ Models → Add endpoint with the label and URL filled, the owner pastes the OpenRouter key (never read from the
-environment, never logged), then the credential file's five keys and exact protection, the snapshot's record and
-picks, the bootstrapped `agents.yaml`, and a log free of the key are asserted; (2) the three tier slots set to
-`anthropic/claude-haiku-4.5` and saved; (3) one real run — the lease, the request to OpenRouter, a settled tool row,
-usage figures and the terminal result from the store; (4) spike 6's live harness against the same endpoint with the
-stored credential; (3b, Part L) three more real runs, one prompt per intent family, each asserted to classify from the small
-slot and never fall back, the answering rung recorded; (5) sign-out from the card — the file gone, the snapshot kept, a prompt refused. `--resume` keeps
-the profile and skips the paste; `--skip-build` skips the build. Evidence lands under `.proof/slice-proof/`. `--from=<scenario>` replays the
+**What `pnpm slice-proof` does.** It builds Electron and carries ONE scratch profile across the launches, because
+the credential the first writes must be the one the runs lease. Since 2026-10-02 ([R-068](../product/requests.md#r-068))
+it signs into the live-run registry's endpoint (`~/.rotaris/live-run/endpoints.json`: its default, or `--endpoint=<name>`),
+read through `apps/desktop/scripts/lib/endpoint-registry.mjs`, the module `live-run` reads it through: the label, base
+URL and model are the registry's and the provider id is the one the product mints for the label (REQ-PROVIDER-051).
+**A registered endpoint with a stored key runs it unattended**: the key (`ROTARIS_LIVE_API_KEY`, else the file beside
+the registry) is filled into the dialog's key field and the dialog's own button pressed, as `live-run` signs in. **An
+endpoint without a stored key takes `--paste-key`**: the label and URL are filled and the owner pastes the key, the
+proof's original design. Until then it signed into OpenRouter constants (`anthropic/claude-haiku-4.5`) and always waited
+for the owner's paste. The key never reaches a log (each is written with it substituted out and asserted to have held
+none), the repository or `.proof/slice-proof/`: the scratch profile, whose credential store holds the key as a person's
+would, lives in the system temp directory, and `credential-facts.json` records the credential file's shape without its
+token. Scenarios: (1) first launch — the notice, Settings → Models → Add endpoint, the credential file's five keys,
+the key it holds being the one the dialog was given, its exact protection, the snapshot's record and picks, the
+discovered-models count read as a count (at least one, its noun agreeing with it, REQ-SHELL-044), the bootstrapped
+`agents.yaml`, and a log free of the key; (2) the three tier slots set to the registered model and saved; (3) one real
+run — the lease, the request to the endpoint, a settled tool row, usage figures and the terminal result from the store;
+(3b, Part L) three more real runs, one prompt per intent family, each asserted to classify from the small slot and never
+fall back, the answering rung recorded; (4) spike 6's live harness against the same URL, model and key; (5) sign-out
+from the card — the file gone, the snapshot kept; (6) a prompt refused. `--resume` keeps the profile and skips the
+sign-in; `--skip-build` skips the build. Evidence lands under `.proof/slice-proof/`. `--from=<scenario>` replays the
 earlier scenarios from their evidence. On 2026-09-05 every scenario passed on the owner's re-run with an OpenRouter
 key (`.proof/slice-proof/results.json`), after two runs that each found a defect. Since 2026-09-29 (R-067) it reads the
 credential file where the product writes it on the running platform (`tokensDirFor`): the Windows spelling it used
@@ -735,7 +746,17 @@ everywhere left the first launch's wait, the strays check and the sign-out check
 Since 2026-10-01 step 3 reads the priming from the run host's opening credential report (`lib/priming-report.mjs`,
 pinned against `LeaseReportLog`): the provider among the authenticated, nothing unresolved (REQ-PROVIDER-067/068), in
 place of "credentials: 1 provider(s) authenticated", a line nothing writes
-([note](../defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md); not yet run since).
+([note](../defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md)). ~~Not yet run since.~~
+**First run against a self-hosted endpoint, 2026-10-02** (`katalyst`, `qwen3.8-flash-next`, the stored key,
+xvfb, as root): every scenario passed on a fresh profile — first launch (`Added Katalyst; discovered 1 model.`), slots,
+run (`completed`, one settled tool row, the request at `…/v1/chat/completions`), the three intents (`question`,
+`explicit_trivial`, `small_feature`, each by `json_schema`, none falling back), spike 6 (four of four), sign-out and the
+refusal — after the runs before it found four defects of the proof, each repaired in the same bundle: the model slots
+named as native selects, the sign-out pressed in a panel that no longer holds it, the run replayed from the newest
+session, and spike 6's figures lost on a green run (notes under `docs/defects/fixed/slice-proof-*`). On a one-model
+endpoint the sign-in's discovery picks already name the model for every tier, so scenario 2 asserts the tiers through
+the discovered layer (the Models page shows them `discovered`; re-selecting the shown value is no edit) rather than a
+saved file. Recorded in [`first-executions.md`](first-executions.md).
 
 **What `pnpm live-run` does.** It is the only check here that answers to a real model rather than a scripted one,
 and the only one that spends money, so it never runs on its own: `pnpm check` does not reach it and without

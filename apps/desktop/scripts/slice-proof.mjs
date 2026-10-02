@@ -1,34 +1,53 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { primingProblem } from './lib/priming-report.mjs';
+import { proofEndpoint } from './lib/endpoint-registry.mjs';
 
 /**
- * The vertical slice's proof (Part K.4): sign in to OpenRouter through the product and complete one run on a
- * real model. ONE scratch profile is carried across the launches, because the credential written by the
- * second must be the one the fourth leases. The owner pastes the key into the authentication window; the
- * script never reads it from an environment variable and never writes it to a log. Every assertion reads
- * the files on disk, the store, or the application log; the PNGs are read back.
+ * The vertical slice's proof (Part K.4): sign in to a real OpenAI-compatible endpoint through the product and complete
+ * runs on a real model. The endpoint is the live-run registry's (`~/.rotaris/live-run/endpoints.json`, R-068): its
+ * default, or the one `--endpoint=<name>` names, exactly as `pnpm live-run` picks it, read through
+ * `lib/endpoint-registry.mjs`. Its label, base URL and model are what the product is given and what every assertion
+ * reads; the provider id is the one the product mints for that label (REQ-PROVIDER-051). Until 2026-10-02 these were
+ * OpenRouter constants and the owner pasted an OpenRouter key by hand; the owner holds no OpenRouter credits and the
+ * registered default (`katalyst`) is self-hosted and unmetered, so the proof now signs in where `live-run` does.
  *
- *   1. first-launch  — the notice; Settings → Models → Add endpoint; label + URL filled; the owner pastes the
- *                      key and presses "Add endpoint"; the credential file, its protection, the snapshot and
- *                      the starter agents.yaml asserted; the log holds no credential.
- *   2. slots         — the three tier slots set to anthropic/claude-haiku-4.5 and saved.
+ * THE KEY. The registered endpoint's stored key is supplied the way `live-run` supplies it: `ROTARIS_LIVE_API_KEY`
+ * first, else `~/.rotaris/live-run/<name>.key(.dpapi)`; it reaches the product only through the add-endpoint dialog's
+ * key field (the fill seam's third segment, which presses the dialog's own button). `--paste-key` keeps the proof's
+ * original design for an endpoint whose key is not stored: the label and URL are filled, the owner pastes the key and
+ * presses "Add endpoint", and the script waits `SLICE_PROOF_KEY_WAIT_MS` (default ten minutes) for the credential file.
+ * The key never reaches a log, the repository or this proof's output directory: every log is written with the key
+ * substituted out and is asserted to have held none; the scratch profile, where the product's credential store keeps
+ * the key as it would on the owner's machine, lives in the system temp directory and not under `.proof/`; and
+ * `credential-facts.json` records the credential file's shape without its token.
+ *
+ * ONE scratch profile is carried across the launches, because the credential written by the first must be the one the
+ * runs lease. Every assertion reads the files on disk, the store, or the application log; the PNGs are read back.
+ *
+ *   1. first-launch  — the notice; Settings → Models → Add endpoint; label, URL (and the stored key) filled and the
+ *                      dialog's own button pressed (or the owner pastes, `--paste-key`); the credential file, its
+ *                      protection, the snapshot, the discovered-models count and the starter agents.yaml asserted;
+ *                      the log holds no credential.
+ *   2. slots         — the three tier slots set to the registered model and saved.
+ *   3. run           — one real run: the leased bearer, a request to the endpoint, an agent row, a tool call
+ *                      settled through the gate, usage figures, the terminal result.
  *   3b. intents      — three more real runs, one prompt per intent family: the classifier's answer is a category
  *                      from the small slot, never the fallback (Part L; the first real run fell to it).
- *   3. run           — one real run: the leased bearer, a request to OpenRouter, an agent row, a tool call
- *                      settled through the gate, usage figures, the terminal result.
- *   4. spike6        — spike 6's live half against the same endpoint, with the credential the owner stored in
- *                      this proof's scratch profile (the figures go into spikes/responses-dialect.md).
+ *   4. spike6        — spike 6's live half against the same endpoint and model, with the same key (the figures go
+ *                      into spikes/responses-dialect.md).
  *   5. sign-out      — Sign out from the providers card; the file gone, the snapshot kept.
  *   6. refused       — a relaunch with a prompt: the run refused "Provider authentication required".
  *
  * `--resume` keeps the profile; `--from=<scenario>` (with --resume) replays the earlier scenarios from their
- * logs and the store instead of launching them, so one scenario can be re-run without a second paste.
+ * logs and the store instead of launching them, so one scenario can be re-run without signing in again.
+ * `--skip-build` trusts `apps/desktop/out`. On a host without a display, run it under
+ * `xvfb-run -a -s "-screen 0 1600x1000x24" node apps/desktop/scripts/slice-proof.mjs --skip-build`.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -49,15 +68,26 @@ const from = process.argv.find((a) => a.startsWith('--from='))?.slice(7) ?? (res
 if (!ORDER.includes(from)) throw new Error(`--from must be one of ${ORDER.join(', ')}`);
 /** A scenario before `from` is replayed from its evidence rather than launched. */
 const replay = (name) => resume && ORDER.indexOf(name) < ORDER.indexOf(from);
+// The endpoint the proof signs into: the registry's default, or `--endpoint=<name>` (R-068). Read before anything is
+// removed or built, so an endpoint without a stored key is refused with the last run's evidence still in place.
+const endpoint = proofEndpoint();
+// The scratch profile holds the product's credential store, which holds the key: it lives outside the repository and
+// outside the output directory, in the system temp directory, one per checkout so two worktrees never share one.
+const root = join(tmpdir(), 'rotaris-slice-proof', basename(repo), 'profile');
 if (resume) { for (const name of ORDER) if (!replay(name)) for (const file of name === 'intents' ? INTENTS.map((_, i) => `intents-${i + 1}`) : [name]) for (const ext of ['.log', '.png']) rmSync(join(output, `${file}${ext}`), { force: true }); rmSync(join(output, 'results.json'), { force: true }); }
-else rmSync(output, { recursive: true, force: true });
+else { rmSync(output, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); }
 mkdirSync(output, { recursive: true });
 
-const PROVIDER_ID = 'openai-compatible--openrouter';
-const BASE_URL = 'https://openrouter.ai/api/v1';
-const MODEL = 'anthropic/claude-haiku-4.5';
-const QUALIFIED = `${PROVIDER_ID}/${MODEL}`;
-const KEY_WAIT_MS = Number(process.env.SLICE_PROOF_KEY_WAIT_MS ?? 600_000);
+const PASTE = endpoint.key === null;
+const PROVIDER_ID = endpoint.providerId;
+const LABEL = endpoint.label;
+const BASE_URL = endpoint.baseUrl;
+const MODEL = endpoint.model;
+const QUALIFIED = endpoint.qualified;
+/** A label, quoted for a regular expression: the product's lines name the endpoint by it. */
+const LABEL_RE = LABEL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// The owner pastes within ten minutes; a stored key signs in as fast as the endpoint answers discovery.
+const KEY_WAIT_MS = Number(process.env.SLICE_PROOF_KEY_WAIT_MS ?? (PASTE ? 600_000 : 120_000));
 const RUN_WAIT_MS = Number(process.env.SLICE_PROOF_RUN_WAIT_MS ?? 300_000);
 
 if (!process.argv.includes('--skip-build')) {
@@ -73,8 +103,7 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 
 
 
-// The ONE profile of this proof.
-const root = join(output, 'profile');
+// The ONE profile of this proof (`root`, above).
 const workspace = join(root, 'workspace');
 const local = join(root, 'local');
 mkdirSync(workspace, { recursive: true });
@@ -99,13 +128,18 @@ async function launch(name, extra, timeoutMs = 120_000) {
     },
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-  writeFileSync(join(output, `${name}.log`), log);
-  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
+  // Written with every known secret substituted out; the caller asserts the raw text held none.
+  writeFileSync(join(output, `${name}.log`), redact(log));
+  if (result.overran) throw new Error(`${redact(overrunMessage(name, result, log))}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   return log;
 }
+/** Every value that must never reach a log or the output directory: the stored key, and the token the product stored. */
+const secrets = new Set(endpoint.key ? [endpoint.key] : []);
+const redact = (text) => [...secrets].reduce((out, secret) => out.split(secret).join('[redacted]'), text);
 function assertNoCredential(log, name) {
+  for (const secret of secrets) if (log.includes(secret)) throw new Error(`${name}.log carries the endpoint's key`);
   if (/sk-or-/i.test(log)) throw new Error(`${name}.log carries a credential prefix`);
   if (/Bearer\s+(?!\*\*\*)\S{20,}/.test(log)) throw new Error(`${name}.log carries a bearer value`);
 }
@@ -127,18 +161,22 @@ function windowsDacl(path) {
   }
 }
 
-const results = { keyPasted: false };
+const results = { endpoint: { name: endpoint.name, label: LABEL, baseUrl: BASE_URL, model: MODEL, providerId: PROVIDER_ID, key: PASTE ? 'pasted by the owner (--paste-key)' : 'stored', unmetered: endpoint.unmetered === true }, keyPasted: false };
+console.error(`slice-proof: ${LABEL} (${endpoint.name}) at ${BASE_URL}, model ${MODEL}; key ${PASTE ? 'pasted by the owner (--paste-key)' : `from ${endpoint.keySource}`}`);
 
-// 1. First launch: the notice; the add-endpoint dialog; the owner pastes the key.
-console.error('\n================================================================================');
-console.error(' SLICE PROOF — the authentication window will open in the app.');
-console.error(` Paste your OpenRouter API key into the "API key" field and press "Add endpoint".`);
-console.error(` The label and URL are filled for you. You have ${Math.round(KEY_WAIT_MS / 60_000)} minutes; the script waits for the credential file.`);
-console.error('================================================================================\n');
+// 1. First launch: the notice; the add-endpoint dialog; the stored key filled and the dialog's own button pressed, or
+//    (--paste-key) the owner pastes the key.
+if (PASTE && !replay('first-launch')) {
+  console.error('\n================================================================================');
+  console.error(' SLICE PROOF — the authentication window will open in the app.');
+  console.error(` Paste the API key of ${LABEL} into the "API key" field and press "Add endpoint".`);
+  console.error(` The label and URL are filled for you. You have ${Math.round(KEY_WAIT_MS / 60_000)} minutes; the script waits for the credential file.`);
+  console.error('================================================================================\n');
+}
 const log1 = replay('first-launch') ? readFileSync(join(output, 'first-launch.log'), 'utf8') : await launch('first-launch', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
   ROTARIS_CAPTURE_CLICKS: '[data-action="add-endpoint"]@2200',
-  ROTARIS_CAPTURE_PROVIDER_FILL: `OpenRouter>>${BASE_URL}`,
+  ROTARIS_CAPTURE_PROVIDER_FILL: PASTE ? `${LABEL}>>${BASE_URL}` : `${LABEL}>>${BASE_URL}>>${endpoint.key}`,
   ROTARIS_CAPTURE_WAIT: `file:${tokensFile}`, ROTARIS_CAPTURE_WAIT_MS: String(KEY_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
 }, KEY_WAIT_MS + 60_000);
 assertNoCredential(log1, 'first-launch');
@@ -147,17 +185,34 @@ if (!/providers: 0 authenticated/.test(log1)) throw new Error('the first launch 
 if (/capture: wait for .* timed out/.test(log1) || (!replay('first-launch') && !existsSync(tokensFile))) {
   results.firstLaunch = { notice: 'raised', dialog: /provider dialog filled/.test(log1) ? 'opened and filled' : 'not filled', keyPasted: false };
   writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
-  console.error('\nThe key was not pasted within the wait: scenarios 2–5 did not run. Run `pnpm slice-proof` again when you can paste it.');
+  if (!PASTE) throw new Error(`the sign-in through the product wrote no credential file within ${KEY_WAIT_MS} ms with the stored key of "${endpoint.name}"; see first-launch.log and first-launch.png`);
+  console.error('\nThe key was not pasted within the wait: scenarios 2–6 did not run. Run `pnpm slice-proof --paste-key` again when you can paste it.');
   process.exit(2);
 }
 results.keyPasted = true;
-const added = /providers: (Added OpenRouter; discovered (\d+) models?\.)/.exec(log1);
-if (!added) throw new Error(`the sign-in outcome was not logged:\n${log1}`);
-// After the sign-out scenario the file is gone; a replay reads the credential facts it recorded.
+// The count is the endpoint's own (REQ-PROVIDER-133's discovery): read as a count, at least the one model the proof
+// runs on, and worded with a noun that agrees with it (REQ-SHELL-044), never compared with a fixed figure.
+const added = new RegExp(`providers: (Added ${LABEL_RE}; discovered (\\d+) (models?)\\.)`).exec(log1);
+if (!added) throw new Error(`the sign-in outcome was not logged:\n${redact(log1)}`);
+const discovered = Number(added[2]);
+if (!Number.isInteger(discovered) || discovered < 1) throw new Error(`the sign-in discovered ${added[2]} models; the proof needs at least ${MODEL}`);
+if ((discovered === 1) !== (added[3] === 'model')) throw new Error(`the sign-in notice's noun does not agree with its count: ${added[1]}`);
+// After the sign-out scenario the file is gone; a replay reads the credential facts it recorded. The facts are the
+// file's shape, never its token: this proof's output directory never holds the key.
 const credentialFacts = join(output, 'credential-facts.json');
-const credential = existsSync(tokensFile) ? JSON.parse(readFileSync(tokensFile, 'utf8')) : existsSync(credentialFacts) ? JSON.parse(readFileSync(credentialFacts, 'utf8')) : { access_token: '', refresh_token: '', expires_at: 0, account_id: null, extra: { provider_family: 'openai-compatible', api_base: BASE_URL }, replayed: true };
-if (existsSync(tokensFile)) writeFileSync(credentialFacts, JSON.stringify({ ...credential, access_token: credential.access_token }));
+const credential = existsSync(tokensFile) ? JSON.parse(readFileSync(tokensFile, 'utf8')) : existsSync(credentialFacts) ? { ...JSON.parse(readFileSync(credentialFacts, 'utf8')), replayed: true } : { keys: ['access_token', 'refresh_token', 'expires_at', 'account_id', 'extra'], expires_at: 0, extra: { provider_family: 'openai-compatible', api_base: BASE_URL }, replayed: true };
+const storedToken = credential.replayed ? '' : String(credential.access_token ?? '');
+if (storedToken !== '' && !secrets.has(storedToken)) {
+  // A pasted key is known only now: the first launch's log is written again without it, and asserted again to hold none.
+  secrets.add(storedToken);
+  if (!replay('first-launch')) writeFileSync(join(output, 'first-launch.log'), redact(log1));
+  assertNoCredential(log1, 'first-launch');
+}
+const credentialKeys = credential.replayed ? credential.keys : Object.keys(credential);
+if (existsSync(tokensFile)) writeFileSync(credentialFacts, JSON.stringify({ keys: credentialKeys, expires_at: credential.expires_at, account_id: credential.account_id ?? null, extra: credential.extra }));
 if (!credential.replayed && (typeof credential.access_token !== 'string' || credential.access_token.length === 0 || credential.expires_at !== 0 || credential.extra?.provider_family !== 'openai-compatible' || credential.extra?.api_base !== BASE_URL)) throw new Error('the credential file does not carry the five keys with the instance extras');
+// The product stored exactly the key it was given through its own dialog.
+if (!credential.replayed && !PASTE && credential.access_token !== endpoint.key) throw new Error('the credential file does not hold the key the dialog was given');
 const strays = existsSync(dirname(tokensFile)) ? readdirSync(dirname(tokensFile)).filter((f) => !f.endsWith('.json')) : [];
 if (strays.length > 0) throw new Error(`the credential directory holds more than <id>.json: ${strays.join(', ')}`);
 let dacl = null;
@@ -169,9 +224,9 @@ if (process.platform === 'win32' && existsSync(tokensFile)) {
 }
 const snapshot = readFileSync(snapshotFile, 'utf8');
 // Keys are emitted in written order (REQ-PROVIDER-085): the record's scalars, then the models, then the family, base URL and picks.
-for (const line of [`  ${PROVIDER_ID}:`, `    id: ${PROVIDER_ID}`, '    display_name: OpenRouter', '    family: openai-compatible', `    base_url: ${BASE_URL}`, '    authenticated: true']) if (!snapshot.split('\n').includes(line)) throw new Error(`the snapshot lacks the line ${JSON.stringify(line)}`);
+for (const line of [`  ${PROVIDER_ID}:`, `    id: ${PROVIDER_ID}`, `    display_name: ${LABEL}`, '    family: openai-compatible', `    base_url: ${BASE_URL}`, '    authenticated: true']) if (!snapshot.split('\n').includes(line)) throw new Error(`the snapshot lacks the line ${JSON.stringify(line)}`);
 if (!snapshot.startsWith('version: 1\n')) throw new Error('the snapshot does not start with its version');
-if (/access_token|sk-or-/.test(snapshot)) throw new Error('the snapshot carries a credential');
+if (/access_token|sk-or-/.test(snapshot) || [...secrets].some((secret) => snapshot.includes(secret))) throw new Error('the snapshot carries a credential');
 const picks = Object.fromEntries(['large_model', 'medium_model', 'small_model', 'fallback_model', 'default_summary_model'].map((k) => [k, new RegExp(`^    ${k}: (.+)$`, 'm').exec(snapshot)?.[1] ?? null]));
 if (!snapshot.includes(`      - id: ${QUALIFIED}\n`)) throw new Error(`the catalog did not carry ${MODEL}`);
 if (!existsSync(agentsFile) || !readFileSync(agentsFile, 'utf8').includes('default_persona: orchestrator')) throw new Error('the starter agents.yaml was not bootstrapped after sign-in');
@@ -179,21 +234,43 @@ if (!existsSync(agentsFile) || !readFileSync(agentsFile, 'utf8').includes('defau
 // scratch workspace is the proof's: its runs are unattended from here on (REQ-TOOLS-071's unsandboxed-autonomous consent
 // given in the file, as a person would give it in Settings → Runtime).
 if (!readFileSync(agentsFile, 'utf8').includes('permission_mode:')) writeFileSync(agentsFile, `${readFileSync(agentsFile, 'utf8')}runtime:\n  permission_mode: autonomous\n  allow_unsandboxed_autonomous: true\n`);
-results.firstLaunch = { notice: 'raised', outcome: added[1], discovered: Number(added[2]), credential: { keys: Object.keys(credential), expiresAt: credential.expires_at, extra: credential.extra }, protection: dacl ? { protected: dacl.protected, aces: dacl.aces.map((a) => `${a.type};${a.rights};${a.sid.startsWith('S-1-5-21') ? 'owner' : a.sid}`) } : 'posix', picks, bootstrap: 'written' };
+results.firstLaunch = { notice: 'raised', outcome: added[1], discovered, credential: { keys: credentialKeys, expiresAt: credential.expires_at, extra: credential.extra }, protection: dacl ? { protected: dacl.protected, aces: dacl.aces.map((a) => `${a.type};${a.rights};${a.sid.startsWith('S-1-5-21') ? 'owner' : a.sid}`) } : 'posix', picks, bootstrap: 'written' };
 
-// 2. The three tier slots pinned to the proof model and saved.
+// 2. The three tier slots pinned to the proof model and saved (or, on a one-model endpoint, already its discovered picks).
 const log2 = replay('slots') ? readFileSync(join(output, 'slots.log'), 'utf8') : await launch('slots', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
-  ROTARIS_CAPTURE_SELECT: `select[aria-label="Model for small_model"]>>${QUALIFIED}@2200;;select[aria-label="Model for medium_model"]>>${QUALIFIED}@2500;;select[aria-label="Model for large_model"]>>${QUALIFIED}@2800`,
+  // The slot's model control is the design system's SearchableSelect, not a native `<select>`: named by its label alone,
+  // the capture seam drives either kind (`docs/defects/fixed/slice-proof-names-the-model-slots-as-native-selects.md`).
+  ROTARIS_CAPTURE_SELECT: `[aria-label="Model for small_model"]>>${QUALIFIED}@2200;;[aria-label="Model for medium_model"]>>${QUALIFIED}@2500;;[aria-label="Model for large_model"]>>${QUALIFIED}@2800`,
   ROTARIS_CAPTURE_CLICKS: '.save-bar .btn-primary>>Save@3600',
   ROTARIS_CAPTURE_AFTER_MS: '5200',
 });
 assertNoCredential(log2, 'slots');
-if (!/providers: 1 authenticated \(openai-compatible--openrouter\)/.test(log2)) throw new Error('the relaunch did not find the provider authenticated');
+const undriven = log2.split('\n').filter((l) => /capture: select .* → no such (control|option)/.test(l)).map((l) => l.replace(/^.*capture: /, ''));
+if (undriven.length > 0) throw new Error(`the slots were not driven:\n${undriven.join('\n')}`);
+if (!new RegExp(`providers: 1 authenticated \\(${PROVIDER_ID}\\)`).test(log2)) throw new Error('the relaunch did not find the provider authenticated');
 if (/notice: No model provider/.test(log2)) throw new Error('the first-launch notice was raised with a provider authenticated');
 const agents = readFileSync(agentsFile, 'utf8');
-for (const slot of ['small_model', 'medium_model', 'large_model']) if (!agents.includes(`${slot}: ${QUALIFIED}\n`)) throw new Error(`the slot ${slot} was not saved:\n${agents}`);
-results.slots = { agentsFile: agents };
+const TIERS = ['small_model', 'medium_model', 'large_model'];
+// An endpoint that serves one model (a self-hosted one, typically) has its sign-in's discovery picks already naming it
+// for every tier, shown in the Models page with the origin "discovered". Choosing the value a slot already shows is no
+// edit — a setter re-selecting the current value cannot dirty the form (`config-state.ts`'s `applyChange`, the rule
+// REQ-CONFIG-335 states for the reasoning setter) — so no Save appears and nothing is written: the tiers name the model
+// through the discovered layer, which this scenario then asserts in place of the saved file. An endpoint whose picks
+// name other models (OpenRouter's did) takes the edit and the Save, and the saved file is asserted as before.
+const pickedAlready = TIERS.every((slot) => results.firstLaunch.picks[slot] === QUALIFIED);
+if (pickedAlready) {
+  for (const slot of TIERS) {
+    const raw = new RegExp(`^${slot}: (.*)$`, 'm').exec(agents)?.[1]?.trim() ?? 'null';
+    if (raw !== 'null' && raw !== QUALIFIED) throw new Error(`the slot ${slot} names ${raw} over the discovered ${QUALIFIED}:\n${agents}`);
+  }
+  const loaded = log2.split('\n').find((l) => /run host: configuration: loaded/.test(l)) ?? '';
+  if (!loaded.includes(`slots: small=${QUALIFIED}`) || !loaded.includes(`on openai-compatible/${MODEL} `)) throw new Error(`the run host did not resolve the tiers to ${QUALIFIED}: ${loaded.trim() || 'no configuration line'}`);
+  results.slots = { source: 'the discovered picks (one model; re-selecting it is no edit, so nothing was saved)', picks: Object.fromEntries(TIERS.map((slot) => [slot, results.firstLaunch.picks[slot]])), agentsFile: agents };
+} else {
+  for (const slot of TIERS) if (!agents.includes(`${slot}: ${QUALIFIED}\n`)) throw new Error(`the slot ${slot} was not saved:\n${agents}`);
+  results.slots = { source: 'saved from the Models page', agentsFile: agents };
+}
 
 // 3. One real run on the leased bearer.
 const log3 = replay('run') ? readFileSync(join(output, 'run.log'), 'utf8') : await launch('run', {
@@ -209,10 +286,16 @@ assertNoCredential(log3, 'run');
 const priming = primingProblem(log3, PROVIDER_ID);
 if (priming !== null) throw new Error(`the run host did not report the priming: ${priming}`);
 const requests = (log3.match(/model request POST (\S+)/g) ?? []).map((l) => l.replace('model request POST ', ''));
-if (!requests.some((u) => u.startsWith(`${BASE_URL}/chat/completions`))) throw new Error(`no request reached OpenRouter:\n${requests.join('\n')}`);
+if (!requests.some((u) => u.startsWith(`${BASE_URL}/chat/completions`))) throw new Error(`no request reached ${LABEL} at ${BASE_URL}:\n${requests.join('\n')}`);
 if (/capture: wait for result timed out/.test(log3)) throw new Error('the run did not end within the wait');
 const db = new Database(oneDatabase(local), { readonly: true });
-const session = db.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed, tokens_input, tokens_output FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+// The run's own session, named by its log: the newest session is the run's only while the intents have not run, so a
+// replay of this step after them (`--from=spike6` and later) read the third intent's session in its place.
+const runSessionId = /session ([0-9a-f-]{36}) started/.exec(log3)?.[1] ?? null;
+const session = runSessionId !== null
+  ? db.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed, tokens_input, tokens_output FROM sessions WHERE session_id = ?').get(runSessionId)
+  : db.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed, tokens_input, tokens_output FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+if (!session) throw new Error(`the run's session ${runSessionId ?? '(none named in run.log)'} is not in the store`);
 const rows = db.prepare('SELECT kind, settled, body FROM transcript_rows WHERE session_id = ? ORDER BY row_index').all(session.session_id);
 const events = db.prepare('SELECT kind, payload FROM events WHERE session_id = ? ORDER BY ordinal').all(session.session_id);
 const audit = db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(session.session_id);
@@ -256,28 +339,36 @@ for (const [i, c] of INTENTS.entries()) {
   results.intents.push({ prompt: c.prompt, category, confidence: detail ?? null, rung: rung ?? null, rungNotes: warned });
 }
 
-// 4. Spike 6's live half, with the credential the owner stored in this proof's profile. The key reaches the harness
-//    through a variable named for it and is never printed; only the harness's figures are kept.
-const spikeEnv = { ...cleanEnvironment(), ROTARIS_SPIKE6_BASE_URL: BASE_URL, ROTARIS_SPIKE6_MODEL: MODEL, ROTARIS_SPIKE6_API_KEY_ENV: 'ROTARIS_SLICE_PROOF_KEY', ROTARIS_SLICE_PROOF_KEY: credential.access_token };
-const spike = replay('spike6') ? null : process.platform === 'win32'
-  ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'npx vitest run packages/model/src/ai-sdk-live.spike.test.ts'], { cwd: repo, encoding: 'utf8', timeout: 300_000, env: spikeEnv })
-  : spawnSync('npx', ['vitest', 'run', 'packages/model/src/ai-sdk-live.spike.test.ts'], { cwd: repo, encoding: 'utf8', timeout: 300_000, env: spikeEnv });
-const spikeOut = spike ? `${spike.stdout ?? ''}\n${spike.stderr ?? ''}`.split(credential.access_token).join('[redacted]') : readFileSync(join(output, 'spike6.log'), 'utf8');
-if (spike) writeFileSync(join(output, 'spike6.log'), spikeOut);
-const redactKey = (text) => (credential.access_token.length > 0 ? text.split(credential.access_token).join('[redacted]') : text);
+// 4. Spike 6's live half against the same endpoint and model, with the same key: the stored one, or the token the
+//    product stored from the owner's paste. The key reaches the harness through a variable named for it and is never
+//    printed; only the harness's figures are kept. With no key in hand (a paste replayed after its sign-out) it is skipped.
+//    `--reporter=verbose`: vitest's default reporter prints no test's console lines when every test passes, so the
+//    `[spike6]` figures never reached spike6.log (`docs/defects/fixed/slice-proof-keeps-no-spike6-figures.md`).
+const spikeKey = endpoint.key ?? storedToken;
+const spikeEnv = { ...cleanEnvironment(), ROTARIS_SPIKE6_BASE_URL: BASE_URL, ROTARIS_SPIKE6_MODEL: MODEL, ROTARIS_SPIKE6_API_KEY_ENV: 'ROTARIS_SLICE_PROOF_KEY', ROTARIS_SLICE_PROOF_KEY: spikeKey };
+const spikeSkipped = !replay('spike6') && spikeKey === '';
+const spike = replay('spike6') || spikeSkipped ? null : process.platform === 'win32'
+  ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'npx vitest run packages/model/src/ai-sdk-live.spike.test.ts --reporter=verbose'], { cwd: repo, encoding: 'utf8', timeout: 300_000, env: spikeEnv })
+  : spawnSync('npx', ['vitest', 'run', 'packages/model/src/ai-sdk-live.spike.test.ts', '--reporter=verbose'], { cwd: repo, encoding: 'utf8', timeout: 300_000, env: spikeEnv });
+const spikeOut = spike ? redact(`${spike.stdout ?? ''}\n${spike.stderr ?? ''}`) : spikeSkipped ? 'skipped: no key in hand (a pasted key replayed after its sign-out)\n' : readFileSync(join(output, 'spike6.log'), 'utf8');
+if (spike || spikeSkipped) writeFileSync(join(output, 'spike6.log'), spikeOut);
 const stripAnsi = (text) => text.replace(/\[[0-9;]*m/g, '');
-const spikeLines = spikeOut.split('\n').filter((l) => l.includes('[spike6]')).map((l) => stripAnsi(redactKey(l.replace(/^.*\[spike6\]/, '[spike6]'))).trim());
+const spikeLines = spikeOut.split('\n').filter((l) => l.includes('[spike6]')).map((l) => stripAnsi(redact(l.replace(/^.*\[spike6\]/, '[spike6]'))).trim());
 const spikeSummary = stripAnsi(/Tests\s+(.*)$/m.exec(spikeOut)?.[1] ?? 'no summary').trim();
-results.spike6 = { exit: spike ? spike.status : 'replayed', tests: spikeSummary, lines: spikeLines };
+results.spike6 = { exit: spike ? spike.status : spikeSkipped ? 'skipped' : 'replayed', tests: spikeSummary, lines: spikeLines };
 
 // 5. Sign out from the providers card; the file gone, the snapshot kept.
 const log5 = replay('sign-out') ? readFileSync(join(output, 'sign-out.log'), 'utf8') : await launch('sign-out', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
-  ROTARIS_CAPTURE_CLICKS: `[data-provider="${PROVIDER_ID}"] .btn-link@2200;;[data-provider-settings="${PROVIDER_ID}"] .btn-secondary>>Sign out@3200`,
+  // The row's own "Sign out", then the confirmation's (REQ-PROVIDER's sign-out asks first); the settings panel the step
+  // opened before holds no Sign out (`docs/defects/fixed/slice-proof-signs-out-from-a-panel-that-no-longer-holds-sign-out.md`).
+  ROTARIS_CAPTURE_CLICKS: `[data-provider="${PROVIDER_ID}"] .provider-row__actions button>>Sign out@2200;;[role="dialog"] .dialog-actions button>>Sign out@3200`,
   ROTARIS_CAPTURE_AFTER_MS: '5000',
 });
 assertNoCredential(log5, 'sign-out');
-if (!/providers: Signed out of OpenRouter\./.test(log5)) throw new Error(`the sign-out was not logged:\n${log5}`);
+const unpressed = log5.split('\n').filter((l) => /capture: no ".*" control on screen/.test(l)).map((l) => l.replace(/^.*capture: /, ''));
+if (unpressed.length > 0) throw new Error(`the sign-out was not driven:\n${unpressed.join('\n')}`);
+if (!new RegExp(`providers: Signed out of ${LABEL_RE}\\.`).test(log5)) throw new Error(`the sign-out was not logged:\n${redact(log5)}`);
 if (existsSync(tokensFile)) throw new Error('the credential file survived the sign-out');
 if (!readFileSync(snapshotFile, 'utf8').includes(`  ${PROVIDER_ID}:`)) throw new Error('the sign-out removed the snapshot entry');
 results.signOut = { credentialFile: 'removed', snapshot: 'kept' };
@@ -286,7 +377,7 @@ results.signOut = { credentialFile: 'removed', snapshot: 'kept' };
 const log6 = replay('refused') ? readFileSync(join(output, 'refused.log'), 'utf8') : await launch('refused', { ROTARIS_CAPTURE_PROMPT: 'Read README.md again.', ROTARIS_CAPTURE_AFTER_MS: '4000' });
 assertNoCredential(log6, 'refused');
 if (!/providers: 0 authenticated/.test(log6)) throw new Error('the relaunch after sign-out still found a provider authenticated');
-if (!/run refused: Provider authentication required/.test(log6)) throw new Error(`the run after sign-out was not refused as specified:\n${log6.split('\n').filter((l) => /refused|session/.test(l)).join('\n')}`);
+if (!/run refused: Provider authentication required/.test(log6)) throw new Error(`the run after sign-out was not refused as specified:\n${redact(log6).split('\n').filter((l) => /refused|session/.test(l)).join('\n')}`);
 if (/session .* started/.test(log6)) throw new Error('a session was started without a leased bearer');
 results.refused = { refusal: 'Provider authentication required', detail: 'Authenticate at least one configured provider before starting a run.' };
 

@@ -180,7 +180,9 @@ record with both cleared until a run of it starts (REQ-NOTIFY-061, `Sessions.ref
 `modelOverrides` (REQ-CHAT-006, REQ-SESSION-026): each configured model key a session-wide override replaces, with the key
 it runs on, derived at every snapshot from the run's catalogue and the session's memory — for a session no run of this
 process has started, from a catalogue resolved once where its timeline holds an override (`Sessions.modelOverridesOf`) —
-so the composer's model chip and the inspector name what the next run starts with.
+so the composer's model chip and the inspector name what the next run starts with. The record's `wait` carries `excluded`
+(REQ-MONITOR-194/303, since 2026-10-02): the configured keys the session holds out of quota, which the quota-wait chooser
+annotates and leaves choosable.
 
 **Checkpoints (Part P; ADR-0039's first execution).** Renderer → main: `checkpoints.list {sessionId}` (rows only, REQ-GIT-050),
 `checkpoints.preview {sessionId, sequence}` and `checkpoints.restore {sessionId, sequence, force}`; main holds ONE desktop

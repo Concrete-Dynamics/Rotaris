@@ -7,7 +7,7 @@ user's next prompt starts a new `Run`, which builds the root on its configuratio
 switch's system row nonetheless said "Entry model switched to <key>; it applies from the next iteration." (and the same
 for the reasoning level), and the next iteration does not run on it. The autopsy reader already states the
 corresponding coarse reading
-([the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md)).
+([the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](fixed/the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md)).
 Noticed by the verifier of `fin5-noticed-gaps` (repair round 1, optional finding) and recorded there. Not repaired. The
 specification says "the run's entry model", and REQ-MONITOR-143 says a switch after the run loop has closed "still
 records the override". Whether a continuation is the same run for this purpose, and so inherits the override, or the

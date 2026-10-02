@@ -137,7 +137,7 @@ A store recording no `switch_pending` reads a move where it stands until a super
 
 The other coarse reading these doc comments state is a different defect: a switched key is carried across a continuation
 that records no snapshot. It is now recorded as an open note,
-[the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](../the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md).
+[the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md).
 
 The product's own row is a separate matter and is recorded, not repaired, here:
 [a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force.md](a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force.md)

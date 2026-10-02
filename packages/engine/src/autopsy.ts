@@ -282,11 +282,14 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  *   the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it).
  * A store recording no `supersedes` reads each switch as applied; one recording no `switch_pending` reads each move and
  * each child's choice where it is recorded, until a switch that supersedes places it.
- * One reading stays coarse: a switch is held on its run alone (`entryOverride`; a continuation is a new
- * `Run`), so a later continuation recording no snapshot starts on its configuration's model, while this keeps the
- * switched key as the configured one. Only snapshot-less runs reach it
- * (the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot). A second: an entry naming a child alive at its
- * instant is that child's, even where a root of the same name was alive too (OQ-158; `childKeyAt`).
+ * A switch is held on its run alone (`entryOverride`; a continuation is a new `Run`), and whether it should reach the next
+ * run is an open question (an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation). A continuation
+ * whose snapshot names the entry model says which it ran on; one recording none, after a switch onto another key than the
+ * last snapshot's, prints `ENTRY_KEY_UNDETERMINED` until a record names a key, so neither answer is printed as fact (since
+ * 2026-10-02; until then the switched key was kept, and a move such a run's fresh cell ended was read as ending on it:
+ * the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot). With no such switch the last
+ * snapshot's key is kept, as before. One reading stays coarse: an entry naming a child alive at its instant is that
+ * child's, even where a root of the same name was alive too (OQ-158; `childKeyAt`).
  */
 export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata' | 'at'>[], children: ChildModelKeys): string[] {
   type Key = { readonly label: string; readonly pair: string | null };
@@ -296,6 +299,8 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
     base: Key | null;
     // The key the configuration names (snapshot or switch); `base` departs from it only while a ladder move is in force.
     configured: Key | null;
+    // The entry key the last snapshot naming one recorded; `configured` differs from it after a switch since.
+    snapshotLabel: string | null;
     fellBack: boolean;
     readonly keys: string[];
     readonly overrides: Map<string, { readonly key: string; readonly to: string | null }>;
@@ -319,6 +324,17 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
   const fromSnapshot = (s: State, snapshot: unknown): void => {
     const e = snapshotEntry(snapshot);
     if (!e) {
+      // A switch recorded since the last snapshot naming an entry model, onto another key: whether it reaches this new run
+      // or ended with its own (`entryOverride` is held per `Run`) is the open question of
+      // an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation, and this snapshot does not say which
+      // model the run was configured with, so the key is undetermined until a record names one (the repair of
+      // the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot; revisit when it is ruled).
+      if (s.configured !== null && s.configured.label !== s.snapshotLabel) {
+        s.base = s.configured = { label: ENTRY_KEY_UNDETERMINED, pair: null };
+        s.fellBack = false;
+        add(s, ENTRY_KEY_UNDETERMINED);
+        return;
+      }
       // A continuation recording no entry model (`config_snapshot: {}`) is still a new run with a new root cell, built
       // from the configured model: a ladder move of the run before it ends there, back to the configured key, or to an
       // undetermined one when nothing ever named it.
@@ -326,6 +342,7 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
       return;
     }
     s.models = e.models;
+    s.snapshotLabel = e.label;
     s.base = s.configured = { label: e.label, pair: e.pair };
     s.fellBack = false;
     add(s, effective(s));
@@ -387,7 +404,7 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
     }
   };
 
-  let s: State = { models: {}, base: null, configured: null, fellBack: false, keys: [], overrides: new Map() };
+  let s: State = { models: {}, base: null, configured: null, snapshotLabel: null, fellBack: false, keys: [], overrides: new Map() };
   if (launchAuditPayload !== undefined) fromSnapshot(s, parseJson(launchAuditPayload)?.['config_snapshot']);
   // A switch the run has not applied yet: it applies at the root's next turn, which the record does not show. `before` is
   // the state before it; `ahead` the records known to precede that turn, read before the switch; `after` the records

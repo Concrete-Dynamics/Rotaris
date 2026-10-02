@@ -218,9 +218,9 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
   const calls: Record<string, number> = { orchestrator: 0, child: 0, summariser: 0, compressor: 0, 'loop-classifier': 0 };
   // PD-ORCH-005: the keys whose counter has been placed by the record their first call in this client carried.
   const seeded = new Set<string>();
-  // The ledger's unit: each key's position in its script as the environment names it. `calls` indexes the list after a
-  // completed wait has been spliced out of it; this counts the wait as the step it was.
-  const position: Record<string, number> = {};
+  // `calls` is each key's position in its script as the environment names it — the ledger's unit too. The lists are never
+  // changed after this: every child shares `scripts.child`, so a completed wait moves only the child's own counter past it
+  // (the repair of fixed/the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md).
   let call = 0;
   const TOOL_STEPS: Record<string, { name: string; args: Record<string, unknown> }> = {
     glob: { name: 'glob', args: { pattern: '**/*.md' } },
@@ -256,11 +256,8 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         const left = agent ? ledger?.read(entryKey) : undefined;
         const fromLedger = left !== undefined && left.length <= conversation.length && digestOf(conversation.slice(0, left.length)) === left.digest ? left.next : 0;
         calls[counterKey] = Math.max(fromRecord, fromLedger);
-        position[counterKey] = calls[counterKey];
       }
       calls[counterKey] = (calls[counterKey] ?? 0) + 1;
-      calls[who] = calls[counterKey]!;
-      position[counterKey] = (position[counterKey] ?? 0) + 1;
       // Verification only: the model each call went to, so a proof can read a fallback or an override from the log (Part Q).
       log(`scripted model call: ${req.model.providerId}/${req.model.modelId} (${who})`);
       record?.({ call, who, model: `${req.model.providerId}/${req.model.modelId}`, system });
@@ -351,23 +348,22 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         return;
       }
       // The agent's entry, written as its call begins and cleared when it answers (`StandingLedger`).
-      const stand = (): void => { if (agent) ledger?.write(entryKey, { next: position[counterKey] ?? 0, length: conversation.length, digest: digestOf(conversation) }); };
+      const stand = (): void => { if (agent) ledger?.write(entryKey, { next: calls[counterKey] ?? 0, length: conversation.length, digest: digestOf(conversation) }); };
       const finished = (reason: 'stop' | 'other'): Ok<StreamPart> => { if (agent) ledger?.write(entryKey, null); return ok<StreamPart>({ kind: 'finish', reason }); };
       stand();
-      let step = scripts[who]?.[(calls[who] ?? 1) - 1] ?? 'answer';
+      let step = scripts[who]?.[(calls[counterKey] ?? 1) - 1] ?? 'answer';
       const wait = /^wait:(\d+)$/.exec(step);
       if (wait) {
         // The wait is a prefix on this call, not a call of its own: the step after it answers in the same call.
         await new Promise<void>((resolve) => { const t = c.timers.after(millis(Number(wait[1])), resolve); req.signal.addEventListener('abort', () => { t.cancel(); resolve(); }, { once: true }); });
         if (req.signal.aborted) { yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } }; return; }
-        scripts[who]?.splice((calls[who] ?? 1) - 1, 1);
-        step = scripts[who]?.[(calls[who] ?? 1) - 1] ?? 'answer';
-        // The wait was a step of the script: the one after it is this call's too.
-        position[counterKey] = (position[counterKey] ?? 0) + 1;
+        // The wait was a step of the script: the one after it is this call's too. Only this agent's counter moves past it.
+        calls[counterKey] = (calls[counterKey] ?? 0) + 1;
+        step = scripts[who]?.[(calls[counterKey] ?? 1) - 1] ?? 'answer';
         stand();
       }
       // The step's ordinal among this agent's steps that answer with a message, left in the message it answers with.
-      const ordinal = ordinalAt(scripts[who] ?? [], (calls[who] ?? 1) - 1);
+      const ordinal = ordinalAt(scripts[who] ?? [], (calls[counterKey] ?? 1) - 1);
       const callId = `call-${call}-s${ordinal}`;
       const marked = (text: string) => `${text} (scripted step ${ordinal})`;
       if (step === 'fail') {

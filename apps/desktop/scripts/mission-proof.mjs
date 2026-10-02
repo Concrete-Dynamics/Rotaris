@@ -139,16 +139,17 @@ const s1 = scenario('painted');
   const rows6 = probesAt(r.log, 6000, '.agent-table__row') ?? [];
   expect(rows6.length === 3, `the table had ${rows6.length} rows at 6 s`);
   const states6 = probesAt(r.log, 6000, '.agent-table__state-text')?.map((p) => p.text) ?? [];
-  // The scripted client's children share one step list, so only the first waits 14 s; the others finish at once (run-host/index.ts).
-  expect(states6.length === 3 && states6.every((t) => ['running', 'waiting', 'queued', 'done'].includes(t)) && states6.includes('running'), `state text at 6 s: ${JSON.stringify(states6)}`);
+  // Each child keeps its own place in the scripted client's step list (run-host/scripted-client.ts), so every child holds
+  // its own 14 s wait and all three are still running at 6 s. A row settled this early means the children took each
+  // other's steps again (docs/defects/fixed/the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md).
+  expect(states6.length === 3 && states6.every((t) => t === 'running'), `state text at 6 s: ${JSON.stringify(states6)}`);
   const tree6 = probesAt(r.log, 6000, '.mission__run-row + .agent-tree .agent-row') ?? [];
   expect(tree6.length === 3, `the tree under the run row had ${tree6.length} rows`);
   const e6 = (probesAt(r.log, 6000, '[data-testid="agent-elapsed"]') ?? []).map((p) => seconds(p.text));
   const e75 = (probesAt(r.log, 7500, '[data-testid="agent-elapsed"]') ?? []).map((p) => seconds(p.text));
-  const liveAt6 = states6.map((t, i) => (t === 'running' ? i : -1)).filter((i) => i >= 0);
-  expect(e6.length === 3 && e75.length === 3 && liveAt6.length > 0 && liveAt6.every((i) => e6[i] !== null && e75[i] !== null && e75[i] > e6[i]), `elapsed did not advance for the live rows: ${JSON.stringify(e6)} → ${JSON.stringify(e75)} at ${JSON.stringify(states6)} (REQ-MONITOR-107)`);
-  const settledAt6 = states6.map((t, i) => (t === 'done' ? i : -1)).filter((i) => i >= 0);
-  expect(settledAt6.every((i) => e6[i] === e75[i]), `a settled row's elapsed changed: ${JSON.stringify(e6)} → ${JSON.stringify(e75)} (REQ-MONITOR-107)`);
+  // Every row is live at 6 s, so every row's elapsed advances. No row settles inside these probes any more; an ended
+  // agent's fixed figure is pinned by packages/ui/src/agent-clock.test.ts.
+  expect(e6.length === 3 && e75.length === 3 && e6.every((v, i) => v !== null && e75[i] !== null && e75[i] > v), `elapsed did not advance for the live rows: ${JSON.stringify(e6)} → ${JSON.stringify(e75)} at ${JSON.stringify(states6)} (REQ-MONITOR-107)`);
   const endRows = endProbe(r.log, '.agent-table__row') ?? [];
   expect(endRows.length === 3 && endRows.every((p) => p.data['data-state'] === 'done'), `after the run the rows read ${JSON.stringify(endRows.map((p) => p.data['data-state']))}`);
   expect(endProbe(r.log, '.app-shell')?.[0]?.data?.['data-view'] === 'mission', 'the capture was not on Mission');
@@ -193,7 +194,7 @@ const s2 = scenario('parity');
 {
   const r = await launch('parity', s2, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'three trees',
-    // Probed once the two quick children have settled and the first is still waiting, so the states are steady across the three views (a state change between probes is not a parity fault).
+    // Probed while all three children are still inside their own 14 s wait, so the states are steady across the three views (a state change between probes is not a parity fault).
     ROTARIS_CAPTURE_VIEWS: '3@7000;;1@8000;;2@9000',
     ROTARIS_CAPTURE_PROBE_AT: '.agent-row@7500;;.app-shell@7500;;.agent-row@8500;;.app-shell@8500;;.agent-row@9500;;.app-shell@9500',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1000',
@@ -271,7 +272,7 @@ const s3 = scenario('pause');
 const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    model: scripted', "    purpose: 'Delegates the work, then waits for it.'", "    system_prompt: 'You are a lead. Delegate the work, then wait for it.'", '    tools: [delegate, read_file, todo]']);
 {
   const r = await launch('cancel', s4, {
-    // The children share one step list: alpha delegates `sub`, and the next two calls — alpha's and sub's, in whichever order — each wait 16 s.
+    // Each child walks this list from its own first step (run-host/scripted-client.ts): alpha delegates `sub`, and its next call waits 16 s; sub's first step names `delegate`, which a coding-agent is not granted, so the client answers instead, and sub's next call waits 16 s — both are live when the cancel lands.
     ROTARIS_SCRIPT: 'delegate:lead:alpha,answer', ROTARIS_CHILD_SCRIPT: 'delegate:coding-agent:sub,wait:16000,answer,wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel a child',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@7000;;[data-testid="mission-cancel"]@7400;;.dialog-actions .btn-danger@8200',

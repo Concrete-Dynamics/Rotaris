@@ -47,6 +47,25 @@ describe('scriptedClient — the step a call takes', () => {
   beforeEach(() => { clock = new FakeClock(); });
   afterEach(() => { vi.unstubAllEnvs(); });
 
+  /*
+   * The repair of fixed/the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md: every child
+   * shares ROTARIS_CHILD_SCRIPT, so a completed wait may not remove anything from it. Three children started together,
+   * each scripted `wait:1000,read,glob`, each read after the wait and then glob — where the shared list's splices handed
+   * the second and third child the steps after the first's, and none of them a glob.
+   */
+  it('a fan-out\'s children each take their own steps after a wait prefix, not each other\'s', async () => {
+    vi.stubEnv('ROTARIS_CHILD_SCRIPT', 'wait:1000,read,glob');
+    const client = scriptedClient(clock, () => {});
+    const roots = ['a', 'b', 'c'].map((name) => [text('system', CHILD_SYSTEM), text('user', `TASK: ${name}\nEXPECTED OUTCOME: done`)]);
+    const first = await Promise.all(roots.map((root) => answered(clock, client, root)));
+    expect(first.map(nameOf)).toEqual(['read_file', 'read_file', 'read_file']);
+    const second = await Promise.all(roots.map((root, i) => answered(clock, client, [...root, first[i]!, result(first[i]!)])));
+    expect(second.map(nameOf)).toEqual(['glob', 'glob', 'glob']);
+    // A child started after the others had waited waits too: the shared list still begins with the wait.
+    const late = [text('system', CHILD_SYSTEM), text('user', 'TASK: d\nEXPECTED OUTCOME: done')];
+    expect(await interrupted(clock, client, late)).toBe('failed:aborted');
+  });
+
   it('PD-ORCH-005: a fresh agent takes its script from the first step, one step per call', async () => {
     vi.stubEnv('ROTARIS_CHILD_SCRIPT', 'glob,write,git');
     const client = scriptedClient(clock, () => {});

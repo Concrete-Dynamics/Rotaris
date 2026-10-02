@@ -96,10 +96,15 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
   };
 }
 
-/** One field of a role row's Scope cell (REQ-CONFIG-341): the origin it draws and whether it offers Unset. */
+/**
+ * One field of a role row's Scope cell (REQ-CONFIG-341): the origin it draws, whether it offers Unset, and that Unset's
+ * accessible name, which identifies the field and the role (`Unset model for tester`) where the visible text, "Unset",
+ * is the same on every row and for both fields.
+ */
 export interface ScopeField {
   readonly origin: ConfigSnapshot['roles'][number]['modelOrigin'];
   readonly offerUnset: boolean;
+  readonly unsetLabel: string;
 }
 
 /**
@@ -115,9 +120,11 @@ export function scopeCellOf(
   scope: 'workspace' | 'global',
 ): { readonly model: ScopeField; readonly reasoning: ScopeField } {
   const edit = pending.roles[row.role];
-  const field = (origin: ScopeField['origin'], unset: boolean | undefined): ScopeField =>
-    unset ? { origin: 'default', offerUnset: false } : { origin, offerUnset: origin === scope };
-  return { model: field(row.modelOrigin, edit?.unsetModel), reasoning: field(row.thinkingOrigin, edit?.unsetThinking) };
+  const field = (name: 'model' | 'reasoning', origin: ScopeField['origin'], unset: boolean | undefined): ScopeField => {
+    const unsetLabel = `Unset ${name} for ${row.role}`;
+    return unset ? { origin: 'default', offerUnset: false, unsetLabel } : { origin, offerUnset: origin === scope, unsetLabel };
+  };
+  return { model: field('model', row.modelOrigin, edit?.unsetModel), reasoning: field('reasoning', row.thinkingOrigin, edit?.unsetThinking) };
 }
 
 function sameValue(a: unknown, b: unknown): boolean {

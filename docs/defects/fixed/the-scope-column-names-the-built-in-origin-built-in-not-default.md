@@ -65,4 +65,4 @@ Noticed while driving it, and recorded rather than repaired: the Scope column's 
 `default` while the unset is pending
 ([`the-scope-columns-unset-leaves-the-field-reading-its-old-origin.md`](the-scope-columns-unset-leaves-the-field-reading-its-old-origin.md), repaired 2026-10-02)
 nor names the field and the role in its accessible name
-([`../the-scope-columns-unset-is-named-unset-and-nothing-else.md`](../the-scope-columns-unset-is-named-unset-and-nothing-else.md)).
+([`the-scope-columns-unset-is-named-unset-and-nothing-else.md`](the-scope-columns-unset-is-named-unset-and-nothing-else.md), repaired 2026-10-02).

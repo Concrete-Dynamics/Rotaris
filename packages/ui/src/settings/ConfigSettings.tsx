@@ -195,8 +195,8 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
                   </DesignSelect>
                 </td>
                 <td className="settings__scope">
-                  <div>model: <span className="text-secondary">{cell.model.origin}</span>{cell.model.offerUnset && <DesignButton type="button" className="btn btn-link btn-compact" title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetModel: true })}>Unset</DesignButton>}</div>
-                  <div>reasoning: <span className="text-secondary">{cell.reasoning.origin}</span>{cell.reasoning.offerUnset && <DesignButton type="button" className="btn btn-link btn-compact" title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetThinking: true })}>Unset</DesignButton>}</div>
+                  <div>model: <span className="text-secondary">{cell.model.origin}</span>{cell.model.offerUnset && <DesignButton type="button" className="btn btn-link btn-compact" aria-label={cell.model.unsetLabel} title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetModel: true })}>Unset</DesignButton>}</div>
+                  <div>reasoning: <span className="text-secondary">{cell.reasoning.origin}</span>{cell.reasoning.offerUnset && <DesignButton type="button" className="btn btn-link btn-compact" aria-label={cell.reasoning.unsetLabel} title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetThinking: true })}>Unset</DesignButton>}</div>
                 </td>
                 <td className="text-secondary settings__tools">{r.tools.join(', ') || '—'}</td>
               </tr>

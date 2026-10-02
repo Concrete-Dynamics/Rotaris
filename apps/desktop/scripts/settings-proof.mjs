@@ -29,6 +29,10 @@
  *                     that the gate is not built; then a prompt is held at the gate, the plan approved, and the approved
  *                     session reopened, where the same hint states that the session is released and names the control
  *                     that re-arms it (`docs/defects/fixed/the-run-start-setting-says-the-plan-gate-is-not-built.md`).
+ *   8. personas-unset — the Personas Scope column (REQ-CONFIG-341), in a workspace of its own whose file sets only
+ *                     `personas.tester.model`: the tester's Unset is found by its accessible name ("Unset model for
+ *                     tester") and clicked; while the unset is pending no row reads its old origin and no Unset is
+ *                     offered; Discard brings `model: workspace` and its named Unset back.
  *
  * The legal links and the licence bundle are exercised through the capture seam's scripted opener
  * (`ROTARIS_CAPTURE_OPEN_EXTERNAL`), which reports success or the platform refusal without launching a browser.
@@ -458,6 +462,62 @@ results.runStartHint = {
   unfollowed: { released: plainHint.data['data-released'], text: plainHint.text },
   session: { held: held.execution_status, released: approvedSession.plan_released },
   released: { released: releasedHint.data['data-released'], text: releasedHint.text },
+};
+
+// ── 8. The Personas Scope column: a pending Unset, and the name it is announced by (REQ-CONFIG-341) ───────────
+// A workspace whose file sets only `personas.tester.model`, so `tester` alone reads `model: workspace` and offers Unset at
+// the Workspace scope. The Unset is found by the accessible name REQ-CONFIG-341 gives it (field and role), clicked, and the
+// cell read while the unset is pending (`default`, no Unset) and after Discard (`workspace` and its Unset again)
+// (docs/defects/fixed/the-scope-columns-unset-leaves-the-field-reading-its-old-origin.md,
+// docs/defects/fixed/the-scope-columns-unset-is-named-unset-and-nothing-else.md).
+const personasRoot = join(output, 'personas');
+const pWorkspace = join(personasRoot, 'workspace');
+const pLocal = join(personasRoot, 'local');
+const pPreferences = join(personasRoot, 'preferences');
+mkdirSync(join(pWorkspace, '.rotaris'), { recursive: true });
+mkdirSync(pLocal, { recursive: true });
+writeFileSync(join(pWorkspace, '.rotaris', 'agents.yaml'), [
+  '# scratch configuration written by the proof script',
+  'models:', '  scripted: { provider: scripted, model_id: scripted }',
+  'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+  'personas:', '  tester:', '    model: large_model', '',
+].join('\n'));
+const UNSET_MODEL = '.settings__scope button[aria-label="Unset model for tester"]';
+const UNSET_ANY = '.settings__scope button';
+const personas = await launch('personas-unset', pWorkspace, pLocal, pPreferences, {
+  ...openCategory('Personas'),
+  ROTARIS_CAPTURE_PROBE_AT: [
+    `.settings__scope@2400`, `${UNSET_MODEL}@2400`, `${UNSET_ANY}@2400`,
+    `.settings__scope@4000`, `${UNSET_ANY}@4000`, `.save-bar__status@4000`,
+  ].join(';;'),
+  ROTARIS_CAPTURE_CLICKS: `${UNSET_MODEL}@3000;;.save-bar .btn-secondary>>Discard@4600`,
+  ROTARIS_CAPTURE_PROBE: [...PROBES, '.settings__scope', UNSET_MODEL, UNSET_ANY].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '6000',
+});
+const probedAt = (ms, selector) => JSON.parse(new RegExp(`probe-at ${ms} ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])`).exec(personas.log)?.[1] ?? 'null');
+const beforeCells = probedAt(2400, '.settings__scope');
+if (!beforeCells) throw new Error('the Personas category drew no Scope column');
+const beforeTester = beforeCells.filter((c) => c.text.startsWith('model: workspace'));
+if (beforeTester.length !== 1 || !beforeTester[0].text.includes('Unset')) throw new Error(`before the click no row read "model: workspace" with Unset: ${JSON.stringify(beforeCells.map((c) => c.text))}`);
+// REQ-CONFIG-341: the Unset's accessible name identifies the field and the role. The one Unset on screen is found by it.
+const named = probedAt(2400, UNSET_MODEL) ?? [];
+const allUnset = probedAt(2400, UNSET_ANY) ?? [];
+if (named.length !== 1 || allUnset.length !== 1) throw new Error(`the tester's model Unset was not named "Unset model for tester": ${named.length} named of ${allUnset.length} Unset`);
+if (!personas.log.includes(`capture: clicked "${UNSET_MODEL}"`)) throw new Error('the Unset named for the tester\'s model was not clicked');
+// REQ-CONFIG-341: the click marks the field's origin as `default`; `default` offers no Unset.
+const pendingCells = probedAt(4000, '.settings__scope') ?? [];
+if (pendingCells.some((c) => c.text.startsWith('model: workspace'))) throw new Error(`with the unset pending a row still read its old origin: ${JSON.stringify(pendingCells.map((c) => c.text))}`);
+if ((probedAt(4000, UNSET_ANY) ?? []).length !== 0) throw new Error('with the unset pending the Scope column still offered Unset');
+if (!(probedAt(4000, '.save-bar__status') ?? []).some((c) => c.text === 'Unsaved changes')) throw new Error('the pending unset did not dirty the form');
+// REQ-CONFIG-341: Discard restores the previous values, and with them the origin and its Unset.
+const discarded = rows(personas.probes, '.settings__scope').filter((c) => c.text.startsWith('model: workspace'));
+if (discarded.length !== 1 || !discarded[0].text.includes('Unset')) throw new Error(`after Discard the tester's model did not read "workspace" with Unset: ${JSON.stringify(rows(personas.probes, '.settings__scope').map((c) => c.text))}`);
+if (rows(personas.probes, UNSET_MODEL).length !== 1) throw new Error('after Discard the Unset was not named for the tester\'s model');
+if ((text(personas.probes, '.save-bar__status')[0] ?? '') !== 'All changes saved') throw new Error('Discard did not leave the form clean');
+results.personasUnset = {
+  before: { cell: beforeTester[0].text, unsetName: 'Unset model for tester' },
+  pending: { testerReadsOldOrigin: false, unsetOffered: 0, status: 'Unsaved changes' },
+  discarded: { cell: discarded[0].text, unsetName: 'Unset model for tester', status: 'All changes saved' },
 };
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

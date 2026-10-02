@@ -168,3 +168,15 @@ describe('REQ-CONFIG-341 — the Scope column reads the pending unset', () => {
     expect(scopeCellOf(tester, pending, 'workspace').model).toMatchObject({ origin: 'workspace', offerUnset: true });
   });
 });
+
+describe('REQ-CONFIG-341 — the Scope column\'s Unset is named by its field and its role', () => {
+  it('names the model\'s and the reasoning\'s Unset apart, and each role apart', async () => {
+    const { pendingFrom, scopeCellOf } = await import('./config-state.js');
+    const saved = pendingFrom(snapshot);
+    const tester = { ...snapshot.roles[0]!, rawModel: 'large_model', modelOrigin: 'workspace' as const, rawThinking: 'high', thinkingOrigin: 'workspace' as const };
+    const cell = scopeCellOf(tester, saved, 'workspace');
+    expect(cell.model).toMatchObject({ offerUnset: true, unsetLabel: 'Unset model for tester' });
+    expect(cell.reasoning).toMatchObject({ offerUnset: true, unsetLabel: 'Unset reasoning for tester' });
+    expect(scopeCellOf({ ...tester, role: 'planner' }, saved, 'workspace').model.unsetLabel).toBe('Unset model for planner');
+  });
+});

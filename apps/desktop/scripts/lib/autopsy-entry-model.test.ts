@@ -34,6 +34,15 @@ const CASES: readonly [string, string | undefined, readonly Entry[], readonly st
   ['an override of a child\'s different pair leaves the root on its own key', audit('root-model', paired), [override('openai', 'c', 'spare-model', 'anthropic', 's')], ['root-model']],
   ['a later switch onto an overridden pair runs on the override', audit('root-model', paired), [override('openai', 'c', 'spare-model', 'anthropic', 's'), entry('entry_model_switched', { model: 'child-model' })], ['root-model', 'spare-model']],
   ['an override chain is followed', audit('root-model', paired), [override('katalyst', 'r', 'child-model', 'openai', 'c'), override('openai', 'c', 'spare-model', 'anthropic', 's')], ['root-model', 'child-model', 'spare-model']],
+  // REQ-NOTIFY-070/078: a `cleared: true` entry takes the pin back (until 2026-10-02 the script's copy skipped it:
+  // the-scripts-autopsy-reader-ignores-a-taken-back-pin).
+  ['a pin taken back returns the root to its own key', audit('root-model', paired), [override('katalyst', 'r', 'spare-model', 'anthropic', 's'), entry('model_override', { provider: 'katalyst', model: 'r', cleared: true, cause: 'authentication' })], ['root-model', 'spare-model', 'root-model']],
+  // REQ-ORCH-091 (d): a wait choice back onto a pair an earlier choice replaced takes that override back first (run.ts
+  // `overrideFor`), so the root, on the pair the newest choice replaces, follows it onto the chosen one.
+  ['a wait choice back onto the pair an earlier one replaced: the superseded override is taken back and the root returns', audit('root-model', paired), [override('katalyst', 'r', 'child-model', 'openai', 'c'), entry('model_override', { provider: 'katalyst', model: 'r', cleared: true, cause: 'superseded' }), override('openai', 'c', 'root-model', 'katalyst', 'r')], ['root-model', 'child-model', 'root-model']],
+  // A cycle a store from before that holds (r → c, then c → r): the newest override's target, as the run's memory reads
+  // it. Until 2026-10-02 an eight-hop walk from c ended on c by parity and printed the replaced key.
+  ['a cycle of overrides ends on the newest override\'s target', audit('child-model', paired), [override('katalyst', 'r', 'child-model', 'openai', 'c'), override('openai', 'c', 'root-model', 'katalyst', 'r')], ['child-model', 'root-model']],
   ['an override the snapshot cannot place against the root makes the key undetermined', audit('root-model'), [override('openai', 'c', 'spare-model', 'anthropic', 's')], ['root-model', ENTRY_KEY_UNDETERMINED]],
   ['an override with no pair recorded is skipped', audit('root-model', paired), [entry('model_override', { model_key: 'other' })], ['root-model']],
   ['a role\'s reasoning copy reads as its one original', audit('__persona__:orchestrator', { 'root-model': base, '__persona__:orchestrator': { ...base, thinking: 'high' } }), [], ['root-model']],

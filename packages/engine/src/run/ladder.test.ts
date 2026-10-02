@@ -649,6 +649,60 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   });
 
   /*
+   * Two wait choices that go back: a1 runs out of quota and the user chooses c1 (a1 → c1); later c1 runs out of quota and
+   * the user chooses a1 (c1 → a1, which clears a1's exclusion, REQ-MONITOR-194). The newest choice supersedes the older
+   * override that would lead back to the pair it replaces: a1 → c1 is taken back (a `model_override` entry carrying
+   * `cleared: true`), so no agent on c1 — the root, which ran on it since the first choice — "follows" the cycle back onto
+   * c1. Until this repair the memory held a1 → c1 → a1 and the bounded walk ended on c1 for the root: child a1, child a1,
+   * summariser a1, root c1.
+   */
+  it('REQ-ORCH-091 (a)/(d) with REQ-MONITOR-194: a wait choice back onto a pair an earlier choice replaced takes that override back, so no agent returns to the pair just replaced', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const who = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => (/^You are the orchestrator/.test(systemOf(r)) ? 'root' : /summarise/i.test(systemOf(r)) ? 'summariser' : 'child');
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      if (persona === 'orchestrator') return turn === 1 ? failing(quota()) : turn === 2 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]) : answer(`root ${turn}`);
+      return turn === 1 ? failing(quota()) : answer('I did it.');
+    };
+    const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true, agent: 'orchestrator' });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    for (let i = 0; i < 40 && lastWait(pub)?.model !== 'c1'; i++) await tick();
+    // The root delegated on c1; the child, built on c1 through the override, met insufficient quota there: it waits on c/c1.
+    expect(lastWait(pub)).toMatchObject({ provider: 'c', model: 'c1', exhausted: true });
+    expect(lastWait(pub)!.agent).not.toBe('orchestrator');
+    // Since the first choice the root runs on c1 (its turn goes on beside the waiting child): nothing has called a1 again.
+    expect(client.requests.slice(0, 2).map((r) => `${who(r)} ${r.model.modelId}`)).toEqual(['root a1', 'root c1']);
+    expect(client.requests.slice(2).map((r) => `${who(r)} ${r.model.modelId}`)).toContain('child c1');
+    expect(client.requests.slice(2).every((r) => r.model.modelId === 'c1')).toBe(true);
+    const before = client.requests.length;
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const after = client.requests.slice(before);
+    // Every call after the second choice goes to a1, the root's included; none returns to c1.
+    expect(after.map((r) => `${who(r)} ${r.model.modelId}`)).toEqual(after.map((r) => `${who(r)} a1`));
+    expect(new Set(after.map(who))).toEqual(new Set(['child', 'summariser', 'root']));
+    const overrides = dal.timelineOf(sid).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+    expect(overrides).toEqual([
+      expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1' }),
+      expect.objectContaining({ provider: 'a', model: 'a1', cleared: true }),
+      expect.objectContaining({ provider: 'c', model: 'c1', model_key: 'a1' }),
+    ]);
+    // REQ-MONITOR-194: a1, excluded and not the waiting pair, was chosen in c1's wait, which cleared its exclusion; c1 stays excluded.
+    const exhausted = dal.timelineOf(sid).filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+    expect(exhausted.map((m) => `${m['provider']}/${m['model']}${m['cleared'] === true ? ' cleared' : ''}`)).toEqual(['a/a1', 'c/c1', 'a/a1 cleared']);
+    // A reload holds the same memory: c1 → a1 alone, a1 eligible, c1 excluded.
+    const resolve = (key: string) => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: e.thinking } : null; };
+    const memory = ResilienceMemory.rehydrate(dal.timelineOf(sid), resolve);
+    expect(memory.overrideFor('a', 'a1')).toBeUndefined();
+    expect(memory.overrideFor('c', 'c1')?.key).toBe('a1');
+    expect([memory.isExhausted('a', 'a1'), memory.isExhausted('c', 'c1')]).toEqual([false, true]);
+  });
+
+  /*
    * The repair of the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it: a
    * child's wait choice records whether an entry switch is pending at it (`switch_pending`), as a ladder move of the root
    * does, because the root follows the override from its next call on the cell from before that switch. Here the root's

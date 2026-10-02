@@ -11,8 +11,18 @@ the engine's reader and the run put it back on the primary. Probed 2026-10-02 (f
 `katalyst/r` to `spare-model` followed by its `cleared: true` entry: the script printed `root-model → spare-model`, the
 engine's copy `root-model → spare-model → root-model`. No row of the moves table holds a `cleared: true` entry, so the
 parity test did not catch it. Noticed while editing both copies for
-[the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md](fixed/the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md);
+[the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md](the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md);
 not repaired there, being outside that task.
+
+**Outcome, 2026-10-02 (fin8, repaired with the second round of
+[a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md](a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md)).**
+That round has the run take back an override a later wait choice supersedes, as a `model_override` entry carrying
+`cleared: true` (`cause: 'superseded'`), so the two copies could no longer disagree on it quietly. The script's
+`model_override` branch now reads `cleared: true` as the engine's does (the pin on the pair deleted, the key printed
+again), and both copies keep their overrides in the order last set and end a cycle on the newest override's target.
+Pinned in `apps/desktop/scripts/lib/autopsy-entry-model.test.ts`'s parity table: "a pin taken back returns the root to its
+own key" (the probe above; red in the script's copy before, `root-model → spare-model`) and "a cycle of overrides ends on
+the newest override's target" (red in both before).
 
 ## Specs
 

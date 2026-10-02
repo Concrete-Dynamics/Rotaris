@@ -52,6 +52,30 @@ root and the summariser off the replaced pair from their next call"): red before
 without `followOverride`, the summariser on `a1` without `resolve`). Recorded in
 [ADR-0027](../../architecture/adr/0027-the-model-client-implementation.md), "Seventh execution".
 
+**Second round, 2026-10-02 (the verifier's finding).** Following the overrides from every call exposed a shape the first
+round left: two wait choices that go back. a1 runs out of quota and the user chooses c1 (`a1 → c1`); later c1 runs out
+and the user chooses a1 (`c1 → a1`, which since the repair of
+[an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md](an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md)
+also clears a1's exclusion). The memory then held the cycle `a1 → c1 → a1`, and `ResilienceMemory.follow`, bounded at
+eight hops with no cycle detection, ended on c1 for an agent on c1: after the second choice the requests were child `a1`,
+child `a1`, summariser `a1`, **root `c1`** — the pair just recorded out of quota and replaced. Repaired at the memory:
+
+- `ResilienceMemory.supersededBy` names the override a choice supersedes — the chosen pair's own, when its chain leads back
+  to the pair the choice replaces — and `Run.overrideFor` (both wait branches of `setEntryModel`) takes it back before
+  setting the new one, in the memory and as a `model_override` entry carrying `cleared: true` and `cause: 'superseded'`
+  (fin6's shape for a taken-back pin; for a child's choice it carries the choice's `switch_pending`, so the autopsy reader
+  orders the two alike). `rehydrate` replays it, so a reload holds `c1 → a1` alone.
+- `follow` is cycle-safe for a store that already holds a cycle (written before this round): it ends on the target of the
+  newest override in the cycle (the memory keeps its overrides in the order last set). Both autopsy readers follow the
+  same rule, and the script's copy now reads a `cleared: true` entry as the engine's does (the repair of
+  [the-scripts-autopsy-reader-ignores-a-taken-back-pin.md](the-scripts-autopsy-reader-ignores-a-taken-back-pin.md), which
+  this round needed for the two copies to agree).
+
+Pinned in `packages/engine/src/run/ladder.test.ts` ("a wait choice back onto a pair an earlier choice replaced takes that
+override back, so no agent returns to the pair just replaced"): red before with exactly `child a1, child a1, summariser a1,
+root c1`; in `resilience.test.ts` (`supersededBy`, and a cycle ending on the newest target, red before for an agent on y);
+and in the readers' parity table (a pin taken back; a superseded override; a cycle), two rows red in the script's copy before.
+
 ## Specs
 
 - REQ-ORCH-091 (a) and (d): exhausted models are "remembered session-wide and excluded from candidates", and a manual

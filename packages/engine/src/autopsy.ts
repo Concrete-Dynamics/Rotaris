@@ -311,9 +311,18 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
     if (s.base.pair === null) return s.overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : s.base.label;
     let label = s.base.label;
     let pair: string = s.base.pair;
-    for (let hops = 0; hops < 8; hops++) {
+    const path: string[] = [];
+    for (;;) {
+      if (path.includes(pair)) {
+        // A cycle — a store written before the run took a superseded override back (`ResilienceMemory.supersededBy`): it
+        // ends on the newest override's target, as the run's memory does (`overrides` is kept in the order last set).
+        const order = [...s.overrides.keys()];
+        const newest = path.slice(path.indexOf(pair)).reduce((a, b) => (order.indexOf(b) > order.indexOf(a) ? b : a));
+        return s.overrides.get(newest)!.key;
+      }
       const o = s.overrides.get(pair);
       if (!o || o.to === pair) break;
+      path.push(pair);
       label = o.key;
       if (o.to === null) return s.overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label;
       pair = o.to;
@@ -387,6 +396,7 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
       const toProvider = meta?.['to_provider'];
       const toModel = meta?.['to_model'];
       const to = typeof toProvider === 'string' && typeof toModel === 'string' ? `${toProvider}|${toModel}` : modelPair(s.models, key);
+      s.overrides.delete(`${provider}|${model}`);
       s.overrides.set(`${provider}|${model}`, { key, to });
       add(s, effective(s));
     } else {

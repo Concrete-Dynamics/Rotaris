@@ -116,9 +116,17 @@ export function entryModelKeys(launchAuditPayload, timeline, children) {
     if (s.base.pair === null) return s.overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : s.base.label;
     let label = s.base.label;
     let pair = s.base.pair;
-    for (let hops = 0; hops < 8; hops++) {
+    const path = [];
+    for (;;) {
+      if (path.includes(pair)) {
+        // A cycle (a store from before the run took a superseded override back): the newest override's target, as the engine's copy.
+        const order = [...s.overrides.keys()];
+        const newest = path.slice(path.indexOf(pair)).reduce((a, b) => (order.indexOf(b) > order.indexOf(a) ? b : a));
+        return s.overrides.get(newest).key;
+      }
       const o = s.overrides.get(pair);
       if (!o || o.to === pair) break;
+      path.push(pair);
       label = o.key;
       if (o.to === null) return s.overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label;
       pair = o.to;
@@ -169,9 +177,18 @@ export function entryModelKeys(launchAuditPayload, timeline, children) {
       add(s, effective(s));
     } else if (t.name === 'model_override') {
       const meta = parseJson(t.metadata);
+      // An entry carrying `cleared: true` takes the pin on its pair back (REQ-NOTIFY-070/078), or an override a later wait
+      // choice superseded (REQ-ORCH-091 d), as the engine's copy reads it (until 2026-10-02 skipped here:
+      // the-scripts-autopsy-reader-ignores-a-taken-back-pin).
+      if (typeof meta?.provider === 'string' && typeof meta?.model === 'string' && meta?.cleared === true) {
+        s.overrides.delete(`${meta.provider}|${meta.model}`);
+        add(s, effective(s));
+        return;
+      }
       const key = str(meta?.model_key);
       if (typeof meta?.provider !== 'string' || typeof meta?.model !== 'string' || key === '') return;
       const to = typeof meta.to_provider === 'string' && typeof meta.to_model === 'string' ? `${meta.to_provider}|${meta.to_model}` : modelPair(s.models, key);
+      s.overrides.delete(`${meta.provider}|${meta.model}`);
       s.overrides.set(`${meta.provider}|${meta.model}`, { key, to });
       add(s, effective(s));
     } else {

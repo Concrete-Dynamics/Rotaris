@@ -2000,20 +2000,20 @@ export class Run {
         // and the wait resolves as a retry on it. No override: the pair replaces nothing. Another agent waiting on another
         // pair moves to it, as a change-model choice moves every parked agent.
         this.clearChosenExclusion(key, provider, resolved.choice.model.modelId);
-        for (const w of this.waits.all()) if (pairKey(w.provider, w.model) !== chosen) this.memory.setOverride(w.provider, w.model, { key, choice });
+        for (const w of this.waits.all()) if (pairKey(w.provider, w.model) !== chosen) this.overrideFor(w, key, choice, {});
         writer.appendRow('system', `${key} chosen during the wait on ${waiting.provider}/${waiting.model}: it is no longer treated as out of quota, and the call is retried on it now.`, true);
         this.waits.resolveWithModel(key, choice);
         return true;
       }
       this.clearChosenExclusion(key, provider, resolved.choice.model.modelId);
-      for (const w of this.waits.all()) this.memory.setOverride(w.provider, w.model, { key, choice });
+      const root = waiting.agent === this.rootName;
+      for (const w of this.waits.all()) this.overrideFor(w, key, choice, root ? {} : { switch_pending: this.entrySwitchPending });
       // `supersedes`: the root's own wait choice replaces a switch recorded since its cell was last settled, which then
       // never applies (`entrySwitchPending`); a child's wait leaves the root's switch as it stands. A child's choice records
       // instead whether such a switch is pending at it (`switch_pending`), as a ladder move of the root does: the root
       // follows the override from its next call (`followOverride`), on the cell from before the switch, and the switch's
       // rebuild then resolves through it, so the autopsy reader reads the choice before the switch
       // (the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it).
-      const root = waiting.agent === this.rootName;
       writer.appendTimeline('model_override', 'user', `The user chose ${key} (${provider}/${choice.model.modelId}) during the wait on ${waiting.provider}/${waiting.model}; it stands for the rest of the session.`, { provider: waiting.provider, model: waiting.model, model_key: key, to_provider: provider, to_model: choice.model.modelId, supersedes: root && this.entrySwitchPending, ...(root ? {} : { switch_pending: this.entrySwitchPending }) });
       writer.appendRow('system', `Model changed to ${key} during the wait; the run resumes on it now and keeps it for the rest of the session.`, true);
       if (root) { this.entryOverride = { ...this.entryOverride, model: choice.model }; this.entrySwitchPending = false; }
@@ -2050,6 +2050,21 @@ export class Run {
   private clearChosenExclusion(key: string, provider: string, modelId: string): void {
     if (!this.memory.clearExhausted(provider, modelId)) return;
     this.deps.writer.appendTimeline('model_exhausted', 'user', `The user chose ${key} (${provider}/${modelId}) explicitly; the pair is no longer excluded as out of quota and is eligible again until a further insufficient-quota response.`, { provider, model: modelId, model_key: key, cleared: true });
+  }
+  /**
+   * A wait choice's override of the pair `w` waits on (REQ-ORCH-091 d). The newest choice supersedes an older override that
+   * would lead the chosen pair's chain back to `w` (`ResilienceMemory.supersededBy`): it is taken back first, in the memory
+   * and as a `model_override` entry carrying `cleared: true` (fin6's shape for a taken-back pin), which `rehydrate` and both
+   * autopsy readers replay — so a1 → c1 followed by a choice of a1 in c1's wait leaves c1 → a1 alone, and no agent on c1
+   * follows a cycle back onto it. `placed` is the choice's own placement against a pending entry switch (`switch_pending`
+   * for a child's), so the reader orders the two entries alike.
+   */
+  private overrideFor(w: WaitState, key: string, choice: ModelChoice, placed: Readonly<Record<string, unknown>>): void {
+    const back = this.memory.supersededBy(w.provider, w.model, choice, this.catalogue);
+    if (back !== null && this.memory.clearOverride(back.provider, back.modelId)) {
+      this.deps.writer.appendTimeline('model_override', 'user', `${key} (${back.provider}/${back.modelId}) was chosen during the wait on ${w.provider}/${w.model}; the earlier override that replaced it, which led back to ${w.provider}/${w.model}, is taken back.`, { provider: back.provider, model: back.modelId, cleared: true, cause: 'superseded', ...placed });
+    }
+    this.memory.setOverride(w.provider, w.model, { key, choice });
   }
   private rejectOverride(waiting: WaitState, key: string, reason: string): void {
     const message = `The model was not changed: ${key} could not be applied (${reason}). The wait on ${waiting.provider}/${waiting.model} is still outstanding; choose again or cancel the run.`;

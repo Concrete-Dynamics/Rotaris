@@ -224,8 +224,35 @@ export class ResilienceMemory {
   clearExhausted(provider: string, modelId: string): boolean {
     return this.exhausted.delete(pairKey(provider, modelId));
   }
+  /** The map's order is the order the overrides were last set in (`follow` reads the newest of a cycle by it). */
   setOverride(fromProvider: string, fromModelId: string, override: Override): void {
-    this.overrides.set(pairKey(fromProvider, fromModelId), override);
+    const key = pairKey(fromProvider, fromModelId);
+    this.overrides.delete(key);
+    this.overrides.set(key, override);
+  }
+  /**
+   * REQ-ORCH-091 (d) with REQ-MONITOR-194: the pair whose override a choice made in place of `from` supersedes — the chosen
+   * pair itself, when the chain of overrides from it leads back to `from` — or null. A wait choice back onto a pair an
+   * earlier choice replaced (a1 → c1, then c1 runs out and a1 is chosen) would otherwise leave a1 → c1 → a1 in the memory,
+   * and an agent on the cycle could "follow" it back onto the pair the newest choice replaced; the caller takes that
+   * override back (`clearOverride`, persisted as `cleared: true`) before setting its own
+   * (a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced, its second round).
+   */
+  supersededBy(fromProvider: string, fromModelId: string, choice: ModelChoice, catalogue: readonly CatalogueEntry[]): { readonly provider: string; readonly modelId: string } | null {
+    const from = pairKey(fromProvider, fromModelId);
+    const chosen = { provider: providerIdentity(catalogue, choice.model), modelId: choice.model.modelId };
+    if (pairKey(chosen.provider, chosen.modelId) === from || !this.overrides.has(pairKey(chosen.provider, chosen.modelId))) return null;
+    const seen = new Set<string>();
+    let current = choice;
+    for (;;) {
+      const key = pairKey(providerIdentity(catalogue, current.model), current.model.modelId);
+      if (key === from) return chosen;
+      if (seen.has(key)) return null;
+      seen.add(key);
+      const o = this.overrides.get(key);
+      if (!o || sameRef(o.choice.model, current.model)) return null;
+      current = o.choice;
+    }
   }
   /**
    * REQ-NOTIFY-070 / REQ-NOTIFY-074 / REQ-NOTIFY-076 / REQ-NOTIFY-078: the pin on a pair taken back — an authentication
@@ -256,12 +283,28 @@ export class ResilienceMemory {
     return this.follow(choice, catalogue).last;
   }
 
+  /**
+   * The chain followed to its end. A chain that comes back to a pair it passed is a cycle — which no choice this run makes
+   * leaves (`supersededBy`), but a store written before 2026-10-02 can replay one — and it ends on the target of the newest
+   * override in it, the choice that superseded the others. Until then the walk was bounded at eight hops and ended wherever
+   * the parity of the cycle left it, on the pair just replaced as often as not.
+   */
   private follow(choice: ModelChoice, catalogue: readonly CatalogueEntry[]): { readonly choice: ModelChoice; readonly last: Override | null } {
     let current = choice;
     let last: Override | null = null;
-    for (let hops = 0; hops < 8; hops++) {
-      const o = this.overrides.get(pairKey(providerIdentity(catalogue, current.model), current.model.modelId));
+    const path: string[] = [];
+    for (;;) {
+      const key = pairKey(providerIdentity(catalogue, current.model), current.model.modelId);
+      const at = path.indexOf(key);
+      if (at >= 0) {
+        const order = [...this.overrides.keys()];
+        const newest = path.slice(at).reduce((a, b) => (order.indexOf(b) > order.indexOf(a) ? b : a));
+        const o = this.overrides.get(newest)!;
+        return { choice: o.choice, last: o };
+      }
+      const o = this.overrides.get(key);
       if (!o || sameRef(o.choice.model, current.model)) break;
+      path.push(key);
       current = o.choice;
       last = o;
     }

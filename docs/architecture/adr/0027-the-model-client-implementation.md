@@ -379,6 +379,15 @@ rules out that call. A switch of the entry model (REQ-MONITOR-142) is not an ove
 iteration, as OQ-177's reading says. Measured in `packages/engine/src/run/ladder.test.ts` with the note's probe: before,
 the requests after the choice were child `c1`, child `c1`, summariser `a1`, root `a1`; after, all four on `c1`.
 
+*Second round, the same day (the verifier's finding).* "Follows the overrides" assumed the memory's chain ends. A wait
+choice back onto a pair an earlier choice replaced (a1 → c1, then a1 chosen in c1's wait) made it a cycle, and the walk —
+eight hops, no cycle detection — ended by parity, on c1 for the root: child `a1`, child `a1`, summariser `a1`, root `c1`
+after the second choice. That reason is kept beside its replacement: the newest choice now supersedes an older override
+that would lead the chosen pair back to the pair it replaces (`ResilienceMemory.supersededBy`; `Run.overrideFor` takes it
+back as a `model_override` entry carrying `cleared: true`, `cause: 'superseded'`), and `follow` ends a cycle a store already
+holds on the newest override's target, as both autopsy readers now do. Measured in `ladder.test.ts` (red before with the
+sequence above; after, all four on `a1`) and `resilience.test.ts`.
+
 ## Eighth execution — 2026-10-02, an explicit choice clears an exclusion (REQ-MONITOR-194)
 
 *The repair of [`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md`](../../defects/fixed/an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md).

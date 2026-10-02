@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { modelError, type ModelError } from '@rotaris/model';
-import { classifyFailure, describeCondition, localBackoffMs, pairKey, ResilienceMemory, retryAfterMs, sameTierCandidates, type CatalogueEntry } from './resilience.js';
+import { classifyFailure, describeCondition, localBackoffMs, pairKey, ResilienceMemory, retryAfterMs, sameTierCandidates, type CatalogueEntry, type ModelChoice } from './resilience.js';
 
 const http = (status: number, providerMessage = '', headline = `HTTP ${status}`): ModelError => modelError({ code: 'http', status, headline, providerMessage });
 
@@ -151,6 +151,39 @@ describe('engine/run/resilience — the session-wide memory (REQ-ORCH-091 a/d, R
     expect(r.overrideFor('a', 'x')?.key).toBe('y');
     expect(r.overrideFor('q', 'r')).toBeUndefined();
     expect(warnings).toHaveLength(1);
+  });
+
+  // REQ-ORCH-091 (d) with REQ-MONITOR-194 (a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced, its second
+  // round): a choice back onto a pair an earlier choice replaced supersedes that override, and a cycle a store already holds
+  // ends on the newest override's target. Before: an eight-hop walk ending on x or y by the cycle's parity.
+  it('REQ-ORCH-091 (d): a choice whose pair leads back to the pair it replaces names the override it supersedes, and a cycle ends on the newest override\'s target', () => {
+    const catalogue = [entry('x', 'a', ['small_model']), entry('y', 'b', ['small_model']), entry('z', 'c', ['small_model'])];
+    const [x, y, z] = catalogue.map((e) => ({ model: e.model, thinking: 'unset' as const })) as [ModelChoice, ModelChoice, ModelChoice];
+    const m = new ResilienceMemory();
+    m.setOverride('a', 'x', { key: 'y', choice: y });
+    // y replaces nothing yet: no override is superseded by choosing it for z, nor by choosing x for y (x → y leads to y).
+    expect(m.supersededBy('c', 'z', y, catalogue)).toBeNull();
+    expect(m.supersededBy('b', 'y', x, catalogue)).toEqual({ provider: 'a', modelId: 'x' });
+    expect(m.supersededBy('b', 'y', z, catalogue)).toBeNull();
+    // A longer chain: x → y → z, then z's wait chooses x — x's override leads back to z.
+    m.setOverride('b', 'y', { key: 'z', choice: z });
+    expect(m.supersededBy('c', 'z', x, catalogue)).toEqual({ provider: 'a', modelId: 'x' });
+    // A cycle written without the superseding (a store from before it): x → y (older), y → x (newer). Every agent on it ends
+    // on x, the newest override's target, whatever pair it starts from and however long the walk.
+    const cycle = new ResilienceMemory();
+    cycle.setOverride('a', 'x', { key: 'y', choice: y });
+    cycle.setOverride('b', 'y', { key: 'x', choice: x });
+    expect(cycle.effective(x, catalogue).model.modelId).toBe('x');
+    expect(cycle.effective(y, catalogue).model.modelId).toBe('x');
+    // Setting an override again makes it the newest: x → y set anew turns the cycle the other way.
+    cycle.setOverride('a', 'x', { key: 'y', choice: y });
+    expect(cycle.effective(x, catalogue).model.modelId).toBe('y');
+    expect(cycle.effective(y, catalogue).model.modelId).toBe('y');
+    // Rehydrated in timeline order, the same.
+    const resolve = (key: string) => (key === 'x' ? x : key === 'y' ? y : null);
+    const rows = [{ name: 'model_override', metadata: JSON.stringify({ provider: 'a', model: 'x', model_key: 'y' }) }, { name: 'model_override', metadata: JSON.stringify({ provider: 'b', model: 'y', model_key: 'x' }) }];
+    expect(ResilienceMemory.rehydrate(rows, resolve).effective(y, catalogue).model.modelId).toBe('x');
+    expect(ResilienceMemory.rehydrate(rows, resolve).overrideReaching(y, catalogue)?.key).toBe('x');
   });
 
   it('REQ-NOTIFY-074/076: a `cleared` entry takes the pin on its pair back, in order, and a later pin stands again', () => {

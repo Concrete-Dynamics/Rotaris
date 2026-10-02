@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A run that ends while its session is not on screen names it (REQ-NOTIFY-031, REQ-MONITOR-202; fin8).** Main's run-result
+handler routes a non-failure ending through `RunFailurePublisher.endedOtherwise`, the focus test REQ-NOTIFY-032's gate
+already used: a session no main window follows raises `unfocusedEndingNotice` (persistent, `success` or `info`, naming the
+session and its normalised state, focusing it) in place of its summary. A new renderer command, `session.release`, tells
+main a window no longer follows the session "New session" released; the **process view**'s Part R paragraph says so. No
+package, edge, process, channel or store column changed; one command was added.
+
 **The quota-wait chooser annotates the pairs held out of quota (REQ-MONITOR-194, REQ-MONITOR-303; fin8, OQ-185).** The
 record's `wait` gains `excluded`, the configured keys whose pair the run's `ResilienceMemory` holds out of quota
 (`excludedModelKeys`, read by `Run.currentWait` at every snapshot); the wait header's change-model chooser lists each with

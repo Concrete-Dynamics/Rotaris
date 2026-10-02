@@ -1,9 +1,10 @@
+import { presentationStatus } from '@rotaris/contracts';
 import type { ReportInput } from './notices.js';
 import type { FallbackOutcome } from './auth-fallback.js';
 import { classifyRunFailure, isQuotaFailure, type RunFailureClass } from './failure-class.js';
 
 /**
- * REQ-NOTIFY-060/063/064/065, REQ-NOTIFY-030/032 — what main publishes when a run ends, decided here and nowhere else.
+ * REQ-NOTIFY-060/063/064/065, REQ-NOTIFY-030/031/032 — what main publishes when a run ends, decided here and nowhere else.
  * Pure: the run's result in, the notice (or the class to recover) out, so a test pins every word and action without an
  * Electron process. Main's run-result handler (`index.ts`) is the only caller; the focus gate is `RunFailurePublisher`.
  */
@@ -56,6 +57,22 @@ export function unfocusedFailureNotice(sessionId: string, failure: string): Repo
     severity: 'warning', title: `Session ${sessionId} failed`,
     message: 'The session on screen is unaffected. Open the failed session to see its recovery.',
     detail: failure, persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId } }, sessionId,
+  };
+}
+
+/**
+ * REQ-NOTIFY-031 (with REQ-MONITOR-202): a run other than the focused one reached a state that is not a failure. Persistent,
+ * naming the session and the state it reached — in the normalised vocabulary (REQ-NOTIFY-048/049), never a raw status —
+ * at `success` where that state is `completed` and `info` for every other, stating that the session on screen is
+ * unaffected and that the finished one can be opened for review, and focusing it. Scoped to the session, so it survives
+ * an unrelated run's start (REQ-NOTIFY-029) and reads as unread (REQ-NOTIFY-028).
+ */
+export function unfocusedEndingNotice(sessionId: string, executionStatus: string): ReportInput {
+  const state = presentationStatus(executionStatus);
+  return {
+    severity: state === 'completed' ? 'success' : 'info', title: `Session ${sessionId} ${state}`,
+    message: 'The session on screen is unaffected. Open the finished session to review it.',
+    persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId } }, sessionId,
   };
 }
 
@@ -165,6 +182,17 @@ export class RunFailurePublisher {
     this.held.delete(sessionId);
     this.deps.log(`run failure: session ${sessionId} is focused; its ${held.failureClass} recovery is published`);
     await this.publish(sessionId, held.failureClass, held.failure);
+  }
+
+  /**
+   * REQ-NOTIFY-031: a run of `sessionId` ended otherwise than failed, `notice` the one `runEndingPublication` decided. A
+   * session on screen raises it; a session not on screen raises REQ-NOTIFY-031's notice naming it in its place, and nothing
+   * changes the focus.
+   */
+  endedOtherwise(sessionId: string, notice: ReportInput, executionStatus: string): void {
+    if (this.deps.isFocused(sessionId)) { this.deps.report(notice); return; }
+    this.deps.log(`run ending: session ${sessionId} is not focused; REQ-NOTIFY-031's notice is raised in place of its own`);
+    this.deps.report(unfocusedEndingNotice(sessionId, executionStatus));
   }
 
   /** Whether a class publication is held for the session (verification and logs). */

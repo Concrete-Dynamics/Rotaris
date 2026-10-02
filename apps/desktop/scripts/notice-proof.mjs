@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-marker.mjs';
+import { startApp, stopApp, until } from './lib/driver.mjs';
 
 /**
  * ADR-0049's first execution in full (Part V), in the built application.
@@ -29,6 +30,10 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  *     And it resubmits the prompt the session sent, wherever its row is (REQ-SESSION-192) and with the image it carried
  *     (REQ-CHAT-173): a failed session whose prompt — one PNG attached — has been released from the resident window is
  *     reopened, and the retry sends the same text and the same image, digest for digest, to the model.
+ *  8. A run that ends while its session is not on screen (REQ-NOTIFY-031, REQ-MONITOR-202): DRIVEN — a run is started,
+ *     "New session" is accepted while it runs (the window then shows no session, REQ-MONITOR-249/252), and its completion
+ *     raises the persistent `success` notice naming the session and the state, saying the session on screen is
+ *     unaffected, without moving the window; its "Open the session" action then focuses the finished session.
  *
  * Every assertion reads the application's own log, its store, or the rendered DOM.
  */
@@ -51,7 +56,7 @@ if (!process.argv.includes('--skip-build')) {
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
-function scenario(name, { globalHooks = null, workspaceHook = false, images = false } = {}) {
+function scenario(name, { globalHooks = null, workspaceHook = false, images = false, runtime = [] } = {}) {
   const root = join(output, name);
   const workspace = join(root, 'workspace');
   const local = join(root, 'local');
@@ -64,7 +69,7 @@ function scenario(name, { globalHooks = null, workspaceHook = false, images = fa
     'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
     // Part T's shipped code_intelligence entry costs about 4.5 s per run start; this proof measures notices.
     'mcp_servers:', '  code_intelligence: { enabled: false }',
-    'runtime:', '  permission_mode: autonomous',
+    'runtime:', '  permission_mode: autonomous', ...runtime,
     // The project-setup task answered (REQ-WORKSPACE-081/111): `enabled: false` above does not make it inapplicable
     // (REQ-WORKSPACE-090), and without the bundled runtime its background run (REQ-WORKSPACE-083) fails and publishes
     // "Project setup did not finish" into the ONE notice slot this proof reads (REQ-NOTIFY-024) — in `review-action`
@@ -425,6 +430,69 @@ const s6 = scenario('retry-image', { images: true });
     digest, retriedDigest: resent[0].digest, modelCallsWithImage: withImage.length, session, png: join(output, 'retry-image.png'), elapsedMs: r.elapsedMs,
   };
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. REQ-NOTIFY-031 / REQ-MONITOR-202: a run that completes while its session is not the one on screen raises the notice
+// naming it. Before the repair of `docs/defects/fixed/a-background-runs-non-failure-ending-raises-its-summary-not-a-notice-naming-the-session.md`
+// the ending raised the run's summary ("The run completed.") whatever the focus, and after "New session" main still
+// counted the released session as the one on screen (`session.release`).
+// The improvement collector off: its own notice follows a completed run within seconds and would replace the one read here
+// in the single slot (REQ-NOTIFY-024), which is that notice's business and not this scenario's.
+const s7 = scenario('background-ending', { runtime: ['  improvement_collector_enabled: false'] });
+{
+  const PROMPT = 'a run that finishes in the background';
+  const started = Date.now();
+  const launched = await startApp({ root: s7.root, workspace: s7.workspace, timeoutMs: 60_000, extra: { ROTARIS_SCRIPT: 'wait:6000,answer' } });
+  const d = launched.driver;
+  const trail = [];
+  const step = async (label, pending) => { const at = Date.now() - started; const value = await pending; trail.push({ at, label }); return value; };
+  const onScreen = (text) => d.eval(`document.querySelector('.app-shell main, .app-shell')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`);
+  let failure = null;
+  let value = null;
+  try {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus' }));
+    await step('the prompt', d.type(PROMPT, { enter: true }));
+    await step('the run on screen', until(() => onScreen(PROMPT), (v) => v === true, { timeoutMs: 20_000, what: 'the prompt on screen' }));
+    // "New session" from the Overview, accepted while the run holds its scripted 6 s wait: the window follows nothing now.
+    await step('Ctrl+1', d.chord('Ctrl+1'));
+    await step('New session', d.click('button', { text: 'New session' }));
+    await step('Start session', d.click('[data-testid="start-session-accept"]'));
+    const released = await step('the window released it', until(() => onScreen(PROMPT), (v) => v === false, { timeoutMs: 10_000, what: 'the released run off screen' }));
+    const notice = await step('the notice naming the session', until(() => d.eval(`[...document.querySelectorAll('[data-testid="notice-title"]')].map((t) => t.textContent)`), (titles) => titles.length === 1 && /^Session \S+ completed$/.test(titles[0]), { timeoutMs: 60_000, what: "REQ-NOTIFY-031's notice" }));
+    const parts = await step('the notice read', d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); return { title: n.querySelector('[data-testid="notice-title"]')?.textContent, message: n.querySelector('[data-testid="notice-message"]')?.textContent, severity: n.getAttribute('data-severity'), action: n.querySelector('.notice__action')?.textContent, member: n.querySelector('.notice__action')?.getAttribute('data-action') }; })()`));
+    const stillReleased = await step('the window did not move', onScreen(PROMPT));
+    await step('the notice picture', d.screenshot(join(output, 'background-ending.png')));
+    await step('Open the session', d.click('.notice__action', { text: 'Open the session' }));
+    const focused = await step('the finished session on screen', until(() => onScreen(PROMPT), (v) => v === true, { timeoutMs: 20_000, what: 'the finished session focused' }));
+    await step('the focused picture', d.screenshot(join(output, 'background-ending-focused.png')));
+    value = { released, notice: notice[0], parts, stillReleased, focused };
+  } catch (cause) {
+    failure = cause;
+  }
+  const stopped = await stopApp(launched, { screenshot: join(output, 'background-ending.closing.png') });
+  const log = existsSync(launched.logFile) ? readFileSync(launched.logFile, 'utf8') : '';
+  writeFileSync(join(output, 'background-ending.log'), log);
+  writeFileSync(join(output, 'background-ending.steps.json'), `${JSON.stringify(trail, null, 2)}\n`);
+  if (failure) throw new Error(`background-ending: ${failure.message} (see background-ending.log, background-ending.steps.json)`);
+  expect(!stopped.overran, 'background-ending: the app did not stop within its bound');
+  expect(!backgroundSetupStarted(log), 'background-ending: a background setup started, so its notice may stand in the slot this proof reads');
+  const db = open(s7);
+  const session = db.prepare('SELECT session_id, execution_status FROM sessions ORDER BY created_at').all();
+  db.close();
+  expect(session.length === 1 && session[0].execution_status === 'completed', `the released run: ${JSON.stringify(session)}`);
+  const sid = session[0].session_id;
+  const p = value.parts;
+  expect(p.title === `Session ${sid} completed` && p.severity === 'success', `the notice names ${JSON.stringify(p.title)} at ${p.severity}, not the session and its state at success (REQ-NOTIFY-031)`);
+  expect(p.message === 'The session on screen is unaffected. Open the finished session to review it.', `the notice's body: ${JSON.stringify(p.message)}`);
+  expect(p.action === 'Open the session' && p.member === 'focus-session', `the notice's action: ${JSON.stringify([p.action, p.member])}`);
+  expect(value.stillReleased === false, 'publishing the notice moved the window onto the finished session (REQ-NOTIFY-031)');
+  expect(/session \S+ is not focused; REQ-NOTIFY-031's notice is raised/.test(log), 'main did not log the unfocused ending');
+  results.backgroundEnding = { sessionId: sid, notice: p, windowMovedByNotice: value.stillReleased, focusedByAction: value.focused, png: join(output, 'background-ending.png'), focusedPng: join(output, 'background-ending-focused.png'), elapsedMs: Date.now() - started };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

@@ -297,3 +297,25 @@ describe('session.subscribe releases a failure held while the session was not fo
     expect(refused.h.focused).toEqual([]);
   });
 });
+
+/*
+ * REQ-NOTIFY-031/032 with REQ-MONITOR-249/252: "New session" leaves the run it released carrying on in the background, and
+ * the window follows nothing until the next prompt. Before `session.release` the window's follow stayed on that session in
+ * main, so the focus test read it as on screen and its ending raised its own notice, not REQ-NOTIFY-031's naming it.
+ */
+describe('session.release: the window stops following the session, and keeps its relay subscription', () => {
+  it('clears the sender\'s follow of that session, unsubscribes nothing and detaches nothing', async () => {
+    const h = harness(() => ({ kind: 'ack' }), () => ({ kind: 'ack' }));
+    const cleared: [number, string][] = [];
+    const unsubscribed: string[] = [];
+    const commands = sessionCommands({
+      ...h.ctx,
+      relay: { unsubscribe: (_id: number, sid: string) => { unsubscribed.push(sid); } } as unknown as CommandContext['relay'],
+      mainWindows: { clearFollowedSession: (sender: number, sid: string) => { cleared.push([sender, sid]); } } as unknown as CommandContext['mainWindows'],
+    });
+    expect(await commands['session.release']({ kind: 'session.release', sessionId: 'S1' }, windowOn('ws-1'))).toEqual({ ok: true });
+    expect(cleared).toEqual([[7, 'S1']]);
+    expect(unsubscribed).toEqual([]);
+    expect(h.hostAsked).toEqual([]);
+  });
+});

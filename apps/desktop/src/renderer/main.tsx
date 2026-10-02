@@ -1115,7 +1115,10 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
     useShellState.getState().setLaunchOptions(options);
     // REQ-MONITOR-249/252: multi-session host — the previous run carries on in the background. Its relay
     // subscription is kept so background notices and terminal frames still reach this window; the replica
-    // simply follows nothing until the next prompt starts the new session.
+    // simply follows nothing until the next prompt starts the new session. REQ-NOTIFY-031/032: main is told the window
+    // no longer shows it, so its ending names it (`session.release`) rather than reading as the focused run's.
+    const released = replica.getState().sessionId;
+    if (released !== null) void bridge.command({ kind: 'session.release', sessionId: released }).catch(() => undefined);
     replica.getState().follow(null);
     useShellState.getState().switchView('workspace');
     requestAnimationFrame(() => requestAnimationFrame(() => { const input = document.querySelector<HTMLTextAreaElement>('.composer__input'); if (input) { input.value = ''; input.focus(); } }));

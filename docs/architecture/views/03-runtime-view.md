@@ -1195,8 +1195,13 @@ window's `session.subscribe` follows that session; a later
 ending of the session supersedes what was held. Main also keeps, by session, every provider/model pair that failed
 authentication since its provider's credentials last changed (`AuthRecovery.refusedPair`, REQ-NOTIFY-068): the dialog
 leaves them out and a retry refuses them; a re-authentication, or a sign-in, saved key, sign-out or removal under Settings,
-releases that provider's pairs. REQ-NOTIFY-031 (a background run's non-failure ending) is not built — recorded in
-`docs/defects/a-background-runs-non-failure-ending-raises-its-summary-not-a-notice-naming-the-session.md`.
+releases that provider's pairs. ~~REQ-NOTIFY-031 (a background run's non-failure ending) is not built — recorded in
+`docs/defects/a-background-runs-non-failure-ending-raises-its-summary-not-a-notice-naming-the-session.md`.~~ *Since 2026-10-02 (fin8,
+`docs/defects/fixed/a-background-runs-non-failure-ending-raises-its-summary-not-a-notice-naming-the-session.md`):* a non-failure ending passes the same focus test
+(`RunFailurePublisher.endedOtherwise`): a session a main window follows raises the notice `runEndingPublication` decided; any
+other raises REQ-NOTIFY-031's in its place (`unfocusedEndingNotice`: persistent, `success` for `completed` and `info`
+otherwise, naming the session and its normalised state, saying the session on screen is unaffected, `focus-session`).
+"New session" sends `session.release` for the session it releases, so main no longer counts that session as followed.
 
 Main presents `run.result` once as the notice — **except where that result carries `persistence: {confirmed: false}`**,
 the run host having already published the one failure notice `REQ-EVENTS-088` allows, with the last durable ordinal

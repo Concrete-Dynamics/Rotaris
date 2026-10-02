@@ -3,7 +3,7 @@ import type { ReportInput } from './notices.js';
 import type { FallbackOutcome } from './auth-fallback.js';
 import {
   AUTHENTICATION_FAILED, authenticationFailureNotice, genericFailureNotice, PROVIDER_LIMIT_REACHED, quotaFailureNotice, RUN_FAILED,
-  RunFailurePublisher, runEndingPublication, SESSION_AND_DRAFT_KEPT, unfocusedFailureNotice, type AuthenticationRecoveryOutcome, type RunEnding,
+  RunFailurePublisher, runEndingPublication, SESSION_AND_DRAFT_KEPT, unfocusedEndingNotice, unfocusedFailureNotice, type AuthenticationRecoveryOutcome, type RunEnding,
 } from './run-failure-notice.js';
 
 const ending = (over: Partial<RunEnding> = {}): RunEnding => ({ error: null, status: 'completed', execution_status: 'completed', summary: 'The run completed.', severity: 'success', ...over });
@@ -34,6 +34,20 @@ describe('main/run-failure-notice — REQ-NOTIFY-064\'s generic notice and the o
       severity: 'warning', title: 'Session S2 failed', message: 'The session on screen is unaffected. Open the failed session to see its recovery.',
       detail: '  HTTP 401\n  Incorrect API key  ', persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: 'S2' } }, sessionId: 'S2',
     });
+  });
+});
+
+describe('main/run-failure-notice — REQ-NOTIFY-031: a run other than the focused one ends otherwise than failed', () => {
+  it('a persistent notice naming the session and the state it reached, `success` for completed and `info` otherwise, focusing the session', () => {
+    expect(unfocusedEndingNotice('S2', 'completed')).toEqual({
+      severity: 'success', title: 'Session S2 completed', message: 'The session on screen is unaffected. Open the finished session to review it.',
+      persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: 'S2' } }, sessionId: 'S2',
+    });
+    expect(unfocusedEndingNotice('S3', 'stopped')).toMatchObject({ severity: 'info', title: 'Session S3 stopped', persistent: true, sessionId: 'S3' });
+    // The state is the normalised vocabulary (REQ-NOTIFY-048/049): a raw persisted status is never rendered.
+    expect(unfocusedEndingNotice('S4', 'paused_message_limit')).toMatchObject({ severity: 'info', title: 'Session S4 paused' });
+    expect(unfocusedEndingNotice('S5', 'awaiting_plan_decision')).toMatchObject({ severity: 'info', title: 'Session S5 paused' });
+    expect(unfocusedEndingNotice('S6', 'interrupted')).toMatchObject({ severity: 'info', title: 'Session S6 idle' });
   });
 });
 
@@ -147,6 +161,16 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
     await h.publisher.focused('S2');
     expect(h.recovered).toEqual(['S2']);
     expect(h.reported).toHaveLength(2);
+  });
+
+  it('REQ-NOTIFY-031: a focused session\'s non-failure ending publishes its own notice; an unfocused one\'s raises the notice naming the session in its place', async () => {
+    const h = harness(new Set(['S1']));
+    const own = { severity: 'info' as const, title: 'The run completed.' };
+    h.publisher.endedOtherwise('S1', own, 'completed');
+    h.publisher.endedOtherwise('S2', own, 'completed');
+    h.publisher.endedOtherwise('S3', { severity: 'warning', title: 'Completed with a task abandoned', detail: 'a task was abandoned' }, 'stopped');
+    expect(h.reported).toEqual([own, unfocusedEndingNotice('S2', 'completed'), unfocusedEndingNotice('S3', 'stopped')]);
+    expect(h.recovered).toEqual([]);
   });
 
   it('every class waits for the focus, and a later ending of the session supersedes what was held', async () => {

@@ -87,6 +87,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     configureRefusesFrom?: number;
     /** REQ-ORCH-152/153: `runtime.run_start_mode`. */
     runStartMode?: 'auto' | 'plan';
+    /** REQ-MONITOR-049: each model's advertised input limit, by model id, through the compression section's `triggerFor`. */
+    inputLimits?: Record<string, number>;
   }
 
   function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, opts: Opts = {}) {
@@ -113,7 +115,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       clocks: clock, publisher: pub, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: (_sid, r) => results.push(r.status),
       configure: () => (++configured >= (opts.configureRefusesFrom ?? Infinity) ? { ok: false as const, error: { reason: 'the configuration no longer loads' } } : { ok: true, value: {
-        model: { backend, config }, models, personas,
+        model: { backend, config, ...(opts.inputLimits === undefined ? {} : { compression: { model: null, timeoutMs: 120_000, charsPerToken: 4, preserveRecentTurns: 1, triggerFor: (m: ModelRef) => ({ tokens: 10_000_000, thresholdPercentage: 60, capacity: opts.inputLimits![m.modelId] ?? 1000, advertisedInputLimit: opts.inputLimits![m.modelId] ?? null, defaultThreshold: 265_000 }) } }) }, models, personas,
         runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.runStartMode === undefined ? {} : { runStartMode: opts.runStartMode }), ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }), ...(opts.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: opts.childStallTimeoutMs }) },
         resilience: { catalogue, fallbackModel: opts.fallbackModel ?? null },
       } }),
@@ -689,6 +691,21 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     // The iteration in flight: a1 until the choice, then c1 (its resume after the child); the next iteration: f1.
     expect(pending.root.slice(0, 3)).toEqual(['a1', 'a1', 'c1']);
     expect(pending.root.at(-1)).toBe('f1');
+  });
+
+  // The repair of the-entry-agents-context-limit-is-read-from-the-requested-model-not-the-one-it-runs-on (REQ-MONITOR-049,
+  // REQ-MONITOR-089): the run-level agent's limit is the maximum input of the model its ladder cell calls, so a same-tier
+  // move of the root moves it. Before: read from the requested model (`entryOverride.model ?? config.model`), 1000 throughout.
+  it('REQ-MONITOR-049 / REQ-MONITOR-089: the entry agent\'s context limit follows the root\'s same-tier move to the model it runs on', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('from b')), { catalogue, inputLimits: { a1: 1000, b1: 5000 } });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+    const limits = (pub.snapshots as unknown as { entryContext: { limit: number } }[]).map((p) => p.entryContext.limit);
+    expect(limits).toContain(1000);
+    expect(limits.at(-1)).toBe(5000);
+    expect(limits.slice(limits.indexOf(5000))).toEqual(limits.slice(limits.indexOf(5000)).map(() => 5000));
   });
 
   describe('PD-MONITOR-001 revision 2: a request is priced at the ladder cell, by the model it was sent to', () => {

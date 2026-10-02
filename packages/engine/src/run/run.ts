@@ -740,9 +740,14 @@ export class Run {
    * REQ-MONITOR-089 (Part AH): the entry role's newest prompt-token reading and the limit it is measured
    * against. The entry role has no `children` row, so `toAgentRecord` never projects it and the surface's
    * synthetic root agent had nothing to read; the tracker has held the figure since Part R.
+   *
+   * REQ-MONITOR-049: the limit is the maximum input of the model the root's ladder cell calls — after a same-tier or
+   * unresponsive-model move (REQ-ORCH-090, REQ-ORCH-091 b) or an override it follows (REQ-ORCH-091 d) — and the requested
+   * model's only before the cell exists. (Until 2026-10-02 it was always the requested model's:
+   * the-entry-agents-context-limit-is-read-from-the-requested-model-not-the-one-it-runs-on.)
    */
   get entryContext(): { readonly used: number; readonly limit: number } {
-    const model = this.entryOverride.model ?? this.deps.config.model;
+    const model = this.rootCell?.model.model ?? this.entryOverride.model ?? this.deps.config.model;
     const advertised = this.deps.compression?.triggerFor(model).advertisedInputLimit ?? null;
     return { used: this.deps.writer.activity.contextUsed(this.rootName), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
   }

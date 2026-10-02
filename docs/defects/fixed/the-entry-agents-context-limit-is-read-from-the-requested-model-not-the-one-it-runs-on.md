@@ -9,6 +9,18 @@ its ladder cell's (`rootCell.model`). Noticed by the verifier of `fin5-noticed-g
 after a switch onto an override-moved pair; the gap predates that branch and holds for every ladder move of the root.
 Not repaired, since it lies outside that branch's tasks.
 
+## Outcome — repaired 2026-10-02 (fin8, ladder-overrides, task 2)
+
+`Run.entryContext` (`packages/engine/src/run/run.ts`) reads the limit from the model the root's ladder cell calls,
+`rootCell?.model.model`, falling back to the requested model (`entryOverride.model ?? config.model`) only before the cell
+exists. A same-tier or unresponsive-model move, an override persisted for the pair and, since the same round, an override
+the root follows from its next call
+([a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md](a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md))
+now move the limit with the cell. Pinned in `packages/engine/src/run/ladder.test.ts` ("the entry agent's context limit
+follows the root's same-tier move to the model it runs on"): `a1` advertising 1000 and `b1` 5000, the root moved `a1` →
+`b1` on quota, and the published `entryContext.limit` reads 1000 then 5000 to the end (red before: 1000 throughout).
+`mission-proof` drives no scripted fallback, so the unit test carries the evidence.
+
 ## Specs
 
 - REQ-MONITOR-049: "the context limit is the model's maximum input tokens", which for the root is the model its ladder

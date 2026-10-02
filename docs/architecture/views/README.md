@@ -45,6 +45,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**The entry agent's context limit is its ladder cell's model's (REQ-MONITOR-049, REQ-MONITOR-089; the repair of
+`the-entry-agents-context-limit-is-read-from-the-requested-model-not-the-one-it-runs-on`).** `Run.entryContext` reads the
+limit from the root cell's model. The **runtime view**'s `SessionRecord.entryContext` sentence says so. Nothing else moved.
+
 **An explicit choice clears an exclusion (REQ-MONITOR-194; the repair of
 `an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion`).** `ResilienceMemory.clearExhausted`, persisted as a
 `model_exhausted` entry carrying `cleared: true`; `setEntryModel` clears the chosen pair, and in a quota wait the waiting

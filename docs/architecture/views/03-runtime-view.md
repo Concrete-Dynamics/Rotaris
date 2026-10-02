@@ -631,7 +631,8 @@ for an agent once a compression is measured not to help — where the provider's
 estimate (the system prompt and the tool definitions, which REQ-MONITOR-082 keeps whole) already reaches the
 threshold, no compression can bring the count under it, and the reason is stated once with both figures. The
 REQ-ORCH-093 recovery path is never latched. **`SessionRecord.entryContext`**
-carries the entry role's latest prompt reading and its model's advertised limit (REQ-MONITOR-089): the entry
+carries the entry role's latest prompt reading and its model's advertised limit (REQ-MONITOR-089) — the model the
+root's ladder cell calls, after any move or override, since 2026-10-02 (REQ-MONITOR-049; the requested model's before): the entry
 role has no `children` row, so this is the only route by which the synthetic root agent's meter gets a figure —
 before it, a run that spawned no child drew zero however much it had spent. **`SessionRecord.entryTools`** (live-run
 finding K1, 2026-09-29) is the same route for its tools: `resolved` is the native set the live run's root port kept

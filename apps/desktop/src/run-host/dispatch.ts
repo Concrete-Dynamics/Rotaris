@@ -332,6 +332,12 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       log(`session ${req.sessionId}: authentication failed on ${r.value.failed.provider}/${r.value.failed.model}; restarted on the fallback ${r.value.fallback.key} (${r.value.fallback.provider}/${r.value.fallback.model})`);
       return { kind: 'session.fallbackRestarted', sessionId: req.sessionId, failed: r.value.failed, fallback: r.value.fallback };
     }
+    case 'session.repinPrimary': {
+      const r = sessions.repinPrimary(asSessionId(req.sessionId), { provider: req.provider, model: req.model });
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The primary model could not be re-pinned', detail: r.error.reason };
+      log(`session ${req.sessionId}: re-authenticated; ${req.provider}/${req.model} re-pinned (${r.value.applies})`);
+      return { kind: 'session.primaryRepinned', sessionId: req.sessionId, applies: r.value.applies };
+    }
     case 'session.planEdit': {
       // REQ-ORCH-154: the edit is recorded and nothing else moves — the gate stays held on the same cycle.
       const r = sessions.planEdit(asSessionId(req.sessionId), req.text);

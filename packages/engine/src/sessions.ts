@@ -2209,6 +2209,32 @@ export class Sessions {
   }
 
   /**
+   * REQ-NOTIFY-078: re-authentication of the provider that failed re-pins the primary model. The authentication pin on the
+   * pair (`restartOnFallback`) is taken back — in the session's memory and as a `model_override` entry carrying
+   * `cleared: true`, so a reload replays it — and a system row says so. Where a run of the session is live it switches from
+   * its next iteration (`Run.rebuildEntryFromMemory`: the root's cell is rebuilt from the memory, the turn in flight
+   * finishing on the fallback); otherwise the primary is used for the next run. Which of the two is the answer, for the
+   * acknowledgement REQ-NOTIFY-078 asks for.
+   */
+  repinPrimary(sessionId: SessionId, primary: { readonly provider: string; readonly model: string }): Result<{ readonly applies: 'next-iteration' | 'next-run' }, { readonly code: string; readonly reason: string }> {
+    const s = this.live.get(sessionId);
+    if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    const storeFailure = storeFailureOf(s.dal, s.writer);
+    if (storeFailure !== null) return err({ code: 'store-failed', reason: `The workspace store requires recovery: ${storeFailure}` });
+    if (s.memory === null) {
+      const stored = s.dal.getSession(sessionId);
+      const setup = stored ? this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false)) : null;
+      const resolve = (key: string): ModelChoice | null => { const r = setup?.ok ? setup.value.models?.(key) : undefined; return r && r.ok ? r.choice : null; };
+      s.memory = ResilienceMemory.rehydrate(s.dal.timelineOf(sessionId), resolve, (m) => { s.log?.warn(m); this.deps.warn(m); });
+    }
+    s.memory.clearOverride(primary.provider, primary.model);
+    s.writer.appendTimeline('model_override', 'user', `The provider of ${primary.provider}/${primary.model} was re-authenticated; the fallback pinned in its place is taken back.`, { provider: primary.provider, model: primary.model, cleared: true, cause: 'reauthentication' });
+    const live = s.run !== null && !s.run.isEnded && s.run.rebuildEntryFromMemory();
+    s.writer.appendRow('system', live ? `Re-authenticated: the run switches back to ${primary.provider}/${primary.model} from the next iteration.` : `Re-authenticated: ${primary.provider}/${primary.model} will be used for the next run.`, true);
+    return ok({ applies: live ? 'next-iteration' : 'next-run' });
+  }
+
+  /**
    * REQ-ORCH-152/153/154 (ADR-0062): whether THIS launch is a plan cycle, and which.
    *
    * The mode is read at the launch and never again while the segment runs, which is REQ-ORCH-154's "a change to

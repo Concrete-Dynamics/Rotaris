@@ -110,6 +110,8 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    * (`Sessions.restartOnFallback`). Main sends it after classifying the run's failure (REQ-NOTIFY-060/067).
    */
   z.object({ kind: z.literal('session.restartOnFallback'), sessionId: z.string().min(1) }),
+  /** REQ-NOTIFY-078: re-authentication re-pins the primary model — the authentication pin on its pair taken back (`Sessions.repinPrimary`). */
+  z.object({ kind: z.literal('session.repinPrimary'), sessionId: z.string().min(1), provider: z.string().min(1), model: z.string().min(1) }),
   /** REQ-ORCH-153/154 (ADR-0062) and PD-ORCH-003: the plan gate's three entries, forwarded to the run host that owns the session. */
   z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().min(1), text: z.string() }),
   z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().optional() }),
@@ -444,6 +446,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.snapshot'), snapshot: ConfigSnapshotSchema }),
   z.object({ kind: z.literal('session.continued'), sessionId: z.string(), resumed: z.boolean(), messageLimit: z.number().int().nullable() }),
   /** REQ-NOTIFY-070: the pair that failed and the fallback now pinned; the restart has begun. */
+  /** REQ-NOTIFY-078: whether the primary applies from the live run's next iteration or from the next run. */
+  z.object({ kind: z.literal('session.primaryRepinned'), sessionId: z.string(), applies: z.enum(['next-iteration', 'next-run']) }),
   z.object({ kind: z.literal('session.fallbackRestarted'), sessionId: z.string(), failed: z.object({ provider: z.string(), model: z.string(), key: z.string().nullable() }), fallback: z.object({ provider: z.string(), model: z.string(), key: z.string() }) }),
   /** REQ-ORCH-154: the cycle the answer settled, and whether a further segment launched (approve and revise) or not (cancel). */
   z.object({ kind: z.literal('session.planResolved'), sessionId: z.string(), cycle: z.number().int().positive(), relaunched: z.boolean() }),

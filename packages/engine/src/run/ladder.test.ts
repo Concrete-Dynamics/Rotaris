@@ -1075,6 +1075,41 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(sessions.restartOnFallback(sid)).toMatchObject({ ok: false, error: { code: 'no-model-failure' } });
     });
 
+    it('REQ-NOTIFY-078: re-authentication re-pins the primary — for the next run after the run ended, durably; from the next iteration while one runs', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      // Turn 1 is the 401 on a1; turn 2 (the restart on f1) is held so a re-pin lands while the run is live; then answers.
+      const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(unauthorized()) : turn === 2 ? { parts: [{ hold, part: { kind: 'text', delta: 'on the fallback' } }, { part: { kind: 'finish', reason: 'stop' } }] } : answer(`answer ${turn}`)), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(sessions.restartOnFallback(sid).ok).toBe(true);
+      await tick();
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
+      expect(sessions.repinPrimary(sid, { provider: 'a', model: 'a1' })).toEqual({ ok: true, value: { applies: 'next-iteration' } });
+      // A queued prompt gives the run a next iteration: the turn in flight finishes on f1, the next one runs on a1.
+      expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'and then this' } }).ok).toBe(true);
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1', 'a1']);
+      expect(dal.residentRows(sid).some((r) => r.kind === 'system' && r.body === 'Re-authenticated: the run switches back to a/a1 from the next iteration.')).toBe(true);
+      // The next prompt runs on the primary again.
+      const next = sessions.prompt(sid, 'again');
+      if (!next.ok) throw new Error(next.error.reason);
+      await sessions.running(sid)!;
+      expect(client.requests.at(-1)!.model.modelId).toBe('a1');
+      // With no run live the answer is "the next run".
+      expect(sessions.repinPrimary(sid, { provider: 'a', model: 'a1' })).toEqual({ ok: true, value: { applies: 'next-run' } });
+      // And a reload replays the taken-back pin: the primary.
+      const fresh = sessionsWith(() => answer('fresh'), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      const again = fresh.sessions.prompt(sid, 'once more');
+      if (!again.ok) throw new Error(again.error.reason);
+      await fresh.sessions.running(sid)!;
+      expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+      expect(JSON.parse(dal.timelineOf(sid).filter((t) => t.name === 'model_override').at(-1)!.metadata)).toMatchObject({ provider: 'a', model: 'a1', cleared: true, cause: 'reauthentication' });
+    });
+
     it('a restart that cannot begin takes the pin back, durably, so the session stays on the model it had (REQ-NOTIFY-070)', async () => {
       // Configure answers the start and the pin's resolution (calls 1 and 2) and refuses the restart's own (call 3).
       const { sessions, client } = sessionsWith(() => failing(unauthorized()), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' }, configureFailsFrom: 3 });

@@ -488,6 +488,8 @@ export class Run {
   private readonly catalogue: readonly CatalogueEntry[];
   /** The root agent's ladder state for this run (one same-tier fallback, one role fallback — REQ-ORCH-091 b / REQ-ORCH-144). */
   private rootCell: AgentResilienceCell | null = null;
+  /** REQ-NOTIFY-078: the session's memory changed under the root (a pin taken back), so its cell is rebuilt at its next turn. */
+  private entryRebuild = false;
   /**
    * REQ-MONITOR-085 (Part AH): the agents whose context is being compressed right now, by name, with the instant each
    * began. Part AO made this a map: a manual pass compresses every live conversation CONCURRENTLY (REQ-MONITOR-092),
@@ -1312,7 +1314,8 @@ export class Run {
     const entryModel = this.entryOverride.model ?? config.model;
     // The cell is settled here for whatever switch is in force: a switch recorded from now on supersedes none.
     this.entrySwitchPending = false;
-    if (this.rootCell === null || this.rootRebuildsFor(entryModel)) {
+    if (this.rootCell === null || this.entryRebuild || this.rootRebuildsFor(entryModel)) {
+      this.entryRebuild = false;
       const base = withSettings(this.catalogue, { model: entryModel, thinking: this.entryOverride.thinking ?? config.thinking });
       const current = this.memory.effective(base, this.catalogue);
       const persona = this.deps.personas?.resolve(config.persona)?.persona;
@@ -1954,6 +1957,16 @@ export class Run {
     this.deps.writer.recordIssue({ kind: 'model_override_rejected', severity: 'warning', actor: 'user', message, metadata: { requested_model: key, reason, waiting_provider: waiting.provider, waiting_model: waiting.model } });
     this.deps.warn(message);
     this.waits.reject(message);
+  }
+  /**
+   * REQ-NOTIFY-078: re-authentication re-pinned the primary model — the session's memory no longer maps the failed pair to
+   * the fallback — so the root's cell is rebuilt from the memory at its next turn: the switch applies from the next
+   * iteration, and the turn in flight finishes on the model it has. False for a run that has ended.
+   */
+  rebuildEntryFromMemory(): boolean {
+    if (this.ended) return false;
+    this.entryRebuild = true;
+    return true;
   }
   setEntryReasoning(level: ThinkingLevel): boolean {
     if (this.ended) return false;

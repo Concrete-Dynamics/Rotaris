@@ -894,8 +894,8 @@ read on the 10^3-file tree, the parse and the parser keep their pairs, and the f
 are unchanged. 10^3 against 2×10^3 was measured first: the 10^3-file side read 36 to 44 ms idle, near the floor at the
 low end its loaded figures extrapolate to (about 28 ms). At 2,000 against 4,000, seven proof runs passed at load
 averages of 2.1 to 3.3 on 4 CPUs, the sweep's ratio asserted at 1.6 to 2.3 with the half side's minimum at 76 to 94 ms of
-thread CPU. Building and reading the pair adds 4.1 to 8.0 s to the proof (`pairMs`), which ran 18 to 23 s in all. No run
-beside added busy loops was taken (the session's permission system refused launching them). The note is
+thread CPU. Building and reading the pair adds 4.1 to 8.0 s to the proof (`pairMs`), which ran 18 to 23 s in all. The builder
+took no run beside added busy loops (the session's permission system refused launching them); fin7's verifier took one: four bounded `node -e 'for(;;){}'` loops beside the proof gave "sweep growth ratio 1.71 against work ratio 2", asserted, with the half side's minimum at 107 ms of thread CPU, at a load average of 7.77 on 4 CPUs, and the proof PASSED. The note is
 [`traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`](../../defects/fixed/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
 
 **Corrected 2026-10-01 (R-062): the second execution's busy pair raced, and is now held in flight.** The falsified

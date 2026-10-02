@@ -61,5 +61,5 @@ seven runs, every one PASSED with the line `sweep growth ratio … against work 
 2.1 to 3.3 on 4 CPUs, beside the other plan's agents. Building and reading the pair took 4.1 to 8.0 s (`pairMs` in
 `spike-results.json`), where the 500-file pair, whose tree the parse pair had already built, read in about one second (sixteen readings of 17
 to 88 ms on the wall clock in the red run above); the whole proof ran 18 to 23 s.
-Not shown: a run beside added busy loops. Launching CPU-bound loops on this host was refused by the session's
-permission system, so the loaded figures are the host's own load alone.
+Not shown by the builder: a run beside added busy loops. Launching CPU-bound loops on this host was refused by the
+session's permission system, so the builder's loaded figures are the host's own load alone. fin7's verifier took one: four bounded `node -e 'for(;;){}'` loops beside the proof gave "sweep growth ratio 1.71 against work ratio 2", asserted, with the half side's minimum at 107 ms of thread CPU, at a load average of 7.77 on 4 CPUs, and the proof PASSED.

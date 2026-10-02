@@ -63,6 +63,13 @@ export interface TurnResilience {
    * stands, and no retry, fallback re-run, condensation or wait follows it (found by phase 3's review). Absent means never.
    */
   readonly resting?: (() => boolean) | undefined;
+  /**
+   * REQ-MONITOR-142: the root's alone — whether an entry-model switch is recorded that its cell has not applied yet (it
+   * applies at the root's next turn). Each ladder move of the root records it (`switch_pending`), so the autopsy reader
+   * places the move before or after that switch; the record holds nothing else that says so
+   * (the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback). Absent for a child.
+   */
+  readonly switchPending?: (() => boolean) | undefined;
 }
 
 /** REQ-ORCH-093: at most twice for one call. */
@@ -105,6 +112,9 @@ function pause(clocks: Clocks, ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+/** `switch_pending` for a ladder move of the root (`TurnResilience.switchPending`); nothing for a child. */
+const switchPendingOf = (r: TurnResilience): { readonly switch_pending?: boolean } => (r.switchPending ? { switch_pending: r.switchPending() } : {});
+
 /** REQ-ORCH-090: the threshold to arm for this call, or null when the fallback route is closed. */
 export function unresponsiveThreshold(r: TurnResilience): number | null {
   const { cell } = r;
@@ -140,7 +150,7 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
       const message = `${agent} received no model event from ${provider}/${modelId} within ${seconds} s; the call was closed and re-run on the fallback model ${fbProvider}/${fb.model.modelId}.`;
       // REQ-ORCH-139: the vocabulary's `llm_unresponsive` names both the entry and the issue (A29; formerly
       // `unresponsive_model_fallback` and `unresponsive_model`, names no list has).
-      writer.appendTimeline('llm_unresponsive', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: fbProvider, to_model: fb.model.modelId, threshold_seconds: seconds });
+      writer.appendTimeline('llm_unresponsive', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: fbProvider, to_model: fb.model.modelId, threshold_seconds: seconds, ...switchPendingOf(r) });
       writer.recordIssue({ kind: 'llm_unresponsive', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${fbProvider}/${fb.model.modelId}`, threshold_seconds: seconds } });
       deps.warn(message);
       cell.attempted.add(pairKey(provider, modelId));
@@ -205,7 +215,7 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
         // REQ-ORCH-139 / REQ-NOTIFY-090: the vocabulary's words for the same-tier change — the `quota_fallback_model` entry and
         // the `quota_fallback` issue, under a rate limit as under exhaustion (REQ-NOTIFY-082's "usage limit"); A29, formerly
         // `model_fallback` for both, a name no list has. `condition` in the metadata still says which it was.
-        writer.appendTimeline('quota_fallback_model', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: candidate.provider, to_model: candidate.model.modelId, to_key: candidate.key, condition: cls, provider_exhausted: exhausted });
+        writer.appendTimeline('quota_fallback_model', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: candidate.provider, to_model: candidate.model.modelId, to_key: candidate.key, condition: cls, provider_exhausted: exhausted, ...switchPendingOf(r) });
         writer.recordIssue({ kind: 'quota_fallback', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${candidate.provider}/${candidate.model.modelId}`, provider_exhausted: exhausted, condition: cls } });
         deps.warn(message);
         cell.model = withSettings(catalogue, { model: candidate.model, thinking: candidate.thinking });

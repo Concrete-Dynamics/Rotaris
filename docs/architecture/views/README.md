@@ -45,6 +45,17 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A switch of the entry model records whether the root's cell is rebuilt for it (REQ-MONITOR-142, REQ-ORCH-090,
+REQ-ORCH-091).** `setEntryModel` writes `entry_model_switched` with `{ model, rebuilds, supersedes }`, `rebuilds` being
+the test `rootResilience` applies at the next turn (`Run.rootRebuildsFor`) and `supersedes` saying the switch replaces one
+the root never took a turn on (`Run.entrySwitchPending`; the root's own wait choice records it on its `model_override`
+too), so the autopsy reader ends a ladder move of the root only on a switch that rebuilt its cell. Each ladder move of the
+root records `switch_pending` (`TurnResilience.switchPending`), so the reader reads a move made while a switch was pending
+before that switch, and reads a superseded switch as if it were not recorded, every record since it read again. The
+**runtime view**'s `setModel` row says so. This repairs
+`the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback.md`; the timeline name is unchanged. No
+package, edge, process, message kind, channel, command or store column changed.
+
 **A setup that finishes before its start is answered is seen to finish (REQ-WORKSPACE-084/103/109, OQ-169).** The
 initialization coordinator keeps the latest `mcp.setupStatus` pushed while its own start request is in flight
 (`setupEarly`) and drains it after the answer when it is the same setup's. Where the drained status has every step

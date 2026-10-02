@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join, relative, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { availableParallelism, loadavg } from 'node:os';
+import type { Millis, MonotonicClock } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
 import { createTraceabilityEngine, fsArtifactIo } from './engine.js';
 import { createInThreadExecutor } from './executor.js';
@@ -10,7 +12,7 @@ import { loadLayout } from './layout.js';
 import { loadParser, parserLoadMs } from './parser.js';
 import { parseStore } from './store.js';
 import { SPIKE_7, generateScaleRepository } from './scale-fixture.js';
-import { growthPair, interleavedMinima } from './growth-readings.js';
+import { growthPair, interleavedMinima, type PassReading } from './growth-readings.js';
 import { sweepRepository, type SweepDetails } from './sweep.js';
 
 /**
@@ -46,6 +48,48 @@ const msMin = (fn: () => void, runs = 3): { readonly minMs: number; readonly run
   for (let i = 0; i < runs; i += 1) all.push(ms(fn));
   return { minMs: Math.min(...all), runsMs: all };
 };
+/**
+ * 2026-10-02: the growth pairs are read on two clocks, and their ratio on the CPU time this thread spent
+ * (`process.threadCpuUsage`, user plus system). The minimum of seven wall-clock readings screens out load only while
+ * some round of each side runs uncontended; with more runnable work than CPUs none does, and the ratio left its band in
+ * both directions at load averages of 9.9 to 20.6 on four CPUs
+ * (`docs/defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`). REQ-TRACE-088's
+ * reference conditions are one execution thread timing the pass alone, which is what the thread's CPU time counts.
+ * The wall-clock readings stay in the record beside them, with the host's load average and CPU count; the absolute
+ * "about one second" budgets above stay on the wall clock (`msMin`), and a red there above the CPU count is re-run
+ * alone. No figure and no bound is changed.
+ */
+const cpuNowMs = (): number => { const u = process.threadCpuUsage(); return (u.user + u.system) / 1000; };
+const round1 = (n: number): number => Math.round(n * 10) / 10;
+const both = (fn: () => void): PassReading => {
+  const c0 = cpuNowMs();
+  const t0 = performance.now();
+  fn();
+  const wallMs = round1(performance.now() - t0);
+  return { wallMs, cpuMs: round1(cpuNowMs() - c0) };
+};
+/** The load the readings were taken under: the 1, 5 and 15 minute load averages, and the CPUs they compete for. */
+const host = () => ({ loadAverage: loadavg().map((n) => Math.round(n * 100) / 100), cpus: availableParallelism() });
+/**
+ * A monotonic clock reading this thread's CPU time, which records the wall clock at each of its readings beside it:
+ * the sweep times itself (its whole duration, and the parse time it keeps apart, REQ-TRACE-088), so handed this clock
+ * it reports CPU figures, and the wall-clock figures of the same pass are rebuilt from the recorded wall instants.
+ */
+const dualClock = () => {
+  const wall: number[] = [];
+  const clock: MonotonicClock = { now: () => { wall.push(performance.now()); return cpuNowMs() as Millis; } };
+  /**
+   * The wall-clock milliseconds of the sweep less its parse time. The sweep reads the clock at its start, before and
+   * after each parse (`timed`) and at its end; the parser is loaded by then, so no other reading falls between.
+   */
+  const sweepWallMs = (parsedFiles: number): number => {
+    if (wall.length !== 2 + 2 * parsedFiles) throw new Error(`the sweep read the clock ${wall.length} times, not ${2 + 2 * parsedFiles}`);
+    let parse = 0;
+    for (let i = 1; i < wall.length - 1; i += 2) parse += wall[i + 1]! - wall[i]!;
+    return round1(wall[wall.length - 1]! - wall[0]! - parse);
+  };
+  return { clock, sweepWallMs };
+};
 
 describe.skipIf(!out)('spike 7 — the traceability engine at scale', () => {
   const scale = resolve(out ?? '.', 'scale');
@@ -64,7 +108,7 @@ describe.skipIf(!out)('spike 7 — the traceability engine at scale', () => {
     const after = process.memoryUsage();
     expect(parsed.errors).toEqual([]);
     expect(parsed.records.length).toBe(shape.requirements);
-    results.parse = { documents: shape.documents, requirements: shape.requirements, storeBytes: shape.bytes, coldMs: cold, warmMs: warm, warmRunsMs: warmRuns.runsMs, heapDeltaMiB: Math.round((after.heapUsed - before.heapUsed) / 1048576 * 10) / 10, rssMiB: Math.round(after.rss / 1048576) };
+    results.parse = { documents: shape.documents, requirements: shape.requirements, storeBytes: shape.bytes, coldMs: cold, warmMs: warm, warmRunsMs: warmRuns.runsMs, heapDeltaMiB: Math.round((after.heapUsed - before.heapUsed) / 1048576 * 10) / 10, rssMiB: Math.round(after.rss / 1048576), host: host() };
     expect(warm).toBeLessThan(1_500);
     // linear growth: half the store in about half the time (REQ-TRACE-501's linear clause), the two sides read evenly
     const halfDir = join(scale, '..', 'scale-half');
@@ -72,10 +116,10 @@ describe.skipIf(!out)('spike 7 — the traceability engine at scale', () => {
     mkdirSync(halfDir, { recursive: true });
     const halfShape = generateScaleRepository(halfDir, { ...SPIKE_7, blocks: 7, implFiles: 400, testFiles: 100 });
     const growth = interleavedMinima({
-      full: () => ms(() => { parseStore({ root: scale, layout, retiredLog: null }); }),
-      half: () => ms(() => { parseStore({ root: halfDir, layout, retiredLog: null }); }),
+      full: () => both(() => { parseStore({ root: scale, layout, retiredLog: null }); }),
+      half: () => both(() => { parseStore({ root: halfDir, layout, retiredLog: null }); }),
     });
-    results.parseHalf = { documents: halfShape.documents, storeBytes: halfShape.bytes, ...growthPair(growth, { full: shape.documents, half: halfShape.documents }) };
+    results.parseHalf = { documents: halfShape.documents, storeBytes: halfShape.bytes, ...growthPair(growth, { full: shape.documents, half: halfShape.documents }), host: host() };
     if (out) writeFileSync(join(out, 'spike-results.json'), JSON.stringify(results, null, 2));
   });
   it('REQ-TRACE-088: 10^3 source files carrying 10^4 annotation sites sweep in about one second on one thread', () => {
@@ -93,20 +137,26 @@ describe.skipIf(!out)('spike 7 — the traceability engine at scale', () => {
     const warm = swept.durationMs - swept.details.parseMs;
     expect(swept.details.files).toBe(SPIKE_7.implFiles + SPIKE_7.testFiles);
     expect(swept.sites.length).toBeGreaterThanOrEqual(10_000);
-    results.sweep = { files: swept.details.files, sites: swept.sites.length, annotations: swept.details.annotations.length, coldMs: cold, warmMs: warm, parseMs: swept.details.parseMs, parsedFiles: swept.details.parsedFiles, wholeMs: swept.durationMs, parserLoadMs: parserLoadedIn };
+    results.sweep = { files: swept.details.files, sites: swept.sites.length, annotations: swept.details.annotations.length, coldMs: cold, warmMs: warm, parseMs: swept.details.parseMs, parsedFiles: swept.details.parsedFiles, wholeMs: swept.durationMs, parserLoadMs: parserLoadedIn, host: host() };
     expect(warm).toBeLessThan(1_500);
     // linear growth: a half-size tree in about half the time. The sweep times itself, so each reader returns the
     // sweep's own figure less the parse time it keeps apart, the same figure the budget above reads; the two sides are
     // read evenly (`interleavedMinima`), where the full side used to be the one reading above against a minimum of three.
+    // Each pass runs on a `dualClock`: its own figure is then thread CPU time, and the wall figure is rebuilt beside it.
     const halfDir = join(scale, '..', 'scale-half');
     const halfParsed = parseStore({ root: halfDir, layout, retiredLog: null });
     let half = sweepRepository({ root: halfDir, layout, aliases: halfParsed.details.legacyAliases, clock });
+    const sweepBoth = (root: string, aliases: typeof parsed.details.legacyAliases): { readonly reading: PassReading; readonly swept: typeof half } => {
+      const dual = dualClock();
+      const s = sweepRepository({ root, layout, aliases, clock: dual.clock });
+      return { reading: { wallMs: dual.sweepWallMs(s.details.parsedFiles), cpuMs: round1(s.durationMs - s.details.parseMs) }, swept: s };
+    };
     const growth = interleavedMinima({
-      full: () => { const s = sweepRepository({ root: scale, layout, aliases: parsed.details.legacyAliases, clock }); return s.durationMs - s.details.parseMs; },
-      half: () => { half = sweepRepository({ root: halfDir, layout, aliases: halfParsed.details.legacyAliases, clock }); return half.durationMs - half.details.parseMs; },
+      full: () => sweepBoth(scale, parsed.details.legacyAliases).reading,
+      half: () => { const r = sweepBoth(halfDir, halfParsed.details.legacyAliases); half = r.swept; return r.reading; },
     });
     // The sweep's figures are whole milliseconds, so the quotient's denominator is floored at 1 ms as before.
-    results.sweepHalf = { files: half.details.files, sites: half.sites.length, ...growthPair(growth, { full: swept.details.files, half: half.details.files }, 1) };
+    results.sweepHalf = { files: half.details.files, sites: half.sites.length, ...growthPair(growth, { full: swept.details.files, half: half.details.files }, 1), host: host() };
     if (out) writeFileSync(join(out, 'spike-results.json'), JSON.stringify(results, null, 2));
   });
   it('OQ-24 (Part AJ2): the parse-requiring checks of REQ-TRACE-104 rule 1 and REQ-TRACE-109/110 over the same 10^3-file tree, with the TypeScript compiler API', () => {
@@ -139,13 +189,13 @@ describe.skipIf(!out)('spike 7 — the traceability engine at scale', () => {
     const halfDir = join(scale, '..', 'scale-half');
     const half = corpus(halfDir);
     // the growth pair, read evenly (`interleavedMinima`); the budget-free figures above stay the full side's own
-    const growth = interleavedMinima({ full: () => ms(full.pass), half: () => ms(half.pass) });
+    const growth = interleavedMinima({ full: () => both(full.pass), half: () => both(half.pass) });
     results.parser = {
       version: parser.version, loadMs: parserLoadMs(), files: full.texts.length, modules: SPIKE_7.implFiles, tests: SPIKE_7.testFiles, functions: counts.functions,
       coldMs: cold, warmMs: warm, warmRunsMs: warmRuns.runsMs, perFileMs: Math.round((warm / full.texts.length) * 1000) / 1000,
       sweepParseMs: full.swept.details.parseMs, sweepParsedFiles: full.swept.details.parsedFiles,
       halfFiles: half.texts.length, halfWarmMs: growth.half.minMs,
-      ...growthPair(growth, { full: full.texts.length, half: half.texts.length }, 1),
+      ...growthPair(growth, { full: full.texts.length, half: half.texts.length }, 1), host: host(),
     };
     if (out) writeFileSync(join(out, 'spike-results.json'), JSON.stringify(results, null, 2));
   });

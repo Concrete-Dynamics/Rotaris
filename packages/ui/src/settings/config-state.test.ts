@@ -47,7 +47,7 @@ describe('the pending settings state (REQ-CONFIG-279..287, 335, 419, 425)', () =
       slotThinking: { small_model: null },
       runtime: { permission_mode: 'autonomous' },
       circuitBreakerEnabled: false,
-      roles: { tester: { scope: 'global', model: 'large_model', unsetThinking: true } },
+      roles: { tester: { global: { model: 'large_model', unsetThinking: true } } },
     });
   });
   it('the live state is the screen\'s current values, saved or not (ADR-0037 Tier B, REQ-CONFIG-262)', () => {
@@ -178,5 +178,42 @@ describe('REQ-CONFIG-341 — the Scope column\'s Unset is named by its field and
     expect(cell.model).toMatchObject({ offerUnset: true, unsetLabel: 'Unset model for tester' });
     expect(cell.reasoning).toMatchObject({ offerUnset: true, unsetLabel: 'Unset reasoning for tester' });
     expect(scopeCellOf({ ...tester, role: 'planner' }, saved, 'workspace').model.unsetLabel).toBe('Unset model for planner');
+  });
+});
+
+/**
+ * Defect note `a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`. REQ-CONFIG-259: "Role edits carry a
+ * per-field scope"; REQ-CONFIG-341: Unset "records a pending unset of (role, field, scope)". The pending entry held ONE
+ * scope per role, and every change to the role overwrote it, so a model unset at Workspace followed by a reasoning
+ * unset at Global saved both at Global: the global layer was asked to unset a model it did not hold, and the workspace
+ * override the user cleared stayed in place. One scope per field (the first repair) still let a second edit of the same
+ * field at the other scope drop the first: the pending edits are now held per (role, scope), each field within.
+ */
+describe('REQ-CONFIG-259/341 — each field of a role\'s pending edit keeps the scope it was made at', () => {
+  it('a model Unset at Workspace and then a reasoning Unset at Global save each at its own scope', () => {
+    const saved = pendingFrom(snapshot);
+    let pending = applyChange(saved, { kind: 'role', role: 'tester', scope: 'workspace', unsetModel: true });
+    pending = applyChange(pending, { kind: 'role', role: 'tester', scope: 'global', unsetThinking: true });
+    expect(savePayload(saved, pending).roles).toEqual({ tester: { workspace: { unsetModel: true }, global: { unsetThinking: true } } });
+  });
+  it('a model picked at Workspace survives a reasoning level picked at Global', () => {
+    const saved = pendingFrom(snapshot);
+    let pending = applyChange(saved, { kind: 'role', role: 'tester', scope: 'workspace', model: 'gpt-4o' });
+    pending = applyChange(pending, { kind: 'role', role: 'tester', scope: 'global', thinking: 'high' });
+    expect(savePayload(saved, pending).roles).toEqual({ tester: { workspace: { model: 'gpt-4o' }, global: { thinking: 'high' } } });
+  });
+  it('REQ-MONITOR-149: a model Unset at Workspace survives a model picked at Global, and both reach the save', () => {
+    const saved = pendingFrom(snapshot);
+    let pending = applyChange(saved, { kind: 'role', role: 'tester', scope: 'workspace', unsetModel: true });
+    pending = applyChange(pending, { kind: 'role', role: 'tester', scope: 'global', model: 'gpt-4o-mini' });
+    expect(savePayload(saved, pending).roles).toEqual({ tester: { workspace: { unsetModel: true }, global: { model: 'gpt-4o-mini' } } });
+  });
+  it('a later edit of the same field at the SAME scope replaces it there; the other scope keeps its own', () => {
+    const saved = pendingFrom(snapshot);
+    let pending = applyChange(saved, { kind: 'role', role: 'tester', scope: 'workspace', thinking: 'low' });
+    pending = applyChange(pending, { kind: 'role', role: 'tester', scope: 'global', model: 'gpt-4o' });
+    pending = applyChange(pending, { kind: 'role', role: 'tester', scope: 'workspace', unsetModel: true });
+    pending = applyChange(pending, { kind: 'role', role: 'tester', scope: 'global', model: 'gpt-4o-mini' });
+    expect(savePayload(saved, pending).roles).toEqual({ tester: { workspace: { unsetModel: true, thinking: 'low' }, global: { model: 'gpt-4o-mini' } } });
   });
 });

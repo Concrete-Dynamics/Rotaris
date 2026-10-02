@@ -1,4 +1,4 @@
-import type { Actor, BlockerPayload, BoardAction, BoardProjection, DisclosureState, Reachability, ReqId, RequirementDetail, RequirementRecord, RequirementsCommandPayload, ReviewPayload, RunClaim, RunLaunchPreview, RunPermissions, RunReaped, RunSettled, StoreParse, TraceabilityEngine, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
+import type { Actor, BlockerPayload, BoardAction, BoardCard, BoardProjection, DisclosureState, Reachability, ReqId, RequirementDetail, RequirementRecord, RequirementsCommandPayload, ReviewPayload, RunClaim, RunLaunchPreview, RunPermissions, RunReaped, RunSettled, StandingDisclosure, StoreParse, TraceabilityEngine, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
 import { SYSTEM_ONLY_REQUIREMENTS_COMMANDS } from '@rotaris/contracts'; // Part AP
 import { asSessionId, err, millis, toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { StoreDal, type ResolvedStore } from '@rotaris/store';
@@ -27,11 +27,12 @@ import { join } from 'node:path';
  */
 export interface DeliveryAnswer {
   readonly value: unknown;
-  /** Present exactly when a write moved the generation; main publishes it on channel 10 AFTER the reply (persist before publish). */
+  /** Present exactly when a write moved the generation, or main's standing disclosure moved the queue; main publishes it on channel 10 AFTER the reply (persist before publish). */
   readonly changed?: { readonly generation: number; readonly affected: ReqId[] | null };
 }
 export interface DeliveryService {
-  handle(command: RequirementsCommandPayload, actor: Actor): Promise<DeliveryAnswer>;
+  /** `disclosure`: main's standing disclosure, stamped on the envelope beside the actor (REQ-TRACE-472); absent, the last one held stands. */
+  handle(command: RequirementsCommandPayload, actor: Actor, disclosure?: StandingDisclosure): Promise<DeliveryAnswer>;
   /** What the restart reap settled on the first pass (REQ-TRACE-476), for the log. */
   readonly reaped: readonly ReapResult[];
   readonly generation: number;
@@ -124,9 +125,24 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   const launches = new Map<ReqId, Launch>();
   const recordOf = (id: ReqId): RequirementRecord | undefined => parse?.records.find((x) => x.id === id);
   const workspaceUnattended = (): boolean => permissionMode === 'autonomous';
-  /** REQ-TRACE-497: a run started while its disclosure was due and not accepted is never observable — a launch without one is not claimable. */
-  const disclosed = (l: Launch | undefined): boolean => l !== undefined && (l.disclosure !== 'undisclosed' || workspaceUnattended());
-  const permissionsOf = (l: Launch | undefined): RunPermissions => (l === undefined || l.disclosure === 'off' || workspaceUnattended() ? 'workspace' : 'permissive');
+  /**
+   * What main's two preferences make of a launch nobody disclosed (REQ-TRACE-472): only main holds them, and it stamps
+   * the value on every command it sends; this is the last one received, `due` until the first. ONE value feeds the
+   * queue the service publishes, the launch preview and the claim, so the queue shows the candidate the scheduler takes
+   * next, for the reason it takes or defers it (REQ-TRACE-478). The verifier's second finding on
+   * `a-card-resting-in-ready-across-a-restart-can-never-be-started.md` put it on the claim alone, and the published queue
+   * then still called "deferred, open it to see the disclosure" a card the next claim took with the disclosure
+   * suppressed (the third finding).
+   */
+  let standing: StandingDisclosure = 'due';
+  /**
+   * REQ-TRACE-497: a run started while its disclosure was due and not accepted is never observable — a launch without one
+   * is not claimable. A launch recorded undisclosed (one the restart recovery rebuilt) is disclosed once the disclosure
+   * is permanently suppressed or the elevation is switched off, as a launch disclosed in this process would be.
+   */
+  const disclosed = (l: Launch | undefined): boolean => l !== undefined && (l.disclosure !== 'undisclosed' || standing !== 'due' || workspaceUnattended());
+  /** REQ-TRACE-472: with the elevation switched off a board-started run adopts the workspace's own permission mode, whatever its launch recorded. */
+  const permissionsOf = (l: Launch | undefined): RunPermissions => (l === undefined || l.disclosure === 'off' || standing === 'off' || workspaceUnattended() ? 'workspace' : 'permissive');
   /** The scheduler over the store's current state (REQ-TRACE-478): the base projection supplies the candidates, then the queue is the scheduler's own order and reasons. */
   const schedule = (base: BoardProjection) => {
     const stamp = now();
@@ -147,13 +163,56 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     });
   };
   const source = () => (parse === undefined ? { writable: false, canCreate: false, reason: 'No requirement store is open.' } : probeSourceWritability(workspaceRoot, parse.layout.storeDir));
+  /** The unit a card in `ready` is launched as: its `Units` fact counts the runs begun, and the next one is that count plus one. */
+  const unitOfCard = (card: BoardCard | undefined): string => unitIdFor(Number(card?.facts.find((f) => f.label === 'Units')?.value ?? '0'));
+  /**
+   * REQ-TRACE-464's take-over of the tree the store recorded for this unit, where no launch in memory holds it (a restart
+   * since the release). `undefined` when no row of this unit names a tree still on disk; otherwise Git's answer.
+   */
+  const takeOverRecorded = async (id: ReqId, unit: string): Promise<Result<ProvisionedWorktree, string> | undefined> => {
+    const recorded = reader.worktrees(id).find((w) => w.unit === unit && existsSync(w.path));
+    return recorded === undefined ? undefined : git.takeOver({ workspaceRoot, id, unit, path: recorded.path, branch: recorded.branch });
+  };
+  /**
+   * Defect note `a-card-resting-in-ready-across-a-restart-can-never-be-started.md` — REQ-TRACE-472/482/464. A card resting
+   * in `ready` whose launch the process lost (a restart: `launches` is memory only) is recovered here from the store's
+   * worktree row, by take-over and never by provisioning: the queue's release has no transition and so no row to write
+   * a new tree into, and REQ-TRACE-464 forbids a second tree for the unit. Called from the queue's release, which records
+   * the disclosure it carries on the recovered launch, and once on the first pass after a start, so an unattended
+   * workspace's scheduler can claim the card with no release at all. A launch already holding this unit's tree only
+   * takes the disclosure. Answers the reason when nothing could be taken over, for the caller to state as the stall
+   * (REQ-TRACE-463); the launch is then kept without a tree, so the claim still refuses it.
+   */
+  const recoverLaunch = async (card: BoardCard, disclosure: Launch['disclosure'], opts: { readonly onlyIfAbsent?: boolean } = {}): Promise<string | undefined> => {
+    const id = card.id;
+    const prior = launches.get(id);
+    const unit = unitOfCard(card);
+    if (prior?.worktree !== undefined && prior.unit === unit && existsSync(prior.worktree.path)) { launches.set(id, { ...prior, disclosure }); return undefined; }
+    const kept = { action: prior?.action ?? ('release' as const), ...(prior?.instructions === undefined ? {} : { instructions: prior.instructions }) };
+    const taken = await takeOverRecorded(id, unit);
+    // The pass's recovery (`onlyIfAbsent`) found no launch before it waited on Git; a queue release that recovered the
+    // card meanwhile recorded the person's disclosure, and an undisclosed launch must not overwrite it (the verifier's
+    // optional finding, repair round 2).
+    if (opts.onlyIfAbsent === true && launches.has(id)) return undefined;
+    if (taken?.ok === true) {
+      launches.set(id, { unit, disclosure, worktree: taken.value, ...kept });
+      log(`requirements: ${id} unit ${unit} takes over its worktree at ${taken.value.path} on ${taken.value.branch} (the tree the store recorded for it, its launch lost since the release; disclosure ${disclosure})`);
+      return undefined;
+    }
+    const reason = taken === undefined
+      ? `${id} unit ${unit} has no recorded worktree on disk to take over, and a start from the queue provisions none: restore the tree, or hold the card and resume it from the board, which provisions one.`
+      : `the worktree recorded for ${id} unit ${unit} was not taken over: ${taken.error}`;
+    launches.set(id, { unit, disclosure, ...kept });
+    log(`requirements: ${id} unit ${unit} rests in ready with no launch to start: ${reason}`, 'warn');
+    return reason;
+  };
   /** REQ-TRACE-464's provisioning, inside the writer's `beforeCommit` slot: a refusal here writes nothing (REQ-TRACE-472's declined disclosure, REQ-TRACE-498's repository rows); a resume's failure never stops the blocker clearing (REQ-TRACE-463). */
   const beforeCommit = async (id: ReqId, action: BoardAction, decision: { readonly startsRun: boolean }, payload: Readonly<Record<string, string>> | undefined) => {
     if (!decision.startsRun) return undefined;
     const record = recordOf(id);
     const card = current?.cards.find((c) => c.id === id);
     const unitsStarted = Number(card?.facts.find((f) => f.label === 'Units')?.value ?? '0');
-    const unit = unitIdFor(unitsStarted);
+    const unit = unitOfCard(card);
     const d = payload?.['disclosure'];
     const disclosure: Launch['disclosure'] = d === 'accepted' || d === 'suppressed' || d === 'off' ? d : 'undisclosed';
     const instructions = payload?.['instructions'];
@@ -175,12 +234,9 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     };
     const prior = launches.get(id);
     if (prior?.worktree !== undefined && prior.unit === unit && existsSync(prior.worktree.path)) return takeOver(prior.worktree, 'the launch its release provisioned');
-    const recorded = prior?.worktree === undefined ? reader.worktrees(id).find((w) => w.unit === unit && existsSync(w.path)) : undefined;
-    if (recorded !== undefined) {
-      const taken = await git.takeOver({ workspaceRoot, id, unit, path: recorded.path, branch: recorded.branch });
-      if (taken.ok) return takeOver(taken.value, 'the tree the store recorded for it');
-      log(`requirements: ${id} unit ${unit}'s recorded worktree was not taken over: ${taken.error}`, 'warn');
-    }
+    const taken = prior?.worktree === undefined ? await takeOverRecorded(id, unit) : undefined;
+    if (taken?.ok === true) return takeOver(taken.value, 'the tree the store recorded for it');
+    if (taken !== undefined) log(`requirements: ${id} unit ${unit}'s recorded worktree was not taken over: ${taken.error}`, 'warn');
     const repo = await git.checkRepository(workspaceRoot);
     if (!repo.ok) return fail(repo.reason);
     const made = await git.provision({ workspaceRoot, id, unit, title: record?.title ?? id, branchTemplate: requirements.execution.branch_template, cycle: unitsStarted + 1 });
@@ -335,6 +391,19 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
       }
       // Part AP — REQ-TRACE-407/437: a delivered requirement whose text moved is moved out of the terminal state by the pass, through the normal evaluation.
       if (parse !== undefined) for (const r of parse.records) { const n = nowOf(r.id); if (n !== undefined) { const m = writer.recordSpecificationMoved(r.id, { now: n }); if (m.ok && m.value.historyEntry !== 0) log(`requirements: ${r.id} moved ${m.value.from} → ${m.value.to} (specification changed since it was accepted)`); } }
+      // Defect note `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`: every pass that parses gives each
+      // card resting in `ready` with NO launch held (a restart lost it; nothing else leaves a candidate without one) the
+      // tree its release recorded, undisclosed — the queue's release records the disclosure; an unattended workspace needs
+      // none (REQ-TRACE-474) and main's claim carries the standing one (REQ-TRACE-472), so the scheduler can claim it. It
+      // was tied to the restart reap's one pass, and a first parse that failed used it up for the session (the verifier's
+      // first finding). A card it could not recover keeps a launch with no tree, so it is tried once, not on every pass.
+      // Git is only read here: nothing is provisioned and no delivery record is written (REQ-TRACE-408).
+      // The cards' take-overs are independent Git reads, so they run together rather than one after another before the
+      // first projection is published.
+      if (parse !== undefined) {
+        const resting = reader.board(input()).cards.filter((card) => card.column === 'ready' && !launches.has(card.id) && !inFlight.has(card.id));
+        await Promise.all(resting.map(async (card) => { const failed = await recoverLaunch(card, 'undisclosed', { onlyIfAbsent: true }); if (failed !== undefined) stalled.set(card.id, failed); }));
+      }
       return rebuild();
     })().finally(() => { refreshing = undefined; });
     return refreshing;
@@ -362,7 +431,20 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   const service: DeliveryService = {
     get reaped() { return reaped ?? []; },
     get generation() { return generation; },
-    async handle(command, actor) {
+    async handle(command, actor, disclosure) {
+      // REQ-TRACE-472/478: main's standing disclosure moved since the queue was last published (a permanent acceptance, the
+      // elevation switched, or the first command after a start told the service what the preferences are). The queue is
+      // recomputed under the new value BEFORE the command is answered, and the reply carries the move for channel 10, so
+      // no surface keeps reading a reason the scheduler no longer gives. Nothing is written: the value is main's.
+      const moved = disclosure !== undefined && disclosure !== standing && current !== undefined;
+      if (disclosure !== undefined) standing = disclosure;
+      if (moved) rebuild();
+      const answer = await answerCommand(command, actor);
+      return moved ? { ...answer, changed: { generation, affected: null } } : answer;
+    },
+  };
+  /** The command proper, under the standing disclosure `handle` settled. */
+  async function answerCommand(command: RequirementsCommandPayload, actor: Actor): Promise<DeliveryAnswer> {
       // Part AP — REQ-TRACE-392: the system is the sole actor that places a requirement into a run; a person's copy of a run command is refused.
       if (SYSTEM_ONLY_REQUIREMENTS_COMMANDS.has(command.name) && actor.kind !== 'system') return { value: { ok: false, error: { reason: `${command.name} is the run coordinator's to speak, not a person's; nothing changed.` } } };
       switch (command.name) {
@@ -424,9 +506,18 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
           if (command.start === true) stopped = false;
           if (command.hold !== undefined) { held.add(command.hold); armed.delete(command.hold); }
           if (command.release !== undefined) {
-            held.delete(command.release); stalled.delete(command.release); armed.add(command.release);
-            const l = launches.get(command.release);
-            if (command.disclosure !== undefined && l !== undefined) launches.set(command.release, { ...l, disclosure: command.disclosure });
+            const id = command.release;
+            held.delete(id); stalled.delete(id); armed.add(id);
+            const l = launches.get(id);
+            const card = current?.cards.find((c) => c.id === id);
+            // Defect note `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`: a candidate in `ready`
+            // whose launch was lost (or holds no tree) is recovered from the store's row, so "Disclose and start"
+            // records its disclosure and the release arms it (REQ-TRACE-472/482/464); otherwise the disclosure is
+            // recorded on the launch held, as before.
+            if (card?.column === 'ready') {
+              const failed = await recoverLaunch(card, command.disclosure ?? l?.disclosure ?? 'undisclosed');
+              if (failed !== undefined) { stalled.set(id, failed); armed.delete(id); }
+            } else if (command.disclosure !== undefined && l !== undefined) launches.set(id, { ...l, disclosure: command.disclosure });
           }
           const g = rebuild();
           return { value: current!.queue, changed: { generation: g, affected: null } };
@@ -607,8 +698,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
           return { value: blockerPayload(command.id) };
         }
       }
-    },
-  };
+  }
   return service;
 }
 

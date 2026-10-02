@@ -62,7 +62,7 @@ describe('REQ-CONFIG-252 every writer preserves comments, blank lines, indentati
   it('the desktop save writes its enumerated keys and nothing else', async () => {
     const s = scope();
     writeFileSync(s.wsFile, FIXTURE);
-    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { slots: { large_model: 'gpt-4o', medium_model: '' }, slotThinking: { large_model: 'high' }, runtime: { max_depth: 2 }, circuitBreakerEnabled: false, delegationStrategy: 'single', roles: { tester: { scope: 'workspace', thinking: 'low' } } });
+    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { slots: { large_model: 'gpt-4o', medium_model: '' }, slotThinking: { large_model: 'high' }, runtime: { max_depth: 2 }, circuitBreakerEnabled: false, delegationStrategy: 'single', roles: { tester: { workspace: { thinking: 'low' } } } });
     expect(r.ok).toBe(true);
     const text = readFileSync(s.wsFile, 'utf8');
     expect(text).toContain('# keep this header\n\ndefault_persona: orchestrator # trailing comment on a key\nsmall_model: gpt-4o-mini\n');
@@ -168,7 +168,7 @@ describe('REQ-CONFIG-256..260 the desktop save', () => {
     expect(!r.ok && r.error.fault).toContain('workspace agents.yaml');
     writeFileSync(s.wsFile, '');
     writeFileSync(s.gFile, '- x\n');
-    const g = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { roles: { tester: { scope: 'global', model: 'gpt-4o' } } });
+    const g = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { roles: { tester: { global: { model: 'gpt-4o' } } } });
     expect(!g.ok && g.error.fault).toContain('global agents.yaml');
     expect(readFileSync(s.wsFile, 'utf8')).toBe('');
   });
@@ -184,7 +184,7 @@ describe('REQ-CONFIG-256..260 the desktop save', () => {
     const s = scope();
     writeFileSync(s.wsFile, 'runtime: 5\npersonas:\n  oracle:\n    model: a\n');
     writeFileSync(s.gFile, 'personas:\n  tester:\n    model: gpt-4o\n    thinking: low\n');
-    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { runtime: { max_depth: 2 }, roles: { 'codebase-analyst': { scope: 'workspace', model: 'gpt-4o-mini' }, tester: { scope: 'global', unsetModel: true, unsetThinking: true } } });
+    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { runtime: { max_depth: 2 }, roles: { 'codebase-analyst': { workspace: { model: 'gpt-4o-mini' } }, tester: { global: { unsetModel: true, unsetThinking: true } } } });
     expect(r.ok).toBe(true);
     expect(readFileSync(s.wsFile, 'utf8')).toBe('runtime:\n  max_depth: 2\npersonas:\n  codebase-analyst:\n    model: gpt-4o-mini\n');
     expect(readFileSync(s.gFile, 'utf8')).toBe('{}\n');
@@ -195,9 +195,49 @@ describe('REQ-CONFIG-256..260 the desktop save', () => {
   it('a role model edit carrying null removes the key instead of writing model: null (REQ-CONFIG-041, REQ-CONFIG-098)', async () => {
     const s = scope();
     writeFileSync(s.gFile, 'personas:\n  orchestrator:\n    thinking: default\n    model: gpt-4o\n');
-    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { roles: { orchestrator: { scope: 'global', model: null } } });
+    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { roles: { orchestrator: { global: { model: null } } } });
     expect(r.ok).toBe(true);
     expect(readFileSync(s.gFile, 'utf8')).toBe('personas:\n  orchestrator:\n    thinking: default\n');
+  });
+});
+
+/**
+ * Defect note `a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md` — REQ-CONFIG-259: "Role edits carry a
+ * per-field scope". One role's model unset at the workspace and reasoning unset at the global layer each land where they
+ * were made, and each file is written once; until 2026-10-02 one `scope` routed the whole entry to one file.
+ */
+describe('REQ-CONFIG-259/341 a role edit at two scopes', () => {
+  it('unsets the model in the workspace file and the reasoning in the global file, each file written once', async () => {
+    const s = scope();
+    writeFileSync(s.wsFile, 'personas:\n  tester:\n    model: gpt-4o\n');
+    writeFileSync(s.gFile, 'personas:\n  tester:\n    model: gpt-4o-mini\n    thinking: high\n');
+    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { roles: { tester: { workspace: { unsetModel: true }, global: { unsetThinking: true } } } });
+    expect(r.ok).toBe(true);
+    // The workspace's override is cleared; the global layer's model, which the user did not touch, stays.
+    expect(readFileSync(s.wsFile, 'utf8')).toBe('{}\n');
+    expect(readFileSync(s.gFile, 'utf8')).toBe('personas:\n  tester:\n    model: gpt-4o-mini\n');
+    expect(r.ok && r.value.global).not.toBeNull();
+    const loaded = loadConfiguration({ globalDir: s.globalDir, workspaceRoot: s.workspaceRoot });
+    expect(loaded.ok && loaded.value.personas['tester']).toMatchObject({ model: 'gpt-4o-mini' });
+  });
+  it('writes a model picked at the workspace and a reasoning level picked at the global layer each in its own file', async () => {
+    const s = scope();
+    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { roles: { tester: { workspace: { model: 'gpt-4o' }, global: { thinking: 'high' } } } });
+    expect(r.ok).toBe(true);
+    expect(readFileSync(s.wsFile, 'utf8')).toBe('personas:\n  tester:\n    model: gpt-4o\n');
+    expect(readFileSync(s.gFile, 'utf8')).toContain('personas:\n  tester:\n    thinking: high\n');
+  });
+  it('REQ-CONFIG-341/MONITOR-149: a model unset at the workspace and a model picked at the global layer both land, each in its own file', async () => {
+    const s = scope();
+    writeFileSync(s.wsFile, 'personas:\n  tester:\n    model: gpt-4o\n');
+    writeFileSync(s.gFile, 'personas:\n  tester:\n    model: gpt-4o\n');
+    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { roles: { tester: { workspace: { unsetModel: true }, global: { model: 'gpt-4o-mini' } } } });
+    expect(r.ok).toBe(true);
+    // The workspace override the user cleared is gone, so the global pick is what the role now runs on.
+    expect(readFileSync(s.wsFile, 'utf8')).toBe('{}\n');
+    expect(readFileSync(s.gFile, 'utf8')).toBe('personas:\n  tester:\n    model: gpt-4o-mini\n');
+    const loaded = loadConfiguration({ globalDir: s.globalDir, workspaceRoot: s.workspaceRoot });
+    expect(loaded.ok && loaded.value.personas['tester']).toMatchObject({ model: 'gpt-4o-mini' });
   });
 });
 

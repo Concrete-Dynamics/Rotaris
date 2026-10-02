@@ -24,7 +24,29 @@ touches. Where this page and an authority disagree, the authority governs and th
 
 A request that would change what the product does is classified before code and logged in
 `docs/product/requests.md` (covered, OQ, ESC, defect found by building, or a directive). The orchestrator does this
-for the owner's requests and rulings before a run, on a docs-only branch; agents cite the ids.
+for the owner's requests and rulings before a run, on a docs-only branch; agents cite the ids. A row is appended at
+the next free `R-NNN`, and the log's `## Count` line is advanced to it **in the same commit**: `pnpm lint` runs
+`tools/check-request-log.mjs`, which refuses a declared count that is not the count ("the Count section declares
+R-001 to R-067, but the highest row is R-068", 2026-10-02).
+
+## Another writer on main
+
+The owner or another session may merge onto `main` while a plan runs (2026-10-02: the owner's Codex-built branch,
+head `d367280`, landed request R-069 with code, test and record edits while fin4 and fin5 ran). At each check-in, list
+what landed since the last merge this session pushed, with the session trailer, since every Claude session authors
+as "Claude" and a trailer-less commit by the owner is theirs:
+
+```bash
+git log --format='%h %an %(trailers:key=Claude-Session,valueonly,separator=%x2C) %s' <that merge>..origin/main
+```
+
+When another author or session appears, refresh the orchestration's reference worktree `<repo>-wt-skillref-<id>` to
+origin/main (SKILL.md §3; §6 removes it) and run `node tools/check-request-log.mjs` and
+`node tools/check-record-links.mjs` there (no install needed; seconds), so a red base is known before a bundle's gate
+blames the bundle. Judge their head commit, never an intermediate merge of theirs (`a46180d`, before they merged this
+session's work, read like a lost row). A red base is reported to the owner and recorded as a defect note
+(`docs/defects/README.md`); their commit is never reverted (`docs/clean-room/agent-workflow.md`: surface a collision
+with the owner's commit, never reset it).
 
 ## Worktrees and branches — `docs/clean-room/agent-workflow.md`
 

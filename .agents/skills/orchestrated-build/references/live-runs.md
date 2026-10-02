@@ -13,6 +13,12 @@ works for a user, and it can spend money. Proofs pass on a product a live run st
   that day and runs on the same terms.
 - The plan carries it: `"live": { "authorized": true, "ownerWords": "<their words>" }`. Without that field, `render`
   tells every agent live runs are not authorised, and acceptance runs no live-runner.
+- **Ask once per owner.** Once the owner has made the authorization standing, it is recorded once with their words
+  and the date (here R-068 in `docs/product/requests.md`), and every later plan quotes those words in
+  `live.ownerWords` without asking again (every plan since has). It covers what the words cover, here the registered
+  self-hosted default; another endpoint, or a metered one, is asked about. A per-run authorization covers its run.
+  The words are in the conversation that gave them: a new session relying on the recorded words alone may meet the
+  classifier's refusal (The permission system, below), and then asks the owner once.
 - The endpoint and key live outside the repository. Here: `~/.rotaris/live-run/endpoints.json` names the default
   endpoint and marks it `unmetered`; the key sits beside it in a file only its owner can read; the environment may
   carry the key and URL in variables the owner names. Never print a key: compare with

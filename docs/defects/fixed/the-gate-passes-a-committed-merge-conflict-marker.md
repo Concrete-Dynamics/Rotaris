@@ -59,6 +59,21 @@ failure, and a root inside a git directory but not a work tree, throws `git rev-
 lint goes red. With the same correction, the index side reads a blob as `:0:<path>`: a bare `:<path>` read a tracked
 `1:x.md` as stage 1 of `x.md` and reported it unreadable (red, never green, but red for the wrong reason).
 
+**Corrected after the third verification (2026-10-02).** The claim above and in the records that it reads every
+tracked text file was false and is kept beside its replacement. Both `git grep` passes ran with `-I`, and `git grep -I`
+treats a path whose `diff` attribute is unset as binary. `.gitattributes` sets `pnpm-lock.yaml text eol=lf -diff`, so
+the lockfile, the file a merge in a pnpm workspace conflicts on most, was never a candidate on either side: a staged
+`<<<<<<< HEAD` / `=======` / `>>>>>>> origin/main` block in it answered `[]` and the lint exited 0. Now both passes run
+`git grep --text`, and what counts as binary is decided by content alone: a candidate with a NUL in its first 8000
+bytes (git's own test, `FIRST_FEW_BYTES`) is passed over, since git never writes markers into a binary file. With the
+same correction, the index side reads `:0:./<path>`: `:0:<path>` resolves from the repository top while `git grep`
+names paths from its cwd, so a root below the top would have reported its candidates unreadable (not reachable from
+the CLI, which passes the repository root). Shown on the worktree's real `pnpm-lock.yaml`: a block appended and
+staged at lines 5305, 5307 and 5309 answers `[]` on the earlier form and six problems (both sides) on this one, and
+removing it turns the check green. Under `pnpm lint`, pnpm itself rewrites a conflicted lockfile on disk before the
+script runs ("Merge conflict detected in pnpm-lock.yaml and successfully merged"), so the working-copy side is clean by
+then and the gate names the three lines on the index side, exit 1.
+
 Pinned by `tools/check-conflict-markers.test.ts` (twelve cases, the markers built with `repeat` so the file cannot trip
 the gate): the three-marker block is named line by line, a diff3 block's base marker and a lone opening or closing
 marker are named, a setext heading underline (alone, and after a closed block) and an indented example inside a code
@@ -72,7 +87,12 @@ throws a `git grep` failure instead of answering. The colour case and the corrup
 form (it answered `[]` and `[]`). Three more were added with the second correction, each failing against the form
 before it: a repository whose `core.repositoryformatversion` is 99 and a directory whose `.git` file names a missing
 git directory both throw `git rev-parse failed` (the earlier form answered `null`), and a staged `1:x.md` holding the
-block is read at stage 0 and names lines 5, 7 and 9 (the earlier form reported it unreadable). Fifteen cases in all.
+block is read at stage 0 and names lines 5, 7 and 9 (the earlier form reported it unreadable). Fifteen cases in all
+after the second correction. Three more were added with the third: a throwaway repository whose `.gitattributes`
+sets `pnpm-lock.yaml text eol=lf -diff` and whose staged lockfile holds a block names lines 2, 4 and 6 on both sides
+(the earlier form answered `[]`); a root below the repository top names its index side (the earlier form reported
+it unreadable); and a file with a NUL in its first bytes and a marker-like line is passed over as binary. Eighteen
+cases in all.
 The dubious-ownership case was shown by hand, not in the test file (it needs a second uid): after `chown -R
 1234:1234` of a scratch repository holding a staged block, the earlier form answered `null` and its CLI printed that
 it skipped (exit 0); the corrected one throws, and its CLI exits 1 with git's message. The test file fails without the repair (the module does not exist). Shown again after the repair: the same marker block

@@ -1,10 +1,11 @@
 /**
  * The conflict-marker gate, over texts and over a throwaway git repository: a real three-marker block it must fail
- * (also when git is configured to colour its output, and never answered as skipped over a checkout git refuses), and the two lookalikes it must pass — a Markdown setext heading underlined with seven `=`, and a marker block shown
+ * (also when git is configured to colour its output, in a file whose `diff` attribute is unset such as this repository's
+ * pnpm-lock.yaml, and never answered as skipped over a checkout git refuses), and the two lookalikes it must pass — a Markdown setext heading underlined with seven `=`, and a marker block shown
  * as an indented example. The markers are built with `repeat` so this file cannot trip the gate it tests.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -159,6 +160,47 @@ describe('checkRepository — over the working copy and the index of a git check
       { where: 'index', path: '1:x.md', line: 5, marker: OPEN },
       { where: 'index', path: '1:x.md', line: 7, marker: SEP },
       { where: 'index', path: '1:x.md', line: 9, marker: CLOSE },
+    ]);
+  });
+
+  it('reads a text file whose diff attribute is unset, as this repository sets it on pnpm-lock.yaml', () => {
+    // `git grep -I` treats a path whose `diff` attribute is unset as binary, so `pnpm-lock.yaml text eol=lf -diff`
+    // once kept the lockfile, the file a pnpm merge conflicts on most, out of the gate on both sides (the third
+    // verifier's finding on this gate).
+    writeFileSync(join(root, '.gitattributes'), 'pnpm-lock.yaml text eol=lf -diff\n');
+    const lock = ["lockfileVersion: '9.0'", `${OPEN} HEAD`, 'a: 1', SEP, 'a: 2', `${CLOSE} origin/main`, ''].join('\n');
+    writeFileSync(join(root, 'pnpm-lock.yaml'), lock);
+    git('add', '.');
+    expect(checkRepository(root).map((p: { where: string; path: string; line: number }) => `${p.where} ${p.path}:${p.line}`)).toEqual([
+      'working copy pnpm-lock.yaml:2',
+      'working copy pnpm-lock.yaml:4',
+      'working copy pnpm-lock.yaml:6',
+      'index pnpm-lock.yaml:2',
+      'index pnpm-lock.yaml:4',
+      'index pnpm-lock.yaml:6',
+    ]);
+  });
+
+  it("skips a binary file (a NUL in its first 8000 bytes, git's own test) even where a line in it reads as a marker", () => {
+    writeFileSync(join(root, 'blob.bin'), Buffer.concat([Buffer.from(`${OPEN} HEAD\nx\n${CLOSE} b\n`), Buffer.from([0, 1, 2])]));
+    writeFileSync(join(root, 'a.md'), block);
+    git('add', '.');
+    expect([...new Set(checkRepository(root).map((p: { path: string }) => p.path))]).toEqual(['a.md']);
+  });
+
+  it("reads the index side of a root below the repository top as that root's own paths", () => {
+    // `:0:<path>` resolves from the repository top while `git grep` names paths from its cwd; `:0:./<path>` keeps the
+    // two in step, so a root below the top is not reported unreadable.
+    mkdirSync(join(root, 'sub'));
+    writeFileSync(join(root, 'sub', 'a.md'), block);
+    git('add', '.');
+    expect(checkRepository(join(root, 'sub')).map((p: { where: string; path: string; line: number }) => `${p.where} ${p.path}:${p.line}`)).toEqual([
+      'working copy a.md:5',
+      'working copy a.md:7',
+      'working copy a.md:9',
+      'index a.md:5',
+      'index a.md:7',
+      'index a.md:9',
     ]);
   });
 

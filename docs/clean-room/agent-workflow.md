@@ -50,6 +50,11 @@ Abandoning a branch because the merge is hard is not an outcome an agent may cho
   Markdown heading underline and passes). It names the file and the line. Markdown and JSON
   read as text are where it matters: a marker there broke nothing else the gate runs
   ([the note](../defects/fixed/the-gate-passes-a-committed-merge-conflict-marker.md)).
+  Text means the content, not an attribute: `pnpm-lock.yaml` (`-diff` in `.gitattributes`)
+  is read too, though until 2026-10-02's third correction it was not. `pnpm` itself
+  rewrites a conflicted lockfile on disk when it runs (`pnpm lint` prints "Merge conflict
+  detected in pnpm-lock.yaml and successfully merged"), so the block it leaves staged is
+  caught on the index side: stage the resolved lockfile again before committing.
 - **After a keep-both merge, run the compiler, not a sweep you wrote.** Command ids,
   preference keys, barrel re-exports, zod literal kinds, `case` labels, script names and
   ignore entries all duplicate silently; `tsc` finds in seconds what a regex misses.

@@ -12,7 +12,11 @@
 //
 // It reads every tracked text file twice over: the working copy (what the next `git add` stages) and the index
 // (what the next commit carries), since either can hold a marker the other has lost. One `git grep` per side
-// names the candidate files; only those are read. Runs as part of `pnpm lint`.
+// names the candidate files; only those are read. What counts as text is the content, never an attribute: `git grep`
+// runs with `--text`, and a candidate is skipped as binary only when a NUL stands in its first 8000 bytes, git's own
+// test. (`git grep -I` reads a path whose `diff` attribute is unset as binary, and `.gitattributes` sets
+// `pnpm-lock.yaml text eol=lf -diff`: the lockfile, the file a pnpm merge conflicts on most, was never read.) Git
+// never writes markers into a binary file; it keeps one side and reports the conflict. Runs as part of `pnpm lint`.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -64,10 +68,10 @@ const CANDIDATE = `^(${OPEN}|${CLOSE}|\\|{7})( |$)`;
  * @param {string} root
  * @param {string[]} args
  */
-function git(root, args) {
+function git(root, args, encoding = 'utf8') {
   return execFileSync('git', ['-c', 'color.ui=false', '-c', 'color.grep=false', ...args], {
     cwd: root,
-    encoding: 'utf8',
+    encoding,
     maxBuffer: 32 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -108,14 +112,23 @@ function reasonOf(error) {
   return stderr !== '' ? stderr.split('\n')[0] : String(error instanceof Error ? error.message : error);
 }
 
+/** Bytes git reads to decide whether a buffer is binary (`FIRST_FEW_BYTES` in git's `xdiff-interface.c`). */
+const FIRST_FEW_BYTES = 8000;
+
+/** Git's own test for a binary buffer: a NUL in its first 8000 bytes. The `diff` and `text` attributes play no part. */
+function isBinary(buffer) {
+  return buffer.subarray(0, FIRST_FEW_BYTES).includes(0);
+}
+
 /**
  * Paths `git grep` names in `root`, over the working copy or (`cached`) the index. `git grep` exiting 1 is the
  * green answer (nothing matched); any other failure in a checkout throws, so a broken checkout cannot read as
- * "skipped" or as clean.
+ * "skipped" or as clean. `--text` greps every file whatever its attributes say; the binary ones are dropped by
+ * content when read (`isBinary`), not by `-I`, which also drops every `-diff` path.
  */
 function candidates(root, cached) {
   try {
-    const out = git(root, ['grep', '--no-color', '-l', '-I', '-z', ...(cached ? ['--cached'] : []), '-E', CANDIDATE]);
+    const out = git(root, ['grep', '--no-color', '-l', '--text', '-z', ...(cached ? ['--cached'] : []), '-E', CANDIDATE]);
     return out.split('\0').filter((p) => p !== '');
   } catch (error) {
     if (error && typeof error === 'object' && 'status' in error && error.status === 1) return [];
@@ -138,7 +151,8 @@ function unmergedPaths(root) {
  * The markers in `root`'s tracked files, each as `{ where, path, line, marker }` (`where` is `working copy` or
  * `index`), or `null` when `root` is not a git checkout. A candidate path the check cannot read is a problem too,
  * `{ where, path, unreadable }`, never a silent skip; the one exception is an unmerged path, which has no stage-0
- * entry to read from the index and whose working copy is read instead.
+ * entry to read from the index and whose working copy is read instead. A candidate whose content is binary (a NUL in
+ * its first 8000 bytes) holds no text marker and is passed over.
  * @param {string} root
  */
 export function checkRepository(root) {
@@ -147,27 +161,30 @@ export function checkRepository(root) {
   const index = candidates(root, true);
   const problems = [];
   for (const path of working) {
-    let text;
+    let bytes;
     try {
-      text = readFileSync(join(root, path), 'utf8');
+      bytes = readFileSync(join(root, path));
     } catch (error) {
       problems.push({ where: 'working copy', path, unreadable: reasonOf(error) });
       continue;
     }
-    for (const m of markersIn(text)) problems.push({ where: 'working copy', path, ...m });
+    if (isBinary(bytes)) continue;
+    for (const m of markersIn(bytes.toString('utf8'))) problems.push({ where: 'working copy', path, ...m });
   }
   const unmerged = index.length > 0 ? unmergedPaths(root) : new Set();
   for (const path of index) {
-    let text;
+    let bytes;
     try {
-      // `:0:` names the stage explicitly: a bare `:${path}` reads `1:x.md` as stage 1 of `x.md`.
-      text = git(root, ['cat-file', 'blob', `:0:${path}`]);
+      // `:0:` names the stage explicitly: a bare `:${path}` reads `1:x.md` as stage 1 of `x.md`. `./` resolves the
+      // path from `root`, as `git grep` named it, not from the repository top, so a root below the top reads its own.
+      bytes = git(root, ['cat-file', 'blob', `:0:./${path}`], 'buffer');
     } catch (error) {
       if (unmerged.has(path)) continue; // no stage-0 entry; its working copy was read above
       problems.push({ where: 'index', path, unreadable: reasonOf(error) });
       continue;
     }
-    for (const m of markersIn(text)) problems.push({ where: 'index', path, ...m });
+    if (isBinary(bytes)) continue;
+    for (const m of markersIn(bytes.toString('utf8'))) problems.push({ where: 'index', path, ...m });
   }
   return problems;
 }

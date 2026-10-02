@@ -47,6 +47,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { CPU_PROFILE_CATEGORIES, bundleRegions, profileDifference, readTrace, spread, summariseAppendProfile, summariseAppendTrace } from './lib/trace-summary.mjs';
+import { hostLoad, judgeWithRerun, loadWords } from './transcript-proof/append-rerun.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -675,6 +676,9 @@ const APPEND_READ_AT = 26_000;
 const TRACE_CATEGORIES = ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'blink', 'blink.user_timing', 'v8.execute', 'cc', 'toplevel', ...CPU_PROFILE_CATEGORIES].join(',');
 async function appendRun(name, sid, tracePath = null) {
   const electronArgs = tracePath === null ? [] : [`--trace-startup=${TRACE_CATEGORIES}`, `--trace-startup-file=${tracePath}`, '--trace-startup-format=json', '--trace-startup-duration=300'];
+  // The host's load at the launch's start and end (`append-rerun.mjs`): a red is read beside it, and one taken above the
+  // CPU count is re-run once (docs/defects/fixed/transcript-proofs-append-comparison-goes-red-under-host-load.md).
+  const start = hostLoad();
   const r = await launch(name, {
     ROTARIS_SCRIPT: APPEND_SCRIPT,
     ROTARIS_CAPTURE_RESUME: sid,
@@ -682,6 +686,7 @@ async function appendRun(name, sid, tracePath = null) {
     ROTARIS_CAPTURE_EVAL_AT: `${APPLIES}@${APPEND_READ_AT};;${FRAME_CADENCE}@${APPEND_READ_AT + 400};;window.__rotarisReplica()@${APPEND_READ_AT + 2000}`,
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '28000',
   }, 300_000, electronArgs);
+  const host = { start, end: hostLoad() };
   // The samples are read at an appointment, so the run must have ENDED before it: main logs the end and the read
   // with the same clock, and a read that came first would be a truncated sample set reported as a small one.
   const ended = /^\[main (\S+)\] .*run \S+ ended /m.exec(r.log);
@@ -718,7 +723,7 @@ async function appendRun(name, sid, tracePath = null) {
   // never ran would be measuring a pane the repair does not reach, and says so rather than passing on its figures.
   const projections = String((r.probes['[data-testid="transcript-scroll"]'] ?? [])[0]?.data?.['data-projections'] ?? '').split('/').map(Number);
   expect(projections.length === 2 && projections[1] > 0, `${name}: the pane never took the bounded projection (data-projections ${JSON.stringify(projections)})`);
-  return { name, samples: all, cadence, projections: { total: projections[0], bounded: projections[1] }, replica: evalAt(r, APPEND_READ_AT + 2000), png: r.png, log: r.log };
+  return { name, host, samples: all, cadence, projections: { total: projections[0], bounded: projections[1] }, replica: evalAt(r, APPEND_READ_AT + 2000), png: r.png, log: r.log };
 }
 /**
  * One side's figures: pooled samples, per-launch medians, and the spread of every phase, in milliseconds and frames —
@@ -742,7 +747,7 @@ function side(launches, frameMs) {
   });
   const burstSizes = launches.flatMap((l) => { const sizes = []; for (const s of l.samples) { if (!s.queued) sizes.push(1); else if (sizes.length > 0) sizes[sizes.length - 1] += 1; } return sizes; });
   return {
-    launches: launches.map((l) => ({ name: l.name, samples: l.samples.length, medianMs: spread(l.samples.map((s) => s.ms)).median, aloneMedianMs: spread(l.samples.filter((s) => !s.queued).map((s) => s.ms)).median, cadence: l.cadence, projections: l.projections, png: l.png })),
+    launches: launches.map((l) => ({ name: l.name, host: l.host, samples: l.samples.length, medianMs: spread(l.samples.map((s) => s.ms)).median, aloneMedianMs: spread(l.samples.filter((s) => !s.queued).map((s) => s.ms)).median, cadence: l.cadence, projections: l.projections, png: l.png })),
     kinds: Object.fromEntries(['append', 'tail', 'update'].map((k) => [k, samples.filter((s) => s.kind === k).length])),
     queued: samples.filter((s) => s.queued).length,
     bursts: { count: burstSizes.length, sizes: spread(burstSizes) },
@@ -757,32 +762,47 @@ function side(launches, frameMs) {
   };
 }
 if (wanted('append')) {
-const emptyLaunches = [];
-const loadedLaunches = [];
-for (let i = 1; i <= APPEND_LAUNCHES; i += 1) {
-  emptyLaunches.push(await appendRun(`append-empty-${i}`, 'S0'));
-  loadedLaunches.push(await appendRun(`append-loaded-${i}`, 'S1200'));
-}
-// The traced pair, after the comparison's own launches and outside them.
-const emptyTracePath = join(output, 'append-empty.trace.json');
-const loadedTracePath = join(output, 'append-loaded.trace.json');
-const emptyTraced = await appendRun('append-empty-traced', 'S0', emptyTracePath);
-const loadedTraced = await appendRun('append-loaded-traced', 'S1200', loadedTracePath);
-{
+// One set of the comparison's launches, alternating empty and loaded. Set 2 is the re-run a red earns when any launch of
+// set 1 ran above the CPU count (`judgeWithRerun`); its launches are named `-rerun-`. Each launch appends its run to the
+// same session, so the re-run's "empty" side starts from the rows the first set appended (some sixty), not none.
+const appendSet = async (n) => {
+  const emptyLaunches = [];
+  const loadedLaunches = [];
+  const tag = n === 1 ? '' : 'rerun-';
+  for (let i = 1; i <= APPEND_LAUNCHES; i += 1) {
+    emptyLaunches.push(await appendRun(`append-empty-${tag}${i}`, 'S0'));
+    loadedLaunches.push(await appendRun(`append-loaded-${tag}${i}`, 'S1200'));
+  }
+  return { emptyLaunches, loadedLaunches };
+};
+// REQ-CHAT-055: appending must cost no more than on an empty transcript. The frame cadence is the floor at both
+// ends, so the comparison is made with a tolerance of one frame — at the cadence measured, not assumed — rather
+// than as an exact inequality. It is read on every update and on the row appends alone; both must hold.
+const judgeAppendSet = ({ emptyLaunches, loadedLaunches }) => {
   const cadences = [...emptyLaunches, ...loadedLaunches].map((l) => l.cadence.medianMs);
   const frameMs = spread(cadences).median;
   const empty = side(emptyLaunches, frameMs);
   const loaded = side(loadedLaunches, frameMs);
   expect(empty.all.ms.n >= 30 && loaded.all.ms.n >= 30, `the pooled sides hold ${empty.all.ms.n} and ${loaded.all.ms.n} samples; thirty each is the least a verdict needs`);
-  // REQ-CHAT-055: appending must cost no more than on an empty transcript. The frame cadence is the floor at both
-  // ends, so the comparison is made with a tolerance of one frame — at the cadence measured, not assumed — rather
-  // than as an exact inequality. It is read on every update and on the row appends alone; both must hold.
   const slack = frameMs;
   const verdict = (label, e, l) => {
     const pass = l.median <= e.median + slack;
     return { label, emptyMedianMs: e.median, loadedMedianMs: l.median, differenceMs: Math.round((l.median - e.median) * 100) / 100, slackMs: Math.round(slack * 100) / 100, emptyIqrMs: e.iqr, loadedIqrMs: l.iqr, pass };
   };
   const verdicts = { all: verdict('every update', empty.all.ms, loaded.all.ms), appends: verdict('row appends', empty.appends.ms, loaded.appends.ms) };
+  // In launch order, with the host's load at each launch's start and end.
+  const launches = emptyLaunches.flatMap((e, i) => [e, loadedLaunches[i]]).map((l) => ({ name: l.name, host: l.host }));
+  return { frameMs, cadences, empty, loaded, verdicts, launches };
+};
+const comparison = await judgeWithRerun({ runSet: async (n) => appendSet(n), judge: judgeAppendSet });
+const { frameMs, cadences, empty, loaded, verdicts } = comparison.judged;
+const loadText = loadWords(comparison);
+// The traced pair, after the comparison's own launches and outside them.
+const emptyTracePath = join(output, 'append-empty.trace.json');
+const loadedTracePath = join(output, 'append-loaded.trace.json');
+const emptyTraced = await appendRun('append-empty-traced', 'S0', emptyTracePath);
+const loadedTraced = await appendRun('append-loaded-traced', 'S1200', loadedTracePath);
+{
   // The renderer bundle the traced launches ran, so a sampled frame names the source module it came from.
   const assets = join(app, 'out', 'renderer', 'assets');
   const bundleUrl = existsSync(assets) ? readdirSync(assets).find((f) => /^index-.*\.js$/.test(f)) ?? null : null;
@@ -806,9 +826,15 @@ const loadedTraced = await appendRun('append-loaded-traced', 'S1200', loadedTrac
   const profileEmpty = profiles[emptyTraced.name];
   const profileLoaded = profiles[loadedTraced.name];
   results.append = {
-    script: APPEND_SCRIPT, launches: APPEND_LAUNCHES, order: 'alternating: empty, loaded, empty, loaded, then one traced launch of each',
+    script: APPEND_SCRIPT, launches: APPEND_LAUNCHES, order: 'alternating: empty, loaded, empty, loaded (and once more, as `rerun`, when that set was red with a launch above the CPU count), then one traced launch of each',
     frameMs: { median: frameMs, perLaunch: cadences },
-    empty, loaded, verdicts,
+    // The figures below are the set judged: the re-run's when one was taken. Both sets are kept under `sets`, each with
+    // its launches' host load, and `load` is the sentence the verdict prints.
+    empty, loaded, verdicts, load: loadText,
+    sets: {
+      first: { launches: comparison.first.launches, verdicts: comparison.first.verdicts, ...(comparison.rerun === null ? {} : { frameMs: comparison.first.frameMs, empty: comparison.first.empty, loaded: comparison.first.loaded }) },
+      rerun: comparison.rerun === null ? null : { launches: comparison.rerun.launches, verdicts: comparison.rerun.verdicts, call: comparison.call },
+    },
     trace: { empty: traceEmpty, loaded: traceLoaded, categories: TRACE_CATEGORIES },
     // V8's sampled profile of the same two launches: per increment, by function and by module, and loaded minus empty.
     // `all` (every function's figure) is what the difference is taken over and is left out of the file for its size.
@@ -826,8 +852,9 @@ const loadedTraced = await appendRun('append-loaded-traced', 'S1200', loadedTrac
   // trace holds no CPU profile would report the trace account alone and say nothing about which script ran.
   expect(profileEmpty !== null && profileLoaded !== null, `the traced launches carry no CPU profile (${CPU_PROFILE_CATEGORIES.join(', ')}); see append.json`);
   for (const v of Object.values(verdicts)) {
-    expect(v.pass, `appending at 1200 rows showed in ${v.loadedMedianMs} ms (${loaded.all.frames.median} frames) against ${v.emptyMedianMs} ms (${empty.all.frames.median} frames) on an empty transcript, on ${v.label}; slack one frame of ${v.slackMs} ms; spreads (IQR) ${v.emptyIqrMs} and ${v.loadedIqrMs} ms`);
+    expect(v.pass, `appending at 1200 rows showed in ${v.loadedMedianMs} ms (${loaded.all.frames.median} frames) against ${v.emptyMedianMs} ms (${empty.all.frames.median} frames) on an empty transcript, on ${v.label}; slack one frame of ${v.slackMs} ms; spreads (IQR) ${v.emptyIqrMs} and ${v.loadedIqrMs} ms; ${loadText}`);
   }
+  console.log(`  append (REQ-CHAT-055): ${Object.values(verdicts).map((v) => `${v.label} ${v.loadedMedianMs} ms loaded against ${v.emptyMedianMs} ms empty`).join('; ')}; slack one frame of ${verdicts.all.slackMs} ms; ${loadText}`);
   // REQ-CHAT-163 / REQ-CHAT-062: the scripted `think` step streams deliberation, so the run must have recorded a
   // streamed-reasoning row — the row kind that did not exist in this product before Part Z.
   const thinking = withDb((db) => db.prepare("SELECT count(*) AS c FROM transcript_rows WHERE session_id = ? AND kind = 'thinking'").get('S0').c);

@@ -737,6 +737,28 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(fresh.results).toEqual(['completed']);
   });
 
+  /*
+   * REQ-CHAT-006 / REQ-SESSION-026 / REQ-NOTIFY-089: the record says which configured key a session-wide override replaces and
+   * the key it runs on, so the composer's model chip and the inspector name what the next run starts with. Before it the chips
+   * read the configured key (docs/defects/the-model-chips-show-the-configured-model-while-a-session-wide-override-is-in-force.md).
+   */
+  it('REQ-CHAT-006 / REQ-SESSION-026: the record names the override in force — in this process, and after a fresh one opens the session', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+    const { sessions, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer(`answer ${turn}`)), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    expect(pub.snapshots.at(-1)!.modelOverrides).toEqual([]);
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(pub.snapshots.at(-1)!.modelOverrides).toEqual([{ from: 'a1', to: 'c1' }]);
+    // A fresh process: no run of the session has started there; opening it reads the override from the timeline.
+    const fresh = sessionsWith(() => answer('fresh'), { catalogue });
+    const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+    if (!resumed.ok) throw new Error(resumed.error.reason);
+    expect(fresh.sessions.attach(sid)).toBe(true);
+    expect(fresh.pub.snapshots.at(-1)!.modelOverrides).toEqual([{ from: 'a1', to: 'c1' }]);
+  });
+
   it('an unresponsive model: no event within llm_response_timeout closes the call and re-runs it once on the fallback; without a fallback the call keeps waiting (REQ-ORCH-090, REQ-CONFIG-114)', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
     const withFallback = sessionsWith((_p, turn) => (turn === 1 ? hanging(NEVER) : answer('from the fallback')), { catalogue, fallbackModel: { model: F1, thinking: 'unset' }, llmResponseTimeoutMs: 30_000 });

@@ -13,7 +13,7 @@ const row = (over: Partial<TranscriptRow>): TranscriptRow => ({ index: 0, kind: 
 const session = (over: Partial<SessionRecord>): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-05T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-05T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, sandboxBackend: '', backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
-  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryStalledSeconds: null, entryToolCalls: null, compressions: 0, ...over,
+  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, modelOverrides: [], compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryStalledSeconds: null, entryToolCalls: null, compressions: 0, ...over,
 });
 
 describe('agents — the shared selection (REQ-MONITOR-042) and the run-level agent (REQ-MONITOR-043/057)', () => {
@@ -143,6 +143,14 @@ describe('entryRole — the run-level agent is drawn as the latest root (REQ-MON
       row({ index: 5, kind: 'agent', name: 'helper', persona: 'coding-agent' }),
     ];
     expect(entryRole(roles, rows, [agent({ name: 'helper' })])).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', tools: ['glob', 'read_file', 'todo'] });
+  });
+  it('REQ-CHAT-006 / REQ-SESSION-026: with a session-wide override in force the entry role names the model it runs on', () => {
+    const rows = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' })];
+    // The record's `to` is already the end of the override chain (the engine follows it, `overridesInForce`).
+    expect(entryRole(roles, rows, [], [], null, [{ from: 'large', to: 'beta' }]).model).toBe('beta');
+    // An override of another key leaves the configured one; none at all is the configured one too.
+    expect(entryRole(roles, rows, [], [], null, [{ from: 'scripted', to: 'beta' }]).model).toBe('large');
+    expect(entryRole(roles, rows, [], [], null, []).model).toBe('large');
   });
   it('a row named for one of the session\'s roots is preferred, so a child\'s row ahead of its record cannot pass for the latest root', () => {
     const rows = [row({ index: 0, kind: 'agent', name: 'reviewer', persona: 'reviewer' }), row({ index: 1, kind: 'agent', name: 'fresh', persona: 'coding-agent' })];

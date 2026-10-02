@@ -52,8 +52,9 @@ export function personasOf(snapshot: ConfigSnapshot | null): PersonaEntry[] {
  * its reasoning and its declared tools (`declaredTools`, REQ-MONITOR-060's stand-in). The first root's persona was drawn until 2026-10-01
  * (docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
  */
-export function entryOf(snapshot: ConfigSnapshot | null, rows: readonly TranscriptRow[], session: Pick<SessionRecord, 'agents' | 'entryRoots' | 'entryPersona'> | null): EntryRole {
-  return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? [], session?.entryPersona ?? null);
+export function entryOf(snapshot: ConfigSnapshot | null, rows: readonly TranscriptRow[], session: Pick<SessionRecord, 'agents' | 'entryRoots' | 'entryPersona' | 'modelOverrides'> | null): EntryRole {
+  // REQ-CHAT-006 / REQ-SESSION-026: with a session-wide override in force the role names the model it runs on.
+  return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? [], session?.entryPersona ?? null, session?.modelOverrides ?? []);
 }
 /** REQ-SHELL-072/073: open or raise the persona window for an agent; the run-level agent's persona is the entry role's. */
 export async function openPersona(agent: AgentRecord, focusSteer: boolean): Promise<void> {

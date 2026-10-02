@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**The model chips name the override in force (REQ-CHAT-006, REQ-SESSION-026, REQ-NOTIFY-089; fin8).** The record gains
+`modelOverrides` (`overridesInForce` over the run's catalogue and the session's memory; for a session opened from the store,
+a catalogue resolved once where its timeline holds an override), and `entryRole` names the key the entry role runs on, so
+the composer's model chip, the inspector and a persona window say what the next run starts with. The **process view**'s
+`SessionRecord` sentence says so. No package, edge, process, channel, command or store column changed. Whether a mid-run
+entry switch reaches the next run is the ladder-overrides bundle's open question and is not decided here.
+
 **The project setup dialog stands below the window chrome (REQ-WORKSPACE-106, ADR-0048; fin8, OQ-186).** AppShell gains
 a `windowDialog` slot inside the rail-and-view region; `ProjectSetupDialog` is mounted there, `absolute` at the region's
 top corner, where it was `fixed` at the window's and lay over the title bar's controls and the notice's answers. The

@@ -28,7 +28,7 @@ import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
 import type { Persona, PersonaResolver } from '../children/personas.js';
 import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
-import { entryOf, excludedModelKeys, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
+import { entryOf, excludedModelKeys, overridesInForce, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
 import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
@@ -716,6 +716,10 @@ export class Run {
    * REQ-MONITOR-303: with it, the model keys the session holds out of quota (`excludedModelKeys`), read from the memory at
    * every snapshot, so the change-model picker lists them annotated with the reason rather than as any other model.
    */
+  /** REQ-CHAT-006 / REQ-SESSION-026: the session-wide overrides in force, by model key, for the record (`overridesInForce`). */
+  get modelOverridesInForce(): { from: string; to: string }[] {
+    return overridesInForce(this.catalogue, this.memory);
+  }
   get currentWait(): (WaitState & { readonly excluded: string[] }) | null {
     const wait = this.waits.current();
     return wait === null ? null : { ...wait, excluded: excludedModelKeys(this.catalogue, this.memory.exhausted) };

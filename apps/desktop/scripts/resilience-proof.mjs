@@ -174,7 +174,9 @@ async function drivenOverride(s, { boundMs = 180_000 } = {}) {
         const settled = await step('the run settled', until(() => { const db = open(s); try { return session(db); } finally { db.close(); } }, (row) => row !== undefined && SETTLED.has(row.execution_status), { timeoutMs: 90_000, what: 'the session settling', signal: giveUp.signal }));
         // EVIDENCE, not an assertion: the header's absence once the run has settled.
         const after = await step('the header after the change', d.probe('.wait-header'));
-        return { during, picker, chosen, settled, after };
+        // REQ-CHAT-006 / REQ-SESSION-026: the composer's model chip names what the next run starts with — the override, beta.
+        const chip = await step('the model chip after the change', until(() => d.eval(`document.querySelector('[data-testid="chip-model"]')?.textContent ?? null`), (t) => typeof t === 'string' && t.includes('beta'), { timeoutMs: 15_000, what: 'the model chip naming beta', signal: giveUp.signal }).catch(async () => d.eval(`document.querySelector('[data-testid="chip-model"]')?.textContent ?? null`)));
+        return { during, picker, chosen, settled, after, chip };
       })(),
       new Promise((_, reject) => { bound = setTimeout(() => reject(new Error(`the steps did not finish within ${boundMs} ms`)), boundMs); }),
     ]);
@@ -381,7 +383,10 @@ await scenarioRun('override', async () => {
   expect(!list.some((t) => t.name === 'quota_fallback_model'), 'a same-tier fallback happened with no candidate');
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted-b/beta', `the run did not resume on beta: ${JSON.stringify(calls)}`);
-  results.override = { status: row.execution_status, headerDuringWait: header.text, chooser: r.value.chosen.kind, picker: r.value.picker, override: JSON.parse(override.metadata), calls, headerAfterChange: r.value.after.length, png: r.png, elapsedMs: r.elapsedMs };
+  // REQ-CHAT-006 / REQ-SESSION-026: the next run starts on the override, and the chip says so (it read alpha until 2026-10-02:
+  // the-model-chips-show-the-configured-model-while-a-session-wide-override-is-in-force.md).
+  expect(typeof r.value.chip === 'string' && r.value.chip.includes('beta') && !r.value.chip.includes('alpha'), `the model chip reads ${JSON.stringify(r.value.chip)} with beta in force`);
+  results.override = { status: row.execution_status, headerDuringWait: header.text, chooser: r.value.chosen.kind, picker: r.value.picker, modelChip: r.value.chip, override: JSON.parse(override.metadata), calls, headerAfterChange: r.value.after.length, png: r.png, elapsedMs: r.elapsedMs };
   // The relaunch: the stored session opened from the browser and continued; the first call of the continuation goes to beta.
   const again = await launch('override-resume', s4, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PROMPT: 'continue on the override', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
   const calls2 = modelCalls(again.log).filter((c) => c.who === 'orchestrator');

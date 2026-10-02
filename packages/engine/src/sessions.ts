@@ -18,7 +18,7 @@ import { cut } from './run/cut.js';
 export { offersToldIn, openOffersText } from './run/offers.js';
 import { planSection } from './run/plan-text.js';
 export { planRequestSection, planSection } from './run/plan-text.js';
-import { entryOf, pairKey, providerIdentity, ResilienceMemory, withSettings, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
+import { entryOf, overridesInForce, pairKey, providerIdentity, ResilienceMemory, withSettings, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
 import type { ResolvedTrigger } from './run/compression.js';
 import { SessionLog, type LogLevel } from './session-log.js';
 import { UserPresence } from './run/presence.js';
@@ -345,6 +345,12 @@ interface Live {
   commitTarget?: { owner?: ProjectionOwner; run?: Run } | undefined;
   /** Part Q: the session-wide memory (REQ-ORCH-091 a/d) — fresh for a new session, rehydrated from the timeline for a loaded one. */
   memory: ResilienceMemory | null;
+  /**
+   * REQ-CHAT-006 / REQ-SESSION-026: for a session no run of this process has started, the catalogue its record's
+   * `modelOverrides` are read against — resolved once, the first time its record is read, and only where its timeline holds
+   * a `model_override` entry (`null` otherwise, or where the configuration does not resolve). Absent until then.
+   */
+  restingCatalogue?: readonly CatalogueEntry[] | null;
   /** Part Y (REQ-ORCH-149): the session's artifact store, one per live session, shared across iterations and continuations. */
   artifacts: ArtifactStore | null;
   /**
@@ -823,6 +829,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     toolCalls: { total: r.tool_calls, agents: Math.max(0, ...toolCalls.map((t) => t.agents)), byTool: toolCalls.map((t) => ({ tool: t.tool_name, count: t.count })) },
     worktreeBranch: parseBinding(r.worktree)?.branch ?? null,
     wait: null,
+    modelOverrides: [],
   };
 }
 
@@ -1316,7 +1323,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1376,7 +1383,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -2468,6 +2475,32 @@ export class Sessions {
     if (!row || row.plan_released === 1) return undefined;
     const cycles = dal.planCyclesOf(sessionId);
     return { plan: { cycle: (cycles[cycles.length - 1]?.cycle ?? 0) + 1, changes: '', withholds } };
+  }
+
+  /**
+   * REQ-CHAT-006 / REQ-SESSION-026 / REQ-NOTIFY-089: the session-wide overrides in force, by model key, for the record. A
+   * session a run of this process has started reads its run's catalogue and the session's memory; one opened from the store
+   * with no run here resolves its configuration once (`restingCatalogue`) — only where its timeline holds an override — and
+   * rehydrates its memory as a continuation would, so the chips name the override after a restart too.
+   */
+  private modelOverridesFor(sessionId: SessionId): { from: string; to: string }[] {
+    const s = this.live.get(sessionId);
+    return s ? this.modelOverridesOf(s, sessionId) : [];
+  }
+  private modelOverridesOf(s: Live, sessionId: SessionId): { from: string; to: string }[] {
+    if (s.run) return s.run.modelOverridesInForce;
+    if (s.restingCatalogue === undefined) {
+      s.restingCatalogue = null;
+      const stored = s.dal.getSession(sessionId);
+      if (stored && s.dal.timelineOf(sessionId).some((t) => t.name === 'model_override')) {
+        const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
+        if (setup.ok) {
+          s.restingCatalogue = setup.value.resilience?.catalogue ?? [];
+          this.memoryOf(s, sessionId, setup.value);
+        }
+      }
+    }
+    return s.restingCatalogue && s.memory ? overridesInForce(s.restingCatalogue, s.memory) : [];
   }
 
   /** The session's memory (REQ-ORCH-091 a/d, REQ-SESSION-026), rehydrated from its timeline once, as a continuation does. */

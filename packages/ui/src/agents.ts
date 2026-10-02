@@ -149,14 +149,24 @@ export interface EntryRole { readonly persona: string; readonly model: string; r
  * steps were tool calls was drawn as the previous root until its first text, and one that had written no row at all
  * until then too (the verifier's finding; docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
  */
-export function entryRole(roles: readonly Pick<ConfigSnapshot['roles'][number], 'role' | 'effectiveModel' | 'rawThinking' | 'declaredTools'>[], rows: readonly TranscriptRow[], agents: readonly Pick<AgentRecord, 'name'>[], roots: readonly Pick<EntryRoot, 'name'>[] = [], live: string | null = null): EntryRole {
+export function entryRole(roles: readonly Pick<ConfigSnapshot['roles'][number], 'role' | 'effectiveModel' | 'rawThinking' | 'declaredTools'>[], rows: readonly TranscriptRow[], agents: readonly Pick<AgentRecord, 'name'>[], roots: readonly Pick<EntryRoot, 'name'>[] = [], live: string | null = null, overrides: SessionRecord['modelOverrides'] = []): EntryRole {
   const childNames = new Set(agents.map((a) => a.name));
   const rootNames = new Set(roots.map((r) => r.name));
   const candidates = rows.filter((r) => AUTHORED_KINDS.has(r.kind) && r.persona !== undefined && r.name !== undefined && !childNames.has(r.name));
   const latest = candidates.findLast((r) => rootNames.has(r.name!)) ?? candidates.at(-1);
   const persona = live ?? latest?.persona ?? 'orchestrator';
   const role = roles.find((r) => r.role === persona);
-  return { persona, model: role?.effectiveModel ?? '', reasoning: role?.rawThinking ?? 'medium', tools: role?.declaredTools ?? [] };
+  // REQ-CHAT-006 / REQ-SESSION-026 / REQ-NOTIFY-089: a session-wide override of the configured key is what the next run starts
+  // with, so the role names the key it runs on (`SessionRecord.modelOverrides`, already the end of the override chain).
+  const configured = role?.effectiveModel ?? '';
+  return { persona, model: modelInForce(configured, overrides), reasoning: role?.rawThinking ?? 'medium', tools: role?.declaredTools ?? [] };
+}
+/**
+ * REQ-CHAT-006 / REQ-SESSION-026: the model key an agent configured on `configured` runs on — the override in force for it
+ * (`SessionRecord.modelOverrides`), else the configured key itself.
+ */
+export function modelInForce(configured: string, overrides: SessionRecord['modelOverrides']): string {
+  return overrides.find((o) => o.from === configured)?.to ?? configured;
 }
 /** The row kinds a turn writes under its agent's persona and name (`run/turn.ts`): the rows an agent authors. */
 const AUTHORED_KINDS = new Set(['agent', 'tool', 'thinking', 'diff']);

@@ -20,7 +20,8 @@ describe('live-run finding K1: the renderer roots wire the declared tools and th
     // The entry role is `entryRole`'s, which takes the role's declared tools (pinned in `packages/ui/src/agents.test.ts`),
     // drawn as the latest root, the session's roots and the live run's root persona handed in (the repair of
     // after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
-    expect(view).toContain('return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? [], session?.entryPersona ?? null);');
+    // Since 2026-10-02 the session's overrides in force too, so the role names the model it runs on (REQ-CHAT-006, REQ-SESSION-026).
+    expect(view).toContain('return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? [], session?.entryPersona ?? null, session?.modelOverrides ?? []);');
     expect(source('main.tsx').match(/entryOf\(snapshot, rows, session\)/g)).toHaveLength(2);
     expect(source('windows.tsx')).toContain('entryOf(snapshot, state.rows, session)');
     expect(source('windows.tsx')).toContain('?.declaredTools ?? [];');

@@ -172,6 +172,26 @@ export function excludedModelKeys(catalogue: readonly CatalogueEntry[], exhauste
   return out;
 }
 
+/**
+ * REQ-CHAT-006 / REQ-SESSION-026 / REQ-NOTIFY-089: every configured model key a session-wide override replaces, with the key
+ * an agent configured on it runs on — the end of the override chain (`ResilienceMemory.effective`) — in declaration order.
+ * What the composer's model chip and the inspector name, so they say what the next run starts with. A key whose chain ends on
+ * a model no configured key names is left out: no key can say where it runs.
+ */
+export function overridesInForce(catalogue: readonly CatalogueEntry[], memory: ResilienceMemory): { from: string; to: string }[] {
+  const out: { from: string; to: string }[] = [];
+  const seen = new Set<string>();
+  for (const e of catalogue) {
+    if (e.origin !== 'configured' || seen.has(e.key)) continue;
+    seen.add(e.key);
+    const runsOn = memory.effective({ model: e.model, thinking: e.thinking }, catalogue).model;
+    if (sameRef(runsOn, e.model)) continue;
+    const to = entryOf(catalogue, runsOn)?.key;
+    if (to !== undefined && to !== e.key) out.push({ from: e.key, to });
+  }
+  return out;
+}
+
 /** REQ-NOTIFY-092's conditions: one condition, one wording; only the substituted values differ between two occurrences. */
 export type Condition =
   | { readonly kind: 'quota_exhausted'; readonly provider: string; readonly model: string }

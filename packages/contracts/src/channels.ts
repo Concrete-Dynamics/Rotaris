@@ -334,6 +334,13 @@ export const SessionRecordSchema = z.object({
     excluded: z.array(z.string()),
   }).nullable(),
   /**
+   * REQ-CHAT-006 / REQ-SESSION-026 / REQ-NOTIFY-089: each configured model key a session-wide override replaces (a model
+   * chosen during a provider wait, an authentication fallback or recovery pin), with the key an agent configured on it runs
+   * on — so the composer's model chip and the inspector name what the next run starts with rather than the configured key.
+   * Derived from the session's memory and catalogue at every snapshot; empty when none is in force.
+   */
+  modelOverrides: z.array(z.object({ from: z.string(), to: z.string() })),
+  /**
    * REQ-MONITOR-085 (Part AH, ADR-0060): the compression in flight — the agent whose context is being
    * compressed and when it began — so a surface can state that compression is running without blocking.
    * Derived from the live run at every snapshot, like `wait` above; null while none is running.

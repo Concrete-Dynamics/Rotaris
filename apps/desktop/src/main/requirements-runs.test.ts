@@ -9,9 +9,11 @@ import { approvalWaitOf, createRequirementsRuns, outcomeOf } from './requirement
  * next candidate follows; the run host's exit reaps with an empty live set; a person's copy of a run command never
  * originates here (the actor is always the system).
  */
-function harness(opts: { claims?: RunClaim[]; startReply?: ProcessReply; prefs?: { runs?: boolean; suppressed?: boolean }; preview?: Record<string, unknown> } = {}) {
+function harness(opts: { claims?: RunClaim[]; startReply?: ProcessReply; prefs?: { runs?: boolean; suppressed?: boolean }; preview?: Record<string, unknown>; current?: { readonly root: string; readonly id: string } } = {}) {
   const claims = [...(opts.claims ?? [])];
   const sent: WorkspaceServiceRequest[] = [];
+  /** The workspace root each service request was addressed to, in order. */
+  const roots: string[] = [];
   const hostSent: RunHostRequest[] = [];
   const broadcasts: unknown[] = [];
   const written: [string, boolean][] = [];
@@ -19,10 +21,12 @@ function harness(opts: { claims?: RunClaim[]; startReply?: ProcessReply; prefs?:
   let onExit: (code: number) => void = () => undefined;
   const prefs = { runs: opts.prefs?.runs ?? true, suppressed: opts.prefs?.suppressed ?? false };
   const runs = createRequirementsRuns({
-    currentWorkspace: () => 'C:\\ws',
-    currentWorkspaceId: () => 'ws-id',
+    // `current`: the most recently focused window's workspace, when a case puts the focus on another one.
+    currentWorkspace: () => opts.current?.root ?? 'C:\\ws',
+    currentWorkspaceId: () => opts.current?.id ?? 'ws-id',
     service: (root, req) => {
-      expect(root).toBe('C:\\ws');
+      if (opts.current === undefined) expect(root).toBe('C:\\ws');
+      roots.push(root);
       sent.push(req);
       if (req.kind !== 'requirements.command') return Promise.resolve({ kind: 'refused', code: 'x', headline: 'not a requirements command' });
       expect(req.actor).toEqual({ kind: 'system' });
@@ -48,7 +52,7 @@ function harness(opts: { claims?: RunClaim[]; startReply?: ProcessReply; prefs?:
     broadcast: (p) => { broadcasts.push(p); },
     log: () => undefined,
   });
-  return { runs, sent, hostSent, broadcasts, written, event: (e: ProcessEvent) => onEvent(e), exit: (code: number) => onExit(code) };
+  return { runs, sent, roots, hostSent, broadcasts, written, event: (e: ProcessEvent) => onEvent(e), exit: (code: number) => onExit(code) };
 }
 const CLAIM: RunClaim = { id: 'REQ-101', unit: 'u1', worktree: { ref: 'REQ-101/u1', path: 'C:\\ws\\.rotaris\\requirements\\worktrees\\rotaris-req-req-101-u1', branch: 'rotaris/req/req-101/u1', baseBranch: 'main', baseRevision: 'abc' }, prompt: 'Implement REQ-101', permissions: 'permissive' };
 
@@ -112,6 +116,30 @@ describe('the dispatch (REQ-TRACE-464/470/471/463)', () => {
     expect(h.hostSent.map((r) => r.kind)).toEqual(['session.start']);
     expect(h.sent.map((r) => (r.kind === 'requirements.command' ? r.command.name : r.kind))).toEqual(['requirements.run.claim', 'requirements.run.abandon', 'requirements.run.claim']);
     expect(h.runs.live()).toEqual([]);
+  });
+  /**
+   * Defect note `an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md` (REQ-TRACE-476/482):
+   * nothing dispatched when a workspace opened, so after a relaunch an automatic queue started nothing until a person
+   * acted. Main's post-open slot now kicks the coordinator once per open, for the workspace just opened.
+   */
+  it('REQ-TRACE-476/482: a workspace open with a claimable candidate starts it, with no command from a renderer', async () => {
+    const h = harness({ claims: [CLAIM] });
+    const report = await h.runs.opened('C:\\ws', 'ws-id');
+    expect(report).toEqual({ started: [{ id: 'REQ-101', unit: 'u1', sessionId: 'sess-1' }], abandoned: [] });
+    expect(h.hostSent.filter((r) => r.kind === 'session.start')).toHaveLength(1);
+    expect(h.sent.map((r) => (r.kind === 'requirements.command' ? r.command.name : r.kind))).toEqual(['requirements.run.claim', 'requirements.run.started', 'requirements.run.claim']);
+  });
+  it('REQ-TRACE-482/408: a workspace open with nothing claimable starts nothing and asks the service for one claim alone', async () => {
+    const h = harness();
+    expect(await h.runs.opened('C:\\ws', 'ws-id')).toEqual({ started: [], abandoned: [] });
+    expect(h.hostSent).toEqual([]);
+    expect(h.sent.map((r) => (r.kind === 'requirements.command' ? r.command.name : r.kind))).toEqual(['requirements.run.claim']);
+  });
+  it('REQ-TRACE-476: the open\'s dispatch is for the workspace just opened, whichever window holds the focus', async () => {
+    const h = harness({ claims: [CLAIM], current: { root: 'D:\\other', id: 'other-id' } });
+    await h.runs.opened('C:\\ws', 'ws-id');
+    expect(new Set(h.roots)).toEqual(new Set(['C:\\ws']));
+    expect(h.hostSent.find((r) => r.kind === 'session.start')).toMatchObject({ workspaceId: 'ws-id' });
   });
   it('two kicks at once share one dispatch, so a claim is never started twice', async () => {
     const h = harness({ claims: [CLAIM] });

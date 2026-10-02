@@ -14,7 +14,7 @@ itself, standing in for the kick. The built app has no such kick at launch.
 Noticed while repairing `a-card-resting-in-ready-across-a-restart-can-never-be-started.md` (bundle `fin7-queue-and-roles`,
 repair round 1). Recorded, not repaired: a dispatch at workspace open asks the service for a claim, and so parses the
 requirement store at every open of every workspace. Where that belongs (main's workspace open, the service's first pass,
-or the board's first read) is a design choice, and the startup budget bears on it.
+or the board's first read) is a design choice, and the startup budget bears on it. The outcome below makes it.
 
 **Amended 2026-10-02 (fifth triage of the open notes, by code reading on origin/main `c1381f5`).** A sibling gap of the
 same shape: under `automatic`, an accepted act that lands a card in `ready` without starting a run — a `reject` from
@@ -24,6 +24,24 @@ another run ends. REQ-TRACE-476 ("The queue SHALL resume where it stopped") and 
 relaunch waits for a person, so where the kick lives is the build's choice; the board's first read is not a placement
 (REQ-TRACE-408: a read creates no execution unit; REQ-TRACE-512: nothing starts on its own initiative from opening the
 view).
+
+**Outcome — repaired 2026-10-02 (bundle `fin9-queue-dispatch-and-disclosure`).** The kick lives in main's post-open
+slot: `openWorkspaceInner` (`apps/desktop/src/main/index.ts`), once the window is interactive and beside the
+initialization's resolve, calls the coordinator's new `opened(root, workspaceId)`
+(`apps/desktop/src/main/requirements-runs.ts`), a dispatch for the workspace just opened rather than the focused
+window's. The coordinator's dispatches are serialised per workspace root. The claim's parse runs in the workspace service,
+and a `manual` workspace with nothing armed is answered without it (the claim's guard, added by the repair of
+[`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](a-rejected-card-back-in-ready-can-never-start-its-next-unit.md)).
+The sibling gap is closed too: the board kicks the coordinator after an act that rests a card in `ready` under automatic
+scheduling (`dispatchesAfter` in `packages/ui/src/requirements/model.ts`, used by `perform`). The board's first read
+dispatches nothing (REQ-TRACE-408/512). Pinned by three cases in `requirements-runs.test.ts` (an open with a claimable
+candidate starts it with no renderer command; an open with nothing claimable starts nothing; the open's dispatch addresses
+the opened workspace whatever window holds the focus), all red on the coordinator before, and one in
+`requirements.test.ts`; `requirements-runs-proof`'s seventh assertion now kicks through `opened`. Shown by
+`requirements-proof`'s new `ready-restart-automatic` stage: under automatic scheduling with the disclosure accepted
+permanently, REQ-101 rested in `ready` across the quit; relaunched with nothing clicked it read `ready` at 9 s and 15 s on
+the unrepaired build, and `review` at both on the repair, its run on the recorded tree. ADR-0041 records it in "Repair —
+2026-10-02: an automatic queue resumes at a workspace open", keeping the replaced clause.
 
 ## Specs
 

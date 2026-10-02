@@ -140,7 +140,7 @@ dispatch and requires `next` with no reason. With the published queue forced bac
 
 Still owed, and recorded rather than repaired: nothing dispatches when the application launches, so an automatic queue
 starts a recovered card only at its first kick (a person's act or queue change, or a run ending). See
-[`../an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md`](../an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md).
+[`an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md`](an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md).
 
 Noticed while repairing it, and recorded rather than repaired: a rejected card back in `ready` can never start its next
 unit. Before the repair the claim handed out the rejected unit's held launch and `run.started` failed on the run

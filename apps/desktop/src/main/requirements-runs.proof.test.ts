@@ -298,7 +298,9 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     const entry = before.queue.entries.find((e) => e.id === id);
     expect(entry).toMatchObject({ state: 'next' });
     expect(entry?.reason).toBeUndefined();
-    const report = await runs.dispatch();
+    // The relaunch's own kick: main's post-open slot dispatches for the workspace just opened (defect note
+    // `an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md`, REQ-TRACE-476/482).
+    const report = await runs.opened(workspaceRoot, 'proof-workspace');
     expect(report.abandoned).toEqual([]);
     expect(report.started.map((s) => s.id)).toContain(id);
     const startRequest = hostRequests.slice(requestsBefore).find((h) => h.request.kind === 'session.start' && (h.request as { effectiveRoot?: string }).effectiveRoot === tree);

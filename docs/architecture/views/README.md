@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**An automatic queue dispatches at a workspace open and after a reject (REQ-TRACE-476, REQ-TRACE-482).** Main's run
+coordinator gains `opened(root, workspaceId)`, a dispatch for the workspace just opened, kicked once from
+`openWorkspaceInner`'s post-open slot; its dispatches are serialised per workspace root rather than one at a time. The
+board kicks it after an act that rests a card in `ready` under automatic scheduling (`dispatchesAfter`). This repairs
+`an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md`; `requirements-proof`'s
+`ready-restart-automatic` stage shows it. The **sequences view**'s board section says so. No package, edge, process,
+message kind, channel, command or store column changed.
+
 **A rejected card's next unit begins on a fresh tree (REQ-TRACE-423, REQ-TRACE-464, REQ-TRACE-482).** The delivery
 service treats a launch held for an earlier unit as spent: the scheduler names the card's current unit, and the claim
 provisions it when the store records no tree for it, writing the row at once through the writer's new

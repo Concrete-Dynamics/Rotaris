@@ -324,8 +324,15 @@ sequenceDiagram
   queue, the launch preview and the claim under the same one, so the queue names what the claim takes (REQ-TRACE-478); a
   value that moved republishes the queue before the answer, which carries `changed`. A launch recorded undisclosed, as a
   recovered one is, is claimed when that is not `due`, and `off` gives the run the workspace's own mode. A permanent
-  acceptance reads the board at once. (Until the second repair round of 2026-10-02 it rode the claim alone.) Nothing dispatches at launch, so an automatic
-  queue picks a recovered card up at the first kick (a defect note records that gap; 2026-10-02).
+  acceptance reads the board at once. (Until the second repair round of 2026-10-02 it rode the claim alone.)
+- **The coordinator is kicked at every workspace open.** Main's post-open slot (`openWorkspaceInner`, beside the
+  initialization's resolve, once the window is interactive) calls `requirementsRuns.opened(root, workspaceId)`, a
+  dispatch for the workspace just opened rather than the focused window's, so an automatic queue resumes where it
+  stopped with no person acting (REQ-TRACE-476/482). Dispatches are serialised per workspace root. The renderer kicks
+  after every run-starting move and, under automatic scheduling, after an act that rests a card in `ready` without
+  starting a run (a `reject`; `dispatchesAfter` in `ui/src/requirements/model.ts`). The board's own read never
+  dispatches (REQ-TRACE-408/512). (Until 2026-10-02 nothing dispatched at launch, and an automatic queue picked a
+  recovered card up only at the first kick a person or a run's end gave.)
 - The elevated grant (`boardPermissions: 'permissive'`) travels **on the `session.start` of that launch** and
   applies to the configuration captured for it. It is not a mode anything stays in.
 - A board read is bounded at 120 s because it may run the engine's three passes; everything else is a store

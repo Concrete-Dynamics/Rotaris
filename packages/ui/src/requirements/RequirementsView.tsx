@@ -12,7 +12,7 @@ import { EpicCardView } from './EpicCardView.js';
 import { EvidencePane, evidenceOpenerSelector } from './EvidencePane.js';
 import { MoveControl } from './MoveControl.js';
 import { ReasonDialog } from './ReasonDialog.js';
-import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, bodyStateOf, dragRefusedOnAxisSentence, rejectedDocumentsSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable } from './model.js';
+import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, bodyStateOf, dispatchesAfter, dragRefusedOnAxisSentence, rejectedDocumentsSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable } from './model.js';
 // Part R2 — the five panes Part AP built and nothing hosted, the elevation's disclosure, and the relationship graph.
 import { GRAPH_DEPTH_DEFAULT, buildGraph, clampDepth } from './graph.js';
 import { GraphPane } from './GraphPane.js';
@@ -478,6 +478,10 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
       const d = await host.dispatchRuns();
       const reason = d.ok ? (d.value.started.some((s) => s.id === id) ? undefined : d.value.abandoned.find((a) => a.id === id)?.reason ?? stall) : d.reason;
       if (reason !== undefined) addFeedback(id, [DISPATCH_NOTHING_STARTED(id, reason)]);
+    } else if (dispatchesAfter(action, to, r.value.value.to, latest.current.board?.queue.automatic === true)) {
+      // REQ-TRACE-482: a card the act rested in `ready` under automatic scheduling is the system's to pick up now; the
+      // queue states any reason it is deferred, so nothing is said on the card for it.
+      void host.dispatchRuns();
     }
     const again = await host.readBoard();
     if (again.ok) adoptBoard(again.value, [id]);

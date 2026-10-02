@@ -379,6 +379,10 @@ async function main(): Promise<void> {
       initialization.open(key, scopeFiles(resolveUserDirs().config, key).workspace.agents, opened.workspaceId);
       clocks.timers.after(millis(process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
         void initialization.resolve(key, true).catch((cause: unknown) => log(`initialization: resolve failed (${String(cause)})`));
+        // REQ-TRACE-476/482: the queue resumes where it stopped — an automatic queue picks a candidate up at the open
+        // with no person acting. The kick is for THIS workspace, whichever window is focused when the slot comes; the
+        // claim's parse runs in the workspace service, and a `manual` one with nothing armed answers without it.
+        void requirementsRuns.opened(key, opened.workspaceId).then((r) => { if (r.started.length + r.abandoned.length > 0) log(`requirements: the open of ${key} dispatched ${r.started.length} run(s), ${r.abandoned.length} abandoned`); }).catch((cause: unknown) => log(`requirements: the dispatch at the open of ${key} failed (${String(cause)})`));
         void runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).then((r) => {
           if (r.kind === 'hooks.summary' && r.summary.status === 'review') { raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review', r.summary.workspace)); return; }
           // REQ-WORKSPACE-152 (3): once the window is interactive, never as a dialog; the only run-time consequence is REQ-WORKSPACE-137's refusal.

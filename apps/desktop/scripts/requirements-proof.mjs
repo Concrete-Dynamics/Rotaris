@@ -80,6 +80,8 @@
  *               asks for the disclosure, "Disclose and start" shows it, "Start the run" begins the run on the tree the
  *               release provisioned: one run row of u1, one worktree row, the take-over in the log and no second
  *               provisioning.
+ *   ready-restart-automatic — REQ-TRACE-476/482: the same rest under automatic scheduling with the disclosure accepted
+ *               permanently; relaunched, nothing is clicked, and the card reaches `running` on its recorded tree.
  *
  * Evidence under `.proof/requirements-proof/`: `vitest.json`, one PNG and one log per launch, `results.json`.
  * `--skip-build` skips the desktop build.
@@ -955,6 +957,54 @@ const restartTrees = restartRows.query("select * from delivery_worktrees where r
 expect(restartRuns.length === 1 && restartRuns[0].unit === 'u1', `REQ-TRACE-464: the relaunched REQ-101 has run rows ${JSON.stringify(restartRuns.map((x) => x.unit))}, not one run of u1`);
 expect(restartTrees.length === 1 && restartTrees[0].path === restingTrees[0].path && restartTrees[0].ref === restartRuns[0].worktree_ref, `REQ-TRACE-464/REQ-GIT-140: the run did not begin on the tree the release provisioned before the quit (trees ${JSON.stringify(restartTrees.map((t) => t.path))}, run on ${JSON.stringify(restartRuns[0].worktree_ref)})`);
 stage2['ready-restart'] = { before: resting.evals['12000'].column, entryAfterRelaunch: { state: restartEntry.state, reason: restartEntry.reason }, disclosure: restartDisclosure.buttons, columns: restartColumns, run: { unit: restartRuns[0].unit, worktree: restartTrees[0].path } };
+
+// ── ready-restart-automatic: an automatic queue picks a resting card up at the relaunch, with no act (REQ-TRACE-476/482) ──
+//
+// Defect note `an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md`. The workspace
+// schedules automatically (`requirements.scheduling.mode: automatic`, REQ-CONFIG-196). The first launch stops the queue
+// and releases REQ-101 through the disclosure accepted PERMANENTLY, so it rests in `ready` on its tree and the
+// disclosure is suppressed in later launches; the application quits. Relaunched, nothing is clicked at all: the queue
+// resumes where it stopped (REQ-TRACE-476) and the system itself picks the candidate up (REQ-TRACE-482). Until the
+// repair nothing dispatched at a workspace open, so the card rested in `ready` until a person acted.
+const CARD_AT = (id) => `(() => { const b = window.__rotarisBoard; if (b && typeof b.reveal === 'function') b.reveal('${id}'); const el = document.querySelector('[data-req-card="${id}"]'); return { column: el === null ? null : el.getAttribute('data-column'), feedback: [...document.querySelectorAll('[data-testid="req-feedback"]')].map((f) => f.textContent.trim()) }; })()`;
+const autoProfile = profile('ready-restart-automatic');
+writeFileSync(join(autoProfile.workspace, '.rotaris', 'agents.yaml'), `${readFileSync(join(autoProfile.workspace, '.rotaris', 'agents.yaml'), 'utf8')}requirements:\n  scheduling:\n    mode: automatic\n`);
+const autoResting = await launch('ready-restart-automatic', autoProfile.workspace, autoProfile.local, autoProfile.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_CLICKS: [
+    '[data-testid="req-queue-open"]@3000',
+    '[aria-label="Stop the queue"]@4000',
+    '[data-testid="req-pane-close"]@4800',
+    `${CARD_101}@5600`,
+    '[data-testid="req-move-control"]@6800',
+    '[data-testid="req-confirm"] .btn>>Release@7800',
+    '[data-testid="req-pane-disclosure"] .btn>>Start, and do not show this again@9000',
+  ].join(';;'),
+  ROTARIS_CAPTURE_EVAL_AT: [`${CARD_AT('REQ-101')}@12000`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '13000',
+}, 180_000);
+expect(autoResting.evals['12000']?.column === 'ready', `REQ-TRACE-479: with the queue stopped the release left REQ-101 in ${JSON.stringify(autoResting.evals['12000'])}, not ready`);
+const autoRestingRows = deliveryRows(autoProfile.local);
+expect(autoRestingRows !== null, `no delivery store was written under ${autoProfile.local}`);
+const autoRestingTrees = autoRestingRows.query("select * from delivery_worktrees where req_id = 'REQ-101'");
+expect(autoRestingTrees.length === 1 && existsSync(autoRestingTrees[0].path), `REQ-TRACE-464: the release did not leave one tree on disk (${JSON.stringify(autoRestingTrees.map((t) => t.path))})`);
+expect(autoRestingRows.query("select * from delivery_runs where req_id = 'REQ-101'").length === 0, 'REQ-TRACE-479: a run began with the queue stopped');
+const autoRelaunch = await launch('ready-restart-automatic-relaunch', autoProfile.workspace, autoProfile.local, autoProfile.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_EVAL_AT: [`${CARD_AT('REQ-101')}@9000`, `${CARD_AT('REQ-101')}@15000`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '16000',
+}, 180_000);
+const autoColumns = ['9000', '15000'].map((k) => autoRelaunch.evals[k]?.column);
+expect(autoColumns.some((c) => c === 'running' || c === 'review' || c === 'done'), `REQ-TRACE-476/482: after the relaunch the automatic queue started nothing with no act — REQ-101 read ${JSON.stringify(autoColumns)} (feedback ${JSON.stringify(autoRelaunch.evals['15000']?.feedback)})`);
+expect(/REQ-101 unit u1 takes over its worktree/.test(autoRelaunch.log), 'REQ-TRACE-464: the relaunch\'s log does not say the recorded tree was taken over');
+const autoRows = deliveryRows(autoProfile.local);
+const autoRuns = autoRows.query("select * from delivery_runs where req_id = 'REQ-101'");
+const autoTrees = autoRows.query("select * from delivery_worktrees where req_id = 'REQ-101'");
+expect(autoRuns.length === 1 && autoRuns[0].unit === 'u1' && autoRuns[0].permissions === 'permissive', `REQ-TRACE-464/472: the relaunched REQ-101 has run rows ${JSON.stringify(autoRuns.map((x) => ({ unit: x.unit, permissions: x.permissions })))}, not one permissive run of u1`);
+expect(autoTrees.length === 1 && autoTrees[0].path === autoRestingTrees[0].path && autoTrees[0].ref === autoRuns[0].worktree_ref, `REQ-TRACE-464: the run did not begin on the tree the release provisioned before the quit (trees ${JSON.stringify(autoTrees.map((t) => t.path))})`);
+stage2['ready-restart-automatic'] = { before: autoResting.evals['12000'].column, columns: autoColumns, run: { unit: autoRuns[0].unit, permissions: autoRuns[0].permissions, worktree: autoTrees[0].path } };
 
 // ── panes and the graph: the registry's contract, and the rest of REQ-TRACE-497 a proof can reach ────────────────
 // Defect `R2-6`, and the reason this read carries geometry at all: every assertion below once read attributes through

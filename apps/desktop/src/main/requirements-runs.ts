@@ -33,8 +33,15 @@ export interface RequirementsRunsDeps {
 }
 export interface RequirementsRuns {
   handle(command: RequirementsRunsCommand): Promise<CommandOutcome>;
-  /** Claims and starts every dispatch the scheduler offers now; serialised, so two kicks never start one claim twice. */
+  /** Claims and starts every dispatch the scheduler offers now, for the focused window's workspace; serialised per workspace, so two kicks never start one claim twice. */
   dispatch(): Promise<DispatchReport>;
+  /**
+   * REQ-TRACE-476/482: the kick of a workspace open — the same dispatch, for THE WORKSPACE JUST OPENED rather than the
+   * focused window's, so an automatic queue resumes where it stopped with no person acting. Main's post-open slot calls
+   * it once per open, after the window is interactive; the claim's parse runs in the workspace service, off main's
+   * thread, and a `manual` workspace with nothing armed is answered without one.
+   */
+  opened(workspaceRoot: string, workspaceId: string): Promise<DispatchReport>;
   live(): readonly LiveBoardRun[];
   /** REQ-TRACE-472: what the two preferences make of a launch nobody disclosed; stamped on every requirements command main sends the service (this coordinator's and the relay's). */
   standingDisclosure(): StandingDisclosure;
@@ -65,7 +72,8 @@ export function approvalWaitOf(seconds: number): LaunchPreview['approvalWait'] {
 export function createRequirementsRuns(deps: RequirementsRunsDeps): RequirementsRuns {
   interface Live { readonly id: ReqId; readonly unit: string; readonly permissions: RunPermissions; waiting: boolean }
   const runs = new Map<string, Live>();
-  let dispatching: Promise<DispatchReport> | undefined;
+  /** One dispatch in flight per workspace root: two kicks for one workspace share it, and a kick for another is not swallowed by it. */
+  const dispatching = new Map<string, Promise<DispatchReport>>();
 
   const ask = async (root: string, command: RequirementsCommandPayload, bound: Millis = BOUND_SERVICE): Promise<{ readonly value: unknown; readonly changed?: { readonly generation: number; readonly affected: readonly ReqId[] | null } } | { readonly refused: string }> => {
     const pending = deps.service(root, { kind: 'requirements.command', workspaceRoot: root, command: { ...command, workspace: root }, actor: { kind: 'system' }, disclosure: standingDisclosure() }, bound);
@@ -118,14 +126,12 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
     }
   };
 
-  const dispatch = (): Promise<DispatchReport> => {
-    if (dispatching) return dispatching;
-    dispatching = (async (): Promise<DispatchReport> => {
+  const dispatchFor = (root: string, workspaceId: string): Promise<DispatchReport> => {
+    const inFlight = dispatching.get(root);
+    if (inFlight) return inFlight;
+    const run = (async (): Promise<DispatchReport> => {
       const started: { id: ReqId; unit: string; sessionId: string }[] = [];
       const abandoned: { id: ReqId; unit: string; reason: string }[] = [];
-      const root = deps.currentWorkspace();
-      const workspaceId = deps.currentWorkspaceId();
-      if (root === undefined || workspaceId === undefined) return { started, abandoned };
       // Bounded by the scheduler: a claim comes back only while a slot is free and a disclosed launch is next (REQ-TRACE-478/481/483).
       for (let guard = 0; guard < 64; guard += 1) {
         const c = await ask(root, { name: 'requirements.run.claim', workspace: root });
@@ -147,8 +153,15 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
         }
       }
       return { started, abandoned };
-    })().finally(() => { dispatching = undefined; });
-    return dispatching;
+    })().finally(() => { dispatching.delete(root); });
+    dispatching.set(root, run);
+    return run;
+  };
+  const dispatch = (): Promise<DispatchReport> => {
+    const root = deps.currentWorkspace();
+    const workspaceId = deps.currentWorkspaceId();
+    if (root === undefined || workspaceId === undefined) return Promise.resolve({ started: [], abandoned: [] });
+    return dispatchFor(root, workspaceId);
   };
 
   // REQ-TRACE-477: a flow that terminates on its worker delivers its ending to the surface that was told it began; the next candidate follows under the scheduler.
@@ -209,6 +222,7 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
       }
     },
     dispatch,
+    opened: (workspaceRoot, workspaceId) => dispatchFor(workspaceRoot, workspaceId),
     standingDisclosure,
     live: () => [...runs.entries()].map(([sessionId, l]) => ({ sessionId, id: l.id, unit: l.unit, waitingOnPerson: l.waiting, permissions: l.permissions })),
     /**

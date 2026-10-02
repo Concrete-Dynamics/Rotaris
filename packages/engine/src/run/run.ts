@@ -1289,7 +1289,7 @@ export class Run {
   private rootResilience(): TurnResilience {
     const { config } = this.deps;
     const entryModel = this.entryOverride.model ?? config.model;
-    if (this.rootRebuildsFor(entryModel)) {
+    if (this.rootCell === null || this.rootRebuildsFor(entryModel)) {
       const base = withSettings(this.catalogue, { model: entryModel, thinking: this.entryOverride.thinking ?? config.thinking });
       const current = this.memory.effective(base, this.catalogue);
       const persona = this.deps.personas?.resolve(config.persona)?.persona;

@@ -511,6 +511,14 @@ export class Run {
   private takenUp: { readonly text: string; readonly message: boolean } | null = null;
   private appliedEntryModel: ModelRef | null = null;
   /**
+   * REQ-MONITOR-142 (OQ-177): the user's entry switch not yet applied to the root's cell, which `rootResilience` applies
+   * at the next iteration's turn. A model switch rebuilds the cell on the chosen model even when it names the model
+   * already requested, because the ladder may have moved the cell off it (REQ-ORCH-090, REQ-ORCH-091 b); a reasoning
+   * switch sets the level on whatever model the cell has. Without it the cell was rebuilt only when the requested model
+   * changed, so a switch back onto the configured key, and every reasoning switch, appended a row that was untrue.
+   */
+  private pendingEntrySwitch: 'model' | 'reasoning' | null = null;
+  /**
    * A switch recorded since the root's cell was last settled (`rootResilience`, at the root's next turn): until then a
    * later switch, or the root's own wait choice, replaces it and it never applies. Each record says so (`supersedes`), and
    * each ladder move of the root says whether one is pending at it (`switch_pending`, `TurnResilience.switchPending`),
@@ -1285,29 +1293,40 @@ export class Run {
   }
 
   /**
-   * Whether the root's cell is built anew for `entryModel` at its next turn: when there is none yet, or when it was last
-   * built from another model. A switch onto the model it was last built from leaves it as it stands, a ladder move of it
-   * included (REQ-ORCH-090, REQ-ORCH-091 b), and `setEntryModel` records which of the two a switch is.
+   * Whether the root's cell is built anew for `entryModel` at its next turn: when there is none yet, when it was last
+   * built from another model, or when a model switch is pending (`pendingEntrySwitch`, OQ-177), so a switch ends a ladder
+   * move of it (REQ-ORCH-090, REQ-ORCH-091 b) even onto the model it was last built from; `setEntryModel` records it as
+   * `rebuilds`. (Until 2026-10-02 the pending switch was not part of the test: a switch onto the model the cell was last
+   * built from left it as it stood, a ladder move included, and the switch recorded `rebuilds: false`.)
    */
   private rootRebuildsFor(entryModel: ModelRef): boolean {
-    return this.rootCell === null || this.appliedEntryModel === null || !sameRef(this.appliedEntryModel, entryModel);
+    return this.rootCell === null || this.appliedEntryModel === null || !sameRef(this.appliedEntryModel, entryModel) || this.pendingEntrySwitch === 'model';
   }
 
-  /** The root's cell lives for the run; the entry model (and a mid-run switch of it) enters through the session memory. */
+  /**
+   * The root's cell lives for the run; the entry model (and a mid-run switch of it) enters through the session memory.
+   * Called once per root turn — an iteration, or the plan cycle — so a switch made while it runs reaches the next one
+   * (REQ-MONITOR-142: "the iteration already in flight finishes on the previous setting").
+   */
   private rootResilience(): TurnResilience {
     const { config } = this.deps;
     const entryModel = this.entryOverride.model ?? config.model;
+    const thinking = this.entryOverride.thinking ?? config.thinking;
     // The cell is settled here for whatever switch is in force: a switch recorded from now on supersedes none.
     this.entrySwitchPending = false;
     if (this.rootCell === null || this.rootRebuildsFor(entryModel)) {
-      const base = withSettings(this.catalogue, { model: entryModel, thinking: this.entryOverride.thinking ?? config.thinking });
+      const base = withSettings(this.catalogue, { model: entryModel, thinking });
       const current = this.memory.effective(base, this.catalogue);
       const persona = this.deps.personas?.resolve(config.persona)?.persona;
       const previous = this.rootCell;
       this.rootCell = agentCell(current, this.fallbackFor(persona, current));
       if (previous) { this.rootCell.fallbackAttempted = previous.fallbackAttempted; this.rootCell.sameTierAttempted = previous.sameTierAttempted; for (const p of previous.attempted) this.rootCell.attempted.add(p); }
       this.appliedEntryModel = entryModel;
+    } else if (this.pendingEntrySwitch === 'reasoning') {
+      // OQ-177: a reasoning switch is not a model switch — a move the ladder made stands, at the level the user chose.
+      this.rootCell.model = { ...this.rootCell.model, thinking };
     }
+    this.pendingEntrySwitch = null;
     // A ladder move of the root records whether a switch is pending at it: made on this cell, before the switch applies.
     return this.resilienceFor(this.rootCell, config.modelTimeoutMs, () => this.entrySwitchPending);
   }
@@ -1407,7 +1426,10 @@ export class Run {
     // The launch content goes to a fresh root's first call only; a resumed root carries on from its record.
     let launching = resume === undefined;
     let initial = true;
-    const compression = this.compressionFor(this.rootResilience().cell.model, () => this.plannerTodoLines());
+    // REQ-MONITOR-142: the root's ladder for this whole turn, the resumes after its children included — a switch made
+    // while it runs applies from the next iteration, not at this iteration's next resume.
+    const rootResilience = this.rootResilience();
+    const compression = this.compressionFor(rootResilience.cell.model, () => this.plannerTodoLines());
     // PD-ORCH-005 revision 4 clause 14: one check per execution of the root, at its first model step.
     const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration);
     /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
@@ -1458,7 +1480,7 @@ export class Run {
       steering: refreshing(this.steeringFor('root'), () => rootWatch.activity()), shouldPause: () => this.pauseRequested,
       // PD-ORCH-005: the pause's tool deadline, and what the root's interrupted calls are recorded as interrupted by.
       cutCalls: this.toolCut.signal, interruption: () => this.restCause,
-      resilience: this.rootResilience(),
+      resilience: rootResilience,
       // Part AH: the entry agent compresses against its own model's capacity, carrying the run-level plan.
       ...(compression ? { compression } : {}),
       // REQ-ORCH-093: after the first call this turn resumes the parent with its children's reports. A resumed root's
@@ -1925,11 +1947,19 @@ export class Run {
       return true;
     }
     this.entryOverride = { ...this.entryOverride, model: resolved.choice.model };
-    writer.appendRow('system', `Entry model switched to ${key}; it applies from the next iteration.`, true);
+    this.pendingEntrySwitch = 'model';
+    // OQ-177: the switch applies over a ladder move; a change-model resolution persisted for the pair (REQ-ORCH-091 d)
+    // stands for the rest of the session, and then the row says where the entry agent runs instead.
+    const kept = this.memory.overrideReaching(withSettings(this.catalogue, resolved.choice), this.catalogue);
+    const pair = `${providerIdentity(this.catalogue, resolved.choice.model)}/${resolved.choice.model.modelId}`;
+    writer.appendRow('system', kept === null
+      ? `Entry model switched to ${key}; it applies from the next iteration.`
+      : `Entry model switched to ${key}, but ${kept.key}, chosen for ${pair} during an earlier wait, stands for the rest of the session: the entry agent runs on ${kept.key} from the next iteration.`, true);
     // `rebuilds`: whether the root's cell is built anew for this model at its next turn, unless a later switch supersedes
-    // this one first — false onto the model it was last built from, which leaves a ladder move of the root in force.
-    // `supersedes`: this switch replaces one recorded since the cell was last settled, which never applied. The autopsy
-    // reader reads both; the record holds nothing else that says so
+    // this one first. Since OQ-177 it is true on every switch (`pendingEntrySwitch`); until 2026-10-02 it was false onto
+    // the model the cell was last built from, which left a ladder move of the root in force — stores written then carry
+    // that false, and the autopsy reader still reads it. `supersedes`: this switch replaces one recorded since the cell
+    // was last settled, which never applied. The autopsy reader reads both; the record holds nothing else that says so
     // (the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback).
     const supersedes = this.entrySwitchPending;
     this.entrySwitchPending = true;
@@ -1945,6 +1975,7 @@ export class Run {
   setEntryReasoning(level: ThinkingLevel): boolean {
     if (this.ended) return false;
     this.entryOverride = { ...this.entryOverride, thinking: level };
+    if (this.pendingEntrySwitch !== 'model') this.pendingEntrySwitch = 'reasoning';
     this.deps.writer.appendRow('system', `Entry reasoning level switched to ${level}; it applies from the next iteration.`, true);
     this.deps.writer.appendTimeline('entry_reasoning_switched', 'user', `The entry reasoning level switched to ${level}.`, { level });
     return true;

@@ -228,13 +228,27 @@ export class ResilienceMemory {
 
   /** The choice an agent actually calls: the override chain followed from the pair, bounded, else the choice itself. */
   effective(choice: ModelChoice, catalogue: readonly CatalogueEntry[]): ModelChoice {
+    return this.follow(choice, catalogue).choice;
+  }
+
+  /**
+   * REQ-MONITOR-142 with REQ-ORCH-091 (d) (OQ-177): the override `effective` ends on for this choice — the last hop of
+   * its chain — or null when none moves it, so a switch onto an overridden pair can say where the agent really runs.
+   */
+  overrideReaching(choice: ModelChoice, catalogue: readonly CatalogueEntry[]): Override | null {
+    return this.follow(choice, catalogue).last;
+  }
+
+  private follow(choice: ModelChoice, catalogue: readonly CatalogueEntry[]): { readonly choice: ModelChoice; readonly last: Override | null } {
     let current = choice;
+    let last: Override | null = null;
     for (let hops = 0; hops < 8; hops++) {
       const o = this.overrides.get(pairKey(providerIdentity(catalogue, current.model), current.model.modelId));
       if (!o || sameRef(o.choice.model, current.model)) break;
       current = o.choice;
+      last = o;
     }
-    return current;
+    return { choice: current, last };
   }
 
   /** Rehydrate from the session's timeline; an override whose key no longer resolves is dropped with a warning. */

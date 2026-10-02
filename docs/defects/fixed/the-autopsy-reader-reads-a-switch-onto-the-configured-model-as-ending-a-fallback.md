@@ -140,6 +140,15 @@ that records no snapshot. It is now recorded as an open note,
 [the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](../the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md).
 
 The product's own row is a separate matter and is recorded, not repaired, here:
-[a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force.md](../a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force.md)
+[a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force.md](a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force.md)
 (the system row says the switch applies from the next iteration, and REQ-MONITOR-145 names the switch as the way back to a
 primary model, while the run keeps the fallback).
+
+**The run's side changed after this repair, 2026-10-02.** Under OQ-177's reading the run now rebuilds the root's cell
+on every switch, even onto the model it was last built from, and records `rebuilds: true` on each
+([an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md](an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md)).
+The reader repaired here is unchanged: `rebuilds: false` is now found only in stores written before that change, and
+it still reads them right. (This paragraph replaces the "Overtaken by the run" paragraph that branch had written on the
+open copy of this note before the two met.) The `ladder.test.ts` cases named above that end on `b1` after a switch back
+onto `a1` now give the run a second iteration and end on `a1`, the reader reading `b1` then `a1`; their records carry
+`rebuilds: true` on that switch.

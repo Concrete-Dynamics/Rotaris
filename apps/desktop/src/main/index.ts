@@ -929,7 +929,11 @@ async function main(): Promise<void> {
       // REQ-NOTIFY-060/063/093 (Part Q): a run ended by a rate-limit or quota condition — the wait cancelled, or the ladder out of
       // recoveries — is the third class: the provider limit was reached, the session is preserved, another model or a retry once
       // the provider resets, the failure text as detail, the action opening model settings. (REQ-NOTIFY-062's hosted-credit
-      // branch is not built: no hosted provider exists.) The authentication and sandbox classes ahead of it are not built either.
+      // branch is not built: no hosted provider exists.) The authentication class ahead of it is not built either. The sandbox
+      // class (REQ-NOTIFY-061) never reaches this handler: a refused confinement mode is refused before a session or a run
+      // exists, and its notice is raised where the start, the prompt or the continue is refused (`confinementRefusalNotice`,
+      // `commands/session.ts`). (Until 2026-10-02 this comment said the sandbox class was not built; it was built only in
+      // part, the wording as detail alone and no action.)
       /**
        * REQ-EVENTS-088 (OQ-42): a run whose terminal persistence could not be confirmed has ALREADY been
        * reported — the run host published one failure notice carrying the last durable ordinal and the reopen

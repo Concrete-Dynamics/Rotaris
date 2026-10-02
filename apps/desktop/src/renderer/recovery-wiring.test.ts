@@ -71,3 +71,19 @@ describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the render
     expect(text).not.toMatch(/`run \$\{STATUS_LABELS/);
   });
 });
+
+/*
+ * REQ-NOTIFY-045 (OQ-178): the window's dispatcher hands `retry-run` to `retryRun` with the draft the composer last
+ * published, and no longer lists it among the members with no target. The dispatcher lives in the renderer root, which
+ * no `node` test environment mounts, so its source is what pins it; `retryRun` itself is pinned in `session-actions.test.ts`.
+ */
+describe('REQ-NOTIFY-045: the retry action reaches its target', () => {
+  const text = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8');
+  it('main.tsx dispatches retry-run to retryRun with the published draft', () => {
+    const arm = text.slice(text.indexOf("case 'retry-run':"), text.indexOf("case 'open-cloud-account':"));
+    expect(arm).toContain('let draft = composerDraft.current;');
+    expect(arm).toContain('await retryRun(draft)');
+    expect(text).not.toMatch(/case 'open-project-init':\s*case 'retry-run':/);
+    expect(text).toContain('publish: (text: string) => { composerDraft.current = text; setPublished(text); }');
+  });
+});

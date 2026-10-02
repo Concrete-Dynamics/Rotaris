@@ -67,7 +67,7 @@ describe('main/run-failure-notice — runEndingPublication: REQ-NOTIFY-060 class
   it('a run that ended otherwise keeps its summary, or REQ-NOTIFY-063\'s notice where it ended on a limit (REQ-NOTIFY-093)', () => {
     expect(runEndingPublication('S1', ending())).toEqual({ kind: 'notice', notice: { severity: 'info', title: 'The run completed.' } });
     expect(runEndingPublication('S1', ending({ error: 'a task was abandoned', severity: 'warning', summary: 'Completed with a task abandoned' }))).toEqual({ kind: 'notice', notice: { severity: 'warning', title: 'Completed with a task abandoned', detail: 'a task was abandoned' } });
-    expect(runEndingPublication('S1', ending({ status: 'cancelled', execution_status: 'cancelled', error: 'the quota wait was cancelled: HTTP 429' }))).toEqual({ kind: 'notice', notice: quotaFailureNotice('S1', 'the quota wait was cancelled: HTTP 429') });
+    expect(runEndingPublication('S1', ending({ status: 'cancelled', execution_status: 'cancelled', error: 'the quota wait was cancelled: HTTP 429' }))).toEqual({ kind: 'notice', notice: quotaFailureNotice('S1', 'the quota wait was cancelled: HTTP 429'), quota: 'the quota wait was cancelled: HTTP 429' });
   });
 });
 
@@ -171,6 +171,42 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
     h.publisher.endedOtherwise('S3', { severity: 'warning', title: 'Completed with a task abandoned', detail: 'a task was abandoned' }, 'stopped');
     expect(h.reported).toEqual([own, unfocusedEndingNotice('S2', 'completed'), unfocusedEndingNotice('S3', 'stopped')]);
     expect(h.recovered).toEqual([]);
+  });
+
+  it('REQ-NOTIFY-093 with REQ-NOTIFY-030/031: an unfocused run that ended on a limit raises 031\'s notice and holds REQ-NOTIFY-063\'s for the focus', async () => {
+    const focused = new Set(['S1']);
+    const h = harness(focused);
+    const failure = 'the quota wait was cancelled: HTTP 429';
+    const publication = runEndingPublication('S2', ending({ status: 'cancelled', execution_status: 'stopped', error: failure }));
+    if (publication.kind !== 'notice') throw new Error('expected a notice');
+    h.publisher.endedOtherwise('S2', publication.notice, 'stopped', publication.quota);
+    // While S2 is not on screen: REQ-NOTIFY-031's info notice naming it, and nothing else.
+    expect(h.reported).toEqual([unfocusedEndingNotice('S2', 'stopped')]);
+    expect(h.reported[0]?.severity).toBe('info');
+    expect(h.publisher.holds('S2')).toBe(true);
+    // Focusing another session publishes nothing of S2's.
+    await h.publisher.focused('S1');
+    expect(h.reported).toHaveLength(1);
+    // Focusing S2 brings REQ-NOTIFY-063's notice and its model-settings action, once.
+    focused.add('S2');
+    await h.publisher.focused('S2');
+    expect(h.reported).toEqual([unfocusedEndingNotice('S2', 'stopped'), quotaFailureNotice('S2', failure)]);
+    await h.publisher.focused('S2');
+    expect(h.reported).toHaveLength(2);
+    expect(h.recovered).toEqual([]);
+    // A focused session's limit ending raises REQ-NOTIFY-063's notice at once and holds nothing.
+    h.publisher.endedOtherwise('S1', quotaFailureNotice('S1', failure), 'stopped', failure);
+    expect(h.reported.at(-1)).toEqual(quotaFailureNotice('S1', failure));
+    expect(h.publisher.holds('S1')).toBe(false);
+    // A later ending of the unfocused session supersedes the held quota notice.
+    h.publisher.endedOtherwise('S3', quotaFailureNotice('S3', failure), 'stopped', failure);
+    expect(h.publisher.holds('S3')).toBe(true);
+    h.publisher.ended('S3');
+    h.publisher.endedOtherwise('S3', { severity: 'info', title: 'The run completed.' }, 'completed');
+    expect(h.publisher.holds('S3')).toBe(false);
+    focused.add('S3');
+    await h.publisher.focused('S3');
+    expect(h.reported.filter((n) => n.sessionId === 'S3')).toEqual([unfocusedEndingNotice('S3', 'stopped'), unfocusedEndingNotice('S3', 'completed')]);
   });
 
   it('every class waits for the focus, and a later ending of the session supersedes what was held', async () => {

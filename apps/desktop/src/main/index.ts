@@ -1097,8 +1097,9 @@ async function main(): Promise<void> {
       } else if (publication.kind === 'failure') {
         void runFailures.failed(e.sessionId, publication.failureClass, publication.failure);
       } else {
-        // REQ-NOTIFY-031: through the same focus test — a session not on screen raises the notice naming it instead.
-        runFailures.endedOtherwise(e.sessionId, publication.notice, e.result.execution_status);
+        // REQ-NOTIFY-031: through the same focus test — a session not on screen raises the notice naming it instead, and
+        // one that ended on a provider limit holds REQ-NOTIFY-063's notice for its focus (REQ-NOTIFY-093/030).
+        runFailures.endedOtherwise(e.sessionId, publication.notice, e.result.execution_status, publication.quota);
       }
       resultSeen = true;
       log(`run ${e.sessionId} ended ${e.result.status} (${e.result.stop_reason}) → ${e.result.execution_status}`);

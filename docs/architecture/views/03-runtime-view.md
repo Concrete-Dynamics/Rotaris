@@ -1214,6 +1214,11 @@ releases that provider's pairs. ~~REQ-NOTIFY-031 (a background run's non-failure
 other raises REQ-NOTIFY-031's in its place (`unfocusedEndingNotice`: persistent, `success` for `completed` and `info`
 otherwise, naming the session and its normalised state, saying the session on screen is unaffected, `focus-session`).
 "New session" sends `session.release` for the session it releases, so main no longer counts that session as followed.
+*Since 2026-10-02 (fin10, `docs/defects/fixed/a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md`):* a
+run that ended otherwise on a provider limit (a cancelled quota wait) carries the limit's text with its notice
+(`runEndingPublication`'s `quota`); a session no main window follows raises REQ-NOTIFY-031's notice as above and **holds the
+`quota` class**, so the focus publishes REQ-NOTIFY-063's notice and its model-settings action (REQ-NOTIFY-093/030), and a
+later ending supersedes it. Until then nothing was held and the limit reached the user only as a plain ending.
 
 Main presents `run.result` once as the notice — **except where that result carries `persistence: {confirmed: false}`**,
 the run host having already published the one failure notice `REQ-EVENTS-088` allows, with the last durable ordinal

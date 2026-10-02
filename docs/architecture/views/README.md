@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A background run that ended on a provider limit brings REQ-NOTIFY-063's notice with the focus (REQ-NOTIFY-093/030/031;
+fin10).** `runEndingPublication` hands the limit's text beside the quota notice, and `RunFailurePublisher.endedOtherwise`
+holds the `quota` class for a session no main window follows, released by the focus as a failure's class is. The
+**runtime view**'s focus-gate paragraph and the **state ownership view**'s held-publication row say so. No package, edge,
+process, channel, command or store column changed.
+
 **The model chips name the override in force (REQ-CHAT-006, REQ-SESSION-026, REQ-NOTIFY-089; fin8).** The record gains
 `modelOverrides` (`overridesInForce` over the run's catalogue and the session's memory; for a session opened from the store,
 its workspace's catalogue read once where its timeline holds an override, through the side-effect-free

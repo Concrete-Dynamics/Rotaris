@@ -12,9 +12,9 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
  * (REQ-MONITOR-117..119), and since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
- * Fifteen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
- * REQ-NOTIFY-064's notice, `auth-fallback` the first failure's automatic fallback and its re-authentication prompt), each
- * asserting the store's events, issues,
+ * Sixteen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
+ * REQ-NOTIFY-064's notice, `auth-fallback` the first failure's automatic fallback and its re-authentication prompt,
+ * `auth-fallback-dialog` the two together), each asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
  *
@@ -848,6 +848,56 @@ await scenarioRun('auth-fallback', async () => {
     expect(own.length === expectedOwn && own.every((c) => c.endsWith('=ok')), `${v.name}: the prompt's own controls are not all usable at ${size}: ${own.join('|')}`);
     results.authFallback[v.name] = { size, status: row.execution_status, calls, pin: meta, acknowledgement: ack, users, prompt: prompt.text, method: prompt.data['data-method'], promptRect: body?.data['data-prompt-rect'] ?? '', composerUsable: composer, chromeUsable: chrome, outsideControlsTested: outside, underPrompt, promptControls: own.join('|'), ...(v.plan ? { gateAnswers, gateRect: body?.data['data-gate-rect'] ?? '', gateChildren: body?.data['data-gate-children'] ?? '' } : {}), png: r.png, elapsedMs: r.elapsedMs };
   }
+});
+
+// 12. `auth-fallback-dialog` — the automatic fallback and the recovery dialog together (the merge of the 401 note's four
+// parts): a first 401 with `fallback_model: beta` restarts on beta and opens the re-authentication prompt; beta's provider
+// refuses too (`fail:401:only=scripted+scripted-b`), a second authentication failure, which opens REQ-NOTIFY-072's dialog
+// naming beta (REQ-NOTIFY-075: the fallback is not tried again) and closes the prompt (REQ-NOTIFY-079); the dialog offers
+// neither alpha — the automatic fallback's primary, refused with the credentials it still has — nor beta (REQ-NOTIFY-068);
+// gpt-4o is chosen and the run completes on it. Driven, because the dialog is its own window.
+const s13 = scenario('auth-fallback-dialog', [], { fallback: 'beta' });
+await scenarioRun('auth-fallback-dialog', async () => {
+  const PROMPT_OPEN = `document.querySelector('[data-testid="reauth-prompt"]')?.getAttribute('data-session') ?? null`;
+  const r = await drivenLaunch('auth-fallback-dialog', s13, { ROTARIS_SCRIPT: 'fail:401:only=scripted+scripted-b' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('bad keys on both providers', { enter: true }));
+    await step('the recovery dialog', until(() => recoveryWindows(d), (w) => w.length === 1 && w[0].visible, { timeoutMs: 60_000, what: 'the recovery window', signal }));
+    await step('the dialog drawn', d.waitFor('[data-testid="auth-recovery-models"]', { window: 'auth-recovery', timeoutMs: 30_000 }));
+    const dialog = await step('the dialog read', d.send('eval', { expression: RECOVERY_READING, window: 'auth-recovery' }));
+    const promptWhileOpen = await step('the prompt behind it', d.eval(PROMPT_OPEN));
+    await step('gpt-4o', d.click('[role="radio"][data-value="gpt-4o"]', { window: 'auth-recovery' }));
+    await step('Retry on gpt-4o', d.click('[data-action="retry"]', { window: 'auth-recovery' }));
+    const done = await step('the run completed', until(() => { const db = open(s13); try { return session(db); } finally { db.close(); } }, (row) => row?.execution_status === 'completed', { timeoutMs: 90_000, what: 'the restarted run completing', signal }));
+    const closedAtEnd = await step('no dialog at the end', recoveryWindows(d));
+    return { dialog, promptWhileOpen, done, closedAtEnd };
+  });
+  const db = open(s13);
+  const row = session(db);
+  const overrides = names(db, row.session_id).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata));
+  db.close();
+  const v = r.value;
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator').map((c) => c.model);
+  expect(JSON.stringify(calls) === JSON.stringify(['scripted/alpha', 'scripted-b/beta', 'openai/gpt-4o']), `the calls are not alpha, the automatic fallback beta, then the dialog's gpt-4o: ${JSON.stringify(calls)}`);
+  // REQ-NOTIFY-070 then REQ-NOTIFY-071: the first failure restarted on beta and opened the prompt; REQ-NOTIFY-072/075: the
+  // second opened the dialog naming beta; REQ-NOTIFY-079: the dialog's opening closed the prompt.
+  const at = (re) => r.log.search(re);
+  const order = [at(/pinned scripted-b\/beta in place of scripted\/alpha/), at(/re-authentication prompt opened for session/), at(/authentication recovery: the dialog is open for session \S+ \(scripted-b\/beta failed/), at(/re-authentication prompt\(s\) closed \(the recovery dialog opened/)];
+  expect(order.every((n) => n >= 0) && order.every((n, k) => k === 0 || n > order[k - 1]), `the restart, the prompt, the dialog and the prompt's closing are not in that order: ${JSON.stringify(order)} (see auth-fallback-dialog.log)`);
+  expect(v.dialog.title === 'Authentication failed for beta', `the dialog does not name the fallback that failed: ${JSON.stringify(v.dialog.title)}`);
+  expect(v.promptWhileOpen === null, `the re-authentication prompt stayed drawn beside the recovery dialog (REQ-NOTIFY-079): ${v.promptWhileOpen}`);
+  // REQ-NOTIFY-068: neither pair that failed with the credentials it still has is offered.
+  const keys = v.dialog.models.map((m) => m.key);
+  expect(!keys.includes('alpha') && !keys.includes('beta') && keys.includes('gpt-4o'), `the dialog offers a pair that already failed authentication, or not gpt-4o: ${JSON.stringify(keys)}`);
+  expect(v.done.execution_status === 'completed' && v.closedAtEnd.length === 0, `the run did not complete on gpt-4o, or a dialog stayed: ${JSON.stringify(v.done)}`);
+  expect(overrides.some((o) => o.provider === 'scripted' && o.model === 'alpha' && o.model_key === 'beta' && o.cause === 'authentication')
+    && overrides.some((o) => o.provider === 'scripted-b' && o.model === 'beta' && o.model_key === 'gpt-4o' && o.cause === 'authentication'), `the two pins are not recorded: ${JSON.stringify(overrides)}`);
+  results.authFallbackDialog = { status: row.execution_status, calls, dialog: { title: v.dialog.title, models: keys }, promptWhileOpen: v.promptWhileOpen, overrides, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ ...results, ...(only === null ? {} : { only }), failures }, null, 2)}\n`);

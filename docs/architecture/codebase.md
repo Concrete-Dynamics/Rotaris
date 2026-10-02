@@ -1191,7 +1191,10 @@ the non-modal re-authentication prompt beside the continuing run with the compos
 notice button usable beside it and no control under it, at the opening size and at 1000x680 with an API-key provider's key
 field (REQ-NOTIFY-071, ADR-0048), and beside an expanded plan gate at 1000x680 drawn as its bar with the gate's three
 answers reachable and the plan the largest part of the gate (REQ-ORCH-153, PD-ORCH-002), drawn in flow as the Workspace
-view's own `reauth` row for the followed session alone (REQ-NOTIFY-030, OQ-181).
+view's own `reauth` row for the followed session alone (REQ-NOTIFY-030, OQ-181). `auth-fallback-dialog` (driven,
+`fail:401:only=scripted+scripted-b`) follows the fallback refused too: the second failure opens the dialog naming beta,
+the prompt is closed as it opens (REQ-NOTIFY-079), neither alpha — the automatic fallback's primary — nor beta is offered
+(REQ-NOTIFY-068), and the run completes on gpt-4o.
 **What the 401 recovery does not do:** a device-code or browser provider is told its method is not provided by this build,
 the sign-in flows being owed (REQ-NOTIFY-076's second branch,
 [note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).

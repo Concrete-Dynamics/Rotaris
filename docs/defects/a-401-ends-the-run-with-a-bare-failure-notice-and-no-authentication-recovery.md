@@ -317,7 +317,9 @@ Pinned by `run-failure-notice.test.ts` (the order: a restart publishes nothing m
 opening closes the prompts; an unfocused session's restart waits for its focus), `auth-fallback.test.ts` (the refusal
 codes, the spent first failure, the refused primary, the key's stages, `closeAllPrompts`), `failure-class.test.ts`, and the
 two `ladder.test.ts` blocks (A's and C's restarts side by side, one harness option `configureRefusesFrom`). The proofs:
-`fatal` (no usable fallback: the dialog), `auth-fallback` (the restart, no dialog).
+`fatal` (no usable fallback: the automatic fallback asked first and finding none, then the dialog), `auth-fallback` (the
+restart, no dialog), and the new `auth-fallback-dialog` (driven; the fallback refused too: the dialog naming beta, the
+prompt closed as it opened, neither alpha nor beta offered, the run completed on gpt-4o).
 
 **Why the note is still open.** The fourth repair round's blocking finding is part A's: a revise cycle that failed on a
 first 401 was restarted from the original prompt as a fresh plan cycle, dropping the stated changes and the plan they

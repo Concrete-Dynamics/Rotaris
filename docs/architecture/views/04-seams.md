@@ -259,7 +259,10 @@ Invariants:
 - **An action is dispatched in one place**, `dispatchNoticeAction` in `apps/desktop/src/renderer/main.tsx`; a member
   whose target is not built is logged there and nothing else. `retry-run` has its target since 2026-10-02 (REQ-NOTIFY-045,
   `retryRun` in `apps/desktop/src/renderer/session-actions.ts`, reading the draft the composer last published through
-  `composerDraft` in `shell.ts`); no failure notice carries it yet (OQ-178).
+  `composerDraft` in `shell.ts`); no failure notice carries it yet (OQ-178). A blank draft is the engine's to retry
+  (`session.retry`, `Sessions.retry`, since 2026-10-02): the last submitted prompt is read over every row with
+  `lastSubmittedPrompt` — the one reading the continue, the plan decision and the authentication restarts share — so an
+  action never resubmits from what a window happens to hold.
 
 ---
 

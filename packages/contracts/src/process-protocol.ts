@@ -128,6 +128,8 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().optional() }),
   z.object({ kind: z.literal('session.planRearm'), sessionId: z.string().min(1) }),
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
+  /** REQ-NOTIFY-045 (OQ-178): resubmit the session's last submitted prompt (`Sessions.retry`); answered `ack`. */
+  z.object({ kind: z.literal('session.retry'), sessionId: z.string().min(1) }),
   z.object({ kind: z.literal('session.readAttachment'), sessionId: z.string().min(1), path: z.string().min(1), digest: z.string().regex(/^[0-9a-f]{64}$/) }),
   /** A surface begins following: snapshot first, then the resident transcript (REQ-MONITOR-214, REQ-SESSION-161). */
   z.object({ kind: z.literal('session.attach'), sessionId: z.string() }),

@@ -10,7 +10,7 @@ has been released, the search finds nothing, and the code falls back to `stored.
 (`lastPromptOf`, behind `restartAfterAuthFailure` and `authRecoveryFacts`'s `lastPrompt`) carry a third and fourth copy
 of the same search, falling back to `''`: the restart is then refused as "No prompt is recorded for this session." and
 the dialog says there is none, both untrue. The renderer's retry has its own copy over the replica's window
-([the-retry-action-reads-the-last-prompt-from-the-resident-window.md](../the-retry-action-reads-the-last-prompt-from-the-resident-window.md)).
+([the-retry-action-reads-the-last-prompt-from-the-resident-window.md](the-retry-action-reads-the-last-prompt-from-the-resident-window.md)).
 Noticed 2026-10-02 by the fourth triage of open defect notes, while reading that note's code; recorded before its repair.
 
 ## Specs

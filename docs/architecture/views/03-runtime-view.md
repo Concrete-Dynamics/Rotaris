@@ -179,8 +179,8 @@ returns before another configuration load. Launch audits record effective permis
 effective configuration snapshot: slots, redacted models, personas with prompt files resolved inline,
 runtime and every other typed section, plus redacted MCP server declarations.
 
-**The continuation lease (2026-09-14, REQ-PROVIDER-066).** The three run-launching continuation commands —
-`session.continue`, `session.prompt`, `session.planDecision` — re-ask main for the credential lease
+**The continuation lease (2026-09-14, REQ-PROVIDER-066).** The run-launching continuation commands —
+`session.continue`, `session.prompt`, `session.planDecision`, and since 2026-10-02 `session.retry` (REQ-NOTIFY-045) — re-ask main for the credential lease
 (`leaseForContinuation`) before the engine resolves the run's setup, and publish the fresh bearers under
 the session's workspace root (`sessionRoots`, recorded at `session.start` and `session.resume`). Before the
 repair, a resumed session's continuation read the previous launch's lease — empty after an application

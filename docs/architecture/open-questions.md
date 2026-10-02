@@ -8849,7 +8849,12 @@ another model, or retry once the provider resets."). Activated, the action resub
 last published it (REQ-CHAT-014), else as stored (REQ-NOTIFY-066), else — the draft blank — the focused session's newest
 `user` row, the prompt the engine's own continue reads as the last one; it goes through the composer's submit path to
 the session the window follows (REQ-NOTIFY-030), and is refused, with the reason in a warning notice, when no session
-is followed or there is nothing to resubmit. The composer keeps the draft: nothing outside the composer clears it.
+is followed or there is nothing to resubmit. The composer keeps the draft: nothing outside the composer clears it. *Since
+2026-10-02 (fin8, the repair of
+[`the-retry-action-reads-the-last-prompt-from-the-resident-window.md`](../defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md)):*
+the blank-draft branch is the engine's (`session.retry`, `Sessions.retry`). It reads the last submitted prompt over every
+row, released ones included, where the window had searched its replica's resident window and refused once the prompt was
+released.
 
 **What a ruling decides.** Which notice carries the retry — REQ-NOTIFY-063's in place of, or beside, its model-settings
 action (which REQ-SHELL-114's single action would then have to allow), REQ-NOTIFY-064's, or none — and whether a draft a

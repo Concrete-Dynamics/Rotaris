@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**The retry resubmits the session's last prompt from the store (REQ-NOTIFY-045, REQ-SESSION-192; fin8).** A notice's
+retry with a blank draft is one command, `session.retry`, renderer → main → run host (`Sessions.retry`), in place of the
+window's search of its replica; `lastSubmittedPrompt` (over `StoreDal.lastPromptRow`, resident and released rows alike)
+is the one reading of a session's last prompt the retry, the continue, the plan decision and the authentication restarts
+share. The **process view** lists the command on both boundaries, the **runtime view**'s continuation lease names it, and
+the **seams view** §6 says where a blank-draft retry lands. No package, edge, process, channel or store column changed.
+
 **An authentication restart relaunches the failed run's own launch (REQ-NOTIFY-070, REQ-NOTIFY-074, REQ-ORCH-154; the
 401 note's part A, fourth repair round).** `Sessions.relaunchAfterAuthFailure` is the one restart path of the automatic
 fallback and of the recovery dialog: a run a plan decision launched (`Live.planLaunch`, kept with that run) is relaunched as

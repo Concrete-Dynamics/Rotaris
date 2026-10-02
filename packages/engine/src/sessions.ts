@@ -633,9 +633,10 @@ export interface LastPrompt {
 /**
  * REQ-NOTIFY-045 / REQ-NOTIFY-069 / REQ-SESSION-192: the session's last submitted prompt, read over EVERY row — resident or
  * released to a page — so a prompt more than `RESIDENT_ROW_CAP` rows back is still the session's. The one reading the
- * continue, the plan decision and the authentication restarts share; null only where no
+ * retry (`Sessions.retry`), the continue, the plan decision and the authentication restarts share; null only where no
  * prompt was ever submitted. Until 2026-10-02 each of them searched `residentRows` and, once the prompt had been released,
- * fell back to the session id as the prompt's text (the continue, the plan decision) or to '' (the restarts) (`docs/defects/fixed/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md`).
+ * fell back to the session id as the prompt's text (the continue, the plan decision) or to '' (the restarts), and the
+ * renderer's retry searched its replica's window (`docs/defects/fixed/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md`).
  */
 export function lastSubmittedPrompt(dal: StoreDal, sessionId: SessionId): LastPrompt | null {
   const row = dal.lastPromptRow(sessionId);
@@ -1458,6 +1459,22 @@ export class Sessions {
     // REQ-CONFIG-094: counted with every other session in this process (`modelSlotsFor`); its end settles what it held.
     live.running = run.start().finally(() => { this.settleModelSlots(sessionId, dal, runRef); delete entry.run; log?.info(`run ended ${run.outcome?.status ?? 'unknown'}`); log?.close(); });
     return ok(sessionId);
+  }
+
+  /**
+   * REQ-NOTIFY-045 with REQ-NOTIFY-030 (OQ-178): a notice's retry where the composer's draft is blank — the session's last
+   * submitted prompt (`lastSubmittedPrompt`, released rows included) resubmitted as `prompt` submits one, so the live-run
+   * refusal and the rest are `prompt`'s. Refused as having nothing to retry only where no prompt was ever submitted. Until
+   * 2026-10-02 the retry was the renderer's: it searched its replica's resident window and refused once the prompt had
+   * been released (`docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`).
+   */
+  retry(sessionId: SessionId): Result<TranscriptRow, { code: string; reason: string }> {
+    const s = this.live.get(sessionId);
+    if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
+    const last = lastSubmittedPrompt(s.dal, sessionId);
+    if (last === null) return err({ code: 'no-prompt', reason: 'No prompt has been submitted in this session, so there is nothing to retry.' });
+    return this.prompt(sessionId, last.text, []);
   }
 
   /** REQ-SESSION-114..116: append first, then continue through the ordinary Run lifecycle. */
@@ -2314,8 +2331,8 @@ export class Sessions {
    *
    * Main keeps the "first failure of the session" bookkeeping (`apps/desktop/src/main/auth-fallback.ts`); this answers for one restart.
    * The restart re-submits the prompt as `prompt` does, so the transcript shows it sent again; the last prompt's
-   * attachments are not re-sent (OQ-182's reading), though `lastSubmittedPrompt` — the reading it shares with the continue,
-   * over released rows too — returns them.
+   * attachments are not re-sent (OQ-182's reading), though `lastSubmittedPrompt` — the reading it shares with the retry
+   * and the continue, over released rows too — returns them.
    */
   restartOnFallback(sessionId: SessionId): Result<AuthFallbackRestart, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);

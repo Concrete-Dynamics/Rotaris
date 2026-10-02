@@ -136,6 +136,11 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   /** REQ-CHAT-011 again for a loaded session with no active run: append the user row. */
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   /** REQ-CHAT-173: thumbnail bytes are fetched on demand and never join a transcript snapshot. */
+  /**
+   * REQ-NOTIFY-045 / REQ-NOTIFY-030 (OQ-178): a notice's retry with a blank draft — the engine resubmits the session's last
+   * submitted prompt, read over every row (`Sessions.retry`), so the renderer names the session and nothing else.
+   */
+  z.object({ kind: z.literal('session.retry'), sessionId: z.string().min(1) }),
   z.object({ kind: z.literal('session.readAttachment'), sessionId: z.string().min(1), path: z.string().min(1), digest: z.string().regex(/^[0-9a-f]{64}$/) }),
   /**
    * REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause, or continue a paused session or one a crash left (PD-ORCH-005

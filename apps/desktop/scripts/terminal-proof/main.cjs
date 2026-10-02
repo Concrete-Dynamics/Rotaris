@@ -8,6 +8,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const { writeFileSync, mkdirSync } = require('node:fs');
 const { join } = require('node:path');
+const { inputFence, until } = require('./fence.cjs');
 
 const out = process.env.TERMINAL_PROOF_OUT;
 const page = process.env.TERMINAL_PROOF_PAGE;
@@ -20,6 +21,8 @@ const failures = [];
 const results = {};
 const expect = (name, condition, detail) => { results[name] = { pass: Boolean(condition), ...(detail === undefined ? {} : { detail }) }; if (!condition) failures.push(`${name}: ${JSON.stringify(detail)}`); };
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** The host's load beside a time-bound reading (REQ-SHELL-166's echo): a red at a load several times the CPU count is the host's to read. */
+const hostLoad = () => { const os = require('node:os'); return { loadavg: os.loadavg().map((l) => Number(l.toFixed(2))), cpus: os.cpus().length }; };
 
 // The frame shape the manager ruled on 2026-09-09: `{ v, sessionId, streamId, seq, kind, payload, meta?, closing? }` (`v` is added by the page).
 const frame = (streamId, seq, kind, payload, extra = {}) => ({ sessionId: 'proof-session', streamId, seq, kind, payload, ...extra });
@@ -56,15 +59,36 @@ app.whenReady().then(async () => {
   const count = (selector) => exec(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
   const active = () => exec(`(() => { const a = document.activeElement; return a ? { tag: a.tagName, testid: a.getAttribute('data-testid'), label: a.getAttribute('aria-label') } : null; })()`);
   const rect = (selector) => exec(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
-  const click = async (selector) => { const r = await rect(selector); if (!r) throw new Error(`no element ${selector}`); const x = Math.round(r.x + r.width / 2); const y = Math.round(r.y + r.height / 2); wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 }); wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 }); await pause(60); };
-  const clickTop = async (selector) => { const r = await rect(selector); if (!r) throw new Error(`no element ${selector}`); const x = Math.round(r.x + r.width / 2); const y = Math.round(r.y + 12); wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 }); wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 }); await pause(60); };
+  // Each input waits until the page has counted it (`fence.cjs`); a fence that times out lands in `results.inputFences`.
+  const inputs = () => exec('window.__terminalProof.inputs()');
+  const fenceMisses = [];
+  results.inputFences = fenceMisses;
+  const fence = inputFence({ read: inputs, misses: fenceMisses });
+  const pressAt = async (x, y, what) => {
+    const before = (await inputs()).pointerUps;
+    wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+    wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+    await fence(what, 'pointerUps', before);
+    await pause(60);
+  };
+  const click = async (selector) => { const r = await rect(selector); if (!r) throw new Error(`no element ${selector}`); await pressAt(Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2), `click ${selector}`); };
+  const clickTop = async (selector) => { const r = await rect(selector); if (!r) throw new Error(`no element ${selector}`); await pressAt(Math.round(r.x + r.width / 2), Math.round(r.y + 12), `click ${selector}`); };
   const key = async (keyCode, modifiers = [], char = null) => {
+    const before = (await inputs()).keydowns;
     wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
     if (char !== null) wc.sendInputEvent({ type: 'char', keyCode: char, modifiers });
     wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
+    await fence(`key ${[...modifiers, keyCode].join('+')}`, 'keydowns', before);
     await pause(40);
   };
-  const wheel = async (x, y, deltaY) => { wc.sendInputEvent({ type: 'mouseWheel', x, y, deltaX: 0, deltaY, canScroll: true }); await pause(60); };
+  // One wheel event in flight at a time: Chromium's browser process holds a wheel event until the renderer has handled
+  // the one before and MERGES those it holds, and a key or a pointer event is not held behind them, so an unfenced notch
+  // could arrive merged with the next, or after the Shift+End that was sent after it.
+  const wheel = async (x, y, deltaY) => {
+    const before = (await inputs()).wheels;
+    wc.sendInputEvent({ type: 'mouseWheel', x, y, deltaX: 0, deltaY, canScroll: true });
+    await fence(`wheel ${deltaY}`, 'wheels', before);
+  };
   let seqA = 300;
   const syncMeta = async () => {
     const last = (await state()).log.resize.filter((r) => r.streamId === STREAM_A).at(-1);
@@ -203,7 +227,8 @@ app.whenReady().then(async () => {
     const beforeSub = after.stream.grid.viewportY;
     const arrivals = [];
     for (let i = 1; i <= 10; i += 1) { await wheel(gx, gy, 10); const v = (await state()).stream.grid.viewportY; if (v !== (arrivals.length ? arrivals.at(-1).v : beforeSub)) arrivals.push({ i, v }); }
-    expect('wheel.subNotch', JSON.stringify(arrivals.map((a) => a.i)) === JSON.stringify([4, 7, 10]) && (await state()).stream.grid.viewportY - beforeSub === expected, arrivals);
+    const afterSub = await state();
+    expect('wheel.subNotch', JSON.stringify(arrivals.map((a) => a.i)) === JSON.stringify([4, 7, 10]) && afterSub.stream.grid.viewportY - beforeSub === expected, { arrivals, wheelEvents: afterSub.log.wheel.slice(-10), fenceMisses: fenceMisses.length });
     expect('cursor.hiddenOffTail', (await exec(`document.querySelector('[data-testid="term-cursor"]').hidden`)) === true);
     await key('End', ['shift']);
     expect('wheel.shiftEndReturnsToTail', (await state()).stream.grid.atTail === true);
@@ -218,26 +243,30 @@ app.whenReady().then(async () => {
     const at = (col, row) => ({ x: Math.round(rowsRect.x + (col + 0.2) * cell.width), y: Math.round(rowsRect.y + (row + 0.5) * cell.height) });
     const p1 = at(0, 2);
     const p2 = at(8, 3);
+    const upsBeforeDrag = (await inputs()).pointerUps;
     wc.sendInputEvent({ type: 'mouseDown', x: p1.x, y: p1.y, button: 'left', clickCount: 1 });
     await pause(30);
     wc.sendInputEvent({ type: 'mouseMove', x: p2.x, y: p2.y, button: 'left', modifiers: ['leftButtonDown'] });
     await pause(30);
     wc.sendInputEvent({ type: 'mouseUp', x: p2.x, y: p2.y, button: 'left', clickCount: 1 });
-    await pause(120);
+    // The drag is read once the page has handled its mouseup (the three events arrive in order), not after a fixed pause.
+    const dragArrived = await fence('selection drag', 'pointerUps', upsBeforeDrag);
+    await pause(30);
     s = await state();
     const visible = s.stream.grid.lines;
     const range = s.stream.grid.selectionRange;
     const vy = s.stream.grid.viewportY;
     const expectedSelection = range ? `${visible[range.start.y - vy].slice(range.start.x).replace(/\s+$/, '')}\n${visible[range.end.y - vy].slice(0, range.end.x).replace(/\s+$/, '')}` : null;
-    expect('selection.text', s.stream.grid.hasSelection && range && range.start.x === 0 && range.start.y - vy === 2 && range.end.y - vy === 3 && s.stream.grid.selectionText === expectedSelection && s.stream.grid.selectionText.startsWith('line 1'), { got: s.stream.grid.selectionText, expectedSelection, range });
+    expect('selection.text', s.stream.grid.hasSelection && range && range.start.x === 0 && range.start.y - vy === 2 && range.end.y - vy === 3 && s.stream.grid.selectionText === expectedSelection && s.stream.grid.selectionText.startsWith('line 1'), { got: s.stream.grid.selectionText, expectedSelection, range, hasSelection: s.stream.grid.hasSelection, viewportY: vy, dragArrived });
     await key('c', ['control']);
-    s = await state();
+    // The acknowledgement follows the clipboard write's promise, so it is waited on rather than read at once.
+    s = (await until(async () => { const st = await state(); return st.log.clipboard.length > 0 && st.log.acks.length > 0 ? st : null; }, 3_000)) ?? (await state());
     expect('selection.ctrlCCopies', s.log.clipboard.length === 1 && s.log.clipboard[0] === expectedSelection && s.log.sendKeys.length === 3, { clipboard: s.log.clipboard, sent: s.log.sendKeys.length });
     expect('selection.copyAcknowledged', s.log.acks.some((a) => a.kind === 'ok' && a.title === 'Copied terminal output'));
     await exec(`window.__terminalProof.clearSelection(${JSON.stringify(STREAM_A)})`);
     await pause(50);
     await key('C', ['control', 'shift']);
-    s = await state();
+    s = (await until(async () => { const st = await state(); return st.log.acks.some((a) => a.kind === 'fail') ? st : null; }, 3_000)) ?? (await state());
     expect('selection.emptyCopyFails', s.log.clipboard.length === 1 && s.log.acks.some((a) => a.kind === 'fail' && a.title === 'Nothing copied' && a.body === 'Nothing is selected.'), s.log.acks);
     expect('selection.emptyCopyNotSent', s.log.sendKeys.length === 3);
 
@@ -430,7 +459,6 @@ app.whenReady().then(async () => {
       if (reply.kind === 'terminal.streams') return { ok: true, value: reply.streams };
       return { ok: true };
     });
-    const until = async (pred, ms, every = 10) => { const t0 = Date.now(); for (;;) { const v = await pred(); if (v) return v; if (Date.now() - t0 > ms) return null; await pause(every); } };
     // No pause between the three events, and Shift held for a capital (Electron lower-cases a `char` sent without it).
     const burst = (keyCode, char = null) => { const modifiers = /^[A-Z]$/.test(keyCode) ? ['shift'] : []; wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); if (char !== null) wc.sendInputEvent({ type: 'char', keyCode: char, modifiers }); wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
     const trimmed = (lines) => { const out = [...(lines ?? [])]; while (out.length > 0 && out[out.length - 1] === '') out.pop(); return out; };
@@ -513,17 +541,22 @@ app.whenReady().then(async () => {
     await click('[data-testid="term-take-control"]');
     expect('live.armed', (await text('[data-testid="term-take-control"]')) === 'Release control' && (await active())?.testid === 'term-grid-input', await active());
     const echoes = [];
+    const loadBeforeEcho = hostLoad();
     for (const sentinel of ['q', 'w', 'e']) {
       await exec(`window.__terminalProof.echoProbe(${JSON.stringify(sentinel)})`);
       await key(sentinel, [], sentinel);
       const probe = await until(async () => { const st = await state(LIVE); return st.echo && st.echo.paintedAt !== null ? st.echo : null; }, 3_000, 5);
-      echoes.push(probe ? { sentinel, keyToFrameMs: Number((probe.frameAt - probe.pressedAt).toFixed(1)), keyToPaintMs: Number((probe.paintedAt - probe.pressedAt).toFixed(1)) } : { sentinel, keyToFrameMs: null, keyToPaintMs: null });
+      echoes.push(probe ? { sentinel, keyToFrameMs: Number((probe.frameAt - probe.pressedAt).toFixed(1)), keyToPaintMs: Number((probe.paintedAt - probe.pressedAt).toFixed(1)), queuedMs: probe.eventAt === null ? null : Number((probe.pressedAt - probe.eventAt).toFixed(1)) } : { sentinel, keyToFrameMs: null, keyToPaintMs: null, queuedMs: null });
       await pause(60);
     }
     await exec('window.__terminalProof.echoProbe(null)');
     live.echo = echoes;
+    // The bound is REQ-SHELL-166's 100 ms and is not relaxed for load. The host's load is recorded beside it, so a red
+    // taken at a load average several times the CPU count reads as the host's (the defect note's loops: 3 of 40 runs
+    // between 10 and 15 on 4 CPUs, keyToFrame 22 to 60 ms and the rest in waiting for the frame to paint).
+    live.echoLoad = { before: loadBeforeEcho, after: hostLoad() };
     const worstEcho = Math.max(...echoes.map((e) => e.keyToPaintMs ?? Number.POSITIVE_INFINITY));
-    expect('live.echoUnder100ms', echoes.every((e) => e.keyToPaintMs !== null) && worstEcho < 100, echoes);
+    expect('live.echoUnder100ms', echoes.every((e) => e.keyToPaintMs !== null) && worstEcho < 100, { echoes, load: live.echoLoad });
     await key('Enter');
     // ── REQ-SHELL-096/166: order and fidelity — a burst of keys, two unmapped keys inside it, nothing invented ────
     const typed = 'abc123XYZ';
@@ -648,14 +681,26 @@ app.whenReady().then(async () => {
     await ask('deliver', { on: true });
     const openRun = run(flood);
     const open = await Promise.race([openRun.done, pause(60_000).then(() => null)]);
-    await pause(500);
+    // The last line reaches the grid and the previews when they have parsed the flood, which on a loaded host is later than
+    // the fixed 500 ms this read used to wait (7 of 20 loaded runs, 2026-10-01: the grid still at line 7,399 to 9,755).
+    // The read is taken once the closing frame has arrived (the meta says the command ended) and every surface has parsed
+    // it: the closing `screen` frame resets each emulator and writes the final screen again, and a read between the two
+    // saw the preview empty (1 of 20 loaded runs after the first repair; recorded in
+    // docs/defects/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md).
+    const floodFrom = Date.now();
+    // The flood's last line appears only after its opening meta, so "ended" together with that line is this command's end,
+    // never the previous command's.
+    await until(async () => { const st = await state(LIVE); return st.stream.meta && st.stream.meta.running === false && st.stream.previewMeta && st.stream.previewMeta.running === false && st.stream.grid.lines.some((l) => l.includes('line 10000')) ? true : null; }, 20_000, 50);
+    await exec(`window.__terminalProof.settled(${JSON.stringify(LIVE)})`);
+    await until(async () => { const st = await state(LIVE); return st.stream.grid.lines.some((l) => l.includes('line 10000')) && st.stream.preview.lines.some((l) => l.includes('line 10000')) ? true : null; }, 20_000, 50);
+    const floodPaintMs = Date.now() - floodFrom;
     const closedLines = (closed?.result.output ?? '').split('\n');
     const openLines = (open?.result.output ?? '').split('\n');
     const firstDiff = closedLines.findIndex((l, i) => l !== openLines[i]);
     live.throughput = { closedMs: closed?.result.elapsedMs ?? null, openMs: open?.result.elapsedMs ?? null, closedExit: closed?.result.exitCode ?? null, openExit: open?.result.exitCode ?? null, closedLines: closedLines.length, lines: openLines.length, outputEqual: closed !== null && open !== null && closed.result.output === open.result.output, ...(firstDiff >= 0 ? { firstDiff: { at: firstDiff, closed: closedLines.slice(firstDiff, firstDiff + 3), open: openLines.slice(firstDiff, firstDiff + 3) } } : {}) };
     expect('live.throughputEqualWindowClosedOrOpen', closed !== null && open !== null && closed.result.output === open.result.output && closed.result.exitCode === open.result.exitCode && open.result.exitCode === 3 && open.result.output.split('\n').length === 10000, live.throughput);
     const afterFlood = await state(LIVE);
-    expect('live.floodPainted', afterFlood.stream.grid.lines.some((l) => l.includes('line 10000')) && afterFlood.stream.preview.lines.some((l) => l.includes('line 10000')), afterFlood.stream.grid.lines.slice(-3));
+    expect('live.floodPainted', afterFlood.stream.grid.lines.some((l) => l.includes('line 10000')) && afterFlood.stream.preview.lines.some((l) => l.includes('line 10000')), { grid: afterFlood.stream.grid.lines.slice(-3), preview: afterFlood.stream.preview.lines.slice(-3), waitedMs: floodPaintMs });
     const finalStats = await ask('stats');
     live.delivery = { delivered: finalStats.delivered, limiter: finalStats.limiter, counters: finalStats.counters };
     live.harnessLog = harnessLog.slice(-20);
@@ -666,6 +711,9 @@ app.whenReady().then(async () => {
     if (child) { try { child.stdin.write('{"id":0,"op":"quit"}\n'); } catch { /* gone */ } await pause(300); try { child.kill(); } catch { /* gone */ } }
   }
 
+  // Every key, click and wheel event the proof sent was counted by the page. A fence that timed out means a check after it
+  // read a state the input may never have reached, so it fails the run rather than standing beside a pass.
+  expect('harness.everyInputCounted', fenceMisses.length === 0, fenceMisses);
   results.consoleErrors = consoleErrors;
   results.consoleAll = consoleAll.slice(0, 40);
   if (consoleErrors.length > 0) failures.push(`console errors: ${JSON.stringify(consoleErrors)}`);

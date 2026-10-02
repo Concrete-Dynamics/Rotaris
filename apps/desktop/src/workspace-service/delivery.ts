@@ -4,7 +4,7 @@ import { asSessionId, err, millis, toIsoUtc, type Clocks } from '@rotaris/kernel
 import { StoreDal, type ResolvedStore } from '@rotaris/store';
 import { assertWriterDeclares, createDeliveryReader, createDeliveryWriter, createQueueSettings, createTransitions, reapStaleRuns, type BoardInput, type DeliveryReader, type DeliveryWriter, type ReapResult, type RequirementNow } from '@rotaris/workspace';
 // Part AP — runs from the board, the queue and the source write (spec 08 §Runs Started from the Board, §Delivery Queue, §Editing and Creating Requirements; ADR-0041's second execution).
-import { ACTION_CLASS, appendEpicIndexRow, checkRepositoryForRuns, composeRequirementDocument, createLocation, documentWritable, editRequirementDocument, epicIndexLink, invokeGit, nextIdentifier, probeSourceWritability, provisionUnitWorktree, readOnlySentence, readSourceText, renderBranch, requirementWorktreePath, runPromptFor, scheduleQueue, slugOf, unitIdFor, WAITING_ON_PERSON, writeSourceDocument, type ProvisionArgs, type ProvisionedWorktree, type RepositoryForRuns } from '@rotaris/workspace';
+import { ACTION_CLASS, appendEpicIndexRow, checkRepositoryForRuns, composeRequirementDocument, createLocation, documentWritable, editRequirementDocument, epicIndexLink, invokeGit, nextIdentifier, probeSourceWritability, provisionUnitWorktree, readOnlySentence, readSourceText, renderBranch, requirementWorktreePath, runPromptFor, scheduleQueue, slugOf, takeOverUnitWorktree, unitIdFor, WAITING_ON_PERSON, writeSourceDocument, type ProvisionArgs, type ProvisionedWorktree, type RepositoryForRuns, type TakeOverArgs } from '@rotaris/workspace';
 import type { Result } from '@rotaris/kernel';
 import { loadConfiguration, commitConfigFields, REQUIREMENTS_DEFAULTS, validateRequirementsPatch, type RequirementsSection } from '@rotaris/config';
 import { resolveUserDirs } from '@rotaris/platform';
@@ -51,6 +51,8 @@ export interface DeliveryServiceDeps {
 export interface RunGitPort {
   checkRepository(root: string): Promise<RepositoryForRuns>;
   provision(args: ProvisionArgs): Promise<Result<ProvisionedWorktree, string>>;
+  /** REQ-TRACE-464's take-over of a tree the store recorded for the same unit, where the launch holding it was lost (`runs.ts` `takeOverUnitWorktree`). */
+  takeOver(args: TakeOverArgs): Promise<Result<ProvisionedWorktree, string>>;
 }
 
 const NOT_MERGED = Object.freeze({ kind: 'failed', what: 'the traceability engine', cause: 'Part AJ is not merged into this build' } as const);
@@ -99,7 +101,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
    * disclosure (REQ-TRACE-467/468/474).
    */
   const configDir = deps.configDir ?? resolveUserDirs().config;
-  const git: RunGitPort = deps.git ?? { checkRepository: (root) => checkRepositoryForRuns(root, { clocks }), provision: (a) => provisionUnitWorktree(a, { clocks }) };
+  const git: RunGitPort = deps.git ?? { checkRepository: (root) => checkRepositoryForRuns(root, { clocks }), provision: (a) => provisionUnitWorktree(a, { clocks }), takeOver: (a) => takeOverUnitWorktree(a, { clocks }) };
   let requirements: RequirementsSection = REQUIREMENTS_DEFAULTS;
   let permissionMode = 'ask';
   let approvalTimeoutSeconds = 300;
@@ -157,6 +159,28 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     const instructions = payload?.['instructions'];
     const softFailure = !ACTION_CLASS[action].startsRun; // resume / answer-blocker returning to ready: the blocker clears whatever happens (REQ-TRACE-463)
     const fail = (reason: string) => { if (softFailure) { stalled.set(id, reason); launches.set(id, { unit, disclosure, action, ...(instructions === undefined ? {} : { instructions }) }); return undefined; } throw new Error(reason); };
+    // REQ-TRACE-464: "The run SHALL take over the worktree already provisioned for it and SHALL never provision a second
+    // one." A card held out of `ready` before its run began and then resumed derives the SAME unit (its `Units` fact has
+    // not moved), and that unit's tree is already on disk: the launch the release left holds it, or — after a restart
+    // lost the launch — the store's worktree row names it. Provisioning it again refused the existing path (REQ-GIT-140),
+    // the soft failure replaced the launch with one that had no worktree, and no claim could ever take the card (defect
+    // note `a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md`). The resume's own
+    // disclosure and instructions are recorded on the launch it takes over; the store's row is already written.
+    const takeOver = (tree: ProvisionedWorktree, from: string) => {
+      launches.set(id, { unit, disclosure, action, worktree: tree, ...(instructions === undefined ? {} : { instructions }) });
+      stalled.delete(id);
+      armed.add(id);
+      log(`requirements: ${id} unit ${unit} takes over its worktree at ${tree.path} on ${tree.branch} (${from}; disclosure ${disclosure})`);
+      return undefined;
+    };
+    const prior = launches.get(id);
+    if (prior?.worktree !== undefined && prior.unit === unit && existsSync(prior.worktree.path)) return takeOver(prior.worktree, 'the launch its release provisioned');
+    const recorded = prior?.worktree === undefined ? reader.worktrees(id).find((w) => w.unit === unit && existsSync(w.path)) : undefined;
+    if (recorded !== undefined) {
+      const taken = await git.takeOver({ workspaceRoot, id, unit, path: recorded.path, branch: recorded.branch });
+      if (taken.ok) return takeOver(taken.value, 'the tree the store recorded for it');
+      log(`requirements: ${id} unit ${unit}'s recorded worktree was not taken over: ${taken.error}`, 'warn');
+    }
     const repo = await git.checkRepository(workspaceRoot);
     if (!repo.ok) return fail(repo.reason);
     const made = await git.provision({ workspaceRoot, id, unit, title: record?.title ?? id, branchTemplate: requirements.execution.branch_template, cycle: unitsStarted + 1 });

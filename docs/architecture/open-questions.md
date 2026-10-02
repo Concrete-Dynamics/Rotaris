@@ -8536,6 +8536,14 @@ reading: a read that rejects makes the predicate raise, which REQ-WORKSPACE-080 
 applicable, and the build does that. A ruling on this question also decides whether an unanswered start has words of the
 specification's own, and whether it should be followed by a cancellation.
 
+*Extended 2026-10-02 by the repair of
+[`a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`](../defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md):*
+one case that reached the bound was not a lost status but one main dropped. The run host pushed every step and the
+`finished` status before the start was answered, and the coordinator had no sink yet. The build now keeps a status
+pushed while its own start is in flight, and asks the run host's status once where the answer has every step ended
+and still reads `running`. That one read is not this question's "ask the run host for the setup's status when the
+bound passes": the bound, and what a follow ends as when it passes, are unchanged.
+
 **What a ruling decides.** Whether these two cases have words of the specification's own; whether the bound is the right
 one (it adds nothing for the run host's own work around the stages, which the budgets do not cover); whether the
 coordinator should instead ask the run host for the setup's status when the bound passes; and whether REQ-WORKSPACE-092's
@@ -8625,6 +8633,17 @@ orderly quit with a step running, REQ-MCP-099's 5 s grace is not given. A cancel
 the full 5 s. The 2 s is the build's figure: it leaves the close room for the poll, the force-kill's settling and the
 host's exit inside 5000 ms (measured: a step and a descendant that both ignore SIGTERM, force-killed, the quit 2234 ms and
 2274 ms).
+
+**Windows measurement, 2026-10-02.** `workspace-proof` on this host passed the project-switch cancellation and the
+replacement's initialization, but failed two REQ-WORKSPACE-092 liveness checks: after a switch, the outgoing step's PID
+was still present 5 s after the switch answered; after Cancel in the first of two windows, that window's step PID was
+still present 5 s after Cancel answered. The product recorded the cancellations and the next workspace's completed
+setup. Its log put the switch's cancellation request at 07:30:49.974 and the stopped step at 07:30:55.463 — 5.489 s
+apart. The Cancel request was at 07:31:19.411 and its stopped step at 07:31:25.014 — 5.603 s apart. An orderly quit
+in the same proof passed its 5 s child and descendant checks under the shorter shutdown grace. This extends the
+question to a workspace switch and an explicit Cancel while the application stays open: REQ-WORKSPACE-092 gives each
+the same 5 s liveness bound while REQ-MCP-099 gives cancellation a full 5 s before force-kill. The build still follows
+the existing reading; no timing rule is changed by this observation.
 
 **What a ruling decides.** Whether a close's cancellation is REQ-MCP-099's cancellation, with its 5 s grace (and then
 whether REQ-WORKSPACE-109's 5000 ms and REQ-WORKSPACE-092's 5 s give way, or the grace is counted inside them); or the

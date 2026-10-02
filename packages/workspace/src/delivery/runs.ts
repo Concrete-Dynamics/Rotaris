@@ -155,6 +155,47 @@ export async function provisionUnitWorktree(a: ProvisionArgs, deps: WorktreeDeps
   return err(`Could not find a free branch name for ${base.value} after ${COLLISION_ATTEMPTS} attempts.`);
 }
 
+/** What a take-over is told: the tree the delivery store recorded for this requirement's unit (its row's path and branch). */
+export interface TakeOverArgs { readonly workspaceRoot: string; readonly id: ReqId; readonly unit: string; readonly path: string; readonly branch: string }
+
+/**
+ * REQ-TRACE-464: "The run SHALL take over the worktree already provisioned for it and SHALL never provision a second
+ * one." The case this exists for is a launch the workspace service no longer holds in memory (a restart since the
+ * release) whose card returns to `ready` for the SAME unit it was provisioned for: the store's worktree row names the
+ * tree, and the run takes it over rather than provisioning that attempt again (defect note
+ * `a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md`).
+ *
+ * This is NOT provisioning, and `provisionUnitWorktree` is unchanged: REQ-GIT-140's "a directory of that name already
+ * existing SHALL fail provisioning … rather than be reused" still holds for every caller that asks for a new tree. A
+ * take-over is admitted only where Git itself lists a worktree of THIS repository at the recorded path on the recorded
+ * branch, and REQ-GIT-140's read-back (top level and checked-out branch) passes on it; anything else is refused with the
+ * reason, and the caller provisions as before. The base the tree was cut from is not on the row, so it is read again:
+ * the base checkout's current branch, and the fork point of the unit's branch from it (`git merge-base HEAD <branch>`).
+ */
+export async function takeOverUnitWorktree(a: TakeOverArgs, deps: WorktreeDeps): Promise<Result<ProvisionedWorktree, string>> {
+  const platform = deps.platform ?? process.platform;
+  if (!existsSync(a.path)) return err(`The worktree recorded for ${a.id} unit ${a.unit} is no longer at ${a.path}.`);
+  if (resolvedPath(a.path, platform) === resolvedPath(a.workspaceRoot, platform)) return err(`${a.path} resolves to the base checkout, and a requirement unit is never run there.`);
+  const listed = okText(await git(['worktree', 'list', '--porcelain'], a.workspaceRoot, deps));
+  if (listed === null) return err(`Git could not list the worktrees of ${a.workspaceRoot}, so the tree recorded for ${a.id} unit ${a.unit} was not taken over.`);
+  const entries = listed.split(/\r?\n\r?\n/).map((block) => {
+    const lines = block.split(/\r?\n/);
+    return { path: lines.find((l) => l.startsWith('worktree '))?.slice('worktree '.length) ?? '', branch: lines.find((l) => l.startsWith('branch '))?.slice('branch '.length) ?? '' };
+  });
+  const entry = entries.find((e) => e.path !== '' && resolvedPath(e.path, platform) === resolvedPath(a.path, platform));
+  if (entry === undefined || entry.branch !== `refs/heads/${a.branch}`) return err(`Git lists no worktree of this repository at ${a.path} on ${a.branch}${entry === undefined ? '' : ` (it is on ${entry.branch === '' ? 'no branch' : entry.branch.replace(/^refs\/heads\//, '')})`}, so it was not taken over.`);
+  // REQ-GIT-140's read-back, as provisioning performs it.
+  const top = okText(await git(['rev-parse', '--show-toplevel'], a.path, deps));
+  const checkedOut = okText(await git(['rev-parse', '--abbrev-ref', 'HEAD'], a.path, deps));
+  if (top === null || resolvedPath(top, platform) !== resolvedPath(a.path, platform) || checkedOut !== a.branch) {
+    return err(`The worktree recorded for ${a.id} unit ${a.unit} did not read back as recorded (top level ${top ?? 'unknown'}, branch ${checkedOut ?? 'unknown'}; recorded ${a.path} on ${a.branch}), so it was not taken over.`);
+  }
+  const baseBranch = okText(await git(['rev-parse', '--abbrev-ref', 'HEAD'], a.workspaceRoot, deps));
+  const baseRevision = okText(await git(['merge-base', 'HEAD', a.branch], a.workspaceRoot, deps));
+  if (baseBranch === null || baseRevision === null) return err(`The base the worktree recorded for ${a.id} unit ${a.unit} was cut from could not be read again, so it was not taken over.`);
+  return ok({ ref: `${a.id}/${a.unit}`, path: a.path, branch: a.branch, baseBranch, baseRevision });
+}
+
 // ---- the scheduler (REQ-TRACE-478..483, 463) ----
 
 export interface QueueCandidate { readonly id: ReqId; readonly unit: string; readonly priority: string | undefined; readonly since: string }

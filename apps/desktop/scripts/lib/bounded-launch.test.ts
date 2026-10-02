@@ -123,7 +123,7 @@ describe('R-062: ending a proof launch within its bound', () => {
     expect(r.stderr).toBe('err\n');
   });
 
-  it('spawnBounded keeps the pipes open across SIGTERM, so the quit path\'s own line reaches the proof', async () => {
+  it.skipIf(!POSIX)('spawnBounded keeps the pipes open across SIGTERM, so the quit path\'s own line reaches the proof', async () => {
     // What `spawnSync`'s timeout breaks: it closes its ends of the pipes as it signals, the line below meets EPIPE,
     // and the product's uncaught-exception handler loops on it (`docs/defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`, repaired 2026-09-29).
     const r = await spawnBounded(process.execPath, ['-e', "process.on('SIGTERM', () => { console.log('quit: requested (before-quit)'); process.exit(0); }); console.log('ready'); setInterval(() => {}, 1000);"], { timeoutMs: 800, graceMs: 5_000 });

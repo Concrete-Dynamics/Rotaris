@@ -6,13 +6,16 @@
  * (`docs/defects/fixed/the-autopsy-reader-does-not-read-the-roots-automatic-model-fallbacks.md`).
  */
 import { describe, expect, it } from 'vitest';
-import { childModelKeys as engineChildModelKeys, ENTRY_KEY_UNDETERMINED, entryModelKeys as engineEntryModelKeys } from '@rotaris/engine';
+import { childKeyAt as engineChildKeyAt, childModelKeys as engineChildModelKeys, ENTRY_KEY_UNDETERMINED, entryModelKeys as engineEntryModelKeys } from '@rotaris/engine';
 // @ts-expect-error — the reader's helpers are plain ESM beside the scripts that run them.
-import { childModelKeys, ENTRY_KEY_UNDETERMINED as SCRIPT_UNDETERMINED, entryKeyLabel, entryModelKeys } from './autopsy-entry-model.mjs';
+import { childKeyAt, childModelKeys, ENTRY_KEY_UNDETERMINED as SCRIPT_UNDETERMINED, entryKeyLabel, entryModelKeys } from './autopsy-entry-model.mjs';
 
 const snapshot = (model: string, models: Record<string, unknown> = {}) => ({ default_persona: 'orchestrator', personas: { orchestrator: { model } }, models });
 const audit = (model: string, models: Record<string, unknown> = {}) => JSON.stringify({ config_snapshot: snapshot(model, models) });
-const entry = (name: string, metadata: unknown) => ({ name, metadata: JSON.stringify(metadata) });
+const T0 = '2026-10-01T10:00:00.000Z';
+const entry = (name: string, metadata: unknown, at = T0) => ({ name, metadata: JSON.stringify(metadata), at });
+/** Children alive for the whole session, by name: the shape `childModelKeys` builds from the children record. */
+const kids = (...names: string[]) => new Map(names.map((n) => [n, [{ model_key: 'child-model', spawned_at: '', completed_at: null }]]));
 const base = { provider: 'openai-compatible', model_id: 'm', base_url: 'http://e', thinking: null };
 const paired = {
   'root-model': { provider: 'openai-compatible', auth_provider: 'katalyst', model_id: 'r' },
@@ -21,7 +24,8 @@ const paired = {
 };
 const override = (provider: string, model: string, key: string, toProvider: string, toModel: string) => entry('model_override', { provider, model, model_key: key, to_provider: toProvider, to_model: toModel });
 
-const CASES: readonly [string, string | undefined, readonly { name: string; metadata: string }[], readonly string[]][] = [
+type Entry = { name: string; metadata: string; at: string };
+const CASES: readonly [string, string | undefined, readonly Entry[], readonly string[]][] = [
   ['nothing recorded', undefined, [], []],
   ['the launch audit alone', audit('root-model'), [], ['root-model']],
   ['a launch audit with no entry model', JSON.stringify({ config_snapshot: {} }), [], []],
@@ -34,19 +38,20 @@ const CASES: readonly [string, string | undefined, readonly { name: string; meta
   ['an override with no pair recorded is skipped', audit('root-model', paired), [entry('model_override', { model_key: 'other' })], ['root-model']],
   ['a role\'s reasoning copy reads as its one original', audit('__persona__:orchestrator', { 'root-model': base, '__persona__:orchestrator': { ...base, thinking: 'high' } }), [], ['root-model']],
   ['two originals match: the recorded name stands', audit('__persona__:orchestrator', { a: base, b: base, '__persona__:orchestrator': { ...base, thinking: 'high' } }), [], ['__persona__:orchestrator']],
-  ['unreadable metadata is skipped', audit('root-model'), [{ name: 'entry_model_switched', metadata: '{' }], ['root-model']],
+  ['unreadable metadata is skipped', audit('root-model'), [{ name: 'entry_model_switched', metadata: '{', at: T0 }], ['root-model']],
 ];
 
 describe('the autopsy reader\'s entry-agent model key (live-run finding a71-13)', () => {
   it.each(CASES)('%s', (_name, payload, timeline, expected) => {
-    expect(entryModelKeys(payload, timeline, [])).toEqual(expected);
-    expect(engineEntryModelKeys(payload, timeline, [])).toEqual(expected);
+    expect(entryModelKeys(payload, timeline, new Map())).toEqual(expected);
+    expect(engineEntryModelKeys(payload, timeline, new Map())).toEqual(expected);
   });
 
   // The ladder's automatic moves (REQ-ORCH-090, REQ-ORCH-091 b): read for an agent no child is, never for a child.
   const sameTier = (agent: string, toProvider: string, toModel: string, toKey: string) => entry('quota_fallback_model', { agent, from_provider: 'katalyst', from_model: 'r', to_provider: toProvider, to_model: toModel, to_key: toKey, condition: 'rate_limit' });
   const unresponsive = (agent: string, toProvider: string, toModel: string) => entry('llm_unresponsive', { agent, from_provider: 'katalyst', from_model: 'r', to_provider: toProvider, to_model: toModel, threshold_seconds: 60 });
-  const MOVES: readonly [string, string | undefined, readonly { name: string; metadata: string }[], readonly string[], readonly string[]][] = [
+  const pendingMove = (e: Entry, pending: boolean): Entry => ({ ...e, metadata: JSON.stringify({ ...JSON.parse(e.metadata), switch_pending: pending }) });
+  const MOVES: readonly [string, string | undefined, readonly Entry[], readonly string[], readonly string[]][] = [
     ['the root\'s same-tier fallback moves it to the candidate\'s key', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model')], ['impl'], ['root-model', 'spare-model']],
     ['the root\'s unresponsive fallback moves it to the key resolving to the pair', audit('root-model', paired), [unresponsive('orchestrator', 'anthropic', 's')], ['impl'], ['root-model', 'spare-model']],
     ['an unresponsive fallback onto a pair no key resolves to reads as the pair', audit('root-model', paired), [unresponsive('orchestrator', 'mistral', 'x')], ['impl'], ['root-model', 'mistral/x']],
@@ -57,23 +62,89 @@ describe('the autopsy reader\'s entry-agent model key (live-run finding a71-13)'
     ['a continuation recording no entry model still ends the root\'s move, back to the configured key', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('run_continuation_intent', { config_snapshot: {} })], ['impl'], ['root-model', 'spare-model', 'root-model']],
     ['with no configured key ever recorded, it ends the move undetermined', undefined, [sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('run_continuation_intent', { config_snapshot: {} })], [], ['spare-model', ENTRY_KEY_UNDETERMINED]],
     ['with no move in force, a continuation recording no entry model leaves the key', audit('root-model', paired), [entry('run_continuation_intent', { config_snapshot: {} })], [], ['root-model']],
-    ['a switch ends the root\'s move (even onto the model already configured, which the run rebuilds on since OQ-176)', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('entry_model_switched', { model: 'root-model' })], [], ['root-model', 'spare-model', 'root-model']],
+    ['a switch the run rebuilds the root\'s cell for ends the root\'s move', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('entry_model_switched', { model: 'child-model', rebuilds: true })], [], ['root-model', 'spare-model', 'child-model']],
+    // run.ts `setEntryModel`: a switch onto the model the root's cell was last built from does not rebuild it (`rootResilience`), so the move stands.
+    ['a switch onto the model already configured, which the run records it does not rebuild for, leaves the root\'s move in force', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('entry_model_switched', { model: 'root-model', rebuilds: false })], [], ['root-model', 'spare-model']],
+    ['… and the next continuation recording no entry model ends that move, back to the switched key', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('entry_model_switched', { model: 'root-model', rebuilds: false }), entry('run_continuation_intent', { config_snapshot: {} })], [], ['root-model', 'spare-model', 'root-model']],
+    ['a switch recording no rebuild with no move in force runs on the switched key', audit('root-model', paired), [entry('entry_model_switched', { model: 'child-model', rebuilds: true }), entry('entry_model_switched', { model: 'root-model', rebuilds: false })], [], ['root-model', 'child-model', 'root-model']],
+    // A store written before the run recorded `rebuilds` keeps the earlier reading: the switch ends the move.
+    ['a switch recording no `rebuilds` (an older store) ends the root\'s move', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('entry_model_switched', { model: 'root-model' })], [], ['root-model', 'spare-model', 'root-model']],
+    // The verifier's away-and-back case: two switches with no root turn between them. The first never applied, so the second
+    // is read from the state before it, and the run (`rootResilience`) keeps the fallback the reader must keep too.
+    ['away from the configured model and back with no turn between: the first never applied, the move stands', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('entry_model_switched', { model: 'child-model', rebuilds: true, supersedes: false }), entry('entry_model_switched', { model: 'root-model', rebuilds: false, supersedes: true })], [], ['root-model', 'spare-model']],
+    ['… and a third switch in the chain is read from the same state, never the superseded one\'s', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('entry_model_switched', { model: 'child-model', rebuilds: true, supersedes: false }), entry('entry_model_switched', { model: 'root-model', rebuilds: false, supersedes: true }), entry('entry_model_switched', { model: 'child-model', rebuilds: true, supersedes: true })], [], ['root-model', 'spare-model', 'child-model']],
+    ['a switch after the root\'s turn applied the one before it supersedes nothing: it is read as recorded', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('entry_model_switched', { model: 'child-model', rebuilds: true, supersedes: false }), entry('entry_model_switched', { model: 'root-model', rebuilds: true, supersedes: false })], [], ['root-model', 'spare-model', 'child-model', 'root-model']],
+    // run.ts: the root's own wait choice replaces a switch not yet applied; the choice moves the pair the root was waiting on.
+    ['the root\'s wait choice that supersedes a pending switch moves the root from where it was, the switch never ran', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('entry_model_switched', { model: 'child-model', rebuilds: true, supersedes: false }), entry('model_override', { provider: 'anthropic', model: 's', model_key: 'root-model', to_provider: 'katalyst', to_model: 'r', supersedes: true })], [], ['root-model', 'spare-model', 'root-model']],
+    // The verifier's second case: a root move between two switches of one chain happened in the turn already running when
+    // the first was made, so undoing the superseded switch keeps it — whether or not the move records `switch_pending`.
+    ['a root move between a switch and the switch superseding it stands: only the superseded switch is undone', audit('root-model', paired), [entry('entry_model_switched', { model: 'child-model', rebuilds: true, supersedes: false }), sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('entry_model_switched', { model: 'root-model', rebuilds: false, supersedes: true })], [], ['root-model', 'spare-model']],
+    ['… the same with the move recording that a switch was pending', audit('root-model', paired), [entry('entry_model_switched', { model: 'child-model', rebuilds: true, supersedes: false }), pendingMove(sameTier('orchestrator', 'anthropic', 's', 'spare-model'), true), entry('entry_model_switched', { model: 'root-model', rebuilds: false, supersedes: true })], [], ['root-model', 'spare-model']],
+    ['the root\'s wait choice superseding a switch keeps the root\'s move recorded since that switch', audit('root-model', paired), [entry('entry_model_switched', { model: 'child-model', rebuilds: true, supersedes: false }), pendingMove(sameTier('orchestrator', 'anthropic', 's', 'spare-model'), true), entry('model_override', { provider: 'anthropic', model: 's', model_key: 'root-model', to_provider: 'katalyst', to_model: 'r', supersedes: true })], [], ['root-model', 'spare-model', 'root-model']],
+    // run.ts `switch_pending`: a root move made while a switch was pending ran on the cell from before it, and the switch
+    // then rebuilt that cell at the root's next turn, so the root ends on the switched key, not on the move's.
+    ['a root move made while a switch was pending is read before it, and the switch it preceded ends it', audit('root-model', paired), [entry('entry_model_switched', { model: 'child-model', rebuilds: true, supersedes: false }), pendingMove(sameTier('orchestrator', 'anthropic', 's', 'spare-model'), true)], [], ['root-model', 'spare-model', 'child-model']],
+    ['a root move made after the switch applied moves the root from the switched key', audit('root-model', paired), [entry('entry_model_switched', { model: 'child-model', rebuilds: true, supersedes: false }), pendingMove(sameTier('orchestrator', 'anthropic', 's', 'spare-model'), false)], [], ['root-model', 'child-model', 'spare-model']],
+    // A superseded switch is read as if it were not recorded: a child's wait choice between two switches of one chain is
+    // read from the state before the first, not dropped, and not read against a switch that never ran.
+    ['a child\'s wait choice between two switches of one chain is read as if the superseded switch were not recorded', audit('root-model', paired), [entry('entry_model_switched', { model: 'child-model', rebuilds: true, supersedes: false }), override('katalyst', 'r', 'spare-model', 'anthropic', 's'), entry('entry_model_switched', { model: 'child-model', rebuilds: true, supersedes: true })], [], ['root-model', 'spare-model', 'child-model']],
     ['a move with no agent or no pair recorded is skipped', audit('root-model', paired), [entry('quota_fallback_model', { to_provider: 'anthropic', to_model: 's', to_key: 'spare-model' }), entry('llm_unresponsive', { agent: 'orchestrator' })], [], ['root-model']],
   ];
   it.each(MOVES)('%s', (_name, payload, timeline, children, expected) => {
-    expect(entryModelKeys(payload, timeline, children)).toEqual(expected);
-    expect(engineEntryModelKeys(payload, timeline, children)).toEqual(expected);
+    expect(entryModelKeys(payload, timeline, kids(...children))).toEqual(expected);
+    expect(engineEntryModelKeys(payload, timeline, kids(...children))).toEqual(expected);
   });
 
   // The live pack 2026-10-01T17-04-24-814Z: a child given 'Run 13 shell commands verbatim' runs, calls and falls back as
   // 'Run-13-shell-commands-verbatim' (REQ-ORCH-044), so both readers know it by that name, never by the one it was given.
   it('knows a child by its canonical name, so its move leaves the root where it is', () => {
-    const rows = [{ given_name: 'Run 13 shell commands verbatim', canonical_name: 'Run-13-shell-commands-verbatim', model_key: 'child-model' }];
-    for (const keys of [childModelKeys(rows) as Map<string, string>, engineChildModelKeys(rows)]) {
-      expect([...keys]).toEqual([['Run-13-shell-commands-verbatim', 'child-model']]);
+    const rows = [{ given_name: 'Run 13 shell commands verbatim', canonical_name: 'Run-13-shell-commands-verbatim', model_key: 'child-model', spawned_at: '2026-10-01T09:00:00.000Z', completed_at: null }];
+    for (const keys of [childModelKeys(rows) as ReturnType<typeof engineChildModelKeys>, engineChildModelKeys(rows)]) {
+      expect([...keys.keys()]).toEqual(['Run-13-shell-commands-verbatim']);
       const timeline = [sameTier('Run-13-shell-commands-verbatim', 'anthropic', 's', 'spare-model'), unresponsive('Run-13-shell-commands-verbatim', 'anthropic', 's')];
-      expect(entryModelKeys(audit('root-model', paired), timeline, keys.keys())).toEqual(['root-model']);
-      expect(engineEntryModelKeys(audit('root-model', paired), timeline, keys.keys())).toEqual(['root-model']);
+      expect(entryModelKeys(audit('root-model', paired), timeline, keys)).toEqual(['root-model']);
+      expect(engineEntryModelKeys(audit('root-model', paired), timeline, keys)).toEqual(['root-model']);
+    }
+  });
+
+  // The defect note's pair: two children of one session sharing the canonical name `impl` (REQ-ORCH-044 makes a name unique
+  // per parent and iteration only), `big-model` in the first run and `small-model` in the second. Keyed by name alone, the
+  // later child's key took every call of both.
+  const T = (m: number) => `2026-10-01T10:${String(m).padStart(2, '0')}:00.000Z`;
+  const runs = [
+    { canonical_name: 'impl', model_key: 'big-model', spawned_at: T(2), completed_at: T(5) },
+    { canonical_name: 'impl', model_key: 'small-model', spawned_at: T(10), completed_at: T(15) },
+  ];
+  const overlapping = [
+    { canonical_name: 'impl', model_key: 'small-model', spawned_at: T(5), completed_at: null },
+    { canonical_name: 'impl', model_key: 'big-model', spawned_at: T(2), completed_at: T(8) },
+  ];
+  const readers = [['script', childModelKeys, childKeyAt], ['engine', engineChildModelKeys, engineChildKeyAt]] as const;
+
+  it.each(readers)('the %s reader attributes two same-named children by their lifetimes: each call to the child alive when it started, else the root', (_name, build, keyAt) => {
+    const keys = build(runs);
+    expect(keyAt(keys, 'impl', T(3))).toBe('big-model');
+    expect(keyAt(keys, 'impl', T(5))).toBe('big-model');
+    expect(keyAt(keys, 'impl', T(11))).toBe('small-model');
+    // Outside every window of its name, and a name no child carries: the root's.
+    expect(keyAt(keys, 'impl', T(7))).toBeNull();
+    expect(keyAt(keys, 'orchestrator', T(3))).toBeNull();
+  });
+
+  it.each(readers)('the %s reader prints a call two overlapping windows of one name hold as ambiguous, naming both keys in spawn order', (_name, build, keyAt) => {
+    const keys = build(overlapping);
+    expect(keyAt(keys, 'impl', T(3))).toBe('big-model');
+    expect(keyAt(keys, 'impl', T(6))).toBe('ambiguous (big-model | small-model)');
+    expect(keyAt(keys, 'impl', T(9))).toBe('small-model');
+  });
+
+  it('a root named like an earlier child: the ladder\'s move of it after that child\'s lifetime moves the root, during it is the child\'s', () => {
+    const rows = [{ canonical_name: 'planner', model_key: 'child-model', spawned_at: T(2), completed_at: T(5) }];
+    const during = [entry('quota_fallback_model', { agent: 'planner', from_provider: 'openai', from_model: 'c', to_provider: 'anthropic', to_model: 's', to_key: 'spare-model' }, T(3))];
+    const after = [entry('quota_fallback_model', { agent: 'planner', from_provider: 'katalyst', from_model: 'r', to_provider: 'anthropic', to_model: 's', to_key: 'spare-model' }, T(11))];
+    for (const [read, keys] of [[entryModelKeys, childModelKeys(rows)], [engineEntryModelKeys, engineChildModelKeys(rows)]] as const) {
+      expect(read(audit('root-model', paired), during, keys)).toEqual(['root-model']);
+      expect(read(audit('root-model', paired), after, keys)).toEqual(['root-model', 'spare-model']);
     }
   });
 

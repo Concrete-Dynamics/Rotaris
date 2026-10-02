@@ -32,7 +32,7 @@ import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { workspacesRootFor } from './lib/harness.mjs';
 import { nullSummaryLine, zeroCostLine } from './lib/autopsy-coherence.mjs';
-import { childModelKeys, entryKeyLabel, entryModelKeys } from './lib/autopsy-entry-model.mjs';
+import { childKeyAt, childModelKeys, entryKeyLabel, entryModelKeys } from './lib/autopsy-entry-model.mjs';
 
 const require = createRequire(join(process.cwd(), 'apps', 'desktop', 'package.json'));
 const Database = require('better-sqlite3');
@@ -107,7 +107,7 @@ const timeline = db.prepare('SELECT ordinal, at, name, actor, message, metadata,
 const launchAudit = db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sid);
 const issues = db.prepare('SELECT ordinal, id, kind, severity, actor, message FROM issues WHERE session_id = ? ORDER BY ordinal').all(sid);
 const events = db.prepare('SELECT ordinal, kind, at, payload FROM events WHERE session_id = ? ORDER BY ordinal').all(sid);
-const children = db.prepare('SELECT given_name, canonical_name, persona, state, tool_calls, model_key FROM children WHERE session_id = ? ORDER BY spawned_at').all(sid);
+const children = db.prepare('SELECT given_name, canonical_name, persona, state, tool_calls, model_key, spawned_at, completed_at FROM children WHERE session_id = ? ORDER BY spawned_at').all(sid);
 const checkpoints = db.prepare('SELECT sequence FROM checkpoints WHERE session_id = ? ORDER BY sequence').all(sid);
 db.close();
 
@@ -170,18 +170,19 @@ for (const t of toolCalls) {
 // switches, the overrides of its pair and the ladder's fallbacks of it — or
 // `session` when none does; never its children's (a71-13). A child is matched
 // by the canonical name its calls and the ladder's entries carry, never by
-// the name it was given (`childModelKeys`).
-const callsByAgent = new Map();
-for (const t of toolCalls) callsByAgent.set(t.agent_name, (callsByAgent.get(t.agent_name) ?? 0) + 1);
-const keyByAgent = childModelKeys(children);
-const childAgents = new Set(keyByAgent.keys());
-const entryKey = entryKeyLabel(entryModelKeys(launchAudit?.payload, timeline, childAgents));
+// the name it was given, and by the instant: the child of that name alive when
+// the call started (`childModelKeys`, `childKeyAt`), since two children of one
+// session can share a canonical name (REQ-ORCH-044). A call no child of its
+// name was alive for is the entry agent's; one two such children could have
+// made prints both keys.
+const childKeys = childModelKeys(children);
+const entryKey = entryKeyLabel(entryModelKeys(launchAudit?.payload, timeline, childKeys));
 const endpoints = new Map();
-for (const [agent, n] of callsByAgent) {
-  const key = childAgents.has(agent) ? keyByAgent.get(agent) : entryKey;
-  const prev = endpoints.get(key) ?? { agents: [], calls: 0 };
-  prev.agents.push(agent);
-  prev.calls += n;
+for (const t of toolCalls) {
+  const key = childKeyAt(childKeys, t.agent_name, t.started_at) ?? entryKey;
+  const prev = endpoints.get(key) ?? { agents: new Set(), calls: 0 };
+  prev.agents.add(t.agent_name);
+  prev.calls += 1;
   endpoints.set(key, prev);
 }
 
@@ -212,9 +213,9 @@ console.log(zeroCostLine(row));
 for (const [path, n] of [...reads.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(cut(`  read ${n}×: ${path}`));
 for (const [command, n] of [...commands.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(cut(`  retried ${n}×: ${command}`));
 console.log('');
-console.log('### tool calls per model key (children from the children record by canonical name, the entry agent from its launch audit, continuations, switches, overrides and fallbacks)');
+console.log('### tool calls per model key (children from the children record by canonical name and lifetime, the entry agent from its launch audit, continuations, switches, overrides and fallbacks)');
 if (endpoints.size === 0) console.log('  none recorded');
-for (const [endpoint, v] of [...endpoints.entries()].sort((a, b) => b[1].calls - a[1].calls)) console.log(cut(`  ${endpoint}: ${v.calls} calls [${v.agents.sort().join(', ')}]`));
+for (const [endpoint, v] of [...endpoints.entries()].sort((a, b) => b[1].calls - a[1].calls)) console.log(cut(`  ${endpoint}: ${v.calls} calls [${[...v.agents].sort().join(', ')}]`));
 console.log('');
 console.log(`counts: timeline=${timeline.length} issues=${issues.length} children=${children.length} checkpoints=${checkpoints.length}`);
 for (const c of children) console.log(cut(`  child ${c.given_name} [${c.persona}]: ${c.state}, ${c.tool_calls} tool calls`));

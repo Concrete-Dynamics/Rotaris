@@ -60,3 +60,14 @@ the built app by `resilience-proof`'s new `switch-back` scenario: a 429 moves th
 switches back to alpha from the run header and queues a follow-up, and iteration 2 runs on alpha under the row
 "Entry model switched to alpha; it applies from the next iteration." Against the build before the repair the same
 scenario failed with the calls alpha, beta, beta; after it all twelve scenarios pass.
+
+**One defect, two notes.** Plan fin5's harness-readers bundle recorded the same defect in parallel, from the same triage
+finding, as
+[a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force.md](a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force.md),
+and made the run record on each switch whether it rebuilds the root's cell (`rebuilds`), with `rebuilds: false` on the
+switch this repair makes rebuild. The two met when this branch merged `origin/main`: that note is closed by this repair
+and says so, `rootRebuildsFor` counts the pending switch so every switch records `rebuilds: true`, and that bundle's four
+`ladder.test.ts` cases that pinned the defect (a switch onto the model last built from, away and back, a move between two
+switches, an unresponsive fallback while a switch is pending) were changed to pin the repair: each now adds a second task,
+so the switch reaches a next iteration (the root's resume after its child is still the iteration in flight), and the
+root ends on the switched model with the reader reading the fallback then that model.

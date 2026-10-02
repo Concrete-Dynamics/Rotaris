@@ -39,7 +39,7 @@ REQ-SESSION-139/199/153/136/134/135, REQ-EVENTS-056). It emits the session
 row, per-tool breakdown (failed vs blocked partitioned, elapsed sums),
 failure detail grouped by cause, usage curve with largest jumps, coherence
 warnings, and per-model-key tool-call attribution (children from the children
-record by canonical name, the entry agent from its own launch audit, continuations, switches, overrides and fallbacks), in one
+record by canonical name and lifetime — a call two same-named children could have made prints `ambiguous (<key> | <key>)` —, the entry agent from its own launch audit, continuations, switches, overrides and fallbacks), in one
 read-only pass:
 
 ```bash
@@ -50,8 +50,11 @@ node apps/desktop/scripts/autopsy.mjs DB [SESSION_ID]
 Two facts the reader bakes in: the `usage.update` payload carries tokens and
 cost alone — no provider or model — so attribution reads `children.model_key`
 for a child (matched by its `canonical_name`, the name its tool calls and the
-ladder's entries carry, never its `given_name`) and, for the entry agent, the key its launch audit's configuration
-snapshot, its continuations and its `entry_model_switched` entries record,
+ladder's entries carry, never its `given_name`, and by its lifetime: a record goes to the child of that name alive at its
+instant, else to the root) and, for the entry agent, the key its launch audit's configuration
+snapshot, its continuations and its `entry_model_switched` entries record (a switch ends a ladder move only where its
+`rebuilds` is not false, one that `supersedes` an unapplied switch reads the timeline as if that switch were not
+recorded, and a root move recording `switch_pending: true` is read before the pending switch),
 carried through every `model_override` of the pair it runs on (`undetermined`
 where the snapshot cannot place the root's pair against a recorded override),
 joined in order when it ran on more than one (`session` means none is recorded;

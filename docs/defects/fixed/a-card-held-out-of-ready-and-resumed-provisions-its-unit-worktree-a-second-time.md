@@ -74,7 +74,7 @@ restart, the take-over of the recorded tree and the claim. Both are red on the c
 after the cut, provisioning the same attempt again still failing, and a wrong branch, a plain directory and a removed
 tree each refused. `requirements-proof`'s `blocker-resume` stage now starts the queue and asserts no "no run began" on
 the card, no "Worktree path already exists" in the log, the card running or further, and one run row of u1 on the one
-worktree row ending `-u1`. It passed with the whole proof on the repair (see `first-executions.md`).
+worktree row ending `-u1`. The stage passed on the repair; the whole proof passed (136 tests) on the branch merged with origin/main `b00f2a9`, after one earlier run whose only red was the axis switch's timing budget under a load average of 11 to 15.
 
 Noticed while repairing it, and recorded rather than repaired: after a restart, a card resting in `ready` before its
 run began can never be started, because the queue's disclosure release finds no launch to record it on. See

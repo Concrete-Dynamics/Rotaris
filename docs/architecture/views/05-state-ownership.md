@@ -26,6 +26,7 @@ credentials     → main, and main alone
 | Window registry, keyed by `webContents` id; focus order | main | `apps/desktop/src/main/main-windows.ts` | main |
 | Approval dialog queue, per window | main | `main/index.ts` | main; the run host asks, main presents |
 | The single current notice, and its serialised chain | main | `main/notices.ts` | main |
+| The open authentication recovery dialog (at most one, REQ-NOTIFY-079) and the payload its window was opened for (REQ-NOTIFY-072, 2026-10-02) | main | `main/index.ts` (`authRecoveryWindow`, `authRecoveryPayloads`), driven by `main/auth-recovery.ts` | main; the window answers by command for the session it was opened for and names none |
 | The held update offer, the one update operation in flight, and the notice the offer lives in (its id) — the updater, 2026-09-28 | main | `main/updater/updater.ts` | main; a renderer's `update.install`/`update.restart` names nothing, and a second operation while one runs is refused (REQ-STARTUP-114) |
 | The installation flavour and the update target (REQ-STARTUP-106) | main | `main/updater/classify.ts`, decided once at start from the artifact the launch started from | nobody after start: it is stable across launches of one installation and takes no user input |
 | The application log's threshold (`PD-MONITOR-002`) | main | `main/index.ts`, over `main/app-log.ts` | nobody: read once from `ROTARIS_APP_LOG_LEVEL` when main starts; no command, key or setting reaches it |

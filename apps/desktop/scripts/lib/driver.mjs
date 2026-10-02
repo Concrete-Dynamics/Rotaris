@@ -90,7 +90,7 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
     windows: () => send('windows'),
     /**
      * A4: point every op after this one at a window, by index, by a suffix of its workspace path, or by a role —
-     * `persona:<persona>`, `approval`, `terminal`. Pass nothing to go back to the active window. A selector matching no
+     * `persona:<persona>`, `approval`, `terminal`, `auth-recovery`. Pass nothing to go back to the active window. A selector matching no
      * window is refused, not ignored. Any op's options may carry `window` instead, for that op alone.
      */
     useWindow: (which) => send('useWindow', which === undefined ? {} : { window: String(which) }),

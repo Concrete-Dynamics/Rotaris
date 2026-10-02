@@ -43,9 +43,10 @@ it there gives it to every window at once, because `shell.ts` makes that set one
 reads or writes for itself stays in the root that draws it: `main.tsx` for the main window's six views,
 `windows.tsx` for the approval, provider, pause, hook-review, persona and terminal windows.
 
-**Which facet.** Sixteen sit beside `commands/context.ts`, one per family: `dialogs`, `providers`, `session`,
+**Which facet.** Eighteen sit beside `commands/context.ts`, one per family: `dialogs`, `providers`, `session`,
 `hooks`, `mcp`, `initialization`, `skills`, `shell`, `git`, `checkpoints`, `library`, `improvements`, `config`,
-`requirements`, `windows`, `workspace`. Add the kind to the one whose name it already carries; a family with no
+`requirements`, `windows`, `workspace`, `update` (the updater's) and `auth-recovery` (REQ-NOTIFY-072's recovery window,
+2026-10-02; this line said sixteen until then, `update` uncounted). Add the kind to the one whose name it already carries; a family with no
 facet yet is a new file and one more spread in the table. Each declares the slice of `CommandContext` it uses
 (`Pick<CommandContext, 'runHost' | …>`) — take what you need and nothing more, because that slice is what a
 test has to satisfy. A member that does not exist yet is added to `CommandContext` and supplied in `index.ts`.

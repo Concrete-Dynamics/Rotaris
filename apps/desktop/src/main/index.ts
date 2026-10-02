@@ -4,6 +4,8 @@ import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
 import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, type CloseGuard } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
+import { AuthRecovery } from './auth-recovery.js'; // REQ-NOTIFY-072..080 (the 401 note's parts C and D)
+import { classifyRunFailure, isQuotaFailure } from './failure-class.js'; // REQ-NOTIFY-060/067
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
 import { startDriver, type AuxiliaryWindow } from './driver.js';
@@ -20,7 +22,7 @@ import { join } from 'node:path';
 import { mkdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { countNoun, millis, toIsoUtc } from '@rotaris/kernel';
-import { type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
+import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
 import { claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
 import { createUpdater } from './updater/updater.js';
@@ -33,6 +35,7 @@ import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LA
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
 import { deliverSetupCancel, InitializationCoordinator } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
+import { authRecoveryCommands } from './commands/auth-recovery.js';
 import { checkpointsCommands } from './commands/checkpoints.js';
 import { configCommands } from './commands/config.js';
 import { dialogsCommands } from './commands/dialogs.js';
@@ -500,6 +503,16 @@ async function main(): Promise<void> {
             : action === 'session.reopen' ? (sessionId === undefined || sessionId === '' ? [] : [{ label: 'Reopen the session', action: { kind: 'focus-session', sessionId } }])
               : [];
   /**
+   * REQ-NOTIFY-064 / REQ-NOTIFY-065: a failed run's error notice — persistent, the failure text as copyable detail, the
+   * statement that the session and the draft were kept, and the action returning to the workspace view (REQ-SHELL-023's
+   * `workspace`). The authentication class raises it under its own title beside the recovery dialog (REQ-NOTIFY-080: the
+   * notice stays on screen when the dialog is cancelled).
+   */
+  const AUTHENTICATION_FAILED = 'Authentication failed';
+  const raiseRunFailure = (failure: string, title = 'The run failed', message = 'The session and the draft were kept.'): void => {
+    void notices.report({ severity: 'error', title, message, detail: failure, persistent: true, action: { label: 'Back to the workspace', action: { kind: 'open-view', view: 'workspace' } } });
+  };
+  /**
    * REQ-SHELL-155 / REQ-SESSION-062, OQ-46 (accepted 2026-09-06): the repair is ANNOUNCED, and the failure it
    * reports is plural. ADR-0002 accepts the run-host crash as a consequence, and it stales one session per
    * in-flight run — so three or five sessions needing repair at once is the realistic shape, and five notices
@@ -545,7 +558,7 @@ async function main(): Promise<void> {
   const presentPause = async (payload: PausePayload): Promise<void> => {
     const existing = pauseWindows.get(payload.sessionId);
     if (existing && !existing.isDestroyed()) { existing.focus(); return; }
-    const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id) && !pausePayloads.has(w.webContents.id));
+    const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id) && !pausePayloads.has(w.webContents.id) && !authRecoveryPayloads.has(w.webContents.id));
     if (!parent) { log('pause: no main window to present the dialog over'); return; }
     const dlg = new BrowserWindow({
       parent, modal: true, width: 560, height: 360, minWidth: 560, minHeight: 360, show: false, title: 'Run paused', backgroundColor: themeBackground(),
@@ -569,6 +582,53 @@ async function main(): Promise<void> {
     }
   };
 
+  /**
+   * REQ-NOTIFY-072..075, REQ-NOTIFY-079/080 (the 401 note's part C): the authentication recovery dialog — a modal window
+   * 560 px wide over the main window following the session (ADR-0048: window-modal, as the pause and provider dialogs are),
+   * its payload read by its own command. REQ-NOTIFY-079: at most one is open; opening one closes any other first.
+   */
+  let authRecoveryWindow: { readonly sessionId: string; readonly win: BrowserWindow } | null = null;
+  const authRecoveryPayloads = new Map<number, AuthRecoveryPayload>();
+  const closeAuthRecovery = (sessionId?: string): void => {
+    const open = authRecoveryWindow;
+    if (open === null || (sessionId !== undefined && open.sessionId !== sessionId)) return;
+    authRecoveryWindow = null;
+    if (!open.win.isDestroyed()) open.win.close();
+  };
+  const presentAuthRecovery = async (payload: AuthRecoveryPayload): Promise<void> => {
+    closeAuthRecovery();
+    const owner = ownerOf(payload.sessionId)?.win;
+    const parent = owner && !owner.isDestroyed() ? owner : BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id) && !pausePayloads.has(w.webContents.id) && !authRecoveryPayloads.has(w.webContents.id));
+    if (!parent) { log('authentication recovery: no main window to present the dialog over'); return; }
+    const dlg = new BrowserWindow({
+      parent, modal: true, width: AUTH_RECOVERY_DIALOG_WIDTH, height: 600, minWidth: AUTH_RECOVERY_DIALOG_WIDTH, maxWidth: AUTH_RECOVERY_DIALOG_WIDTH, minHeight: 420, show: false, title: 'Authentication failed', backgroundColor: themeBackground(),
+      resizable: true, minimizable: false, maximizable: false, fullscreenable: false,
+      webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+    });
+    const wc = dlg.webContents.id;
+    authRecoveryWindow = { sessionId: payload.sessionId, win: dlg };
+    authRecoveryPayloads.set(wc, payload);
+    dlg.setMenuBarVisibility(false);
+    dlg.on('closed', () => { authRecoveryPayloads.delete(wc); if (authRecoveryWindow?.win === dlg) authRecoveryWindow = null; });
+    const query = { role: 'auth-recovery' };
+    try {
+      if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
+      else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query });
+      if (dlg.isDestroyed()) return;
+      dlg.show();
+      dlg.focus();
+    } catch (cause) {
+      log(`authentication recovery: the dialog could not be shown: ${String(cause)}`, 'warn');
+    }
+  };
+  const authRecovery = new AuthRecovery({
+    request: async (req) => await runHost.request(req, millis(30_000)),
+    providerName: (id) => providers.displayName(id),
+    present: (payload) => { void presentAuthRecovery(payload); },
+    close: (sessionId) => closeAuthRecovery(sessionId),
+    log: (message) => log(message),
+  });
+
   // ADR-0030 / REQ-PROVIDER-116/117/142: the authentication window — one at a time, its payload read by its own command.
   let providerWindow: BrowserWindow | null = null;
   const providerPayloads = new Map<number, { mode: ProviderDialogPayload['mode']; providerId: string | null }>();
@@ -588,7 +648,7 @@ async function main(): Promise<void> {
   }));
   const presentProvider = async (mode: ProviderDialogPayload['mode'], providerId: string | null): Promise<void> => {
     if (providerWindow && !providerWindow.isDestroyed()) { providerWindow.focus(); return; }
-    const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id) && !pausePayloads.has(w.webContents.id) && !providerPayloads.has(w.webContents.id));
+    const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id) && !pausePayloads.has(w.webContents.id) && !providerPayloads.has(w.webContents.id) && !authRecoveryPayloads.has(w.webContents.id));
     if (!parent) { log('providers: no main window to present the dialog over'); return; }
     const name = providerId ? providers.displayName(providerId) : null;
     const dlg = new BrowserWindow({
@@ -926,14 +986,19 @@ async function main(): Promise<void> {
       }
       // REQ-SESSION-186 / REQ-NOTIFY-003: the terminal outcome, presented once, at the severity summarisation assigned.
       const sev = e.result.severity === 'error' ? 'error' : e.result.severity === 'warning' ? 'warning' : 'info';
-      // REQ-NOTIFY-060/063/093 (Part Q): a run ended by a rate-limit or quota condition — the wait cancelled, or the ladder out of
-      // recoveries — is the third class: the provider limit was reached, the session is preserved, another model or a retry once
-      // the provider resets, the failure text as detail, the action opening model settings. (REQ-NOTIFY-062's hosted-credit
-      // branch is not built: no hosted provider exists.) The authentication class ahead of it is not built either. The sandbox
-      // class (REQ-NOTIFY-061) never reaches this handler: a refused confinement mode is refused before a session or a run
-      // exists, and its notice is raised where the start, the prompt or the continue is refused (`confinementRefusalNotice`,
-      // `commands/session.ts`). (Until 2026-10-02 this comment said the sandbox class was not built; it was built only in
-      // part, the wording as detail alone and no action.)
+      // REQ-NOTIFY-060: a failed run's failure is matched against four classes in order (`failure-class.ts`), the first match
+      // handling it. (1) Authentication (REQ-NOTIFY-067's markers): the recovery dialog of REQ-NOTIFY-072..075 opens over the
+      // session (`auth-recovery.ts`) beside the class's error notice — or, where REQ-NOTIFY-069's preconditions do not hold, the
+      // generic path below. The automatic first-failure fallback restart ahead of the dialog (REQ-NOTIFY-070/071, the 401
+      // note's parts A and B) is not built on this branch's base, so every authentication failure the preconditions admit opens
+      // the dialog. (2) The sandbox class (REQ-NOTIFY-061) never reaches this handler: a refused confinement mode is refused
+      // before a session or a run exists, and its notice is raised where the start, the prompt or the continue is refused
+      // (`confinementRefusalNotice`, `commands/session.ts`). (3) Part Q (REQ-NOTIFY-063/093): a run ended by a rate-limit or
+      // quota condition — the wait cancelled, or the ladder out of recoveries — the provider limit was reached, the session is
+      // preserved, another model or a retry once the provider resets, the failure text as detail, the action opening model
+      // settings. (REQ-NOTIFY-062's hosted-credit branch is not built: no hosted provider exists.) (4) REQ-NOTIFY-064's generic
+      // notice: the run failed, the session and the draft were kept, the failure text as detail, the action returning to the
+      // workspace view. (Until 2026-10-02 a failure that was not a limit raised the run's summary with no action.)
       /**
        * REQ-EVENTS-088 (OQ-42): a run whose terminal persistence could not be confirmed has ALREADY been
        * reported — the run host published one failure notice carrying the last durable ordinal and the reopen
@@ -944,10 +1009,27 @@ async function main(): Promise<void> {
        */
       if (e.result.persistence !== undefined) {
         log(`run ${e.sessionId}: completion unconfirmed, last durable event ordinal ${e.result.persistence.last_event_ordinal} — the recording-failure notice already carries it (REQ-EVENTS-088)`);
-      } else if (e.result.error !== null && /rate.?limit|quota|429|too many requests/i.test(e.result.error)) {
-        raiseNotice('error', 'The provider limit was reached; the session is preserved', `${e.result.error}\n\nChoose another model, or retry once the provider resets.`, recoveryFor('config.models'));
+      } else if (e.result.error !== null) {
+        const failure = e.result.error;
+        // REQ-NOTIFY-060 classifies a FAILED run. A run that ended otherwise with a failure text — a cancelled quota wait
+        // (REQ-NOTIFY-093), a run that completed with a task abandoned — keeps the limit's notice or its own summary.
+        const failed = e.result.execution_status === 'failed' || e.result.status === 'failed' || e.result.status === 'error';
+        const failureClass = classifyRunFailure(failure);
+        if (failed && failureClass === 'authentication') {
+          const sessionId = e.sessionId;
+          void authRecovery.onAuthenticationFailure(sessionId, failure).then((r) => {
+            if (r.opened) raiseRunFailure(failure, AUTHENTICATION_FAILED, 'The session and the draft were kept. Choose another model in the recovery dialog.');
+            else { log(`authentication recovery: no dialog for session ${sessionId} (${r.reason}); the generic failure notice is raised`); raiseRunFailure(failure); }
+          });
+        } else if (failureClass === 'quota' || (!failed && isQuotaFailure(failure))) {
+          raiseNotice('error', 'The provider limit was reached; the session is preserved', `${failure}\n\nChoose another model, or retry once the provider resets.`, recoveryFor('config.models'));
+        } else if (failed) {
+          raiseRunFailure(failure);
+        } else {
+          raiseNotice(sev, e.result.summary, failure);
+        }
       } else {
-        raiseNotice(sev, e.result.summary, e.result.error ?? undefined);
+        raiseNotice(sev, e.result.summary);
       }
       resultSeen = true;
       log(`run ${e.sessionId} ended ${e.result.status} (${e.result.stop_reason}) → ${e.result.execution_status}`);
@@ -1438,7 +1520,7 @@ async function main(): Promise<void> {
     log, clocks, capturing, layout, processes,
     runHost, services, relay,
     mainWindows, windowFor, ownerOfAuxiliary, dialogs, dialogPayloads,
-    pauseWindows, pausePayloads, presentPause, reviewPayloads,
+    pauseWindows, pausePayloads, presentPause, reviewPayloads, authRecovery, authRecoveryPayloads,
     measurePersonaPaint, terminalWindowCommand, surface,
     notices, raiseNotice, raiseNoticeKeyed, recoveryFor, announceRepairs, updater,
     providers, healthCache, providerPayloads, providerChoices, providerRows, presentProvider, afterProviderChange,
@@ -1454,6 +1536,7 @@ async function main(): Promise<void> {
    * which is the stop `04-seams.md` §1 names, and is why this table has no `default`.
    */
   const handlers: CommandHandlers = {
+    ...authRecoveryCommands(commandContext),
     ...checkpointsCommands(commandContext),
     ...configCommands(commandContext),
     ...dialogsCommands(commandContext),
@@ -1572,6 +1655,9 @@ async function main(): Promise<void> {
         if (dialog && !dialog.win.isDestroyed()) found.push({ selector: 'approval', role: 'approval', owner, wcId: dialog.win.webContents.id, visible: dialog.win.isVisible(), win: dialog.win });
         const terminal = candidate.terminalWindows.current();
         if (terminal) found.push({ selector: 'terminal', role: 'terminal', owner, wcId: terminal.wcId, visible: terminal.win.isVisible(), win: terminal.win });
+        // REQ-NOTIFY-072: the authentication recovery dialog, under the main window it was presented over.
+        const recovery = authRecoveryWindow;
+        if (recovery && !recovery.win.isDestroyed() && recovery.win.getParentWindow() === candidate.win) found.push({ selector: 'auth-recovery', role: 'auth-recovery', owner, wcId: recovery.win.webContents.id, visible: recovery.win.isVisible(), win: recovery.win });
         return found;
       }),
       timers: clocks.timers,

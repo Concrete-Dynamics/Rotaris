@@ -1,0 +1,85 @@
+import type { AuthRecoveryModel, AuthRecoveryPayload, AuthRecoveryResult, ProcessReply } from '@rotaris/contracts';
+
+/**
+ * REQ-NOTIFY-069/072..075, REQ-NOTIFY-079/080, REQ-MONITOR-147 (the 401 note's part C) — main's half of the authentication
+ * recovery. Main classifies a failed run (`failure-class.ts`, REQ-NOTIFY-060/067); for an authentication failure it asks the
+ * run host for the facts (`session.authRecovery`) and opens the 560 px modal recovery dialog over them, or answers that it
+ * cannot, so the caller takes the generic failure path (REQ-NOTIFY-069: a run channel, a configuration service and a
+ * recorded last prompt must all exist).
+ *
+ * Pure of Electron: the window is `present`/`close`, the run host is `request`, so a test drives it with plain objects.
+ *
+ * The automatic first-failure fallback restart (REQ-NOTIFY-070/071, the note's parts A and B) is not on this branch's base
+ * (`origin/main`): every authentication failure the preconditions admit opens this dialog, a first one with a usable
+ * fallback included, where the fallback is listed among the models to choose by hand. When part A lands it goes ahead of
+ * this in `onAuthenticationFailure`'s caller and this dialog keeps REQ-NOTIFY-072's two cases.
+ */
+export interface AuthRecoveryDeps {
+  /** The run host's request path (`session.authRecovery`, `session.authRestart`). */
+  readonly request: (req: { kind: 'session.authRecovery'; sessionId: string } | { kind: 'session.authRestart'; sessionId: string; modelKey: string }) => Promise<ProcessReply>;
+  /** The provider's display name, where the provider store knows one; else the id itself. */
+  readonly providerName: (id: string) => string;
+  /** Opens the dialog over the window following the session, closing any recovery dialog already open (REQ-NOTIFY-079). */
+  readonly present: (payload: AuthRecoveryPayload) => void;
+  /** Closes the session's recovery dialog, if one is open. */
+  readonly close: (sessionId: string) => void;
+  readonly log: (message: string) => void;
+}
+
+/** Why the dialog was not opened, for the caller's log line; the caller then raises the generic notice. */
+export type AuthRecoveryOpened = { readonly opened: true } | { readonly opened: false; readonly reason: string };
+
+export class AuthRecovery {
+  constructor(private readonly deps: AuthRecoveryDeps) {}
+
+  /**
+   * REQ-NOTIFY-072: an authentication failure of `sessionId`'s run, its failure text `error`. Opens the recovery dialog, or
+   * answers why it did not (REQ-NOTIFY-069's preconditions, or a run host that could not answer).
+   */
+  async onAuthenticationFailure(sessionId: string, error: string): Promise<AuthRecoveryOpened> {
+    let reply: ProcessReply;
+    try {
+      reply = await this.deps.request({ kind: 'session.authRecovery', sessionId });
+    } catch (cause) {
+      return { opened: false, reason: `the run host did not answer: ${cause instanceof Error ? cause.message : String(cause)}` };
+    }
+    if (reply.kind === 'refused') return { opened: false, reason: [reply.headline, reply.detail].filter(Boolean).join(': ') };
+    if (reply.kind !== 'session.authRecovery') return { opened: false, reason: `the run host answered ${reply.kind}` };
+    if (!reply.lastPrompt) return { opened: false, reason: 'no prompt is recorded for the session (REQ-NOTIFY-069)' };
+    const named = <T extends { readonly key: string | null; readonly provider: string; readonly model: string }>(m: T): T & AuthRecoveryModel => ({ ...m, providerName: this.deps.providerName(m.provider) });
+    const payload: AuthRecoveryPayload = {
+      sessionId,
+      failed: reply.failed === null ? null : named(reply.failed),
+      active: reply.active === null ? null : named(reply.active),
+      models: reply.models.map(named),
+      error,
+    };
+    this.deps.present(payload);
+    this.deps.log(`authentication recovery: the dialog is open for session ${sessionId} (${payload.failed === null ? 'the failed model unknown' : `${payload.failed.provider}/${payload.failed.model} failed`}; ${payload.models.length} model(s) configured)`);
+    return { opened: true };
+  }
+
+  /**
+   * REQ-NOTIFY-074: the model chosen in the dialog is pinned and the run restarts. On success the dialog closes; a refusal is
+   * answered as the sentence the dialog shows, and the dialog stays.
+   */
+  async retry(payload: AuthRecoveryPayload, modelKey: string): Promise<AuthRecoveryResult> {
+    let reply: ProcessReply;
+    try {
+      reply = await this.deps.request({ kind: 'session.authRestart', sessionId: payload.sessionId, modelKey });
+    } catch (cause) {
+      return { ok: false, message: `The run could not be restarted: ${cause instanceof Error ? cause.message : String(cause)}` };
+    }
+    if (reply.kind === 'refused') return { ok: false, message: [reply.headline, reply.detail].filter(Boolean).join(': ') };
+    if (reply.kind !== 'session.authRestarted') return { ok: false, message: `The run could not be restarted: the run host answered ${reply.kind}.` };
+    this.deps.close(payload.sessionId);
+    this.deps.log(`authentication recovery: session ${payload.sessionId} restarted on ${reply.pinned.to.key} (${reply.pinned.to.provider}/${reply.pinned.to.model})`);
+    return { ok: true };
+  }
+
+  /** REQ-NOTIFY-080: Cancel closes the dialog and does nothing else; the run stays failed and its notice stays on screen. */
+  cancel(payload: AuthRecoveryPayload): void {
+    this.deps.close(payload.sessionId);
+    this.deps.log(`authentication recovery: the dialog for session ${payload.sessionId} was cancelled`);
+  }
+}

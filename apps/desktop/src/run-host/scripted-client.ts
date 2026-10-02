@@ -387,6 +387,12 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         yield finished('other');
         return;
       }
+      // `<fault>:only=<provider>[+<provider>…]`: the fault answers a call addressed to one of those providers, and a call to any
+      // other answers as `answer` does — a credential refused by one provider that a model on another does not share (the
+      // authentication recovery dialog's restart on a chosen model, REQ-NOTIFY-074, whose restarted root takes the script from
+      // its first step again, a failed call leaving nothing in its record). Verification only.
+      const scoped = /^(fail:(?:429|quota|503|401)(?::retry-after=\d+)?):only=([\w+-]+)$/.exec(step);
+      if (scoped) step = scoped[2]!.split('+').includes(req.model.providerId) ? scoped[1]! : 'answer';
       // `hang` streams nothing until the caller aborts (the unresponsive-model timer or the child timeout).
       const fault = /^fail:(429|quota|503|401)(?::retry-after=(\d+))?$/.exec(step);
       if (fault) {

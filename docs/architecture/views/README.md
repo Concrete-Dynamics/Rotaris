@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A failed run is classified, and an authentication failure opens the recovery dialog (REQ-NOTIFY-060, REQ-NOTIFY-064,
+REQ-NOTIFY-067, REQ-NOTIFY-072..075, REQ-NOTIFY-079/080; the 401 note's part C).** Main matches a failed run in REQ-NOTIFY-060's
+order (`main/failure-class.ts`); the generic class raises REQ-NOTIFY-064's notice with the workspace action; the
+authentication class asks the run host `session.authRecovery` and opens a 560 px modal window, role `auth-recovery`, whose
+Retry is relayed as `session.authRestart` (`Sessions.restartAfterAuthFailure`: a `model_override` pin against the failed pair,
+the last prompt re-submitted). The **process view** gains the window, the two run-host message kinds and the three
+`authRecovery.*` commands; the **runtime view** the classification paragraph; the **seams view** §1 the `auth-recovery`
+facet (its count corrected: eighteen, not sixteen); the **state-ownership view** the open dialog's row. No package, edge,
+process, channel or store column changed.
+
 **The run-wide compression count reaches the record and the agent surfaces (REQ-MONITOR-086, REQ-MONITOR-281, OQ-159).**
 `SessionRecord` gains `compressions`: the live run's maintained aggregate while a run is live (`Run.compressions`), else the
 stored `sessions.compressions` (`runCompressionsOf`). The run-level agent carries it in place of the children-only sum, so a

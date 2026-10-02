@@ -1163,6 +1163,22 @@ the release out of the terminal transaction and to the end of cleanup: `REQ-EVEN
 session's history exactly the right to hold its lock, so releasing it before `session.end` and `result` would have
 recorded both after writing authority ended. This paragraph said “the lock release” inside the transaction until
 2026-09-13; the code has not done that since A3 was applied.*
+**A failed run is classified before it is presented (REQ-NOTIFY-060, 2026-10-02).** Main matches a FAILED run's failure
+text in REQ-NOTIFY-060's order (`main/failure-class.ts`): REQ-NOTIFY-067's authentication markers (`401` standing alone),
+the sandbox class (never reached here — a refused confinement mode is refused before a run exists), the rate-limit or quota
+markers (REQ-NOTIFY-063's notice, as before), else REQ-NOTIFY-064's generic notice: the run failed, the session and the
+draft were kept, the failure text as detail, `open-view: workspace`. The authentication class asks the run host for the
+recovery facts and opens the 560 px modal recovery dialog beside the class's own error notice (`main/auth-recovery.ts`;
+REQ-NOTIFY-072..075/079/080), or — REQ-NOTIFY-069's preconditions unmet — takes the generic path. Retry pins the chosen
+model against the pair the failed root call was addressed to (`Run.failedEntryModel`, recorded with the run's last
+failure) in the session's `ResilienceMemory` and as a `model_override` timeline entry carrying `cause: authentication`, then
+re-submits the session's last prompt through `promptHeld` (`Sessions.restartAfterAuthFailure`); a pin away from the chosen
+model is taken back first, and a restart that cannot begin takes its own pin back (`cleared: true`, which `rehydrate`
+replays in order). REQ-NOTIFY-070's automatic first-failure fallback restart and REQ-NOTIFY-071's prompt are not built on
+this base (the 401 note's parts A and B), so every authentication failure the preconditions admit opens the dialog.
+A run that ended otherwise with a failure text — a cancelled quota wait, a completion with a task abandoned — keeps the
+limit's notice or its own summary.
+
 Main presents `run.result` once as the notice — **except where that result carries `persistence: {confirmed: false}`**,
 the run host having already published the one failure notice `REQ-EVENTS-088` allows, with the last durable ordinal
 and the reopen action on it (OQ-42). **Part V:** a starting run first clears the standing notice where it

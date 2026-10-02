@@ -1143,7 +1143,17 @@ Since 2026-10-02 a `switch-back` scenario follows the same-tier move with a swit
 configured key from the run header, and a follow-up queued beside it: iteration 2 runs on the configured model, as the
 switch's REQ-MONITOR-142 row says (OQ-177;
 [note](../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md)); and
-`--only=<name>[,<name>…]` runs the named scenarios alone.
+`--only=<name>[,<name>…]` runs the named scenarios alone. **Since 2026-10-02 `fatal` is driven** (`drivenLaunch`, its steps in
+`fatal.steps.json`): a 401 with no usable fallback opens the authentication recovery dialog — REQ-NOTIFY-072..075/079/080,
+the 401 note's part C (`main/failure-class.ts`, `main/auth-recovery.ts`, `packages/ui/src/AuthRecoveryDialog.tsx`,
+`Sessions.authRecoveryFacts` / `restartAfterAuthFailure`) — read in its own window (560 px, its title, the error in the
+failure colour, the other providers' models), Cancelled with the run left failed and the class's notice on screen,
+reopened by a second failure, answered with beta (refused too, `fail:401:only=scripted+scripted-b`, which reopens it
+naming beta) and then gpt-4o, on which the run completes; the pins are read from the timeline
+([note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md), open: parts A, B and D
+are not built on this base). **What the 401 recovery does not yet do:** the automatic first-failure fallback restart and the
+non-modal re-authentication prompt (REQ-NOTIFY-070/071/078, parts A and B, built on `fin6-auth-recovery-1` and not merged),
+so every authentication failure opens the dialog.
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong

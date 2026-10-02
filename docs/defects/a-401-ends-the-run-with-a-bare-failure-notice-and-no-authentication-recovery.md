@@ -21,6 +21,42 @@ not the recovery above; it should assert REQ-NOTIFY-072's dialog (with no fallba
 Recorded, not repaired: building the class is product work of its own (a dialog surface, a fallback restart, a
 re-authentication path).
 
+## Parts built — the note stays open until every part has landed
+
+The third triage (2026-10-02) split the repair in four parts over two bundles: **A** the classifier, REQ-NOTIFY-064's generic
+notice and the first-failure fallback pin and restart (REQ-NOTIFY-060/064/067..070); **B** the non-modal re-authentication
+prompt (REQ-NOTIFY-071/078); **C** the 560 px modal recovery dialog (REQ-NOTIFY-072..075/079/080); **D** its re-authenticate
+path (REQ-NOTIFY-076/077).
+
+- **A and B are not on `origin/main`.** They were built on `fin6-auth-recovery-1`, which ended unverified and did not merge.
+  Bundle `fin6-auth-recovery-2` was told to build C and D on `origin/main` as it stood (`dc796f5`), so it built the
+  share of A that C cannot run without — the classifier in REQ-NOTIFY-060's order (`apps/desktop/src/main/failure-class.ts`,
+  REQ-NOTIFY-067's markers, `401` standing alone) and REQ-NOTIFY-064's generic notice (the run failed, the session and the
+  draft were kept, the failure text as detail, `open-view: workspace`) — and not the fallback pin and restart, nor B's prompt.
+  **The reading this build proceeds under until A lands:** every authentication failure REQ-NOTIFY-069's preconditions admit
+  opens C's dialog, a first one with a usable fallback included; the configured fallback is then one of the models listed to
+  choose by hand. When A lands, its restart goes ahead of the dialog in the run-result handler and the dialog keeps
+  REQ-NOTIFY-072's two cases.
+- **C — built 2026-10-02 on `fin6-auth-recovery-2`.** Main classifies the failed run; for the authentication class it asks the
+  run host for the facts (`session.authRecovery`: the model the failed root call was addressed to, the active model, every
+  configured model a restart can reach, whether a last prompt is recorded — `Sessions.authRecoveryFacts`), raises the class's
+  error notice ("Authentication failed", the session and the draft kept, the failure text as detail, `open-view: workspace`)
+  and opens the dialog (`apps/desktop/src/main/auth-recovery.ts`): a modal window 560 px wide over the main window following
+  the session, one at a time (REQ-NOTIFY-079), drawn by `packages/ui/src/AuthRecoveryDialog.tsx` from design-system controls.
+  Its title names the model that failed, else the active one; the provider's error is collapsed and cut at 320 characters
+  plus an ellipsis in `--rt-danger-300`; the models of other providers come first, then the failed provider's others, the
+  failed model never (`recoveryModelList`); Retry is disabled while the list is empty. Retry pins the chosen model against
+  the failed pair and restarts with the same prompt (`session.authRestart` → `Sessions.restartAfterAuthFailure`, the
+  `model_override` entry `ResilienceMemory.rehydrate` replays, so the pin survives a reload — REQ-SESSION-026); a pin away from
+  the chosen model is taken back, and a restart that cannot begin takes its pin back (`cleared: true`). A chosen model that
+  fails too reopens the dialog naming it (REQ-NOTIFY-075). Cancel closes the dialog and nothing else (REQ-NOTIFY-080).
+  Pinned by `failure-class.test.ts`, `auth-recovery.test.ts` (main and ui), the `REQ-NOTIFY-072/074` block of
+  `ladder.test.ts`, `resilience.test.ts` and `scripted-client.test.ts`; shown by `pnpm resilience-proof`'s `fatal` scenario,
+  now driven: a 401 with no fallback configured opens the dialog (title, 560 px, the error in the failure colour, the other
+  providers' models), Cancel leaves the run failed and the notice on screen, a second prompt reopens it, beta is chosen and
+  refused too, the dialog comes back naming beta, and the run completes on gpt-4o.
+- **D — not yet built** (the same bundle's next task).
+
 ## Specs
 
 - REQ-NOTIFY-060 — the authentication class is matched first; here it is never matched.

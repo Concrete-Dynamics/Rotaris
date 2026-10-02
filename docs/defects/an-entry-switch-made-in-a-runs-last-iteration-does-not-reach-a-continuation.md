@@ -13,6 +13,19 @@ specification says "the run's entry model", and REQ-MONITOR-143 says a switch af
 records the override". Whether a continuation is the same run for this purpose, and so inherits the override, or the
 row should say the switch ends with the run, is for the owner, raised with the repair.
 
+## Status — 2026-10-02 (fin8, ladder-overrides, task 2): raised as OQ-183; the reader's share repaired; the product part open
+
+- **Raised:** [OQ-183](../architecture/open-questions.md) asks the owner whether a mid-run switch of the entry model or
+  reasoning level reaches the session's next run. The build proceeds under "a switch ends with its run", as it stands.
+  The product part of this note waits on that ruling and stays open: no agent rules it.
+- **Repaired, the reader's share:** the autopsy reader no longer carries a switched key across a continuation whose
+  snapshot names no entry model; it prints `undetermined`, right under either answer
+  ([the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](fixed/the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md)).
+- **When it is ruled:** if the switch reaches the next run, it is recorded session-wide (REQ-SESSION-026's runtime
+  override) and `launchContinuation` starts from it unless the composer's next-run choice differs, pinned by a sessions test
+  (a switch in the last iteration, a continuation, the root's first call on the switched key). If it ends with its run,
+  the row says so when no further iteration of the run is queued. Either way the reader then reads the ruling.
+
 ## Specs
 
 - REQ-MONITOR-142: a switch applies from the next iteration onward, and its row says so.

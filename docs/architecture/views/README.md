@@ -45,6 +45,9 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**An entry switch ends with its run, and OQ-183 asks whether it should (REQ-MONITOR-142/143, REQ-SESSION-026,
+REQ-MONITOR-146).** The **runtime view**'s `setModel` row says where a switch is held. No code moved.
+
 **The entry agent's context limit is its ladder cell's model's (REQ-MONITOR-049, REQ-MONITOR-089; the repair of
 `the-entry-agents-context-limit-is-read-from-the-requested-model-not-the-one-it-runs-on`).** `Run.entryContext` reads the
 limit from the root cell's model. The **runtime view**'s `SessionRecord.entryContext` sentence says so. Nothing else moved.

@@ -9012,3 +9012,37 @@ the application; whether the pin covers every agent on the failed pair or the en
 with no usable fallback spends the session's automatic fallback; whether a session not on screen is restarted at once,
 in the background, or when it is focused; and whether "the same prompt" of a run a plan decision launched is that decision
 (as built) or the session's last prompt.
+
+**OQ-183 — Does a mid-run switch of the entry model or reasoning level reach the session's next run?** *(REQ-MONITOR-142,
+"A switch of the run's entry model, or of its entry reasoning level, applies from the next iteration onward", its row
+saying "it applies from the next iteration"; REQ-MONITOR-143, after the loop has closed "a switch still records the
+override"; REQ-SESSION-026, "A mid-session runtime model override (active model key and runtime model configurations) MUST
+persist across calls and across reloads of the session"; REQ-MONITOR-146, "Composer-side model, persona, and reasoning
+choices apply to the next prompt". Raised 2026-10-02 by
+[`an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md`](../defects/an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md)
+(fin8, ladder-overrides, task 2). Open.)*
+
+A switch of the entry model or reasoning level from the run header or the inspector (`setModel`, `setReasoning`) is held
+on its `Run` (`entryOverride`). When the iteration in flight is the run's last, the next iteration is a continuation —
+the user's next prompt starts a new `Run`, built from the configuration (`Sessions.launchContinuation`) — so the switch
+never applies, though its row said it applies from the next iteration. The requirements pull two ways. REQ-MONITOR-142
+speaks of "the run's" entry model and "the next iteration", which a continuation is in the session's numbering;
+REQ-MONITOR-143 keeps the override recorded once the loop has closed, which has a purpose only if something later reads
+it; and REQ-SESSION-026 makes a mid-session runtime model override persist "across calls and across reloads of the
+session". Against them, REQ-MONITOR-146 gives the next run its own selector — the composer's "Model for the next run",
+which writes the entry persona's model into the configuration — and a switch that reached the next run would sit beside
+that chip, which shows the configured model, with no rule for which wins.
+
+**What the build proceeds under** (`packages/engine/src/run/run.ts`, `entryOverride`, `setEntryModel`,
+`setEntryReasoning`; `packages/engine/src/sessions.ts`, `launchContinuation`): a switch **ends with its run**. Its row
+still says "it applies from the next iteration", which is true while the run has a next iteration of its own (a queued
+prompt, a task added while it runs) and untrue when it has none. A change-model resolution of a wait (REQ-ORCH-091 d) is
+not such a switch: its override is session-wide and reaches every later run. The autopsy reader prints the entry key
+`undetermined` after a continuation whose snapshot names no entry model when a switch onto another key preceded it
+([the repair](../defects/fixed/the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md)),
+so its reading is right under either answer; a continuation whose snapshot names the entry model says which it ran on.
+
+**What a ruling decides.** Whether a switch made from the run header or the inspector reaches the session's next run
+(recorded session-wide, as REQ-SESSION-026's override, and taken by the continuation unless the composer's next-run choice
+differs), or ends with its run (and its row then says so when no further iteration of the run is queued); the same for a
+reasoning switch; and, if it reaches the next run, how it stands beside the composer's next-run chip.

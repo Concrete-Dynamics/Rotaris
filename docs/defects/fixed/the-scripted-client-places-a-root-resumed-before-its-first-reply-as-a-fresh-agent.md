@@ -92,4 +92,5 @@ its scenarios before 9, the relaunches of a session a crash left among them, pas
 
 Noticed along the way, and not repaired here: a `wait:` prefix is spliced out of the step list every child shares, so a
 fan-out's children take each other's steps
-([`../the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md`](../the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md)).
+([`the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md`](the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md);
+repaired 2026-10-02, and its counter `position` folded into `calls` there).

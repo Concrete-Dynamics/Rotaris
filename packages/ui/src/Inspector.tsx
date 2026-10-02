@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { agentArtifacts, cancelCascade, cancelOffered, cancelUnavailableReason, cascadeNote, chipStates, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, resolvedTools } from './agents.js';
+import { agentArtifacts, cancelCascade, cancelOffered, cancelUnavailableReason, cascadeNote, chipStates, compressionLine, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, resolvedTools } from './agents.js';
 import { elapsedLabel, elapsedShown } from './AgentTree.js';
 import { AgentArtifactLinks } from './ArtifactLinks.js';
 import { ContextRing } from './ContextRing.js';
@@ -141,6 +141,7 @@ export function Inspector(props: InspectorProps) {
             <div className="inspector__ring-caption text-secondary">
               <div>This agent's own context window: {shown.contextUsed.toLocaleString()} of {shown.contextLimit.toLocaleString()} tokens.</div>
               <div>Compression at {compressionThresholdPercent}% of the limit. Not a session-wide figure.</div>
+              <div data-testid="inspector-compressions">{compressionLine(shown)}.</div>
             </div>
           </div>
           <div className="inspector__controls">

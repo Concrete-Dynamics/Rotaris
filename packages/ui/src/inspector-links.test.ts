@@ -26,7 +26,7 @@ const session = (over: Partial<SessionRecord> = {}): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-29T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-29T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
   usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 15, agents: 1, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY },
-  entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryStalledSeconds: null, entryToolCalls: null, ...over,
+  entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryStalledSeconds: null, entryToolCalls: null, compressions: 0, ...over,
 });
 const inspector = (s: SessionRecord, selected: string, runLevel: AgentRecord | null, onOpenArtifact?: (id: string) => void) => renderToStaticMarkup(createElement(Inspector, {
   session: s, rows: [], personas: [{ role: 'orchestrator', tools: ORCHESTRATOR_DECLARED, thinking: null, effectiveModel: 'm' }], runLevel, selectedAgentId: selected, onSelect: () => undefined, models: [], compressionThresholdPercent: 60, runActive: true, resting: false, nowIso: null,
@@ -223,5 +223,32 @@ describe('REQ-MONITOR-089 / REQ-MONITOR-065 (acceptance A36): the run-level agen
     expect(html).toContain(`This agent&#x27;s own context window: ${(4_505).toLocaleString()} of ${(262_144).toLocaleString()} tokens.`);
     expect(html).not.toContain('does not carry');
     expect(html).not.toContain('prompt reading in this build');
+  });
+});
+
+/*
+ * docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md: the inspector
+ * and a persona window drew an agent's tokens and tool calls and never its compression count (REQ-MONITOR-281), and nothing
+ * drew the run-wide count (REQ-MONITOR-086). Each now draws it as an element of its own, labelled with its unit; the
+ * run-level agent's is the run-wide count, the roots' compressions included (OQ-159's recorded reading).
+ */
+describe('REQ-MONITOR-281/086: the inspector and the persona window draw the compression count', () => {
+  const testText = (html: string, testId: string) => html.match(new RegExp(`data-testid="${testId}">([^<]*)<`))?.[1] ?? null;
+  const s = session({ agents: [child({ compressions: 1 })], compressions: 3 });
+  const root = runLevelAgent(s, entry, false)!;
+  const window = (selected: string, persona: string) => renderToStaticMarkup(createElement(PersonaWindow, {
+    persona, session: s, rows: [], runLevel: root, declaredTools: [], selectedAgentId: selected, onSelectTab: () => undefined, nowIso: null, compressionThresholdPercent: 60,
+    onSteer: async () => ({ ok: true as const }), onCancel: async () => ({ ok: true as const }),
+  }));
+  it('the run-level agent: the run-wide count, across the run', () => {
+    expect(testText(inspector(s, RUN_AGENT_ID, root), 'inspector-compressions')).toBe('3 compressions across the run.');
+    expect(testText(window(RUN_AGENT_ID, 'orchestrator'), 'persona-compressions')).toBe('3 compressions across the run.');
+  });
+  it('a child: its own count; the meta and context lines keep their fixed forms (REQ-MONITOR-052/069)', () => {
+    const html = inspector(s, 'bg_00000001', root);
+    expect(testText(html, 'inspector-compressions')).toBe("1 compression of this agent's context.".replace("'", '&#x27;'));
+    expect(testText(html, 'inspector-meta')).toMatch(/^running · .+ · 1 tool call$/);
+    const pw = window('bg_00000001', 'coding-agent');
+    expect(testText(pw, 'persona-compressions')).toBe("1 compression of this agent's context.".replace("'", '&#x27;'));
   });
 });

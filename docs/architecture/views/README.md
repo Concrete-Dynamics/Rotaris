@@ -72,6 +72,14 @@ and the last prompt re-submitted; a `cleared: true` entry takes a pin back). The
 **runtime view** the classes and the restart, **state ownership** main's first-failure bookkeeping. No package, edge,
 channel, command or store column changed.
 
+**The run-wide compression count reaches the record and the agent surfaces (REQ-MONITOR-086, REQ-MONITOR-281, OQ-159).**
+`SessionRecord` gains `compressions`: the live run's maintained aggregate while a run is live (`Run.compressions`), else the
+stored `sessions.compressions` (`runCompressionsOf`). The run-level agent carries it in place of the children-only sum, so a
+root's own compressions are counted, and the inspector's ring caption and the persona window's context card draw the count
+as an element of their own (`inspector-compressions`, `persona-compressions`). The **runtime view**'s entry-record paragraph
+says so. This repairs `the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md`. The
+snapshot channel's `SessionRecord` gained the field; no package, edge, process, message kind, command or store column changed.
+
 **An entry switch applies from the next iteration, over a ladder move (REQ-MONITOR-142, REQ-ORCH-090, REQ-ORCH-091,
 OQ-177).** `Run.pendingEntrySwitch` holds a user's switch until `rootResilience`, now read once per root turn (an
 iteration, its resumes after its children included), applies it: a model switch rebuilds the root's cell on the chosen

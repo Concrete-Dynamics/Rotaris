@@ -441,6 +441,30 @@ describe('createDeliveryService', () => {
     expect(calls).toEqual(['u1', 'u2']);
     expect(takenOver.map((t) => t.path)).toContain(u('u2'));
   });
+  /**
+   * The same note's built-app consequence: `run.started`'s write threw on `delivery_runs`' primary key and the throw
+   * skipped settling the claim, so the card read `next` and held a unit slot until a restart. The claim is settled
+   * whatever the write does. A row for the same (req_id, unit) written first makes the primary key refuse the write.
+   */
+  it('REQ-TRACE-478/482: a run.started whose write is refused still settles the claim — its unit slot is free for the next candidate', async () => {
+    // Each card's tree on disk, so the claim hands the release's launch out as it stands.
+    const port: RunGitPort = { ...FAKE_GIT, provision: async (a) => { const path = join(ws, '.rotaris', 'requirements', 'worktrees', `${a.id}-${a.unit}`); mkdirSync(path, { recursive: true }); return ok({ ref: `${a.id}/${a.unit}`, path, branch: `rotaris/req/${a.id.toLowerCase()}/${a.unit}`, baseBranch: 'main', baseRevision: 'abc123' }); } };
+    const s = createDeliveryService({ db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port });
+    await s.handle({ name: 'requirements.queue.set', workspace: 'x', concurrency: 1 }, USER);
+    await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-102', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    const queued = (await s.handle({ name: 'requirements.board', workspace: 'x' }, USER)).value as BoardProjection;
+    expect(queued.queue.concurrency).toBe(1);
+    // The queue's order (priority, then the time released, then identifier) puts REQ-102 first: it takes the one slot.
+    expect(queued.queue.entries.map((e) => [e.id, e.state])).toEqual([['REQ-102', 'next'], ['REQ-101', 'deferred']]);
+    const first = (await s.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value as { id: string; unit: string } | null;
+    expect(first).toMatchObject({ id: 'REQ-102', unit: 'u1' });
+    r.db.prepare("INSERT INTO delivery_runs (req_id, unit, session_id, worktree_ref, permissions, status, stage, outcome, started_at, ended_at) VALUES ('REQ-102', 'u1', 'sess-other', NULL, '', 'failed', NULL, 'failed', 't', 't')").run();
+    await expect(s.handle({ name: 'requirements.run.started', workspace: 'x', id: 'REQ-102', unit: 'u1', sessionId: 'sess-1', permissions: 'permissive' }, SYSTEM)).rejects.toThrow();
+    // Concurrency 1: the slot the refused start held is free, so the next candidate is claimable (the claim schedules
+    // from the live claimed set; left unsettled, REQ-102 would still hold the one slot and the claim would answer null).
+    expect((await s.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value).toMatchObject({ id: 'REQ-101', unit: 'u1' });
+  });
   it('a claim before the first pass, under manual with nothing armed, answers null without parsing the store; under automatic it parses', async () => {
     const s = service();
     expect((await s.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value).toBeNull();

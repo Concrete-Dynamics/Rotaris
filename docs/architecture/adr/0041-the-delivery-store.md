@@ -1186,7 +1186,7 @@ through the writer's new `recordWorktreeProvisioned` (`workspace/src/delivery/tr
 run starts takes the tree over rather than provisioning a second one (REQ-TRACE-464). A recorded row whose tree is gone
 stays the stated stall. The read pass never provisions (REQ-TRACE-408), and neither does the reject (REQ-TRACE-389 and
 REQ-TRACE-422 fix what it says it does to the worktree). `requirements.run.started` settles the claim whatever its write
-does. A claim made before the first pass under `manual` with nothing armed answers `null` without parsing the store, so a
+does (pinned by a `delivery.test.ts` case whose start the primary key refuses: the next candidate takes the freed slot). A claim made before the first pass under `manual` with nothing armed answers `null` without parsing the store, so a
 kick at a workspace open costs a `manual` workspace no parse. `requirements-runs-proof`'s eighth assertion shows it
 against a real scratch repository: a reviewed card rejected, `runs.dispatch()`, and u2 runs on its own worktree beside
 the kept u1.

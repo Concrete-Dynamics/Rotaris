@@ -56,7 +56,10 @@ tree is gone stays the stated stall. Nothing provisions on a board read (REQ-TRA
 does. A claim before the first pass under `manual` with nothing armed answers `null` without parsing the store. Pinned by
 five cases in `delivery.test.ts` (manual release after a reject; automatic claim after a reject; an ending classified
 `cancelled`; a restart between the provisioning claim and the start; the cheap claim), all red before the repair, and one
-in `transition.test.ts`; shown by `requirements-runs-proof`'s eighth assertion (a reviewed card rejected, the dispatch,
+in `transition.test.ts`. The settled claim on a refused write was unpinned at hand-over (the verifier's repair round 1 put
+the sequential form back and every case still passed); a sixth case now pins it — a row for the same (req_id, unit)
+written first makes `delivery_runs`' primary key refuse the start's write, and under concurrency 1 the next candidate is
+still claimable — red with the write and the three deletes in sequence, green with the `finally`. Shown by `requirements-runs-proof`'s eighth assertion (a reviewed card rejected, the dispatch,
 u2 running on its own worktree beside the kept u1), red on the unrepaired service and green on the repair. ADR-0041 records
 it in "Repair — 2026-10-02: a card's next unit is provisioned at the claim", keeping the replaced clause.
 

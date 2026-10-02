@@ -45,7 +45,7 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
-**An entry switch ends with its run, and OQ-183 asks whether it should (REQ-MONITOR-142/143, REQ-SESSION-026,
+**An entry switch ends with its run, and OQ-185 asks whether it should (REQ-MONITOR-142/143, REQ-SESSION-026,
 REQ-MONITOR-146).** The **runtime view**'s `setModel` row says where a switch is held. No code moved.
 
 **The entry agent's context limit is its ladder cell's model's (REQ-MONITOR-049, REQ-MONITOR-089; the repair of
@@ -64,6 +64,23 @@ every call (`followOverride`), not only where a cell is built, and the summarise
 attempt. The **runtime view**'s ladder paragraph says so. A child's wait choice records `switch_pending` on its
 `model_override`, which the autopsy reader places before a pending switch; the **runtime view**'s `setModel` row says so.
 No package, edge, process, channel, command or store column changed.
+
+**The status strip names the focused session's confinement backend (REQ-SANDBOX-121, REQ-MONITOR-257, REQ-NOTIFY-030;
+fin8).** Store v31 appends `sessions.sandbox_backend`, written beside `sandboxed` when a run starts; the record carries
+`sandboxBackend`; the strip draws `sandbox: <backend>` for a focused session whose record says confined, and nothing
+otherwise. A run of an existing session refused at the confinement gate republishes its record unconfined until a run of it
+starts (REQ-NOTIFY-061; repair round 1, `Sessions.refusedAtStart`, held in memory, not in the row). The **runtime view**'s
+`sessions` row, the **process view**'s `SessionRecord` line, the **state-ownership view**'s run-host row for that refusal
+and the **seams view** §8 (a worked status-strip item) say so. No package, edge, process, channel or command changed; one
+store column did.
+
+**The retry resubmits the session's last prompt from the store, images included (REQ-NOTIFY-045, REQ-SESSION-192,
+REQ-CHAT-173; fin8).** A notice's retry with a blank draft is one command, `session.retry`, renderer → main → run host
+(`Sessions.retry`), in place of the window's search of its replica, and the prompt's images go with it, read back from the
+session's directory and verified by digest (`readBackAttachments`); `lastSubmittedPrompt` (over `StoreDal.lastPromptRow`, resident and released rows alike)
+is the one reading of a session's last prompt the retry, the continue, the plan decision and the authentication restarts
+share. The **process view** lists the command on both boundaries, the **runtime view**'s continuation lease names it, and
+the **seams view** §6 says where a blank-draft retry lands. No package, edge, process, channel or store column changed.
 
 **An authentication restart relaunches the failed run's own launch (REQ-NOTIFY-070, REQ-NOTIFY-074, REQ-ORCH-154; the
 401 note's part A, fourth repair round).** `Sessions.relaunchAfterAuthFailure` is the one restart path of the automatic

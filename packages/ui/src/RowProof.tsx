@@ -129,7 +129,7 @@ export function rowProofSession(): SessionRecord {
     id: 'rows-proof-session', executionStatus: 'running', workspaceRoot: 'C:/rows-proof', createdAt: AT, updatedAt: at(10),
     historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null },
     agents: [AGENT], pendingQuestions: [], tokenUsage: { input: 120, output: 80 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: AT,
-    iterationsCompleted: 1, summary: null, permissionMode: 'guided', sandboxed: false,
+    iterationsCompleted: 1, summary: null, permissionMode: 'guided', sandboxed: false, sandboxBackend: '',
     pendingApprovals: [{ request_id: 'req-1', session_id: 'rows-proof-session', agent_id: 'helper', persona: 'coding-agent', tool_name: 'terminal', command: 'git push origin main', argument_summary: '', rule_id: 'starter.push', reason: 'a push leaves the machine', sequence: 1 }],
     backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
     usageHistory: [], costLabel: { text: 'cost unknown', qualifier: 'unknown' },

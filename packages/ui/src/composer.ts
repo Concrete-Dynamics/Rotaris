@@ -87,6 +87,25 @@ export function statusStripModeItem(sessionMode: string | null, configuredMode: 
   return `mode: ${sessionMode ?? resolvePreset(configuredMode).preset}`;
 }
 
+/**
+ * REQ-SANDBOX-121's workspace indicator naming the confinement backend, drawn in the status strip as text (REQ-SHELL-149,
+ * REQ-TOOLS-184's text-flag craft — the mockup has no confinement indicator): present only for a focused session whose
+ * recorded result is confined, so it re-binds with focus (REQ-MONITOR-257, REQ-NOTIFY-030) and is absent with no session
+ * focused, which is where a refused start leaves the window (REQ-NOTIFY-061, REQ-SANDBOX-120: no session remains). A run
+ * of an existing session refused at the confinement gate is published by the engine as no longer sandboxed
+ * (`Sessions.refusedAtStart`), so the item is gone beside REQ-NOTIFY-061's notice until a run of it starts again. The
+ * tooltip words confinement as the settings page's Sandbox mode control does ("OS-level confinement", "Active — <backend>")
+ * and joins it to the short form as REQ-SHELL-041's flags do. A record written before the backend was recorded, and whose
+ * start event no longer holds it, reads `sandbox: confined`. Where the indicator stands among REQ-SHELL-038's items, and
+ * its words, are OQ-184's.
+ */
+export function statusStripSandboxItem(session: { readonly sandboxed: boolean; readonly sandboxBackend: string } | null): { readonly text: string; readonly name: string; readonly title: string; readonly testId: string } | null {
+  if (session === null || !session.sandboxed) return null;
+  const backend = session.sandboxBackend.trim();
+  const text = backend === '' ? 'sandbox: confined' : `sandbox: ${backend}`;
+  return { text, name: 'Confinement backend', title: `${text} — Sandbox mode active${backend === '' ? '' : ` (${backend})`}: agent commands in this session run inside OS-level confinement.`, testId: 'strip-sandbox' };
+}
+
 /** What the Pause control's pending mark is scoped to: the session shown and whether its run is busy (REQ-NOTIFY-050). */
 export interface PauseScope {
   readonly sessionId: string | null;

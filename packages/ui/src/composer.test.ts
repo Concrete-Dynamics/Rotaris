@@ -6,7 +6,7 @@ import {
   COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, COMPOSER_PLACEHOLDERS, COMPOSER_WIDGET_MIN_HEIGHT, DEFAULT_REASONING, DRAFT_PUBLISH_MS,
   DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, MODELS_LOADING_LABEL, pausePendingAfter,
   PROJECT_SETUP_REFUSAL, reasoningChipLabel, runControlReason, runHeaderControlReason, RUN_STATE_LABELS, runStateOf, runTimingLabel,
-  runTimingSeconds, sendRefusal, statusStripModeItem, statusStripRunItem, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk,
+  runTimingSeconds, sendRefusal, statusStripModeItem, statusStripRunItem, statusStripSandboxItem, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk,
 } from './composer.js';
 import { STRIP_NARROW_BELOW, STRIP_TIGHT_BELOW, stripDensity, stripIconTitle } from './WorkspaceView.js';
 
@@ -48,6 +48,48 @@ describe('REQ-TOOLS-184: the status strip shows the preset in force, with or wit
     expect(statusStripModeItem('autonomous', 'restricted')).toBe('mode: autonomous');
     // No configuration read yet (or none to read): a missing key resolves to the shipped default, `ask`.
     expect(statusStripModeItem(null, null)).toBe('mode: ask');
+  });
+});
+
+/*
+ * REQ-SANDBOX-121 with REQ-MONITOR-257, REQ-NOTIFY-030 and REQ-NOTIFY-061 (the repair of
+ * `docs/defects/fixed/no-workspace-indicator-names-the-confinement-backend.md`): no surface read the record's `sandboxed`,
+ * and the record carried no backend to name.
+ */
+describe('REQ-SANDBOX-121: the strip names the confinement backend of the focused session, and only of a confined one', () => {
+  it('a confined record names its backend, as text, with the tooltip worded as the settings page words confinement', () => {
+    expect(statusStripSandboxItem({ sandboxed: true, sandboxBackend: 'bubblewrap' })).toEqual({
+      text: 'sandbox: bubblewrap', name: 'Confinement backend', testId: 'strip-sandbox',
+      title: 'sandbox: bubblewrap — Sandbox mode active (bubblewrap): agent commands in this session run inside OS-level confinement.',
+    });
+    expect(statusStripSandboxItem({ sandboxed: true, sandboxBackend: 'seatbelt' })?.text).toBe('sandbox: seatbelt');
+    // A record written before the backend was recorded, whose start event no longer holds it: confined, backend unnamed.
+    expect(statusStripSandboxItem({ sandboxed: true, sandboxBackend: '' })?.text).toBe('sandbox: confined');
+  });
+
+  it('an unconfined record and no focused session draw nothing', () => {
+    expect(statusStripSandboxItem({ sandboxed: false, sandboxBackend: '' })).toBeNull();
+    // A stale backend beside `sandboxed: false` is never drawn: the flag decides.
+    expect(statusStripSandboxItem({ sandboxed: false, sandboxBackend: 'bubblewrap' })).toBeNull();
+    // No session focused — where a refused START leaves the window, since it leaves no session (REQ-SANDBOX-120).
+    expect(statusStripSandboxItem(null)).toBeNull();
+  });
+
+  it('REQ-NOTIFY-061: a confined session whose next run was refused at the confinement gate stops drawing the item, and draws it again once a confined run starts', () => {
+    // The records the engine publishes, in order (sandbox-record.test.ts pins the engine's half): the confined run, the
+    // refusal at the gate (`refusedAtStart`: no longer sandboxed, no backend), the confined run that started after it.
+    const published = [
+      { sandboxed: true, sandboxBackend: 'bubblewrap' },
+      { sandboxed: false, sandboxBackend: '' },
+      { sandboxed: true, sandboxBackend: 'bubblewrap' },
+    ];
+    expect(published.map((record) => statusStripSandboxItem(record)?.text ?? null)).toEqual(['sandbox: bubblewrap', null, 'sandbox: bubblewrap']);
+  });
+
+  it('re-binds with focus: the item is the focused record\'s, so switching between a confined and an unconfined session moves it (REQ-MONITOR-257, REQ-NOTIFY-030)', () => {
+    const confined = { sandboxed: true, sandboxBackend: 'bubblewrap' };
+    const open = { sandboxed: false, sandboxBackend: '' };
+    expect([confined, open, confined].map((focused) => statusStripSandboxItem(focused)?.text ?? null)).toEqual(['sandbox: bubblewrap', null, 'sandbox: bubblewrap']);
   });
 });
 

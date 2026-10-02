@@ -18,7 +18,7 @@ The run host cannot tell this refusal from any other configuration refusal by it
 `apps/desktop/src/main/index.ts`'s run-result handler says "The authentication and sandbox classes ahead of it are not
 built either": the sandbox class never reaches a run result, because the run never starts. The indicator clause
 ("The sandbox indicator stops describing the run as sandboxed") is met only because no such indicator is drawn
-([no-workspace-indicator-names-the-confinement-backend.md](../no-workspace-indicator-names-the-confinement-backend.md)).
+([no-workspace-indicator-names-the-confinement-backend.md](no-workspace-indicator-names-the-confinement-backend.md)).
 Found read-only by the third triage; confirmed on `fin5-noticed-gaps` by `launch.test.ts` (the refusal's code) and
 `commands/session.test.ts` (the notice's shape).
 
@@ -40,8 +40,11 @@ Found read-only by the third triage; confirmed on `fin5-noticed-gaps` by `launch
 ## Outcome
 
 Repaired 2026-10-02 on `fin5-noticed-gaps`, for the start, the prompt and the continue; the indicator clause stays with
-[no-workspace-indicator-names-the-confinement-backend.md](../no-workspace-indicator-names-the-confinement-backend.md),
-which is open.
+[no-workspace-indicator-names-the-confinement-backend.md](no-workspace-indicator-names-the-confinement-backend.md),
+which is open (it was then; repaired 2026-10-02 by fin8: a refused start's indicator is absent, no session being
+focused, and a run of an existing session refused at the gate publishes its record no longer sandboxed, so the indicator
+is gone beside the notice until a run of it starts again — `Sessions.refusedAtStart`. fin8 first left that second case to
+OQ-184; its verifier found the clause plain, and repair round 1 built it).
 
 - The confinement gate's two refusals carry `code: 'confinement'` (`ConfigureRefusal`, `prepareRun`); `launchSession`
   answers them as `session.confinement` under REQ-SANDBOX-120's title, and the run host hands the class to the engine

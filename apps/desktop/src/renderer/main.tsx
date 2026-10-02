@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripRunItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripRunItem, statusStripSandboxItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -1237,6 +1237,10 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
   // REQ-TOOLS-184: the configured preset, re-read on every configuration change, for the strip's mode with no session focused.
   const configuredMode = useConfigSnapshot(workspace)?.runtime.permission_mode ?? null;
+  // REQ-SANDBOX-121 / REQ-MONITOR-257: the focused session's confinement backend, re-bound with focus; absent unless confined.
+  const sandboxFlag = session ? session.sandboxed : null;
+  const sandboxBackend = session?.sandboxBackend ?? '';
+  const sandboxItem = useMemo(() => statusStripSandboxItem(sandboxFlag === null ? null : { sandboxed: sandboxFlag, sandboxBackend }), [sandboxFlag, sandboxBackend]);
   const status = useMemo<readonly StatusItem[]>(
     () => [
       // REQ-NOTIFY-048/049: the presentation vocabulary, never a raw persisted string; in REQ-CHAT-008's recovery state the
@@ -1246,11 +1250,14 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
       { text: branchItem.text, name: 'Checked-out branch', title: branchItem.title, state: branchItem.state, testId: 'strip-branch' },
       // REQ-TOOLS-184: text, never colour alone — the mode, the workspace-scope flag (REQ-TOOLS-131), redaction (REQ-TOOLS-174), background sessions.
       // With no session focused the mode is the configured preset the next run starts from, never a literal (live-run finding L7).
-      statusStripModeItem(session?.permissionMode ?? null, configuredMode), 'workspace-scoped', 'redaction: always on', `bg sessions: ${session?.backgroundSessions ?? 0}`,
+      statusStripModeItem(session?.permissionMode ?? null, configuredMode), 'workspace-scoped',
+      // REQ-SANDBOX-121: beside the workspace-scope flag, the OS confinement the focused session's run had (OQ-184).
+      ...(sandboxItem ? [sandboxItem] : []),
+      'redaction: always on', `bg sessions: ${session?.backgroundSessions ?? 0}`,
       ...(circuitBreakerArmed ? ['● CB armed'] : []),
       theme.label, ...processes, `applied ${counters.applied} · reset ${counters.reset} · refused ${counters.refused}`,
     ],
-    [processes, counters, session, shownStatus, needsRecovery, theme, circuitBreakerArmed, branchItem, configuredMode],
+    [processes, counters, session, shownStatus, needsRecovery, theme, circuitBreakerArmed, branchItem, configuredMode, sandboxItem],
   );
   // Part W: Ctrl+L (REQ-CHAT-002) and every other chord of REQ-SHELL-049 are the command registry's, bound once by the
   // shell's `useCommandShortcuts`; the Ctrl+L effect that lived here is gone. ADR-0048's application modality: the palette

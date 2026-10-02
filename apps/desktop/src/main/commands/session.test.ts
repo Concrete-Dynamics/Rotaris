@@ -99,6 +99,30 @@ describe('REQ-NOTIFY-061: a sandboxed launch that was refused', () => {
     expect(h.raised).toEqual([]);
   });
 
+  /*
+   * REQ-NOTIFY-045 with REQ-NOTIFY-061: a retry refused at the confinement gate never reached a run either, so main reports
+   * it in the same notice — and offers no retry of the retry. Any other refusal of a retry raises nothing here and comes
+   * back with its words for the window to show. Pinned after fin8's verifier found main's `session.retry` untested.
+   */
+  it('a retry is reported the same way, and its other refusals come back with their words and no notice', async () => {
+    const h = harness(() => ({ kind: 'ack' }), host);
+    const commands = sessionCommands(h.ctx);
+    expect(await commands['session.retry']({ kind: 'session.retry', sessionId: 'S1' }, windowOn('ws-1'))).toEqual({ ok: false, code: 'session.confinement', headline: 'The prompt could not be retried', detail: `The run was refused before it started: ${WORDING}` });
+    expect(h.hostAsked).toEqual([{ kind: 'session.retry', sessionId: 'S1' }]);
+    expect(h.reported).toEqual([expected]);
+    expect(h.raised).toEqual([]);
+    expect(h.logs.some((l) => l.startsWith('run refused: The run was refused before it started'))).toBe(true);
+
+    const missing = { kind: 'refused', code: 'session.attachment-unavailable', headline: 'The prompt could not be retried', detail: 'The last prompt was not retried, because its image shot.png could not be read back: it is no longer available.' } as const;
+    const other = harness(() => ({ kind: 'ack' }), () => missing);
+    expect(await sessionCommands(other.ctx)['session.retry']({ kind: 'session.retry', sessionId: 'S1' }, windowOn('ws-1'))).toEqual({ ok: false, code: 'session.attachment-unavailable', headline: 'The prompt could not be retried', detail: `${missing.headline}: ${missing.detail}` });
+    expect(other.reported).toEqual([]);
+    expect(other.raised).toEqual([]);
+
+    const taken = harness(() => ({ kind: 'ack' }), () => ({ kind: 'ack' }));
+    expect(await sessionCommands(taken.ctx)['session.retry']({ kind: 'session.retry', sessionId: 'S1' }, windowOn('ws-1'))).toEqual({ ok: true });
+  });
+
   it('any other refusal keeps its own notice', async () => {
     const h = harness(() => ({ kind: 'ack' }), (req) => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: 'ws-1', count: 0 } : { kind: 'refused', code: 'session.configuration', headline: 'The run was refused before it started', detail: 'The configuration could not be loaded.' }));
     await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'));

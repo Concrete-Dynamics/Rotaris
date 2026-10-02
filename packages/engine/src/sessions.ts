@@ -33,7 +33,7 @@ import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 import { ArtifactStore } from './artifacts/store.js';
 import { toArtifactRecord } from './artifacts/record.js';
-import { persistAttachments, projectAttachments, readAttachmentBody, validateAttachmentInputs } from './attachments.js';
+import { decodeStoredAttachments, persistAttachments, projectAttachments, readAttachmentBody, readBackAttachments, validateAttachmentInputs, type StoredAttachment } from './attachments.js';
 import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
 import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
@@ -366,6 +366,14 @@ interface Live {
    */
   readonly portsOpen: Set<Run>;
   /**
+   * REQ-NOTIFY-061's last sentence for a session that already exists: the latest attempt to start a run on it was refused
+   * at the confinement gate, so the record it publishes stops describing it as sandboxed (`sandboxed: false`, no backend)
+   * until a run of it starts again. Held in memory and not written to the row: the row's `sandboxed`/`sandbox_backend`
+   * stay the latest run that started's own fact (REQ-SANDBOX-094, REQ-SANDBOX-121), and a refused run writes no snapshot
+   * (REQ-SANDBOX-126). Set by `refusedAtStart`, cleared by `launchContinuation`.
+   */
+  refusedConfinement?: boolean;
+  /**
    * REQ-ORCH-154 with REQ-NOTIFY-070/074/076: the plan decision that launched a run of this session, kept with the run it
    * launched, so an authentication restart of that run relaunches the same decision (`relaunchAfterAuthFailure`). Read
    * only while that run is the session's last: any other launch replaces `run`, and the record no longer matches.
@@ -623,6 +631,35 @@ export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt:
 }
 
 
+/** REQ-NOTIFY-045 / REQ-NOTIFY-069: a session's last submitted prompt — its row, its text and the images sent with it. */
+export interface LastPrompt {
+  readonly index: number;
+  readonly text: string;
+  readonly attachments: readonly StoredAttachment[];
+}
+
+/**
+ * REQ-NOTIFY-045 / REQ-NOTIFY-069 / REQ-SESSION-192: the session's last submitted prompt, read over EVERY row — resident or
+ * released to a page — so a prompt more than `RESIDENT_ROW_CAP` rows back is still the session's. The one reading the
+ * retry (`Sessions.retry`), the continue, the plan decision and the authentication restarts share; null only where no
+ * prompt was ever submitted. Until 2026-10-02 each of them searched `residentRows` and, once the prompt had been released,
+ * fell back to the session id as the prompt's text (the continue, the plan decision) or to '' (the restarts), and the
+ * renderer's retry searched its replica's window (`docs/defects/fixed/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md`).
+ */
+export function lastSubmittedPrompt(dal: StoreDal, sessionId: SessionId): LastPrompt | null {
+  const row = dal.lastPromptRow(sessionId);
+  return row === undefined ? null : { index: row.row_index, text: row.body, attachments: decodeStoredAttachments(row.attachments) };
+}
+
+/**
+ * REQ-ORCH-004: the request a continuation, a plan decision or a relaunched decision carries as its "Latest user request"
+ * and labels its task with — the last submitted prompt's text. The session id stands in only for a session with no
+ * submitted prompt at all (a transcript cleared under REQ-CHAT-084), never for one whose prompt has been released.
+ */
+function latestRequestOf(dal: StoreDal, stored: SessionRow): string {
+  return lastSubmittedPrompt(dal, stored.session_id as SessionId)?.text ?? stored.session_id;
+}
+
 /** REQ-MONITOR-171: the run's duration as `m:ss` / `h:mm:ss`; empty before any run. */
 export function durationLabel(startedAt: string | null, until: string): string {
   if (!startedAt) return '';
@@ -768,6 +805,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     summary: r.summary_status && r.summary_severity && r.summary_text ? { status: r.summary_status, severity: r.summary_severity, message: r.summary_text } : null,
     permissionMode: r.permission_mode,
     sandboxed: r.sandboxed === 1,
+    sandboxBackend: r.sandboxed === 1 ? r.sandbox_backend : '',
     backgroundSessions: 0,
     intent: null,
     queuedPrompts: [...queued],
@@ -1278,7 +1316,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1338,7 +1376,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1432,6 +1470,28 @@ export class Sessions {
     return ok(sessionId);
   }
 
+  /**
+   * REQ-NOTIFY-045 with REQ-NOTIFY-030 and REQ-CHAT-173 (OQ-178): a notice's retry where the composer's draft is blank —
+   * the session's last submitted prompt (`lastSubmittedPrompt`, released rows included) resubmitted as `prompt` submits
+   * one, with the images it was sent with read back from the session's directory by path and verified by digest
+   * (`readBackAttachments`), so they never cross the command boundary a second time. A missing or altered image refuses
+   * the retry, naming it, rather than resubmitting less than was sent; REQ-CHAT-171's gate, the live-run refusal and the
+   * rest are `prompt`'s, against the model the retry runs on. Refused as having nothing to retry only where no prompt was
+   * ever submitted. Until 2026-10-02 the retry was the renderer's: it searched its replica's resident window and re-sent
+   * the text alone (`docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`,
+   * `docs/defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md`).
+   */
+  retry(sessionId: SessionId): Result<TranscriptRow, { code: string; reason: string }> {
+    const s = this.live.get(sessionId);
+    if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
+    const last = lastSubmittedPrompt(s.dal, sessionId);
+    if (last === null) return err({ code: 'no-prompt', reason: 'No prompt has been submitted in this session, so there is nothing to retry.' });
+    const images = readBackAttachments(this.deps.sessionFilesDir(s.dal, sessionId), last.attachments);
+    if (!images.ok) return err({ code: 'attachment-unavailable', reason: `The last prompt was not retried, because its image ${images.name} could not be read back: ${images.reason}` });
+    return this.prompt(sessionId, last.text, images.inputs);
+  }
+
   /** REQ-SESSION-114..116: append first, then continue through the ordinary Run lifecycle. */
   prompt(sessionId: SessionId, prompt: string, inputs: readonly ImageAttachmentInput[] = []): Result<TranscriptRow, { code: string; reason: string }> {
     // ADR-0005: a lock the continue took is given back when it launches no run; a launched run's teardown releases it.
@@ -1454,7 +1514,7 @@ export class Sessions {
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const storedForSetup = s.dal.getSession(sessionId);
     const setup = this.setupFor(storedForSetup?.workspace_root ?? '', this.deps.attended?.() ?? false, sessionId, storedForSetup ? effectiveRootOf(storedForSetup).root : '', resumedPersona(s.dal, sessionId, false));
-    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     if (inputs.length > 0 && setup.value.model.config.model.acceptsImageInput !== true) return err({ code: 'image-input-unsupported', reason: 'The selected model does not declare image input support.' });
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
@@ -1480,6 +1540,27 @@ export class Sessions {
     // PD-ORCH-005 clause 4: where an iteration is open, the new message is the resumed root's next message.
     this.launchContinuation(s, prompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, attachments.content, undefined, { message: [{ kind: 'text', text: prompt }, ...attachments.content] });
     return ok(row.value);
+  }
+
+  /**
+   * A run of an existing session refused before it started (REQ-NOTIFY-061): at the confinement gate, the record stops
+   * describing the session as sandboxed and is published again, so the workspace indicator (REQ-SANDBOX-121) is gone
+   * beside the refusal notice. Every other refusal leaves the record as it was. Called by every path that would start a
+   * run of a live session: the prompt (and through it the retry and the authentication restarts), the continue, the
+   * plan decision and the restart on the fallback. Before 2026-10-02 nothing was written or published, and a confined
+   * session refused at the gate kept reading `sandbox: <backend>` (fin8's verifier, round 1).
+   */
+  private refusedAtStart(s: Live, refusal: StartRefusal): { readonly code: string; readonly reason: string } {
+    if (refusal.code === 'confinement') {
+      s.refusedConfinement = true;
+      s.owner.reconcile();
+    }
+    return { code: refusal.code, reason: refusal.reason };
+  }
+
+  /** The record's confinement fields while `refusedConfinement` holds (see `Live.refusedConfinement`); nothing otherwise. */
+  private confinementShown(sessionId: SessionId): { readonly sandboxed?: false; readonly sandboxBackend?: '' } {
+    return this.live.get(sessionId)?.refusedConfinement === true ? { sandboxed: false, sandboxBackend: '' } : {};
   }
 
   /**
@@ -1514,6 +1595,8 @@ export class Sessions {
     // REQ-GIT-019: a continuation of a bound session works in its tree (the caller already refused a missing one).
     const effectiveRoot = effectiveRootOf(storedRow).root;
     const permission = postureAtStart(runtime, this.deps.attended?.() ?? false);
+    // REQ-NOTIFY-061: a run of the session starts, so its own confinement fact is the record's again (`refusedAtStart`).
+    s.refusedConfinement = false;
     // REQ-SESSION-142: one log per run — the one `resume` opened closes when the first continuation ends, so
     // every continuation opens its own rather than writing into a closed one.
     s.log?.close();
@@ -2206,8 +2289,8 @@ export class Sessions {
     // 'continue' and 'double') — appends it to the todo again (REQ-ORCH-004; OQ-102's no-append covers only a request
     // held unfinished): the undecided case of OQ-103's "Nothing open to resume".
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, opts.withoutPaused === true));
-    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
-    const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? stored.session_id;
+    if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
+    const lastPrompt = latestRequestOf(s.dal, stored);
     const todo = parseTodoDocument(stored);
     if (!todo.ok) return todo;
     const payload = buildContinuationPayload(s.dal, stored, lastPrompt, todo.value);
@@ -2247,7 +2330,7 @@ export class Sessions {
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
-    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     const gone = missingWorktree(stored);
     if (gone) return err(gone);
     const todo = parseTodoDocument(stored);
@@ -2256,7 +2339,7 @@ export class Sessions {
     const held = this.holdForContinue(s);
     if (!held.ok) return err(held.error);
     hold.release = held.value.release;
-    const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((r) => r.kind === 'user')?.body ?? stored.session_id;
+    const lastPrompt = latestRequestOf(s.dal, stored);
     const payload = `${buildContinuationPayload(s.dal, stored, lastPrompt, todo.value)}\n\n${planSection(decided.decision, decided.plan, decided.changes)}`;
     beginning();
     /*
@@ -2286,7 +2369,8 @@ export class Sessions {
    *
    * Main keeps the "first failure of the session" bookkeeping (`apps/desktop/src/main/auth-fallback.ts`); this answers for one restart.
    * The restart re-submits the prompt as `prompt` does, so the transcript shows it sent again; the last prompt's
-   * attachments are not re-sent (the row keeps only their metadata).
+   * attachments are not re-sent (OQ-182's reading), though `lastSubmittedPrompt` — the reading it shares with the retry,
+   * over released rows too — returns them, and the retry (`retry`) does re-send them.
    */
   restartOnFallback(sessionId: SessionId): Result<AuthFallbackRestart, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);
@@ -2294,12 +2378,13 @@ export class Sessions {
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const failed = s.run?.failedEntryModel ?? null;
     if (failed === null) return err({ code: 'no-model-failure', reason: 'The session\'s last run did not end on a model call failing.' });
-    const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? '';
-    if (lastPrompt.trim() === '') return err({ code: 'no-prompt', reason: 'No prompt is recorded for this session.' });
+    const promptRead = this.lastPromptOf(s, sessionId);
+    if (!promptRead.ok) return err(promptRead.error);
+    const lastPrompt = promptRead.value;
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
-    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     const catalogue = setup.value.resilience?.catalogue ?? [];
     const fallback = setup.value.resilience?.fallbackModel ?? null;
     if (fallback === null) return err({ code: 'no-fallback', reason: 'No fallback model is configured.' });
@@ -2394,9 +2479,18 @@ export class Sessions {
     return s.memory;
   }
 
-  /** The newest submitted prompt of the session — the one a restart re-submits (REQ-NOTIFY-070/074/076) — or '' when none is recorded. */
-  private lastPromptOf(s: Live, sessionId: SessionId): string {
-    return [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user' && row.body.trim() !== '')?.body ?? '';
+  /**
+   * The text of the session's last submitted prompt — the one a restart re-submits (REQ-NOTIFY-070/074/076) — read by
+   * `lastSubmittedPrompt`, over released rows too; refused as `no-prompt` where there is no text to re-send. The restarts
+   * re-send the text alone (OQ-182's reading), so a last prompt of images alone is refused rather than sent empty, and the
+   * refusal says so: a prompt IS recorded, the restart does not re-send what it carries (an optional finding of fin8's
+   * verifier — it had read "No prompt is recorded for this session.").
+   */
+  private lastPromptOf(s: Live, sessionId: SessionId): Result<string, { readonly code: string; readonly reason: string }> {
+    const last = lastSubmittedPrompt(s.dal, sessionId);
+    if (last !== null && last.text.trim() !== '') return ok(last.text);
+    if (last !== null && last.attachments.length > 0) return err({ code: 'no-prompt', reason: 'The last prompt carries images only, which the restart does not re-send (OQ-182), so there is no text to restart with.' });
+    return err({ code: 'no-prompt', reason: 'No prompt is recorded for this session.' });
   }
 
   /**
@@ -2427,7 +2521,7 @@ export class Sessions {
       seen.add(e.key);
       models.push({ key: e.key, provider: e.provider, model: e.model.modelId });
     }
-    return ok({ failed: failed === null ? null : named(failed), active: named(active), models, lastPrompt: this.lastPromptOf(s, sessionId).trim() !== '' });
+    return ok({ failed: failed === null ? null : named(failed), active: named(active), models, lastPrompt: this.lastPromptOf(s, sessionId).ok });
   }
 
   /**
@@ -2447,8 +2541,9 @@ export class Sessions {
     const s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
-    const lastPrompt = this.lastPromptOf(s, sessionId);
-    if (lastPrompt.trim() === '') return err({ code: 'no-prompt', reason: 'No prompt is recorded for this session.' });
+    const promptRead = this.lastPromptOf(s, sessionId);
+    if (!promptRead.ok) return err(promptRead.error);
+    const lastPrompt = promptRead.value;
     const hold: HoldSlot = {};
     if (modelKey === null) {
       const restarted = this.relaunchAfterAuthFailure(s, sessionId, lastPrompt, hold, () => {
@@ -2460,7 +2555,7 @@ export class Sessions {
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
-    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     const resolved = setup.value.models?.(modelKey);
     if (!resolved?.ok) return err({ code: 'unknown-model', reason: resolved?.reason ?? `'${modelKey}' is not a configured model` });
     const catalogue = setup.value.resilience?.catalogue ?? [];
@@ -2573,14 +2668,14 @@ export class Sessions {
       return ok({ relaunched: false, cycle });
     }
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
-    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     const gone = missingWorktree(stored);
     if (gone) return err(gone);
     const todo = parseTodoDocument(stored);
     if (!todo.ok) return todo;
     const resolved = s.writer.resolvePlanGate(cycle, decision, 'idle', decision === 'approve', null);
     if (!resolved.ok) return err({ code: resolved.error.code, reason: 'reason' in resolved.error ? resolved.error.reason : resolved.error.code });
-    const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((r) => r.kind === 'user')?.body ?? stored.session_id;
+    const lastPrompt = latestRequestOf(s.dal, stored);
     const payload = `${buildContinuationPayload(s.dal, s.dal.getSession(sessionId)!, lastPrompt, todo.value)}\n\n${planSection(decision, text, changes)}`;
     // REQ-ORCH-004 / REQ-ORCH-154 (OQ-104): a plan decision states no new top-level task — the held run's todo already
     // carries the gated work — so the relaunch appends none; appending the last request again would duplicate it. After

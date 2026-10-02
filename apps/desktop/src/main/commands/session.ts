@@ -24,7 +24,7 @@ export function confinementRefusalNotice(r: { readonly headline: string; readonl
  */
 export function sessionCommands(
   ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services'>,
-): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.reconcile' | 'session.pageOlder'> {
+): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.retry' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.reconcile' | 'session.pageOlder'> {
   const { capturing, clocks, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runFailures, runHost, services } = ctx;
   return {
     'session.continue': async (req) => {
@@ -192,6 +192,13 @@ export function sessionCommands(
       // REQ-NOTIFY-061: a continuation refused at the confinement gate never reached a run; it is reported as a start's is.
       if (r.kind === 'refused' && r.code === 'session.confinement') { void notices.report(confinementRefusalNotice(r)); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
       return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be recorded');
+    },
+    'session.retry': async (req) => {
+      // REQ-NOTIFY-045 (OQ-178): the engine resubmits the last submitted prompt with its images; a refusal carries its words.
+      const r = await runHost.request({ kind: 'session.retry', sessionId: req.sessionId }, millis(10_000));
+      // REQ-NOTIFY-061: a retry refused at the confinement gate never reached a run; it is reported as a prompt's is.
+      if (r.kind === 'refused' && r.code === 'session.confinement') { void notices.report(confinementRefusalNotice(r)); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
+      return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be retried');
     },
     'session.readAttachment': async (req) => {
       const r = await runHost.request(req, millis(10_000));

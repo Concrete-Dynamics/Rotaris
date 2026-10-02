@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
-import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
+import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { migrateStore, openStore, RESIDENT_ROW_CAP, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRef, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, ResilienceMemory, RUN_CONFIG_DEFAULTS, Sessions, toSessionRecord, type CatalogueEntry, type DelegationOps, type ModelChoice, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
+import { persistAttachments } from '../attachments.js';
 import { childModelKeys, entryModelKeys } from '../autopsy.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000d') as MachineId;
@@ -1860,6 +1861,70 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       const row = systemRows(sid).find((b) => b.startsWith('Entry model switched to a1'))!;
       expect(row).toBe('Entry model switched to a1, but c1, chosen for a/a1 during an earlier wait, stands for the rest of the session: the entry agent runs on c1 from the next iteration.');
       expect(row).not.toContain('it applies from the next iteration');
+    });
+  });
+  /*
+   * REQ-NOTIFY-069/070/074/076 with REQ-SESSION-192: the authentication restarts and the recovery dialog read the session's
+   * last prompt over released rows too (`lastSubmittedPrompt`, through `lastPromptOf`). Before the repair of
+   * `docs/defects/fixed/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md`
+   * they searched the resident window only, so once the prompt had been released the restart refused with "No prompt is
+   * recorded for this session." and the dialog said no prompt was recorded. fin8's verifier found nothing pinned it.
+   */
+  describe('REQ-NOTIFY-069/070/074/076 with REQ-SESSION-192: the restarts read a prompt that has been released', () => {
+    const unauthorized = () => failing(modelError({ code: 'http', status: 401, headline: 'Unauthorized', providerMessage: 'Incorrect API key provided', transient: false }));
+    const catalogue = () => [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    /** A session at rest `paused` whose prompt lies RESIDENT_ROW_CAP + 10 rows back (released to a page), continued, its run failing on a 401. */
+    const failedReleased = async (raw: string, opts: Opts = {}, prompt: { readonly body: string; readonly attachments?: string } = { body: 'the released prompt' }) => {
+      const sid = asSessionId(raw);
+      dal.upsertSession({ session_id: raw, execution_status: 'paused', workspace_root: 'C:/ws', created_at: '2026-10-02T10:00:00.000Z', updated_at: '2026-10-02T10:05:00.000Z', worktree: null });
+      dal.transaction(() => {
+        dal.appendRow(sid, 0, 'user', true, prompt.body, '2026-10-02T10:00:00.000Z', prompt.attachments === undefined ? {} : { attachments: prompt.attachments });
+        for (let i = 1; i <= RESIDENT_ROW_CAP + 10; i++) dal.appendRow(sid, i, i % 2 === 0 ? 'agent' : 'tool', true, `row ${i}`, '2026-10-02T10:01:00.000Z');
+        while (dal.residentCount(sid) > RESIDENT_ROW_CAP) dal.releaseOldestPage(sid, dal.nextPageNumber(sid));
+      });
+      expect(dal.residentRows(sid).some((r) => r.kind === 'user')).toBe(false);
+      const s = sessionsWith((_p, turn) => (turn === 1 ? unauthorized() : answer('restarted')), { catalogue: catalogue(), ...opts });
+      const resumed = s.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      const continued = s.sessions.continueSession(sid, 'continue');
+      if (!continued.ok) throw new Error(continued.error.reason);
+      expect((await s.sessions.running(sid)!).status).toBe('failed');
+      return { ...s, sid };
+    };
+    const userBodies = (sid: SessionId) => dal.rowsBefore(sid, dal.nextRowIndex(sid), 1_000_000).filter((r) => r.kind === 'user').map((r) => r.body).reverse();
+
+    it('the recovery dialog says a prompt is recorded, and the fallback restart re-sends the released prompt\'s text', async () => {
+      const { sessions, client, sid } = await failedReleased('RL1', { fallbackModel: { model: F1, thinking: 'unset' } });
+      const facts = sessions.authRecoveryFacts(sid);
+      if (!facts.ok) throw new Error(facts.error.reason);
+      expect(facts.value.lastPrompt).toBe(true);
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(restarted.error.reason);
+      expect(restarted.value.prompt).toBe('the released prompt');
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
+      expect(userBodies(sid)).toEqual(['the released prompt', 'the released prompt']);
+    });
+
+    it('the re-authenticated restart (no model chosen) re-sends the released prompt\'s text', async () => {
+      const { sessions, sid } = await failedReleased('RL2');
+      const restarted = sessions.restartAfterAuthFailure(sid, null);
+      if (!restarted.ok) throw new Error(restarted.error.reason);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(userBodies(sid)).toEqual(['the released prompt', 'the released prompt']);
+    });
+
+    it('a last prompt of images alone is refused by name — a prompt is recorded, its images are not re-sent (OQ-182) — never as "no prompt recorded"', async () => {
+      const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1]);
+      const saved = persistAttachments(join(dir, 'sessions', 'RL3'), [{ name: 'shot.png', mediaType: 'image/png', size: png.length, base64: png.toString('base64') }]);
+      if (!saved.ok) throw new Error(saved.reason);
+      const { sessions, sid } = await failedReleased('RL3', { fallbackModel: { model: F1, thinking: 'unset' } }, { body: '', attachments: JSON.stringify(saved.attachments) });
+      const reason = 'The last prompt carries images only, which the restart does not re-send (OQ-182), so there is no text to restart with.';
+      expect(sessions.restartOnFallback(sid)).toEqual({ ok: false, error: { code: 'no-prompt', reason } });
+      expect(sessions.restartAfterAuthFailure(sid, null)).toEqual({ ok: false, error: { code: 'no-prompt', reason } });
+      const facts = sessions.authRecoveryFacts(sid);
+      if (!facts.ok) throw new Error(facts.error.reason);
+      expect(facts.value.lastPrompt).toBe(false);
     });
   });
 });

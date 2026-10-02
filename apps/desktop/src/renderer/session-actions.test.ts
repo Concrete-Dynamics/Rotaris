@@ -236,13 +236,17 @@ describe('PD-ORCH-005 clauses 3 and 15: the stop comes to rest, and the confirme
 /*
  * REQ-NOTIFY-045 with REQ-NOTIFY-030 and REQ-NOTIFY-066 (OQ-178): the notice's retry, which had no target until the repair
  * of `docs/defects/fixed/the-retry-run-notice-action-has-no-target.md` — the window logged that and dispatched nothing.
+ * Since the repair of `docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md` and
+ * `docs/defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md`, a blank draft is the engine's to retry
+ * (`session.retry`, `Sessions.retry` in `packages/engine/src/last-prompt.test.ts`): the window no longer searches its replica.
  */
-describe('REQ-NOTIFY-045: a notice\'s retry resubmits the draft, or the session\'s last submitted prompt', () => {
+describe('REQ-NOTIFY-045: a notice\'s retry resubmits the draft, or asks the engine for the session\'s last submitted prompt', () => {
   const row = (index: number, kind: string, body: string): TranscriptRow => ({ index, kind, settled: true, body, at: '2026-10-02T09:00:00.000Z', ts: '09:00:00' });
   function retrying(rows: readonly TranscriptRow[], sessionId: string | null = 'S1', reply: CommandOutcome = { ok: true, value: null }) {
     const sent: CommandRequest[] = [];
     const a = createSessionActions({
       bridge: { command: async (req) => { sent.push(req); return reply; } },
+      // `rows` is what the window's replica holds; the retry must not read it (it is the resident window only).
       replica: { getState: () => ({ sessionId, follow: () => undefined, rows }) },
     });
     return { a, sent };
@@ -255,22 +259,28 @@ describe('REQ-NOTIFY-045: a notice\'s retry resubmits the draft, or the session\
     expect(sent).toEqual([{ kind: 'session.prompt', sessionId: 'S1', prompt: 'the draft I kept' }]);
   });
 
-  it('a blank draft resubmits the session\'s newest submitted prompt, not an earlier one and not a system row', async () => {
+  it('a blank draft asks the engine to retry the followed session\'s last submitted prompt — the window sends no prompt text of its own', async () => {
     const { a, sent } = retrying(history);
     expect(await a.retryRun('  \n ')).toEqual({ ok: true, resubmitted: 'last-prompt' });
-    expect(sent).toEqual([{ kind: 'session.prompt', sessionId: 'S1', prompt: 'the prompt that failed' }]);
+    expect(sent).toEqual([{ kind: 'session.retry', sessionId: 'S1' }]);
+    // A prompt the resident window has released is not in the replica at all; the engine still has it.
+    const released = retrying([row(6000, 'agent', 'a late answer')]);
+    expect(await released.a.retryRun('')).toEqual({ ok: true, resubmitted: 'last-prompt' });
+    expect(released.sent).toEqual([{ kind: 'session.retry', sessionId: 'S1' }]);
   });
 
-  it('nothing to resubmit, or no session followed, is a refusal that sends nothing and starts nothing', async () => {
-    const empty = retrying([row(0, 'system', 'nothing yet')]);
-    expect(await empty.a.retryRun('')).toEqual({ ok: false, reason: 'There is no draft and no submitted prompt in this session to retry.' });
-    expect(empty.sent).toEqual([]);
+  it('no session followed is a refusal that sends nothing and starts nothing', async () => {
     const none = retrying(history, null);
     expect(await none.a.retryRun('a draft')).toEqual({ ok: false, reason: 'No session is loaded.' });
+    expect(await none.a.retryRun('')).toEqual({ ok: false, reason: 'No session is loaded.' });
     expect(none.sent).toEqual([]);
   });
 
-  it('the engine\'s refusal is the retry\'s reason', async () => {
+  it('the engine\'s refusal is the retry\'s reason — nothing to retry, a missing image, a live run', async () => {
+    const nothing = retrying([], 'S1', { ok: false, code: 'session.no-prompt', headline: 'The prompt could not be retried', detail: 'The prompt could not be retried: No prompt has been submitted in this session, so there is nothing to retry.' });
+    expect(await nothing.a.retryRun('')).toEqual({ ok: false, reason: 'The prompt could not be retried: No prompt has been submitted in this session, so there is nothing to retry.' });
+    const image = retrying(history, 'S1', { ok: false, code: 'session.attachment-unavailable', headline: 'The prompt could not be retried', detail: 'The prompt could not be retried: The last prompt was not retried, because its image shot.png could not be read back: Image is no longer available.' });
+    expect(await image.a.retryRun('')).toEqual({ ok: false, reason: 'The prompt could not be retried: The last prompt was not retried, because its image shot.png could not be read back: Image is no longer available.' });
     const { a } = retrying(history, 'S1', { ok: false, code: 'session.run-active', headline: 'A run is already active.', detail: 'A run is already active.' });
     expect(await a.retryRun('')).toEqual({ ok: false, reason: 'A run is already active.' });
   });

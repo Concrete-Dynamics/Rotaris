@@ -13,9 +13,9 @@ specification says "the run's entry model", and REQ-MONITOR-143 says a switch af
 records the override". Whether a continuation is the same run for this purpose, and so inherits the override, or the
 row should say the switch ends with the run, is for the owner, raised with the repair.
 
-## Status — 2026-10-02 (fin8, ladder-overrides, task 2): raised as OQ-183; the reader's share repaired; the product part open
+## Status — 2026-10-02 (fin8, ladder-overrides, task 2): raised as OQ-185 (OQ-183 on the branch, renumbered at its merge); the reader's share repaired; the product part open
 
-- **Raised:** [OQ-183](../architecture/open-questions.md) asks the owner whether a mid-run switch of the entry model or
+- **Raised:** [OQ-185](../architecture/open-questions.md) asks the owner whether a mid-run switch of the entry model or
   reasoning level reaches the session's next run. The build proceeds under "a switch ends with its run", as it stands.
   The product part of this note waits on that ruling and stays open: no agent rules it.
 - **Repaired, the reader's share:** the autopsy reader no longer carries a switched key across a continuation whose

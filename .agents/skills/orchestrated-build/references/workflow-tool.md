@@ -54,12 +54,18 @@ every bundle's ending, acceptance); the journal holds every agent's.
   - each has its own `id`, so its own branches and integration worktree (`<repo>-wt-integ-<id>`), and its own
     scratchpad directory (SKILL.md §3: `plan.json`, `RUNS.txt`, rendered scripts) and check-in;
   - each takes `"acceptance": { "rounds": 0 }`, because every plan shares the profile's acceptance worktree;
-  - when both have settled, one acceptance-only plan (`"bundles": []`, the rounds a single plan would have had,
-    2 by default) runs the acceptance over merged main, and its repairs go through the same loop;
+  - when both have settled and a fresh triage has run (SKILL.md §5), one acceptance-only plan (`"bundles": []`, the
+    rounds a single plan would have had, 2 by default) runs the acceptance over merged main, and its repairs go
+    through the same loop;
   - the acceptance live runs stay one at a time, in the acceptance-only plan; a builder's short `--only=<scenario>`
     run may meet one from the other plan, and two live runs leave each other's sandboxes alone
     (`references/live-runs.md`), competing only for CPU and the endpoint.
   Pushes from the two meet at `origin/main` (below).
+- **A bundle that builds on another plan's unmerged changes** is a later plan, launched when what it builds on has
+  merged, and the orchestrator holds it until then. A triage marks such a bundle with the plan it waits on, in the
+  triage's own list (triage 4 wrote `after: ["fin6"]`); the mark never goes into `plan.json`, where `after` names
+  bundles of the same plan only and `render` refuses any other. On 2026-10-02 fin8's `ladder-overrides` and
+  `focus-bound-recovery` were held so while fin6's `auth-recovery` bundles had yet to merge.
 - Merges are serialized with a promise-chain lock, proof sweeps with another. Two workflows, or a workflow and you,
   coordinate through `origin/main`: a push that is not a fast-forward is rejected, and whoever is rejected fetches
   and merges. Never run two runs of one `RUNS.txt` at once.

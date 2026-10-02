@@ -29,6 +29,9 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *   4c. persona    — the inspector pops out the run-level agent; the window's Cancel on the run's own instance confirmed: every
  *                    snapshot after the confirmation was handled reads the instance's state `cancelling` or the run at rest,
  *                    never `running` (acceptance A35, REQ-MONITOR-127/130, REQ-SHELL-075 (a)).
+ *   4d. inspector  — the Workspace inspector following the run-level agent, its Cancel confirmed ("Cancel the run?"): every
+ *                    snapshot after the confirmation was handled whose run header reads `Cancelling…` reads the meta line
+ *                    `cancelling · …`, never `running · …` (REQ-MONITOR-127/130/052, OQ-165's reading).
  *   5. open        — pop-out off: Open pins the agent in the Workspace inspector; on: one window per persona, 820×620,
  *                    reused for a second instance, hidden on close, shown again; a new session destroys it.
  *   6. inspector   — following the latest author, pinned on selection, chips in one order across a state change, Steer
@@ -399,6 +402,49 @@ const s4c = scenario('cancel-run-persona');
   const cancellingSamples = samples.filter((x) => x.state === 'cancelling').length;
   expect(!['running', 'waiting', 'starting', 'pausing', 'cancelling', 'background'].includes(row.execution_status), `the cancelled run ended ${row.execution_status} (${row.stop_reason})`);
   results.cancelRunPersona = { following, window: windows[0] ?? null, before: { name: field(before, 'persona-agent-name'), state: field(before, 'persona-agent-state') }, dialog, samples, stillShowingDialog: pending, cancellingSamples, finalStatus: row.execution_status, stopReason: row.stop_reason, png: join(output, 'cancel-run-persona-window.png') };
+}
+
+// 4d. Cancel the run from the Workspace inspector (REQ-MONITOR-127/130/052, OQ-165's reading;
+// docs/defects/fixed/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md): the inspector
+// following the run-level agent, its Cancel confirmed as "Cancel the run?". The run header and the meta line are read in one
+// snapshot: whenever the header reads `Cancelling…` the meta line reads `cancelling · …`. Before the repair the meta line read
+// the agent vocabulary alone, `running · …`, beside the header's `Cancelling…` until the record at rest arrived.
+const s4d = scenario('cancel-run-inspector');
+{
+  const SAMPLES = [6610, 6620, 6630, 6640, 6660, 6700, 6800, 7000, 8000, 9000];
+  // One selector list per sample: the confirmation, the run header and the meta line read in the same instant (see 4b).
+  const SNAPSHOT = '[data-testid="cancel-run-confirm"], [data-testid="run-state"], [data-testid="inspector-meta"]';
+  const r = await launch('cancel-run-inspector', s4d, {
+    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel the run from the inspector',
+    ROTARIS_CAPTURE_CLICKS: '[data-testid="inspector-cancel"]@6000;;[data-testid="cancel-run-confirm"] .btn-danger@6600',
+    ROTARIS_CAPTURE_PROBE_AT: ['[data-testid="inspector-name"]@5800', `${SNAPSHOT}@5800`, '[data-testid="cancel-run-confirm"]@6300', ...SAMPLES.map((at) => `${SNAPSHOT}@${at}`)].join(';;'),
+    ROTARIS_CAPTURE_PNG_AT: `${join(output, 'cancel-run-inspector.png')}@6640`,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
+  }, { timeout: 200_000 });
+  const db = open(s4d); const row = session(db); db.close();
+  const following = probesAt(r.log, 5800, '[data-testid="inspector-name"]')?.[0]?.text ?? null;
+  expect(following === 'orchestrator', `the inspector did not follow the run-level agent at 5.8 s: "${following}"`);
+  const field = (snap, id) => snap?.find((p) => p.data['data-testid'] === id)?.text ?? null;
+  const before = probesAt(r.log, 5800, SNAPSHOT);
+  expect((field(before, 'inspector-meta') ?? '').startsWith('running · '), `the run-level agent's meta line before the cancel: ${JSON.stringify(before)}`);
+  const dialog = probesAt(r.log, 6300, '[data-testid="cancel-run-confirm"]')?.[0]?.text ?? '';
+  expect(/Cancel the run\?/.test(dialog), `the inspector's Cancel on the run-level agent did not ask "Cancel the run?": "${dialog}" (REQ-MONITOR-126)`);
+  const confirmed = r.log.indexOf('capture: clicked "[data-testid="cancel-run-confirm"] .btn-danger"');
+  expect(confirmed >= 0, 'the confirm click was not recorded');
+  const afterConfirm = r.log.slice(confirmed);
+  const snapshots = SAMPLES.map((at) => ({ at, snap: probesAt(afterConfirm, at, SNAPSHOT) })).filter((x) => x.snap !== null);
+  const pending = snapshots.filter((x) => field(x.snap, 'cancel-run-confirm') !== null).map((x) => x.at);
+  const samples = snapshots.filter((x) => field(x.snap, 'cancel-run-confirm') === null).map(({ at, snap }) => ({ at, header: field(snap, 'run-state'), meta: field(snap, 'inspector-meta') })).filter((x) => x.header !== null && x.meta !== null);
+  expect(samples.length >= 3, `fewer than three snapshots after the confirmation was handled: ${JSON.stringify(samples)} (still showing the dialog: ${JSON.stringify(pending)})`);
+  // REQ-MONITOR-130: whichever surface asks, the same state — the meta line never reads the run-level agent running beside it.
+  const split = samples.filter((x) => x.header === 'Cancelling…' && !x.meta.startsWith('cancelling · '));
+  expect(split.length === 0, `the inspector's meta line read another state beside the run header's Cancelling…: ${JSON.stringify(split)} (REQ-MONITOR-127/130/052)`);
+  const running = samples.filter((x) => x.meta.startsWith('running · '));
+  expect(running.length === 0, `the inspector's meta line read the cancelled run's agent running after the confirm: ${JSON.stringify(running)} (REQ-MONITOR-127/130)`);
+  // Whether a snapshot lands inside the cancel's window is host timing: recorded, not asserted.
+  const cancellingSamples = samples.filter((x) => x.header === 'Cancelling…').length;
+  expect(!['running', 'waiting', 'starting', 'pausing', 'cancelling', 'background'].includes(row.execution_status), `the cancelled run ended ${row.execution_status} (${row.stop_reason})`);
+  results.cancelRunInspector = { following, before: { header: field(before, 'run-state'), meta: field(before, 'inspector-meta') }, dialog, samples, stillShowingDialog: pending, cancellingSamples, finalStatus: row.execution_status, stopReason: row.stop_reason, png: join(output, 'cancel-run-inspector.png') };
 }
 
 // 5. Open an agent under both preferences; the window's lifecycle; a new session destroys it.

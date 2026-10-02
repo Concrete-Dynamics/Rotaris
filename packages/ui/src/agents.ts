@@ -398,8 +398,14 @@ export function stalledText(seconds: number | null): string | null {
   return seconds === null ? null : `stalled\u00a0${Math.max(0, Math.floor(seconds))}s`;
 }
 
-/** REQ-MONITOR-052/069: the meta line and the context line, the elapsed fallback an em-dash / a hyphen; a stalled agent says so. */
-export function metaLine(agent: AgentRecord, elapsed: string | null): string {
+/**
+ * REQ-MONITOR-052/069: the meta line and the context line, the elapsed fallback an em-dash / a hyphen; a stalled agent says so.
+ * Its `{state}` is `agentStateLabel`'s over the shown session (REQ-MONITOR-127/130, OQ-165's reading): the run-level agent
+ * reads the run's `cancelling` while it is live and the session reads it, as a persona window does. Until 2026-10-01 the line
+ * read `presentationState` alone, so beside the run header's `Cancelling…` it read `running`
+ * (docs/defects/fixed/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md).
+ */
+export function metaLine(agent: AgentRecord, session: Pick<SessionRecord, 'executionStatus'> | null, elapsed: string | null): string {
   const stalled = stalledText(agent.stalledSeconds);
-  return `${agent.presentationState} · ${elapsed ?? '—'} · ${countNoun(agent.toolCalls, 'tool call')}${stalled === null ? '' : ` · ${stalled}`}`;
+  return `${agentStateLabel(agent, session)} · ${elapsed ?? '—'} · ${countNoun(agent.toolCalls, 'tool call')}${stalled === null ? '' : ` · ${stalled}`}`;
 }

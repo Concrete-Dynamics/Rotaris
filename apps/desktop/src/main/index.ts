@@ -506,7 +506,6 @@ async function main(): Promise<void> {
    * REQ-NOTIFY-060..070 — the run failure's classes and their recoveries. The run channel is the run host's link; the
    * configuration service is the workspace service of the window that follows the session (REQ-NOTIFY-069).
    */
-  const reauthWindows = new Map<string, MainWindowState>();
   const failureRecovery = createFailureRecovery({
     notices,
     restartOnFallback: async (sessionId) => {
@@ -519,14 +518,14 @@ async function main(): Promise<void> {
       return owner !== undefined && owner.workspace !== '(no workspace)' && services.has(canonicalPath(owner.workspace));
     },
     /**
-     * REQ-NOTIFY-071 / ADR-0048: the prompt is the window's, so it goes to the window that follows the session (the
-     * approval's rule, `ownerOf`) on channel 13 — and the close goes to the same window, wherever focus has moved since.
+     * REQ-NOTIFY-071 / ADR-0048 with REQ-NOTIFY-030: the prompt is window-level and moves with the focused session, so its
+     * opening and its closing go to every main window on channel 13; each holds the prompts by session and draws only the
+     * one for the session it follows. A window that mounts later reads the open ones (`reauth.read`).
      */
     publishPrompt: (sessionId, prompt) => {
-      const owner = prompt === null ? (reauthWindows.get(sessionId) ?? ownerOf(sessionId)) : (ownerOf(sessionId) ?? activeWindow());
-      if (prompt === null) reauthWindows.delete(sessionId); else if (owner) reauthWindows.set(sessionId, owner);
-      if (owner && !owner.win.isDestroyed()) owner.win.webContents.send(CHANNEL.reauthPrompt, { v: CONTRACT_SCHEMA_VERSION, prompt });
-      log(`authentication recovery: re-authentication prompt ${prompt === null ? 'closed' : 'opened'} for session ${sessionId}${owner ? ` in main window ${owner.wcId}` : ' (no main window)'}`);
+      const windows = orderedMainWindows().filter((w) => !w.win.isDestroyed());
+      for (const w of windows) w.win.webContents.send(CHANNEL.reauthPrompt, { v: CONTRACT_SCHEMA_VERSION, sessionId, prompt });
+      log(`authentication recovery: re-authentication prompt ${prompt === null ? 'closed' : 'opened'} for session ${sessionId} (sent to ${windows.length} main window(s))`);
     },
     describeProvider: (id) => {
       const known = providers.allKnownIds().includes(id);

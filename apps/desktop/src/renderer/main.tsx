@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripRunItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripRunItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -730,13 +730,22 @@ function useConfinement() {
  * state too, so a surface that acts is never a frame behind the one that listens.
  */
 /**
- * REQ-NOTIFY-071 / REQ-NOTIFY-078 (the 401 note's part B) — this window's non-modal re-authentication prompt, PUSHED by
- * main on channel 13 when a fallback restart opens it and when it closes. The two answers are main's to apply: the window
- * names the session the prompt was opened for and nothing else, and the key travels once, to the credential store.
+ * REQ-NOTIFY-071 / REQ-NOTIFY-078 (the 401 note's part B) — the non-modal re-authentication prompts, PUSHED by main on
+ * channel 13 to every main window as each opens and closes (and read once at mount, `reauth.read`). The window holds them
+ * by session and draws the followed session's alone (REQ-NOTIFY-030). The two answers are main's to apply: the window names
+ * the session the drawn prompt was opened for and nothing else, and the key travels once, to the credential store.
  */
 function useReauthPrompt() {
-  const [prompt, setPrompt] = useState<ReauthPromptState | null>(null);
-  useEffect(() => bridge.onReauthPrompt((p) => setPrompt((p as { prompt: ReauthPromptState | null }).prompt)), []);
+  // REQ-NOTIFY-030: held by session, drawn for the followed one only — a focus change moves the prompt with it.
+  const [prompts, setPrompts] = useState<ReauthPrompts>(() => new Map());
+  useEffect(() => bridge.onReauthPrompt((p) => {
+    const { sessionId, prompt } = p as { sessionId: string; prompt: ReauthPromptState | null };
+    setPrompts((held) => applyReauthPublish(held, sessionId, prompt));
+  }), []);
+  // A reload or a new window draws the prompts that opened before it mounted.
+  useEffect(() => { queueMicrotask(() => { void bridge.command({ kind: 'reauth.read' }).then((r) => { if (r.ok) setPrompts((held) => seedReauthPrompts(held, (r.value as { prompts: ReauthPromptState[] }).prompts)); }); }); }, []);
+  const followed = useStore(replica, (s) => s.sessionId);
+  const prompt = reauthPromptFor(prompts, followed);
   const onSubmit = useCallback(async (apiKey: string): Promise<ReauthSubmitResult> => {
     if (prompt === null) return { ok: false, message: 'No re-authentication prompt is open.' };
     const r = await bridge.command({ kind: 'reauth.submit', sessionId: prompt.sessionId, apiKey });
@@ -746,7 +755,7 @@ function useReauthPrompt() {
     if (prompt === null) return;
     const r = await bridge.command({ kind: 'reauth.dismiss', sessionId: prompt.sessionId });
     // A prompt main no longer holds is closed here too, so a stale one never stands on screen.
-    if (!r.ok) setPrompt(null);
+    if (!r.ok) setPrompts((held) => applyReauthPublish(held, prompt.sessionId, null));
   }, [prompt]);
   return { prompt, onSubmit, onDismiss };
 }
@@ -1320,6 +1329,10 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
       onAction={dispatchNoticeAction}
       acknowledgements={acknowledgements}
       onOpenSessions={() => { void loadSessions(); }}
+      // REQ-NOTIFY-071 / ADR-0048: the re-authentication prompt, window-level and non-modal — drawn in the shell's
+      // rail-and-view region, below the title bar and the notice slot, so no window control and no notice answer is
+      // under it; the composer and every view stay usable while it is open. It is the followed session's (REQ-NOTIFY-030).
+      windowPanel={reauth.prompt !== null ? <ReauthPrompt key={reauth.prompt.sessionId} prompt={reauth.prompt} onSubmit={reauth.onSubmit} onDismiss={reauth.onDismiss} /> : null}
     />
     {/*
       * Part AS — ADR-0064 / REQ-WORKSPACE-106: a WINDOW-level dialog, mounted beside the shell rather than
@@ -1331,12 +1344,6 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
     {projectSetup !== null && initialization.state !== null && (
       <ProjectSetupDialog state={initialization.state} auto={projectSetup === 'auto'} onInitialize={initialization.onInitialize} onSkip={initialization.onSkip} onClose={closeProjectSetup} />
     )}
-    {/*
-      * REQ-NOTIFY-071 / ADR-0048: the re-authentication prompt, window-level and non-modal like the setup dialog above
-      * it in this list — beside the shell, no backdrop — so the run continuing on the fallback, the composer and every
-      * view stay usable while it is open.
-      */}
-    {reauth.prompt !== null && <ReauthPrompt prompt={reauth.prompt} onSubmit={reauth.onSubmit} onDismiss={reauth.onDismiss} />}
     {browserOpen && (
       <SessionBrowser sessions={browserSessions} loading={browserLoading} error={browserError} onOpen={openSession} onDismiss={() => setBrowserOpen(false)}
         onRefresh={refreshSessions}

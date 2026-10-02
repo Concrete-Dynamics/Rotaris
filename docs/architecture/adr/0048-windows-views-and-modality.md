@@ -330,10 +330,18 @@ REQ-NOTIFY-071, REQ-NOTIFY-078. Found nothing wrong with the decision.*
 The Context names two non-modal window-level surfaces, the project-setup consent dialog and the re-authentication prompt;
 only the first had been built. The second is built the same way the Decision states the level — "an in-window panel
 that does not trap focus and leaves the rest navigable": `packages/ui/src/ReauthPrompt.tsx`, `role="dialog"` with no
-`aria-modal` and no backdrop, mounted beside the shell next to `ProjectSetupDialog` and positioned as it is (fixed, its
-own corner, z-index 40, below an application-modal backdrop). It is fed by main on its own channel (`reauth:prompt`,
-channel 13) to the one window that follows the session. Measured in the built app by `resilience-proof`'s
-`auth-fallback` scenario with the prompt open: the composer is the element under its own centre, takes the focus and is
-enabled, and the prompt carries no `aria-modal`. Not measured: Escape, which this surface does not answer (only its
+`aria-modal` and no backdrop, ~~mounted beside the shell next to `ProjectSetupDialog` and positioned as it is (fixed, its
+own corner, z-index 40, below an application-modal backdrop)~~ — **falsified the same day**: that corner is the title
+bar's right end and the notice slot below it, and a panel open until answered covered the session browser, minimise,
+maximise, close and the notice's dismissal (the verifier's `elementFromPoint` probe in the built app). It is now drawn in
+AppShell's `windowPanel` slot inside the rail-and-view region (absolute, z-index 40, below an application-modal
+backdrop), so neither lies under it whatever the notice's height; it overlays the view's top-right corner (in the
+Workspace view, the inspector's persona and agent-model fields, recorded by the proof as `underPrompt`). The decision
+holds — "leaves the rest navigable" is what the first placement broke. It is fed by main on its own channel
+(`reauth:prompt`, channel 13), ~~to the one window that follows the session~~ — also corrected: to every main window,
+each drawing the followed session's prompt alone (REQ-NOTIFY-030), with `reauth.read` for a window that mounts later.
+Measured in the built app by `resilience-proof`'s `auth-fallback` scenario with the prompt open: the composer is the
+element under its own centre, takes the focus and is enabled, the prompt carries no `aria-modal`, and every title-bar and
+notice-slot button is the element under its own centre (`chromeUsable`). Not measured: Escape, which this surface does not answer (only its
 two buttons close it — the dismissal keeps the fallback, REQ-NOTIFY-071), and REQ-NOTIFY-079's rule that the modal
 recovery dialog closes it, since that dialog is not built (part C).

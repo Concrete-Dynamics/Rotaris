@@ -109,6 +109,8 @@ export interface FailureRecovery {
   clearFallback(sessionId: string): void;
   /** The prompt open for this session, if any. */
   promptOf(sessionId: string): ReauthPrompt | undefined;
+  /** Every prompt open now, for a window that mounts after they opened (a reload, a new window). */
+  openPrompts(): readonly ReauthPrompt[];
   /** REQ-NOTIFY-078: the prompt submitted, with the key typed into it (empty for none). */
   submitPrompt(sessionId: string, apiKey: string): Promise<ReauthSubmitResult>;
   /** REQ-NOTIFY-071: the prompt dismissed — the fallback is kept. */
@@ -162,6 +164,7 @@ export function createFailureRecovery(deps: FailureRecoveryDeps): FailureRecover
     fallbackOf: (sessionId) => attempted.get(sessionId),
     clearFallback: (sessionId) => { attempted.delete(sessionId); },
     promptOf: (sessionId) => prompts.get(sessionId),
+    openPrompts: () => [...prompts.values()],
     async submitPrompt(sessionId, apiKey) {
       const prompt = prompts.get(sessionId);
       if (!prompt) return { ok: false, message: 'No re-authentication prompt is open for this session.' };
@@ -174,12 +177,15 @@ export function createFailureRecovery(deps: FailureRecoveryDeps): FailureRecover
           return { ok: false, message: saved.message };
         }
       }
-      attempted.delete(sessionId);
       const repinned = await deps.repinPrimary(sessionId, prompt.primary).catch((cause: unknown) => ({ ok: false as const, reason: `the run host did not answer (${String(cause)})` }));
       if (!repinned.ok) {
+        // The primary was not re-pinned, so the session is still on the fallback: the bookkeeping stands, and a further
+        // authentication failure there is the fallback's, which is not tried again (REQ-NOTIFY-075).
         deps.notices.acknowledge('fail', `${pairLabel(prompt.primary)} could not be re-pinned`, repinned.reason);
         return { ok: false, message: repinned.reason };
       }
+      // REQ-NOTIFY-078: cleared once the primary is re-pinned, so a further fallback attempt is available.
+      attempted.delete(sessionId);
       closePrompt(sessionId);
       const ack = reauthAcknowledgement(prompt, repinned.applies);
       deps.notices.acknowledge('ok', ack.title, ack.body);

@@ -34,8 +34,13 @@ export const ReauthPromptSchema = z.object({
 });
 export type ReauthPrompt = z.infer<typeof ReauthPromptSchema>;
 
-/** Channel 13: the window's prompt, or null when it closes. */
-export const ReauthPromptPublishSchema = z.object({ v: z.literal(CONTRACT_SCHEMA_VERSION), prompt: ReauthPromptSchema.nullable() });
+/**
+ * Channel 13: one session's prompt as it opens, or null when it closes. It goes to every main window, and each window
+ * holds the prompts by session and draws only the one for the session it follows — REQ-NOTIFY-030: changing the focused
+ * session moves every recovery affordance with it, so another session's prompt never stands over the focused one and
+ * comes back when its session is focused again, in whichever window.
+ */
+export const ReauthPromptPublishSchema = z.object({ v: z.literal(CONTRACT_SCHEMA_VERSION), sessionId: z.string().min(1), prompt: ReauthPromptSchema.nullable() });
 export type ReauthPromptPublish = z.infer<typeof ReauthPromptPublishSchema>;
 
 /**
@@ -46,6 +51,8 @@ export type ReauthPromptPublish = z.infer<typeof ReauthPromptPublishSchema>;
 export const REAUTH_COMMAND_SCHEMAS = [
   z.object({ kind: z.literal('reauth.submit'), sessionId: z.string().min(1), apiKey: z.string() }),
   z.object({ kind: z.literal('reauth.dismiss'), sessionId: z.string().min(1) }),
+  /** The prompts open now (`{ prompts: ReauthPrompt[] }`), read when a window mounts so a reload or a new window draws them too. */
+  z.object({ kind: z.literal('reauth.read') }),
 ] as const;
 
 /** What a submission answered: the acknowledgement already raised says the rest; a refusal names why and the prompt stays. */

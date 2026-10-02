@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**The re-authentication prompt follows the focused session and covers no window control (REQ-NOTIFY-030, REQ-NOTIFY-071,
+ADR-0048; the part B repair round).** Channel 13 now carries `{sessionId, prompt}` to every main window, a new renderer
+command **`reauth.read`** answers the open prompts for a window that mounts later, and each window draws the followed
+session's prompt alone. AppShell gains a **`windowPanel`** slot inside the rail-and-view region, where the prompt is
+drawn, below the title bar and the notice slot. The **seams view** §2, the **process view**, the **runtime view** and
+**state ownership** say so, each with the first build's reading kept beside the correction. No package, edge or store
+column changed.
+
 **The non-modal re-authentication prompt (REQ-NOTIFY-071/078, ADR-0048; the 401 note's part B).** A new main → renderer
 channel, **`reauth:prompt`** (channel 13), carries one session's prompt or null to the window that follows it; two
 renderer commands answer it, **`reauth.submit {sessionId, apiKey}`** and **`reauth.dismiss {sessionId}`** (facet

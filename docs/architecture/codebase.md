@@ -1136,7 +1136,8 @@ session and the draft were kept, `Return to the workspace` — and the new `auth
 the scripted step `fail:401:only=scripted`) asserts the pin of the fallback keyed by the failed pair, the acknowledgement
 naming both models and the restart with the same prompt completing on `scripted-b/beta` (REQ-NOTIFY-070,
 REQ-MONITOR-147, REQ-SESSION-026), and since part B the non-modal re-authentication prompt beside the continuing run
-with the composer usable behind it (REQ-NOTIFY-071, ADR-0048). The recovery
+with the composer, every title-bar control and every notice button usable beside it (REQ-NOTIFY-071, ADR-0048), drawn in
+AppShell's `windowPanel` slot for the followed session alone (REQ-NOTIFY-030). The recovery
 dialog and its re-authentication path are owed
 ([note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
 

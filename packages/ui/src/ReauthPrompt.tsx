@@ -34,6 +34,33 @@ export function reauthCopy(prompt: ReauthPromptState): { readonly title: string;
   };
 }
 
+/**
+ * REQ-NOTIFY-030 — "changing the focused session moves every recovery affordance with it". A window holds the open prompts
+ * by session (channel 13 carries each one's opening and closing, `reauth.read` the ones open when the window mounts) and
+ * draws only the one for the session it follows: another session's prompt is never drawn over the focused one, and comes
+ * back when its session is focused again.
+ */
+export type ReauthPrompts = ReadonlyMap<string, ReauthPromptState>;
+
+/** One publish applied: the session's prompt opened (or replaced), or closed on `null`. */
+export function applyReauthPublish(prompts: ReauthPrompts, sessionId: string, prompt: ReauthPromptState | null): ReauthPrompts {
+  const next = new Map(prompts);
+  if (prompt === null) next.delete(sessionId); else next.set(sessionId, prompt);
+  return next;
+}
+
+/** The prompts read at mount, merged under any publish that already reached the window (the publish is newer). */
+export function seedReauthPrompts(prompts: ReauthPrompts, read: readonly ReauthPromptState[]): ReauthPrompts {
+  const next = new Map(read.map((p) => [p.sessionId, p] as const));
+  for (const [sessionId, prompt] of prompts) next.set(sessionId, prompt);
+  return next;
+}
+
+/** The prompt this window draws: the followed session's, or none while it follows no session or one with none open. */
+export function reauthPromptFor(prompts: ReauthPrompts, followedSessionId: string | null): ReauthPromptState | null {
+  return followedSessionId === null ? null : prompts.get(followedSessionId) ?? null;
+}
+
 export interface ReauthPromptProps {
   readonly prompt: ReauthPromptState;
   readonly onSubmit: (apiKey: string) => Promise<ReauthSubmitResult>;

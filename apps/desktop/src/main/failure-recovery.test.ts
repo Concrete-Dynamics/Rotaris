@@ -135,6 +135,27 @@ describe('main/failure-recovery — the non-modal re-authentication prompt (REQ-
     expect(h.recovery.fallbackOf('S1')).toBeDefined();
   });
 
+  it('a re-pin that fails leaves the prompt open and the bookkeeping standing: the session is still on the fallback (REQ-NOTIFY-075, REQ-NOTIFY-078)', async () => {
+    const h = harness(RESTARTED, true, { applies: new Error('the run host stopped') });
+    await h.recovery.onRunFailed({ sessionId: 'S1', error: AUTH });
+    expect(await h.recovery.submitPrompt('S1', '')).toEqual({ ok: false, message: 'the run host did not answer (Error: the run host stopped)' });
+    expect(h.acks.at(-1)).toMatchObject({ kind: 'fail', title: 'scripted/alpha could not be re-pinned' });
+    expect(h.recovery.promptOf('S1')).toBeDefined();
+    expect(h.recovery.fallbackOf('S1')).toBeDefined();
+    // A further authentication failure is the fallback's own: not restarted automatically again.
+    expect(await h.recovery.onRunFailed({ sessionId: 'S1', error: AUTH })).toBe('generic');
+    expect(h.restarts).toEqual(['S1']);
+  });
+
+  it('REQ-NOTIFY-030: every open prompt is readable, by session, for a window that mounts after it opened', async () => {
+    const h = harness();
+    await h.recovery.onRunFailed({ sessionId: 'S1', error: AUTH });
+    await h.recovery.onRunFailed({ sessionId: 'S2', error: AUTH });
+    expect(h.recovery.openPrompts().map((p) => p.sessionId)).toEqual(['S1', 'S2']);
+    h.recovery.dismissPrompt('S1');
+    expect(h.recovery.openPrompts().map((p) => p.sessionId)).toEqual(['S2']);
+  });
+
   it('a device-code or browser provider takes no key: a typed key is refused with the reason the prompt shows', async () => {
     const reason = 'GitHub Copilot signs in with "Code shown here, entered at the provider", which this build does not provide yet.';
     const h = harness(RESTARTED, true, { provider: { provider: { id: 'copilot', name: 'GitHub Copilot' }, method: 'unavailable', unavailableReason: reason } });

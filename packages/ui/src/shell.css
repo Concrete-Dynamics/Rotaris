@@ -105,7 +105,7 @@
 .notice-slot { min-height: 0; }
 .notice-slot:not(:empty) { padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-surface); }
 
-.body { display: grid; grid-template-columns: auto 1fr; min-height: 0; }
+.body { display: grid; grid-template-columns: auto 1fr; min-height: 0; position: relative; }
 
 .nav-rail {
   display: flex; flex-direction: column; gap: 2px;
@@ -1042,13 +1042,22 @@
  * usable is never covered. The provider's words sit in the inset block the "Provider auth modal" draws its code in: the
  * ground, the hairline border, the medium radius. Tokens only.
  */
+/*
+ * REQ-NOTIFY-071 / ADR-0048 — the re-authentication prompt is non-modal and window-level, and it stays open until it is
+ * answered, so it may cover none of the window's own controls. It is drawn in AppShell's `windowPanel` slot, inside the
+ * rail-and-view region (`.body`, the containing block): the title bar (the session browser, minimise, maximise, close)
+ * and the notice slot (a notice's answers and its dismissal) lie above that region, so neither can be under it however
+ * tall the notice grows. The first build placed it `fixed` at the window's top corner, copied from `.project-setup`,
+ * and covered all five of those controls in the built app (the verifier's probe, 2026-10-02). Same stacking as the setup
+ * dialog: above the view (40), below an application-modal backdrop (50).
+ */
 .reauth-prompt {
-  position: fixed;
+  position: absolute;
   top: var(--rt-space-4);
   right: var(--rt-space-4);
   z-index: 40;
-  max-width: calc(100vw - 2 * var(--rt-space-4));
-  max-height: calc(100vh - 2 * var(--rt-space-4));
+  max-width: calc(100% - 2 * var(--rt-space-4));
+  max-height: calc(100% - 2 * var(--rt-space-4));
   overflow: auto;
   border: var(--rt-hairline-width) solid var(--rt-border);
 }

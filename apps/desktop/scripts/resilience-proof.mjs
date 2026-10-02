@@ -495,12 +495,17 @@ await scenarioRun('auth-fallback', async () => {
   // REQ-NOTIFY-071 / ADR-0048: with the prompt open the composer is still the element under its own centre, takes the
   // focus and is enabled — the prompt traps nothing and covers nothing it leaves usable. Written onto the body for the probe.
   const composerUsable = "(() => { const ta = document.querySelector('textarea.composer__input'); if (!ta) return false; const r = ta.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); ta.focus(); document.body.dataset.composerUsable = [hit === ta || ta.contains(hit) || (hit !== null && hit.closest('.slash-field') !== null), document.activeElement === ta, !ta.disabled, !(document.querySelector('[data-testid=\"reauth-prompt\"]')?.hasAttribute('aria-modal') ?? true)].join(':'); return true; })()";
+  // ADR-0048 again: the prompt stays open until answered, so none of the window's own controls may be under it — every
+  // title-bar button (the session browser, minimise, maximise, close) and every notice-slot button (a notice's answers,
+  // its dismissal) is the element under its own centre. `underPrompt` lists, for the record, the view's controls that
+  // the panel overlays (it is drawn in the rail-and-view region, so they are the view's alone).
+  const chromeUsable = "(() => { const p = document.querySelector('[data-testid=\"reauth-prompt\"]'); const label = (b) => (b.getAttribute('aria-label') || b.textContent || b.title || '?').trim(); const centreHit = (b) => { const r = b.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return hit === b || b.contains(hit) ? 'ok' : (p !== null && p.contains(hit) ? 'UNDER-PROMPT' : 'covered'); }; const chrome = [...document.querySelectorAll('.title-bar button, .notice-slot button')]; document.body.dataset.chromeUsable = chrome.map((b) => label(b) + '=' + centreHit(b)).join('|'); document.body.dataset.underPrompt = [...document.querySelectorAll('button, input, select, textarea')].filter((b) => p !== null && !p.contains(b) && centreHit(b) === 'UNDER-PROMPT').map(label).join('|'); return chrome.length > 0; })()";
   const ackSeen = "(document.body.dataset.ackSeen ||= [...document.querySelectorAll('[data-testid=\"acknowledgement\"]')].map((a) => a.textContent).find((t) => t.includes('Authentication failed')) ?? '')";
   const r = await launch('auth-fallback', s8, {
     // `:only=scripted`: alpha's provider refuses the key, beta's does not; the restarted root takes its script from the
     // first step again, so the fault is scoped to the provider rather than to the step.
     ROTARIS_SCRIPT: 'fail:401:only=scripted', ROTARIS_CAPTURE_PROMPT: 'bad key, then the fallback',
-    ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed' && document.querySelector('[data-testid="reauth-prompt"]') !== null && ${composerUsable}`, ROTARIS_CAPTURE_WAIT_MS: '90000',
+    ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed' && document.querySelector('[data-testid="reauth-prompt"]') !== null && ${composerUsable} && ${chromeUsable}`, ROTARIS_CAPTURE_WAIT_MS: '90000',
     ROTARIS_CAPTURE_PROBE: 'body;;.notice-slot;;[data-testid="reauth-prompt"];;[data-action="reauth-keep"];;[data-testid="reauth-error"]', ROTARIS_CAPTURE_AFTER_MS: '800',
   }, { timeout: 180_000 });
   const db = open(s8);
@@ -537,7 +542,11 @@ await scenarioRun('auth-fallback', async () => {
   expect(prompt.data['data-method'] === 'none', `the prompt does not offer what this provider gets: ${JSON.stringify(prompt.data)}`);
   const composer = body?.data['data-composer-usable'] ?? '';
   expect(composer === 'true:true:true:true', `the composer is not usable behind a non-modal prompt (hit:focused:enabled:no-aria-modal = ${composer})`);
-  results.authFallback = { status: row.execution_status, calls, pin: meta, acknowledgement: ack, users, prompt: prompt.text, composerUsable: composer, png: r.png, elapsedMs: r.elapsedMs };
+  const chrome = body?.data['data-chrome-usable'] ?? '';
+  const chromeControls = chrome.split('|').filter((c) => c !== '');
+  expect(chromeControls.length >= 4 && chromeControls.every((c) => c.endsWith('=ok')) && chromeControls.some((c) => c.startsWith('Close')), `a title-bar or notice control is not usable beside the non-modal prompt: ${chrome}`);
+  const underPrompt = body?.data['data-under-prompt'] ?? '';
+  results.authFallback = { status: row.execution_status, calls, pin: meta, acknowledgement: ack, users, prompt: prompt.text, composerUsable: composer, chromeUsable: chrome, underPrompt, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ ...results, ...(only === null ? {} : { only }), failures }, null, 2)}\n`);

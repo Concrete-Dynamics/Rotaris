@@ -2,7 +2,8 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ReauthPrompt as ReauthPromptState } from '@rotaris/contracts';
-import { REAUTH_KEEP_LABEL, REAUTH_SUBMIT_LABEL, ReauthPrompt, reauthCopy } from './ReauthPrompt.js';
+import { AppShell } from './AppShell.js';
+import { REAUTH_SUBMIT_LABEL, ReauthPrompt, applyReauthPublish, reauthCopy, reauthPromptFor, seedReauthPrompts, type ReauthPrompts } from './ReauthPrompt.js';
 
 const ERROR = 'scripted authentication failure (HTTP 401) — HTTP 401 — Incorrect API key provided';
 const base: ReauthPromptState = {
@@ -26,9 +27,10 @@ describe('the non-modal re-authentication prompt (REQ-NOTIFY-071/078, ADR-0048)'
     expect(html).not.toContain('aria-modal');
     expect(html).not.toContain('dialog-backdrop');
     expect(html).toContain('data-testid="reauth-error">scripted authentication failure (HTTP 401) — HTTP 401 — Incorrect API key provided</p>');
-    expect(html).toContain(`data-action="reauth-keep">${REAUTH_KEEP_LABEL}</button>`);
+    // REQ-NOTIFY-071's dismissal "meaning that the fallback is kept", in the words the surface shows.
+    expect(html).toContain('data-action="reauth-keep">Keep the fallback</button>');
     expect(html).toContain(`data-action="reauth-submit">${REAUTH_SUBMIT_LABEL}</button>`);
-    expect(html.indexOf(REAUTH_KEEP_LABEL)).toBeLessThan(html.indexOf(`>${REAUTH_SUBMIT_LABEL}<`));
+    expect(html.indexOf('Keep the fallback')).toBeLessThan(html.indexOf(`>${REAUTH_SUBMIT_LABEL}<`));
   });
 
   it('REQ-NOTIFY-078: a key-based provider is offered a masked key field', () => {
@@ -48,5 +50,41 @@ describe('the non-modal re-authentication prompt (REQ-NOTIFY-071/078, ADR-0048)'
     const copy = reauthCopy({ ...base, provider: { id: 'scripted', name: 'scripted' }, method: 'none' });
     expect(copy.method).toBe('This application holds no credential for scripted; its key comes from the model configuration. Re-authenticate it there, then switch back here.');
     expect(render({ ...base, method: 'none' })).toContain('data-action="reauth-submit"');
+  });
+
+  it('REQ-NOTIFY-030: the window draws the followed session\'s prompt alone — absent while another is focused, back on refocusing', () => {
+    let held: ReauthPrompts = new Map();
+    held = applyReauthPublish(held, 'S1', base);
+    expect(reauthPromptFor(held, 'S1')).toBe(base);
+    // The user focuses S2: S1's prompt is not drawn over it, and nothing S1's would act on is on screen.
+    expect(reauthPromptFor(held, 'S2')).toBeNull();
+    expect(reauthPromptFor(held, null)).toBeNull();
+    // S2 gets its own; each session's is drawn only while it is followed.
+    const s2: ReauthPromptState = { ...base, sessionId: 'S2', primary: { provider: 'openai', model: 'gpt', modelKey: 'gpt' } };
+    held = applyReauthPublish(held, 'S2', s2);
+    expect(reauthPromptFor(held, 'S2')).toBe(s2);
+    // Refocusing S1 brings its prompt back; closing it (an answer, in any window) removes it for good.
+    expect(reauthPromptFor(held, 'S1')).toBe(base);
+    held = applyReauthPublish(held, 'S1', null);
+    expect(reauthPromptFor(held, 'S1')).toBeNull();
+    expect(reauthPromptFor(held, 'S2')).toBe(s2);
+  });
+
+  it('a window that mounts after a prompt opened draws it from the read, and a publish that reached it first wins', () => {
+    const newer: ReauthPromptState = { ...base, error: 'a newer failure' };
+    const seeded = seedReauthPrompts(applyReauthPublish(new Map(), 'S1', newer), [base, { ...base, sessionId: 'S3' }]);
+    expect(reauthPromptFor(seeded, 'S1')).toBe(newer);
+    expect(reauthPromptFor(seeded, 'S3')?.sessionId).toBe('S3');
+  });
+
+  it('ADR-0048: the shell draws the prompt inside the rail-and-view region, after the title bar and the notice slot, never over them', () => {
+    const panel = createElement(ReauthPrompt, { prompt: base, onSubmit: async () => ({ ok: true as const, applies: 'next-run' as const }), onDismiss: async () => undefined });
+    const html = renderToStaticMarkup(createElement(AppShell, { version: '0.0.0', workspacePath: '/w', home: '/h', sessionName: null, onChooseWorkspace: () => undefined, statusItems: [], windowPanel: panel }));
+    const body = html.indexOf('<div class="body"');
+    const prompt = html.indexOf('data-testid="reauth-prompt"');
+    expect(html.indexOf('class="notice-slot"')).toBeLessThan(body);
+    expect(body).toBeGreaterThan(-1);
+    expect(prompt).toBeGreaterThan(body);
+    expect(prompt).toBeLessThan(html.indexOf('<footer class="status-strip"'));
   });
 });

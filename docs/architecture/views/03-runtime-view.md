@@ -1184,7 +1184,8 @@ both models (REQ-NOTIFY-070) and keeps "this session's fallback was attempted" f
 missing run channel, a missing service, or a second authentication failure publishes REQ-NOTIFY-064's notice — the
 recovery dialog of REQ-NOTIFY-072 is not built (the note's part C).
 **The re-authentication prompt (REQ-NOTIFY-071/078, ADR-0048; part B, 2026-10-02).** The restart opens the non-modal
-prompt in the window that follows the session (channel 13): the primary that failed, the run continuing on the fallback,
+prompt (channel 13, to every main window; a window draws the followed session's alone, REQ-NOTIFY-030, in AppShell's
+`windowPanel` slot inside the rail-and-view region, below the title bar and the notice slot): the primary that failed, the run continuing on the fallback,
 the switch back from the next iteration, the provider's error quoted, a key field for a key-based provider (a device-code
 or browser provider is told its method is unavailable in this build). Dismissing it keeps the fallback. Submitting saves
 a key supplied, clears main's bookkeeping and sends `session.repinPrimary`: `Sessions.repinPrimary` takes the pin back

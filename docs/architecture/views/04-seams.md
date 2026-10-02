@@ -85,9 +85,16 @@ state main opens and closes on its own account (after a fallback restart), which
 any session) nor channel 12 (one workspace's initialization) could carry without changing what they mean. It is the
 worked example of a **window-level non-modal surface fed by main** (ADR-0048): the payload schema and the two commands
 in `packages/contracts/src/reauth.ts`, the counter in `packages/shell/src/relay.ts`'s total record, the publisher in
-`main/index.ts` sending to the window that follows the session (`ownerOf`) and the close to that same window, the state
-in `main/failure-recovery.ts`, the facet `main/commands/reauth.ts`, the hook in `renderer/main.tsx` and the surface
-`packages/ui/src/ReauthPrompt.tsx`, mounted beside the shell next to `ProjectSetupDialog`.
+`main/index.ts` sending each opening and closing, keyed by session, to every main window, the state in
+`main/failure-recovery.ts`, the facet `main/commands/reauth.ts` (the two answers, and `reauth.read` for a window that
+mounts later), the hook in `renderer/main.tsx` holding the prompts by session and choosing the followed session's
+(`reauthPromptFor`, REQ-NOTIFY-030: a recovery affordance moves with the focused session), and the surface
+`packages/ui/src/ReauthPrompt.tsx`, drawn in AppShell's **`windowPanel`** slot inside the rail-and-view region — so the
+title bar and the notice slot, which a panel open until answered may never cover, lie above it. *Corrected 2026-10-02
+(the repair round):* the first build sent to the one window following the session and mounted the surface beside the
+shell, `fixed` at the window's corner like `ProjectSetupDialog`; the verifier measured the session browser, the three
+window controls and the notice's dismissal under it, and the prompt staying over whatever session that window focused
+next. A window-level non-modal surface goes in the `windowPanel` slot.
 
 | # | File | What lands here |
 |---|---|---|

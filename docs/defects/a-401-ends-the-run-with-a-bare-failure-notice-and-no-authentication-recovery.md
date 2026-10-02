@@ -83,6 +83,18 @@ every case. Pinned by `packages/ui/src/reauth-prompt.test.ts` (its copy and stat
 iteration; a reload replays it); shown by `resilience-proof`'s `auth-fallback` (the prompt present, its words, and the
 composer usable behind it — the element under its own centre, focused, enabled, no `aria-modal`).
 
+*Repair round, 2026-10-02 (the verifier's findings on part B).* The prompt was first mounted beside the shell `fixed` at
+the window's top corner (copied from `.project-setup`) and covered the title bar's session browser, minimise, maximise,
+close and the notice's dismissal while open; it is now drawn in AppShell's `windowPanel` slot inside the rail-and-view
+region, below the title bar and the notice slot, and `auth-fallback` asserts every title-bar and notice-slot button is
+the element under its own centre (the same fault in the setup dialog is recorded in
+[`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md)).
+It was also one prompt per window, sent to the window following the session, so it stood over whichever session that
+window focused next and acted on its own; channel 13 now carries `{sessionId, prompt}` to every main window, each holds
+the prompts by session and draws the followed session's alone (REQ-NOTIFY-030; `reauthPromptFor` in
+`reauth-prompt.test.ts`), and `reauth.read` gives a reloaded or new window the prompts already open. A re-pin that fails
+now leaves the first-failure bookkeeping standing (the session is still on the fallback; `failure-recovery.test.ts`).
+
 **Still owed:** part C, REQ-NOTIFY-072's 560 px
 recovery dialog on a second failure or with no usable fallback (until it lands both take the generic notice, and `fatal`
 asserts that notice rather than the dialog); part D, the dialog's re-authenticate path (REQ-NOTIFY-076/077). Device-code

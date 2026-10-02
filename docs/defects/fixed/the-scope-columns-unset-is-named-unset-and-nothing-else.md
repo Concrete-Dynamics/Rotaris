@@ -45,3 +45,8 @@ Pinned by:
   ([`the-scope-columns-unset-leaves-the-field-reading-its-old-origin.md`](the-scope-columns-unset-leaves-the-field-reading-its-old-origin.md)).
   Against the unrepaired renderer (`ConfigSettings.tsx` at `f2bddcf`, rebuilt) the launch fails with "the tester's
   model Unset was not named "Unset model for tester": 0 named of 1 Unset". With the repair the whole proof passes.
+  Hardened after the first verification (2026-10-02): a missing or empty probe of the pending column no longer passes,
+  since the launch now asks for the probe at all, for as many cells as before the click, and for exactly one more row
+  reading `model: default` (13 before, 14 pending), and for an Unset probe that ran and found none. Against a build
+  holding this repair but not the sibling one (`scopeCellOf` drawing the read-back origin over a pending unset), the
+  launch fails with "with the unset pending a row still read its old origin"; with both, the proof passes.

@@ -505,9 +505,15 @@ const allUnset = probedAt(2400, UNSET_ANY) ?? [];
 if (named.length !== 1 || allUnset.length !== 1) throw new Error(`the tester's model Unset was not named "Unset model for tester": ${named.length} named of ${allUnset.length} Unset`);
 if (!personas.log.includes(`capture: clicked "${UNSET_MODEL}"`)) throw new Error('the Unset named for the tester\'s model was not clicked');
 // REQ-CONFIG-341: the click marks the field's origin as `default`; `default` offers no Unset.
-const pendingCells = probedAt(4000, '.settings__scope') ?? [];
+// Each pending reading needs a probe that ran and found the column: a missing or empty probe is no evidence.
+const pendingCells = probedAt(4000, '.settings__scope');
+if (!pendingCells || pendingCells.length !== beforeCells.length) throw new Error(`with the unset pending the Scope column was not read row for row: ${pendingCells?.length ?? 'no probe'} cells of ${beforeCells.length}`);
 if (pendingCells.some((c) => c.text.startsWith('model: workspace'))) throw new Error(`with the unset pending a row still read its old origin: ${JSON.stringify(pendingCells.map((c) => c.text))}`);
-if ((probedAt(4000, UNSET_ANY) ?? []).length !== 0) throw new Error('with the unset pending the Scope column still offered Unset');
+const modelDefault = (cells) => cells.filter((c) => c.text.startsWith('model: default')).length;
+if (modelDefault(pendingCells) !== modelDefault(beforeCells) + 1) throw new Error(`with the unset pending the tester's model did not read "default": ${modelDefault(beforeCells)} rows read it before, ${modelDefault(pendingCells)} after`);
+const pendingUnset = probedAt(4000, UNSET_ANY);
+if (pendingUnset === null) throw new Error('the pending Scope column\'s Unset was never probed');
+if (pendingUnset.length !== 0) throw new Error('with the unset pending the Scope column still offered Unset');
 if (!(probedAt(4000, '.save-bar__status') ?? []).some((c) => c.text === 'Unsaved changes')) throw new Error('the pending unset did not dirty the form');
 // REQ-CONFIG-341: Discard restores the previous values, and with them the origin and its Unset.
 const discarded = rows(personas.probes, '.settings__scope').filter((c) => c.text.startsWith('model: workspace'));
@@ -516,7 +522,7 @@ if (rows(personas.probes, UNSET_MODEL).length !== 1) throw new Error('after Disc
 if ((text(personas.probes, '.save-bar__status')[0] ?? '') !== 'All changes saved') throw new Error('Discard did not leave the form clean');
 results.personasUnset = {
   before: { cell: beforeTester[0].text, unsetName: 'Unset model for tester' },
-  pending: { testerReadsOldOrigin: false, unsetOffered: 0, status: 'Unsaved changes' },
+  pending: { rows: pendingCells.length, testerReadsOldOrigin: false, modelDefaultRows: `${modelDefault(beforeCells)} → ${modelDefault(pendingCells)}`, unsetOffered: 0, status: 'Unsaved changes' },
   discarded: { cell: discarded[0].text, unsetName: 'Unset model for tester', status: 'All changes saved' },
 };
 

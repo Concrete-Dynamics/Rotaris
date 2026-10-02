@@ -23,9 +23,9 @@ export function confinementRefusalNotice(r: { readonly headline: string; readonl
  * a refusal into a notice where the surface has nowhere to show one.
  */
 export function sessionCommands(
-  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runHost' | 'services'>,
+  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services'>,
 ): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.reconcile' | 'session.pageOlder'> {
-  const { capturing, clocks, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runHost, services } = ctx;
+  const { capturing, clocks, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runFailures, runHost, services } = ctx;
   return {
     'session.continue': async (req) => {
       const r = await runHost.request({ kind: 'session.continue', sessionId: req.sessionId, action: req.action, ...(req.withoutPaused === true ? { withoutPaused: true } : {}) }, millis(10_000));
@@ -207,6 +207,9 @@ export function sessionCommands(
       // for itself (the twenty-seventh defect above) and must not move any main window's followed session.
       mainWindows.setFollowedSession(senderId, req.sessionId);
       const r = await runHost.request({ kind: 'session.attach', sessionId: req.sessionId }, millis(5_000));
+      // REQ-NOTIFY-030/032: the session is on screen now — a failure held while it was not arrives with the focus change: its
+      // class notice, and for an authentication failure the recovery dialog over this window. Only a MAIN window follows.
+      if (r.kind === 'ack' && mainWindows.followerOfSession(req.sessionId, [senderId]) !== undefined) void runFailures.focused(req.sessionId);
       // A seam (verification only, ROTARIS_CAPTURE_PNG): ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS holds the reply that long
       // after the attach was acknowledged. A start's send settles in the renderer only on this reply, while the
       // attach's snapshot and the run's events have already drawn the run as active, so a dialog opened in between

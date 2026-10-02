@@ -2376,3 +2376,47 @@
 .check__input:disabled ~ .check__label { color: var(--rt-text-disabled); }
 .check__label { min-width: 0; }
 .check__hint { display: block; font-size: var(--rt-text-xs); }
+
+/* REQ-NOTIFY-072..075 — the authentication recovery dialog (`AuthRecoveryDialog.tsx`), in its own 560 px modal window. Craft
+   from the design material's provider-auth and question-stepper modals: the error in a quiet inset on the page ground, the
+   models as single-select option cards. REQ-NOTIFY-073: the error is drawn in the failure text colour, `--rt-danger-300`,
+   the fail state's readable-text token. */
+.auth-recovery { min-height: 100vh; box-sizing: border-box; }
+.auth-recovery__error {
+  margin: 0;
+  padding: var(--rt-space-2) var(--rt-space-3);
+  color: var(--rt-danger-300);
+  background: var(--rt-bg);
+  border: var(--rt-hairline-width) solid var(--rt-border);
+  border-radius: var(--rt-radius-md);
+  font-size: var(--rt-text-xs);
+  overflow-wrap: anywhere;
+}
+.auth-recovery__path { display: flex; flex-direction: column; gap: var(--rt-space-2); }
+.auth-recovery__heading {
+  margin: 0;
+  font-size: var(--rt-text-2xs);
+  letter-spacing: var(--rt-tracking-label);
+  text-transform: uppercase;
+  color: var(--rt-text-tertiary);
+  font-weight: var(--rt-weight-medium);
+}
+.auth-recovery__options { display: flex; flex-direction: column; gap: var(--rt-space-2); max-height: 40vh; overflow: auto; }
+.auth-recovery__option {
+  display: flex;
+  text-align: left;
+  padding: var(--rt-space-2) var(--rt-space-3);
+  border: var(--rt-hairline-width) solid var(--rt-border);
+  border-radius: var(--rt-radius-md);
+  background: var(--rt-surface-2);
+  color: var(--rt-text-secondary);
+  cursor: pointer;
+  transition: background var(--rt-duration) var(--rt-ease), border-color var(--rt-duration) var(--rt-ease);
+}
+.auth-recovery__option:hover:not(:disabled) { border-color: var(--rt-border-strong); }
+.auth-recovery__option.is-selected { border-color: var(--rt-accent-500); background: var(--rt-accent-tint-14); color: var(--rt-text); }
+.auth-recovery__option-label { font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); }
+/* REQ-NOTIFY-076: the masked key field and its save-and-retry control on one line. */
+.auth-recovery__key { display: flex; gap: var(--rt-space-2); align-items: center; }
+.auth-recovery__key .input { flex: 1; min-width: 0; }
+.auth-recovery__path > .text-secondary { margin: 0; font-size: var(--rt-text-xs); }

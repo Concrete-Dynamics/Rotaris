@@ -77,6 +77,30 @@ provisions it when the store records no tree for it, writing the row at once thr
 `a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`; `requirements-runs-proof`'s eighth assertion shows it.
 The **sequences view**'s board section says so. The writer gained one method (a row write, no delivery state); no
 package, edge, process, message kind, channel, command or store column changed.
+**A failed run's notice waits for its session to be on screen, and a pair that failed authentication is not offered again
+(REQ-NOTIFY-030/032, REQ-NOTIFY-064, REQ-NOTIFY-068; the 401 note's repair round 1).** Every run-ending notice is built by
+`main/run-failure-notice.ts`; a failed run of a session no main window follows raises REQ-NOTIFY-032's warning and holds its
+class publication — the recovery dialog included — until `session.subscribe` follows it (`MainWindows.followerOfSession`).
+Main keeps the pairs that failed authentication by session until their provider's credentials change. The **runtime view**'s
+classification paragraph and two **state-ownership** rows say so. No package, edge, process, channel, command or store
+column changed.
+
+**The recovery dialog re-authenticates the provider that failed (REQ-NOTIFY-076, REQ-NOTIFY-077, REQ-NOTIFY-202, OQ-179; the
+401 note's part D).** A fourth command, `authRecovery.reauthenticate {apiKey}`, carries a key inward to main's provider key
+store (`ProviderService.reauthenticateWithKey`, stage-typed so a storage failure is told apart) and relays
+`session.authRestart` with no model key, which restarts on the same model without a pin. The **process view**'s command
+and run-host message entries and the **runtime view**'s classification paragraph say so. No package, edge, process, channel
+or store column changed.
+
+**A failed run is classified, and an authentication failure opens the recovery dialog (REQ-NOTIFY-060, REQ-NOTIFY-064,
+REQ-NOTIFY-067, REQ-NOTIFY-072..075, REQ-NOTIFY-079/080; the 401 note's part C).** Main matches a failed run in REQ-NOTIFY-060's
+order (`main/failure-class.ts`); the generic class raises REQ-NOTIFY-064's notice with the workspace action; the
+authentication class asks the run host `session.authRecovery` and opens a 560 px modal window, role `auth-recovery`, whose
+Retry is relayed as `session.authRestart` (`Sessions.restartAfterAuthFailure`: a `model_override` pin against the failed pair,
+the last prompt re-submitted). The **process view** gains the window, the two run-host message kinds and the three
+`authRecovery.*` commands; the **runtime view** the classification paragraph; the **seams view** §1 the `auth-recovery`
+facet (its count corrected: eighteen, not sixteen); the **state-ownership view** the open dialog's row. No package, edge,
+process, channel or store column changed.
 
 **A closing terminal frame no longer blanks a preview (REQ-SHELL-102, REQ-CHAT-063, REQ-CHAT-076).** The renderer's
 `TerminalStreamSet` holds, for `previewOf`, the screen a `screen` frame's reset replaces, from the parser reaching that

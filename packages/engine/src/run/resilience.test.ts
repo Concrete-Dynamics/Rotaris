@@ -139,4 +139,18 @@ describe('engine/run/resilience — the session-wide memory (REQ-ORCH-091 a/d, R
     expect(r.overrideFor('q', 'r')).toBeUndefined();
     expect(warnings).toHaveLength(1);
   });
+
+  it('REQ-NOTIFY-074/076: a `cleared` entry takes the pin on its pair back, in order, and a later pin stands again', () => {
+    const catalogue = [entry('x', 'a', ['small_model']), entry('y', 'b', ['small_model']), entry('z', 'c', ['small_model'])];
+    const resolve = (key: string) => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: 'unset' as const } : null; };
+    const pinned = { name: 'model_override', metadata: JSON.stringify({ provider: 'a', model: 'x', model_key: 'y' }) };
+    const cleared = { name: 'model_override', metadata: JSON.stringify({ provider: 'a', model: 'x', cleared: true }) };
+    const again = { name: 'model_override', metadata: JSON.stringify({ provider: 'a', model: 'x', model_key: 'z' }) };
+    expect(ResilienceMemory.rehydrate([pinned, cleared], resolve).overrideFor('a', 'x')).toBeUndefined();
+    expect(ResilienceMemory.rehydrate([pinned, cleared, again], resolve).overrideFor('a', 'x')?.key).toBe('z');
+    const m = ResilienceMemory.rehydrate([pinned], resolve);
+    expect(m.clearOverride('a', 'x')).toBe(true);
+    expect(m.clearOverride('a', 'x')).toBe(false);
+    expect(m.effective({ model: catalogue[0]!.model, thinking: 'unset' }, catalogue).model.modelId).toBe('x');
+  });
 });

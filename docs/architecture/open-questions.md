@@ -8855,12 +8855,38 @@ is followed or there is nothing to resubmit. The composer keeps the draft: nothi
 action (which REQ-SHELL-114's single action would then have to allow), REQ-NOTIFY-064's, or none — and whether a draft a
 retry resubmitted is cleared from the composer as a submitted one is.
 
-**OQ-179 — Where does a board run that stops at its iteration limit rest, and does automatic scheduling start it again?**
+**OQ-179 — What does the recovery dialog's re-authenticate path offer for a provider whose key the model configuration
+carries?** *(REQ-NOTIFY-076, "For key-based providers it offers a masked key field with a save-and-retry control … For
+browser and device-code providers it starts that provider's own flow in place"; REQ-NOTIFY-077; REQ-NOTIFY-202;
+REQ-CONFIG-083 and REQ-PROVIDER-092, a model's `api_key` / `api_key_env`, read per request, when it names no
+`auth_provider`; REQ-PROVIDER-118/140, "Authentication is managed by model configuration." for a provider that resolves to
+no sign-in method. Raised 2026-10-02 by the 401 note's part D on `fin6-auth-recovery-2`. Open.)*
+
+REQ-NOTIFY-076 sorts the provider that failed into two kinds: key-based, re-authenticated through a key field, and
+browser or device-code, through their own flow. A model can also reach a provider with a key it states itself — `api_key`
+or `api_key_env` in `agents.yaml`, with no `auth_provider` — and then no provider record or credential-store entry exists
+for it: a key typed into the dialog and stored would never be read by that model, so "save and retry" would retry with the
+same credentials, which REQ-NOTIFY-068 forbids. The scripted test provider is one such provider. The specification does not
+say what the dialog's second path offers for it.
+
+**What the build proceeds under** (`ProviderService.reauthentication` in `packages/providers/src/signin.ts`;
+`AuthRecoveryDialog.tsx`): a provider id that resolves to no sign-in method reads `configuration`, and the dialog's second
+path shows REQ-PROVIDER-118/140's sentence and says to correct the key the model configuration names, then retry — no key
+field, no save-and-retry control, and nothing directing the user to a shell or a terminal. The first path (another model) is
+unaffected. Device-code and browser providers read `unavailable` and say their flow is not provided by this build (the flows
+are owed, `packages/providers/src/catalogue.ts`); that is a gap of the build, not of the specification, and is recorded on
+[the 401 note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
+
+**What a ruling decides.** Whether such a provider is offered a key field at all — writing the key into the configuration
+the model reads (a write into the user's project files, which REQ-NOTIFY-047 keeps out of notice actions but not out of a
+dialog), or into the credential store with the model then pointed at it — or only the sentence this build shows.
+**OQ-180 — Where does a board run that stops at its iteration limit rest, and does automatic scheduling start it again?**
 *(REQ-TRACE-477, a flow's ending delivered to the surface told it began; REQ-TRACE-482, "the system itself picks up the
 next candidate as capacity becomes available"; REQ-TRACE-463; REQ-TRACE-476, "without re-running completed units".
 Raised 2026-10-02 by the repair of
 [`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](../defects/fixed/a-rejected-card-back-in-ready-can-never-start-its-next-unit.md),
-bundle `fin9-queue-dispatch-and-disclosure`. Open.)*
+bundle `fin9-queue-dispatch-and-disclosure`, as OQ-179, and renumbered OQ-180 when the bundle merged `origin/main`,
+which had taken OQ-179 meanwhile. Open.)*
 
 A board run that reaches its iteration limit persists `stopped`; main's coordinator classifies `stopped` and `cancelling`
 as `cancelled` (`outcomeOf`, `apps/desktop/src/main/requirements-runs.ts`), and a `cancelled` ending rests the card in

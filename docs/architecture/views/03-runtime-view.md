@@ -1163,6 +1163,36 @@ the release out of the terminal transaction and to the end of cleanup: `REQ-EVEN
 session's history exactly the right to hold its lock, so releasing it before `session.end` and `result` would have
 recorded both after writing authority ended. This paragraph said “the lock release” inside the transaction until
 2026-09-13; the code has not done that since A3 was applied.*
+**A failed run is classified before it is presented (REQ-NOTIFY-060, 2026-10-02).** Main matches a FAILED run's failure
+text in REQ-NOTIFY-060's order (`main/failure-class.ts`): REQ-NOTIFY-067's authentication markers (`401` standing alone),
+the sandbox class (never reached here — a refused confinement mode is refused before a run exists), the rate-limit or quota
+markers (REQ-NOTIFY-063's notice, as before), else REQ-NOTIFY-064's generic notice: the run failed, the session and the
+draft were kept, the failure text as detail, `open-view: workspace`. The authentication class asks the run host for the
+recovery facts and opens the 560 px modal recovery dialog beside the class's own error notice (`main/auth-recovery.ts`;
+REQ-NOTIFY-072..075/079/080), or — REQ-NOTIFY-069's preconditions unmet — takes the generic path. Retry pins the chosen
+model against the pair the failed root call was addressed to (`Run.failedEntryModel`, recorded with the run's last
+failure) in the session's `ResilienceMemory` and as a `model_override` timeline entry carrying `cause: authentication`, then
+re-submits the session's last prompt through `promptHeld` (`Sessions.restartAfterAuthFailure`); a pin away from the chosen
+model is taken back first, and a restart that cannot begin takes its own pin back (`cleared: true`, which `rehydrate`
+replays in order). The dialog's second path (REQ-NOTIFY-076/077, part D) stores a new key for a key-based provider through
+main's provider key store — validated by discovery first — and restarts on the same model with no pin, the continuation
+lease reading the new credential; a storage failure and a refused restart each raise their own error acknowledgement. A
+device-code or browser provider, and one whose key the model configuration carries (OQ-179), are told the path is not
+available here. REQ-NOTIFY-070's automatic first-failure fallback restart and REQ-NOTIFY-071's prompt are not built on
+this base (the 401 note's parts A and B), so every authentication failure the preconditions admit opens the dialog.
+A run that ended otherwise with a failure text — a cancelled quota wait, a completion with a task abandoned — keeps the
+limit's notice or its own summary. *Since repair round 1 (2026-10-02):* every notice a run's ending raises is built by
+`main/run-failure-notice.ts` (`runEndingPublication`, a failed run with no failure text taking the generic class too), and a
+failed run's class publication passes the **focus gate** (`RunFailurePublisher`, REQ-NOTIFY-030/032): a session a main
+window follows (`MainWindows.followerOfSession`, no fallback to the active window) publishes at once; any other raises
+REQ-NOTIFY-032's warning — naming the session, the failure text as detail, `focus-session` — and holds the class notice, and
+for an authentication failure the recovery dialog, until a main window's `session.subscribe` follows that session; a later
+ending of the session supersedes what was held. Main also keeps, by session, every provider/model pair that failed
+authentication since its provider's credentials last changed (`AuthRecovery.refusedPair`, REQ-NOTIFY-068): the dialog
+leaves them out and a retry refuses them; a re-authentication, or a sign-in, saved key, sign-out or removal under Settings,
+releases that provider's pairs. REQ-NOTIFY-031 (a background run's non-failure ending) is not built — recorded in
+`docs/defects/a-background-runs-non-failure-ending-raises-its-summary-not-a-notice-naming-the-session.md`.
+
 Main presents `run.result` once as the notice — **except where that result carries `persistence: {confirmed: false}`**,
 the run host having already published the one failure notice `REQ-EVENTS-088` allows, with the last durable ordinal
 and the reopen action on it (OQ-42). **Part V:** a starting run first clears the standing notice where it

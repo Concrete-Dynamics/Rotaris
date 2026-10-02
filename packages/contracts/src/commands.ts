@@ -14,6 +14,7 @@ import { RequirementsRunsCommandSchema } from './requirements.js'; // Part AP
 import { TERMINAL_COMMAND_SCHEMAS, TERMINAL_WINDOW_COMMAND_SCHEMAS } from './terminal.js';
 import { PROMPTS_COMMAND_SCHEMAS } from './slash.js'; // Part AO
 import { SKILLS_COMMAND_SCHEMAS } from './skills.js'; // ADR-0063
+import { AUTH_RECOVERY_COMMAND_SCHEMAS } from './auth-recovery.js'; // REQ-NOTIFY-072..080
 import { NoticeSeveritySchema } from './notices.js'; // Part AO
 
 /**
@@ -338,6 +339,9 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   // ADR-0063 — portable skills (REQ-WORKSPACE-051..073, 151). None carries a workspace or a session: main names
   // the window's open workspace and the session it follows, and relays to the run host, which owns the catalog.
   ...SKILLS_COMMAND_SCHEMAS,
+  // REQ-NOTIFY-072..080 (the 401 note's parts C and D) — the authentication recovery dialog's payload and its three answers,
+  // each for the session the asking window was opened for (`auth-recovery.ts`).
+  ...AUTH_RECOVERY_COMMAND_SCHEMAS,
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

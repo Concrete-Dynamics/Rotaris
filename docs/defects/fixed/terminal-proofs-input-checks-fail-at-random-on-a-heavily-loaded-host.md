@@ -104,3 +104,13 @@ passed 117/117 (key to paint 20 to 30 ms).
 (as root under Xvfb, Node 24, `--skip-tests`, every run's `results.json` kept): three runs with only the other plan's
 agents on the host (load average 6.4 to 10.7) and eight beside two busy loops (6.1 to 12.3). All eleven passed 118/118,
 no fence timed out, and the echo read key to paint at 8.3 to 80.9 ms.
+
+**After verification, 2026-10-02.** `live.echoUnder100ms` now reads from the key event's own time stamp where the page
+has it (`from: 'event'` on each echo), so the time the key waited in the renderer's queue is inside REQ-SHELL-166's
+100 ms rather than beside it ("measured from the key press"); the listener's time is the fallback. This tightens the
+reading and relaxes nothing. `live.floodPainted`'s `waitedMs` is recorded and bounds nothing of REQ-SHELL-150's budget.
+
+**What this note leaves open, to the owner.** The proof side is repaired: every input check reads the state it waited
+for. Whether the 100 ms echo must hold on a host whose CPUs other processes oversubscribe is not this note's to rule;
+it stays open as [OQ-176](../../architecture/open-questions.md), and a red echo at a load average above the CPU count is
+run again alone meanwhile.

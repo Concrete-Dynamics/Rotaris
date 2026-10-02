@@ -8740,7 +8740,7 @@ the two differ for output that ends in blank lines, and for a tail whose first c
 **OQ-176 — Does REQ-SHELL-166's 100 ms echo hold on a host whose CPUs other processes oversubscribe?** *(REQ-SHELL-166,
 echo latency "within the 100 ms gesture budget of REQ-SHELL-150, measured from the key press to the frame that shows it";
 REQ-SHELL-150, whose "sustained load" is a burst of changes in the shell, "a build that misses any of the three under
-sustained load fails this requirement". Raised 2026-10-01 while repairing
+sustained load fails this requirement". Raised 2026-10-01 while repairing (measured that day; first committed 2026-10-02)
 [`terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md`](../defects/fixed/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md)
 under R-062. Open.)*
 
@@ -8754,7 +8754,8 @@ condition; neither says whether the bound applies when other processes keep the 
 
 **What the build proceeds under.** The bound is kept as stated and is not relaxed for load. The proof records the host's
 load average and CPU count beside the reading (`results.live.echoLoad`) and how long the key waited in the renderer's queue
-(`queuedMs`). A red taken at a load average above the CPU count is run again alone, as the host's own rule says
+(`queuedMs`). Since 2026-10-02 the reading starts at the key event's own time stamp, so that wait is inside the bound
+(`from: 'event'`); until then it started when the page's listener ran and the wait was recorded beside it. A red taken at a load average above the CPU count is run again alone, as the host's own rule says
 (`.agents/skills/orchestrated-build/references/environment.md`, "Load"). A red alone is the product's.
 
 **What a ruling decides.** Whether the 100 ms applies on any host the product runs on, whatever else that host runs;

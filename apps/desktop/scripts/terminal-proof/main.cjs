@@ -546,7 +546,10 @@ app.whenReady().then(async () => {
       await exec(`window.__terminalProof.echoProbe(${JSON.stringify(sentinel)})`);
       await key(sentinel, [], sentinel);
       const probe = await until(async () => { const st = await state(LIVE); return st.echo && st.echo.paintedAt !== null ? st.echo : null; }, 3_000, 5);
-      echoes.push(probe ? { sentinel, keyToFrameMs: Number((probe.frameAt - probe.pressedAt).toFixed(1)), keyToPaintMs: Number((probe.paintedAt - probe.pressedAt).toFixed(1)), queuedMs: probe.eventAt === null ? null : Number((probe.pressedAt - probe.eventAt).toFixed(1)) } : { sentinel, keyToFrameMs: null, keyToPaintMs: null, queuedMs: null });
+      // REQ-SHELL-166 measures "from the key press": the event's own time stamp where the page has it, so the time the key
+      // waited in the renderer's queue (`queuedMs`) is inside the bound, not beside it; the listener's time is the fallback.
+      const pressed = probe ? probe.eventAt ?? probe.pressedAt : null;
+      echoes.push(probe ? { sentinel, keyToFrameMs: Number((probe.frameAt - pressed).toFixed(1)), keyToPaintMs: Number((probe.paintedAt - pressed).toFixed(1)), queuedMs: probe.eventAt === null ? null : Number((probe.pressedAt - probe.eventAt).toFixed(1)), from: probe.eventAt === null ? 'listener' : 'event' } : { sentinel, keyToFrameMs: null, keyToPaintMs: null, queuedMs: null, from: null });
       await pause(60);
     }
     await exec('window.__terminalProof.echoProbe(null)');
@@ -693,6 +696,8 @@ app.whenReady().then(async () => {
     await until(async () => { const st = await state(LIVE); return st.stream.meta && st.stream.meta.running === false && st.stream.previewMeta && st.stream.previewMeta.running === false && st.stream.grid.lines.some((l) => l.includes('line 10000')) ? true : null; }, 20_000, 50);
     await exec(`window.__terminalProof.settled(${JSON.stringify(LIVE)})`);
     await until(async () => { const st = await state(LIVE); return st.stream.grid.lines.some((l) => l.includes('line 10000')) && st.stream.preview.lines.some((l) => l.includes('line 10000')) ? true : null; }, 20_000, 50);
+    // `waitedMs` is recorded, not bounded: this check is REQ-SHELL-103/166's throughput (the flood is painted, whole), and
+    // it bounds nothing of REQ-SHELL-150's responsiveness budget under load; a pass here is no evidence for that budget.
     const floodPaintMs = Date.now() - floodFrom;
     const closedLines = (closed?.result.output ?? '').split('\n');
     const openLines = (open?.result.output ?? '').split('\n');

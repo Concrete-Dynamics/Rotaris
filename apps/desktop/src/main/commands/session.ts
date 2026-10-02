@@ -3,6 +3,19 @@ import { canonicalPath } from '@rotaris/platform';
 import { millis } from '@rotaris/kernel';
 import { randomUUID } from 'node:crypto';
 import { refusal, type CommandContext, type CommandHandlers } from './context.js';
+import type { ReportInput } from '../notices.js';
+
+/**
+ * REQ-NOTIFY-060/061: a sandboxed launch that was refused — the confinement gate answered before the run reached a
+ * started state (`session.confinement`). The notice reproduces the refusal wording as received, unedited, as its message
+ * AND its copyable detail, remediation included; its one action returns to the workspace view; it offers no retry.
+ * REQ-SANDBOX-120's title stays the run host's. The same notice for a start, a prompt and a continue: the gate runs
+ * before each, and none of them reaches a run.
+ */
+export function confinementRefusalNotice(r: { readonly headline: string; readonly detail?: string | undefined }): ReportInput {
+  const wording = r.detail ?? r.headline;
+  return { severity: 'error', title: r.headline, message: wording, detail: wording, persistent: true, action: { label: 'Open Workspace', action: { kind: 'open-view', view: 'workspace' } } };
+}
 
 /**
  * SESSIONS — starting one, resuming one, steering one, and the plan gate's two entries (ADR-0062,
@@ -16,7 +29,10 @@ export function sessionCommands(
   return {
     'session.continue': async (req) => {
       const r = await runHost.request({ kind: 'session.continue', sessionId: req.sessionId, action: req.action, ...(req.withoutPaused === true ? { withoutPaused: true } : {}) }, millis(10_000));
-      if (r.kind !== 'session.continued') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The session could not be continued'); }
+      if (r.kind !== 'session.continued') {
+        if (r.kind === 'refused') { if (r.code === 'session.confinement') void notices.report(confinementRefusalNotice(r)); else raiseNotice('error', r.headline, r.detail); }
+        return refusal(r, 'The session could not be continued');
+      }
       const open = pauseWindows.get(req.sessionId);
       if (open && !open.isDestroyed()) open.close();
       log(`session ${req.sessionId} ${req.action}: ${r.resumed ? 'continued' : 'left paused'}`);
@@ -105,7 +121,11 @@ export function sessionCommands(
         }
         // REQ-NOTIFY-003: a refusal is also published as a persistent notice, so it outlives the composer's error line.
         // REQ-WORKSPACE-137: the two provider refusals carry an action leading to the Models settings.
-        if (r.kind === 'refused') { raiseNotice('error', r.headline, r.detail, r.code === 'session.no-model' || r.code === 'session.provider-auth' ? recoveryFor('config.models') : undefined); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
+        if (r.kind === 'refused') {
+          if (r.code === 'session.confinement') void notices.report(confinementRefusalNotice(r));
+          else raiseNotice('error', r.headline, r.detail, r.code === 'session.no-model' || r.code === 'session.provider-auth' ? recoveryFor('config.models') : undefined);
+          log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`);
+        }
         return refusal(r, 'The session could not be started');
       }
       if (binding) log(`session ${r.sessionId} bound to ${binding.worktree_path} on ${binding.branch} (${binding.created_by_session ? 'created by the session' : 'attached'})`);
@@ -169,6 +189,8 @@ export function sessionCommands(
     },
     'session.prompt': async (req) => {
       const r = await runHost.request({ kind: 'session.prompt', sessionId: req.sessionId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }) }, millis(10_000));
+      // REQ-NOTIFY-061: a continuation refused at the confinement gate never reached a run; it is reported as a start's is.
+      if (r.kind === 'refused' && r.code === 'session.confinement') { void notices.report(confinementRefusalNotice(r)); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
       return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be recorded');
     },
     'session.readAttachment': async (req) => {

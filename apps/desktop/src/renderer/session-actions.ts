@@ -1,4 +1,4 @@
-import { RUN_AGENT_ID, type CommandOutcome, type CommandRequest, type ImageAttachmentInput, type PauseResolution, type PermissionPreset, type PlanDecision, type QuestionAnswers, type RendererBridge, type SessionRecord } from '@rotaris/contracts';
+import { RUN_AGENT_ID, type CommandOutcome, type CommandRequest, type ImageAttachmentInput, type PauseResolution, type PermissionPreset, type PlanDecision, type QuestionAnswers, type RendererBridge, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { useShellState, type CancelOverlayStore } from '@rotaris/ui';
 
 /**
@@ -25,7 +25,7 @@ export interface SessionActionDeps {
    * real one (ADR-0043) satisfies it and so does `{ getState: () => ({ sessionId, follow }) }`, which is the point.
    */
   readonly replica: {
-    readonly getState: () => { readonly sessionId: string | null; readonly follow: (sessionId: string | null) => void; readonly session?: SessionRecord | null };
+    readonly getState: () => { readonly sessionId: string | null; readonly follow: (sessionId: string | null) => void; readonly session?: SessionRecord | null; readonly rows?: readonly TranscriptRow[] };
   };
   /**
    * REQ-MONITOR-127/128 / REQ-MONITOR-296: the overlay a confirmed cancel of one agent, or of the run, is shown through
@@ -236,5 +236,25 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
     return rearmed.ok ? { ok: true } : { ok: false, reason: rearmed.detail ?? rearmed.headline };
   }
 
-  return { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, setMode, setRunStartMode, stopRun, submitPrompt };
+  /**
+   * REQ-NOTIFY-045 with REQ-NOTIFY-030 and REQ-NOTIFY-066 (OQ-178): a notice's retry. It resubmits the current composer
+   * draft, or — the draft blank — the followed session's last submitted prompt, its newest `user` row (the prompt the
+   * engine's own continue reads as the last one). It goes through `submitPrompt`, the composer's own path, so it reaches
+   * the session this window follows and never another's, and a refusal carries the engine's words. With no session
+   * followed there is no failed run to retry, so nothing is started.
+   */
+  async function retryRun(draft: string): Promise<{ ok: true; resubmitted: 'draft' | 'last-prompt' } | { ok: false; reason: string }> {
+    const state = replica.getState();
+    if (!state.sessionId) return { ok: false, reason: 'No session is loaded.' };
+    if (draft.trim() !== '') {
+      const r = await submitPrompt(draft, []);
+      return r.ok ? { ok: true, resubmitted: 'draft' } : r;
+    }
+    const last = [...(state.rows ?? [])].reverse().find((row) => row.kind === 'user' && row.body.trim() !== '');
+    if (!last) return { ok: false, reason: 'There is no draft and no submitted prompt in this session to retry.' };
+    const r = await submitPrompt(last.body, []);
+    return r.ok ? { ok: true, resubmitted: 'last-prompt' } : r;
+  }
+
+  return { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, retryRun, setMode, setRunStartMode, stopRun, submitPrompt };
 }

@@ -337,7 +337,9 @@ export function createRunHost() {
       // REQ-WORKSPACE-050: the catalog from the BASE workspace, which is what `configure` is called with; the
       // context files from the run's EXECUTION root, which the session carries and which differs only for an
       // isolated session. The two halves of one sentence, and the second was the recorded defect.
-      return r.ok ? { ok: true as const, value: { ...r.value, contextUnits: () => skills.contextUnits(workspaceRoot, ctx.sessionId, ctx.executionRoot) } } : { ok: false as const, error: { reason: r.error.reason } };
+      // REQ-NOTIFY-061: a refused confinement mode keeps its class through the engine, so a continuation's refusal is
+      // reported as a start's is.
+      return r.ok ? { ok: true as const, value: { ...r.value, contextUnits: () => skills.contextUnits(workspaceRoot, ctx.sessionId, ctx.executionRoot) } } : { ok: false as const, error: { reason: r.error.reason, ...(r.error.code === 'confinement' ? { code: 'confinement' as const } : {}) } };
     },
     /**
      * REQ-MONITOR-049 / REQ-CONFIG-085 (Part AH): a model's own maximum input tokens, from the configuration

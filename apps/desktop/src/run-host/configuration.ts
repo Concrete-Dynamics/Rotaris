@@ -471,7 +471,11 @@ export interface PrepareOptions {
  * errors are warnings while a person is present and fatal otherwise (REQ-CONFIG-245/246); an entry model
  * with no reachable endpoint refuses (REQ-EVENTS-021, one result of status error).
  */
-export type ConfigureRefusal = { readonly reason: string; readonly cfg?: LoadedConfiguration; readonly code?: 'no-model' };
+/**
+ * `confinement` (REQ-NOTIFY-060/061): the start-time gate refused the confinement mode the run asked for, so the run never
+ * reached a started state; main reports that class in REQ-NOTIFY-061's own notice.
+ */
+export type ConfigureRefusal = { readonly reason: string; readonly cfg?: LoadedConfiguration; readonly code?: 'no-model' | 'confinement' };
 
 /** Captured inputs and the credential boundary for one launch (REQ-TRACE-470/471). */
 export interface PreparedRun {
@@ -526,10 +530,10 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
    * probing at all (REQ-SANDBOX-074).
    */
   const mode = effectiveSandboxMode(granted.runtime.sandbox_mode, options?.sandboxMode);
-  if (!mode.ok) return err({ reason: mode.error, cfg: granted });
+  if (!mode.ok) return err({ reason: mode.error, cfg: granted, code: 'confinement' });
   const verdict = deps.confinement?.() ?? null;
   if (mode.value !== 'off' && verdict?.available !== true) {
-    return err({ reason: renderUnavailability(verdict ?? { available: false, backend: 'unavailable', reason: '', remediation: '' }), cfg: granted });
+    return err({ reason: renderUnavailability(verdict ?? { available: false, backend: 'unavailable', reason: '', remediation: '' }), cfg: granted, code: 'confinement' });
   }
   // The override is folded into the captured configuration, so the run, its snapshot and its audit
   // all read one mode rather than the file's and the dialog's separately (REQ-SANDBOX-104, -122).

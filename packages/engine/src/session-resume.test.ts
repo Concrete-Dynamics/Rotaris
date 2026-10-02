@@ -74,6 +74,32 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(roots).toEqual([{ workspaceRoot: 'C:/ws', executionRoot: tree }, { workspaceRoot: 'C:/ws', executionRoot: tree }]);
   });
 
+  /**
+   * REQ-NOTIFY-060/061: a continuation refused at the confinement gate keeps its class through the engine (`confinement`),
+   * so main reports it in REQ-NOTIFY-061's notice; any other configuration refusal stays `configuration`. Before the repair of
+   * `docs/defects/fixed/a-refused-confinement-start-is-not-reported-as-req-notify-061-says.md` both read `configuration`.
+   */
+  it('REQ-NOTIFY-061: a continuation refused at the confinement gate is refused as `confinement`, another refusal as `configuration`', async () => {
+    const client = new ScriptedModelClient([answer('one')]);
+    const backend = new DefaultAgentBackend(client);
+    let refuse: { readonly reason: string; readonly code?: 'confinement' } | null = null;
+    const sessions = new Sessions({
+      clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 77, host: HOST,
+      retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-confined',
+      model: null, sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid),
+      configure: (): Result<RunSetup, { readonly reason: string; readonly code?: 'confinement' }> => refuse !== null
+        ? { ok: false, error: refuse }
+        : { ok: true, value: { model: { backend, config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => '' } }, runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' } } },
+    });
+    const started = sessions.start(dal, 'C:/ws', 'build it');
+    if (!started.ok) throw new Error(started.error.reason);
+    await sessions.running(started.value);
+    refuse = { reason: 'Confinement is unavailable: bwrap is not on PATH. Install bubblewrap.', code: 'confinement' };
+    expect(sessions.prompt(started.value, 'keep going')).toMatchObject({ ok: false, error: { code: 'confinement', reason: refuse.reason } });
+    refuse = { reason: 'The configuration could not be loaded: runtime is not a mapping.' };
+    expect(sessions.prompt(started.value, 'keep going')).toMatchObject({ ok: false, error: { code: 'configuration' } });
+  });
+
   it('reopens the same identity, sweeps orphans at the continue (never at the load, PD-ORCH-005 clause 8), continues ordinals and carries prior intent', async () => {
     const client = new ScriptedModelClient([answer('first answer', { input: 10, output: 4 }), answer('second answer', { input: 7, output: 3 })]);
     const backend = new DefaultAgentBackend(client);

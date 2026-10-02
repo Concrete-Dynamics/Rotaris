@@ -96,6 +96,30 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
   };
 }
 
+/** One field of a role row's Scope cell (REQ-CONFIG-341): the origin it draws and whether it offers Unset. */
+export interface ScopeField {
+  readonly origin: ConfigSnapshot['roles'][number]['modelOrigin'];
+  readonly offerUnset: boolean;
+}
+
+/**
+ * REQ-CONFIG-341: what a role row's Scope column draws, per field. A pending unset of the field marks its origin as
+ * `default` — the click's own effect, before any save — and `default` is never an edit scope, so it offers no Unset.
+ * Otherwise the field draws the origin the snapshot read back (REQ-CONFIG-031's layers) and offers Unset only where
+ * that origin equals the selected edit scope. Discard restores the saved pending state, which holds no unset, so the
+ * read-back origin and its Unset return with it.
+ */
+export function scopeCellOf(
+  row: ConfigSnapshot['roles'][number],
+  pending: PendingSettings,
+  scope: 'workspace' | 'global',
+): { readonly model: ScopeField; readonly reasoning: ScopeField } {
+  const edit = pending.roles[row.role];
+  const field = (origin: ScopeField['origin'], unset: boolean | undefined): ScopeField =>
+    unset ? { origin: 'default', offerUnset: false } : { origin, offerUnset: origin === scope };
+  return { model: field(row.modelOrigin, edit?.unsetModel), reasoning: field(row.thinkingOrigin, edit?.unsetThinking) };
+}
+
 function sameValue(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }

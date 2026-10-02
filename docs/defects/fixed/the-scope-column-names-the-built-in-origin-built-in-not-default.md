@@ -63,6 +63,6 @@ its Unset. `settings-proof` passed after the repair. `config-proof` passed on it
 
 Noticed while driving it, and recorded rather than repaired: the Scope column's Unset neither marks the field
 `default` while the unset is pending
-([`../the-scope-columns-unset-leaves-the-field-reading-its-old-origin.md`](../the-scope-columns-unset-leaves-the-field-reading-its-old-origin.md))
+([`the-scope-columns-unset-leaves-the-field-reading-its-old-origin.md`](the-scope-columns-unset-leaves-the-field-reading-its-old-origin.md), repaired 2026-10-02)
 nor names the field and the role in its accessible name
 ([`../the-scope-columns-unset-is-named-unset-and-nothing-else.md`](../the-scope-columns-unset-is-named-unset-and-nothing-else.md)).

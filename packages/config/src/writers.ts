@@ -176,14 +176,36 @@ export async function writeVerifierSection(file: string, section: unknown, deps:
 
 export type RoleEditScope = 'workspace' | 'global';
 
-export interface RoleEdit {
-  readonly scope: RoleEditScope;
-  /** A model to write; null writes an explicit null; absent leaves the key. */
+/** One role's field edits at one layer: what `applyRoleEdit` writes into one document. */
+export interface RoleFieldEdits {
+  /** A model to write; null removes the key (REQ-CONFIG-041); absent leaves the key. */
   readonly model?: string | null;
   readonly thinking?: RoleReasoning | null;
   /** REQ-CONFIG-341: an unset removes the key at the edited scope. */
   readonly unsetModel?: boolean;
   readonly unsetThinking?: boolean;
+}
+
+/**
+ * REQ-CONFIG-259: "Role edits carry a per-field scope"; REQ-CONFIG-341: an Unset records "a pending unset of (role, field,
+ * scope)". One role's edits are held per scope, and each field's edit at a scope is written in that scope's file: a model
+ * unset at the workspace and a reasoning unset at the global layer each land where they were made, and so do a model
+ * unset at the workspace and a model picked at the global layer (defect note
+ * `a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`; until 2026-10-02 one `scope` routed the whole entry,
+ * and then one scope per field still dropped the first of two edits of one field at two scopes).
+ */
+export interface RoleEdit {
+  readonly workspace?: RoleFieldEdits;
+  readonly global?: RoleFieldEdits;
+}
+
+/** The part of a role edit made at `scope`, or undefined when no field was edited there. */
+function roleEditAt(edit: RoleEdit, scope: RoleEditScope): RoleFieldEdits | undefined {
+  const at = edit[scope];
+  if (at === undefined) return undefined;
+  const model = at.model !== undefined || at.unsetModel === true;
+  const thinking = at.thinking !== undefined || at.unsetThinking === true;
+  return model || thinking ? at : undefined;
 }
 
 export interface DesktopSave {
@@ -233,7 +255,7 @@ function ensureMapping(root: YAMLMap, key: string, doc: Document): YAMLMap {
   return fresh;
 }
 
-function applyRoleEdit(doc: Document, root: YAMLMap, role: string, edit: RoleEdit): void {
+function applyRoleEdit(doc: Document, root: YAMLMap, role: string, edit: RoleFieldEdits): void {
   const canonical = LEGACY_ROLE_ALIASES[role] ?? role;
   const personas = ensureMapping(root, 'personas', doc);
   // REQ-CONFIG-251: a legacy alias key whose canonical name is now present is deleted.
@@ -267,7 +289,10 @@ export async function saveDesktop(files: { workspace: string; global: string }, 
   }
   const ws = openDocument(files.workspace);
   if (!ws.ok) return ws.error.code === 'not-a-mapping' ? err({ ...ws.error, fault: `the workspace agents.yaml is not a mapping (${ws.error.fault})` }) : ws;
-  const globalEdits = Object.entries(save.roles ?? {}).filter(([, e]) => e.scope === 'global');
+  // REQ-CONFIG-259/341: each field at the layer it was edited at — the workspace's part of every role edit, then the global's.
+  const atScope = (scope: RoleEditScope) => Object.entries(save.roles ?? {}).flatMap(([role, e]) => { const part = roleEditAt(e, scope); return part === undefined ? [] : [[role, part] as const]; });
+  const workspaceEdits = atScope('workspace');
+  const globalEdits = atScope('global');
   let global: { doc: Document.Parsed } | null = null;
   if (globalEdits.length > 0) {
     const g = openDocument(files.global);
@@ -331,7 +356,7 @@ export async function saveDesktop(files: { workspace: string; global: string }, 
     }
     if (instructions.items.length === 0) root.delete('instructions');
   }
-  for (const [role, edit] of Object.entries(save.roles ?? {})) if (edit.scope === 'workspace') applyRoleEdit(doc, root, role, edit);
+  for (const [role, edit] of workspaceEdits) applyRoleEdit(doc, root, role, edit);
   if (global) for (const [role, edit] of globalEdits) applyRoleEdit(global.doc, rootOf(global.doc), role, edit);
 
   const wrote = await commit(files.workspace, doc, deps.timers);
@@ -374,6 +399,6 @@ export async function writeModelPreferences(file: string, prefs: ModelPreference
     if (level === null) root.delete(key);
     else if (level !== undefined) root.set(key, doc.createNode(level));
   }
-  for (const [role, edit] of Object.entries(prefs.roles ?? {})) applyRoleEdit(doc, root, role, { scope: 'workspace', ...edit });
+  for (const [role, edit] of Object.entries(prefs.roles ?? {})) applyRoleEdit(doc, root, role, edit);
   return commit(file, doc, deps.timers);
 }

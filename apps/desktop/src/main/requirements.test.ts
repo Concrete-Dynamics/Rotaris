@@ -14,6 +14,7 @@ function harness(reply: ProcessReply | Error, workspace: string | null = 'C:\\ws
     currentWorkspace: () => workspace ?? undefined,
     awaitWorkspace: () => Promise.resolve(),
     request: (root, req) => { sent.push(req); expect(root).toBe(workspace); return reply instanceof Error ? Promise.reject(reply) : Promise.resolve(reply); },
+    disclosure: () => 'suppressed',
     person: () => 'gang',
     broadcast: (p) => { broadcasts.push(p); },
     log: () => undefined,
@@ -30,7 +31,8 @@ describe('createRequirementsRelay', () => {
     const h = harness({ kind: 'requirements.result', value: { cards: [] } });
     const out = await h.relay.handle({ name: 'requirements.board', workspace: 'D:\\somewhere-else' }, { kind: 'window', webContentsId: 1 });
     expect(out).toEqual({ ok: true, value: { cards: [] } });
-    expect(h.sent).toEqual([{ kind: 'requirements.command', workspaceRoot: 'C:\\ws', command: { name: 'requirements.board', workspace: 'C:\\ws' }, actor: { kind: 'user', person: 'gang' } }]);
+    // REQ-TRACE-472/478: main's standing disclosure is stamped beside the actor, so the queue the service publishes reads what its claim reads.
+    expect(h.sent).toEqual([{ kind: 'requirements.command', workspaceRoot: 'C:\\ws', command: { name: 'requirements.board', workspace: 'C:\\ws' }, actor: { kind: 'user', person: 'gang' }, disclosure: 'suppressed' }]);
     expect(h.broadcasts).toEqual([]);
   });
   it('broadcasts channel 10 exactly when the reply carries `changed` (persist before publish)', async () => {

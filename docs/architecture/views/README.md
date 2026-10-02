@@ -92,6 +92,33 @@ ended and still reads `running`, it asks the run host's status once. This repair
 The **process view**'s initialization paragraph says so. No package, edge, process, message kind, channel, command or
 store column changed.
 
+**A role's pending edits keep each field's scope through the save (REQ-CONFIG-259, REQ-CONFIG-341).** The Personas
+table's pending edits are held per role and per scope (`PendingRoleEdit` is `{ workspace?, global? }`), and
+`applyChange` writes a change under its own scope only. `RoleEditSchema` carries the same two-scope shape in place of one
+`scope`, strictly. `saveDesktop` writes each scope's part in its own file (`roleEditAt`). The Personas row shows the
+pending edit made at the selected scope. This repairs `a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`,
+in two rounds. The first gave each field one scope, and a second edit of the same field at the other scope dropped the
+first. `settings-proof`'s launches 9 and 10 show it. The **seams view** §5 says so. The `config.save` payload's role entry
+changed shape. No package, edge, process, message kind, channel, command or store column changed.
+
+**A card resting in `ready` across a restart is disclosed and started from the queue (REQ-TRACE-472, REQ-TRACE-482,
+REQ-TRACE-464).** The delivery service's `recoverLaunch` (`workspace-service/delivery.ts`) rebuilds a launch the restart
+lost from the store's worktree row through `RunGitPort.takeOver`, never by provisioning. It runs once on the first pass
+after a start and again on the queue's release, which records the disclosure it carries. A tree that cannot be taken
+over is stated on the queue entry. `beforeCommit`'s own take-over now shares `takeOverRecorded` with it. This repairs
+`a-card-resting-in-ready-across-a-restart-can-never-be-started.md`; `requirements-runs-proof`'s sixth assertion shows
+it. The verifier falsified two of its clauses the same day. First, the recovery ran on the restart reap's pass only, so a
+first parse that failed used it up; it now runs on every pass that parses. Second, a recovered launch was undisclosed with
+no way to learn main's preferences. Main's coordinator now sends its standing disclosure (`due`, `suppressed`, `off`) on
+`requirements.run.claim`, a new optional field of that command. `requirements-runs-proof`'s seventh assertion shows it.
+The **sequences view**'s board section says so. No package, edge, process, message kind, channel or store column changed.
+**Corrected in a second round the same day:** sent on the claim alone, the value split the scheduler, and the queue the
+board published still asked for a disclosure the claim no longer needed. The field moved off `requirements.run.claim`
+onto the `requirements.command` envelope, beside the actor, stamped by main's relay and its coordinator on every command;
+the service holds the last value and schedules the published queue, the preview and the claim under it. The **process
+view**'s requirements contracts and the **sequences view**'s board section say so. No package, edge, process, message
+kind, channel or store column changed.
+
 **A unit's worktree is provisioned once, and a later start of the same unit takes it over (REQ-TRACE-464,
 REQ-GIT-140).** The delivery service's `beforeCommit` takes over the tree of the launch it holds when that launch is
 for the derived unit and its tree is on disk. It provisions only a unit with no tree. After a restart it takes over the

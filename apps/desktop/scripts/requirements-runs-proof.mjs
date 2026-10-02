@@ -3,7 +3,7 @@
  * §Delivery Queue, §Editing and Creating Requirements; REQ-TRACE-369/375, 417..426, 434..454, 463..483, 498).
  *
  * It builds a REAL scratch Git repository from Part AJ's fixture requirement store, then runs the Part AP suites
- * through vitest with the JSON reporter and reads the FIVE proof assertions back by their `it` titles from
+ * through vitest with the JSON reporter and reads the SEVEN proof assertions back by their `it` titles from
  * `apps/desktop/src/main/requirements-runs.proof.test.ts`. That suite drives the real delivery service, the real
  * traceability engine (in-thread executor) and main's real run coordinator over the real store and the real Git
  * helper; only the run host is scripted, and it records the live configuration state in force at each request so
@@ -58,13 +58,17 @@ const SUITES = [
   'apps/desktop/src/run-host/launch.test.ts',
   'packages/workspace/src/delivery/proof.test.ts',
 ];
-/** The plan's five assertions for this row, verbatim as `it` titles in requirements-runs.proof.test.ts. */
+/** The plan's five assertions for this row, and the restart's sixth and seventh, verbatim as `it` titles in requirements-runs.proof.test.ts. */
 const ASSERTIONS = {
   runStartsInItsOwnWorktreeElevated: "release → disclosure → accept: the run starts in a new worktree with the permissive preset, and the composer's next run does not",
   runRowCarriesTheSessionId: 'the run row carries the session id while the unit runs',
   interruptedWorkRetained: 'the run host dies mid-run: the restart reports "interrupted, work retained" and the worktree is still there',
   manualNeverStartsOnItsOwn: "automatic scheduling off: a candidate back in the released column is never dispatched on its own, and the queue quotes the scheduler's reason",
   concurrencyHoldsTheThird: "concurrency 2 holds a third release as deferred with the scheduler's reason quoted",
+  // Defect note `a-card-resting-in-ready-across-a-restart-can-never-be-started.md` (REQ-TRACE-472/482/464).
+  restingCardStartsAfterRestart: 'a card resting in ready across a restart is disclosed and started from the queue, on the worktree its release provisioned',
+  // The verifier's second finding on that note (REQ-TRACE-472/482): main's standing disclosure travels on its claim.
+  suppressedCardPickedUpAfterRestart: 'a card resting in ready is picked up by automatic scheduling after a restart once the disclosure is suppressed permanently, on its recorded tree',
 };
 
 const jsonPath = join(output, 'vitest.json');

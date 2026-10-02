@@ -171,7 +171,8 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
         <thead><tr><th>Persona</th><th>Role</th><th>Model</th><th>Reasoning</th><th>Scope</th><th>Tools</th></tr></thead>
         <tbody>
           {snapshot.roles.map((r) => {
-            const edit = pending.roles[r.role];
+            // REQ-CONFIG-259/341: the controls show the pending edit made at the selected scope; switching scope shows that scope's values.
+            const edit = pending.roles[r.role]?.[scope];
             const model = edit?.unsetModel ? '' : edit?.model !== undefined ? edit.model ?? '' : r.rawModel ?? '';
             const thinking = edit?.unsetThinking ? 'default' : edit?.thinking !== undefined ? edit.thinking ?? 'default' : r.rawThinking ?? 'default';
             const levels = ROLE_REASONING_NAMES.includes(thinking as 'default') ? ROLE_REASONING_NAMES : [...ROLE_REASONING_NAMES, thinking];

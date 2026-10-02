@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, mintWorkspaceId, ok, err } from '@rotaris/kernel';
@@ -185,6 +185,164 @@ describe('createDeliveryService', () => {
     expect(takenOver).toEqual([{ path: join(ws, '.rotaris', 'requirements', 'worktrees', 'u1'), branch: 'rotaris/req/req-101/u1' }]);
     const claim = (await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value as { unit: string; worktree: { path: string } } | null;
     expect(claim).toMatchObject({ unit: 'u1', worktree: { path: join(ws, '.rotaris', 'requirements', 'worktrees', 'u1') } });
+  });
+  /**
+   * Defect note `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`: a release with the queue stopped
+   * provisions u1 and rests in `ready`; a restart loses the launch while the store keeps the card in `ready` and the
+   * tree's row. The queue's "Disclose and start" sends `requirements.queue.set {release, disclosure}`, which recorded
+   * the disclosure only on a launch it already held, so the entry stayed deferred as undisclosed and no claim took the
+   * card. REQ-TRACE-472 (accepting is what lets the run start), REQ-TRACE-482 (released, it begins), REQ-TRACE-464
+   * (the run takes over the worktree already provisioned for it and never provisions a second one).
+   */
+  it('REQ-TRACE-472/482/464: after a restart lost the launch of a card resting in ready, the queue\'s disclosure release takes over the recorded tree and the claim begins u1 on it', async () => {
+    const { port, calls, takenOver } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    // The restart: a new service over the same store (REQ-TRACE-480: the stop is not persisted).
+    const after = createDeliveryService(deps);
+    const board = (await after.handle({ name: 'requirements.board', workspace: 'x' }, USER)).value as BoardProjection;
+    expect(board.cards.find((c) => c.id === 'REQ-101')!.column).toBe('ready');
+    const entry = (q: { entries: readonly { id: string; state: string; reason?: string }[] }) => q.entries.find((e) => e.id === 'REQ-101');
+    // Before the user accepts, the entry still asks for the disclosure: nothing begins without it (REQ-TRACE-472/497).
+    expect(entry(board.queue)).toMatchObject({ state: 'deferred', reason: 'The permissions of the run for REQ-101 have not been disclosed and accepted; open it from the queue to see the disclosure and start it.' });
+    expect((await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value).toBeNull();
+    const released = await after.handle({ name: 'requirements.queue.set', workspace: 'x', release: 'REQ-101', disclosure: 'accepted' }, USER);
+    expect(entry(released.value as BoardProjection['queue'])).toMatchObject({ state: 'next' });
+    const claim = (await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value as { id: string; unit: string; worktree: { path: string; branch: string }; permissions: string } | null;
+    expect(claim).toMatchObject({ id: 'REQ-101', unit: 'u1', worktree: { path: join(ws, '.rotaris', 'requirements', 'worktrees', 'u1'), branch: 'rotaris/req/req-101/u1' }, permissions: 'permissive' });
+    expect(calls).toEqual(['u1']);
+    expect(takenOver.map((t) => t.path)).toContain(join(ws, '.rotaris', 'requirements', 'worktrees', 'u1'));
+  });
+  it('REQ-TRACE-464/482: under an unattended workspace with automatic scheduling, the first pass after a restart takes the recorded tree over and the scheduler claims the card with no release', async () => {
+    const { port, calls } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    writeFileSync(join(root, 'agents.yaml'), 'runtime:\n  permission_mode: autonomous\nrequirements:\n  scheduling:\n    mode: automatic\n');
+    const after = createDeliveryService(deps);
+    const claim = (await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value as { id: string; unit: string; worktree: { path: string }; permissions: string } | null;
+    expect(claim).toMatchObject({ id: 'REQ-101', unit: 'u1', worktree: { path: join(ws, '.rotaris', 'requirements', 'worktrees', 'u1') }, permissions: 'workspace' });
+    expect(calls).toEqual(['u1']);
+  });
+  /**
+   * Verifier's finding, repair round 1: the recovery ran only on the pass that did the restart reap, whether or not the
+   * store parsed there. A first parse that failed (a document mid-edit when the app opened) used it up, and no later
+   * pass recovered the card, so an unattended automatic workspace never claimed it for the rest of the session.
+   */
+  it('REQ-TRACE-482/464: a first parse that fails does not use up the recovery; the next pass that parses recovers the card and the scheduler claims it', async () => {
+    const { port, calls } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    writeFileSync(join(root, 'agents.yaml'), 'runtime:\n  permission_mode: autonomous\nrequirements:\n  scheduling:\n    mode: automatic\n');
+    let failOnce = true;
+    const flaky: TraceabilityEngine = { ...engine, parseStore: async (root_, o) => { if (failOnce) { failOnce = false; return err({ kind: 'layout', message: 'the store is mid-edit' } as never); } return engine.parseStore(root_, o); } };
+    const after = createDeliveryService({ ...deps, engine: flaky });
+    await after.handle({ name: 'requirements.board', workspace: 'x' }, USER);
+    await after.handle({ name: 'requirements.refresh', workspace: 'x' }, USER);
+    const claim = (await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value as { id: string; unit: string; worktree: { path: string } } | null;
+    expect(claim).toMatchObject({ id: 'REQ-101', unit: 'u1', worktree: { path: join(ws, '.rotaris', 'requirements', 'worktrees', 'u1') } });
+    expect(calls).toEqual(['u1']);
+  });
+  /**
+   * Verifier's finding, repair round 1: the recovery recorded every recovered launch as undisclosed, and the service
+   * never learnt main's standing disclosure (the two preferences REQ-TRACE-472 names). A card released with the
+   * disclosure suppressed permanently, or with the elevation switched off, in a workspace that schedules automatically
+   * but is not unattended, was never claimed after a restart. Main now stamps its standing disclosure on every command
+   * it sends (the envelope's `disclosure`, the third argument here).
+   */
+  it('REQ-TRACE-472/482: after a restart, a claim carrying a permanently suppressed disclosure starts the card permissive; one carrying the elevation off starts it on the workspace\'s own mode; one with the disclosure due starts nothing', async () => {
+    const { port, calls } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'suppressed' } }, USER);
+    writeFileSync(join(root, 'agents.yaml'), 'requirements:\n  scheduling:\n    mode: automatic\n');
+    const due = createDeliveryService(deps);
+    expect((await due.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM, 'due')).value).toBeNull();
+    const suppressed = createDeliveryService(deps);
+    const s = (await suppressed.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM, 'suppressed')).value as { id: string; unit: string; permissions: string } | null;
+    expect(s).toMatchObject({ id: 'REQ-101', unit: 'u1', permissions: 'permissive' });
+    const off = createDeliveryService(deps);
+    const o = (await off.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM, 'off')).value as { id: string; unit: string; permissions: string } | null;
+    expect(o).toMatchObject({ id: 'REQ-101', unit: 'u1', permissions: 'workspace' });
+    expect(calls).toEqual(['u1']);
+  });
+  /**
+   * Verifier's finding, repair round 2: the standing disclosure reached the claim alone, so the queue the board
+   * published was still computed as if the disclosure were due. After a restart, under automatic scheduling with the
+   * disclosure suppressed permanently, the entry read "deferred … open it from the queue to see the disclosure and start
+   * it" while the next claim took the card with no disclosure shown — the queue no longer showed the scheduler's own
+   * order and reason (REQ-TRACE-478), and promised a disclosure REQ-TRACE-472 suppresses.
+   */
+  it('REQ-TRACE-478/472: after a restart, the queue the board publishes under a suppressed disclosure shows the card next, and the claim takes the card the queue named', async () => {
+    const { port, calls } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'suppressed' } }, USER);
+    writeFileSync(join(root, 'agents.yaml'), 'requirements:\n  scheduling:\n    mode: automatic\n');
+    const after = createDeliveryService(deps);
+    const board = (await after.handle({ name: 'requirements.board', workspace: 'x' }, USER, 'suppressed')).value as BoardProjection;
+    const entry = board.queue.entries.find((e) => e.id === 'REQ-101');
+    expect(entry).toMatchObject({ state: 'next' });
+    expect(entry?.reason).toBeUndefined();
+    const claim = (await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM, 'suppressed')).value as { id: string; unit: string; permissions: string } | null;
+    expect(claim).toMatchObject({ id: 'REQ-101', unit: 'u1', permissions: 'permissive' });
+    expect(calls).toEqual(['u1']);
+  });
+  it('REQ-TRACE-478/472: a standing disclosure that moves republishes the queue under it, and the reply carries the move for channel 10; one that holds changes nothing', async () => {
+    const { port } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    writeFileSync(join(root, 'agents.yaml'), 'requirements:\n  scheduling:\n    mode: automatic\n');
+    const after = createDeliveryService(deps);
+    const entry = (b: BoardProjection) => b.queue.entries.find((e) => e.id === 'REQ-101');
+    const first = await after.handle({ name: 'requirements.board', workspace: 'x' }, USER, 'due');
+    expect(entry(first.value as BoardProjection)).toMatchObject({ state: 'deferred', reason: 'The permissions of the run for REQ-101 have not been disclosed and accepted; open it from the queue to see the disclosure and start it.' });
+    expect(first.changed).toBeUndefined();
+    const same = await after.handle({ name: 'requirements.board', workspace: 'x' }, USER, 'due');
+    expect(same.value).toBe(first.value);
+    expect(same.changed).toBeUndefined();
+    // A permanent acceptance in another window: main's next command carries `suppressed`.
+    const moved = await after.handle({ name: 'requirements.board', workspace: 'x' }, SYSTEM, 'suppressed');
+    const g = (first.value as BoardProjection).generation + 1;
+    expect(moved.changed).toEqual({ generation: g, affected: null });
+    expect((moved.value as BoardProjection).generation).toBe(g);
+    expect(entry(moved.value as BoardProjection)).toMatchObject({ state: 'next' });
+    // A command that names no disclosure keeps the last one held.
+    const kept = await after.handle({ name: 'requirements.board', workspace: 'x' }, USER);
+    expect(kept.value).toBe(moved.value);
+  });
+  it('REQ-TRACE-472: with the elevation switched off when the claim is made, a launch accepted earlier starts on the workspace\'s own mode', async () => {
+    const { port } = provisioningGit();
+    const s = createDeliveryService({ db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port });
+    await s.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    await s.handle({ name: 'requirements.queue.set', workspace: 'x', start: true }, USER);
+    const c = (await s.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM, 'off')).value as { id: string; permissions: string } | null;
+    expect(c).toMatchObject({ id: 'REQ-101', permissions: 'workspace' });
+  });
+  it('REQ-TRACE-464/463: a recorded tree that cannot be taken over is stated on the entry, and nothing is provisioned from the queue', async () => {
+    const { port, calls } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    rmSync(join(ws, '.rotaris', 'requirements', 'worktrees', 'u1'), { recursive: true, force: true });
+    const after = createDeliveryService(deps);
+    const released = await after.handle({ name: 'requirements.queue.set', workspace: 'x', release: 'REQ-101', disclosure: 'accepted' }, USER);
+    const e = (released.value as BoardProjection['queue']).entries.find((x) => x.id === 'REQ-101');
+    expect(e).toMatchObject({ state: 'deferred' });
+    expect(e?.reason).toBe('The last start of REQ-101 did not begin: REQ-101 unit u1 has no recorded worktree on disk to take over, and a start from the queue provisions none: restore the tree, or hold the card and resume it from the board, which provisions one. Release it from the queue to try again.');
+    expect((await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value).toBeNull();
+    expect(calls).toEqual(['u1']);
   });
   it('deliveryServiceFor keeps one service per open store', () => {
     const deps = { workspaceRoot: ws, engine, clocks: clock, log: () => undefined };

@@ -15,7 +15,7 @@ import { GitViewStateSchema, RepositoryStateSchema, WorktreeBindingSchema } from
 import { SANDBOX_MODE_NAMES } from './config.js';
 import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './checkpoints.js';
 import { PromptListSchema, PromptStateSchema } from './library.js';
-import { ActorSchema, RequirementsCommandSchema } from './requirements.js'; // Part AK
+import { ActorSchema, RequirementsCommandSchema, STANDING_DISCLOSURES } from './requirements.js'; // Part AK
 import { PromptsRootsResultSchema } from './slash.js'; // Part AO
 import { SkillsStateSchema } from './skills.js'; // ADR-0063
 import { ImprovementAnalysisJobSchema, ImprovementArtifactSchema, ImprovementCommandSchema, RunTypeSchema } from './improvements.js';
@@ -366,8 +366,10 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   /** Part U / REQ-GIT-069: every ref under `refs/rotaris/checkpoints/<sid>/` in the tree, best-effort; a missing tree is a detail, never a failure. */
   z.object({ kind: z.literal('checkpoint.deleteNamespace'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1) }),
   // Part AK — ADR-0041: the requirements command family, relayed whole; the ACTOR is stamped by main at the boundary
-  // the action arrived through (REQ-CONFIG-198) and is the one field a renderer never sends.
-  z.object({ kind: z.literal('requirements.command'), workspaceRoot: z.string(), command: RequirementsCommandSchema, actor: ActorSchema }),
+  // the action arrived through (REQ-CONFIG-198) and is the one field a renderer never sends. `disclosure` is main's
+  // standing disclosure (REQ-TRACE-472's two preferences, which only main holds), stamped beside the actor on every
+  // command so the queue the service publishes and the claim it answers read the same value (REQ-TRACE-478).
+  z.object({ kind: z.literal('requirements.command'), workspaceRoot: z.string(), command: RequirementsCommandSchema, actor: ActorSchema, disclosure: z.enum(STANDING_DISCLOSURES).optional() }),
   // Part AJ
   /**
    * ADR-0040 (Part AJ): the four toolchain operations of REQ-TRACE-508..511 against the open workspace's root

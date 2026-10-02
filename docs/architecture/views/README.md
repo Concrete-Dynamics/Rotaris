@@ -48,8 +48,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 **The status strip names the focused session's confinement backend (REQ-SANDBOX-121, REQ-MONITOR-257, REQ-NOTIFY-030;
 fin8).** Store v31 appends `sessions.sandbox_backend`, written beside `sandboxed` when a run starts; the record carries
 `sandboxBackend`; the strip draws `sandbox: <backend>` for a focused session whose record says confined, and nothing
-otherwise. The **runtime view**'s `sessions` row, the **process view**'s `SessionRecord` line and the **seams view** §8
-(a worked status-strip item) say so. No package, edge, process, channel or command changed; one store column did.
+otherwise. A run of an existing session refused at the confinement gate republishes its record unconfined until a run of it
+starts (REQ-NOTIFY-061; repair round 1, `Sessions.refusedAtStart`, held in memory, not in the row). The **runtime view**'s
+`sessions` row, the **process view**'s `SessionRecord` line, the **state-ownership view**'s run-host row for that refusal
+and the **seams view** §8 (a worked status-strip item) say so. No package, edge, process, channel or command changed; one
+store column did.
 
 **The retry resubmits the session's last prompt from the store, images included (REQ-NOTIFY-045, REQ-SESSION-192,
 REQ-CHAT-173; fin8).** A notice's retry with a blank draft is one command, `session.retry`, renderer → main → run host

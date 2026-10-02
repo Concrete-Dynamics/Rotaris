@@ -9042,25 +9042,28 @@ the retry and stay where they are. A blank draft resubmits the session's last su
 **What a ruling decides.** Whether a retry of a non-blank draft carries the images the composer holds (and so whether the
 composer publishes them to application state as it does its text), and whether they are then cleared from the composer.
 
-**OQ-184 — Where does REQ-SANDBOX-121's workspace indicator stand, and what does it say after a refused continuation of a
-confined session?** *(REQ-SANDBOX-121, "A workspace indicator naming the backend appears only for a session whose recorded
-result is confined"; REQ-MONITOR-257 and REQ-NOTIFY-030, "the sandbox indicator"; REQ-NOTIFY-061, "The sandbox indicator
+**OQ-184 — Where does REQ-SANDBOX-121's workspace indicator stand, and in what words?** *(Asked until 2026-10-02 as "…and
+what does it say after a refused continuation of a confined session?"; that third part was not open and is withdrawn, below.)
+(REQ-SANDBOX-121, "A workspace indicator naming the backend appears only for a session whose recorded result is confined"; REQ-MONITOR-257 and REQ-NOTIFY-030, "the sandbox indicator"; REQ-NOTIFY-061, "The sandbox indicator
 stops describing the run as sandboxed"; REQ-SHELL-038, the strip's items left to right, a closed list; REQ-SHELL-047, "An
 item added to the strip is given its threshold here"; REQ-TOOLS-184. Raised 2026-10-02 by the repair of
 [`no-workspace-indicator-names-the-confinement-backend.md`](../defects/fixed/no-workspace-indicator-names-the-confinement-backend.md)
 (fin8). Open.)*
 
-Three things the requirements leave to the build:
+Two things the requirements leave to the build:
 
 - **Where it stands.** REQ-SANDBOX-121 calls it a *workspace* indicator and places it nowhere; REQ-SHELL-038 lists the
   strip's items and has none for it, and REQ-SHELL-047 says an item added to the strip gets its responsive threshold there,
   which it has not.
 - **Its words.** "Naming the backend" fixes the backend's name and nothing else; REQ-TOOLS-184's flags take their
   tooltips' wording from the settings pages, which this indicator is not among.
-- **A refused continuation.** A confined session whose next run is refused at the confinement gate (REQ-NOTIFY-061) started
-  no run, and its record still says its last run was confined. REQ-NOTIFY-061 has the indicator "stop describing the run as
-  sandboxed"; whether "the run" is the refused one (which the indicator never described) or the session's latest result is
-  not said.
+- ~~**A refused continuation.**~~ *Withdrawn 2026-10-02 (fin8, repair round 1): not open.* It read: "A confined session
+  whose next run is refused at the confinement gate (REQ-NOTIFY-061) started no run, and its record still says its last
+  run was confined. REQ-NOTIFY-061 has the indicator 'stop describing the run as sandboxed'; whether 'the run' is the
+  refused one (which the indicator never described) or the session's latest result is not said." fin8's verifier found the
+  reading empty the clause: a refused START leaves no session (REQ-SANDBOX-120), so no indicator is drawn for it either
+  way, and the only indicator that can stop is the one a refused continuation would otherwise keep showing. The clause is
+  plain, and the build now meets it (below).
 
 **What the build proceeds under** (`statusStripSandboxItem`, `packages/ui/src/composer.ts`; `apps/desktop/src/renderer/main.tsx`):
 an inert text item in the status strip, right after the workspace-scope flag, reading `sandbox: <backend>` (or
@@ -9068,9 +9071,12 @@ an inert text item in the status strip, right after the workspace-scope flag, re
 accessible name "Confinement backend" and a tooltip worded as the settings page's Sandbox mode control words confinement,
 joined to the short form as REQ-SHELL-041's flags are. It is shown at every width (no REQ-SHELL-047 threshold). It reads
 the focused session's record, so it is absent with no session focused — where a refused start leaves the window, no
-session remaining (REQ-SANDBOX-120) — and after a refused continuation it keeps describing the session's last run that
-started, which was confined; the refusal is reported by REQ-NOTIFY-061's notice and changes no record.
+session remaining (REQ-SANDBOX-120). After a run of an existing session is refused at the confinement gate (a prompt, a
+retry, a continue, a plan decision, an authentication restart) the engine publishes the record no longer sandboxed and with
+no backend (`Sessions.refusedAtStart`, `packages/engine/src/sessions.ts`), so the item is gone beside the refusal notice
+until a run of the session starts again; the stored row keeps the fact of the run that started (REQ-SANDBOX-094). Until
+that repair the reading here was that the item kept describing the last run that started and the refusal changed no
+record; the verifier's finding above withdrew it.
 
 **What a ruling decides.** Whether the indicator belongs in the status strip (and then its place among REQ-SHELL-038's items
-and its REQ-SHELL-047 threshold) or on another workspace surface; its wording beyond the backend's name; and whether a
-refused continuation clears it until a run starts confined again.
+and its REQ-SHELL-047 threshold) or on another workspace surface; its wording beyond the backend's name.

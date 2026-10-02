@@ -67,12 +67,23 @@ describe('REQ-SANDBOX-121: the strip names the confinement backend of the focuse
     expect(statusStripSandboxItem({ sandboxed: true, sandboxBackend: '' })?.text).toBe('sandbox: confined');
   });
 
-  it('an unconfined record, a refused start (no session), and no focused session draw nothing', () => {
+  it('an unconfined record and no focused session draw nothing', () => {
     expect(statusStripSandboxItem({ sandboxed: false, sandboxBackend: '' })).toBeNull();
     // A stale backend beside `sandboxed: false` is never drawn: the flag decides.
     expect(statusStripSandboxItem({ sandboxed: false, sandboxBackend: 'bubblewrap' })).toBeNull();
-    // REQ-NOTIFY-061 / REQ-SANDBOX-120: a refused start leaves no session, so the window follows none.
+    // No session focused — where a refused START leaves the window, since it leaves no session (REQ-SANDBOX-120).
     expect(statusStripSandboxItem(null)).toBeNull();
+  });
+
+  it('REQ-NOTIFY-061: a confined session whose next run was refused at the confinement gate stops drawing the item, and draws it again once a confined run starts', () => {
+    // The records the engine publishes, in order (sandbox-record.test.ts pins the engine's half): the confined run, the
+    // refusal at the gate (`refusedAtStart`: no longer sandboxed, no backend), the confined run that started after it.
+    const published = [
+      { sandboxed: true, sandboxBackend: 'bubblewrap' },
+      { sandboxed: false, sandboxBackend: '' },
+      { sandboxed: true, sandboxBackend: 'bubblewrap' },
+    ];
+    expect(published.map((record) => statusStripSandboxItem(record)?.text ?? null)).toEqual(['sandbox: bubblewrap', null, 'sandbox: bubblewrap']);
   });
 
   it('re-binds with focus: the item is the focused record\'s, so switching between a confined and an unconfined session moves it (REQ-MONITOR-257, REQ-NOTIFY-030)', () => {

@@ -366,6 +366,14 @@ interface Live {
    */
   readonly portsOpen: Set<Run>;
   /**
+   * REQ-NOTIFY-061's last sentence for a session that already exists: the latest attempt to start a run on it was refused
+   * at the confinement gate, so the record it publishes stops describing it as sandboxed (`sandboxed: false`, no backend)
+   * until a run of it starts again. Held in memory and not written to the row: the row's `sandboxed`/`sandbox_backend`
+   * stay the latest run that started's own fact (REQ-SANDBOX-094, REQ-SANDBOX-121), and a refused run writes no snapshot
+   * (REQ-SANDBOX-126). Set by `refusedAtStart`, cleared by `launchContinuation`.
+   */
+  refusedConfinement?: boolean;
+  /**
    * REQ-ORCH-154 with REQ-NOTIFY-070/074/076: the plan decision that launched a run of this session, kept with the run it
    * launched, so an authentication restart of that run relaunches the same decision (`relaunchAfterAuthFailure`). Read
    * only while that run is the session's last: any other launch replaces `run`, and the record no longer matches.
@@ -1308,7 +1316,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1368,7 +1376,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1506,7 +1514,7 @@ export class Sessions {
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const storedForSetup = s.dal.getSession(sessionId);
     const setup = this.setupFor(storedForSetup?.workspace_root ?? '', this.deps.attended?.() ?? false, sessionId, storedForSetup ? effectiveRootOf(storedForSetup).root : '', resumedPersona(s.dal, sessionId, false));
-    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     if (inputs.length > 0 && setup.value.model.config.model.acceptsImageInput !== true) return err({ code: 'image-input-unsupported', reason: 'The selected model does not declare image input support.' });
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
@@ -1532,6 +1540,27 @@ export class Sessions {
     // PD-ORCH-005 clause 4: where an iteration is open, the new message is the resumed root's next message.
     this.launchContinuation(s, prompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, attachments.content, undefined, { message: [{ kind: 'text', text: prompt }, ...attachments.content] });
     return ok(row.value);
+  }
+
+  /**
+   * A run of an existing session refused before it started (REQ-NOTIFY-061): at the confinement gate, the record stops
+   * describing the session as sandboxed and is published again, so the workspace indicator (REQ-SANDBOX-121) is gone
+   * beside the refusal notice. Every other refusal leaves the record as it was. Called by every path that would start a
+   * run of a live session: the prompt (and through it the retry and the authentication restarts), the continue, the
+   * plan decision and the restart on the fallback. Before 2026-10-02 nothing was written or published, and a confined
+   * session refused at the gate kept reading `sandbox: <backend>` (fin8's verifier, round 1).
+   */
+  private refusedAtStart(s: Live, refusal: StartRefusal): { readonly code: string; readonly reason: string } {
+    if (refusal.code === 'confinement') {
+      s.refusedConfinement = true;
+      s.owner.reconcile();
+    }
+    return { code: refusal.code, reason: refusal.reason };
+  }
+
+  /** The record's confinement fields while `refusedConfinement` holds (see `Live.refusedConfinement`); nothing otherwise. */
+  private confinementShown(sessionId: SessionId): { readonly sandboxed?: false; readonly sandboxBackend?: '' } {
+    return this.live.get(sessionId)?.refusedConfinement === true ? { sandboxed: false, sandboxBackend: '' } : {};
   }
 
   /**
@@ -1566,6 +1595,8 @@ export class Sessions {
     // REQ-GIT-019: a continuation of a bound session works in its tree (the caller already refused a missing one).
     const effectiveRoot = effectiveRootOf(storedRow).root;
     const permission = postureAtStart(runtime, this.deps.attended?.() ?? false);
+    // REQ-NOTIFY-061: a run of the session starts, so its own confinement fact is the record's again (`refusedAtStart`).
+    s.refusedConfinement = false;
     // REQ-SESSION-142: one log per run — the one `resume` opened closes when the first continuation ends, so
     // every continuation opens its own rather than writing into a closed one.
     s.log?.close();
@@ -2258,7 +2289,7 @@ export class Sessions {
     // 'continue' and 'double') — appends it to the todo again (REQ-ORCH-004; OQ-102's no-append covers only a request
     // held unfinished): the undecided case of OQ-103's "Nothing open to resume".
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, opts.withoutPaused === true));
-    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     const lastPrompt = latestRequestOf(s.dal, stored);
     const todo = parseTodoDocument(stored);
     if (!todo.ok) return todo;
@@ -2299,7 +2330,7 @@ export class Sessions {
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
-    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     const gone = missingWorktree(stored);
     if (gone) return err(gone);
     const todo = parseTodoDocument(stored);
@@ -2352,7 +2383,7 @@ export class Sessions {
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
-    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     const catalogue = setup.value.resilience?.catalogue ?? [];
     const fallback = setup.value.resilience?.fallbackModel ?? null;
     if (fallback === null) return err({ code: 'no-fallback', reason: 'No fallback model is configured.' });
@@ -2517,7 +2548,7 @@ export class Sessions {
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
-    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     const resolved = setup.value.models?.(modelKey);
     if (!resolved?.ok) return err({ code: 'unknown-model', reason: resolved?.reason ?? `'${modelKey}' is not a configured model` });
     const catalogue = setup.value.resilience?.catalogue ?? [];
@@ -2630,7 +2661,7 @@ export class Sessions {
       return ok({ relaunched: false, cycle });
     }
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
-    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     const gone = missingWorktree(stored);
     if (gone) return err(gone);
     const todo = parseTodoDocument(stored);

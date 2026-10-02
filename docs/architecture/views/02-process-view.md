@@ -175,7 +175,8 @@ baseRevision}` | `refused` (the Git failure text as the headline); `worktree.rem
 asked, so a binding failure leaves no session behind (REQ-GIT-023 by construction). `SessionListItem` gains `worktree`
 and `checkpointCount` (REQ-GIT-018); `SessionRecord` gains `worktreeBranch` for the status strip (REQ-GIT-122), and
 since 2026-10-02 `sandboxBackend` beside `sandboxed` (REQ-SANDBOX-121: the backend the latest run was confined by, '' when
-it was not; the strip's sandbox indicator reads both).
+it was not; the strip's sandbox indicator reads both). A run of the session refused at the confinement gate republishes the
+record with both cleared until a run of it starts (REQ-NOTIFY-061, `Sessions.refusedAtStart`); the row is not written.
 
 **Checkpoints (Part P; ADR-0039's first execution).** Renderer → main: `checkpoints.list {sessionId}` (rows only, REQ-GIT-050),
 `checkpoints.preview {sessionId, sequence}` and `checkpoints.restore {sessionId, sequence, force}`; main holds ONE desktop

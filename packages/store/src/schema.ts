@@ -1071,6 +1071,8 @@ export const MIGRATIONS: readonly Migration[] = [
      * session's latest run was confined by, written beside `sandboxed` when a run starts ('' when it was not confined).
      * A session written before this version takes the backend its `session.start` event recorded
      * (`sandbox.backend`, REQ-SESSION-193) where it is marked confined and that event is still held, else ''.
+     * `session.start` is written once, at the session's creation, so it is the FIRST run's backend while `sandboxed`
+     * describes the LATEST run's; they agree in practice, a host having one confinement backend (REQ-SANDBOX-065).
      */
     sql: `
       ALTER TABLE sessions ADD COLUMN sandbox_backend TEXT NOT NULL DEFAULT '';

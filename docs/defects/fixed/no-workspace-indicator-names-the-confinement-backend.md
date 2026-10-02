@@ -33,15 +33,26 @@ Repaired 2026-10-02 (fin8, bundle `fin8-focus-bound-recovery`). The backend reac
   is absent for an unconfined session, and is absent with no session focused, which is where a refused start leaves the
   window (REQ-NOTIFY-061, REQ-SANDBOX-120). The mockup has no confinement indicator, so the strip's own text-flag craft
   decided; no new control or token.
+- REQ-NOTIFY-061's indicator clause for a session that exists (repair round 1, after fin8's verifier): a run of a
+  confined session refused at the confinement gate — by its prompt, a retry, a continue, a plan decision or an
+  authentication restart — publishes the session's record with `sandboxed: false` and no backend
+  (`Sessions.refusedAtStart` and `Live.refusedConfinement`, `packages/engine/src/sessions.ts`), so the item is gone beside
+  the refusal notice until a run of the session starts again. The stored row keeps the started run's own fact
+  (REQ-SANDBOX-094); the state is the published record's. The first version of this repair kept the item describing the
+  last run that started and raised what a refused continuation says as part of OQ-184; the verifier found that reading left
+  the clause with no effect (a refused start leaves no session, so the only indicator that can stop is this one), and that
+  part of OQ-184 is withdrawn.
 
-Raised, not ruled: where the indicator stands among REQ-SHELL-038's items and its REQ-SHELL-047 threshold, its wording, and
-what it says after a refused continuation of a confined session (OQ-184; the build keeps describing the last run that
-started). Recorded beside it: the strip applies no REQ-SHELL-047 hiding and is over-full at the 1000 px floor, which this
+Raised, not ruled: where the indicator stands among REQ-SHELL-038's items and its REQ-SHELL-047 threshold, and its wording
+(OQ-184). Recorded beside it: the strip applies no REQ-SHELL-047 hiding and is over-full at the 1000 px floor, which this
 item widens
 ([the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md](../the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)).
 
-Pinned by `packages/ui/src/composer.test.ts` (confined, unconfined and refused-start records, and a focus switch),
-`packages/engine/src/sandbox-record.test.ts` (a confined run's record names `bubblewrap`, an unconfined one none) and
+Pinned by `packages/ui/src/composer.test.ts` (confined and unconfined records, no session focused, a focus switch, and
+the records published around a refusal at the gate), `packages/engine/src/sandbox-record.test.ts` (a confined run's record
+names `bubblewrap`, an unconfined one none; a confined session's prompt, retry and continue refused at the confinement gate
+each publish the record unconfined, another refusal publishes nothing, the row keeps `sandboxed 1`, and the next confined
+run names `bubblewrap` again — that test fails without `refusedAtStart`) and
 `packages/store/src/store.test.ts` (v30 → v31 with the backfill). Shown in the built application with `pnpm app:drive`
 on this host (bubblewrap available) in one workspace configured `sandbox_mode: workspace-write`: before the repair a
 confined session's strip read `… workspace-scoped | redaction: always on …` with no indicator, its record `sandboxed: 1`;

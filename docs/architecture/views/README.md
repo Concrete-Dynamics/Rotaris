@@ -43,7 +43,15 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-10-01**
+## Last reconciled with the code: **2026-10-02**
+
+**A unit's worktree is provisioned once, and a later start of the same unit takes it over (REQ-TRACE-464,
+REQ-GIT-140).** The delivery service's `beforeCommit` takes over the tree of the launch it holds when that launch is
+for the derived unit and its tree is on disk. It provisions only a unit with no tree. After a restart it takes over the
+store's worktree row for that unit through `takeOverUnitWorktree` (`workspace/src/delivery/runs.ts`, the new
+`RunGitPort.takeOver`), and `provisionUnitWorktree` is unchanged. This repairs
+`a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md`. The **sequences view**'s board
+section says so. No package, edge, process, message kind, channel, command or store column changed.
 
 **A dialog opened while the composer's send is settling keeps its focus (REQ-MONITOR-137, REQ-CHAT-002).** The
 composer's awaited submissions (a queue, a start or continue, an executed slash command) return the focus through one

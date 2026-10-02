@@ -8,7 +8,7 @@ import type { StoreParse } from '@rotaris/contracts';
 import { fixtureParse } from './fixture-store.js';
 import {
   appendEpicIndexRow, checkRepositoryForRuns, composeRequirementDocument, createLocation, editRequirementDocument, heldReason, manualReason, nextIdentifier, NOT_A_REPOSITORY,
-  probeSourceWritability, provisionUnitWorktree, QUEUE_STOPPED_REASON, readOnlySentence, renderBranch, requirementWorktreePath, runPromptFor, scheduleQueue, slotReason, slugOf, stalledReason, writeSourceDocument, type ScheduleInput,
+  probeSourceWritability, provisionUnitWorktree, QUEUE_STOPPED_REASON, readOnlySentence, renderBranch, requirementWorktreePath, runPromptFor, scheduleQueue, slotReason, slugOf, stalledReason, takeOverUnitWorktree, writeSourceDocument, type ScheduleInput,
 } from './runs.js';
 
 /**
@@ -197,6 +197,36 @@ describe.skipIf(!gitPresent)('provisioning against a scratch repository (REQ-GIT
     // The second cycle renders its own name.
     const cycle2 = await provisionUnitWorktree(args('u2', 2), { clocks });
     expect(cycle2.ok && cycle2.value.branch).toBe('rotaris/req/req-101/u2-c2');
+  });
+  it('REQ-TRACE-464: the tree recorded for a unit is taken over where Git lists it on its branch, read back, base re-read; provisioning it again still fails (REQ-GIT-140)', async () => {
+    const first = await provisionUnitWorktree(args('u1'), { clocks });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const head = git(root, 'rev-parse', 'HEAD');
+    // The base moves on after the cut: the base revision is still the fork point, not the new head.
+    writeFileSync(join(root, 'later.md'), 'later\n');
+    git(root, 'add', 'later.md');
+    git(root, 'commit', '-q', '-m', 'later');
+    const taken = await takeOverUnitWorktree({ workspaceRoot: root, id: 'REQ-101', unit: 'u1', path: first.value.path, branch: first.value.branch }, { clocks });
+    expect(taken).toEqual({ ok: true, value: { ref: 'REQ-101/u1', path: first.value.path, branch: 'rotaris/req/req-101/u1', baseBranch: 'main', baseRevision: head } });
+    // Provisioning is unchanged: the same attempt asked for again still fails rather than reusing the directory.
+    const again = await provisionUnitWorktree(args('u1'), { clocks });
+    expect(again.ok).toBe(false);
+    // Recorded on another branch than Git lists there: refused, with both named.
+    const wrong = await takeOverUnitWorktree({ workspaceRoot: root, id: 'REQ-101', unit: 'u1', path: first.value.path, branch: 'rotaris/req/req-101/u9' }, { clocks });
+    expect(wrong.ok).toBe(false);
+    if (!wrong.ok) expect(wrong.error).toBe(`Git lists no worktree of this repository at ${first.value.path} on rotaris/req/req-101/u9 (it is on rotaris/req/req-101/u1), so it was not taken over.`);
+    // A plain directory at a recorded path is not a worktree of this repository: refused.
+    const stray = join(root, '.rotaris', 'requirements', 'worktrees', 'stray');
+    mkdirSync(stray, { recursive: true });
+    const plain = await takeOverUnitWorktree({ workspaceRoot: root, id: 'REQ-101', unit: 'u1', path: stray, branch: first.value.branch }, { clocks });
+    expect(plain.ok).toBe(false);
+    if (!plain.ok) expect(plain.error).toMatch(/^Git lists no worktree of this repository at /);
+    // Gone from disk: refused, so the caller provisions.
+    git(root, 'worktree', 'remove', '--force', first.value.path);
+    const gone = await takeOverUnitWorktree({ workspaceRoot: root, id: 'REQ-101', unit: 'u1', path: first.value.path, branch: first.value.branch }, { clocks });
+    expect(gone.ok).toBe(false);
+    if (!gone.ok) expect(gone.error).toBe(`The worktree recorded for REQ-101 unit u1 is no longer at ${first.value.path}.`);
   });
   it('REQ-TRACE-498: not a repository → "nothing to branch from" with setup offered; no commit → the engine quoted', async () => {
     const plain = mkdtempSync(join(tmpdir(), 'rotaris-ap-plain-'));

@@ -299,6 +299,11 @@ sequenceDiagram
   another workspace.
 - **One claim is one `session.start`.** The row is written the moment the run host answers, or the launch is
   abandoned with a reason.
+- **A unit is provisioned once.** The worktree is provisioned inside the run-starting action's transaction. A later
+  run-starting action for the same unit takes that tree over and never provisions it again (REQ-TRACE-464,
+  REQ-GIT-140). Such an action is a card held out of `ready` before its run began and then resumed, or returned and
+  released again. The tree comes from the launch the service holds, or, after a restart, from the store's worktree row
+  through `takeOverUnitWorktree`, which admits only a tree Git lists at that path on that branch (2026-10-02).
 - The elevated grant (`boardPermissions: 'permissive'`) travels **on the `session.start` of that launch** and
   applies to the configuration captured for it. It is not a mode anything stays in.
 - A board read is bounded at 120 s because it may run the engine's three passes; everything else is a store

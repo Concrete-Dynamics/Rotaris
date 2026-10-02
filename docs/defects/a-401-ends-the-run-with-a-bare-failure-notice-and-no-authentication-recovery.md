@@ -36,6 +36,8 @@ re-authentication path).
   `raiseNotice(sev, e.result.summary, e.result.error)`, with no authentication class ahead of them.
 - `apps/desktop/scripts/resilience-proof.mjs` — the `fatal` scenario, which shows the notice a 401 gets today.
 - `apps/desktop/src/run-host/scripted-client.ts` — the `fail:401` fault step.
+- `packages/ui/src/ReauthPrompt.tsx`, `packages/ui/src/WorkspaceView.tsx` (`reauthPrompt`), `packages/ui/src/shell.css`
+  (`.reauth-prompt`, the `reauth` grid row) — part B's prompt and its placement.
 
 ## Progress — part A built 2026-10-02 (the note stays open until part D)
 
@@ -67,7 +69,8 @@ half, REQ-SESSION-026, REQ-CONFIG-067) is built:
 ## Progress — part B built 2026-10-02
 
 **Part B** (REQ-NOTIFY-071/078, ADR-0048's non-modal window-level level) is built: a successful fallback restart opens
-`packages/ui/src/ReauthPrompt.tsx` in the window that follows the session (channel 13, `reauth:prompt`). It names the
+`packages/ui/src/ReauthPrompt.tsx` ~~in the window that follows the session~~ (superseded by both repair rounds below: in
+every main window, drawn for the followed session alone, in flow in the Workspace view; channel 13, `reauth:prompt`). It names the
 primary that failed, states that the run continues on the fallback and that re-authenticating switches back from the next
 iteration, quotes the provider's error, and offers "Keep the fallback" (the dismissal, `reauth.dismiss`). Its submit
 (`reauth.submit`) saves a key typed for a key-based provider through the credential store (`providers.replaceKey`; a key
@@ -85,8 +88,8 @@ composer usable behind it — the element under its own centre, focused, enabled
 
 *Repair round, 2026-10-02 (the verifier's findings on part B).* The prompt was first mounted beside the shell `fixed` at
 the window's top corner (copied from `.project-setup`) and covered the title bar's session browser, minimise, maximise,
-close and the notice's dismissal while open; it is now drawn in AppShell's `windowPanel` slot inside the rail-and-view
-region, below the title bar and the notice slot, and `auth-fallback` asserts every title-bar and notice-slot button is
+close and the notice's dismissal while open; it ~~is now~~ was then drawn in AppShell's `windowPanel` slot inside the rail-and-view
+region, below the title bar and the notice slot (superseded by the second round below), and `auth-fallback` asserts every title-bar and notice-slot button is
 the element under its own centre (the same fault in the setup dialog is recorded in
 [`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md)).
 It was also one prompt per window, sent to the window following the session, so it stood over whichever session that
@@ -94,6 +97,22 @@ window focused next and acted on its own; channel 13 now carries `{sessionId, pr
 the prompts by session and draws the followed session's alone (REQ-NOTIFY-030; `reauthPromptFor` in
 `reauth-prompt.test.ts`), and `reauth.read` gives a reloaded or new window the prompts already open. A re-pin that fails
 now leaves the first-failure bookkeeping standing (the session is still on the fallback; `failure-recovery.test.ts`).
+
+*Second repair round, 2026-10-02.* The `windowPanel` placement was still an overlay: at REQ-SHELL-022's 1000x680 minimum
+it covered the run header's model and reasoning switches and Compress context, under an API-key provider's taller prompt
+the composer's submit, and in the other views their top-right controls; the proof had measured only the opening size
+with the shortest prompt. The prompt is now **laid out in flow**: the Workspace view draws it (`WorkspaceView`'s
+`reauthPrompt`) as its own grid row, `reauth`, between the run header and the transcript, in every template of the view's
+grid, and AppShell's `windowPanel` slot is gone. The transcript keeps REQ-CHAT-010's floor and the prompt takes what is
+left; shorter than it needs, the card scrolls with its answers (the key field and the two buttons, one wrapping row)
+pinned sticky to its floor, as the plan gate's are, and the key's hint describes the field. Where "beside the continuing
+run" stands, and that the prompt is not drawn while another view is shown, is raised as **OQ-180** with that reading.
+Pinned by `reauth-prompt.test.ts` (the prompt's row in the Workspace view, no `fixed`/`absolute`/`z-index` in its rule, the
+`reauth` area and a `minmax(0, auto)` track in every grid template, the sticky answers); shown by `auth-fallback` in two
+launches — the opening size with alpha on `scripted` (no key field) and 1000x680 with alpha on `deepseek` (an API-key
+provider, with the key field) — each asserting that no on-screen control outside the prompt has the prompt at its centre
+(`underPrompt` empty: 45 and 33 controls tested) and that the prompt's own key field and answers are each the element
+under their own centre. The proof run against the second placement failed at its first launch with `Persona|orchestrator|Agent model` under the prompt.
 
 **Still owed:** part C, REQ-NOTIFY-072's 560 px
 recovery dialog on a second failure or with no usable fallback (until it lands both take the generic notice, and `fatal`

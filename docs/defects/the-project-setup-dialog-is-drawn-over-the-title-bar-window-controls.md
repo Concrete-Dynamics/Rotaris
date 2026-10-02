@@ -12,7 +12,11 @@ Inferred, not measured on this dialog: the re-authentication prompt of REQ-NOTIF
 copied from `.project-setup`, and the verifier of 2026-10-02 measured in the built app (`elementFromPoint` at the centre
 of every `.title-bar` and `.notice-slot` button, `resilience-proof`'s `auth-fallback` scenario) that `Sessions`,
 `Minimize`, `Maximize`, `Close window` and the notice's `Dismiss` were all under it. That prompt was moved into AppShell's
-`windowPanel` slot inside the rail-and-view region (`.body`) and the scenario now asserts those controls usable. The setup
+`windowPanel` slot inside the rail-and-view region (`.body`) and the scenario now asserts those controls usable. *(Since
+the prompt's second repair round, 2026-10-02: that slot was an overlay too — at 1000x680 it covered the run header's
+switches and the composer's submit — and is gone; the prompt is laid out in flow as the Workspace view's own grid row,
+and `auth-fallback` asserts that no on-screen control has it at its centre. Any repair of this dialog meets the same
+choice: an overlay that stays open until answered covers something at some size.)* The setup
 dialog keeps the fixed rule; `pnpm init-proof` checks its texts, that it is visible and the composer's gate, and nothing
 under it. Noticed while repairing the 401 note's part B; not repaired (outside that task).
 
@@ -27,7 +31,9 @@ under it. Noticed while repairing the 401 note's part B; not repaired (outside t
 
 - `packages/ui/src/shell.css` — `.project-setup` (the fixed corner placement); `.reauth-prompt` beside it, the repaired
   sibling, with the measurement in its comment.
-- `packages/ui/src/AppShell.tsx` — the `windowPanel` slot, drawn inside `.body`, below the title bar and the notice slot.
+- `packages/ui/src/WorkspaceView.tsx` — the `reauthPrompt` row, where the repaired sibling is laid out in flow (AppShell's
+  `windowPanel` slot, its intermediate placement, is gone).
 - `apps/desktop/src/renderer/main.tsx` — where `ProjectSetupDialog` is mounted beside the shell.
-- `apps/desktop/scripts/resilience-proof.mjs` — `auth-fallback`'s `chromeUsable` probe, the measurement a repair can reuse
+- `apps/desktop/scripts/resilience-proof.mjs` — `auth-fallback`'s `chromeUsable` probe (every on-screen control tested at its
+  centre, at the opening size and at 1000x680), the measurement a repair can reuse
   in `init-proof`.

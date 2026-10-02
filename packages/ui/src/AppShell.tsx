@@ -70,12 +70,6 @@ export interface AppShellProps {
   readonly onOpenSessions?: (() => void) | undefined;
   /** ADR-0048 (Part W): the application-modal registration with main's window registry (`window.modality`). */
   readonly onModality?: ((active: boolean) => void) | undefined;
-  /**
-   * ADR-0048's non-modal window-level panels (REQ-NOTIFY-071's re-authentication prompt): drawn inside the rail-and-view
-   * region, so the title bar and the notice slot above it — the window's own controls and a notice's answers — are never
-   * under one, however tall the notice grows; the view's own controls stay reachable beside it.
-   */
-  readonly windowPanel?: ReactNode;
   /** PD-SHELL-003: the main window's product-drawn frame. */
   readonly windowControls?: {
     readonly maximized: boolean;
@@ -120,7 +114,7 @@ export function useCommandContext(): CommandContext {
   }), [activeView]);
 }
 
-export function AppShell({ version, workspacePath, home, sessionName, onChooseWorkspace, statusItems, views = {}, notice = null, onAcknowledge, onAction, acknowledgements, onOpenSessions, onModality, windowControls, windowPanel = null }: AppShellProps) {
+export function AppShell({ version, workspacePath, home, sessionName, onChooseWorkspace, statusItems, views = {}, notice = null, onAcknowledge, onAction, acknowledgements, onOpenSessions, onModality, windowControls }: AppShellProps) {
   const activeView = useShellState((s) => s.activeView);
   const switchView = useShellState((s) => s.switchView);
   const paletteOpen = useShellState((s) => s.paletteOpen);
@@ -173,7 +167,6 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
             </div>
           )}
         </main>
-        {windowPanel}
       </div>
       <footer className="status-strip" aria-label="Status" aria-description="An item too long for the strip is shortened with an ellipsis and keeps its full text in its tooltip." tabIndex={0} {...layoutContractAttributes(SHELL_LAYOUT.status)}>
         {/* REQ-SHELL-038: an item that elides keeps its full text in the tooltip — so every item carries one (UIR-001). */}

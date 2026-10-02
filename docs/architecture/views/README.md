@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**The re-authentication prompt is laid out in flow and overlays nothing (REQ-NOTIFY-071, ADR-0048, OQ-180; the part B
+second repair round).** AppShell's **`windowPanel`** slot is removed; the Workspace view draws the followed session's
+prompt (`WorkspaceView`'s `reauthPrompt`) as its own grid row, **`reauth`**, between the run header and the transcript,
+declared in every template of the view's grid. The **seams view** §2 states the rule this leaves (a non-modal surface open
+until answered is laid out in flow, never as an overlay) and the **runtime view** the placement, each with the
+falsified reading kept. No package, edge, channel, command or store column changed.
+
 **The re-authentication prompt follows the focused session and covers no window control (REQ-NOTIFY-030, REQ-NOTIFY-071,
 ADR-0048; the part B repair round).** Channel 13 now carries `{sessionId, prompt}` to every main window, a new renderer
 command **`reauth.read`** answers the open prompts for a window that mounts later, and each window draws the followed

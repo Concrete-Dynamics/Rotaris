@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ReauthPrompt as ReauthPromptState } from '@rotaris/contracts';
 import { AppShell } from './AppShell.js';
+import { WorkspaceView } from './WorkspaceView.js';
 import { REAUTH_SUBMIT_LABEL, ReauthPrompt, applyReauthPublish, reauthCopy, reauthPromptFor, seedReauthPrompts, type ReauthPrompts } from './ReauthPrompt.js';
 
 const ERROR = 'scripted authentication failure (HTTP 401) — HTTP 401 — Incorrect API key provided';
@@ -77,14 +79,76 @@ describe('the non-modal re-authentication prompt (REQ-NOTIFY-071/078, ADR-0048)'
     expect(reauthPromptFor(seeded, 'S3')?.sessionId).toBe('S3');
   });
 
-  it('ADR-0048: the shell draws the prompt inside the rail-and-view region, after the title bar and the notice slot, never over them', () => {
+  it('ADR-0048 / OQ-180: the Workspace view draws the prompt in flow, in its own row after the run header and before the transcript', () => {
     const panel = createElement(ReauthPrompt, { prompt: base, onSubmit: async () => ({ ok: true as const, applies: 'next-run' as const }), onDismiss: async () => undefined });
-    const html = renderToStaticMarkup(createElement(AppShell, { version: '0.0.0', workspacePath: '/w', home: '/h', sessionName: null, onChooseWorkspace: () => undefined, statusItems: [], windowPanel: panel }));
-    const body = html.indexOf('<div class="body"');
+    const html = renderToStaticMarkup(createElement(WorkspaceView, { session: null, rows: [], onSubmit: async () => ({ ok: true as const }), onStop: async () => ({ ok: true as const }), reauthPrompt: panel }));
     const prompt = html.indexOf('data-testid="reauth-prompt"');
-    expect(html.indexOf('class="notice-slot"')).toBeLessThan(body);
-    expect(body).toBeGreaterThan(-1);
-    expect(prompt).toBeGreaterThan(body);
-    expect(prompt).toBeLessThan(html.indexOf('<footer class="status-strip"'));
+    expect(prompt).toBeGreaterThan(html.indexOf('data-testid="run-header"'));
+    expect(prompt).toBeLessThan(html.indexOf('class="transcript"'));
+    // A direct child of the view's grid, so it takes the `reauth` row rather than lying over another.
+    expect(html).toMatch(/<\/div><section class="reauth-prompt" role="dialog"[\s\S]*?<\/section><div class="transcript" role="log"/);
+    // And the shell no longer carries a window panel over the rail-and-view region.
+    const shell = renderToStaticMarkup(createElement(AppShell, { version: '0.0.0', workspacePath: '/w', home: '/h', sessionName: null, onChooseWorkspace: () => undefined, statusItems: [] }));
+    expect(shell).not.toContain('reauth-prompt');
+  });
+
+  it('the head (title, sentence), the provider\'s words with the key\'s hint, then the answers (key, buttons) — the hint describing the key field', () => {
+    const html = render(base);
+    const head = html.indexOf('class="reauth-prompt__head"');
+    const detail = html.indexOf('class="reauth-prompt__detail"');
+    const answer = html.indexOf('class="reauth-prompt__answer"');
+    expect(head).toBeGreaterThan(-1);
+    expect(head).toBeLessThan(html.indexOf('data-testid="reauth-body"'));
+    expect(detail).toBeLessThan(html.indexOf('data-testid="reauth-error"'));
+    expect(answer).toBeGreaterThan(html.indexOf('data-testid="reauth-error"'));
+    expect(answer).toBeLessThan(html.indexOf('data-testid="reauth-key"'));
+    expect(answer).toBeLessThan(html.indexOf('data-action="reauth-keep"'));
+    expect(answer).toBeGreaterThan(html.indexOf('data-testid="reauth-key-hint"'));
+    const hintId = /id="([^"]+)" class="reauth-prompt__caption" data-testid="reauth-key-hint"/.exec(html)?.[1];
+    expect(hintId).toBeDefined();
+    expect(html).toMatch(new RegExp(`aria-describedby="${hintId}"[^>]*data-testid="reauth-key"`));
+  });
+});
+
+/**
+ * The placement in the stylesheet. Two overlay placements covered controls in the built app — `fixed` at the window's
+ * corner (the title bar, the notice) and `absolute` in the rail-and-view region (at 1000x680 the run header's switches,
+ * and the composer's submit under a key field) — so the rule pinned here is that the prompt is no overlay at all: it
+ * names a row of the Workspace grid, and every template of that grid declares the row.
+ */
+const css = readFileSync(new URL('./shell.css', import.meta.url), 'utf8');
+const rulesOf = (selector: string): string[] => [...css.matchAll(new RegExp(`(?:^|\\n|\\})\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]+)\\}`, 'g'))].map((m) => m[1] ?? '');
+
+describe('the re-authentication prompt overlays nothing (ADR-0048 "leaves the rest navigable", REQ-SHELL-022)', () => {
+  it('is laid out in flow — no fixed or absolute position, no stacking order of its own — in the Workspace grid\'s `reauth` row', () => {
+    const own = rulesOf('.reauth-prompt').join(' ');
+    expect(own).not.toMatch(/position\s*:\s*(fixed|absolute)/);
+    expect(own).not.toMatch(/z-index/);
+    expect(own).toMatch(/overflow\s*:\s*auto/);
+    expect(rulesOf('.workspace > .reauth-prompt').join(' ')).toMatch(/grid-area\s*:\s*reauth/);
+    // Shorter than it needs (the minimum window with a notice standing), the card scrolls and its answers stay at its floor.
+    const answer = rulesOf('.reauth-prompt__answer').join(' ');
+    expect(answer).toMatch(/position\s*:\s*sticky/);
+    expect(answer).toMatch(/(^|[\s;])bottom\s*:/);
+  });
+
+  it('every Workspace grid template names the `reauth` row and gives it a row of its own, zero high when empty', () => {
+    const areas = [...css.matchAll(/\.workspace(?:--with-sidebar|--narrow)\s*\{[^}]*grid-template-areas:\s*([^;]+);/g)].map((m) => m[1]!);
+    expect(areas.length).toBe(2);
+    for (const a of areas) {
+      const rows = [...a.matchAll(/'([^']+)'/g)].map((m) => m[1]!.trim());
+      expect(rows.some((r) => r.split(/\s+/).includes('reauth'))).toBe(true);
+      expect(rows.findIndex((r) => r.split(/\s+/).includes('reauth'))).toBe(rows.findIndex((r) => r.split(/\s+/).includes('runhead')) + 1);
+    }
+    // Each rows template of the view: the wide ones have seven tracks and the narrow ones eight (the drawer bar), the
+    // `reauth` track `minmax(0, auto)` straight after the run header's, so the transcript's floor is sized first.
+    const templates = [...css.matchAll(/(\.workspace[^{,]*)\{[^}]*grid-template-rows:\s*([^;]+);/g)].map((m) => ({ selector: m[1]!.trim(), rows: m[2]!.trim() }));
+    expect(templates.length).toBeGreaterThanOrEqual(6);
+    for (const t of templates) {
+      const tracks = t.rows.match(/minmax\([^)]*\([^)]*\)[^)]*\)|minmax\([^)]*\)|\S+/g)!;
+      const narrow = t.selector.includes('--narrow');
+      expect(tracks.length, t.selector).toBe(narrow ? 8 : 7);
+      expect(tracks[narrow ? 2 : 1], t.selector).toBe('minmax(0, auto)');
+    }
   });
 });

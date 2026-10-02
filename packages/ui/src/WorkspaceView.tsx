@@ -185,6 +185,13 @@ export interface WorkspaceViewProps {
    * Nothing passes it yet — the renderer is not this part's file — and the handoff carries the ready-to-paste block.
    */
   readonly slash?: SlashHost | undefined;
+  /**
+   * REQ-NOTIFY-071 / ADR-0048 (the 401 note's part B): the followed session's non-modal re-authentication prompt, drawn
+   * IN FLOW as the view's own row between the run header and the transcript — beside the continuing run (OQ-180), taking
+   * its height from the transcript, overlaying no control. The renderer root holds the prompts and passes the one for
+   * the session this view shows; `null` when none is open, and the row is then zero high.
+   */
+  readonly reauthPrompt?: ReactNode;
 }
 
 /** Part AN — see `WorkspaceViewProps.slash`. */
@@ -672,7 +679,7 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
@@ -1346,6 +1353,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
         * controls and follow the OPPOSITE enablement rule to the composer's chips (REQ-CHAT-006's closing sentence).
         */}
       <RunHeader runState={runState} session={session} runActive={runActive} stepStartedAt={stepStartedAt} models={models} onSetModel={onSetModel} onSetReasoning={onSetReasoning} onError={setError} />
+      {/* REQ-NOTIFY-071 / ADR-0048: the re-authentication prompt in its own row beside the continuing run (OQ-180) — in flow,
+        * so it overlays nothing; zero high while none is open. */}
+      {reauthPrompt}
       {/*
         * REQ-SHELL-168: the plan gate is hosted inside THIS view and nowhere else — not a modal window, not the
         * Overview, not a notice. It is its own row of the workspace grid, ABOVE the transcript rather than inside

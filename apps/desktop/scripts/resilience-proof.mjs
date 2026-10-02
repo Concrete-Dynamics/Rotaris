@@ -57,7 +57,7 @@ function scenario(name, agentsYaml, opts = {}) {
   writeFileSync(join(workspace, 'README.md'), '# proof\n');
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
     'models:',
-    '  alpha: { provider: scripted, model_id: alpha }',
+    `  alpha: { provider: ${opts.alphaProvider ?? 'scripted'}, model_id: alpha }`,
     '  beta: { provider: scripted-b, model_id: beta }',
     'small_model: alpha', 'medium_model: alpha', 'large_model: alpha',
     ...(opts.fallback ? [`fallback_model: ${opts.fallback}`] : []),
@@ -490,63 +490,89 @@ await scenarioRun('fatal', async () => {
 // session's model override (keyed by the pair that failed), acknowledges both models, and restarts the run with the same
 // prompt on beta, which answers. The acknowledgement is transient (REQ-NOTIFY-020's lifetime), so the wait expression
 // writes its text onto the body the moment it is drawn and the probe reads it back from there.
-const s8 = scenario('auth-fallback', [], { fallback: 'beta' });
+//
+// Two launches, because the prompt's placement is a question of size: the window as it opens on this host (1600x1000,
+// alpha on `scripted`, which no credential store holds, so the shortest prompt — no key field) and REQ-SHELL-022's
+// 1000x680 minimum with alpha on `deepseek`, an API-key provider, so the prompt carries its key field and hint, and is
+// taller by them. The second form of the placement (absolute in the rail-and-view region) passed the first launch
+// and covered the run header's switches and the composer's submit at the second (the verifier's probe, 2026-10-02).
+const authVariants = [
+  { name: 'auth-fallback', provider: 'scripted', method: 'none', resize: null },
+  { name: 'auth-fallback-minimum', provider: 'deepseek', method: 'api-key', resize: '1000x680' },
+];
 await scenarioRun('auth-fallback', async () => {
   // REQ-NOTIFY-071 / ADR-0048: with the prompt open the composer is still the element under its own centre, takes the
   // focus and is enabled — the prompt traps nothing and covers nothing it leaves usable. Written onto the body for the probe.
   const composerUsable = "(() => { const ta = document.querySelector('textarea.composer__input'); if (!ta) return false; const r = ta.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); ta.focus(); document.body.dataset.composerUsable = [hit === ta || ta.contains(hit) || (hit !== null && hit.closest('.slash-field') !== null), document.activeElement === ta, !ta.disabled, !(document.querySelector('[data-testid=\"reauth-prompt\"]')?.hasAttribute('aria-modal') ?? true)].join(':'); return true; })()";
-  // ADR-0048 again: the prompt stays open until answered, so none of the window's own controls may be under it — every
-  // title-bar button (the session browser, minimise, maximise, close) and every notice-slot button (a notice's answers,
-  // its dismissal) is the element under its own centre. `underPrompt` lists, for the record, the view's controls that
-  // the panel overlays (it is drawn in the rail-and-view region, so they are the view's alone).
-  const chromeUsable = "(() => { const p = document.querySelector('[data-testid=\"reauth-prompt\"]'); const label = (b) => (b.getAttribute('aria-label') || b.textContent || b.title || '?').trim(); const centreHit = (b) => { const r = b.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return hit === b || b.contains(hit) ? 'ok' : (p !== null && p.contains(hit) ? 'UNDER-PROMPT' : 'covered'); }; const chrome = [...document.querySelectorAll('.title-bar button, .notice-slot button')]; document.body.dataset.chromeUsable = chrome.map((b) => label(b) + '=' + centreHit(b)).join('|'); document.body.dataset.underPrompt = [...document.querySelectorAll('button, input, select, textarea')].filter((b) => p !== null && !p.contains(b) && centreHit(b) === 'UNDER-PROMPT').map(label).join('|'); return chrome.length > 0; })()";
+  // ADR-0048 again: the prompt stays open until answered, so it may overlay NO control — not the window's own (every
+  // title-bar and notice-slot button is the element under its own centre, `chromeUsable`), and not the view's: every
+  // control in the window that is on screen and outside the prompt is tested at its centre, and `underPrompt` lists those
+  // whose centre is the prompt's — it must be empty. The prompt's own controls are tested the same way (`promptControls`):
+  // its answers never scroll away, whatever the size. `size` and `promptRect` say what was measured.
+  const chromeUsable = "(() => { const p = document.querySelector('[data-testid=\"reauth-prompt\"]'); if (p === null) return false; const label = (b) => (b.getAttribute('aria-label') || b.textContent || b.title || b.getAttribute('data-testid') || b.tagName).trim().slice(0, 60); const centre = (b) => { const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height }; }; const centreHit = (b) => { const c = centre(b); const hit = document.elementFromPoint(c.x, c.y); return hit === b || b.contains(hit) ? 'ok' : (p.contains(hit) ? 'UNDER-PROMPT' : 'covered'); }; const onScreen = (b) => { const c = centre(b); return c.w > 0 && c.h > 0 && c.x >= 0 && c.y >= 0 && c.x < innerWidth && c.y < innerHeight; }; const chrome = [...document.querySelectorAll('.title-bar button, .notice-slot button')]; const controls = [...document.querySelectorAll('button, input, select, textarea, a[href], [role=\"separator\"][tabindex], [tabindex]:not([tabindex=\"-1\"])')].filter(onScreen); document.body.dataset.chromeUsable = chrome.map((b) => label(b) + '=' + centreHit(b)).join('|'); document.body.dataset.underPrompt = controls.filter((b) => !p.contains(b) && centreHit(b) === 'UNDER-PROMPT').map(label).join('|'); document.body.dataset.outsideControls = String(controls.filter((b) => !p.contains(b)).length); document.body.dataset.promptControls = [...p.querySelectorAll('button, input')].map((b) => label(b) + '=' + (onScreen(b) ? centreHit(b) : 'off-screen')).join('|'); const r = p.getBoundingClientRect(); document.body.dataset.promptRect = [r.left, r.top, r.width, r.height].map(Math.round).join(','); document.body.dataset.size = innerWidth + 'x' + innerHeight; return chrome.length > 0; })()";
   const ackSeen = "(document.body.dataset.ackSeen ||= [...document.querySelectorAll('[data-testid=\"acknowledgement\"]')].map((a) => a.textContent).find((t) => t.includes('Authentication failed')) ?? '')";
-  const r = await launch('auth-fallback', s8, {
-    // `:only=scripted`: alpha's provider refuses the key, beta's does not; the restarted root takes its script from the
-    // first step again, so the fault is scoped to the provider rather than to the step.
-    ROTARIS_SCRIPT: 'fail:401:only=scripted', ROTARIS_CAPTURE_PROMPT: 'bad key, then the fallback',
-    ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed' && document.querySelector('[data-testid="reauth-prompt"]') !== null && ${composerUsable} && ${chromeUsable}`, ROTARIS_CAPTURE_WAIT_MS: '90000',
-    ROTARIS_CAPTURE_PROBE: 'body;;.notice-slot;;[data-testid="reauth-prompt"];;[data-action="reauth-keep"];;[data-testid="reauth-error"]', ROTARIS_CAPTURE_AFTER_MS: '800',
-  }, { timeout: 180_000 });
-  const db = open(s8);
-  const row = session(db);
-  const list = names(db, row.session_id);
-  const users = db.prepare("SELECT body FROM transcript_rows WHERE session_id = ? AND kind = 'user' ORDER BY row_index").all(row.session_id).map((u) => u.body);
-  const rows = systemRows(db, row.session_id);
-  // The first run's result carries the provider's failure text, which the prompt quotes (REQ-NOTIFY-071).
-  const error0 = db.prepare("SELECT payload FROM events WHERE session_id = ? AND kind = 'result'").all(row.session_id).map((e) => JSON.parse(e.payload)?.result?.error).find((e) => typeof e === 'string') ?? null;
-  db.close();
-  expect(row.execution_status === 'completed', `the restarted run did not complete on the fallback: ${JSON.stringify(row)}`);
-  expect(typeof error0 === 'string' && /HTTP 401/.test(error0), `the first run's result does not carry the 401: ${error0}`);
-  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
-  expect(calls.length === 2 && calls[0].model === 'scripted/alpha' && calls[1].model === 'scripted-b/beta', `the 401 was not followed by one call on the fallback: ${JSON.stringify(calls)}`);
-  const pin = list.find((t) => t.name === 'model_override');
-  const meta = pin ? JSON.parse(pin.metadata) : null;
-  expect(meta !== null && meta.provider === 'scripted' && meta.model === 'alpha' && meta.model_key === 'beta' && meta.cause === 'authentication', `the fallback was not pinned keyed by the pair that failed: ${pin?.metadata}`);
-  expect(users.length === 2 && users[0] === users[1] && users[0] === 'bad key, then the fallback', `the run did not restart with the same prompt: ${JSON.stringify(users)}`);
-  expect(rows.some((b) => b.startsWith('Authentication failed on scripted/alpha') && b.includes('beta')), `no system row names the restart on the fallback: ${rows.join(' | ')}`);
-  const body = probes(r.log, 'probe').find((p) => p.selector === 'body')?.found[0];
-  const ack = body?.data['data-ack-seen'] ?? '';
-  expect(/Authentication failed on scripted\/alpha/.test(ack) && /scripted-b\/beta/.test(ack), `the acknowledgement did not name both models: ${JSON.stringify(ack)}`);
-  const notice = probes(r.log, 'probe').find((p) => p.selector === '.notice-slot')?.found[0];
-  expect(notice === undefined || !/The run failed/.test(notice.text), `the restarted run left a failure notice on screen: ${JSON.stringify(notice)}`);
-  // REQ-NOTIFY-071: the non-modal prompt beside the continuing run — the primary named, the fallback in use, the provider's
-  // error quoted, the dismissal that keeps the fallback offered — and, ADR-0048, no modality: no aria-modal, the composer usable.
-  const prompt = probes(r.log, 'probe').find((p) => p.selector === '[data-testid="reauth-prompt"]')?.found[0];
-  expect(prompt !== undefined, 'no re-authentication prompt was on screen after the restart');
-  expect(/scripted\/alpha could not authenticate/.test(prompt.text) && /continues on the fallback model scripted-b\/beta/.test(prompt.text) && /from the next iteration/.test(prompt.text), `the prompt does not say REQ-NOTIFY-071's three things: ${prompt.text}`);
-  const quoted = probes(r.log, 'probe').find((p) => p.selector === '[data-testid="reauth-error"]')?.found[0]?.text ?? '';
-  const keep = probes(r.log, 'probe').find((p) => p.selector === '[data-action="reauth-keep"]')?.found[0]?.text ?? '';
-  expect(quoted === error0 && keep === 'Keep the fallback', `the prompt does not quote the provider's error or offer the dismissal: ${JSON.stringify({ quoted, keep })}`);
-  // `scripted` is no provider the credential store holds, so the prompt offers switching back and no key field.
-  expect(prompt.data['data-method'] === 'none', `the prompt does not offer what this provider gets: ${JSON.stringify(prompt.data)}`);
-  const composer = body?.data['data-composer-usable'] ?? '';
-  expect(composer === 'true:true:true:true', `the composer is not usable behind a non-modal prompt (hit:focused:enabled:no-aria-modal = ${composer})`);
-  const chrome = body?.data['data-chrome-usable'] ?? '';
-  const chromeControls = chrome.split('|').filter((c) => c !== '');
-  expect(chromeControls.length >= 4 && chromeControls.every((c) => c.endsWith('=ok')) && chromeControls.some((c) => c.startsWith('Close')), `a title-bar or notice control is not usable beside the non-modal prompt: ${chrome}`);
-  const underPrompt = body?.data['data-under-prompt'] ?? '';
-  results.authFallback = { status: row.execution_status, calls, pin: meta, acknowledgement: ack, users, prompt: prompt.text, composerUsable: composer, chromeUsable: chrome, underPrompt, png: r.png, elapsedMs: r.elapsedMs };
+  results.authFallback = {};
+  for (const v of authVariants) {
+    const s8 = scenario(v.name, [], { fallback: 'beta', alphaProvider: v.provider });
+    const primary = `${v.provider}/alpha`;
+    const r = await launch(v.name, s8, {
+      // `:only=<provider>`: alpha's provider refuses the key, beta's does not; the restarted root takes its script from the
+      // first step again, so the fault is scoped to the provider rather than to the step.
+      ROTARIS_SCRIPT: `fail:401:only=${v.provider}`, ROTARIS_CAPTURE_PROMPT: 'bad key, then the fallback',
+      ...(v.resize === null ? {} : { ROTARIS_CAPTURE_RESIZE: `${v.resize}@200` }),
+      ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed' && document.querySelector('[data-testid="reauth-prompt"]') !== null${v.resize === null ? '' : ` && innerWidth + 'x' + innerHeight === '${v.resize}'`} && ${composerUsable} && ${chromeUsable}`, ROTARIS_CAPTURE_WAIT_MS: '90000',
+      ROTARIS_CAPTURE_PROBE: 'body;;.notice-slot;;[data-testid="reauth-prompt"];;[data-action="reauth-keep"];;[data-testid="reauth-error"]', ROTARIS_CAPTURE_AFTER_MS: '800',
+    }, { timeout: 180_000 });
+    const db = open(s8);
+    const row = session(db);
+    const list = names(db, row.session_id);
+    const users = db.prepare("SELECT body FROM transcript_rows WHERE session_id = ? AND kind = 'user' ORDER BY row_index").all(row.session_id).map((u) => u.body);
+    const rows = systemRows(db, row.session_id);
+    // The first run's result carries the provider's failure text, which the prompt quotes (REQ-NOTIFY-071).
+    const error0 = db.prepare("SELECT payload FROM events WHERE session_id = ? AND kind = 'result'").all(row.session_id).map((e) => JSON.parse(e.payload)?.result?.error).find((e) => typeof e === 'string') ?? null;
+    db.close();
+    expect(row.execution_status === 'completed', `${v.name}: the restarted run did not complete on the fallback: ${JSON.stringify(row)}`);
+    expect(typeof error0 === 'string' && /HTTP 401/.test(error0), `${v.name}: the first run's result does not carry the 401: ${error0}`);
+    const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
+    expect(calls.length === 2 && calls[0].model === primary && calls[1].model === 'scripted-b/beta', `${v.name}: the 401 was not followed by one call on the fallback: ${JSON.stringify(calls)}`);
+    const pin = list.find((t) => t.name === 'model_override');
+    const meta = pin ? JSON.parse(pin.metadata) : null;
+    expect(meta !== null && meta.provider === v.provider && meta.model === 'alpha' && meta.model_key === 'beta' && meta.cause === 'authentication', `${v.name}: the fallback was not pinned keyed by the pair that failed: ${pin?.metadata}`);
+    expect(users.length === 2 && users[0] === users[1] && users[0] === 'bad key, then the fallback', `${v.name}: the run did not restart with the same prompt: ${JSON.stringify(users)}`);
+    expect(rows.some((b) => b.startsWith(`Authentication failed on ${primary}`) && b.includes('beta')), `${v.name}: no system row names the restart on the fallback: ${rows.join(' | ')}`);
+    const body = probes(r.log, 'probe').find((p) => p.selector === 'body')?.found[0];
+    const ack = body?.data['data-ack-seen'] ?? '';
+    expect(ack.includes(`Authentication failed on ${primary}`) && /scripted-b\/beta/.test(ack), `${v.name}: the acknowledgement did not name both models: ${JSON.stringify(ack)}`);
+    const notice = probes(r.log, 'probe').find((p) => p.selector === '.notice-slot')?.found[0];
+    expect(notice === undefined || !/The run failed/.test(notice.text), `${v.name}: the restarted run left a failure notice on screen: ${JSON.stringify(notice)}`);
+    // REQ-NOTIFY-071: the non-modal prompt beside the continuing run — the primary named, the fallback in use, the provider's
+    // error quoted, the dismissal that keeps the fallback offered — and, ADR-0048, no modality: no aria-modal, the composer usable.
+    const prompt = probes(r.log, 'probe').find((p) => p.selector === '[data-testid="reauth-prompt"]')?.found[0];
+    expect(prompt !== undefined, `${v.name}: no re-authentication prompt was on screen after the restart`);
+    expect(prompt.text.includes(`${primary} could not authenticate`) && /continues on the fallback model scripted-b\/beta/.test(prompt.text) && /from the next iteration/.test(prompt.text), `${v.name}: the prompt does not say REQ-NOTIFY-071's three things: ${prompt.text}`);
+    const quoted = probes(r.log, 'probe').find((p) => p.selector === '[data-testid="reauth-error"]')?.found[0]?.text ?? '';
+    const keep = probes(r.log, 'probe').find((p) => p.selector === '[data-action="reauth-keep"]')?.found[0]?.text ?? '';
+    expect(quoted === error0 && keep === 'Keep the fallback', `${v.name}: the prompt does not quote the provider's error or offer the dismissal: ${JSON.stringify({ quoted, keep })}`);
+    // `scripted` is no provider the credential store holds, so the prompt offers switching back and no key field; `deepseek`
+    // signs in with an API key, so the prompt offers the key field (REQ-NOTIFY-078).
+    expect(prompt.data['data-method'] === v.method, `${v.name}: the prompt does not offer what this provider gets (${v.method}): ${JSON.stringify(prompt.data)}`);
+    const size = body?.data['data-size'] ?? '';
+    if (v.resize !== null) expect(size === v.resize, `${v.name}: the window was not measured at ${v.resize}: ${size}`);
+    const composer = body?.data['data-composer-usable'] ?? '';
+    expect(composer === 'true:true:true:true', `${v.name}: the composer is not usable behind a non-modal prompt (hit:focused:enabled:no-aria-modal = ${composer})`);
+    const chrome = body?.data['data-chrome-usable'] ?? '';
+    const chromeControls = chrome.split('|').filter((c) => c !== '');
+    expect(chromeControls.length >= 4 && chromeControls.every((c) => c.endsWith('=ok')) && chromeControls.some((c) => c.startsWith('Close')), `${v.name}: a title-bar or notice control is not usable beside the non-modal prompt: ${chrome}`);
+    // The placement itself: no control outside the prompt has the prompt at its centre, and the prompt's own controls are
+    // usable where they stand (the key field and both answers, which never scroll away).
+    const underPrompt = body?.data['data-under-prompt'] ?? '';
+    const outside = Number(body?.data['data-outside-controls'] ?? '0');
+    expect(outside >= 10 && underPrompt === '', `${v.name}: the prompt overlays ${underPrompt === '' ? 'nothing, but too few controls were tested' : 'controls'} at ${size} (${outside} tested): ${underPrompt}`);
+    const own = (body?.data['data-prompt-controls'] ?? '').split('|').filter((c) => c !== '');
+    const expectedOwn = v.method === 'api-key' ? 3 : 2;
+    expect(own.length === expectedOwn && own.every((c) => c.endsWith('=ok')), `${v.name}: the prompt's own controls are not all usable at ${size}: ${own.join('|')}`);
+    results.authFallback[v.name] = { size, status: row.execution_status, calls, pin: meta, acknowledgement: ack, users, prompt: prompt.text, method: prompt.data['data-method'], promptRect: body?.data['data-prompt-rect'] ?? '', composerUsable: composer, chromeUsable: chrome, outsideControlsTested: outside, underPrompt, promptControls: own.join('|'), png: r.png, elapsedMs: r.elapsedMs };
+  }
 });
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ ...results, ...(only === null ? {} : { only }), failures }, null, 2)}\n`);

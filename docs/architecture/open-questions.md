@@ -8893,3 +8893,33 @@ Three things the requirements leave to the build:
 **What a ruling decides.** Whether the restart appends a user turn or continues the failed request (and so whether the
 failed run's task stays abandoned beside the restart's); whether attachments are re-sent; whether a restart that could not begin leaves the pin standing; whether the first-failure bookkeeping outlives
 the application; and whether the pin covers every agent on the failed pair or the entry agent alone.
+
+**OQ-180 — Where does REQ-NOTIFY-071's prompt stand "beside the continuing run", and is it drawn while the window shows
+another view?** *(REQ-NOTIFY-071, "a successful fallback restart opens a non-modal re-authentication prompt beside the
+continuing run"; ADR-0048's non-modal window-level level, "an in-window panel that does not trap focus and leaves the rest
+navigable"; REQ-SHELL-022's minimum; REQ-CHAT-010's 180 px transcript floor; REQ-NOTIFY-030. Raised 2026-10-02 by the
+401 note's part B, second repair round,
+[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
+Open.)*
+
+The requirement places the prompt by the run, not by the window, and the level ADR-0048 gives it requires the rest of the
+window to stay navigable while it is open — and it stays open until it is answered. Two overlay placements were built
+and both covered controls in the built app: `fixed` at the window's top corner (the title bar's Sessions, minimise,
+maximise, close and the notice's dismissal), then `absolute` at the top corner of the rail-and-view region (at the
+1000x680 minimum the run header's model and reasoning switches and Compress context; with a key field, the composer's
+submit; in the other views each one's top-right controls). Any overlay that stays open covers something at some size.
+The specification does not say which region "beside the continuing run" is, nor whether the prompt is drawn while the
+window shows a view other than the one the run is shown in.
+
+**What the build proceeds under** (`WorkspaceView`'s `reauthPrompt` row, `packages/ui/src/shell.css`):
+- the prompt is drawn **in flow in the Workspace view**, the view that shows the run, as its own row of the view's grid
+  between the run header and the transcript (the plan gate's kind of place, REQ-SHELL-168). It overlays nothing at any
+  window size: the transcript keeps REQ-CHAT-010's floor and the prompt takes what is left, scrolling when that is less
+  than it needs with its answers pinned to its floor;
+- it is **not drawn while another view is shown**. The window keeps holding it (by session, REQ-NOTIFY-030) and draws it
+  again when the Workspace view returns; the run's acknowledgement (REQ-NOTIFY-070) is the window-wide signal, shown in
+  any view. A key half-typed into the field is not kept across a view change.
+
+**What a ruling decides.** Whether "beside the continuing run" means the Workspace view's run column (as built), a region
+of the window shown in every view (which then has to take space from every view at REQ-SHELL-022's minimum), or a
+separate window; and whether a prompt the user has not answered should be reachable from the other views.

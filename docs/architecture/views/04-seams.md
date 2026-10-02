@@ -89,12 +89,18 @@ in `packages/contracts/src/reauth.ts`, the counter in `packages/shell/src/relay.
 `main/failure-recovery.ts`, the facet `main/commands/reauth.ts` (the two answers, and `reauth.read` for a window that
 mounts later), the hook in `renderer/main.tsx` holding the prompts by session and choosing the followed session's
 (`reauthPromptFor`, REQ-NOTIFY-030: a recovery affordance moves with the focused session), and the surface
-`packages/ui/src/ReauthPrompt.tsx`, drawn in AppShell's **`windowPanel`** slot inside the rail-and-view region — so the
-title bar and the notice slot, which a panel open until answered may never cover, lie above it. *Corrected 2026-10-02
-(the repair round):* the first build sent to the one window following the session and mounted the surface beside the
+`packages/ui/src/ReauthPrompt.tsx`, drawn **in flow** by the Workspace view (`WorkspaceView`'s `reauthPrompt`) as its
+own row of the view's grid, `reauth`, between the run header and the transcript (OQ-180's reading of "beside the
+continuing run") — so a panel open until answered overlays no control at any window size. *Corrected 2026-10-02
+(the repair rounds):* the first build sent to the one window following the session and mounted the surface beside the
 shell, `fixed` at the window's corner like `ProjectSetupDialog`; the verifier measured the session browser, the three
 window controls and the notice's dismissal under it, and the prompt staying over whatever session that window focused
-next. A window-level non-modal surface goes in the `windowPanel` slot.
+next. ~~A window-level non-modal surface goes in the `windowPanel` slot~~ — the second build drew it `absolute` in an
+AppShell `windowPanel` slot inside the rail-and-view region, and at 1000x680 the run header's switches and, under a key
+field, the composer's submit were under it; the slot is gone. **A non-modal surface that stays open until answered is
+laid out in flow, in a row or column of the view it belongs to, never as an overlay**: add its grid area to every
+template of that view (`layout-proof` fails a child naming an area the template lacks) and measure it at REQ-SHELL-022's
+minimum.
 
 | # | File | What lands here |
 |---|---|---|

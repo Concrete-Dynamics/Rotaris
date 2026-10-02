@@ -263,7 +263,8 @@ export interface SessionsDeps {
    * ADR-0036/0037: the run's configuration, resolved at run start from the files with the live state on top
    * (Tier B). Present, it supplies the model and the runtime for that run; absent, `model` and `runtime` stand.
    */
-  readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean; readonly sessionId: SessionId; readonly executionRoot: string; readonly entryPersona?: string | undefined }) => Result<RunSetup, { readonly reason: string }>) | undefined;
+  /** `code: 'confinement'` (REQ-NOTIFY-060/061): the refusal is the start-time confinement gate's, kept as its own class. */
+  readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean; readonly sessionId: SessionId; readonly executionRoot: string; readonly entryPersona?: string | undefined }) => Result<RunSetup, { readonly reason: string; readonly code?: 'confinement' }>) | undefined;
 }
 
 /** What a run starts with once configuration resolves it. */
@@ -1432,7 +1433,7 @@ export class Sessions {
     if (this.deps.configure) {
       const r = this.deps.configure(workspaceRoot, { attended, sessionId, executionRoot, ...(entryPersona === undefined ? {} : { entryPersona }) });
       // REQ-EVENTS-021 / REQ-CONFIG-478: refused before it starts, carrying the report.
-      return r.ok ? ok(r.value) : err(refused('configuration', r.error.reason));
+      return r.ok ? ok(r.value) : err(refused(r.error.code === 'confinement' ? 'confinement' : 'configuration', r.error.reason));
     }
     if (!this.deps.model) return err(refused('no-model', 'No model is configured, so the run was refused before it started.'));
     return ok({ model: this.deps.model, ...(this.deps.runtime ? { runtime: this.deps.runtime } : { runtime: { permissionMode: '', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' } }) });

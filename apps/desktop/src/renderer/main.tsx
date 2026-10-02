@@ -21,7 +21,7 @@ import '@phosphor-icons/web/fill';
 
 // The window itself: the bridge, the replica and the two stacks, the terminal registry, the display preferences and
 // the theme — everything this window has before a surface mounts (`shell.ts`).
-import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
+import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, retryRun, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
 import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery, useShownSession } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
@@ -135,12 +135,19 @@ function useDraft(workspace: string): { draft: string | undefined; publish: (t: 
   useEffect(() => {
     if (workspace === '(no workspace)') return;
     let live = true;
-    void bridge.command({ kind: 'composer.readDraft' }).then((r) => { if (live && r.ok) setStored((r.value as { text: string }).text); });
+    // REQ-NOTIFY-045: a workspace's draft is its own; the retry reads none from the workspace before.
+    composerDraft.current = null;
+    void bridge.command({ kind: 'composer.readDraft' }).then((r) => {
+      if (!live || !r.ok) return;
+      const text = (r.value as { text: string }).text;
+      setStored(text);
+      if (composerDraft.current === null) composerDraft.current = text;
+    });
     return () => { live = false; };
   }, [workspace]);
   return {
     draft: stored,
-    publish: setPublished,
+    publish: (text: string) => { composerDraft.current = text; setPublished(text); },
     write: (text: string) => { void bridge.command({ kind: 'composer.writeDraft', text }); },
   };
 }
@@ -995,12 +1002,25 @@ function dispatchNoticeAction(action: NoticeAction): void {
       // installation is main's, through the instance record.
       void bridge.command({ kind: 'update.restart' });
       return;
+    case 'retry-run':
+      // REQ-NOTIFY-045 (OQ-178): the draft as the window last published it, else as stored (REQ-NOTIFY-066), else the
+      // followed session's last submitted prompt — `retryRun` decides, and a refusal is said rather than swallowed.
+      void (async () => {
+        let draft = composerDraft.current;
+        if (draft === null) {
+          const stored = await bridge.command({ kind: 'composer.readDraft' });
+          draft = stored.ok ? (stored.value as { text: string }).text : '';
+        }
+        const r = await retryRun(draft);
+        if (!r.ok) void bridge.command({ kind: 'notice.report', severity: 'warning', title: 'Nothing was retried', message: r.reason, persistent: true });
+      })();
+      return;
     case 'open-cloud-account':
     case 'open-project-init':
-    case 'retry-run':
     case 'save-settings':
       // Each is a member REQ-NOTIFY-044 fixes whose target does not exist in this build (no hosted cloud, no
       // project-initialization surface, no proposal store). Nothing is dispatched and the attempt is recorded.
+      // (`retry-run` was among them until 2026-10-02; its target is `retryRun` above.)
       console.warn(`notice action "${action.kind}" has no target in this build`);
       return;
   }

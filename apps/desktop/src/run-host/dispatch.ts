@@ -319,7 +319,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       if (leaseRefusal) return leaseRefusal;
       // PD-ORCH-005 clause 6: resuming the open iteration is the default; `withoutPaused` declines it.
       const r = sessions.continueSession(asSessionId(req.sessionId), req.action, { withoutPaused: req.withoutPaused === true });
-      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The session could not be continued', detail: r.error.reason };
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: r.error.code === 'confinement' ? 'The run was refused before it started' : 'The session could not be continued', detail: r.error.reason };
       log(`session ${req.sessionId} ${req.action}: ${r.value.resumed ? 'a continuation run is executing' : 'left paused'}${r.value.messageLimit === null ? '' : ` (message limit ${r.value.messageLimit})`}`);
       return { kind: 'session.continued', sessionId: req.sessionId, resumed: r.value.resumed, messageLimit: r.value.messageLimit };
     }
@@ -367,7 +367,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       const leaseRefusal = await continuationLeaseForSession(req.sessionId);
       if (leaseRefusal) return leaseRefusal;
       const r = sessions.prompt(asSessionId(req.sessionId), req.prompt, req.attachments ?? []);
-      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: r.error.code === 'run-active' ? r.error.reason : 'The prompt could not be recorded', detail: r.error.reason };
+      // REQ-SANDBOX-120 / REQ-NOTIFY-061: a refused confinement mode reads as a start's refusal does.
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: r.error.code === 'run-active' ? r.error.reason : r.error.code === 'confinement' ? 'The run was refused before it started' : 'The prompt could not be recorded', detail: r.error.reason };
       return { kind: 'ack' };
     }
     case 'session.readAttachment': {

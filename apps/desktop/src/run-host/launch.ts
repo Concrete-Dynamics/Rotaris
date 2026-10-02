@@ -106,8 +106,9 @@ export async function launchSession(req: LaunchRequest, deps: LaunchDeps): Promi
     if (prepared.error.code === 'no-model') return { kind: 'refused', code: 'session.no-model', headline: 'No model configured', detail: 'Choose a model in Settings before starting a run.' };
     // REQ-SANDBOX-120: the notice's title conveys that the run did not get underway; its body
     // carries the reason and the remediation. Neither a session nor a session lock remains, because
-    // the gate refused before either existed (REQ-SANDBOX-095).
-    return { kind: 'refused', code: 'session.configuration', headline: 'The run was refused before it started', detail: prepared.error.reason };
+    // the gate refused before either existed (REQ-SANDBOX-095). REQ-NOTIFY-060/061: the refused confinement mode is a
+    // class of its own, so its code says so and main raises REQ-NOTIFY-061's notice for it.
+    return { kind: 'refused', code: prepared.error.code === 'confinement' ? 'session.confinement' : 'session.configuration', headline: 'The run was refused before it started', detail: prepared.error.reason };
   }
   const bearers = prepared.value.authProviders.length > 0
     ? await deps.leaseCredentials(prepared.value.authProviders).catch(() => ({} as Readonly<Record<string, string>>))

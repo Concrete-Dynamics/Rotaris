@@ -8781,14 +8781,82 @@ load average and CPU count beside the reading (`results.live.echoLoad`) and how 
 or on a host whose CPUs are not oversubscribed, so a red under a load above the CPU count is evidence about the host; or
 on a stated reference host and load.
 
-**OQ-177 — What is REQ-NOTIFY-070's restart "with the same prompt", what does "the fallback bookkeeping is cleared" take back,
+**OQ-177 — Does a user's switch of the entry model onto the model the run was configured with end a move the ladder made?**
+*(REQ-MONITOR-142, "A switch of the run's entry model … applies from the next iteration onward"; REQ-ORCH-090, the role's
+fallback "tried once per child by rebuilding the agent and transparently re-running"; REQ-ORCH-091 (b), "at most one
+same-tier automatic model fallback per child", and (d), a manual model change "persists the override in session state for
+the rest of the session"; REQ-MONITOR-194, a pair chosen explicitly is "eligible again". Raised 2026-10-02 by the repair of
+[`an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md`](../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md),
+as OQ-176, and renumbered OQ-177 at its merge because `origin/main` had taken OQ-176 meanwhile. Open.)*
+
+After the ladder moves the entry agent off its configured model — to the role's fallback when the model is unresponsive
+(REQ-ORCH-090), or to a same-tier model on another provider after a rate-limit or quota response (REQ-ORCH-091 b) — the
+user can switch the entry model to the configured key from the run header or the inspector. The specification says a
+switch applies from the next iteration and says nothing of a switch that names the model the run already asked for, which
+only the ladder's move makes a change. Read as a switch, it ends the move: the user chose that model. Read as no change,
+the move stands, since nothing the user asked for differs from what the run was asked to use. The same question arises
+for a switch onto a pair a change-model resolution moved during an earlier wait (REQ-ORCH-091 d), whose override the
+requirement keeps "for the rest of the session", and REQ-MONITOR-194, which lets an explicit choice of an excluded pair
+make it eligible again, bears on it without settling it.
+
+**What the build proceeds under** (`packages/engine/src/run/run.ts`, `rootResilience`, `setEntryModel`,
+`setEntryReasoning`; `ResilienceMemory.overrideReaching`): a switch is the user's choice and applies. From the next
+iteration the root's cell is rebuilt on the chosen model, ending a REQ-ORCH-090 or REQ-ORCH-091 b move, whether or not the
+key names the model already requested; the cell's once-per-agent budgets (the one unresponsive fallback, the one same-tier
+fallback, the pairs already attempted) carry over, so the ladder does not move the agent automatically more often than the
+requirements allow. A reasoning switch is not a model switch: the move stands and the level changes on the model the cell
+has. A change-model resolution's override (REQ-ORCH-091 d) is left standing for the rest of the session, as the
+requirement says, so a switch onto the pair it moved runs on the override's model, and the row says so in place of "it
+applies from the next iteration": "Entry model switched to X, but Y, chosen for P/M during an earlier wait, stands for the
+rest of the session: the entry agent runs on Y from the next iteration." The iteration in flight finishes on the setting
+it had: the root's ladder is read once per root turn, so a root resumed after its children in the same iteration is not
+moved by a switch made meanwhile. The exclusion of an exhausted pair is not touched by a switch (whether an explicit choice
+clears it is REQ-MONITOR-194's, recorded in
+[`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md`](../defects/an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md)).
+
+**What a ruling decides.** Whether a switch onto the configured key ends a ladder move (as built) or leaves it in force —
+and, if it leaves it, what the row says; whether a later switch onto a pair an override moved supersedes that override for
+the entry agent, or the override stands (as built) and only the row says so.
+
+**OQ-178 — Which notice offers REQ-NOTIFY-045's retry, when a notice carries one action?** *(REQ-NOTIFY-044, whose
+vocabulary includes "retry the failed run under REQ-NOTIFY-045"; REQ-NOTIFY-045; REQ-NOTIFY-030; REQ-NOTIFY-066;
+REQ-SHELL-114, a notice's "optional action (label plus action identifier)"; REQ-NOTIFY-061, "offers no retry";
+REQ-NOTIFY-062, "an action opening the cloud account surface"; REQ-NOTIFY-063, "offering another model or a retry once the
+provider resets … and offering an action opening model settings"; REQ-NOTIFY-064, "an action returning to the workspace
+view". Raised 2026-10-02 by the repair of
+[`the-retry-run-notice-action-has-no-target.md`](../defects/fixed/the-retry-run-notice-action-has-no-target.md),
+as OQ-177, and renumbered OQ-178 at its merge because `origin/main` had taken OQ-176 meanwhile and this branch's OQ-176
+became OQ-177. Open.)*
+
+REQ-NOTIFY-045 says what a retry does and REQ-NOTIFY-044 lists it among a notice's actions, and REQ-NOTIFY-061 takes the
+trouble to say its notice offers none, which reads as though another failure notice does. But every failure class names
+its notice's action, and none names the retry: REQ-NOTIFY-062's opens the cloud account, REQ-NOTIFY-063's opens model
+settings, REQ-NOTIFY-064's and REQ-NOTIFY-061's return to the workspace view; REQ-SHELL-114 gives a notice one action.
+REQ-NOTIFY-063 "offers" a retry in words beside its action, and it is the only failure notice that mentions one. The
+specification also says nothing of the composer after the draft has been resubmitted from a notice.
+
+**What the build proceeds under** (`apps/desktop/src/renderer/session-actions.ts`, `retryRun`;
+`apps/desktop/src/renderer/main.tsx`, `dispatchNoticeAction`): the action has its target, and no run-failure notice
+carries it — each class keeps the action its requirement names, and REQ-NOTIFY-063's retry stays in its message ("Choose
+another model, or retry once the provider resets."). Activated, the action resubmits the composer's draft as the window
+last published it (REQ-CHAT-014), else as stored (REQ-NOTIFY-066), else — the draft blank — the focused session's newest
+`user` row, the prompt the engine's own continue reads as the last one; it goes through the composer's submit path to
+the session the window follows (REQ-NOTIFY-030), and is refused, with the reason in a warning notice, when no session
+is followed or there is nothing to resubmit. The composer keeps the draft: nothing outside the composer clears it.
+
+**What a ruling decides.** Which notice carries the retry — REQ-NOTIFY-063's in place of, or beside, its model-settings
+action (which REQ-SHELL-114's single action would then have to allow), REQ-NOTIFY-064's, or none — and whether a draft a
+retry resubmitted is cleared from the composer as a submitted one is.
+
+**OQ-179 — What is REQ-NOTIFY-070's restart "with the same prompt", what does "the fallback bookkeeping is cleared" take back,
 and how long does "the first authentication failure of a session" last?** *(REQ-NOTIFY-070, "the run restarts with the
 same prompt. Where the restart cannot begin, the fallback bookkeeping is cleared and the generic failure notice is
 published instead"; REQ-NOTIFY-069, "a recorded last prompt"; REQ-NOTIFY-045, whose retry "resubmits the current composer
 draft, or the last submitted prompt"; REQ-NOTIFY-072/075, "a second authentication failure"; REQ-SESSION-026. Raised
 2026-10-02 by the 401 note's part A,
-[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
-Open.)*
+[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
+as OQ-177, and renumbered OQ-179 at its merge because `origin/main` had taken OQ-177 and OQ-178 meanwhile; the branch's
+commit subjects still say OQ-177. Open.)*
 
 Three things the requirements leave to the build:
 

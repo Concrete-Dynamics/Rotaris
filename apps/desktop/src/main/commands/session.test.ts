@@ -3,6 +3,7 @@ import type { ProcessReply, RunHostRequest, WorkspaceServiceRequest } from '@rot
 import { canonicalPath } from '@rotaris/platform';
 import { FakeClock } from '@rotaris/kernel';
 import { sessionCommands } from './session.js';
+import type { ReportInput } from '../notices.js';
 import type { CommandAt, CommandContext, MainWindowState } from './context.js';
 
 /**
@@ -29,6 +30,8 @@ function windowOn(workspaceId: string | null): CommandAt {
 interface Harness {
   readonly logs: string[];
   readonly raised: { severity: string; headline: string; detail: string | undefined }[];
+  /** Notices main reports whole, through the store, rather than through `raiseNotice`'s short form. */
+  readonly reported: ReportInput[];
   readonly svcAsked: WorkspaceServiceRequest[];
   readonly hostAsked: RunHostRequest[];
   readonly ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runHost' | 'services'>;
@@ -39,6 +42,7 @@ interface Harness {
 function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | ProcessReply, host: (req: RunHostRequest) => Promise<ProcessReply> | ProcessReply): Harness {
   const logs: string[] = [];
   const raised: Harness['raised'] = [];
+  const reported: ReportInput[] = [];
   const svcAsked: WorkspaceServiceRequest[] = [];
   const hostAsked: RunHostRequest[] = [];
   const quit = { now: false };
@@ -49,7 +53,7 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
     dialogs: new Map(),
     log: (m: string) => { logs.push(m); },
     mainWindows: { takeMintedSession: () => 'minted-1' } as unknown as CommandContext['mainWindows'],
-    notices: { clearForRunStart: async () => undefined } as unknown as CommandContext['notices'],
+    notices: { clearForRunStart: async () => undefined, report: async (input: ReportInput) => { reported.push(input); return { id: reported.length, shown: true }; } } as unknown as CommandContext['notices'],
     pauseWindows: new Map(),
     raiseNotice: (...args: Parameters<CommandContext['raiseNotice']>) => { raised.push({ severity: args[0], headline: args[1], detail: args[2] }); },
     recoveryFor: () => [],
@@ -57,10 +61,47 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
     runHost: { request: async (req: RunHostRequest) => { hostAsked.push(req); return host(req); } },
     services: new Map([[canonicalPath(WORKSPACE), { link: { request: async (req: WorkspaceServiceRequest) => { svcAsked.push(req); return svc(req); } } }]]) as unknown as CommandContext['services'],
   };
-  return { logs, raised, svcAsked, hostAsked, ctx, quit };
+  return { logs, raised, reported, svcAsked, hostAsked, ctx, quit };
 }
 
 const created = { kind: 'worktree.created', path: `${WORKSPACE}/.rotaris/worktrees/minted-1`, branch: 'rotaris/session/minted-1', baseBranch: 'main', baseRevision: 'abc' } as const;
+
+/*
+ * REQ-NOTIFY-060/061 with REQ-SANDBOX-120: the refused confinement mode's notice, for a start, a prompt and a continue.
+ * Before the repair of `docs/defects/fixed/a-refused-confinement-start-is-not-reported-as-req-notify-061-says.md` the
+ * refusal wording was only the copyable detail, the message was empty, no action was offered, and a prompt's refusal
+ * raised no notice at all.
+ */
+describe('REQ-NOTIFY-061: a sandboxed launch that was refused', () => {
+  const WORDING = 'Confinement is unavailable: the bubblewrap launcher is not on PATH. Install bubblewrap (bwrap) and start the run again.';
+  const refused = { kind: 'refused', code: 'session.confinement', headline: 'The run was refused before it started', detail: WORDING } as const;
+  const host = (req: RunHostRequest): ProcessReply => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: 'ws-1', count: 0 } : refused);
+  const expected = { severity: 'error', title: 'The run was refused before it started', message: WORDING, detail: WORDING, persistent: true, action: { label: 'Open Workspace', action: { kind: 'open-view', view: 'workspace' } } };
+
+  it('a start: the wording as received in the message and the copyable detail, an action returning to the workspace view, no retry', async () => {
+    const h = harness(() => ({ kind: 'ack' }), host);
+    const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Confine this.' }, windowOn('ws-1'));
+    expect(out).toMatchObject({ ok: false, code: 'session.confinement' });
+    expect(h.reported).toEqual([expected]);
+    expect(h.raised).toEqual([]);
+  });
+
+  it('a prompt and a continue on an existing session are reported the same way', async () => {
+    const h = harness(() => ({ kind: 'ack' }), host);
+    const commands = sessionCommands(h.ctx);
+    expect(await commands['session.prompt']({ kind: 'session.prompt', sessionId: 'S1', prompt: 'Again.' }, windowOn('ws-1'))).toMatchObject({ ok: false, code: 'session.confinement' });
+    expect(await commands['session.continue']({ kind: 'session.continue', sessionId: 'S1', action: 'continue' }, windowOn('ws-1'))).toMatchObject({ ok: false, code: 'session.confinement' });
+    expect(h.reported).toEqual([expected, expected]);
+    expect(h.raised).toEqual([]);
+  });
+
+  it('any other refusal keeps its own notice', async () => {
+    const h = harness(() => ({ kind: 'ack' }), (req) => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: 'ws-1', count: 0 } : { kind: 'refused', code: 'session.configuration', headline: 'The run was refused before it started', detail: 'The configuration could not be loaded.' }));
+    await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'));
+    expect(h.reported).toEqual([]);
+    expect(h.raised).toEqual([{ severity: 'error', headline: 'The run was refused before it started', detail: 'The configuration could not be loaded.' }]);
+  });
+});
 
 describe('session.start, driven without a process behind it', () => {
   it('a rejecting worktree link refuses with the cause instead of throwing (R0-2)', async () => {

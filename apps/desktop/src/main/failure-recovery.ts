@@ -13,7 +13,8 @@ import type { NoticeStore, ReportInput } from './notices.js';
  *   now in use. Where the restart is refused or cannot begin, the bookkeeping is cleared and the generic notice is
  *   published. A second authentication failure, or a first with no usable fallback, opens REQ-NOTIFY-072's recovery
  *   dialog — NOT BUILT: it takes the generic notice until it is (the 401 note's part C).
- * - **sandbox** (REQ-NOTIFY-061): not built — nothing reports a refused sandboxed launch to main, so it never matches.
+ * - **sandbox** (REQ-NOTIFY-061): a refused confinement mode never reaches a run result — it is refused, with its own
+ *   notice, where the start, the prompt or the continue is refused (`confinementRefusalNotice`) — so it never matches here.
  * - **quota** (REQ-NOTIFY-063): the provider limit was reached, the session is preserved, the action opening model
  *   settings. REQ-NOTIFY-062's hosted-credit branch is not built: no hosted provider exists.
  * - **generic** (REQ-NOTIFY-064): the run failed and the session and the draft were kept, the failure text as detail,

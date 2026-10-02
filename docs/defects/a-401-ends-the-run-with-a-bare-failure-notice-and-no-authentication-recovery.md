@@ -59,7 +59,7 @@ half, REQ-SESSION-026, REQ-CONFIG-067) is built:
   REQ-SESSION-026 …"), `resilience.test.ts`, `autopsy.test.ts`, and shown by `resilience-proof`'s new `auth-fallback`
   scenario (`fail:401:only=scripted`, `fallback_model: beta`). REQ-NOTIFY-068 holds: the 401 is not retried on the pair.
 - **Readings** the build proceeds under (the restart re-submits the prompt as a new row, a restart that cannot begin takes
-  the pin back, the first-failure bookkeeping lives in main for the process's life): OQ-177.
+  the pin back, the first-failure bookkeeping lives in main for the process's life): OQ-179.
 
 ## Progress — part B built 2026-10-02
 

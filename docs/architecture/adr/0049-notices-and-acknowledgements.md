@@ -201,11 +201,15 @@ acknowledgement is a **persistent notice** under `REQ-NOTIFY-040`, never a longe
 **Not built, said so.** The application diagnostics of `REQ-NOTIFY-268`'s second branch are main's log line, because
 the diagnostics store (`REQ-STARTUP-130` onward) does not exist; a warning with no session and no focused run is
 therefore readable in the log and nowhere else. `REQ-SHELL-118`'s update-offer notice, updated in place with download
-progress, is not built (there is no updater). Seven members of the action vocabulary parse and dispatch to nothing in
-this build — the update, the restart, the cloud account, the project initialization, the retry, the proposal revert and
+progress, is not built (there is no updater). ~~Seven~~ members of the action vocabulary parse and dispatch to nothing in
+this build — the update, the restart, the cloud account, the project initialization, ~~the retry,~~ the proposal revert and
 the settings save — each logged rather than silently ignored, and `open-library` has no target until the Library view
-exists. Two members outside `REQ-NOTIFY-044`'s list were carried because two other requirements demand them
-(`REQ-NOTIFY-224`'s hook review and `REQ-WORKSPACE-152`'s provider sign-in). **That gap was RULED 2026-09-06 as
+exists. *Corrected 2026-10-02: the retry was one of the seven as first written; since 2026-10-02 `retry-run`
+dispatches to `retryRun` (`apps/desktop/src/renderer/session-actions.ts`, `REQ-NOTIFY-045`), which resubmits the
+composer's draft, else the followed session's last submitted prompt, and refuses with a reason when there is neither —
+[`the-retry-run-notice-action-has-no-target.md`](../../defects/fixed/the-retry-run-notice-action-has-no-target.md).
+No failure notice carries the action yet (OQ-178), so it is reached only by a notice that names it.*
+Two members outside `REQ-NOTIFY-044`'s list were carried because two other requirements demand them (`REQ-NOTIFY-224`'s hook review and `REQ-WORKSPACE-152`'s provider sign-in). **That gap was RULED 2026-09-06 as
 ESC-34, the same day:** the owner added both members to `REQ-NOTIFY-044` on the precedent of its own resolution 12,
 where this vocabulary was corrected to match a behavioural requirement rather than the other way round. **This ruling
 did change the code:** `REQ-NOTIFY-044` requires an action concerning an object to carry that object's identity, and

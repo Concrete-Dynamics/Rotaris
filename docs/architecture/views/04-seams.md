@@ -229,6 +229,10 @@ Invariants:
 - A renderer that must raise a persistent notice sends `notice.report` — it does not draw one. That missing
   entry for a renderer was defect fifty-seven.
 - A transient acknowledgement may carry **exactly one** action, from a closed one-member type.
+- **An action is dispatched in one place**, `dispatchNoticeAction` in `apps/desktop/src/renderer/main.tsx`; a member
+  whose target is not built is logged there and nothing else. `retry-run` has its target since 2026-10-02 (REQ-NOTIFY-045,
+  `retryRun` in `apps/desktop/src/renderer/session-actions.ts`, reading the draft the composer last published through
+  `composerDraft` in `shell.ts`); no failure notice carries it yet (OQ-178).
 
 ---
 

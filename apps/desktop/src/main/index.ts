@@ -981,7 +981,10 @@ async function main(): Promise<void> {
       // sandboxed launch, a quota or rate limit, anything else — and its class's recovery published (`failure-recovery.ts`):
       // a first authentication failure pins the fallback and restarts (REQ-NOTIFY-070), a quota failure takes REQ-NOTIFY-063's
       // notice (a cancelled wait included, whatever its status), anything else REQ-NOTIFY-064's. A result with no failure
-      // text is presented at the severity summarisation assigned.
+      // text is presented at the severity summarisation assigned. (REQ-NOTIFY-062's hosted-credit branch is not built: no
+      // hosted provider exists.) The sandbox class (REQ-NOTIFY-061) never reaches this handler: a refused confinement mode
+      // is refused before a session or a run exists, and its notice is raised where the start, the prompt or the continue
+      // is refused (`confinementRefusalNotice`, `commands/session.ts`), so the classifier's sandbox fact is never set here.
       /**
        * REQ-EVENTS-088 (OQ-42): a run whose terminal persistence could not be confirmed has ALREADY been
        * reported — the run host published one failure notice carrying the last durable ordinal and the reopen

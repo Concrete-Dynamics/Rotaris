@@ -25,8 +25,10 @@ export function isAuthenticationFailure(text: string): boolean {
 
 export interface FailureFacts {
   /**
-   * REQ-NOTIFY-061: a sandbox mode was requested and the run never reached a started state. Nothing reports this fact
-   * to main in this build (the sandbox class is not built), so the caller passes nothing and the class never matches.
+   * REQ-NOTIFY-061: a sandbox mode was requested and the run never reached a started state. A refused confinement mode
+   * is refused before a run exists and has its own notice where the start, the prompt or the continue is refused
+   * (`confinementRefusalNotice`, `commands/session.ts`), so main's run-result handler never sets this; it keeps the
+   * class's place in the order.
    */
   readonly sandboxRefused?: boolean;
 }

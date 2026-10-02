@@ -415,7 +415,9 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(pub.snapshots.every((s) => s.wait === null)).toBe(true);
   });
 
-  it('REQ-MONITOR-142 over REQ-ORCH-091 b: a switch records whether the root\'s cell is rebuilt for it — not for the model it was last built from, so a fallback in force stands (the repair of the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback)', async () => {
+  // Until OQ-177 (2026-10-02) the switch onto a1 recorded `rebuilds: false` and the fallback stood
+  // (a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force); now every switch rebuilds the cell.
+  it('REQ-MONITOR-142 over REQ-ORCH-091 b (OQ-177): a switch records that the root\'s cell is rebuilt for it — even for the model it was last built from, so a fallback in force ends', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
     let release!: () => void;
     const held = new Promise<void>((r) => { release = r; });
@@ -425,12 +427,12 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     // The root fell back a1 → b1 and its call on b1 is in flight: no wait, so a switch is the next-iteration switch.
     expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
     const switched = () => dal.timelineOf(sid).filter((t) => t.name === 'entry_model_switched').map((t) => JSON.parse(t.metadata) as unknown);
-    // The configured key: the cell was built from a1, so it is not rebuilt and b1 stays in force.
+    // The configured key: the cell was built from a1, and it is rebuilt on a1 all the same (OQ-177), ending b1.
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
     // Another model: rebuilt from the next iteration.
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
     // No root turn between the two: the second supersedes the first, which never applies.
-    expect(switched()).toEqual([{ model: 'a1', rebuilds: false, supersedes: false }, { model: 'c1', rebuilds: true, supersedes: true }]);
+    expect(switched()).toEqual([{ model: 'a1', rebuilds: true, supersedes: false }, { model: 'c1', rebuilds: true, supersedes: true }]);
     release();
     expect((await sessions.running(sid)!).status).toBe('completed');
   });
@@ -438,10 +440,13 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   /*
    * The verifier's away-and-back case of the same note: with the root on its fallback, a switch away from the configured
    * model and one back onto it before the root's next turn. `rebuilds: true` on the first was a prediction the second
-   * overtook; the run says so (`supersedes`), keeps b1 at the root's next turn, and the reader, over the run's own store,
-   * reads b1 and nothing else. The control: the switch away alone moves the root's next turn to c1.
+   * overtook; the run says so (`supersedes`). Since OQ-177 the second rebuilds the cell on a1, so the next iteration's root
+   * runs on a1 and the reader, over the run's own store, reads b1 then a1. (Until 2026-10-02 the second recorded
+   * `rebuilds: false`, the root kept b1 and the reader read b1 alone.) The control: the switch away alone moves the next
+   * iteration's root to c1. A second task gives the run that next iteration: a switch applies from the next iteration, and
+   * the root's resume after its child is still this one (REQ-MONITOR-142).
    */
-  it('REQ-MONITOR-142 over REQ-ORCH-091 b: a switch away and back before the root\'s next turn supersedes the first — the root keeps its fallback, and the record and the autopsy reader say so', async () => {
+  it('REQ-MONITOR-142 over REQ-ORCH-091 b (OQ-177): a switch away and back before the root\'s next turn supersedes the first — the root returns to the configured model, and the record and the autopsy reader say so', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
     const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
     const runWith = async (switches: readonly string[]) => {
@@ -460,6 +465,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       for (let i = 0; i < 40 && client.requests.length < 2; i++) await tick();
       expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
       for (const model of switches) expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model } })).toEqual({ ok: true });
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', id: 'second', text: 'a second task' } })).toEqual({ ok: true });
       release();
       expect((await sessions.running(sid)!).status).toBe('completed');
       const rows = dal.timelineOf(sid);
@@ -476,20 +482,23 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(control.root.at(-1)).toBe('c1');
     expect(control.keys).toEqual(['b1', 'c1']);
     const awayAndBack = await runWith(['c1', 'a1']);
-    expect(awayAndBack.records).toEqual([{ model: 'c1', rebuilds: true, supersedes: false }, { model: 'a1', rebuilds: false, supersedes: true }]);
+    expect(awayAndBack.records).toEqual([{ model: 'c1', rebuilds: true, supersedes: false }, { model: 'a1', rebuilds: true, supersedes: true }]);
     expect(awayAndBack.root.length).toBeGreaterThan(3);
-    expect(awayAndBack.root.slice(1).every((m) => m === 'b1')).toBe(true);
-    expect(awayAndBack.keys).toEqual(['b1']);
+    expect(awayAndBack.root).not.toContain('c1');
+    expect(awayAndBack.root.at(-1)).toBe('a1');
+    expect(awayAndBack.keys).toEqual(['b1', 'a1']);
   });
 
   /*
    * The verifier's second case of the same note: the root's ladder move recorded BETWEEN a switch and the switch that
    * supersedes it. The move happens in the turn already running when the first switch was made, on the cell from before
-   * it, so undoing the superseded switch keeps it: the root stays on b1 and the reader, over the run's own store, ends on
-   * b1. The run records on the move that a switch was pending (`switch_pending`), so the reader also places a move before
-   * a switch that is never superseded — the control: the switch to c1 alone ends the move at the root's next turn.
+   * it, so undoing the superseded switch keeps it until the superseding switch applies: since OQ-177 that switch back onto
+   * a1 rebuilds the cell, so the next iteration's root runs on a1 and the reader, over the run's own store, reads b1 then
+   * a1. (Until 2026-10-02 the switch back recorded `rebuilds: false`, the root stayed on b1 and the reader ended on b1.)
+   * The run records on the move that a switch was pending (`switch_pending`), so the reader also places a move before a
+   * switch that is never superseded — the control: the switch to c1 alone ends the move at the next iteration's root.
    */
-  it('REQ-MONITOR-142 over REQ-ORCH-091 b: a root fallback made while a switch is pending is recorded so, and the reader places it before the switch — kept when the switch is superseded, ended when it applies', async () => {
+  it('REQ-MONITOR-142 over REQ-ORCH-091 b (OQ-177): a root fallback made while a switch is pending is recorded so, and the reader places it before the switch — superseded, then ended by the switch that supersedes it; ended when the switch applies', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
     const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
     const runWith = async (back: boolean) => {
@@ -514,6 +523,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       for (let i = 0; i < 40 && client.requests.length < 2; i++) await tick();
       expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
       if (back) expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', id: 'second', text: 'a second task' } })).toEqual({ ok: true });
       releaseB();
       expect((await sessions.running(sid)!).status).toBe('completed');
       const rows = dal.timelineOf(sid);
@@ -536,15 +546,17 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(between.records).toEqual([
       { name: 'entry_model_switched', model: 'c1', rebuilds: true, supersedes: false },
       expect.objectContaining({ name: 'quota_fallback_model', agent: 'orchestrator', to_key: 'b1', switch_pending: true }),
-      { name: 'entry_model_switched', model: 'a1', rebuilds: false, supersedes: true },
+      { name: 'entry_model_switched', model: 'a1', rebuilds: true, supersedes: true },
     ]);
     expect(between.root.length).toBeGreaterThan(3);
-    expect(between.root.slice(1).every((m) => m === 'b1')).toBe(true);
-    expect(between.keys).toEqual(['b1']);
+    expect(between.root).not.toContain('c1');
+    expect(between.root.at(-1)).toBe('a1');
+    expect(between.keys).toEqual(['b1', 'a1']);
   });
 
   // The same placement for the ladder's other automatic move (REQ-ORCH-090): an unresponsive fallback made while a switch
-  // is pending records so, the switch ends it at the root's next turn, and the reader reads f1's pair then c1, as the root ran.
+  // is pending records so, the switch ends it at the next iteration's root (a second task gives the run one; the root's
+  // resume after its child stays on f1, REQ-MONITOR-142), and the reader reads f1's pair then c1, as the root ran.
   it('REQ-MONITOR-142 over REQ-ORCH-090: a root unresponsive fallback made while a switch is pending is recorded so, and the switch it preceded ends it', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, []), entry('f1', 'f', F1, [])];
     const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
@@ -561,6 +573,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
     for (let i = 0; i < 40 && client.requests.length < 1; i++) await tick();
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', id: 'second', text: 'a second task' } })).toEqual({ ok: true });
     clock.advance(30_000);
     expect((await sessions.running(sid)!).status).toBe('completed');
     const rows = dal.timelineOf(sid);
@@ -1141,5 +1154,109 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const sid2 = (t.sessions.start(dal, 'C:/ws', 'y') as { value: SessionId }).value;
     await t.sessions.running(sid2)!;
     expect(t.client.requests[0]).toMatchObject({ timeoutMs: RUN_CONFIG_DEFAULTS.modelTimeoutMs, retries: RUN_CONFIG_DEFAULTS.modelRetries });
+  });
+
+  /*
+   * REQ-MONITOR-142 over REQ-ORCH-090/091 (OQ-177): the row a switch appends says what the entry agent runs on from the
+   * next iteration, whatever the ladder did before it — and the iteration in flight finishes on the setting it had.
+   */
+  describe('REQ-MONITOR-142 with REQ-ORCH-090/091 (OQ-177): an entry switch row is what the next iteration runs on', () => {
+    const systemRows = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'system').map((r) => r.body);
+    const isRoot = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => /^You are the orchestrator/.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '');
+    const rootModels = (client: ScriptedModelClient) => client.requests.filter(isRoot).map((r) => r.model.modelId);
+    const held = () => { let open!: () => void; const p = new Promise<void>((r) => { open = r; }); return { p, open }; };
+    const addTask = (sessions: Sessions, sid: SessionId) => expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', id: 'second', text: 'a second task' } })).toEqual({ ok: true });
+
+    it('a switch back to the configured key after a same-tier move rebuilds the root on it at the next iteration, as its row says (REQ-ORCH-091 b)', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      const gate = held();
+      const { sessions, client } = sessionsWith((p, turn) => (p !== 'orchestrator' ? answer('{"summary":"done"}') : turn === 1 ? failing(rateLimit(1)) : turn === 2 ? hanging(gate.p) : answer(`iteration ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(rootModels(client)).toEqual(['a1', 'b1']);
+      addTask(sessions, sid);
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      gate.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(dal.iterationsOf(sid)).toHaveLength(2);
+      expect(rootModels(client)).toEqual(['a1', 'b1', 'a1']);
+      expect(systemRows(sid)).toContain('Entry model switched to a1; it applies from the next iteration.');
+    });
+
+    it('a switch back to the configured key after an unresponsive-model fallback rebuilds the root on it at the next iteration (REQ-ORCH-090)', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+      const gate = held();
+      const { sessions, client } = sessionsWith((p, turn) => (p !== 'orchestrator' ? answer('{"summary":"done"}') : turn === 1 ? hanging(NEVER) : turn === 2 ? hanging(gate.p) : answer(`iteration ${turn}`)), { catalogue, fallbackModel: { model: F1, thinking: 'unset' }, llmResponseTimeoutMs: 30_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(30_000);
+      await tick();
+      expect(rootModels(client)).toEqual(['a1', 'f1']);
+      addTask(sessions, sid);
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      gate.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(rootModels(client)).toEqual(['a1', 'f1', 'a1']);
+      expect(systemRows(sid)).toContain('Entry model switched to a1; it applies from the next iteration.');
+    });
+
+    it('a reasoning switch reaches the next iteration\'s requests, on the model the root has, and the row says so', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      const gate = held();
+      const { sessions, client } = sessionsWith((p, turn) => (p !== 'orchestrator' ? answer('{"summary":"done"}') : turn === 1 ? failing(rateLimit(1)) : turn === 2 ? hanging(gate.p) : answer(`iteration ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      addTask(sessions, sid);
+      expect(sessions.control({ op: 'setReasoning', sessionId: sid, args: { level: 'high' } })).toEqual({ ok: true });
+      gate.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // A reasoning switch is not a model switch: the same-tier move stands, and only the level changes.
+      expect(client.requests.filter(isRoot).map((r) => [r.model.modelId, r.thinking])).toEqual([['a1', 'unset'], ['b1', 'unset'], ['b1', 'high']]);
+      expect(systemRows(sid)).toContain('Entry reasoning level switched to high; it applies from the next iteration.');
+    });
+
+    it('the iteration in flight finishes on the model it had: a root resumed after its child in the same iteration is not moved by a switch', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+      const gate = held();
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer(`root ${turn}`);
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        return turn === 1 ? hanging(gate.p) : answer('I did it.');
+      };
+      const { sessions, client } = sessionsWith(script, { catalogue, delegation: true });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(dal.childrenOf(sid)[0]!.state).toBe('running');
+      addTask(sessions, sid);
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      gate.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(dal.iterationsOf(sid)).toHaveLength(2);
+      // Iteration 1's root (its first call, its call after the delegation, its resume with the child's report) on a1;
+      // iteration 2's root on c1.
+      const roots = client.requests.filter(isRoot);
+      expect(roots.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'a1', 'c1']);
+      expect(JSON.stringify(roots[2]!.messages.at(-1))).toContain('[Background task completed]');
+    });
+
+    it('a switch onto a pair an earlier wait moved for the rest of the session says the entry agent stays on that choice (REQ-ORCH-091 d)', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+      const gate = held();
+      const { sessions, client, pub } = sessionsWith((p, turn) => (p !== 'orchestrator' ? answer('{"summary":"done"}') : turn === 1 ? failing(quota()) : turn === 2 ? hanging(gate.p) : answer(`iteration ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1' });
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      await tick();
+      expect(rootModels(client)).toEqual(['a1', 'c1']);
+      addTask(sessions, sid);
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      gate.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(rootModels(client)).toEqual(['a1', 'c1', 'c1']);
+      const row = systemRows(sid).find((b) => b.startsWith('Entry model switched to a1'))!;
+      expect(row).toBe('Entry model switched to a1, but c1, chosen for a/a1 during an earlier wait, stands for the rest of the session: the entry agent runs on c1 from the next iteration.');
+      expect(row).not.toContain('it applies from the next iteration');
+    });
   });
 });

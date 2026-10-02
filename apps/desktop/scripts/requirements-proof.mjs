@@ -72,7 +72,9 @@
  *               disclosure, the card held out of `ready` by a drag onto the blocked column with a stated reason, and the
  *               blockers pane's "Clear the blocker" taken. The disclosure is due again; while it stands the pane says
  *               nothing has been recorded as a status, not a refusal, with the resume held; once it is accepted the pane
- *               is re-read and says nothing holds the card, draws no alert, and the history holds one resume.
+ *               is re-read and says nothing holds the card, draws no alert, and the history holds one resume. The queue
+               is then started, and a run begins on the one tree the release provisioned (`…-u1`): no "no run began" on
+               the card, no second provisioning in the log, one run row and one worktree row (REQ-TRACE-464).
  *
  * Evidence under `.proof/requirements-proof/`: `vitest.json`, one PNG and one log per launch, `results.json`.
  * `--skip-build` skips the desktop build.
@@ -835,14 +837,18 @@ const resumed = await launch('blocker-resume', br.workspace, br.local, br.prefer
     '[data-testid="req-detail-blockers"]@17000',
     '[aria-label="Clear the blocker"]@18400',
     '[data-testid="req-pane-disclosure"] .btn>>Start the run@20400',
+    // The dispatch (defect note `a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md`):
+    // the queue is started again after the resume's reads, and the run must begin on the tree the release provisioned.
+    '[data-testid="req-queue-open"]@24000',
+    '[aria-label="Start the queue"]@25000',
   ].join(';;'),
   ROTARIS_CAPTURE_TYPE_AT: 'Waiting on a vendor answer@12200',
   // The focused card opens its own detail with Enter (REQ-TRACE-484); the harness sends single clicks only. A card is
   // read through the board's own reveal first (REQ-TRACE-364): the column it sits in may lie outside the viewport.
   ROTARIS_CAPTURE_KEYS: 'Return@16000',
-  ROTARIS_CAPTURE_EVAL_AT: [`${BOARD_AT}@10400`, `${DRAG_TO_BLOCKED}@11000`, `${REVEAL_101}@14000`, `${BOARD_AT}@14200`, `${BLOCKERS_AT}@17800`, `${DISCLOSURE_AT}@19400`, `${BLOCKERS_AT}@19600`, `${BLOCKERS_AT}@23000`, `${REVEAL_101}@23100`, `${BOARD_AT}@23200`].join(';;'),
-  ROTARIS_CAPTURE_AFTER_MS: '24000',
-}, 240_000);
+  ROTARIS_CAPTURE_EVAL_AT: [`${BOARD_AT}@10400`, `${DRAG_TO_BLOCKED}@11000`, `${REVEAL_101}@14000`, `${BOARD_AT}@14200`, `${BLOCKERS_AT}@17800`, `${DISCLOSURE_AT}@19400`, `${BLOCKERS_AT}@19600`, `${BLOCKERS_AT}@23000`, `${REVEAL_101}@23100`, `${BOARD_AT}@23200`, `${REVEAL_101}@29900`, `${BOARD_AT}@30000`, `${REVEAL_101}@35900`, `${BOARD_AT}@36000`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '37000',
+}, 300_000);
 expect(resumed.evals['10400']?.column === 'ready', `REQ-TRACE-382: with the queue stopped the release left REQ-101 in ${JSON.stringify(resumed.evals['10400']?.column)}, not ready (feedback ${JSON.stringify(resumed.evals['10400']?.feedback)})`);
 const heldDrag = resumed.evals['11000'];
 expect(heldDrag !== null && typeof heldDrag === 'object' && heldDrag.dragging === 'true' && heldDrag.dialog === true, `REQ-TRACE-389: dropping REQ-101 on the blocked column did not ask for the hold's reason (${JSON.stringify(heldDrag)})`);
@@ -868,7 +874,22 @@ const resumeRows = deliveryRows(br.local);
 expect(resumeRows !== null, `no delivery store was written under ${br.local}`);
 const resumeHistory = resumeRows.query(`select * from "${resumeRows.tables.find((t) => /history/.test(t))}" order by rowid`).map((e) => String(e.action));
 expect(resumeHistory.filter((a) => a === 'resume').length === 1, `REQ-TRACE-453/472: the resume accepted through the disclosure left ${JSON.stringify(resumeHistory)} in the history, not one resume`);
-stage2['blocker-resume'] = { disclosure: resumeDisclosure.buttons, waiting: resumeWaiting.waiting, afterAccept: { none: resumeAfter.none, alerts: resumeAfter.alerts }, column: resumed.evals['23200'].column, history: resumeHistory };
+// REQ-TRACE-464/453 — the dispatch. Until 2026-10-02 the resume provisioned u1 a second time, `createWorktree` refused
+// the existing path, the soft failure replaced the launch with one that had no worktree, and the card read "REQ-101
+// moved, and no run began: Worktree path already exists: …" while no claim could ever take it: this stage asserted the
+// pane and the history and passed with that defect present. The resume now takes over the release's tree, and once the
+// queue is started a run begins on it.
+const dispatchReads = ['23200', '30000', '36000'].map((k) => resumed.evals[k]).filter((v) => v && typeof v === 'object');
+const noRun = dispatchReads.flatMap((t) => t.feedback ?? []).filter((f) => /no run began/i.test(f));
+expect(noRun.length === 0, `REQ-TRACE-464/463: the resumed card says no run began: ${JSON.stringify(noRun)}`);
+expect(!/Worktree path already exists/.test(resumed.log), 'REQ-TRACE-464: the resume provisioned the unit\'s worktree a second time (the log carries "Worktree path already exists")');
+const dispatched = ['30000', '36000'].map((k) => resumed.evals[k]?.column);
+expect(dispatched.some((c) => c === 'running' || c === 'review' || c === 'done'), `REQ-TRACE-464/453: once the queue was started the resumed REQ-101 never became a run — it read ${JSON.stringify(dispatched)}`);
+const resumeRuns = resumeRows.query("select * from delivery_runs where req_id = 'REQ-101'");
+const resumeTrees = resumeRows.query("select * from delivery_worktrees where req_id = 'REQ-101'");
+expect(resumeRuns.length === 1 && resumeRuns[0].unit === 'u1', `REQ-TRACE-464: the resumed REQ-101 has run rows ${JSON.stringify(resumeRuns.map((x) => x.unit))}, not one run of u1`);
+expect(resumeTrees.length === 1 && String(resumeTrees[0].path).endsWith('-u1') && resumeTrees[0].ref === resumeRuns[0].worktree_ref, `REQ-TRACE-464/REQ-GIT-140: the run did not begin on the one tree the release provisioned (trees ${JSON.stringify(resumeTrees.map((t) => t.path))}, run on ${JSON.stringify(resumeRuns[0].worktree_ref)})`);
+stage2['blocker-resume'] = { disclosure: resumeDisclosure.buttons, waiting: resumeWaiting.waiting, afterAccept: { none: resumeAfter.none, alerts: resumeAfter.alerts }, column: resumed.evals['23200'].column, history: resumeHistory, dispatched, run: { unit: resumeRuns[0].unit, worktree: resumeTrees[0].path } };
 
 // ── panes and the graph: the registry's contract, and the rest of REQ-TRACE-497 a proof can reach ────────────────
 // Defect `R2-6`, and the reason this read carries geometry at all: every assertion below once read attributes through

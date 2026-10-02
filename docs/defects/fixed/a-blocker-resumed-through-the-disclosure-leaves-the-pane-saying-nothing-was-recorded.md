@@ -59,4 +59,4 @@ none was run.
 
 Noticed while repairing it: the resumed card's run never begins, because the resume provisions the unit's worktree a
 second time. See
-[`../a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md`](../a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md).
+[`a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md`](a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md) (repaired 2026-10-02).

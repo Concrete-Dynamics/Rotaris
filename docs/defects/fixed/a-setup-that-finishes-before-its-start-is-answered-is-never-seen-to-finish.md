@@ -14,7 +14,7 @@ in the run's `then`, after `startSetup` has returned). The coordinator drains th
 (`setupTurn`), and the run ending then as a retryable failure for a setup that completed.
 
 Seen 2026-10-01 in the built app while adding `workspace-proof`'s scenario 8g for
-[`the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`](fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md):
+[`the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`](the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md):
 a documentation-only project carrying `.serena/project.yml` logged `mcp setup: create succeeded — the project already
 exists …`, both `skipped-no-code` steps and `mcp setup: completed — …` in the same millisecond as `mcp setup: started`,
 and the coordinator's run was still under way 30 s later, when the proof closed the window ("…init-marker was closed while
@@ -35,3 +35,36 @@ not repaired.
 - `apps/desktop/src/run-host/mcp.ts` — `startSetup`, whose answer is the status as it stands when `runSetupSteps` first
   yields, and whose `finished` status is set in the run's `then`, after the steps' pushes.
 - `packages/mcp/src/setup.ts` — `runSetupSteps`, which awaits nothing when every step is skipped.
+
+## Outcome
+
+**Repaired 2026-10-02** (third repair round over the open notes, bundle `fin5-board-and-setup`; origin/main `2e8f9c0`).
+
+**The order, read from the code.** The run host's `mcp.setup` arm is answered from the async request handler
+(`apps/desktop/src/run-host/dispatch.ts`). `startSetup` pushes each step from `runSetupSteps`' synchronous part, and the
+`finished` status is set in the run's `then`, a microtask queued before the handler's return is awaited. So all four
+pushes reach main ahead of the start's answer, in the order sent, and the coordinator had no sink for any of them.
+
+**Confirmed first.** A new case in `apps/desktop/src/main/initialization.test.ts` has a fake setup port that pushes the
+three steps and the `finished` status before it resolves `start` with a running status whose steps have all ended. On
+the code before, nothing was recorded with no timer advanced. `workspace-proof`'s scenario 8g gained a
+documentation-only project carrying the runtime's marker and no source file, the note's shape. On the unrepaired build
+its run had not ended 18.2 s after the launch began, with no steps reported, although the run host had logged its
+completion.
+
+**What changed.** `InitializationCoordinator` (`apps/desktop/src/main/initialization.ts`) keeps the latest status
+pushed while its own start request is in flight with no sink installed (`setupEarly`; a push while no start is in
+flight is still dropped). `followSetup` drains the start's answer and then that kept status. Either is drained only
+when it is this setup's, by `startedAt`. A second guard covers a push lost otherwise: when the drained status has every
+step ended and its state still reads `running`, the coordinator asks `setup.status` once and drains the answer if it is
+this setup's. A failed read is logged and the follow waits on the pushes and the bound as before. OQ-169's bound and
+its readings are unchanged.
+
+**Pinned by** three cases in `initialization.test.ts` ("a setup that finishes before its start is answered"). The first
+two are red on the code before. The kept status ends the run as `success` at once, with the three steps, the non-code
+summary and no banner, and the next workspace's setup starts and is followed. The status read ends it when every push
+was lost. A kept status and a status read that belong to another setup are ignored. In the built app 8g's new check
+passed: the run ended 2.9 s after the launch began, `success`, with "project file already exists; left as is" and the
+two `skipped-no-code` sentences, and REQ-WORKSPACE-095's non-code summary (51 passed, 0 failed, 2 skipped). 8g's
+`init-marker` project keeps its source file, so the case with waiting steps is still measured too.
+

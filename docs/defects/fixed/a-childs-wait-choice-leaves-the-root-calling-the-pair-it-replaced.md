@@ -101,6 +101,21 @@ takes back the override an earlier choice set for it, and the call is retried on
 `a1, a1, c1, c1`), and in the readers' parity table (`apps/desktop/scripts/lib/autopsy-entry-model.test.ts`: two rows, red
 in both copies before with `root-model` printed again at the end).
 
+**Fourth round, 2026-10-02 (the verifier's repair-round-3 finding).** The third round's claim that "both autopsy readers
+read it, so they stay in step with the run" was false for a root on an intermediate pair of the chain. `takeBackOverrideOf`
+recorded `followed` only when the root's cell was the chain's END (`memory.effective` of the chosen pair), though its own
+comment defined `followed` as "on the override's target". A root that had followed `a1 → c1` and was still on c1 when
+`c1 → f1` was added sat on the taken-back override's own target and moved on to f1 at its next call (`followOverride`), yet
+the entry recorded `elsewhere`: both readers deleted `a1 → c1`, walked from the configured a1 and ended on `a1`
+(`a1, c1, f1, a1`) while the root called f1. The third round's reason is kept above; its replacement: `followed` is recorded
+when the root's cell is any pair of the chain from the taken-back override's own target on (`Run.onChainFrom`, which walks
+`memory.overrideFor` from it, bounded by the pairs passed). The readers needed no change: on `followed` they already set
+the root to the chain's end, which is where the run's root goes from any pair of the chain. Pinned in
+`packages/engine/src/run/ladder.test.ts` ("a take-back while the root is on an intermediate pair of the override's chain
+records it followed, and the reader ends where the root runs": the verifier's probe, red before with `root_cell:
+'elsewhere'` and `entryModelKeys` ending `a1, c1, f1, a1`; after, root `a1, a1, c1, f1, …` and the reader `a1, c1, f1`),
+and by a row of the readers' parity table for an intermediate root recorded `followed`.
+
 ## Specs
 
 - REQ-ORCH-091 (a) and (d): exhausted models are "remembered session-wide and excluded from candidates", and a manual

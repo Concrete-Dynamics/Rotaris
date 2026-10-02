@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A take-back records a root on any pair of the override's chain as having followed it (REQ-ORCH-091 d, REQ-MONITOR-142;
+the fourth round of `a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced`).** `Run.onChainFrom` classifies
+`root_cell: 'followed'` for a root on the taken-back override's own target or any pair past it, not only the chain's end.
+The **runtime view**'s ladder paragraph says so. No package, edge, process, channel, timeline name or store column changed.
+
 **An entry switch ends with its run, and OQ-185 asks whether it should (REQ-MONITOR-142/143, REQ-SESSION-026,
 REQ-MONITOR-146).** The **runtime view**'s `setModel` row says where a switch is held. No code moved.
 

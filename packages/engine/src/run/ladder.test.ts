@@ -92,7 +92,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     inputLimits?: Record<string, number>;
   }
 
-  function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, opts: Opts = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: Parameters<ScriptedModelClient['stream']>[0]) => ScriptedCall, opts: Opts = {}) {
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
     const original = client.stream.bind(client);
@@ -101,7 +101,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       const persona = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise/i.test(system) ? 'summariser' : 'child';
       const n = (counts.get(persona) ?? 0) + 1;
       counts.set(persona, n);
-      client.push(script(persona, n));
+      client.push(script(persona, n, req));
       return original(req);
     };
     const pub = recorder();
@@ -752,6 +752,74 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(memory.overrideFor('a', 'a1')).toBeUndefined();
     expect(memory.overrideFor('f', 'f1')?.key).toBe('a1');
     expect([memory.isExhausted('a', 'a1'), memory.isExhausted('f', 'f1')]).toEqual([false, true]);
+  });
+
+  /*
+   * Repair round 3 of the same note: a root that followed a1 → c1 and is still on c1 when c1 → f1 is added sits on the
+   * taken-back override's own target, an intermediate pair of the chain from a1, and moves on to f1 at its next call
+   * (`followOverride`). Its take-back records `root_cell: 'followed'`, so the autopsy reader keeps the root on the chain
+   * instead of returning it to a1. Before: the cell was compared with the chain's end (f1) only, recorded `elsewhere`, and
+   * both readers ended on a1 while the root called f1 (the verifier's repair-round-3 finding).
+   */
+  it('REQ-ORCH-091 (d) / REQ-MONITOR-142: a take-back while the root is on an intermediate pair of the override\'s chain records it followed, and the reader ends where the root runs', async () => {
+    const catalogue = [entry('a1', 'a', A1, []), entry('c1', 'c', C1, []), entry('f1', 'f', F1, [])];
+    const textOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages.flatMap((m) => m.content.map((p) => (p.kind === 'text' ? p.text ?? '' : ''))).join('\n');
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const holds = new Map<string, () => void>();
+    const hold = (name: string) => new Promise<void>((r) => { holds.set(name, r); });
+    const calls = new Map<string, number>();
+    const script = (persona: string, turn: number, req: Parameters<ScriptedModelClient['stream']>[0]): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      if (persona === 'orchestrator') {
+        if (turn === 1) return toolCalls(['x', 'y', 'z'].map((t) => ({ callId: `d${t}`, name: 'delegate', args: { persona: 'coding-agent', task_name: t, task: `TASK: child ${t}` } })));
+        if (turn === 3) return { parts: [{ hold: hold('root'), part: { kind: 'text', delta: 'root 3' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+        return answer(`root ${turn}`);
+      }
+      const child = ['x', 'y', 'z'].find((t) => textOf(req).includes(`TASK: child ${t}`)) ?? '?';
+      const n = (calls.get(child) ?? 0) + 1;
+      calls.set(child, n);
+      // X: out of quota on a1 (→ c1 chosen), then held on c1 and out of quota there (→ f1 chosen), then done.
+      if (child === 'x') return n === 1 ? failing(quota()) : n === 2 ? { parts: [{ hold: hold('x') }, { error: quota() }] } : answer('x done');
+      // Y: held on a1 until c1 is chosen, then done, which resumes the root on c1.
+      if (child === 'y') return n === 1 ? { parts: [{ hold: hold('y'), part: { kind: 'text', delta: 'y done' } }, { part: { kind: 'finish', reason: 'stop' } }] } : answer('y done');
+      // Z: held on a1, then out of quota there once a1 → c1 → f1 stands; a1 itself is chosen for the retry.
+      return n === 1 ? { parts: [{ hold: hold('z') }, { error: quota() }] } : answer('z done');
+    };
+    const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    const root = () => client.requests.filter((r) => /^You are the orchestrator/.test(systemOf(r))).map((r) => r.model.modelId);
+    for (let i = 0; i < 40 && (lastWait(pub) === null || root().length < 2 || !holds.has('y') || !holds.has('z')); i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    for (let i = 0; i < 40 && !holds.has('x'); i++) await tick();
+    holds.get('y')!();
+    for (let i = 0; i < 40 && !holds.has('root'); i++) await tick();
+    // The root resumed after Y on c1 — it followed a1 → c1 — and its turn is held there.
+    expect(root()).toEqual(['a1', 'a1', 'c1']);
+    holds.get('x')!();
+    for (let i = 0; i < 40 && lastWait(pub)?.model !== 'c1'; i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'c', model: 'c1', exhausted: true });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'f1' } })).toEqual({ ok: true });
+    for (let i = 0; i < 40 && lastWait(pub)?.model === 'c1'; i++) await tick();
+    holds.get('z')!();
+    for (let i = 0; i < 40 && !(lastWait(pub)?.model === 'a1' && lastWait(pub)?.exhausted === true); i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+    holds.get('root')!();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    // The root stays on the chain it followed: from c1 it moves on to f1, never back to a1.
+    expect(root().slice(0, 3)).toEqual(['a1', 'a1', 'c1']);
+    expect(root().slice(3)).toEqual(root().slice(3).map(() => 'f1'));
+    expect(root().length).toBeGreaterThan(3);
+    const rows = dal.timelineOf(sid);
+    expect(rows.filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>)).toEqual([
+      expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1' }),
+      expect.objectContaining({ provider: 'c', model: 'c1', model_key: 'f1' }),
+      expect.objectContaining({ provider: 'a', model: 'a1', cleared: true, cause: 'superseded', root_cell: 'followed' }),
+    ]);
+    const models = { a1: { provider: 'a', model_id: 'a1' }, c1: { provider: 'c', model_id: 'c1' }, f1: { provider: 'f', model_id: 'f1' } };
+    const audit = JSON.stringify({ session_id: sid, config_snapshot: { default_persona: 'orchestrator', personas: { orchestrator: { model: 'a1' } }, models } });
+    expect(entryModelKeys(audit, rows, childModelKeys(dal.childrenOf(sid)))).toEqual(['a1', 'c1', 'f1']);
   });
 
   /*

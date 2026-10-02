@@ -47,6 +47,11 @@ const CASES: readonly [string, string | undefined, readonly Entry[], readonly st
   // so the key printed for it is taken back. Read without `root_cell`, both printed root-model again at the end.
   ['a wait choice of a pair whose override the root had followed takes it back, and the root stays on the target', audit('root-model', paired), [override('katalyst', 'r', 'child-model', 'openai', 'c'), entry('model_override', { provider: 'katalyst', model: 'r', cleared: true, cause: 'superseded', root_cell: 'followed' }), override('anthropic', 's', 'root-model', 'katalyst', 'r')], ['root-model', 'child-model']],
   ['the waiting pair chosen again while the root never left it: the key printed for the override is taken back', audit('root-model', paired), [override('katalyst', 'r', 'child-model', 'openai', 'c'), entry('model_override', { provider: 'katalyst', model: 'r', cleared: true, cause: 'superseded', root_cell: 'on_pair' })], ['root-model']],
+  // Repair round 3: the root followed r → c and was still on c when c → s was added; r chosen in a wait takes r → c back.
+  // The run records it `followed` (on the chain from the override's own target on, `Run.onChainFrom`) and the root moves on
+  // to spare-model at its next call, which both copies print. Recorded `elsewhere`, as before that round, they printed
+  // root-model at the end: a key the root never ran on again.
+  ['a take-back while the root is on an intermediate pair of the chain keeps it on the chain, which ends past it', audit('root-model', paired), [override('katalyst', 'r', 'child-model', 'openai', 'c'), override('openai', 'c', 'spare-model', 'anthropic', 's'), entry('model_override', { provider: 'katalyst', model: 'r', cleared: true, cause: 'superseded', root_cell: 'followed' })], ['root-model', 'child-model', 'spare-model']],
   // A cycle a store from before that holds (r → c, then c → r): the newest override's target, as the run's memory reads
   // it. Until 2026-10-02 an eight-hop walk from c ended on c by parity and printed the replaced key.
   ['a cycle of overrides ends on the newest override\'s target', audit('child-model', paired), [override('katalyst', 'r', 'child-model', 'openai', 'c'), override('openai', 'c', 'root-model', 'katalyst', 'r')], ['child-model', 'root-model']],

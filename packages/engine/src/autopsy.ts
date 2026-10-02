@@ -281,7 +281,8 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  *   key it replaced is never printed (the repair of
  *   the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it).
  * - on an override a wait choice took back (`cleared: true`, `cause: 'superseded'`, since 2026-10-02), where the root's
- *   cell was (`root_cell`): `followed` keeps the root on the override's target, as a ladder move does; `on_pair` takes back
+ *   cell was (`root_cell`): `followed` (on any pair of the chain from the override's own target on) keeps the root on the
+ *   chain's end, where the run's root goes from its next call, as a ladder move does; `on_pair` takes back
  *   the target's key printed for it, which the root never ran on.
  * A store recording no `supersedes` reads each switch as applied; one recording no `switch_pending` reads each move and
  * each child's choice where it is recorded, until a switch that supersedes places it.
@@ -394,8 +395,9 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
       // REQ-NOTIFY-070/078: an entry carrying `cleared: true` takes the pin on its pair back (`ResilienceMemory.rehydrate`).
       if (typeof provider === 'string' && typeof model === 'string' && meta?.['cleared'] === true) {
         // REQ-ORCH-091 (d) / REQ-MONITOR-303: a wait choice of the pair took back an override from it (`cause: 'superseded'`,
-        // `Run.takeBackOverrideOf`). An agent that had followed it stays on its target, so a root the run records there
-        // (`root_cell: 'followed'`) keeps it, as after a ladder move; a root still on the pair (`on_pair`: its call was in
+        // `Run.takeBackOverrideOf`). An agent that had followed it stays on the chain it followed, so a root the run records
+        // there (`root_cell: 'followed'`: on any pair of the chain from the override's own target on, `Run.onChainFrom`) is
+        // kept on the chain's end, where it moves from its next call, as after a ladder move; a root still on the pair (`on_pair`: its call was in
         // flight, or it waited there, when the override was set) never ran on the target, so the key printed for it is
         // taken back. A store recording no `root_cell` (fin6's taken-back pins, which rebuild the root) reads as before.
         const cleared = `${provider}|${model}`;

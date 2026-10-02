@@ -398,6 +398,15 @@ the retry sent to c1). The user's newest explicit choice of a pair now supersede
 and `ResilienceMemory.supersededBy` is gone. Measured in `ladder.test.ts`: after, root `a1, c1, f1, a1`, and the retry on
 `a1` throughout.
 
+*Fourth round, the same day (the verifier's repair-round-3 finding).* "`root_cell` saying whether the root's cell had
+followed it, which both autopsy readers read" held only for a root on the chain's end: the run compared the cell with
+`memory.effective` of the chosen pair, so a root on an intermediate pair (followed `a1 → c1`, still on c1 when `c1 → f1` was
+added) was recorded `elsewhere` and both readers returned it to `a1` while it called `f1`. That reason is kept beside its
+replacement: `followed` now means any pair of the chain from the taken-back override's own target on (`Run.onChainFrom`),
+where the root moves along the rest of the chain from its next call, and the readers, which set such a root to the chain's
+end, are unchanged. Measured in `ladder.test.ts` with the verifier's probe: before, `root_cell: 'elsewhere'` and the reader
+ending `a1, c1, f1, a1`; after, `followed` and `a1, c1, f1`, the root's requests `a1, a1, c1, f1, …`.
+
 ## Eighth execution — 2026-10-02, an explicit choice clears an exclusion (REQ-MONITOR-194)
 
 *The repair of [`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md`](../../defects/fixed/an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md).

@@ -551,7 +551,9 @@ root's resume after the waiting child's report included; the summariser, which h
 same overrides at each attempt, `SummariserDeps.resolve`; a wait choice of a pair — a change of model, or the waiting pair
 itself chosen for a retry — first takes back any override an earlier choice set from that pair (`Run.takeBackOverrideOf`, a
 `model_override` entry carrying `cleared: true`, `cause: 'superseded'` and `root_cell`, where the root's cell then is), so the
-agent resumes on the pair chosen, an agent that had already followed the override stays on its target, the chain never
+agent resumes on the pair chosen, an agent that had already followed the override stays on the chain it followed (a root on
+any pair of it from the override's own target on is recorded `followed`, `Run.onChainFrom`, and moves on to the chain's end
+from its next call), the chain never
 cycles, and a cycle a store already holds ends on its newest override's target), its role's fallback (`personas.<role>.fallback_model`,
 else the run-level `fallback_model` slot, never its own model), and three once-only marks — the role fallback (shared by the
 unresponsive-model route and the hard child timeout, REQ-ORCH-144), the same-tier fallback, the wait attempt. On a failed step,

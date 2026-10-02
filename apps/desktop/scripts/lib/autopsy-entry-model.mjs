@@ -185,7 +185,7 @@ export function entryModelKeys(launchAuditPayload, timeline, children) {
       // the-scripts-autopsy-reader-ignores-a-taken-back-pin).
       if (typeof meta?.provider === 'string' && typeof meta?.model === 'string' && meta?.cleared === true) {
         // A wait choice of the pair took back an override from it (`cause: 'superseded'`): a root that had followed it
-        // (`root_cell: 'followed'`) stays on its target; one still on the pair (`on_pair`) never ran on the target, so the key
+        // (`root_cell: 'followed'`: on any pair of the chain from its target on) stays on the chain, read at its end; one still on the pair (`on_pair`) never ran on the target, so the key
         // printed for it is taken back. None recorded (fin6's pins): as before. The engine's copy says why.
         const cleared = `${meta.provider}|${meta.model}`;
         const before = walk(s);

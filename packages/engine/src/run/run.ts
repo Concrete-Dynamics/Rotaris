@@ -2062,8 +2062,9 @@ export class Run {
    * which `rehydrate` and both autopsy readers replay; with the chosen pair's own override gone, the new override from the
    * waiting pair can never lead back to it, so the chain never cycles. An agent whose cell had already followed the
    * override stays where it is (`followOverride` moves a cell; nothing moves it back). `root_cell` says where the root's
-   * cell is at the choice — `followed` (on the override's target, past the pair: the reader keeps it there instead of
-   * returning it to the pair), `on_pair` (still on the pair, its call in flight or waiting there when the override was set:
+   * cell is at the choice — `followed` (on any pair of the chain from the override's own target on, `onChainFrom`: it moves
+   * along the rest of the chain from its next call, and the reader keeps it on the chain's end instead of returning it to
+   * the pair), `on_pair` (still on the pair, its call in flight or waiting there when the override was set:
    * the reader takes back the target's key it printed, which the root never ran on) or `elsewhere`. `placed`
    * is the choice's own placement against a pending entry switch (`switch_pending` for a child's), so the reader orders the
    * two entries alike.
@@ -2072,18 +2073,37 @@ export class Run {
    * (`ResilienceMemory.supersededBy`, 822224c): a chosen pair with an older override elsewhere kept it, and the agent
    * followed it off the pair chosen before its first call — a1 → c1, then a1 chosen in f1's wait, called c1 while the row
    * said "resumes on a1" (the verifier's repair-round-2 finding on
-   * a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced).
+   * a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced). Until repair round 3, `followed` was recorded only
+   * for a root on the chain's END: a root that had followed a1 → c1 and was still on c1 when c1 → f1 was added recorded
+   * `elsewhere`, and both autopsy readers returned it to a1 while it called f1 (the verifier's repair-round-3 finding).
    */
   private takeBackOverrideOf(w: WaitState, key: string, choice: ModelChoice, placed: Readonly<Record<string, unknown>>): void {
     const provider = providerIdentity(this.catalogue, choice.model);
     const modelId = choice.model.modelId;
     const old = this.memory.overrideFor(provider, modelId);
     if (old === undefined) return;
-    const target = this.memory.effective(choice, this.catalogue).model;
     const cell = this.rootCell?.model.model;
-    const rootCell = cell === undefined ? 'elsewhere' : sameRef(cell, choice.model) ? 'on_pair' : sameRef(cell, target) ? 'followed' : 'elsewhere';
+    const rootCell = cell === undefined ? 'elsewhere' : sameRef(cell, choice.model) ? 'on_pair' : this.onChainFrom(old.choice, cell) ? 'followed' : 'elsewhere';
     this.memory.clearOverride(provider, modelId);
     this.deps.writer.appendTimeline('model_override', 'user', `${key} (${provider}/${modelId}) was chosen during the wait on ${w.provider}/${w.model}; the earlier override that replaced it with ${old.key} is taken back.`, { provider, model: modelId, cleared: true, cause: 'superseded', root_cell: rootCell, ...placed });
+  }
+  /**
+   * Whether `cell` is a pair of the override chain that starts at `from` — the taken-back override's own target or any pair
+   * it leads on to. A root on any of them followed the override and moves along the rest of the chain from its next call
+   * (`followOverride`), so it ends where the chain ends, never back on the pair the override replaced. Bounded by the
+   * pairs already passed, for a cycle an older store replays.
+   */
+  private onChainFrom(from: ModelChoice, cell: ModelRef): boolean {
+    const passed = new Set<string>();
+    for (let at: ModelChoice | undefined = from; at !== undefined;) {
+      if (sameRef(at.model, cell)) return true;
+      const provider = providerIdentity(this.catalogue, at.model);
+      const key = pairKey(provider, at.model.modelId);
+      if (passed.has(key)) return false;
+      passed.add(key);
+      at = this.memory.overrideFor(provider, at.model.modelId)?.choice;
+    }
+    return false;
   }
   private rejectOverride(waiting: WaitState, key: string, reason: string): void {
     const message = `The model was not changed: ${key} could not be applied (${reason}). The wait on ${waiting.provider}/${waiting.model} is still outstanding; choose again or cancel the run.`;

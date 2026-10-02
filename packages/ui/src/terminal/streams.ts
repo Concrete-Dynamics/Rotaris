@@ -20,11 +20,33 @@ export interface TerminalPreview {
   readonly displayName: string;
 }
 
-export type StreamListener = (streamId: string, outcome: ApplyOutcome | 'cleared') => void;
+/**
+ * `parsed`: a `screen` frame's text has been parsed, so a preview drawn while it was parsing (from the held screen) is
+ * now out of date and is drawn again.
+ */
+export type StreamListener = (streamId: string, outcome: ApplyOutcome | 'cleared' | 'parsed') => void;
+
+/**
+ * The screen a stream's previews show while a `screen` frame is parsing: the lines as parsed when the first such frame
+ * arrived, and how many screen frames are still parsing.
+ */
+interface HeldScreen {
+  readonly lines: readonly string[];
+  pending: number;
+}
 
 export class TerminalStreamSet {
   private readonly streams = new Map<string, StreamDisplay>();
   private readonly listeners = new Set<StreamListener>();
+  /**
+   * REQ-SHELL-102, REQ-CHAT-063/076: a `screen` frame resets the emulator and rewrites it, and the library parses the
+   * text over several tasks, so a snapshot taken in between reads a reset (empty) or half-written screen. While a
+   * stream's screen frame is parsing, its previews read the screen as it stood before that frame, and once the text
+   * has parsed the listeners are told (`parsed`) and the preview reads the emulator again. Seen once in
+   * `terminal-proof`'s live section as an empty row preview after the closing frame
+   * (`docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
+   */
+  private readonly held = new Map<string, HeldScreen>();
   /** REQ-SHELL-108: the total only ever climbs within a session. */
   private total = 0;
 
@@ -37,10 +59,30 @@ export class TerminalStreamSet {
       this.streams.set(frame.streamId, display);
       this.total += 1;
     }
-    const result = applyFrame(display, frame);
-    if (result.outcome === 'applied') this.streams.set(frame.streamId, result.display);
-    for (const listener of this.listeners) listener(frame.streamId, result.outcome);
+    const streamId = frame.streamId;
+    let hold: HeldScreen | undefined;
+    if (frame.kind === 'screen') {
+      // Read before the frame is applied: the screen as parsed so far, which is what the previews showed a moment ago.
+      hold = this.held.get(streamId) ?? { lines: display.emulator.snapshot().lines, pending: 0 };
+    }
+    const screen = hold;
+    const result = applyFrame(display, frame, screen === undefined ? undefined : () => this.screenParsed(streamId, screen));
+    if (result.outcome === 'applied') {
+      this.streams.set(streamId, result.display);
+      if (screen !== undefined) { screen.pending += 1; this.held.set(streamId, screen); }
+    }
+    for (const listener of this.listeners) listener(streamId, result.outcome);
     return result.outcome;
+  }
+
+  /** A screen frame's text has parsed: the hold is released after the last pending one, and the surfaces redraw. */
+  private screenParsed(streamId: string, screen: HeldScreen): void {
+    // A hold the set no longer carries belongs to a stream cleared since (REQ-SHELL-110/111): nothing to announce.
+    if (this.held.get(streamId) !== screen) return;
+    screen.pending -= 1;
+    if (screen.pending > 0) return;
+    this.held.delete(streamId);
+    for (const listener of this.listeners) listener(streamId, 'parsed');
   }
 
   get(streamId: string): StreamDisplay | null { return this.streams.get(streamId) ?? null; }
@@ -55,6 +97,7 @@ export class TerminalStreamSet {
     const ids = [...this.streams.keys()];
     for (const s of this.streams.values()) s.emulator.dispose();
     this.streams.clear();
+    this.held.clear();
     this.total = 0;
     for (const id of ids) for (const listener of this.listeners) listener(id, 'cleared');
   }
@@ -64,11 +107,14 @@ export class TerminalStreamSet {
     return () => { this.listeners.delete(listener); };
   }
 
-  /** What the transcript row's preview block draws (REQ-CHAT-063/066/076, REQ-SHELL-079). */
+  /**
+   * What the transcript row's preview block draws (REQ-CHAT-063/066/076, REQ-SHELL-079). While a `screen` frame is
+   * parsing, the lines are the screen from before it, never the reset or half-written one; the state is the frame's.
+   */
   previewOf(streamId: string): TerminalPreview | null {
     const display = this.streams.get(streamId);
     if (display === undefined) return null;
-    const lines = [...display.emulator.snapshot().lines];
+    const lines = [...(this.held.get(streamId)?.lines ?? display.emulator.snapshot().lines)];
     while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
     return {
       streamId, lines, running: display.meta.running, truncated: display.meta.truncated,

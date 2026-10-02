@@ -362,5 +362,18 @@ time one keystroke of three missing the bound by 0 to 44 ms. Whether the bound h
 
 **Found along the way.** A closing `screen` frame resets each emulator and rewrites the final screen, which the library
 parses over several tasks; one read in that window saw the row preview empty while the grid showed the flood's last line
-([note](../../defects/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md), recorded, not
+([note](../../defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md), recorded, not
 repaired).
+
+**Repaired 2026-10-02 (fin7): the previews hold the previous screen while a `screen` frame parses.** The subscription
+point (`TerminalStreamSet`, `streams.ts`) now keeps, per stream, the screen as parsed when a `screen` frame arrives;
+`applyFrame` hands that frame's write a `parsed` callback, and until every pending screen frame of the stream has parsed,
+`previewOf` reads the held lines with the frame's own state (running, exit code). Once the text has parsed the hold is
+released and the listeners are told again (`parsed`), so a preview drawn in the window is drawn again with the final
+screen. The grid reads its own emulator and is unchanged; deltas are never held. Pinned by three cases in
+`terminal.test.ts` over an emulator whose parse completes on a later task (red on the code before: the preview read `[]`
+after the reset had parsed). `terminal-proof`'s live section now samples both previews from the flood's closing frame
+until every surface has parsed it (`live.closingFrameNeverBlanksPreview`); five runs on the repair passed, at load
+averages of 1.6 to 3.6 on 4 CPUs, and five on the code before passed too, at 2.6 to 3.2, the closing text parsing in one
+task there: the window the note saw is shown by the test, not by the proof on this host
+([note](../../defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md), the outcome written on it).

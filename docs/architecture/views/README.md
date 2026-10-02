@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A closing terminal frame no longer blanks a preview (REQ-SHELL-102, REQ-CHAT-063, REQ-CHAT-076).** The renderer's
+`TerminalStreamSet` holds a stream's previous screen for `previewOf` while a `screen` frame parses (`applyFrame` passes the
+write a `parsed` callback) and notifies its listeners again with a new outcome, `parsed`, once it has. The **process
+view**'s live-terminal paragraph says so. This repairs
+`a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`. No package, edge, process, message kind,
+command or store column changed.
+
 **The run-wide compression count reaches the record and the agent surfaces (REQ-MONITOR-086, REQ-MONITOR-281, OQ-159).**
 `SessionRecord` gains `compressions`: the live run's maintained aggregate while a run is live (`Run.compressions`), else the
 stored `sessions.compressions` (`runCompressionsOf`). The run-level agent carries it in place of the children-only sum, so a

@@ -84,8 +84,12 @@ export function createStreamDisplay(frame: DisplayFrame, factory: EmulatorFactor
  * line is never shown twice while retained and fresh output both arrive; a `screen` frame resets and rewrites; a
  * `delta` appends; a `meta` frame synchronises command, truncation and running state idempotently. The closing frame
  * (OQ-5's reading) is a literal replacement: reset, then the plain text with its newlines carried to column 0.
+ *
+ * `screenParsed` is called once a `screen` frame's text has been parsed (the write's `parsed` callback), and only for an
+ * applied `screen` frame: the subscription point holds the previous screen for the previews until then
+ * (`streams.ts`; `docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
  */
-export function applyFrame(display: StreamDisplay, frame: DisplayFrame): { readonly display: StreamDisplay; readonly outcome: ApplyOutcome } {
+export function applyFrame(display: StreamDisplay, frame: DisplayFrame, screenParsed?: () => void): { readonly display: StreamDisplay; readonly outcome: ApplyOutcome } {
   if (frame.streamId !== display.streamId) return { display, outcome: 'wrong-stream' };
   const seq = frameSeq(frame);
   if (seq <= display.lastSeq) return { display, outcome: 'stale' };
@@ -127,7 +131,7 @@ export function applyFrame(display: StreamDisplay, frame: DisplayFrame): { reado
   let closingEndsMidRow = display.closingEndsMidRow;
   if (frame.kind === 'screen') {
     display.emulator.reset();
-    display.emulator.write(frame.closing ? frame.payload.replace(/\r?\n/g, '\r\n') : frame.payload);
+    display.emulator.write(frame.closing ? frame.payload.replace(/\r?\n/g, '\r\n') : frame.payload, screenParsed);
     closingEndsMidRow = frame.closing === true && frame.payload !== '' && !frame.payload.endsWith('\n');
   } else {
     if (reopened && closingEndsMidRow) display.emulator.write('\r\n');

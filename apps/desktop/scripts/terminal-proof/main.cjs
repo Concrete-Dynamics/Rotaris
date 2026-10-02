@@ -682,6 +682,10 @@ app.whenReady().then(async () => {
     const closedRun = run(flood);
     const closed = await Promise.race([closedRun.done, pause(60_000).then(() => null)]);
     await ask('deliver', { on: true });
+    // REQ-SHELL-102, REQ-CHAT-063/076: from here the page samples both previews from each closing frame's arrival until
+    // every surface has parsed it, at once and then on every task it gets; none may read empty
+    // (docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md).
+    await exec(`window.__terminalProof.watchPreviews(${JSON.stringify(LIVE)})`);
     const openRun = run(flood);
     const open = await Promise.race([openRun.done, pause(60_000).then(() => null)]);
     // The last line reaches the grid and the previews when they have parsed the flood, which on a loaded host is later than
@@ -689,7 +693,8 @@ app.whenReady().then(async () => {
     // The read is taken once the closing frame has arrived (the meta says the command ended) and every surface has parsed
     // it: the closing `screen` frame resets each emulator and writes the final screen again, and a read between the two
     // saw the preview empty (1 of 20 loaded runs after the first repair; recorded in
-    // docs/defects/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md).
+    // docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md, and the window
+    // itself is now sampled: `live.closingFrameNeverBlanksPreview` below).
     const floodFrom = Date.now();
     // The flood's last line appears only after its opening meta, so "ended" together with that line is this command's end,
     // never the previous command's.
@@ -706,6 +711,11 @@ app.whenReady().then(async () => {
     expect('live.throughputEqualWindowClosedOrOpen', closed !== null && open !== null && closed.result.output === open.result.output && closed.result.exitCode === open.result.exitCode && open.result.exitCode === 3 && open.result.output.split('\n').length === 10000, live.throughput);
     const afterFlood = await state(LIVE);
     expect('live.floodPainted', afterFlood.stream.grid.lines.some((l) => l.includes('line 10000')) && afterFlood.stream.preview.lines.some((l) => l.includes('line 10000')), { grid: afterFlood.stream.grid.lines.slice(-3), preview: afterFlood.stream.preview.lines.slice(-3), waitedMs: floodPaintMs });
+    // The closing frame's window, sampled by the page: the previews hold the screen before it until it has parsed.
+    const watched = await exec('window.__terminalProof.previewWatched()');
+    await exec('window.__terminalProof.watchPreviews(null)');
+    live.closingFramePreviews = watched;
+    expect('live.closingFrameNeverBlanksPreview', watched !== null && watched.closingFrames >= 1 && watched.frames.every((f) => f.settled && f.samples >= 2) && watched.emptyPreview === 0 && watched.emptyPersona === 0, watched);
     const finalStats = await ask('stats');
     live.delivery = { delivered: finalStats.delivered, limiter: finalStats.limiter, counters: finalStats.counters };
     live.harnessLog = harnessLog.slice(-20);

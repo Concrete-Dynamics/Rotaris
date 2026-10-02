@@ -481,6 +481,85 @@ describe('emulator — a character grid, not a log (REQ-SHELL-095), applied by s
   });
 });
 
+// ── REQ-SHELL-102, REQ-CHAT-063/076: a closing screen frame never blanks the preview while it is parsed ──────────
+/**
+ * An emulator whose parse completes on a LATER task, one queued write per `step()`, as xterm drains its write queue on
+ * macrotasks and yields between chunks: the reset of a `screen` frame lands before its text, and a snapshot taken
+ * between the two reads an empty screen
+ * (`docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
+ */
+function slowEmulators() {
+  const queue: { readonly op: () => void; readonly parsed?: (() => void) | undefined }[] = [];
+  const step = (): boolean => { const next = queue.shift(); if (next === undefined) return false; next.op(); next.parsed?.(); return true; };
+  const factory = (cols: number, rows: number) => {
+    let lines: string[] = [];
+    return {
+      cols, rows,
+      write(data: string, parsed?: () => void) { queue.push({ op: () => { if (data === '') return; const more = data.split('\r\n'); if (lines.length > 0) lines[lines.length - 1] += more.shift()!; lines.push(...more); }, parsed }); },
+      reset() { queue.push({ op: () => { lines = []; } }); },
+      resize() {},
+      snapshot: () => ({ cols, rows, lines: [...lines], cursor: { x: 0, y: 0 }, historyRows: 0, viewportY: 0, atTail: true, alternate: false, cursorHidden: false }),
+      readCells: () => '',
+      dispose() {},
+    };
+  };
+  return { factory, step, drain: () => { while (step()); } };
+}
+
+describe('preview — a closing screen frame never blanks the preview while the final screen is parsed (REQ-SHELL-102, REQ-CHAT-063/076)', () => {
+  it('shows the previous complete screen between the closing frame and its parse, never [], and is redrawn once it has parsed', () => {
+    const slow = slowEmulators();
+    const set = new TerminalStreamSet(slow.factory);
+    set.apply(frame(1, 'meta', '', { meta: META }));
+    set.apply(frame(2, 'delta', 'line 1\r\nline 2'));
+    slow.drain();
+    expect(set.previewOf('fg:a')!.lines).toEqual(['line 1', 'line 2']);
+    const seen: string[] = [];
+    set.subscribe((_id, outcome) => seen.push(outcome));
+    set.apply(frame(3, 'screen', 'line 1\nline 2\nline 3', { closing: true, meta: { ...META, running: false, exitCode: 0 } }));
+    // Nothing parsed yet, then the reset alone: the emulator's own screen is empty here, the preview is not.
+    expect(set.previewOf('fg:a')).toMatchObject({ lines: ['line 1', 'line 2'], running: false, exitCode: 0 });
+    slow.step();
+    expect(set.get('fg:a')!.emulator.snapshot().lines).toEqual([]);
+    expect(set.previewOf('fg:a')!.lines).toEqual(['line 1', 'line 2']);
+    expect(seen).toEqual(['applied']);
+    slow.drain();
+    expect(set.previewOf('fg:a')!.lines).toEqual(['line 1', 'line 2', 'line 3']);
+    // A second notification once the closing text has parsed, so a surface drawn in the window is drawn again.
+    expect(seen).toEqual(['applied', 'parsed']);
+  });
+  it('holds the screen from before the first of two screen frames until both have parsed, and reads deltas live otherwise', () => {
+    const slow = slowEmulators();
+    const set = new TerminalStreamSet(slow.factory);
+    set.apply(frame(1, 'delta', 'before'));
+    slow.drain();
+    set.apply(frame(2, 'screen', 'resync'));
+    set.apply(frame(3, 'screen', 'final', { closing: true }));
+    slow.step(); slow.step(); slow.step();
+    expect(set.get('fg:a')!.emulator.snapshot().lines).toEqual([]);
+    expect(set.previewOf('fg:a')!.lines).toEqual(['before']);
+    slow.drain();
+    expect(set.previewOf('fg:a')!.lines).toEqual(['final']);
+    // A delta is never held: the preview reads whatever has parsed, as before.
+    set.apply(frame(4, 'meta', '', { meta: META }));
+    set.apply(frame(5, 'delta', '\r\nmore'));
+    expect(set.previewOf('fg:a')!.lines).toEqual(['final']);
+    slow.drain();
+    expect(set.previewOf('fg:a')!.lines).toEqual(['final', 'more']);
+  });
+  it('a stream cleared while its screen frame parses announces nothing more', () => {
+    const slow = slowEmulators();
+    const set = new TerminalStreamSet(slow.factory);
+    set.apply(frame(1, 'screen', 'text'));
+    const seen: string[] = [];
+    set.subscribe((_id, outcome) => seen.push(outcome));
+    set.clear();
+    slow.drain();
+    expect(seen).toEqual(['cleared']);
+    expect(set.previewOf('fg:a')).toBeNull();
+  });
+});
+
 // ── REQ-SHELL-098: the sixteen colours as tokens, in every palette ───────────────────────────────────────────
 describe('theme — the terminal tokens exist in every palette (REQ-SHELL-098, ADR-0050 note)', () => {
   it('declares the ground, the ink, the cursor, the selection and the sixteen ANSI colours for all three themes', () => {

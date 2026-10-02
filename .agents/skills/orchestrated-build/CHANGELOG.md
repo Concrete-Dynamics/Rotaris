@@ -3,6 +3,70 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-02 — recovery and planning lessons of plans fin1 to fin9
+
+**Prompted by** the plans `fin1` to `fin9` of one session (2026-10-01 and 02), each lesson with its evidence:
+- **A usage limit can lift before its stated reset.** fin3 (`wf_27c648a2-1f5`) and fin4 (`wf_27b2ef63-c36`) halted
+  about 20:10 UTC on 2026-10-01 (fin3 20:10, fin4 20:16), two and three agents failing with "You've hit your weekly
+  limit · resets Oct 5, 9pm (UTC)". The orchestrator's own turns were refused with the same message ("Continue from
+  where you left off." at 21:16 UTC on 2026-10-01 and 01:06 UTC on 2026-10-02). After the owner wrote "Continue", a
+  one-line probe agent succeeded at 06:43 UTC on 2026-10-02. §4 said to wait for the stated reset.
+- **A lost merge agent loses nothing.** The two merge agents lost to that limit (`merge:run-agent-readings`,
+  `merge:proof-evidence`: journal `started`, then `failed`) left finished, unpushed merge commits `c6e5d96` and
+  `bfc3f33` in their integration worktrees; the re-rendered merge stages merged again from origin/main, and both
+  bundles landed (`eb3f13b`, `22fbe5e`).
+- **Every round needs a fresh triage.** Builders keep recording defect notes (fin2's journals alone list more than a
+  dozen; the fourth triage counted thirteen recorded or changed since the third, across fin4's second run and fin5),
+  and the autopsy lists only what its runs observe. The session's fifth triage, an incremental one, took 13 minutes
+  and produced plan fin9 (`wf_c9402872-e4a`), which merged `2fb627d` while fin6 still ran.
+- **A standing live-run authorization.** On 2026-10-02 the owner wrote "you may do the live run.never ask for my
+  persmission for it. you always have my permission." (R-068); the plan files of fin5 to fin9 and of the
+  acceptance-only plan quote it in `live.ownerWords`, and no plan asked again. §1 read as if every plan asked.
+- **The request log's count.** Appending R-068 to `docs/product/requests.md` went red in `pnpm lint` at 09:06 UTC
+  on 2026-10-02: `tools/check-request-log.mjs` said "the Count section declares R-001 to R-067, but the highest
+  row is R-068".
+- **Another writer on main.** The owner merged a Codex-built branch (head `d367280`, adding R-069) while fin4 and fin5
+  ran; their intermediate merge `a46180d`, made before they merged this session's work, read like a lost R-068 row.
+- **§4's recovery command was a shorthand without `--profile`.** At 10:42:58 UTC on 2026-10-02 the orchestrator's
+  fresh render of fin6's `run-1.js` from the refreshed reference worktree, typed from memory with neither `--runs`
+  nor `--profile` (no `RUNS.txt` existed yet), failed with "render needs --profile". §3 writes `--profile` out; §4's
+  shorthand `render --plan … --runs` did not, so a recovery typed from it fails the same way.
+- **A cross-plan dependency.** fin8's `ladder-overrides` and `focus-bound-recovery` build on fin6's unmerged
+  `auth-recovery` changes; the fourth triage marked them `after: ["fin6"]` in its own list, `after` in a plan names
+  bundles of that plan only, so the orchestrator holds fin8.
+
+**Changed**
+- SKILL.md §1: an authorization the owner made standing is quoted in every later plan and asked about no further;
+  what its words leave out is asked.
+- SKILL.md §3: the check-in also looks for another writer on main.
+- SKILL.md §4: a usage limit is probed at the first turn it lets through, not only at its stated reset; the recovery
+  command is written out whole, with `--profile` as in §3. `references/environment.md` (Restarts) names `--profile`
+  beside its shorthand.
+- SKILL.md §5: with split plans, triage again over origin/main before the acceptance-only plan (a single plan, when
+  its acceptance ends); a short triage of the last plan's notes can fill a free plan slot while another plan builds.
+  `references/workflow-tool.md` points the acceptance-only plan at it.
+- `references/environment.md` (Limits): the orchestrator's refused turns, the early probe with its evidence, and the
+  lost merge agent's unpushed commit.
+- `references/live-runs.md` (Authorization): ask once per owner; record the standing words once, quote them in every
+  later plan; they cover what they say, and another or a metered endpoint is asked about; a new session relying on
+  the recorded words alone may meet the classifier's refusal, and then asks the owner once.
+- `references/repository.md`: a request row and the `## Count` line move in the same commit; a new section, "Another
+  writer on main": the check-in comparison (author and session trailer), the two record tools run in the refreshed
+  reference worktree, and a red base reported to the owner and recorded, never reverted.
+- `references/workflow-tool.md` (Concurrency): a bundle building on another plan's unmerged changes is a later plan,
+  held by the orchestrator; the triage's mark never goes into `plan.json`.
+
+**First exercise of the `unverified` re-render.** fin6's run 1 (`wf_2f9ffe7c-6a7`) ended `incomplete` with
+`auth-recovery-1` `unverified` after four failed verifications; run 2 (`wf_6fd02cd2-ceb`, rendered with `--runs`)
+resumed it at `fix:auth-recovery-1#4` with a fresh budget, and `verify:auth-recovery-1#5` passed, so the bundle
+reached its merge in one round. §4's table said what happened; its text is unchanged.
+
+**Not changed**: no script, so no new self-test assertion; no protected invariant, "Improving this skill",
+`references/skill-review.md` or self-test assertion. The plan still carries the owner's quoted authorization for every
+live run.
+
+**Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check` under Node 24, both green.
+
 ## 2026-10-01 — a run executes two agents at a time; one integration worktree per plan
 
 **Prompted by** plan `fin1` (run `wf_64915ef8-93e`): four lanes rendered, and for over twenty minutes only

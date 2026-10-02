@@ -44,14 +44,22 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
 - **What survives:** scheduled check-ins (`send_later`), workflow journals
   (`~/.claude/projects/<project>/<session>/subagents/workflows/<run>/journal.jsonl`), and the branches agents
   committed to. An agent stopped mid-step leaves commits and sometimes an uncommitted edit.
-- **Recovery** is `render --runs RUNS.txt` and a relaunch (SKILL.md §4): minutes, where hand-written continuations
-  took hours.
+- **Recovery** is a `render` with `--runs RUNS.txt` (SKILL.md §4 gives the whole command, `--profile` included) and
+  a relaunch: minutes, where hand-written continuations took hours.
 - MCP tools disconnect and reconnect around a restart; load them again with ToolSearch when needed.
 
 ## Limits
 
 - **A usage limit** makes agents come back empty with a message naming the reset time; three in a row halt the run.
-  Wait for the reset, probe with one trivial agent, then recover from the journals.
+  While it holds, the orchestrator's own turns are refused with the same message, so the first turn of yours that
+  can act is the signal: probe with one trivial agent then, and recover from the journals once it succeeds. That
+  can be long before the stated reset: fin3 (`wf_27c648a2-1f5`) and fin4 (`wf_27b2ef63-c36`) halted about 20:10 UTC
+  on 2026-10-01 (fin3 20:10, fin4 20:16) on "weekly limit · resets Oct 5, 9pm (UTC)"; the "Continue from where you
+  left off." turns at 21:16 UTC that day and 01:06 UTC the next were answered by the limit message; and a probe sent
+  when the owner wrote "Continue" succeeded at 06:43 UTC on 2026-10-02.
+- **A merge agent lost after its merge commit and before its push** leaves that commit, unpushed, as the detached
+  HEAD of `<repo>-wt-integ-<id>`. Nothing is lost: the re-rendered merge stage checks out origin/main there and
+  merges again (fin3's `c6e5d96` and fin4's `bfc3f33`, both lost to that limit).
 
 ## Shell forms the harness blocks
 

@@ -34,6 +34,8 @@ it**, and **nothing lands unless the repository's gate is green on the merged re
 3. Ask the owner, in ONE message, everything that would stop the run later: may live runs happen, against which
    endpoint, and may you add the permission rules for agents (`references/live-runs.md`); model and effort (default:
    Opus, `high`); what is excluded. Settle from the code, the record or a default anything that can be settled so.
+   An authorization the owner made standing is quoted in every later plan and asked about no further; what its
+   words leave out (another endpoint, a metered one) is asked (`references/live-runs.md`, Authorization).
 4. Record the owner's requests and rulings where the repository requires (`references/repository.md`, Owner
    requests) on a docs-only branch merged before launch; the brief cites them by id.
 
@@ -92,8 +94,8 @@ that leaves a bundle unsettled. Launch with `Workflow({ scriptPath: "$S/run-1.js
 first line of `$S/RUNS.txt`. The first merge agent creates the plan's integration worktree.
 
 Schedule a fallback check-in (`send_later`, ~120 minutes) whose message says: read the last run of `RUNS.txt`, run
-`status`, recover if it stopped, else re-arm silently. Re-arm at every check-in. It survives restarts; background
-tasks do not.
+`status`, look for another writer on main (`references/repository.md`), recover if it stopped, else re-arm
+silently. Re-arm at every check-in. It survives restarts; background tasks do not.
 
 ## 4. While it runs
 
@@ -114,11 +116,16 @@ The run's own `status`: `complete`; `incomplete` (a plan bundle did not settle, 
 **Recovering** from a restart, a usage limit or a halt:
 1. Make sure the previous run has stopped (a restart notice says so; otherwise stop it). Never run two runs of one
    `RUNS.txt` at once.
-2. After a usage limit, wait for its stated reset and probe with one trivial agent.
+2. After a usage limit, probe with one trivial agent at the first turn of yours it lets through (the owner saying to
+   continue, or the stated reset), which can be days early (`references/environment.md`, Limits); recover once the
+   probe succeeds.
 3. Refresh the reference worktree to origin/main (§3), so a skill improvement merged meanwhile reaches the agents.
-4. `render --plan … --runs $S/RUNS.txt --out $S/run-N.js`, launch, append the run id to `RUNS.txt`. `render` reads
-   every journal and starts each bundle where it stopped, with a note telling the agent what an interrupted
-   predecessor may have left. Never resume a lane script with `resumeFromRunId`.
+4. Render from the journals, launch, and append the run id to `RUNS.txt`:
+   ```bash
+   node $K/scripts/orchestration.mjs render --plan $S/plan.json --profile $K/profiles/<repo>.json --runs $S/RUNS.txt --out $S/run-N.js
+   ```
+   `render` reads every journal and starts each bundle where it stopped, with a note telling the agent what an
+   interrupted predecessor may have left. Never resume a lane script with `resumeFromRunId`.
 
 **Reopening a blocked bundle** that holds good work: add `"reopen": "<the accepted outcome of the blocked task>"`
 to it in the plan and render; every later stage of it sees that scope, and it is verified again and merged.
@@ -137,6 +144,11 @@ serialized halves, the authorized live runs, then an autopsy listing what still 
 paired by area, go through the same loop; then the next round. A cached acceptance result is replayed only while
 nothing but its own repairs merged after it; `"acceptance": { "fresh": true }` forces a fresh round.
 
+- **Triage again before acceptance.** Builders keep recording defect notes (each bundle's `notesRecorded`), and the
+  autopsy lists only what its runs observe. With split plans, re-run §1's survey over origin/main before the
+  acceptance-only plan (`references/workflow-tool.md`, Concurrency) and plan the repairable notes it finds ahead of
+  it; a single plan runs acceptance inside its own workflow, so triage when it ends and plan what remains. While
+  another plan still builds, a short triage of only the notes the last plan recorded can fill the free plan slot.
 - A live run refused by the permission system is yours: run it (a long one as a background task with an explicit
   `timeout`, `references/live-runs.md`), have an agent autopsy the packs, and feed the findings in as a new plan.
 - **Record every finding left unrepaired** when the rounds end: a defect note, or an open question for one that needs

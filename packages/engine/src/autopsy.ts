@@ -218,10 +218,12 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * - `llm_unresponsive` (REQ-ORCH-090): the role's fallback, recorded as a `provider|model` pair with no key, so the key
  *   is the one `models:` key of the snapshot in force that resolves to that pair, and the pair itself
  *   (`provider/model`) when none does or more than one does.
- * A child's move leaves the root where it is. One reading is knowingly coarse: a switch to a key resolving to the very
- * model already configured does not rebuild the root's cell in the run (`sameRef`), so a fallback in force then stands,
- * while this reads the switch as ending it; the snapshot records `provider|model` pairs, not the reference the run
- * compares. A second is coarse the same way: a switch is held on its run alone (`entryOverride`; a continuation is a new
+ * A child's move leaves the root where it is. A switch ends a move only when the run rebuilt the root's cell for
+ * it: the run records `rebuilds: false` on a switch onto the model the cell was last built from (`rootResilience`,
+ * `sameRef`), and the move then stands while the switched key becomes the configured one; a store written before the
+ * run recorded `rebuilds` is read as rebuilt. One reading stays coarse: two switches within one iteration, the first
+ * away from the configured model while a move is in force and the second back onto it, read as ending the move, though
+ * the cell was never rebuilt between them. A second is coarse the same way: a switch is held on its run alone (`entryOverride`; a continuation is a new
  * `Run`), so a later continuation recording no snapshot starts on its configuration's model, while this keeps the
  * switched key as the configured one. Only snapshot-less runs reach it. The children are keyed by canonical name, which
  * is unique only per parent and iteration (REQ-ORCH-044); two children sharing one read as one
@@ -269,9 +271,15 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
   for (const t of timeline) {
     if (t.name === 'run_continuation_intent') fromSnapshot(parseJson(t.metadata)?.['config_snapshot']);
     else if (t.name === 'entry_model_switched') {
-      const key = str(parseJson(t.metadata)?.['model']);
+      const meta = parseJson(t.metadata);
+      const key = str(meta?.['model']);
       if (key === '') continue;
-      base = configured = { label: modelLabel(models, key), pair: modelPair(models, key) };
+      configured = { label: modelLabel(models, key), pair: modelPair(models, key) };
+      // `rebuilds: false`: the switch named the model the root's cell was last built from, so the run did not rebuild
+      // it and a ladder move in force stands. A store recording no `rebuilds` (written before the run recorded it) is
+      // read as rebuilt.
+      if (meta?.['rebuilds'] === false && fellBack) continue;
+      base = configured;
       fellBack = false;
       add(effective());
     } else if (t.name === 'model_override') {

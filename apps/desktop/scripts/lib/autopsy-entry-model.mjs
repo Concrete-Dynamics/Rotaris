@@ -74,8 +74,9 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * automatic moves of an agent no child is (`childNames`, the canonical names of `childModelKeys`): `quota_fallback_model` to its `to_key` (REQ-ORCH-091 b,
  * REQ-NOTIFY-082) and `llm_unresponsive` to the one `models:` key resolving to its recorded pair, else the pair itself
  * (REQ-ORCH-090). A child's move leaves the root where it is; the next continuation ends a move (its snapshot's key, or
- * the configured key when it records none), and so does a switch — read so even onto the model already configured,
- * which the run does not rebuild the root's cell for (the engine's copy says why). A continuation recording no snapshot
+ * the configured key when it records none), and so does a switch the run rebuilt the root's cell for — not one it
+ * records `rebuilds: false` on, onto the model the cell was last built from (a store recording no `rebuilds` reads as
+ * rebuilt; the engine's copy says what stays coarse). A continuation recording no snapshot
  * returns the root to the last switched key, though a switch is held on its run alone and the new run starts on its
  * configuration's model; and two children sharing one canonical name read as one (the engine's copy says both).
  */
@@ -119,9 +120,13 @@ export function entryModelKeys(launchAuditPayload, timeline, childNames) {
   for (const t of timeline) {
     if (t.name === 'run_continuation_intent') fromSnapshot(parseJson(t.metadata)?.config_snapshot);
     else if (t.name === 'entry_model_switched') {
-      const key = str(parseJson(t.metadata)?.model);
+      const meta = parseJson(t.metadata);
+      const key = str(meta?.model);
       if (key === '') continue;
-      base = configured = { label: modelLabel(models, key), pair: modelPair(models, key) };
+      configured = { label: modelLabel(models, key), pair: modelPair(models, key) };
+      // `rebuilds: false`: the run did not rebuild the root's cell, so a ladder move in force stands; none recorded: rebuilt.
+      if (meta?.rebuilds === false && fellBack) continue;
+      base = configured;
       fellBack = false;
       add(effective());
     } else if (t.name === 'model_override') {

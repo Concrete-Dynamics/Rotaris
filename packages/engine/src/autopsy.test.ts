@@ -210,6 +210,22 @@ describe('R-043 — the run-autopsy snapshot', () => {
         });
         expect(readAutopsy(dal, later, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model → root-model', agents: ['orchestrator'], tool_calls: 3 });
       });
+      it('a switch ends the root\'s move only where the run records it rebuilt the root\'s cell for it (REQ-MONITOR-142)', () => {
+        // run.ts `setEntryModel` records `rebuilds: false` on a switch onto the model the root's cell was last built from:
+        // `rootResilience` does not rebuild it, so the same-tier fallback stays in force.
+        const switched = (sid: SessionId, n: number, key: string, rebuilds?: boolean) =>
+          dal.insertTimeline(sid, n, `t${n}`, 'entry_model_switched', 'user', `The entry model switched to ${key}.`, JSON.stringify(rebuilds === undefined ? { model: key } : { model: key, rebuilds }), `aaaaaaaaaah${n}`, 'info');
+        const kept = plant('S-switch-onto-configured', 'completed');
+        dal.transaction(() => { run(kept); audit(kept, 'root-model', models); sameTier(kept, 1, 'orchestrator', ['anthropic', 's', 'spare-model']); switched(kept, 2, 'root-model', false); });
+        expect(readAutopsy(dal, kept, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model', agents: ['orchestrator'], tool_calls: 3 });
+        const rebuilt = plant('S-switch-rebuilt', 'completed');
+        dal.transaction(() => { run(rebuilt); audit(rebuilt, 'root-model', models); sameTier(rebuilt, 1, 'orchestrator', ['anthropic', 's', 'spare-model']); switched(rebuilt, 2, 'child-model', true); });
+        expect(readAutopsy(dal, rebuilt, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model → child-model', agents: ['orchestrator'], tool_calls: 3 });
+        // A store written before the run recorded `rebuilds` keeps the earlier reading.
+        const older = plant('S-switch-unrecorded', 'completed');
+        dal.transaction(() => { run(older); audit(older, 'root-model', models); sameTier(older, 1, 'orchestrator', ['anthropic', 's', 'spare-model']); switched(older, 2, 'root-model'); });
+        expect(readAutopsy(dal, older, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model → root-model', agents: ['orchestrator'], tool_calls: 3 });
+      });
       it('a continuation recording no entry model (`config_snapshot: {}`) is a new run all the same: the root\'s move ends there', () => {
         const sid = plant('S-quota-then-bare-continue', 'completed');
         dal.transaction(() => {

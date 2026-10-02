@@ -1276,11 +1276,20 @@ export class Run {
     return { cell, memory: this.memory, catalogue: this.catalogue, waits: this.waits, transientRetries: config.transientRetries, validationRetries: config.validationRetries, llmResponseTimeoutMs: config.llmResponseTimeoutMs, unresponsiveBoundMs, resting: () => this.restCause !== null };
   }
 
+  /**
+   * Whether the root's cell is built anew for `entryModel` at its next turn: when there is none yet, or when it was last
+   * built from another model. A switch onto the model it was last built from leaves it as it stands, a ladder move of it
+   * included (REQ-ORCH-090, REQ-ORCH-091 b), and `setEntryModel` records which of the two a switch is.
+   */
+  private rootRebuildsFor(entryModel: ModelRef): boolean {
+    return this.rootCell === null || this.appliedEntryModel === null || !sameRef(this.appliedEntryModel, entryModel);
+  }
+
   /** The root's cell lives for the run; the entry model (and a mid-run switch of it) enters through the session memory. */
   private rootResilience(): TurnResilience {
     const { config } = this.deps;
     const entryModel = this.entryOverride.model ?? config.model;
-    if (this.rootCell === null || this.appliedEntryModel === null || !sameRef(this.appliedEntryModel, entryModel)) {
+    if (this.rootRebuildsFor(entryModel)) {
       const base = withSettings(this.catalogue, { model: entryModel, thinking: this.entryOverride.thinking ?? config.thinking });
       const current = this.memory.effective(base, this.catalogue);
       const persona = this.deps.personas?.resolve(config.persona)?.persona;
@@ -1903,7 +1912,10 @@ export class Run {
     }
     this.entryOverride = { ...this.entryOverride, model: resolved.choice.model };
     writer.appendRow('system', `Entry model switched to ${key}; it applies from the next iteration.`, true);
-    writer.appendTimeline('entry_model_switched', 'user', `The entry model switched to ${key}.`, { model: key });
+    // `rebuilds`: whether the root's cell is built anew for this model — false onto the model it was last built from,
+    // which leaves a ladder move of the root in force. The autopsy reader reads it; the record holds nothing else that
+    // says so (the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback).
+    writer.appendTimeline('entry_model_switched', 'user', `The entry model switched to ${key}.`, { model: key, rebuilds: this.rootRebuildsFor(resolved.choice.model) });
     return true;
   }
   private rejectOverride(waiting: WaitState, key: string, reason: string): void {

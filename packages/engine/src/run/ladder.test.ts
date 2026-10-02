@@ -411,6 +411,25 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(pub.snapshots.every((s) => s.wait === null)).toBe(true);
   });
 
+  it('REQ-MONITOR-142 over REQ-ORCH-091 b: a switch records whether the root\'s cell is rebuilt for it — not for the model it was last built from, so a fallback in force stands (the repair of the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback)', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : { parts: [{ hold: held }, ...answer('from b').parts] }), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && client.requests.length < 2; i++) await tick();
+    // The root fell back a1 → b1 and its call on b1 is in flight: no wait, so a switch is the next-iteration switch.
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+    const switched = () => dal.timelineOf(sid).filter((t) => t.name === 'entry_model_switched').map((t) => JSON.parse(t.metadata) as unknown);
+    // The configured key: the cell was built from a1, so it is not rebuilt and b1 stays in force.
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+    // Another model: rebuilt from the next iteration.
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    expect(switched()).toEqual([{ model: 'a1', rebuilds: false }, { model: 'c1', rebuilds: true }]);
+    release();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+  });
+
   describe('PD-MONITOR-001 revision 2: a request is priced at the ladder cell, by the model it was sent to', () => {
     const A_RATES = { input: '0.000003', output: '0.000015' };
     const B_RATES = { input: '0.0000001', output: '0.0000002' };

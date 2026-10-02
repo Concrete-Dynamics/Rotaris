@@ -81,7 +81,7 @@ configuration snapshot) is still a new run with a new root cell, so it now ends 
 its configured key, or `undetermined` when nothing ever named one. Pinned by "a continuation recording no entry model …"
 in `packages/engine/src/autopsy.test.ts` and three rows of the moves table (two fail without it; the third, with no move
 in force, guards the other direction). One reading stays coarse and is recorded as its own note:
-[the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback.md](../the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback.md)
+[the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback.md](the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback.md)
 (a switch onto the model already configured, which the run does not rebuild the root's cell for).
 
 ### Repair round 2 — a collision recorded (2026-10-01)

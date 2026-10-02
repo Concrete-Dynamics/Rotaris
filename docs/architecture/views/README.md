@@ -43,7 +43,14 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-10-01**
+## Last reconciled with the code: **2026-10-02**
+
+**A switch of the entry model records whether the root's cell is rebuilt for it (REQ-MONITOR-142, REQ-ORCH-090,
+REQ-ORCH-091).** `setEntryModel` writes `entry_model_switched` with `{ model, rebuilds }`, `rebuilds` being the test
+`rootResilience` applies at the next turn (`Run.rootRebuildsFor`), so the autopsy reader ends a ladder move of the root only
+on a switch that rebuilt its cell. The **runtime view**'s `setModel` row says so. This repairs
+`the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback.md`; the timeline name is unchanged. No
+package, edge, process, message kind, channel, command or store column changed.
 
 **A dialog opened while the composer's send is settling keeps its focus (REQ-MONITOR-137, REQ-CHAT-002).** The
 composer's awaited submissions (a queue, a start or continue, an executed slash command) return the focus through one

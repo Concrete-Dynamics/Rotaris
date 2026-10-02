@@ -67,6 +67,8 @@ Not changed: `ROTARIS_CAPTURE_RESUME` still clicks the centre of the row's first
 point is inside the scrolled table's visible box. With the table bounded the point is inside it; a seam that refused an
 invisible target would have named this failure rather than reporting a run that never ended, and is left as it stands.
 
+## Specs
+
 - `REQ-SHELL-022` — every control reachable and fully labelled at the minimum window size; here the row's Open is not
   even visible at the default size, depending on the path's spelling.
 - `REQ-SHELL-126` and `REQ-SESSION-118` — the browser and its Open, which is the user's route to a stored session.

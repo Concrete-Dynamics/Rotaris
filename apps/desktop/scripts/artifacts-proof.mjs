@@ -38,6 +38,8 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { unpressedClicks } from './lib/capture-clicks.mjs';
+import { ARTIFACTS_TAB, PUBLISH_SCHEDULE, emptyBeforePublish } from './lib/library-refresh.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -136,8 +138,8 @@ function toolRows(db, sessionId, tool) {
 }
 const PROBE_ROWS = 'tr[data-artifact-id]';
 // The Library opens on its FIRST tab (REQ-LIBRARY-103's order), so every launch below picks the Artifacts tab
-// after the view switch. Before the merge this proof drove a Library that held only this tab and needed no click.
-const ARTIFACTS_TAB = '[data-testid="library-tab"][data-tab="artifacts"]';
+// after the view switch (`ARTIFACTS_TAB`, from `lib/library-refresh.mjs`). Before the merge this proof drove a Library
+// that held only this tab and needed no click.
 // Live-run finding K1: the inspector's name, chips and artifact links, and the produced group's links.
 const INSPECTOR_NAME = '[data-testid="inspector-name"]';
 const INSPECTOR_CHIPS = '[data-testid="inspector-chips"] .chip';
@@ -153,20 +155,19 @@ const results = {};
 {
   const r = await launch('publish', {
     // The Library is shown FIRST (empty), the run then publishes, the view is left and returned to: the row
-    // appears on the next refresh, with no restart and no manual reload (REQ-LIBRARY-136).
-    ROTARIS_CAPTURE_VIEWS: '6@1200;;2@2000;;6@14000',
-    ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@1400`, `${ARTIFACTS_TAB}@14400`].join(';;'),
-    ROTARIS_CAPTURE_PROMPT: 'publish the plan', ROTARIS_CAPTURE_PROMPT_MS: '2600',
+    // appears on the next refresh, with no restart and no manual reload (REQ-LIBRARY-136). The schedule waits for
+    // the Library's tab and its loaded read instead of reading at appointments a startup stall can close
+    // (`lib/library-refresh.mjs`); the prompt seam's own Ctrl+2 is the leave.
+    ...PUBLISH_SCHEDULE,
+    ROTARIS_CAPTURE_PROMPT: 'publish the plan',
     ROTARIS_SCRIPT: 'artifact:artifact_write,artifact:artifact_list,answer',
-    ROTARIS_CAPTURE_PROBE_AT: `${PROBE_ROWS}@1600;;[data-testid="library-artifacts-empty"]@1600`,
     ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
-    ROTARIS_CAPTURE_AFTER_MS: '16000',
   });
-  const before = probe(r.log, PROBE_ROWS, 1600);
-  const emptyBefore = probe(r.log, '[data-testid="library-artifacts-empty"]', 1600);
+  const missed = unpressedClicks(r.log, [ARTIFACTS_TAB]);
+  if (missed.length > 0) throw new Error(`the Artifacts tab was not pressed: ${JSON.stringify(missed)}`);
+  const notEmpty = emptyBeforePublish(r.log);
+  if (notEmpty !== null) throw new Error(notEmpty);
   const after = probe(r.log, PROBE_ROWS);
-  if (before.length !== 0) throw new Error(`the Library showed ${before.length} row(s) before the run published`);
-  if (emptyBefore.length !== 1) throw new Error('the empty state was not shown before the run published');
   if (after.length !== 1) throw new Error(`the published artifact did not appear on the next refresh: ${JSON.stringify(after)}`);
   const db = new Database(oneDatabase(), { readonly: true });
   const s = latestSession(db);
@@ -221,7 +222,7 @@ const results = {};
   if (parsed.headings.includes('Snippets') || parsed.headings.includes('Edited Files')) throw new Error(`an empty section was rendered: ${JSON.stringify(parsed.headings)}`);
   if ('edited_at' in parsed.front) throw new Error('edited_at was written before any person edited the body');
   results.publish = {
-    rowsBeforeRefresh: before.length, rowsAfterRefresh: after.length,
+    rowsBeforeRefresh: 0, rowsAfterRefresh: after.length,
     record: { id: record.id, slug: record.slug, kind: record.kind, status: record.status, importance: record.importance, createdBy: record.created_by, persona: record.source_persona, bodyFile: record.body_file },
     sessionFiles: files, frontmatter: parsed.front, sections: parsed.headings,
     publishObservation: String(writes[0].entry.result).slice(0, 120),

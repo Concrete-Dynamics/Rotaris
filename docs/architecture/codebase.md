@@ -1373,7 +1373,12 @@ section (the tool path whose private allow-list closeout planning found predated
 the whole document), the sidecar carrying the same statuses in words, and the inspector rendering that ledger. The
 scripted dialect gained a verification-only `terminal:<key>` step for it, its arguments from `ROTARIS_SCRIPT_TERMINAL_ARGS` in the
 shape of the artifact and MCP argument maps. Evidence under `.proof/artifacts-proof/`. Every launch clicks the Artifacts tab after
-switching view — the Library opens on Prompts, REQ-LIBRARY-103's first tab.
+switching view — the Library opens on Prompts, REQ-LIBRARY-103's first tab. Since 2026-10-03 the first launch's empty
+Library is read when the Artifacts tab has loaded, in one waited-for probe of its empty state and rows, and nothing
+leaves the Library before that reading's deadline (`apps/desktop/scripts/lib/library-refresh.mjs`, the capture grammar's
+`@from~ms`): its click, reading and leave had been appointments 400 to 600 ms apart, which a renderer answering 1.5 s
+late during startup put out of order
+([note](../defects/fixed/artifacts-proofs-publish-launch-reads-the-empty-library-in-a-window-a-startup-stall-closes.md)).
 
 ## The driver — a step that waits instead of guessing (2026-09-11)
 

@@ -5426,6 +5426,29 @@ recursive-delete rule should admit a scratch directory, and whether a continuati
 record or report beyond the offer. Each is a change to a requirement or a directive that states the behavioural target
 or the owner's choice, so each would be a directive or a revision, not a repair.
 
+*(Added 2026-10-03, a further case of the continuation that starts from nothing, from finding U2 of the orchestrator's
+duress live run at `1763f7f` (pack `2026-10-03T06-15-52-273Z`)
+([`a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md`](../defects/a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md)).
+The parent is not told that a continuation starts from nothing: neither the cut-off offer ("the remaining work may be
+delegated to a new child as a continuation of this one", `packages/engine/src/children/cut-off.ts`) nor `delegate`'s
+description of `continuation_of` (`packages/agent-tools/src/tools/delegation.ts`) says so, and no requirement fixes either
+wording. The orchestrator briefed both of the run's continuations as if they remembered — #287 "You had already run
+everything … each of the nine claims from your brief adjudicated", #170 "You had already read the sources". The
+verification continuation, holding no brief, rebuilt it from the product's own session store through its terminal: 31
+calls on the per-user data directory (#301 to #328, #341, #342, #344) of `strings`, `grep -a` and `python3` `sqlite3` reads,
+two of which opened the live store without `mode=ro`, and one `grep -rl` through the tree that holds the leased credential
+file, printing only names. The 146,921 characters it read took its prompt from 22,621 to 74,608 tokens and were re-sent in
+33 later requests, about 1.7M input tokens, roughly 18 % of the session. The orchestrator told the user. The run was
+unconfined by the live-run harness's choice (`permission_mode: autonomous` with REQ-SANDBOX-052's
+`allow_unsandboxed_autonomous: true`, `sandbox_mode` left `off`), but REQ-SANDBOX-060 leaves reads unrestricted under
+confinement too, so the reads were within what the specification allows either way. What the build proceeds under: the
+current behaviour, unchanged until the owner rules — the payload carries nothing of the continued child, and the offer and
+the description keep their wording. What a ruling of this question adds for this case: if a continuation is to go on
+starting from nothing, whether the offer and `delegate`'s description should tell the parent so, so that it writes a
+self-contained brief; and if it is to be given its predecessor's brief, record or report, the case does not arise. Whether
+an agent's terminal may read the product's own data directory is not asked here: REQ-SANDBOX-060 answers it, and a change
+there would be a directive of its own.)*
+
 **OQ-115 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open. Raised as OQ-114 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `packages/config/src/mcp/prompt.ts:29` renders each server tool's description as REQ-MCP-101 requires, and the bundled

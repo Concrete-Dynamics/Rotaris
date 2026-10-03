@@ -52,3 +52,8 @@ the code-intelligence bundle (setup failed at 2.7 s, bootstrap `written` at 5.7 
 at 6.7 s, setup's outcome at 11.0 s). Neither reached F1's order: the live run's sign-in presses at 2.2 s and lands
 before setup records, so on this host the live run meets F1 only when setup finishes first, as slice-proof's did. The
 failing side is shown by F1's file above, not by a live run.
+
+F1 itself was repaired by the sibling bundle `finacc-accept1-3`, merged after this one
+([a-first-run-workspace-never-gets-the-starter-agents-yaml.md](a-first-run-workspace-never-gets-the-starter-agents-yaml.md)):
+the workspace's open writes the starter before initialization records. At its merge it took this note's reader, and
+`slice-proof`'s first-launch scenario asks `starterMissing` too; `starter-config.test.ts` gained that case.

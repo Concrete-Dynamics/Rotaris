@@ -58,7 +58,8 @@ repair.
 - `packages/config/src/writers.ts`: `bootstrapConfigFile`, `starterDocument`, `writeConfigFields`.
 - `packages/config/src/init/execute.ts`: the per-task recording that creates the file.
 - `apps/desktop/scripts/slice-proof.mjs`: scenario 1's starter assertion (line 234 on `1763f7f`).
-- `apps/desktop/scripts/live-run.mjs`: the sign-in scenario's `existsSync(agentsFile)` check.
+- `apps/desktop/scripts/live-run.mjs`: the sign-in scenario's `existsSync(agentsFile)` check (acceptance F3, repaired
+  by another bundle of the same round: [live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md](live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md)).
 
 ## Outcome — repaired 2026-10-03 (branch `finacc-accept1-3`)
 
@@ -82,8 +83,12 @@ moments.
   `config.bootstrap` before each `config.setField`, so a file removed while the workspace is open gets the starter
   before the record (REQ-WORKSPACE-040). A bootstrap that fails does not stop the record.
 - **The proofs that passed over it.** `pnpm live-run`'s sign-in check read only that the file existed, which
-  initialization's record alone satisfied. It now asks `apps/desktop/scripts/lib/starter-config.mjs` (`starterProblem`:
-  the comment header first, `default_persona: orchestrator`, the twelve nulls).
+  initialization's record alone satisfied. That is acceptance F3, repaired not here but by the sibling bundle
+  `finacc-accept1-1`, merged first ([live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md](live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md)): its reader
+  `apps/desktop/scripts/lib/starter-config.mjs` (`starterMissing`: the comment header, `default_persona: orchestrator`,
+  the twelve null keys at the top level) is what the live run asks. This branch first wrote a reader of its own
+  (`starterProblem`) and changed the same live-run line; at the merge with origin/main it took F3's reader and check
+  and dropped its own, and `slice-proof` asks `starterMissing` too (F2, below).
 
 **Pinned in:**
 - `apps/desktop/src/workspace-service/open-bootstrap.test.ts`: the defect's order, reproduced; the starter at the open
@@ -94,8 +99,8 @@ moments.
 - `apps/desktop/src/main/initialization-marker-writer.test.ts`: over the real writers, bootstrap then record, in that
   order, for a missing file; the user's file left as written; a failing bootstrap not stopping the record; and main
   wiring this writer, which fails on the unrepaired tree.
-- `apps/desktop/scripts/lib/starter-config.test.ts`: the reader against `starterDocument` and against the file
-  acceptance observed, and live-run asking it.
+- `apps/desktop/scripts/lib/starter-config.test.ts` (F3's, extended here): the reader against `starterDocument` and
+  against the file acceptance observed, live-run asking it, and slice-proof asking it (F2, below).
 
 **Shown by the proof that found it** (`pnpm slice-proof`, the `katalyst` endpoint, each run on a fresh profile, load
 recorded per run in the session scratchpad's `a13-slice-proof.r<N>.log`):
@@ -125,11 +130,14 @@ this repair: the starter writes fourteen nulls where REQ-WORKSPACE-038 names exa
 ## F2: slice-proof's scenario 1, on the repaired head
 
 The proof's assertion was right (F2), so nothing in it needed repair. It was strengthened in the same terms as
-live-run's: scenario 1 now asks `starterProblem` for the whole starter (the comment header first, `default_persona:
-orchestrator`, the twelve nulls) rather than the persona line alone, and its error names what is missing.
-`apps/desktop/scripts/lib/starter-config.test.ts` checks that both scripts ask the reader and that neither keeps its
-weaker check; that case fails on the script as it stood. **Run 7** (build `f9365cd`, the strengthened script, 06:25 to
-06:33 UTC, load 2.4 to 2.9, another live run sharing the endpoint) passed all seven scenarios: the run completed
-`tasks_complete` with a settled tool row; the intents were `question`, `explicit_trivial` and `small_feature`; the
-refusal was "Provider authentication required". The shipped head has live-model slice evidence again.
+live-run's (F3): scenario 1 now asks `starterMissing`, F3's reader, for the whole starter (the comment header,
+`default_persona: orchestrator`, the twelve null keys) rather than the persona line alone, and its error names what the
+file lacks. `apps/desktop/scripts/lib/starter-config.test.ts` checks that slice-proof asks the reader and no longer keeps
+the persona-only check; that case fails on origin/main's script. It also checks that a file holding the persona line
+and initialization's record alone, which the old check passed, lacks the header and the twelve keys.
+
+**Run 7** (build `f9365cd`, the branch's own reader `starterProblem`, 06:25 to 06:33 UTC, load 2.4 to 2.9, another live
+run sharing the endpoint) passed all seven scenarios: the run completed `tasks_complete` with a settled tool row; the
+intents were `question`, `explicit_trivial` and `small_feature`; the refusal was "Provider authentication required".
+The re-run on the merged branch, with `starterMissing`, is recorded below.
 

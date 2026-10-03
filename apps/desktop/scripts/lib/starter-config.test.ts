@@ -1,7 +1,9 @@
 /**
  * `live-run`'s sign-in check reads the starter document (REQ-CONFIG-025, REQ-WORKSPACE-038) rather than the file's
  * existence, which a file holding only the initialization record satisfied
- * (`docs/defects/fixed/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md`).
+ * (`docs/defects/fixed/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md`),
+ * and `slice-proof`'s first-launch scenario reads it rather than the persona line alone
+ * (`docs/defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`).
  * The reader is held to the product's own `starterDocument`, so the two cannot drift apart unseen.
  */
 import { readFileSync } from 'node:fs';
@@ -57,5 +59,19 @@ describe('the starter agents.yaml read by its content (REQ-CONFIG-025, REQ-WORKS
     expect(line).toContain('starterLacks.length === 0');
     expect(line).not.toContain('existsSync(agentsFile)');
     expect(run).toContain("starterMissing(readFileSync(agentsFile, 'utf8'))");
+  });
+
+  it('names what a file with the persona line alone lacks, which slice-proof\'s old persona-only check passed', () => {
+    expect(starterMissing(`default_persona: orchestrator\n${INITIALIZATION_ONLY}`)).toEqual(['the comment header', ...keys]);
+  });
+
+  it('is what slice-proof\'s first-launch scenario checks, rather than the persona line alone', () => {
+    const proof = readFileSync(new URL('../slice-proof.mjs', import.meta.url), 'utf8');
+    const at = proof.indexOf('the starter agents.yaml was not bootstrapped');
+    expect(at).toBeGreaterThan(-1);
+    const line = proof.slice(proof.lastIndexOf('\n', at) + 1, proof.indexOf('\n', at));
+    expect(line).toContain('starterLacks.length > 0');
+    expect(proof).toContain("starterMissing(readFileSync(agentsFile, 'utf8'))");
+    expect(proof).not.toContain(".includes('default_persona: orchestrator')");
   });
 });

@@ -5,13 +5,18 @@
  * nulls. A key's VALUE beyond `default_persona` is not read, since a sign-in or a slot edit may already have written one;
  * what is read is that the starter's keys are there at the top level, as the starter put them.
  *
- * `live-run`'s sign-in scenario used to check only that the file existed. Initialization now records into a missing
- * workspace file before anyone signs in, creating it with `initialization:` alone, so that check passed over a workspace
+ * `live-run`'s sign-in scenario used to check only that the file existed. Initialization recorded into a missing
+ * workspace file before anyone signed in, creating it with `initialization:` alone, so that check passed over a workspace
  * that never received the starter (acceptance F1 and F3, 2026-10-03;
  * `docs/defects/fixed/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md`).
+ * Since F1's repair the workspace's open writes the starter before initialization records, and initialization's writer
+ * asks for it first (REQ-WORKSPACE-040); the reader still refuses the file F1 left.
  *
- * Nothing here is product code. It runs only from the live run and its test; the test holds it to the product's own
- * `starterDocument`, so the two cannot drift apart unseen.
+ * `slice-proof`'s first-launch scenario read only the `default_persona` line; it asks this reader too (2026-10-03,
+ * `docs/defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`).
+ *
+ * Nothing here is product code. It runs only from the live run, the slice proof and its test; the test holds it to the
+ * product's own `starterDocument`, so the two cannot drift apart unseen.
  */
 
 /** The shipped `default_persona` (REQ-CONFIG-025, REQ-CONFIG-063). */

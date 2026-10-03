@@ -17,6 +17,7 @@
  *
  * Nothing here is product code. It runs only from the live run.
  */
+import { usageIn } from './model-traffic.mjs';
 
 /** A report field as text, whatever the store held (a missing field and `null` both read as ''). */
 const text = (value) => (typeof value === 'string' ? value.trim() : '');
@@ -73,15 +74,17 @@ export function commandsReading(children, calls, reportOf) {
   return { asked, mute, unsettled };
 }
 
-/** The token counts one recorded call's streamed usage chunk carries; each is null where the record holds none. */
+/**
+ * The token counts one recorded call's streamed usage chunk carries; each is null where the record holds none. The usage
+ * the recorder kept from the whole body (`record.usage`, since 2026-10-03) comes first, because the recorded body is cut at
+ * its cap and a long response's usage chunk, which comes last, went with the cut (finding U6:
+ * `docs/defects/fixed/the-traffic-recorders-body-cap-drops-a-responses-usage-and-two-duress-figures-disagree-with-the-store.md`);
+ * an older record is read from its body as before.
+ */
 export function usageOf(record) {
-  const body = typeof record?.responseBody === 'string' ? record.responseBody : '';
-  const last = (field) => {
-    let found = null;
-    for (const m of body.matchAll(new RegExp(`"${field}"\\s*:\\s*(\\d+)`, 'g'))) found = Number(m[1]);
-    return found;
-  };
-  return { promptTokens: last('prompt_tokens'), completionTokens: last('completion_tokens'), reasoningTokens: last('reasoning_tokens') };
+  const u = record?.usage !== null && typeof record?.usage === 'object' ? record.usage : usageIn(typeof record?.responseBody === 'string' ? record.responseBody : '');
+  const figure = (v) => (typeof v === 'number' ? v : null);
+  return { promptTokens: figure(u?.prompt_tokens), completionTokens: figure(u?.completion_tokens), reasoningTokens: figure(u?.reasoning_tokens) };
 }
 
 /** One recorded call as the interval it held the endpoint for, and its usage. */
@@ -116,9 +119,10 @@ export function compressionNote({ largestPrompt, trigger, calls = null }) {
   const window = trigger.advertised === null ? `the ${n(trigger.capacity)}-token default capacity (the model advertises no input limit)` : `the model's ${n(trigger.advertised)}-token window`;
   const at = `the ${trigger.thresholdPercentage} % compression trigger, ${n(trigger.tokens)} tokens (REQ-CONFIG-134)`;
   if (largestPrompt === null) return `no recorded call carried its prompt size (traffic not recorded), so whether a prompt ever neared ${at} is unknown; the compressions aggregate is unasked`;
-  // Which calls the figure is the largest of, and whose count it is: a call aborted, or cut at the recorder's body cap,
-  // carries no usage chunk; and the product tests the trigger against its own estimate at `chars_per_token`
-  // (REQ-CONFIG-132), not against the endpoint's count.
+  // Which calls the figure is the largest of, and whose count it is: a call aborted carries no usage chunk (one over the
+  // recorder's body cap keeps its usage on the record since 2026-10-03, finding U6, where it lost it with the cut before);
+  // and the product tests the trigger against its own estimate at `chars_per_token` (REQ-CONFIG-132), not against the
+  // endpoint's count.
   const of = calls === null ? 'any agent sent' : `of the ${n(calls.withUsage)} calls that carried usage (${n(calls.total - calls.withUsage)} did not)`;
   const whose = "the endpoint's `prompt_tokens`, not the product's own chars_per_token estimate (REQ-CONFIG-132)";
   if (largestPrompt < trigger.tokens) {

@@ -51,7 +51,8 @@ works for a user, and it can spend money. Proofs pass on a product a live run st
 
 ## Running
 
-- Build the head you mean to judge first; a live run of a stale build judges nothing.
+- Build the head you mean to judge first; a live run of a stale build judges nothing. A `--skip-build` launch also needs
+  the code-intelligence bundle (`pnpm code-intel:bundle`) in that tree, and refuses at once without it (2026-10-03).
 - The default run takes about sixteen minutes. Duress needs a window the endpoint can fill
   (`LIVE_RUN_DURESS_MS=5400000` under `timeout 7200` here; one took 85 minutes): run it as a background task with
   the Bash tool's largest `timeout`, 7,200,000 ms (`references/environment.md`, Long jobs). That launch is one of

@@ -20,16 +20,20 @@
  *                    (REQ-MONITOR-049/060; the declared tools stood in for that empty grant until 2026-10-01). Driven.
  *   4. narrowing   — `--rename-after` withdraws `extra` mid-run; calling it is refused; the prompt is not re-rendered.
  *   5. crash       — `--crash-after` fails the call in flight, one warning issue, the next call re-establishes (069).
- *   6. drop rules  — an unknown server, an unavailable command, `enabled: false`, and a session toggle off from the
- *                    Settings category → absent from the run, the row's wording, the child's recorded evidence; a
- *                    relaunch shows the override gone (115). Driven: each step waits for its condition.
+ *   6. drop rules  — an unknown server, an unavailable command, `enabled: false`, a server whose tool discovery fails
+ *                    and a session toggle off from the Settings category → absent from the run, the row's wording, the
+ *                    child's recorded evidence and its inspector, the failed server drawn "dropped — discovery-failed"
+ *                    with no tools (114 with 042; drawn "connected" until 2026-10-03), its failure one warning on one
+ *                    line carrying its stderr and no restated fact in the log (048, finding U4); a relaunch shows the
+ *                    override gone (115). Driven: each step waits for its condition.
  *   7. settings    — Check status → checking then healthy/unreachable, the button disabled while probing, probed twice
  *                    → the fixture contacted twice (054); the secrets card masked and scoped; the PNG. The `.cmd`
  *                    runner's health (REQ-MCP-113's wrap) is asserted on win32 only and stated not applicable elsewhere.
  *                    Driven, as 6 is.
  *   8. fatal YAML  — a stdio entry without a command and a bad request_timeout: both reported, the load rejected; the
  *                    same defects in `.mcp.json` drop the entries and the run proceeds.
- *   9. exit bound  — a server that never answers initialize: discovery returns empty at ≤ 35 s and the application exits.
+ *   9. exit bound  — a server that never answers initialize: discovery returns empty at ≤ 35 s (read from the REQ-MCP-048
+ *                    warning, the failure's one record since 2026-10-03) and the application exits.
  *
  * Evidence under `.proof/mcp-proof/`: one log and PNG per launch, `<name>.steps.json` for each driven launch (every
  * step, when it ran, what it answered), `results.json`. `--skip-build` skips the build.
@@ -42,6 +46,7 @@ import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
+import { restatedFacts } from './lib/restated-facts.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -452,7 +457,14 @@ const ROUND_OVER = `(() => {
 
 // ---- 6. Drop rules, the session toggle, the relaunch --------------------------------------------------------
 {
-  const global6 = globalYaml({ personas: { 'coding-agent': '{ mcp_servers: [alpha, beta, nope, ghost, off] }' } }).replace('  orchestrator: { mcp_servers: [alpha, beta, gamma], mcp_tools: { beta: [echo, nothing, extra] } }', '  orchestrator: { mcp_servers: [alpha, beta, nope, ghost, off] }');
+  // `broken` launches and exits before it answers `initialize`, two lines on its standard error: its tool discovery fails
+  // (REQ-MCP-042/048), and REQ-MCP-114 records it dropped for that reason — until 2026-10-03 it was recorded and drawn
+  // "connected" (`docs/defects/fixed/an-mcp-server-whose-tool-discovery-failed-reads-as-connected.md`).
+  const brokenServer = `  broken: { command: ${y(node)}, args: ${y(['-e', "process.stderr.write('broken: first stderr line\\nbroken: second stderr line\\n'); process.exit(3)"])} }`;
+  const global6 = globalYaml({ personas: { 'coding-agent': '{ mcp_servers: [alpha, beta, nope, ghost, off, broken] }' } })
+    .replace('  orchestrator: { mcp_servers: [alpha, beta, gamma], mcp_tools: { beta: [echo, nothing, extra] } }', '  orchestrator: { mcp_servers: [alpha, beta, nope, ghost, off, broken] }')
+    .replace('  ghost: { command: no-such-command-xyz }\n', `  ghost: { command: no-such-command-xyz }\n${brokenServer}\n`);
+  if (!global6.includes('  broken: ')) throw new Error('the drop-rules configuration lost its broken server');
   const r = await drivenLaunch('drop-rules', { ROTARIS_SCRIPT: 'delegate:coding-agent:one,answer', ROTARIS_CHILD_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_INTENT_SCRIPT: 'moderate_feature' }, { files: { global: global6, workspace: WORKSPACE.replace('  delegation_strategy: single\n', '  delegation_strategy: orchestrator\n') } }, async (d, step) => {
     await openMcpSettings(d, step);
     const before = latestSessionId();
@@ -463,7 +475,13 @@ const ROUND_OVER = `(() => {
     const enablement = await step('the overridden row\'s wording', d.probe('tr[data-mcp-server="beta"] [data-enablement]'));
     await typePrompt(d, step, 'delegate once');
     const session = await step('the run settled', until(() => sessionAfter(before), (s) => s !== null && SETTLED.has(s.execution_status), { timeoutMs: 90_000, what: 'a new session settling' }));
-    return { wording: enablement[0]?.text ?? '', session };
+    // REQ-MCP-114: the child's inspector reads each carried server's fate from the run's recorded evidence.
+    await step('one in the tree', d.waitFor('.agent-row__task', { text: 'one' }));
+    await step('select one', d.click('.agent-row__task', { text: 'one' }));
+    await step('the inspector shows one', d.waitFor('[data-testid="inspector-name"]', { text: 'one' }));
+    await step('broken in the inspector', d.waitFor('.inspector__mcp[data-mcp-server="broken"]'));
+    const inspector = await step('the inspector\'s MCP servers', d.probe('.inspector__mcp'));
+    return { wording: enablement[0]?.text ?? '', session, inspector: inspector.map((x) => ({ server: x.data['data-mcp-server'], fate: x.data['data-fate'], text: x.text })) };
   });
   const wording = r.value.wording;
   if (!/Overridden for this session/.test(wording) || !/not persistent/.test(wording) || !/enabled in the configuration file/.test(wording)) throw new Error(`the overridden row's wording is wrong: ${wording}`);
@@ -475,7 +493,17 @@ const ROUND_OVER = `(() => {
   if (children.length === 0) throw new Error(`the run ${s.session_id} (${s.execution_status}) recorded no child`);
   const evidence = JSON.parse(children[0].granted_mcp);
   const fates = Object.fromEntries(evidence.servers.map((x) => [x.name, x.reason ?? x.fate]));
-  if (fates.alpha !== 'connected' || fates.beta !== 'disabled' || fates.nope !== 'not-configured' || fates.ghost !== 'unavailable' || fates.off !== 'disabled') throw new Error(`the recorded fates are wrong: ${JSON.stringify(fates)}`);
+  if (fates.alpha !== 'connected' || fates.beta !== 'disabled' || fates.nope !== 'not-configured' || fates.ghost !== 'unavailable' || fates.off !== 'disabled' || fates.broken !== 'discovery-failed') throw new Error(`the recorded fates are wrong: ${JSON.stringify(fates)}`);
+  const shown = Object.fromEntries(r.value.inspector.map((x) => [x.server, x]));
+  if (shown.broken?.fate !== 'dropped' || !/dropped — discovery-failed/.test(shown.broken.text) || !/No tools granted\./.test(shown.broken.text)) throw new Error(`the inspector does not draw broken dropped for failed discovery with no tools (REQ-MCP-114): ${JSON.stringify(shown.broken)}`);
+  if (shown.alpha?.fate !== 'connected' || /dropped/.test(shown.alpha.text)) throw new Error(`the inspector does not draw alpha connected: ${JSON.stringify(shown.alpha)}`);
+  if (!issues.some((m) => /'broken' failed tool discovery/.test(m))) throw new Error(`the failed discovery was not recorded as an issue (REQ-MCP-042): ${JSON.stringify(issues)}`);
+  // Finding U4: the failure is one record — `ToolDiscovery`'s REQ-MCP-048 warning — on one physical line that keeps broken's
+  // two stderr lines; the run host does not say it again (`restated-facts.mjs` knows that restatement).
+  const brokenWarnings = lines(r.log, /mcp broken: tool discovery failed/);
+  if (brokenWarnings.length !== 1 || !/first stderr line \| broken: second stderr line/.test(brokenWarnings[0]) || !/^\[main [^\]]+\] warning run host: mcp broken: tool discovery failed in \d+ ms \(/.test(brokenWarnings[0])) throw new Error(`broken's discovery failure is not one warning on one line carrying its stderr: ${JSON.stringify(brokenWarnings)}`);
+  const restated = restatedFacts(r.log);
+  if (restated.length > 0) throw new Error(`a fact reached the log twice: ${restated.map((x) => `line ${x.line}, ${x.fact} (owner: ${x.owner}): ${x.text}`).join(' | ')}`);
   if (Object.keys(evidence.granted).sort().join() !== 'alpha') throw new Error(`granted should hold alpha only: ${JSON.stringify(evidence.granted)}`);
   if (!issues.some((m) => /'nope', which is not configured/.test(m))) throw new Error('the missing-server warning was not recorded as an issue');
   if (!issues.some((m) => /'ghost' is unavailable/.test(m))) throw new Error('the unavailable warning was not recorded as an issue');
@@ -492,7 +520,7 @@ const ROUND_OVER = `(() => {
   });
   const row = again.value[0]?.data ?? {};
   if (row['data-overridden'] !== 'no' || row['data-enabled'] !== 'yes') throw new Error(`after a relaunch beta should be back to its configured value: ${JSON.stringify(again.value)}`);
-  results.dropRules = { fates, granted: evidence.granted, issues, detailedLineCount: detailed, perPersonaWarnings: perPersona, overriddenWording: wording.slice(0, 200), sessionStatus: s.execution_status, relaunchOverrideGone: true, relaunchRow: row };
+  results.dropRules = { fates, inspector: r.value.inspector, brokenWarning: brokenWarnings[0], granted: evidence.granted, issues, detailedLineCount: detailed, perPersonaWarnings: perPersona, overriddenWording: wording.slice(0, 200), sessionStatus: s.execution_status, relaunchOverrideGone: true, relaunchRow: row };
 }
 
 // ---- 7. The Settings category ---------------------------------------------------------------------------------
@@ -573,8 +601,10 @@ const ROUND_OVER = `(() => {
   // The run's first port waits on the mute server's discovery; the bound fires at 35 s, the run proceeds with alpha listed bare,
   // and the user closes the window at 40 s — the exit must follow without waiting on anything.
   const r = await launch('exit-bound', { ROTARIS_CAPTURE_PROMPT: 'a server that never answers', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '60000', ROTARIS_CAPTURE_QUIT_MS: '40000' }, { files: { global: globalYaml({ alphaFlags: ['--never-init'] }) }, timeout: 120_000 });
-  const disc = lines(r.log, /mcp: discovery of 'alpha' failed/)[0] ?? '';
-  const ms = Number(/in (\d+) ms/.exec(disc)?.[1] ?? NaN);
+  // The failure's one record is `ToolDiscovery`'s REQ-MCP-048 warning, which carries the time; the run host's own
+  // "discovery of 'alpha' failed … in N ms" restated it until 2026-10-03 and is gone (finding U4).
+  const disc = lines(r.log, /mcp alpha: tool discovery failed in \d+ ms/)[0] ?? '';
+  const ms = Number(/failed in (\d+) ms/.exec(disc)?.[1] ?? NaN);
   if (!(ms >= 34_000 && ms <= 35_500)) throw new Error(`discovery did not return at the 35 s bound: ${disc}`);
   if (!/mcp: surface for orchestrator — callable alpha\[\]/.test(r.log)) throw new Error('the run did not proceed with alpha listed bare after the bound');
   const quitAt = 40_000;

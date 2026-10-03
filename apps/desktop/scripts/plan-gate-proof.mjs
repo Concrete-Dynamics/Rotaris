@@ -5,6 +5,7 @@ import Database from 'better-sqlite3';
 import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { parseEvals, readEval } from './lib/capture-evals.mjs';
+import { codeIntelligenceDiscovered } from './lib/code-intelligence-discovery.mjs';
 
 /**
  * ADR-0062's first execution in the BUILT app: the plan gate driven end to end (REQ-ORCH-152/153/154).
@@ -187,7 +188,9 @@ const log1 = await launch('held', {
   ROTARIS_CAPTURE_INSPECT_AT: `[data-testid="plan-gate"]@~${GATE_DEADLINE_MS};;[data-testid="plan-gate-plan"]@~${GATE_DEADLINE_MS}`,
   ROTARIS_CAPTURE_EVAL_AT: `${GATE_TEXT}>>[data-testid="plan-gate"]@~${GATE_DEADLINE_MS}`,
 });
-if (/discovery of 'code_intelligence'/.test(log1)) throw new Error(`the fixture did not turn code intelligence off — the run discovered it:\n${log1}`);
+// Any discovery of the server — one that listed its tools, or one that failed (since 2026-10-03 only ToolDiscovery's warning
+// says so: the run-host line this guard once matched is gone, finding U4) — means the switch went stale.
+if (codeIntelligenceDiscovered(log1)) throw new Error(`the fixture did not turn code intelligence off — the run discovered it:\n${log1}`);
 if (existsSync(PLANNED_FILE)) throw new Error('a file the plan names was written while the gate was held (REQ-ORCH-153)');
 const held = readStore();
 if (held.session?.execution_status !== 'awaiting_plan_decision') throw new Error(`the session is ${held.session?.execution_status}, not awaiting_plan_decision:\n${log1}`);

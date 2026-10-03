@@ -27,9 +27,22 @@ export interface DiscoverRequest {
   readonly name: string;
   readonly description: ServerDescription;
   readonly workspaceRoot: string;
+  /**
+   * Words the failure's warning names the launch by, after the server's name — the run host's `project <root>`
+   * (REQ-MCP-034) — so the one record of a failure says what was launched; not part of the identity. Omitted when empty.
+   * The warning is written at most once per identity (REQ-MCP-048), from the first discovery of it, so a later call's
+   * `context` never reaches it; a caller that wants the project named passes it on every call. `McpHost.prepare` is the
+   * only caller today, and it always does.
+   */
+  readonly context?: string;
 }
 
 const EMPTY: readonly ToolInfo[] = Object.freeze([]);
+
+/** A failure's detail on one line: each of its lines trimmed, the empty ones left out, the rest joined by ` | `. */
+function oneLine(detail: string): string {
+  return detail.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '').join(' | ');
+}
 
 export class ToolDiscovery {
   private readonly memo = new Map<string, DiscoveryResult>();
@@ -102,7 +115,11 @@ export class ToolDiscovery {
         this.memo.set(identity, result);
         if (result.failed && !this.warned.has(identity)) {
           this.warned.add(identity);
-          log.warn(`mcp ${req.name}: tool discovery failed (${result.detail}); the persona prompt will list this server with no tool details attached (REQ-MCP-048)`);
+          // The one record of the failure: the run host's `prepare` writes no line of its own for it, and the detail — which
+          // carries the child's standard error, often several lines — is kept on this record's one line. Until 2026-10-03 the
+          // run host said the same failure again 1 ms later and each record printed as three physical lines
+          // (`docs/defects/fixed/one-mcp-discovery-failure-is-logged-twice-its-stderr-breaking-each-record.md`).
+          log.warn(`mcp ${req.name}${req.context ? ` (${req.context})` : ''}: tool discovery failed in ${result.elapsedMs.toFixed(0)} ms (${oneLine(result.detail)}); the persona prompt will list this server with no tool details attached (REQ-MCP-048)`);
         }
         resolve(result);
       };

@@ -579,8 +579,11 @@ process that did the work, and the process it answers relays the answer without 
 (`repository <root>: …`) and the Git view (`git view: N reads in M ms (…)`) are the workspace service's lines, not main's
 command handlers'; the credentials lease's report is the run host's `LeaseReportLog` (REQ-PROVIDER-068), not main's ask
 handler; a setup step's outcome is the run host's step reporter (`mcp setup: <id> succeeded (N ms)`), not
-`runSetupSteps`, which logs only the command a step spawns. `scripts/lib/restated-facts.mjs` reads a launch's log for a
-restatement of any of the four; `git-proof` and every live-run launch assert there is none. Main's own lines are `info`, except its reports of a loss — a crash, a renderer or child process
+`runSetupSteps`, which logs only the command a step spawns; an MCP tool discovery's failure is `ToolDiscovery`'s one
+REQ-MCP-048 warning (`mcp <name> (project <root>): tool discovery failed in N ms (…)`, the child's stderr kept on its one
+line, ` | ` between its lines), not `McpHost.prepare`'s, which says a success only (live-run finding U4, repaired 2026-10-03).
+`scripts/lib/restated-facts.mjs` reads a launch's log for a restatement of any of the five; `git-proof`, `mcp-proof`'s
+drop-rules launch and every live-run launch assert there is none. Main's own lines are `info`, except its reports of a loss — a crash, a renderer or child process
 gone for any reason but `clean-exit`, a child exiting with any status but 0, a `shutdown` a child refused or left
 unanswered, still running, when its bound elapsed at quit, a failed hand-over, a refused launch — which are `error`, and
 a dialog it could not present, which is `warning`. An exit status of 0 is not proof of an orderly `shutdown`: Electron

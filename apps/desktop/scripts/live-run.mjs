@@ -97,7 +97,8 @@
  *   model-traffic.jsonl  what the model was SENT and what came back — bodies, status and duration per call,
  *                      recorded by a loopback proxy the sandbox is pointed at (`--no-record-traffic` skips it),
  *                      into the file of the scenario that made the call, each naming how it ended (`outcome`:
- *                      `complete`, `aborted` when the product let go, `in-flight at close`, …).
+ *                      `complete`, `aborted` when the product let go, `in-flight at close`, …) and, where the response
+ *                      carried one, its `usage`, read from the whole body (a body over 1 MB is recorded cut).
  *                      The product logs a method and a URL and nothing else, so this exists nowhere else.
  *   *.png              the end of the scenario, plus a fifth and three fifths of the way through its wait
  *   node-test.log, diff.txt, changed/   where the scenario produces them
@@ -119,10 +120,12 @@ import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsola
 import { KEY_ENV, endpointKey, endpointStore, instanceIdFor, powershell, selectEndpoint } from './lib/endpoint-registry.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
-import { restatedFacts } from './lib/restated-facts.mjs';
+import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { refusalIssues } from './lib/refusal-issues.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
+import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
+import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
@@ -364,7 +367,8 @@ const USAGE = `pnpm live-run — the application against a real model endpoint, 
   --no-record-traffic  talk to the endpoint directly; do not record request and response bodies
   --gui                show the window each scenario drives, to watch it (hidden by default; nothing else changes)
   --keep               keep the sandbox workspace instead of deleting it
-  --skip-build         trust apps/desktop/out as it stands
+  --skip-build         trust apps/desktop/out as it stands; the code-intelligence bundle must already be there
+                       (pnpm code-intel:bundle), or the run refuses at once — without this flag it is built
 `;
 
 if (has('help')) { console.log(USAGE); process.exit(0); }
@@ -481,10 +485,31 @@ if (!has('confirm')) {
   console.log(`Traffic:  ${RECORD_TRAFFIC ? 'recorded — request and response bodies through a loopback proxy, one file per scenario' : 'not recorded (--no-record-traffic)'}`);
   console.log(`Ceiling:  ${accountingKind === 'unmetered' ? 'none — registered unmetered; only the iteration ceiling binds' : accountingKind === 'tokens' ? `${MAX_TOKENS} tokens (this endpoint reports no cost and carries no prices)` : `${BUDGET.toFixed(2)} USD, ${accountingKind === 'provider' ? "read from the provider's own accounting" : 'estimated from the registered prices'}`}`);
   console.log(`Key:      ${keySource ?? `NONE — run \`pnpm live-run --set-key --endpoint=${endpoint.name}\`, or set ${KEY_ENV}`}`);
+  const bundleNow = runBundleScript(['--check'], 60_000);
+  console.log(`Bundle:   ${bundleNow.status === 0 ? 'the code-intelligence runtime is present' : `absent or stale — ${has('skip-build') ? 'a --skip-build run refuses to start; run `pnpm code-intel:bundle` first' : 'the run builds it (`pnpm code-intel:bundle`) before the first launch'}`}`);
   console.log('\nNothing ran. Add --confirm to spend.');
   process.exit(2);
 }
 if (key === null || key === '') { console.error(`No key for "${endpoint.name}". Run \`pnpm live-run --set-key --endpoint=${endpoint.name}\`, or set ${KEY_ENV}.`); process.exit(1); }
+/*
+ * The bundled code-intelligence runtime is a precondition, as it is `init-proof`'s: without it every launch's setup and
+ * discovery fail, and the run judges a tree in which code intelligence never ran. The duress run at 1763f7f did exactly
+ * that on a `--skip-build` tree with no bundle and passed all 18 checks in silence
+ * (`docs/defects/fixed/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md`). With
+ * `--skip-build` an absent or stale tree refuses here, before a pack or a sandbox exists; without it the bundle is built
+ * beside the desktop build. Every launch then states whether its code-intelligence discovery succeeded (`launch`).
+ */
+let codeIntelligenceBundle;
+try {
+  codeIntelligenceBundle = ensureBundle({
+    skipBuild: has('skip-build'),
+    consequence: 'Without it every launch\'s code-intelligence setup and discovery fail (REQ-WORKSPACE-084, REQ-MCP-042), and this run would judge a tree in which code intelligence never ran.',
+  });
+} catch (cause) {
+  console.error(`live-run refused: ${cause instanceof Error ? cause.message : String(cause)}`);
+  process.exit(1);
+}
+console.log(`Bundle:   ${codeIntelligenceBundle === 'built' ? 'the code-intelligence runtime was built (pnpm code-intel:bundle)' : 'the code-intelligence runtime is present'}`);
 const redact = (text) => text.split(key).join('[redacted]');
 console.log(`Model:    ${endpoint.model} (${modelSource})`);
 if (GUI) console.log('window:   shown (--gui) — the window is driven from inside the process, so clicking it does not steer the run, but typing into it does write into the product');
@@ -711,10 +736,18 @@ async function launch(name, extra, timeoutMs = 180_000) {
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${join(dir, 'app.log')}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   assertNoCredential(`${name}/app.log`, log);
-  // PD-MONITOR-002, live-run finding a71-9: no launch's log carries one of the four restatements `restated-facts.mjs`
-  // knows (main's repository, Git view and lease lines, `runSetupSteps`' success). A duplicate of another fact passes.
+  // PD-MONITOR-002, live-run findings a71-9 and U4: no launch's log carries one of the restatements `restated-facts.mjs`
+  // knows (main's repository, Git view and lease lines, `runSetupSteps`' success, the run host's restated discovery
+  // failure). A duplicate of another fact passes.
   const restated = restatedFacts(log);
-  check(restated.length === 0, `${name}: none of the four known restatements reaches the application log`, restated.map((r) => `app.log line ${r.line}, ${r.fact} restated (its owner is the ${r.owner}): ${r.text}`).join(' | ') || undefined);
+  check(restated.length === 0, `${name}: none of the ${KNOWN_RESTATEMENTS} known restatements reaches the application log`, restated.map((r) => `app.log line ${r.line}, ${r.fact} restated (its owner is the ${r.owner}): ${r.text}`).join(' | ') || undefined);
+  // Finding U5: whether code intelligence ran in this launch is stated, so a pass can never hide that it did not. A launch
+  // that starts no run discovers nothing — a NOTE, unless a setup step failed; a discovery that failed, or that listed no
+  // tool, is a FAILURE (`codeIntelligenceStatement`).
+  const intelligence = codeIntelligenceStatement(name, log);
+  scenarioEvidence[name].codeIntelligence = intelligence.reading;
+  if (intelligence.verdict === 'note') noted(intelligence.label, intelligence.detail);
+  else check(intelligence.verdict === 'pass', intelligence.label, intelligence.detail);
   return log;
 }
 /** The store as the run left it: the newest session, its rows, its events, and the totals across every session. */
@@ -905,7 +938,7 @@ const check = (passed, what, detail) => { checks.push({ passed: Boolean(passed),
 const noted = (what, detail) => { checks.push({ passed: true, noted: true, what, detail }); };
 const results = {
   startedAt: new Date().toISOString(), endpoint: { name: endpoint.name, label: endpoint.label, baseUrl: endpoint.baseUrl, model: endpoint.model, contextTokens: endpoint.contextTokens ?? null, unmetered },
-  qualifiedModel: QUALIFIED, accounting: accountingKind, budgetUsd: BUDGET, maxTokens: MAX_TOKENS, keySource, sandbox, scenarios: {},
+  qualifiedModel: QUALIFIED, accounting: accountingKind, budgetUsd: BUDGET, maxTokens: MAX_TOKENS, keySource, sandbox, codeIntelligenceBundle, scenarios: {},
 };
 function finish(code) {
   results.finishedAt = new Date().toISOString();

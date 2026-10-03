@@ -4276,6 +4276,11 @@ no more; its last sentence settles "every other unfinished agent of a session at
   it subscribes (`followCoalesced`), because a session at rest publishes nothing more, so the root keeps its last activity
   there too. *Until the fourteenth review round the strip read "run Running", and one drive showed that window's root
   with no rows; that second defect was not reproduced (`docs/defects/fixed/`).*
+  *Amended 2026-10-03 (fin10): the strip draws no run state any more — REQ-SHELL-038's item list is closed and names none
+  ([`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)),
+  and `statusStripRunItem` is gone. The Workspace view's run header and the Mission view's subtitle carry `Run needs recovery`,
+  so the sentence above about the strip is kept as the record of what was built until then; no surface reads a run as
+  active beside a root drawn `paused` still holds through those two.
 - **What a crash left — a departure from clause 13's last sentence and from REQ-MONITOR-211/213.** The agents the
   crash record will pause present as it will leave them — `paused`, interruption `crash`, their activity kept, no chip
   — before it is recorded, although they are not in the child state `paused` and the sentence settles them: every
@@ -9219,18 +9224,22 @@ tooltip says so: "Tokens used by this workspace's runs so far: {n} tok."
 **What a ruling decides.** The scope of REQ-SHELL-044's running total (the workspace's runs, the focused session, the
 current run), and whether the tooltip names it.
 
-**OQ-189 — The workspace domain states three things about the status strip that the shell domain, which owns it, states
+**OQ-189 — The workspace domain states five things about the status strip that the shell domain, which owns it, states
 otherwise.** *(REQ-SHELL-040, "Neither failure is silent", with the resolution of `docs/spec/resolutions/12-desktop-shell-windows.md`
 item 7, "Silent failure is dropped"; REQ-WORKSPACE-019, "a failure to open SHALL be silent"; REQ-SHELL-041, the
 `unsaved settings` explanation conveys "that runs keep using the last saved values until they are saved", and the mode
 flag's explanation is given word for word; REQ-WORKSPACE-022, the same flag's explanation conveys "that runs use the values
 on screen rather than the values on disk", and the mode flag's conveys "exactly the following and no more: which permission
-mode is in force and that it decides whether a tool call is allowed outright, put to the user, or refused"; REQ-SHELL-047,
+mode is in force and that it decides whether a tool call is allowed outright, put to the user, or refused", the redaction
+flag's "that secrets are removed from what is recorded and displayed and that this cannot be turned off", and the
+circuit-breaker flag's "that the circuit breaker is armed and will halt a run that trips it"; REQ-SHELL-047,
 "This document owns the status strip". Raised 2026-10-02 by the repair of
 [`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)
-(fin10, bundle `fin10-strip-notices-and-listing`). Open.)*
+(fin10, bundle `fin10-strip-notices-and-listing`). Open. *Amended 2026-10-03 (fin10's repair round): raised as "three
+things", it missed the redaction and circuit-breaker explanations, which REQ-WORKSPACE-022's "exactly the following and no
+more" bounds as well; both are added below.*)*
 
-Three statements disagree:
+Five statements disagree:
 
 - **The workspace-path link's failure.** REQ-SHELL-040 (amended by the shell domain's resolution 7) reports a failure to open
   the folder on the transient error surface with the path attempted; REQ-WORKSPACE-019 still says the failure is silent.
@@ -9240,6 +9249,14 @@ Three statements disagree:
 - **The mode flag's explanation.** REQ-SHELL-041 gives the sentence ("Permission mode {mode}: how much agents may do
   without asking. Change it under the composer or in Settings → Runtime."); REQ-WORKSPACE-022 bounds it to the mode in
   force and that it decides allow, ask or refuse, "and no more", which the shell's second sentence exceeds.
+- **The redaction flag's explanation.** REQ-SHELL-041 gives the sentence ("Secret redaction: anything that looks like a
+  credential is masked before it reaches a model or the transcript."); REQ-WORKSPACE-022 bounds it to two facts, that
+  secrets are removed from what is recorded and displayed and that this cannot be turned off, "and no more". The shell's
+  sentence does not say it cannot be turned off, and adds "before it reaches a model", which the bound excludes.
+- **The circuit-breaker flag's explanation.** REQ-SHELL-041 gives the sentence ("Circuit breaker: Rotaris stops a run that
+  keeps repeating a failing step."); REQ-WORKSPACE-022 bounds it to that the circuit breaker is armed and will halt a run
+  that trips it, "and no more". The shell's sentence says what trips it (a repeated failing step) and does not say it is
+  armed.
 
 The file-access flag's two explanations are not among them: REQ-WORKSPACE-022 fixes that pair word for word and
 REQ-SHELL-041 asks only that they use the Settings control's words, which REQ-WORKSPACE-022's pair does (REQ-WORKSPACE-148's
@@ -9250,7 +9267,7 @@ control "lets agents read and write outside this workspace folder").
 statements, since REQ-SHELL-047 says that document owns the strip and its resolution 7 is the later decision. A folder that
 cannot be opened raises the transient error naming the path (an opener that never answers counts after 5 s,
 `apps/desktop/src/main/open-folder.ts`); `unsaved settings` reads "The Settings view is holding edits that have not been
-saved; runs keep using the last saved values until they are saved."; the mode flag's sentence is REQ-SHELL-041's; the
-file-access pair is REQ-WORKSPACE-022's.
+saved; runs keep using the last saved values until they are saved."; the mode, redaction and circuit-breaker flags'
+sentences are REQ-SHELL-041's word for word; the file-access pair is REQ-WORKSPACE-022's.
 
-**What a ruling decides.** Which domain's statement stands for each of the three, and an amendment to the other.
+**What a ruling decides.** Which domain's statement stands for each of the five, and an amendment to the other.

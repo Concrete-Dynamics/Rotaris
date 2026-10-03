@@ -28,7 +28,7 @@ chosen pair in the dialog's path, which lies in `sessions.ts`, outside that task
   choose it again; the proof chooses another key first. With the second note of this task, the key stays choosable,
   annotated, from the run header, the inspector and the wait surface, which clear it — during a run; at rest neither is live,
   so the limit is recorded as an open note of its own (fin10's first repair round):
-  [`the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows.md`](../the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows.md).
+  [`the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows.md`](the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows.md) (repaired 2026-10-03: the chip re-chooses the excluded key it shows).
 - Pinned in `packages/engine/src/run/ladder.test.ts` ("REQ-MONITOR-194: a pair chosen for the next run or in the recovery
   dialog is no longer excluded", four cases, each red with the clearing disabled): the composer's choice of the excluded
   `a1` makes the next run call `a1` (before: `b1`, the pre-call move), in this process and in a fresh one; the dialog's

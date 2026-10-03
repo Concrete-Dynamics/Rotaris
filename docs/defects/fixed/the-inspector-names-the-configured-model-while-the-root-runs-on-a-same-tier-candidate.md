@@ -52,7 +52,7 @@ the composer's chip and the strip's model item keep naming what the next run sta
   branch read `alpha` (no republish) and then `scripted-b/beta` (the discovered tier pick's key, before the configured key
   for the pair was preferred).
 - **Not repaired here:** the inspector's reselect of the shown excluded key is the chip note's repair
-  ([`the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows.md`](../the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows.md));
+  ([`the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows.md`](the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows.md));
   children moved by a fallback stay open in
   [`a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md`](../a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md).
 

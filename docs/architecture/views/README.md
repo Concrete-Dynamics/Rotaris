@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-03**
 
+**A selector's shown excluded key can be chosen there (REQ-MONITOR-194; fin11).** `SearchableOption.rechoosable` and
+`choiceFires` in the design system's searchable select; `annotatedModelOptions` marks each excluded key; the inspector's
+guard lets the shown key through when it is excluded. The **process view**'s `SessionRecord` sentence says so. No package,
+edge, process, channel, command or store column changed.
+
 **The run-level agent's Model names the key its root runs on while the run is live (REQ-MONITOR-052, REQ-MONITOR-066,
 REQ-MONITOR-069; fin11).** The record gains `entryModelKey` (the live run's `Run.entryModelKey`: the configured key of the pair
 the root's ladder cell calls; null at rest), which `runLevelAgent` names through `runLevelModel`; `entryRole`, and with it the

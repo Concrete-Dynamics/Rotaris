@@ -396,6 +396,24 @@ describe('production design-system layer', () => {
       });
       expect(withheld).toContain('m — withheld: quota');
     });
+
+    /*
+     * The repair of the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows (REQ-MONITOR-194): a row the
+     * caller marks `rechoosable` fires its choice even when it is the current value; every other row keeps the native select's
+     * same-value suppression, so no other selector changes. `choose` decides by `choiceFires` alone.
+     */
+    it('fires a choice of the current value only for a row marked rechoosable, and never for an unavailable row (REQ-MONITOR-194)', () => {
+      expect(design.choiceFires({ value: 'beta', label: 'beta' }, 'alpha')).toBe(true);
+      expect(design.choiceFires({ value: 'alpha', label: 'alpha' }, 'alpha')).toBe(false);
+      expect(design.choiceFires({ value: 'alpha', label: 'alpha', hint: 'provider reported insufficient quota in this session', rechoosable: true }, 'alpha')).toBe(true);
+      expect(design.choiceFires({ value: 'alpha', label: 'alpha', rechoosable: true }, 'beta')).toBe(true);
+      expect(design.choiceFires({ value: 'delta', label: 'delta', unavailableReason: 'region', rechoosable: true }, 'delta')).toBe(false);
+      expect(design.choiceFires({ value: 'delta', label: 'delta', unavailableReason: 'region' }, 'alpha')).toBe(false);
+      // The source: `choose` fires through `choiceFires`, not a same-value comparison of its own.
+      const source = readFileSync(fileURLToPath(new URL('./searchable-select.tsx', import.meta.url)), 'utf8');
+      expect(source).toMatch(/if \(choiceFires\(option, value\)\) onChange\(option\.value\);/);
+      expect(source).not.toMatch(/if \(option\.value !== value\) onChange/);
+    });
   });
 
   describe('Checkbox — OQ-57, drawn from parts the language declares', () => {

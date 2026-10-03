@@ -203,7 +203,10 @@ annotates and leaves choosable. Since fin10 the same list rides outside a wait a
 the live run's memory (`Run.excludedModelKeys`), else — a session at rest — the memory its timeline rehydrates through the
 same `restingCatalogue` read, now taken where the timeline holds a `model_exhausted` entry too (`Sessions.restingReadOf`);
 the run header's Switch model, the inspector's Model field and the composer's next-run chip annotate each key with the
-reason and leave it choosable (`annotatedModelOptions`, `packages/ui/src/model-options.ts`).
+reason and leave it choosable (`annotatedModelOptions`, `packages/ui/src/model-options.ts`) — since 2026-10-03 choosable when
+it is already the selector's value too: each excluded key is marked `rechoosable`, and the design system's searchable select
+fires a choice of its current value for such a row alone (`choiceFires`), so the composer's chip showing the excluded
+configured key sends `session.chooseNextModel` for it.
 
 **Checkpoints (Part P; ADR-0039's first execution).** Renderer → main: `checkpoints.list {sessionId}` (rows only, REQ-GIT-050),
 `checkpoints.preview {sessionId, sequence}` and `checkpoints.restore {sessionId, sequence, force}`; main holds ONE desktop

@@ -10,7 +10,7 @@ configuration twice. During a run the key stays choosable from the run header an
 **Amended 2026-10-03 (fin11's triage, before the repair).** The sentence above said the key stays choosable from the
 inspector during a run too. It does not when the inspector shows the excluded key — and it does show it, the configured key,
 while the root runs on the same-tier candidate
-([`fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md`](fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md), repaired since: the inspector names the live key, beta, during a run):
+([`the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md`](the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md), repaired since: the inspector names the live key, beta, during a run):
 its handler drops a choice equal to its current value (`v !== currentModel`), and the searchable select fires nothing for one.
 Also, the chip is no native select since the searchable picker (`DesignSearchableSelect`): the same-value suppression is the
 control's own (`searchable-select.tsx`'s `choose`, "Value discipline is the native select's").
@@ -22,10 +22,33 @@ distinct "use it again" affordance would be an invention the design material doe
 the mockup draws no exclusion at all.
 
 Recorded by fin10's first repair round (2026-10-03) from the verifier's optional finding; the fixed note
-[`fixed/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md`](fixed/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md)
+[`a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md`](a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md)
 states the limit, and `resilience-proof`'s `next-run-choice` scenario chooses beta first for that reason. Not repaired: the
 remedy is a surface choice (re-selection of an annotated key firing a choice, or a distinct "use it again" affordance beside
 the annotation) that the design material does not settle. Size S once chosen.
+
+## Outcome — repaired 2026-10-03 (fin11)
+
+- **The control fires a choice of its current value for a row marked `rechoosable`.** `SearchableOption.rechoosable` and
+  `choiceFires` in `packages/ui/src/design-system/searchable-select.tsx`: opt-in per option, so every other row and every
+  other searchable selector keeps the same-value suppression. No affordance was added and nothing was redrawn: the row is
+  the one already listed and annotated (the design material draws no exclusion; `pnpm mockup`'s source was read for it and
+  holds none).
+- **Every excluded key is marked.** `annotatedModelOptions` (`packages/ui/src/model-options.ts`) gives each key the session
+  holds out of quota `rechoosable: true` beside its hint, so the composer's chip, the inspector's Model field, the run
+  header's switch and the wait's chooser all take it; the chip's handler already sent any non-empty value
+  (`setNextModel`: the configuration write, then `session.chooseNextModel`, which clears the exclusion). The inspector's own
+  guard now lets the shown key through when it is excluded (`Inspector.tsx`), the case left when the root waits on that pair
+  with no candidate (since the companion repair it names the live key, so after a move it shows the candidate and the
+  excluded key is another row).
+- **Pinned** by `design-system.test.ts` ("fires a choice of the current value only for a row marked rechoosable …") and two
+  cases in `packages/ui/src/excluded-model-selectors.test.ts` (the chip and the inspector: the shown excluded key is sent
+  once, the shown plain key sends nothing); the chip case fails without the `rechoosable` mark, the inspector case without
+  either half.
+- **Shown** by `resilience-proof`'s `next-run-choice` (`--only=next-run-choice --skip-build` after `pnpm build`, as root under
+  Xvfb, Node 24, load 1.0 to 1.2), which now chooses alpha directly in the chip that shows it (`chipValue: "alpha"`): a
+  `model_exhausted` `cleared: true` entry for alpha and the further prompt on `scripted/alpha`. Before the repair the same
+  scenario failed at "alpha's exclusion cleared did not hold within 30000 ms" (load 1.0 to 1.7).
 
 ## Specs
 

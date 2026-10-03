@@ -9507,3 +9507,28 @@ built from the last assistant message that carried text, the child ends `failed`
 nothing, as now; the step's partial text or reasoning in the child's report; or the partial step handed to the
 continuation. A longer landing pushes back the ceiling REQ-CONFIG-113 calls hard, so either answer changes a requirement
 or a directive; neither is a repair.
+
+**OQ-197 — Does a write of the permission mode that leaves the file's value unchanged displace an unsaved Settings
+selection?** *(REQ-CONFIG-423, "for this one field the last write wins over an unsaved selection on this screen" and "a
+change to the same field made while Settings is open by any other surface … lands in that pending state"; REQ-CONFIG-420, a
+refresh never discards an edit in progress "with the single exception REQ-CONFIG-423 states for the permission-mode field,
+where a mode already applied to a live run displaces an unsaved selection"; REQ-CONFIG-288, the composer's control writes
+that key alone. Raised 2026-10-03 by the repair of
+[`fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md`](../defects/fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md)
+(fin13, bundle `fin13-settings-last-write-and-record-pointers`), as OQ-196, and renumbered OQ-197 at its merge of
+`origin/main` because the landing-grace question had taken OQ-196 meanwhile. Open.)*
+
+The screen learns of a write made elsewhere only from the reloaded snapshot main announces after it, and a snapshot carries
+values, not the writes that produced them. Settings holding an unsaved `plan` over a saved `ask`, the composer writing `ask`
+(the value the file already holds) yields a snapshot identical to the one a sign-in's reload yields; the two cannot be told
+apart on the screen. REQ-CONFIG-423's "last write" read literally would have the composer's `ask` displace `plan`; its
+"change to the same field" and REQ-CONFIG-420's "a mode already applied … displaces" read as a change of the value.
+
+**What the build proceeds under** (`rebasePending`, `packages/ui/src/settings/config-state.ts`): a change of the value. A
+reloaded snapshot whose permission mode differs from the one the screen last saved displaces the unsaved selection; one whose
+mode is unchanged keeps it, as every other field's edit is kept (REQ-CONFIG-420). The composer shows the file's mode in that
+case and Settings the unsaved selection until it is saved or discarded.
+
+**What a ruling decides.** Whether a write of the unchanged value must also displace the selection — which would need the
+announcement to name the key a `config.setField` wrote (a contract change on `config:changed`) — or whether the change
+reading stands.

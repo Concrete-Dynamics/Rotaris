@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-03**
 
+**Settings adopts a reload in one update of the whole form, and a permission mode written elsewhere wins (REQ-CONFIG-419,
+REQ-CONFIG-423; fin13).** The Settings hook holds the saved and pending values as one form (`SettingsForm`) and folds each
+`config:changed` through `adoptSnapshot`, so a second announcement in the same tick is rebased against what the first left;
+`rebasePending` lets a changed permission mode displace an unsaved selection. The **runtime view**'s Tier A paragraph says
+so. No package, edge, process, channel, command or store column changed.
+
 **One MCP discovery failure is one record on one line (REQ-MCP-048, PD-MONITOR-002; fin13).** `ToolDiscovery`'s
 REQ-MCP-048 warning carries the time, the project the run host launched (the new optional `DiscoverRequest.context`) and the
 detail with its lines joined by ` | `; `McpHost.prepare` logs a success only. `restated-facts.mjs` knows the run host's old

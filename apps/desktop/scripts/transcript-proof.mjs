@@ -110,8 +110,9 @@ async function launch(name, extra, timeoutMs = 240_000, electronArgs = []) {
   // can outlive it by a moment, and a session it held is refused to the next launch for as long as its pid answers
   // ("held by another run in this application (pid …)"). Measured 2026-09-28: the behaviour launch opened S1200 1.5 s after the invariance launch's main exited
   // and was refused by the run host that launch had left exiting. So each launch ends only when its children are gone.
-  // Since the repair of that window (`docs/defects/fixed/a-session-lock-outlives-…`) main ends its run host before it
-  // exits, so this wait finds the run host gone; it stays as the guard that says so if that ever stops being true.
+  // Since the repair of that window (recorded as
+  // `docs/defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`)
+  // main ends its run host before it exits, so this wait finds the run host gone; it stays as the guard that says so if that ever stops being true.
   const children = [...log.matchAll(/"process":"[a-z-]+","pid":(\d+)/g)].map((m) => Number(m[1]));
   const started = Date.now();
   const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -229,7 +230,7 @@ function plant(sid, total, opts = {}) {
   });
 }
 /**
- * docs/defects/live-rows-are-never-measured.md: one agent, a name too long for the 112 px role column, and a run
+ * docs/defects/fixed/live-rows-are-never-measured.md: one agent, a name too long for the 112 px role column, and a run
  * long enough that `.activity__segments` MUST wrap — with the last call still `running`, so the activity line is
  * LIVE. That combination is the one the pool used to position by `estimateHeight` for the whole time it was live,
  * drawing three wrapped lines into a 36 px allocation and through the row beneath it.
@@ -486,7 +487,7 @@ const behaviour = await launch('behaviour', {
 // REQ-CHAT-058 says heights are MEASURED rather than assumed, and the pool positions every slot from the prefix
 // sum of those heights. The property that makes the sum right is the one a reader actually sees: no two slots
 // overlap. This reads boxes rather than attributes, because a row drawn through another row is in the DOM,
-// focusable, carrying every identifier it should — and unreadable (docs/defects/live-rows-are-never-measured.md).
+// focusable, carrying every identifier it should — and unreadable (docs/defects/fixed/live-rows-are-never-measured.md).
 if (wanted('geometry')) {
   // One line, deliberately: the log reader's `capture: eval-at (\d+) (.*?) → (.*)$` cannot span newlines, and a
   // multi-line expression parses as no result at all rather than as an error.

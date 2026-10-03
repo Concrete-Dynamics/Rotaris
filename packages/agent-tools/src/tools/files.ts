@@ -338,9 +338,9 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
      * (WF1) had two children send `path` and `content` with no `operation`, be refused, and regenerate their
      * whole file: the schema they were sent names the field, but the sentence they acted on listed the
      * operations as verbs and never said they were the values of a required selector. REQ-TOOLS-135 names the
-     * selector `operation` and nothing fixes this wording (docs/defects/
-     * write-files-first-use-refusal-recurred-under-duress.md). The duress run after it still had 1 of 4 children omit
-     * the field; reading the selector from the call instead is a fourth REQ-TOOLS-032 repair, so it is OQ-139's.
+     * selector `operation` and nothing fixes this wording (recorded as
+     * docs/defects/write-files-first-use-refusal-recurred-under-duress.md). The duress run after it still had 1 of 4
+     * children omit the field; reading the selector from the call instead is a fourth REQ-TOOLS-032 repair, so it is OQ-139's.
      */
     description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path}. Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it.',
     schema: writeSchema,
@@ -388,8 +388,8 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
             // REQ-TOOLS-135 fixes this text. A 2026-09-22 extension added whether "this agent" had read the path,
             // and the read record cannot answer that: it is shared by every agent and run on the workspace root
             // (REQ-TOOLS-133, REQ-TOOLS-137), so a sibling's create read as the caller's own. Sibling collisions
-            // are PD-TOOLS-006's write scopes to prevent. The history is in docs/defects/fixed/
-            // the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md.
+            // are PD-TOOLS-006's write scopes to prevent. The history is in
+            // docs/defects/fixed/the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md.
             return errorObservation(`File already exists: ${rel}. Use 'overwrite' or 'edit'.`);
           }
           const content = a.content ?? '';

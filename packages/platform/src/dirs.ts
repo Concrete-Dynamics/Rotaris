@@ -39,9 +39,9 @@ export function resolveUserDirs(e: DirEnv = { platform: process.platform, env: p
       const local = e.env['LOCALAPPDATA'] ?? join(e.home, 'AppData', 'Local');
       // Both under the LOCAL profile: the roaming half is exactly what the requirement excludes.
       // REQ-CONFIG-001 spells the global configuration scope `%LOCALAPPDATA%\rotaris\rotaris\`; until 2026-09-29 this
-      // answered `rotaris\config`, a name the requirement never spells (repaired under R-067; `docs/defects/fixed/
-      // the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`). No earlier directory is
-      // adopted (REQ-STARTUP-145, REQ-CONFIG-058). The data directory is the sibling `rotaris\data`, so the two stay
+      // answered `rotaris\config`, a name the requirement never spells (repaired under R-067;
+      // `docs/defects/fixed/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`).
+      // No earlier directory is adopted (REQ-STARTUP-145, REQ-CONFIG-058). The data directory is the sibling `rotaris\data`, so the two stay
       // different directories (D-04).
       return { config: join(local, name, name), data: join(local, name, 'data') };
     }

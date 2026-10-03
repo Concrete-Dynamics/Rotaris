@@ -200,8 +200,8 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
 
 describe('line counts: a trailing newline ends the last line, it does not start another (REQ-TOOLS-134, REQ-TOOLS-135, REQ-CHAT-050)', () => {
   // Live run 2026-09-29 (L6): `probe-ok\n` was reported "2 line(s) created", its diff showed an empty line 2, and
-  // read_file said total_lines: 2 — the model spent a terminal call on `wc` to check. docs/defects/fixed/
-  // a-trailing-newline-counts-as-a-line.md.
+  // read_file said total_lines: 2 — the model spent a terminal call on `wc` to check.
+  // docs/defects/fixed/a-trailing-newline-counts-as-a-line.md.
   it('create, read, overwrite, undo and the diff count a newline-terminated file by its lines', async () => {
     const w = writeFileTool(state, fence);
     const c = await w.execute({ operation: 'create', path: 'probe.txt', content: 'probe-ok\n', replace_all: false }, ctx());

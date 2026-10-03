@@ -163,7 +163,7 @@ function markdownHeight(text: string, width: number): number {
 function estimateBox(d: Exclude<DisplayRow, { shape: 'trailer' }>, expanded: boolean, width: number): number {
   const main = width > GUTTER ? width - GUTTER : 0;
   // REQ-CHAT-057's attribution shares the row's height: `.row__role` wraps inside its 112 px column rather than
-  // truncating (docs/defects/role-gutter-truncation-rule-is-inert.md), so a long agent name costs a second line
+  // truncating (docs/defects/fixed/role-gutter-truncation-rule-is-inert.md), so a long agent name costs a second line
   // even when the main column needs only one.
   const role = (d.shape === 'group' ? d.role : d.row.name ?? '').toUpperCase();
   const roleLines = wrappedLines(role, ROLE_COLUMN, LABEL_CHARACTER);

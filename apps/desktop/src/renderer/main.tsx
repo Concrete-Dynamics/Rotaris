@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -639,8 +639,11 @@ interface AppearanceProps {
 /** ADR-0037: the pending settings state (destination 1), the save, the discard, the guard, and the live state handed to the run host. */
 function useConfiguration(workspace: string | null) {
   const [snapshot, setSnapshot] = useState<ConfigSnapshot | null>(null);
-  const [saved, setSaved] = useState<PendingSettings | null>(null);
-  const [pending, setPending] = useState<PendingSettings | null>(null);
+  // The saved and pending halves move in one update (`adoptSnapshot`), so a reload is rebased against the saved values the
+  // reload before it left, however close behind it arrives (REQ-CONFIG-419; `docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`).
+  const [form, setForm] = useState<SettingsForm | null>(null);
+  const saved = form?.saved ?? null;
+  const pending = form?.pending ?? null;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [guarding, setGuarding] = useState<{ resolve: (proceed: boolean) => void } | null>(null);
@@ -648,24 +651,22 @@ function useConfiguration(workspace: string | null) {
   // REQ-SHELL-041: the strip's `unsaved settings` flag, shown only while this screen holds unsaved edits.
   useEffect(() => { settingsUnsaved.setState({ dirty }); }, [dirty]);
   useEffect(() => () => { settingsUnsaved.setState({ dirty: false }); }, []);
-  const pendingRef = useRef<PendingSettings | null>(null);
-  useEffect(() => { pendingRef.current = pending; }, [pending]);
+  // Save reads both halves from one form, so the saved values it diffs against are the ones its pending values were
+  // rebased on (the pair an effect refreshes together; two refs refreshed apart are the shape REQ-CONFIG-419's repair removed).
+  const formRef = useRef<SettingsForm | null>(null);
+  useEffect(() => { formRef.current = form; }, [form]);
   // REQ-CONFIG-472: publish the pending caps for the transcript, and take them back down when the screen goes.
   useEffect(() => { pendingDisplay.setState({ caps: pending?.display ?? null }); }, [pending]);
   useEffect(() => () => { pendingDisplay.setState({ caps: null }); }, []);
   // REQ-CONFIG-419/425: a read repopulates from the file's values and marks the form clean; a change made elsewhere (the composer's write) lands in the pending state (decision 4 of the plan, REQ-CONFIG-423).
-  const savedRef = useRef<PendingSettings | null>(null);
-  useEffect(() => { savedRef.current = saved; }, [saved]);
   const adopt = useCallback((next: ConfigSnapshot, keepPending: boolean) => {
     setSnapshot(next);
     const fresh = pendingFrom(next);
-    const previous = savedRef.current;
-    setSaved(fresh);
     // A reload from elsewhere keeps only the fields the user changed (REQ-CONFIG-419/423); every other field takes the file's new value.
-    setPending((current) => (keepPending && current && previous ? rebasePending(previous, current, fresh) : fresh));
+    setForm((current) => adoptSnapshot(current, fresh, keepPending));
   }, []);
   const read = useCallback(async () => {
-    if (workspace === null) { setSnapshot(null); setSaved(null); setPending(null); return; }
+    if (workspace === null) { setSnapshot(null); setForm(null); return; }
     setLoading(true);
     const r = await bridge.command({ kind: 'config.read' });
     setLoading(false);
@@ -675,16 +676,18 @@ function useConfiguration(workspace: string | null) {
   useEffect(() => bridge.onConfigChanged((p) => { const payload = p as { snapshot: ConfigSnapshot }; adopt(payload.snapshot, true); }), [adopt]);
   // ADR-0037 Tier B: the screen's current values reach the run host on every change (REQ-CONFIG-262).
   useEffect(() => { if (pending) void bridge.command({ kind: 'config.liveState', state: liveStateOf(pending) }); }, [pending]);
-  const onChange = useCallback((change: PendingChange) => { setPending((current) => (current ? applyChange(current, change) : current)); }, []);
+  const onChange = useCallback((change: PendingChange) => {
+    setForm((current) => { if (!current) return current; const next = applyChange(current.pending, change); return next === current.pending ? current : { saved: current.saved, pending: next }; });
+  }, []);
   const onSave = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
-    const current = pendingRef.current;
-    if (!saved || !current) return { ok: false, reason: 'No configuration is loaded.' };
-    const r = await bridge.command({ kind: 'config.save', save: savePayload(saved, current) });
+    const current = formRef.current;
+    if (!current) return { ok: false, reason: 'No configuration is loaded.' };
+    const r = await bridge.command({ kind: 'config.save', save: savePayload(current.saved, current.pending) });
     if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
     adopt(r.value as ConfigSnapshot, false);
     return { ok: true };
-  }, [saved, adopt]);
-  const onDiscard = useCallback(() => { if (saved) setPending(saved); }, [saved]);
+  }, [adopt]);
+  const onDiscard = useCallback(() => { setForm((current) => (current ? { saved: current.saved, pending: current.saved } : current)); }, []);
   const onSetField = useCallback(async (scope: 'workspace' | 'global', patch: Record<string, unknown>): Promise<{ ok: true } | { ok: false; reason: string }> => {
     const r = await bridge.command({ kind: 'config.setField', scope, patch });
     return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };

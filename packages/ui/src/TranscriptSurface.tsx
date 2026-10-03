@@ -267,7 +267,8 @@ export function RowList({ rows, surface, acknowledge, trailers, displays: given,
     // `project.ts` keys a group `group:<first member's key>`, whose `group:` prefix no member key carries.
     // `expansionKey` stays the single definition of the SHAPE part, which is what keeps a group's identity
     // apart from its members' — the two carry the same string under REQ-CHAT-059 and would otherwise open
-    // together (docs/defects/…-does-not-lift-the-display-caps.md — moved to `fixed/` with the repair).
+    // together (recorded as
+    // docs/defects/fixed/expanding-a-member-of-an-activity-line-does-not-lift-the-display-caps.md).
     memberExpanded: (key) => expanded[expansionKey('row', key)] === true,
     toggleMember: (key) => toggle(expansionKey('row', key), false),
   }), [surface, expanded, toggle]);

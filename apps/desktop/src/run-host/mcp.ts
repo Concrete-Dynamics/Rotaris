@@ -112,7 +112,7 @@ function idleSetup(): McpSetupStatus {
  * decided"; REQ-WORKSPACE-091 then binds the indexing and memory stages to "a workspace classified
  * `non-code` (REQ-WORKSPACE-098)". So a workspace of `main.tf` and `deploy.sh` was indexed for 1800 s
  * under a set this domain does not own. Recorded as
- * `docs/defects/classification-decided-by-the-runtimes-extension-list.md`.
+ * `docs/defects/fixed/classification-decided-by-the-runtimes-extension-list.md`.
  */
 export function workspaceContainsCode(root: string, agentsFile: string): boolean {
   return classifyWorkspaceRoot(root, agentsFile) === 'code';

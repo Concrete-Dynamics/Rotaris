@@ -28,8 +28,9 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *   refused (`sandbox_unavailable`, 126) and the name is still absent afterwards.
  *
  * IC-8 is discharged only when the six effects have been run on a real macOS host AND a real Linux host,
- * so no run of this proof on one platform discharges it (`docs/defects/fixed/
- * sandbox-proof-asserts-the-windows-verdict-on-every-platform.md` is why the proof reads the host).
+ * so no run of this proof on one platform discharges it (the note
+ * `docs/defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md` is why the proof reads
+ * the host).
  */
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -178,7 +179,7 @@ results.verdict = verdictLine.slice(verdictLine.indexOf('confinement:')).trim();
  * 2. REQ-SANDBOX-130: the settings surface carries the plain disclosure with `sandbox_mode` at its
  *    shipped `off` default — WITHOUT the user having to select a confinement mode first — and
  *    REQ-SANDBOX-113's six controls are drawn where a sentence used to stand in for them
- *    (`docs/defects/settings-surface-refuses-the-six-security-keys.md`).
+ *    (`docs/defects/fixed/settings-surface-refuses-the-six-security-keys.md`).
  */
 const READ_SECURITY = `({
   disclosure: document.querySelector('[data-testid="confinement-disclosure"]')?.textContent ?? '',
@@ -215,9 +216,9 @@ results.settingsSurface = { disclosure: expected === 'outside' ? 'present with s
  *     and on the same condition: drawn only where no mechanism exists at all. Where a mechanism exists but is not
  *     usable (launcher missing, trial failed) the dialog carries that mechanism's own reason and remediation instead
  *     (REQ-SANDBOX-119), and where it is available, neither. The dialog drew the disclosure whenever confinement was
- *     not available until 2026-09-29 (`docs/defects/fixed/
- *     the-launch-dialog-draws-the-no-mechanism-disclosure-where-a-mechanism-exists.md`). The select's disabled state
- *     is read too: it says the verdict had arrived when the dialog was read, so an absent text is not a verdict not yet
+ *     not available until 2026-09-29 (recorded as
+ *     `docs/defects/fixed/the-launch-dialog-draws-the-no-mechanism-disclosure-where-a-mechanism-exists.md`).
+ *     The select's disabled state is read too: it says the verdict had arrived when the dialog was read, so an absent text is not a verdict not yet
  *     taken.
  */
 const READ_DIALOG = `({

@@ -173,7 +173,7 @@ export function reuseKey(
  * which is REQ-CHAT-058's rule and is right. Measurement has no such reason — the row is in the DOM with a real
  * height, and refusing to read it does not keep anything fresh, it throws away the only accurate number there
  * is. Sharing one key meant a running group was positioned by `estimateHeight` for its whole life and drew three
- * wrapped segment lines into a 36 px allocation (docs/defects/live-rows-are-never-measured.md).
+ * wrapped segment lines into a 36 px allocation (docs/defects/fixed/live-rows-are-never-measured.md).
  *
  * The identity is everything before the first `|`, which is what lets a layout recover "whatever this row last
  * measured" from a key whose content part has since changed — the streaming case, where every chunk mints a key.

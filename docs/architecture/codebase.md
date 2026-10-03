@@ -99,7 +99,10 @@ plain process with no React and the restore run against a fake run host with a c
   `CONTEXT-MAP.md`, `AGENTS.md`, `CLAUDE.md` or a `packages/**/CONTEXT.md` whose target file does not exist or
   whose `#fragment` names no heading or anchor in it; fenced and inline code and HTML comments are text, not links.
   A defect note moved to `docs/defects/fixed/` takes every link to it along in the same commit, or the gate says
-  which one stayed behind (since 2026-09-28, R-062).
+  which one stayed behind (since 2026-09-28, R-062). A second pass reads the code: a `docs/defects/….md` path in a
+  file under `apps/`, `packages/` or `tools/` — comment, test or a line a proof prints — must name a note that exists,
+  and be written whole on one line, since a path wrapped across a comment's lines or abbreviated with `…` is one no
+  pass can read (since 2026-10-03, fin13).
 - **No merge leaves a conflict marker behind** — `tools/check-conflict-markers.mjs` (in `pnpm lint`, after
   `check-line-endings.mjs`) reads every tracked text file in the working copy and the index, through `git grep`, and
   fails on a line git writes as a marker: seven `<`, `|` or `>` at column 0 followed by a space or the line's end, and

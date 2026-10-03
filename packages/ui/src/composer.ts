@@ -339,7 +339,7 @@ export function runHeaderControlReason(state: RunState): string | null {
  * **Its wording changed with it, and the reason is a disagreement between two requirements.** REQ-CHAT-007
  * leaves this text to the implementation; REQ-WORKSPACE-112 fixes it, word for word, and differently. The
  * more specific statement is followed — its text conveys both facts REQ-CHAT-007 requires — and the
- * disagreement is recorded at `docs/defects/two-requirements-fix-the-composer-setup-refusal-differently.md`
+ * disagreement is recorded at `docs/defects/fixed/two-requirements-fix-the-composer-setup-refusal-differently.md`
  * rather than settled here. The string itself lives in `contracts` beside the keyboard path's two, so the
  * gate and the error a submit raises cannot drift apart.
  */

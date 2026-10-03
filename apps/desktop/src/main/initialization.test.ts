@@ -1240,7 +1240,7 @@ describe('a setup whose finished status never arrives', () => {
 });
 
 /**
- * `docs/defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`: a documentation-only
+ * `docs/defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`: a documentation-only
  * workspace whose runtime marker is present skips every step without waiting, so the run host pushes the three steps and
  * the `finished` status before main's start request is answered. The coordinator installed its sink only once the start
  * answered, dropped every one of those pushes, drained the answer — every step done, its state still `running` — and

@@ -2,7 +2,7 @@
  * The harness's isolation, composed with the product's own resolution — on every platform, from
  * whichever platform is running the test.
  *
- * `docs/defects/proof-isolation-is-windows-only-so-a-driven-run-writes-the-users-real-data-directory.md`
+ * `docs/defects/fixed/proof-isolation-is-windows-only-so-a-driven-run-writes-the-users-real-data-directory.md`
  * recorded that a driven launch on Linux or macOS ignored the scratch profile and opened its workspace
  * databases under the operator's own `~/.local/share/rotaris/`. The repair names both variable pairs at
  * every launch, and its POSIX half was argued from `dirs.ts` reading exactly those variables rather than

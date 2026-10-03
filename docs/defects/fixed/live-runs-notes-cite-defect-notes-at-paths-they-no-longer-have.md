@@ -29,6 +29,6 @@ scenario's header — now name `docs/defects/fixed/…`, where the notes are. Pi
 `apps/desktop/scripts/lib/live-run-defect-citations.test.ts`, which reads every `docs/defects/…` path the script cites and
 requires each to exist; red before the repair, listing exactly the four. The same class of stale path in other scripts and
 in product code comments is outside this note and recorded separately
-([code-comments-cite-defect-notes-at-paths-they-no-longer-have.md](../code-comments-cite-defect-notes-at-paths-they-no-longer-have.md)).
+([code-comments-cite-defect-notes-at-paths-they-no-longer-have.md](code-comments-cite-defect-notes-at-paths-they-no-longer-have.md)).
 Not shown live (this plan runs no live scenario): `live-run --only=frictions` prints the two NOTE lines with the corrected
 paths.

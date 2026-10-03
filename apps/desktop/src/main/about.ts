@@ -19,9 +19,9 @@ export const BUILD_ID_ASSET = 'build-id.txt';
 /**
  * REQ-STARTUP-141 fixes the name, case included: `THIRD-PARTY-LICENSES.txt`. It was written in lower case until
  * 2026-09-27, which a case-insensitive filesystem forgives and a Linux one does not — the About page there would have
- * shown the absent caption beside a bundle that is present (`docs/defects/fixed/the-about-page-looks-for-the-licence-
- * bundle-under-a-lowercase-name.md`). The generator writes the same literal (`tools/notices/notices.mjs`, `NOTICES_FILE`),
- * and `about.test.ts` holds the two equal.
+ * shown the absent caption beside a bundle that is present (recorded as
+ * `docs/defects/fixed/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). The generator writes
+ * the same literal (`tools/notices/notices.mjs`, `NOTICES_FILE`), and `about.test.ts` holds the two equal.
  */
 export const THIRD_PARTY_LICENSES_ASSET = 'THIRD-PARTY-LICENSES.txt';
 

@@ -493,6 +493,31 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     });
   }
 
+  /**
+   * ROTARIS_CAPTURE_CONFIG_PAIR_AT="<patch JSON>>><patch JSON>@ms": two configuration writes made from elsewhere, landing
+   * together. Each patch goes through the renderer's own `config.setField`, one after the other, and main announces each
+   * reloaded snapshot as it announces every write; the window's `config:changed` deliveries are held while the two writes
+   * run and then handed over in one synchronous loop — two announcements in one tick, the arrival two quick writes (or a
+   * write and a sign-in's reload) can produce and a timed click never does. The snapshots are the real ones, in their real
+   * order; only their delivery is bunched (REQ-CONFIG-419, `docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`).
+   */
+  for (const step of steps(process.env['ROTARIS_CAPTURE_CONFIG_PAIR_AT'])) {
+    clocks.timers.after(millis(step.at), async () => {
+      const contents = win.webContents;
+      const send = contents.send.bind(contents);
+      const held: unknown[][] = [];
+      contents.send = (channel: string, ...args: unknown[]) => { if (channel === CHANNEL.configChanged) held.push(args); else send(channel, ...args); };
+      const written: boolean[] = [];
+      try {
+        for (const patch of [step.selector, step.arg ?? '{}']) written.push((await host.command({ kind: 'config.setField', patch: JSON.parse(patch) as unknown })).ok);
+      } finally {
+        contents.send = send;
+      }
+      for (const args of held) send(CHANNEL.configChanged, ...args);
+      log(`capture: config-pair-at ${step.at} → writes ${JSON.stringify(written)}, ${held.length} announcements delivered in one tick`);
+    });
+  }
+
   // ROTARIS_CAPTURE_RECONCILE_AT="ms;;ms": a whole read of the followed session at that time — one publication while a chosen
   // view is visible, for REQ-MONITOR-038's refresh measurement on a stored record.
   for (const step of steps(process.env['ROTARIS_CAPTURE_RECONCILE_AT'])) {

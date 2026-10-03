@@ -671,6 +671,12 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     // Every call after the choice — the child's, the summariser's and the root's — goes to c1; none returns to a1.
     expect(after.map((r) => `${who(r)} ${r.model.modelId}`)).toEqual(after.map((r) => `${who(r)} c1`));
     expect(new Set(after.map(who))).toEqual(new Set(['child', 'summariser', 'root']));
+    // REQ-MONITOR-052/066 (a-child-moved-by-a-fallback-is-drawn-on-its-configured-model): from the choice on, the live record
+    // draws the child on c1, the key chosen, while its row keeps the configured a1.
+    const drawn = pub.snapshots.flatMap((s) => s.agents.map((a) => a.model));
+    expect(drawn.slice(0, drawn.indexOf('c1'))).toEqual(drawn.slice(0, drawn.indexOf('c1')).map(() => 'a1'));
+    expect(drawn).toContain('c1');
+    expect(dal.childrenOf(sid)[0]!.model_key).toBe('a1');
   });
 
   /*
@@ -1044,6 +1050,79 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(last.entryModelKey).toBe('b1');
     release();
     expect((await sessions.running(sid)!).status).toBe('completed');
+  });
+
+  /*
+   * The repair of a-child-moved-by-a-fallback-is-drawn-on-its-configured-model (REQ-MONITOR-052/066/069, REQ-MONITOR-049):
+   * a delegated child's record names the key its own ladder cell runs on, and measures its context against that model's
+   * maximum input, while its run is live. Before: `toAgentRecord` read the configured `children.model_key` for both, so a
+   * child moved to b1 (or to its role's fallback f1) was drawn on a1, against a1's limit, while every call went elsewhere.
+   */
+  describe('REQ-MONITOR-052 / REQ-MONITOR-066 / REQ-MONITOR-049: a child moved by a fallback is drawn on the model it runs on', () => {
+    const childOf = (pub: ReturnType<typeof recorder>) => pub.snapshots.at(-1)?.agents[0] ?? null;
+    const delegateOnce = (child: (turn: number) => ScriptedCall) => (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]) : answer(`root ${turn}`);
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      return child(turn);
+    };
+
+    it('after a same-tier move on a quota answer the child is drawn on b1, against b1\'s limit, while its call on b1 is in flight', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const script = delegateOnce((turn) => (turn === 1 ? failing(quota()) : { parts: [{ hold: held }, ...answer('I did it.').parts] }));
+      const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 600_000, inputLimits: { a1: 1000, b1: 5000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      const childCalls = () => client.requests.filter((r) => !/^You are the orchestrator|summarise/i.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? ''));
+      for (let i = 0; i < 80 && childCalls().length < 2; i++) await tick();
+      expect(childCalls().map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+      clock.advance(200);
+      await tick();
+      const child = childOf(pub)!;
+      expect(dal.childrenOf(sid)[0]!.model_key).toBe('a1');
+      expect(child.live).toBe(true);
+      expect(child.model).toBe('b1');
+      expect(child.contextLimit).toBe(5000);
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+    });
+
+    it('after REQ-ORCH-088\'s timeout fallback the child is drawn on its role\'s fallback, against that model\'s limit, while the retry runs', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const script = delegateOnce((turn) => (turn === 1 ? hanging(NEVER) : { parts: [{ hold: held }, ...answer('I did it on the fallback.').parts] }));
+      const { sessions, client, pub } = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true, inputLimits: { a1: 1000, f1: 7000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(dal.childrenOf(sid)[0]!.state).toBe('running');
+      clock.advance(10_000);
+      await tick();
+      clock.advance(30_000);
+      const childCalls = () => client.requests.filter((r) => !/^You are the orchestrator|summarise/i.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? ''));
+      for (let i = 0; i < 80 && childCalls().length < 2; i++) await tick();
+      expect(childCalls().map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
+      clock.advance(200);
+      await tick();
+      const child = childOf(pub)!;
+      expect(child.live).toBe(true);
+      expect(child.model).toBe('f1');
+      expect(child.contextLimit).toBe(7000);
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // At rest the record names the configured key again, as the run-level agent's does (no live cell to read).
+      expect(dal.childrenOf(sid)[0]!.model_key).toBe('a1');
+    });
+
+    it('a child that never moves is drawn on its configured key throughout', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      const { sessions, pub } = sessionsWith(delegateOnce(() => answer('I did it.')), { catalogue, delegation: true, childTimeoutMs: 600_000, inputLimits: { a1: 1000, b1: 5000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const drawn = pub.snapshots.flatMap((s) => s.agents.map((a) => a.model));
+      expect(drawn.length).toBeGreaterThan(0);
+      expect(new Set(drawn)).toEqual(new Set(['a1']));
+    });
   });
 
   describe('PD-MONITOR-001 revision 2: a request is priced at the ladder cell, by the model it was sent to', () => {

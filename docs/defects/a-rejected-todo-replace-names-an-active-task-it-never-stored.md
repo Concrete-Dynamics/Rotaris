@@ -47,3 +47,11 @@ What the refusal should say when no task is active is not stated by REQ-TOOLS-14
   its minted id and returns before `list.phases` is replaced, so nothing of the list is stored.
 - `packages/agent-tools/src/tools/todo.ts:133-138` — the other rejection, REQ-TOOLS-146's case, which names a stored
   active task.
+
+Observed again at origin/main 1763f7f (live run 2026-10-03), in the `edit` scenario of the default pack
+(`.live-run/runs/2026-10-03T05-56-27-364Z/` of the `accept` worktree, git-ignored; the self-hosted `katalyst` endpoint),
+session `4e1ed99c`: #6 (05:57:28.968) was a `replace` marking two tasks `IN_PROGRESS` and got "Only one task can be
+IN_PROGRESS at a time. Active task: e6482926 (Implement clearCompleted in src/todos.js). …", an id the rejection never
+stored; #13 `update 71a2b58c PENDING` was refused "Unknown task id '71a2b58c'. Available phases: (none)"; row 23 reads
+"The replace failed entirely? … so maybe nothing was applied"; #17 re-issued the replace and it succeeded. Cost: two
+failed calls, two `tool_error` issues, about 10 s. No code changed: the note waits on the owner's ruling.

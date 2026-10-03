@@ -104,3 +104,12 @@ The header half is repaired; the rest stays open under [OQ-162](../architecture/
   "Intent: small_feature". The harness takes no screenshot while the Continue's classification is in flight, so the
   `classifying` status in that window is shown by the test alone, not in the built app.
 
+
+Observed again at origin/main 1763f7f (live run 2026-10-03), in the `resume` scenario of the default pack
+(`.live-run/runs/2026-10-03T05-56-27-364Z/` of the `accept` worktree, git-ignored; the self-hosted `katalyst` endpoint),
+session `0aa37938`: the launch's classification (traffic #0, 11,964 ms) and the Continue's (traffic #5, from
+06:01:36.629, 11,996 ms) each ran to the 12 s bound and were aborted; timeline #10 (06:01:48.629) records
+`carried_over: true`, `moderate_feature`, and the resumed iteration began at 06:01:48.644, so the classification added
+12.0 s to the Continue's critical path. The widening half was not exercised: 24 tools before (traffic #2) and 24 after
+(traffic #8), and no `resumed_under_changed_instructions` issue. The header half holds: `resume.png` reads "Intent:
+moderate_feature (continued from the previous run)". No code changed: the note waits on the owner's ruling.

@@ -81,6 +81,17 @@ describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the render
     expect(text).toContain('const circuitBreakerArmed = stripCircuitBreakerArmed(stripConfig?.circuitBreakerEnabled, circuitBreakerAtBoot, circuitBreakerHostOff);');
     expect(text).toMatch(/safety: \{ circuitBreakerArmed, /);
   });
+
+  // REQ-TOOLS-184 ("never redraws when nothing it displays has changed"): the status memo depends on the focused session's
+  // two displayed primitives, not the whole record, which every replica update replaces.
+  it('main.tsx memoises the strip on the focused session\'s mode and background count, never the whole record', () => {
+    const text = source('main.tsx');
+    const memo = /const status = useMemo<readonly StatusItem\[\]>\([\s\S]*?\n {4}\[([^\]]*)\],\n {2}\);/.exec(text);
+    expect(memo).not.toBeNull();
+    const deps = memo![1]!.split(',').map((d) => d.trim());
+    expect(deps).toEqual(expect.arrayContaining(['focusedMode', 'backgroundSessions']));
+    expect(deps).not.toContain('session');
+  });
 });
 
 /*

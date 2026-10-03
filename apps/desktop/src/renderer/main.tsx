@@ -1259,6 +1259,10 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
   // REQ-SHELL-047: the window's width decides which items are shown — read as its band, so a resize that crosses no
   // threshold rebuilds nothing (REQ-TOOLS-184).
   const windowWidth = stripWidthBand(useWindowWidth());
+  // REQ-TOOLS-184: the memo depends on the two primitives of the focused session it shows, never the whole record, so a
+  // replica update that changes nothing the strip displays rebuilds nothing.
+  const focusedMode = session?.permissionMode ?? null;
+  const backgroundSessions = session?.backgroundSessions ?? 0;
   const status = useMemo<readonly StatusItem[]>(
     () => stripItems(windowWidth, {
       // REQ-SHELL-038/039/040: the workspace path, as the title-bar chip shortens it, a link to the folder.
@@ -1267,16 +1271,16 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
       branch: { text: branchItem.text, title: branchItem.title, state: branchItem.state },
       // REQ-SHELL-041 / REQ-TOOLS-184: text, never colour alone. With no session focused the mode is the configured preset
       // the next run starts from, never a literal (live-run finding L7).
-      safety: { circuitBreakerArmed, unsavedSettings, outsideWorkspace, mode: statusStripModeItem(session?.permissionMode ?? null, configuredMode) },
+      safety: { circuitBreakerArmed, unsavedSettings, outsideWorkspace, mode: statusStripModeItem(focusedMode, configuredMode) },
       // REQ-SANDBOX-121: beside the file-access flag, the OS confinement the focused session's run had (OQ-184).
       sandbox: sandboxItem,
       // REQ-SHELL-043: the composer's model chip's own words, and the model it names in the tooltip, so the two never differ.
       model: stripModelItem(modelChipLabel(modelsLoaded, models, stripModel || null)),
       tokens: usage.tokens,
       cost: usage.cost,
-      backgroundSessions: session?.backgroundSessions ?? 0,
+      backgroundSessions,
     }),
-    [windowWidth, workspace, home, branchItem, circuitBreakerArmed, unsavedSettings, outsideWorkspace, session, configuredMode, sandboxItem, stripModel, modelsLoaded, models, usage],
+    [windowWidth, workspace, home, branchItem, circuitBreakerArmed, unsavedSettings, outsideWorkspace, focusedMode, backgroundSessions, configuredMode, sandboxItem, stripModel, modelsLoaded, models, usage],
   );
   // Part W: Ctrl+L (REQ-CHAT-002) and every other chord of REQ-SHELL-049 are the command registry's, bound once by the
   // shell's `useCommandShortcuts`; the Ctrl+L effect that lived here is gone. ADR-0048's application modality: the palette

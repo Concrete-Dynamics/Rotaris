@@ -1732,6 +1732,10 @@ export class Run {
           children.closeGivenUpOn();
         }
       }
+      // REQ-ORCH-053 / REQ-ORCH-098: the iteration's children are torn down — finalized, or paused by the rest — so their
+      // scheduler is closed: a child execution settling after this runs no pass against a store that may be closed by then
+      // (the repair of a-childs-closing-scheduler-pass-can-outlive-the-run-that-awaited-it).
+      children?.close();
       // A root given up on, or whose turn raised, that no rest paused — the explicit cancel, an iteration that closes
       // failed — still leaves no call row running (REQ-SESSION-129): its open call is recorded cut off, naming no rest
       // (OQ-96, "A call cut by no rest").

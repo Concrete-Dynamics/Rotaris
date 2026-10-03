@@ -26,6 +26,27 @@ driven; by reading it needs post-settle asynchronous work in the child's executi
 gave up on is one). The repair owed: the scheduler closed at the iteration's teardown, after which the pass returns at once,
 and the pass in the unawaited `.finally` guarded so a raise is warned and never rejects.
 
+## Outcome — repaired 2026-10-03 (fin11)
+
+- **The scheduler is closed at the iteration's teardown.** `Scheduler.close` (`packages/engine/src/children/scheduler.ts`)
+  marks it closed and releases every waiter; `pass` then returns at once, and `waitFor` resolves. `IterationChildren.close`
+  (`packages/engine/src/children/orchestration.ts`) closes it, and `Run.turn` (`packages/engine/src/run/run.ts`) calls that
+  once the iteration's children are torn down — finalized (REQ-ORCH-052) or paused by a rest (PD-ORCH-005 clause 2) — so a
+  child's execution settling after the run's end reads no store.
+- **The unawaited pass can never reject.** `startOne`'s `.finally` wraps the pass in a try/catch that warns through
+  `deps.warn` ("the scheduler's pass after child … raised: …"), so a store closed under a scheduler nobody closed is a
+  warning, not an unhandled rejection that would end the run host.
+- **Pinned** by two cases in `packages/engine/src/children/children.test.ts` ("a child's closing pass and a closed store"),
+  against a real store closed while the child's execution is still pending: without `close()`, the pass's raise is warned
+  once and no unhandled rejection is seen (before the repair: one, `TypeError: The database connection is not open`); after
+  `close()`, the pass reads the ledger not at all and warns nothing.
+- **The clause 6 case** passes with an extra await before the turn's compression check (`settleBeforeCall` awaited
+  unconditionally, tried on this branch and reverted). That variant did not reproduce the original unhandled rejection on
+  this branch without the repair either — the timing it depended on has moved since — so the new cases, which close the store
+  deterministically, are the reproduction.
+- **No proof**: nothing observable changes except the run host surviving a store closed just after a run with children; the
+  gate is the evidence. Whether a child's execution can settle after such a close in the product was not driven.
+
 ## Specs
 
 None contradicted directly. REQ-ORCH-053 and REQ-ORCH-098 (a child settled and torn down) say nothing of when the

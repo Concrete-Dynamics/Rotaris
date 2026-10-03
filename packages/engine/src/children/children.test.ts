@@ -310,6 +310,54 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
     sched.pass();
     expect(warnings.filter((w) => /quiescence/.test(w))).toHaveLength(0);
   });
+
+  /*
+   * The repair of a-childs-closing-scheduler-pass-can-outlive-the-run-that-awaited-it (REQ-ORCH-053, REQ-ORCH-098): the pass
+   * that follows a child's end runs in an unawaited `.finally`, and reads the ledger. A child whose execution settles after
+   * the store was closed — at quit, or while the run host lives (`workspace.closeStore` before a backup or a restore,
+   * `workspace.closing`) — made that pass raise "The database connection is not open" as an unhandled rejection, which ends
+   * a process with no handler for one (the run host installs none).
+   */
+  describe('a child\'s closing pass and a closed store', () => {
+    const settlingAfterClose = (closeFirst: boolean) => async () => {
+      const rejections: unknown[] = [];
+      const onRejection = (e: unknown) => { rejections.push(e); };
+      process.on('unhandledRejection', onRejection);
+      try {
+        const l = ledger();
+        let finish!: () => void;
+        const execution = new Promise<void>((r) => { finish = r; });
+        let reads = 0;
+        const counted = new Proxy(l, { get: (t, p, r) => { if (p === 'all') reads += 1; const v = Reflect.get(t, p, r) as unknown; return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(t) : v; } });
+        const sched = new Scheduler({ ledger: counted, runChild: () => execution, warn: (m) => warnings.push(m) });
+        const a = spawn(l, 'a'); const idA = a.ok ? a.value.row.task_id : '';
+        sched.pass();
+        expect(dal.getChild(sid, idA)!.state).toBe('starting');
+        // The run's teardown of the iteration's children (`IterationChildren.close`), then the store closes under it.
+        if (closeFirst) sched.close();
+        const readsAtClose = reads;
+        dal.db.close();
+        finish();
+        await new Promise((r) => setTimeout(r, 20));
+        expect(rejections).toEqual([]);
+        if (closeFirst) {
+          // Closed: the follow-up pass returns at once — no ledger read, nothing warned.
+          expect(reads).toBe(readsAtClose);
+          expect(warnings).toEqual([]);
+        } else {
+          // Never closed: the pass raises on the closed store, and the raise is warned once instead of rejecting.
+          expect(warnings).toHaveLength(1);
+          expect(warnings[0]).toMatch(/the scheduler's pass after child .* raised: .*not open/i);
+        }
+      } finally {
+        process.off('unhandledRejection', onRejection);
+        // The suite's afterEach closes the store it finds: give it an open one.
+        dal = new StoreDal(openStore(join(dir, 'workspace.db')));
+      }
+    };
+    it('a pass the store closed under raises nothing unhandled: it is warned, once', settlingAfterClose(false));
+    it('after `close()`, the pass that follows a child\'s end returns at once and reads nothing', settlingAfterClose(true));
+  });
 });
 
 describe('an iteration with children, end to end against the run (REQ-ORCH-055..060, 072, 080, 088, 108..112, REQ-TOOLS-152..156)', () => {

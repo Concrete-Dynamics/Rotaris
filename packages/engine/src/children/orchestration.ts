@@ -634,6 +634,15 @@ export class IterationChildren implements DelegationOps {
   }
 
   /**
+   * REQ-ORCH-053 / REQ-ORCH-098: the run's teardown of this iteration's children is over — finalized, or left paused by a
+   * rest — so the scheduler is closed (`Scheduler.close`): a child's execution that settles later runs no pass against a
+   * store that may be closed by then. Called by `Run` once per iteration, after the teardown; idempotent.
+   */
+  close(): void {
+    this.scheduler.close();
+  }
+
+  /**
    * PD-ORCH-005 clauses 2 and 3: every agent of the iteration that has not reached a terminal state is left `paused` with
    * `cause` recorded. The children executing come to rest themselves, each in its own execution (its in-flight calls
    * finish or are cut at the deadline, and it stops before its next model step); this waits for all of them, then pauses

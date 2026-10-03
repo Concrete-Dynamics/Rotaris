@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-03**
 
+**A child's closing scheduler pass cannot outlive its store (REQ-ORCH-053, REQ-ORCH-098; fin11).** `Scheduler.close`, called
+through `IterationChildren.close` by `Run.turn` once the iteration's children are torn down, stops every later pass; the pass
+in `startOne`'s unawaited `.finally` warns a raise instead of rejecting. The **runtime view**'s teardown paragraph says so. No
+package, edge, process, channel, command or store column changed.
+
 **A selector's shown excluded key can be chosen there (REQ-MONITOR-194; fin11).** `SearchableOption.rechoosable` and
 `choiceFires` in the design system's searchable select; `annotatedModelOptions` marks each excluded key; the inspector's
 guard lets the shown key through when it is excluded. The **process view**'s `SessionRecord` sentence says so. No package,

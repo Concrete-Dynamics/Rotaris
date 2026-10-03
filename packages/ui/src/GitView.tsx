@@ -117,14 +117,14 @@ export function effectivePicked(entries: readonly SessionListItemPayload[], pick
  * workspace's checked-out branch with `↑<n>` when ahead; a detached checkout and a non-repository are each conveyed
  * in words distinct from a branch name and from each other; an unread repository takes the empty value.
  */
-export function branchStripItem(state: GitViewState | null, focusedWorktreeBranch: string | null): { text: string; title: string; state: 'branch' | 'detached' | 'none' | 'unknown' } {
+export function branchStripItem(state: GitViewState | null, focusedWorktreeBranch: string | null): { text: string; suffix?: string; title: string; state: 'branch' | 'detached' | 'none' | 'unknown' } {
   if (focusedWorktreeBranch !== null) return { text: focusedWorktreeBranch, title: `Branch this session's worktree is on: ${focusedWorktreeBranch}`, state: 'branch' };
   if (state === null) return { text: '—', title: 'Branch this workspace is on: not read yet', state: 'unknown' };
   if (!state.isRepository) return { text: state.gitAvailable ? 'no git repository' : 'no git', title: state.gitAvailable ? 'This folder is not a Git repository.' : 'Git is not installed or not on PATH.', state: 'none' };
   if (state.detached) return { text: 'detached HEAD', title: 'This workspace is on no branch (detached HEAD).', state: 'detached' };
   const branch = state.branch ?? '—';
-  const ahead = state.ahead > 0 ? ` ↑${state.ahead}` : '';
-  return { text: `${branch}${ahead}`, title: `Branch this workspace is on: ${branch}${state.ahead > 0 ? `, ${state.ahead} commit${state.ahead === 1 ? '' : 's'} ahead` : ''}`, state: 'branch' };
+  // REQ-WORKSPACE-149 rule 2 shortens the branch NAME; the ` ↑{n}` marker is drawn after it, whole (`suffix`).
+  return { text: branch, ...(state.ahead > 0 ? { suffix: ` ↑${state.ahead}` } : {}), title: `Branch this workspace is on: ${branch}${state.ahead > 0 ? `, ${state.ahead} commit${state.ahead === 1 ? '' : 's'} ahead` : ''}`, state: 'branch' };
 }
 
 const NO_ROWS: readonly GitWorktreeRow[] = [];

@@ -45,6 +45,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-03**
 
+**The status strip's path link and branch item are shortened from the middle against their measured width (REQ-WORKSPACE-149
+rule 2; fin11).** `StatusStripItem` draws every strip item; one marked `middle` asks the row for its whole label and re-elides
+on resize (seams §8, the status-strip item).
+
 **A persona or terminal window's commands answer for the main window that owns it (REQ-MONITOR-069, REQ-STARTUP-163;
 fin11).** `runCommand` resolves its window through `MainWindows.forCommand` — the sender's main window, else the owner of
 the auxiliary window that sent it, else the active window (process view, main's row; seams §1).

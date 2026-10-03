@@ -1444,6 +1444,16 @@
    sentence gives way, and it keeps its full text in its tooltip (REQ-SHELL-038). */
 .status-strip__item { white-space: nowrap; flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; }
 .status-strip__item[data-elide='1'] { flex: 0 1 auto; min-width: var(--rt-space-12); }
+/* REQ-WORKSPACE-149 rule 2: the path link and the branch item are shortened from the MIDDLE, not at their end. The item asks
+   the row for its whole label (`--status-strip-label-basis`, measured by StatusStripItem.tsx) and may be shrunk to nothing;
+   the label inside is re-elided against what the item was given, and hidden rather than clipped where `…` cannot fit, so
+   no end ellipsis is drawn (`text-overflow: clip`). Border-box, so the measured basis is the whole box. */
+.status-strip__item[data-middle='1'] {
+  display: inline-flex; align-items: center; gap: var(--rt-space-1);
+  flex: 0 1 var(--status-strip-label-basis, auto); min-width: 0; box-sizing: border-box; text-overflow: clip;
+}
+.status-strip__label { white-space: nowrap; overflow: hidden; }
+.status-strip__suffix { flex: none; white-space: nowrap; }
 /* REQ-SHELL-038's spacer between the branch and the safety flags: it takes the slack and gives it back first. */
 .status-strip__spacer { flex: 1 1 0; min-width: 0; }
 .status-strip__item[data-figure='1'] { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); }

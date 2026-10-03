@@ -105,7 +105,7 @@ describe('REQ-SHELL-038/047: the status strip, item by item', () => {
   const opened: string[] = [];
   const facts = (over: Partial<StripFacts> = {}): StripFacts => ({
     workspace: { label: '~/work/rotaris', path: '/home/u/work/rotaris', open: () => { opened.push('folder'); } },
-    branch: { text: 'main ↑1', title: 'Branch this workspace is on: main, 1 commit ahead.' },
+    branch: { text: 'main', suffix: ' ↑1', title: 'Branch this workspace is on: main, 1 commit ahead.', state: 'branch' },
     safety: { circuitBreakerArmed: true, unsavedSettings: false, outsideWorkspace: false, mode: 'mode: ask' },
     sandbox: statusStripSandboxItem({ sandboxed: true, sandboxBackend: 'bubblewrap' }),
     model: { name: 'scripted', label: 'model: scripted' },
@@ -114,7 +114,7 @@ describe('REQ-SHELL-038/047: the status strip, item by item', () => {
     backgroundSessions: 3,
     ...over,
   });
-  const texts = (items: readonly StripItem[]) => items.map((i) => (i.kind === 'spacer' ? '|' : i.text));
+  const texts = (items: readonly StripItem[]) => items.map((i) => (i.kind === 'spacer' ? '|' : `${i.text}${i.kind === 'text' ? i.suffix ?? '' : ''}`));
   const named = (items: readonly StripItem[], name: string) => items.filter((i): i is Exclude<StripItem, { kind: 'spacer' }> => i.kind !== 'spacer' && i.name === name);
 
   it('draws REQ-SHELL-038\'s items left to right, with the sandbox indicator after the file-access flag (OQ-184), at full width', () => {
@@ -124,6 +124,16 @@ describe('REQ-SHELL-038/047: the status strip, item by item', () => {
     ]);
     // Nothing REQ-SHELL-038 does not list: no run state, theme, child service or replica counter.
     expect(texts(stripItems(1400, facts())).some((t) => /^run |rotaris-dim|svc:|applied \d/.test(t))).toBe(false);
+  });
+
+  it('shortens exactly the path link and the branch item from the middle (REQ-WORKSPACE-149 rule 2), the ahead marker never shortened', () => {
+    const items = stripItems(1400, facts());
+    const middle = items.flatMap((i) => (i.kind !== 'spacer' && i.middle === true ? [i.testId] : []));
+    expect(middle).toEqual(['strip-workspace', 'strip-branch']);
+    const branch = items.find((i) => i.kind === 'text' && i.testId === 'strip-branch');
+    expect(branch).toMatchObject({ text: 'main', suffix: ' ↑1' });
+    // The tooltip and the description carry the full path, however the label is shortened.
+    expect(items.find((i) => i.kind === 'link')).toMatchObject({ text: '~/work/rotaris', title: 'Workspace folder: /home/u/work/rotaris. Opens it in your file manager.' });
   });
 
   it('gives every item REQ-SHELL-038\'s accessible name, and exactly the workspace path is a link (REQ-SHELL-039/040)', () => {

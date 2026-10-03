@@ -84,7 +84,7 @@ with `allow_outside_workspace: true` the flag read `outside-workspace!`; an unsa
 the path link on this host (no `xdg-open`) raised "The workspace folder could not be opened" naming the path after 5 s.
 
 Noticed while building and recorded, not repaired:
-[the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md](../the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md),
+[the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md](the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md),
 [the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md](../the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md).
 
 **Repair round, 2026-10-03 (the verifier's two findings against this repair).** Two flags still did not follow the

@@ -3,6 +3,7 @@ import { PRIMARY_VIEWS, type Notice, type NoticeAction, type ViewId } from '@rot
 import type { AcknowledgementStore } from '@rotaris/ui-core';
 import { NavRail } from './NavRail.js';
 import { WorkspaceChip } from './WorkspaceChip.js';
+import { StatusStripItem } from './StatusStripItem.js';
 import { useShellState } from './shell-state.js';
 import { Acknowledgements } from './Acknowledgements.js';
 import { NoticeBanner } from './Notice.js';
@@ -184,12 +185,11 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
       <footer className="status-strip" aria-label="Status" aria-description="An item too long for the strip is shortened with an ellipsis and keeps its full text in its tooltip." tabIndex={0} {...layoutContractAttributes(SHELL_LAYOUT.status)}>
         {/* REQ-SHELL-038: an item that elides keeps its full text in the tooltip — so every item carries one (UIR-001).
             REQ-SHELL-039: the workspace path is the one link (its own focus stop, click or Return); every other item is inert
-            text exposed with its accessible name and its tooltip sentence as its description (REQ-SHELL-058). */}
+            text exposed with its accessible name and its tooltip sentence as its description (REQ-SHELL-058). The path link and the
+            branch item are shortened from the middle against their measured width (REQ-WORKSPACE-149 rule 2, StatusStripItem.tsx). */}
         {statusItems.map((s, i) => (s.kind === 'spacer'
           ? <span key={`spacer-${i}`} className="status-strip__spacer" aria-hidden="true" />
-          : s.kind === 'link'
-            ? <DesignButton key={s.testId} type="button" className="btn btn-link status-strip__item status-strip__link" data-elide={s.text.length > 28 ? '1' : undefined} aria-label={s.name} aria-description={s.title} title={s.title} data-testid={s.testId} onClick={s.onActivate}>{s.text}</DesignButton>
-            : <span key={s.testId} className="status-strip__item" data-elide={s.text.length > 28 ? '1' : undefined} aria-label={s.name} aria-description={s.title} title={s.title} data-branch-state={s.state} data-figure={s.figure ? '1' : undefined} data-strong={s.strong ? '1' : undefined} data-testid={s.testId}>{s.text}</span>
+          : <StatusStripItem key={s.testId} item={s} />
         ))}
       </footer>
       {acknowledgements && <Acknowledgements store={acknowledgements} />}

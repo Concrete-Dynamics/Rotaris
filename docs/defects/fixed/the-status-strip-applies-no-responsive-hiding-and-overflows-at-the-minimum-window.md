@@ -107,3 +107,10 @@ configuration the file-access flag had been made to read:
   priced, drawing `0.00 cost` before any usage (REQ-SHELL-045); `workspaceUsage` now counts a row's cost only once it
   reported usage (`workspace-usage.test.ts`, red before). And the strip memoises on its REQ-SHELL-047 band
   (`stripWidthBand`), so a resize that crosses no threshold rebuilds nothing (REQ-TOOLS-184; `composer.test.ts`).
+
+Shown in the built app with `pnpm app:drive` on 2026-10-03 at 00:36 UTC (load 2.70): window A on one scratch workspace
+and, by `workspace.choose {newWindow: true}`, window B on another, both reading `● CB armed | redaction: always on |
+workspace-scoped`. The product's own `config.setField {circuit_breaker: {enabled: false}, runtime: {allow_outside_workspace:
+true}}` sent from window A wrote A's `agents.yaml`; A's strip then read `redaction: always on | outside-workspace!` (no
+breaker flag) and B's was unchanged (`● CB armed | redaction: always on | workspace-scoped`). Setting `enabled: true` again
+from A brought `● CB armed` back in A; the opt-out written from B turned B's flag to `outside-workspace!`.

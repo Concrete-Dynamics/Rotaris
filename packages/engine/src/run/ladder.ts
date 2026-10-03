@@ -70,6 +70,13 @@ export interface TurnResilience {
    * (the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback). Absent for a child.
    */
   readonly switchPending?: (() => boolean) | undefined;
+  /**
+   * REQ-MONITOR-052/066 with REQ-MONITOR-049: the cell's model changed — a move to a same-tier candidate or a fallback, an
+   * override followed, a model chosen during a wait — with no save behind it, so the run republishes the record and the
+   * surfaces name the model the agent now calls (`SessionRecord.entryModelKey`) and measure its limit (`entryContext`) before
+   * the next call returns. Absent means nobody is told.
+   */
+  readonly moved?: (() => void) | undefined;
 }
 
 /** REQ-ORCH-093: at most twice for one call. */
@@ -138,6 +145,7 @@ function followOverride(r: TurnResilience): void {
   if (sameRef(followed.model, cell.model.model)) return;
   cell.attempted.add(pairKey(providerIdentity(catalogue, cell.model.model), cell.model.model.modelId));
   cell.model = withSettings(catalogue, followed);
+  r.moved?.();
 }
 
 export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (choice: ModelChoice, unresponsiveMs: number | null) => Promise<StepOutcome>, signal: AbortSignal): Promise<TurnReport> {
@@ -179,6 +187,7 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
       deps.warn(message);
       cell.attempted.add(pairKey(provider, modelId));
       cell.model = withSettings(catalogue, fb);
+      r.moved?.();
       continue;
     }
     if (report.status !== 'failed' || signal.aborted) return report;
@@ -302,6 +311,7 @@ async function limitPath(deps: LadderDeps, r: TurnResilience, signal: AbortSigna
       writer.recordIssue({ kind: 'quota_fallback', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${candidate.provider}/${candidate.model.modelId}`, provider_exhausted: exhausted, condition: cls, ...preCallMeta } });
       deps.warn(message);
       cell.model = withSettings(catalogue, { model: candidate.model, thinking: candidate.thinking });
+      r.moved?.();
       return null;
     }
   }
@@ -322,6 +332,7 @@ async function limitPath(deps: LadderDeps, r: TurnResilience, signal: AbortSigna
   if (decision.kind === 'model') {
     cell.attempted.add(pairKey(provider, modelId));
     cell.model = withSettings(catalogue, decision.choice);
+    r.moved?.();
     return null;
   }
   // Auto-resume: retry the same model — unless a pause released the wait, which the loop's top ends the step on.

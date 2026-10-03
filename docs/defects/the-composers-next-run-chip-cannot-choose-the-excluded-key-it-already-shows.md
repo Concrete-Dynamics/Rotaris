@@ -10,7 +10,7 @@ configuration twice. During a run the key stays choosable from the run header an
 **Amended 2026-10-03 (fin11's triage, before the repair).** The sentence above said the key stays choosable from the
 inspector during a run too. It does not when the inspector shows the excluded key — and it does show it, the configured key,
 while the root runs on the same-tier candidate
-([`the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md`](the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md)):
+([`fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md`](fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md), repaired since: the inspector names the live key, beta, during a run):
 its handler drops a choice equal to its current value (`v !== currentModel`), and the searchable select fires nothing for one.
 Also, the chip is no native select since the searchable picker (`DesignSearchableSelect`): the same-value suppression is the
 control's own (`searchable-select.tsx`'s `choose`, "Value discipline is the native select's").

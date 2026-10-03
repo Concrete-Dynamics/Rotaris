@@ -195,7 +195,9 @@ it runs on, derived at every snapshot from the run's catalogue and the session's
 process has started, from its workspace's catalogue read once where its timeline holds an override, through the
 side-effect-free `SessionsDeps.restingCatalogue` port (the run host's `restingCatalogueOf`: the load, the live overlay and
 the snapshot fold, never the per-run `configure` with its MCP configuration load and run maps), against a memory of its own
-(`Sessions.modelOverridesOf`) — so the composer's model chip and the inspector name what the next run starts with. The record's `wait` carries `excluded`
+(`Sessions.modelOverridesOf`) — so the composer's model chip names what the next run starts with, as the inspector does at
+rest; while a run is live the run-level agent's Model names **`entryModelKey`** instead (since 2026-10-03, REQ-MONITOR-052/066):
+the key the live root's ladder cell runs on (`Run.entryModelKey`), null with no live run. The record's `wait` carries `excluded`
 (REQ-MONITOR-194/303, since 2026-10-02): the configured keys the session holds out of quota, which the quota-wait chooser
 annotates and leaves choosable. Since fin10 the same list rides outside a wait as **`excludedModels`** (REQ-MONITOR-194): from
 the live run's memory (`Run.excludedModelKeys`), else — a session at rest — the memory its timeline rehydrates through the

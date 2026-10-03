@@ -384,6 +384,17 @@ export const SessionRecordSchema = z.object({
    */
   entryPersona: z.string().nullable(),
   /**
+   * REQ-MONITOR-052 / REQ-MONITOR-066 / REQ-MONITOR-069 (the repair of
+   * `the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md`): the configured model key
+   * the live run's root runs on — the key of the pair its ladder cell calls, which a same-tier or unresponsive-model move
+   * (REQ-NOTIFY-082, REQ-ORCH-091 b, REQ-ORCH-090), a pre-call move off a pair held out of quota (REQ-MONITOR-194) or an
+   * override it follows changes without touching the configuration. The run-level agent's Model (the inspector, a persona
+   * window) names it while the run is live; the composer's chip and the strip's model item keep naming what the next run
+   * starts with (`modelOverrides`, REQ-MONITOR-146, REQ-SHELL-043). Null for a record read with no live run, before the
+   * root's cell exists, or when the pair is no catalogue entry's.
+   */
+  entryModelKey: z.string().nullable(),
+  /**
    * REQ-MONITOR-117/119/120: the entry agent's stall, as `AgentRecord.stalledSeconds` carries a child's — the seconds with
    * no model event or token while its watch finds it stalled, else null. Null for a record read with no live run.
    */

@@ -826,6 +826,25 @@ export class Run {
   get entryPersona(): string {
     return this.deps.config.persona;
   }
+  /**
+   * REQ-MONITOR-052 / REQ-MONITOR-066 / REQ-MONITOR-069: the configured model key of the pair the root's ladder cell calls —
+   * after a same-tier or unresponsive-model move (REQ-NOTIFY-082, REQ-ORCH-091 b, REQ-ORCH-090), a pre-call move off a pair
+   * held out of quota (REQ-MONITOR-194) or an override it follows (REQ-ORCH-091 d), none of which writes the configuration —
+   * so the run-level agent's Model names the model the root runs on (`SessionRecord.entryModelKey`), as `entryContext` reads
+   * its limit from that cell (REQ-MONITOR-049). The configured key for the pair where one names it — the keys the model
+   * selectors list — else the entry the move took it to (a discovered tier pick, `scripted-b/beta` in resilience-proof). Null
+   * before the cell exists, or for a pair no catalogue entry carries. Until
+   * 2026-10-03 the inspector named the configured key or the override in force while the root ran on a candidate
+   * (docs/defects/fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md).
+   */
+  get entryModelKey(): string | null {
+    const model = this.rootCell?.model.model;
+    if (model === undefined) return null;
+    // By pair, as the exclusions are keyed (`excludedModelKeys`): a configured key and a discovered tier pick for one
+    // provider's model can carry different dispatch references.
+    const pair = pairKey(providerIdentity(this.catalogue, model), model.modelId);
+    return (this.catalogue.find((e) => e.origin === 'configured' && pairKey(e.provider, e.model.modelId) === pair) ?? entryOf(this.catalogue, model))?.key ?? null;
+  }
   /** REQ-MONITOR-048 (Part R): the persona's configured thinking level as this run resolved it; null when the persona is unknown or states none. */
   reasoningFor(persona: string): string | null {
     const resolved = this.deps.personas?.resolve(persona) ?? null;
@@ -1384,7 +1403,7 @@ export class Run {
   /** The per-agent ladder deps shared by the root and every child (the cell is the agent's own). */
   private resilienceFor(cell: AgentResilienceCell, unresponsiveBoundMs: number, switchPending?: () => boolean): TurnResilience {
     const { config } = this.deps;
-    return { cell, memory: this.memory, catalogue: this.catalogue, waits: this.waits, transientRetries: config.transientRetries, validationRetries: config.validationRetries, llmResponseTimeoutMs: config.llmResponseTimeoutMs, unresponsiveBoundMs, resting: () => this.restCause !== null, switchPending };
+    return { cell, memory: this.memory, catalogue: this.catalogue, waits: this.waits, transientRetries: config.transientRetries, validationRetries: config.validationRetries, llmResponseTimeoutMs: config.llmResponseTimeoutMs, unresponsiveBoundMs, resting: () => this.restCause !== null, switchPending, moved: () => this.deps.owner.refreshRecord() };
   }
 
   /**

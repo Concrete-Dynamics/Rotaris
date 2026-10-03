@@ -34,13 +34,18 @@ export interface WriteOutcome {
   readonly text: string;
 }
 
-/** REQ-CONFIG-025: the scope-independent starter document. */
+/**
+ * REQ-CONFIG-025: the scope-independent starter document. Its comment header is REQ-WORKSPACE-038's three lines, one
+ * fact each: a minimal starting configuration, an override of the built-in personas, models and tool servers, and
+ * real models wired up by authenticating a provider in the Settings Models category (REQ-WORKSPACE-152). The wording
+ * is the implementation's; the header shipped before 2026-10-03 carried only the second fact
+ * (`docs/defects/fixed/the-starter-agents-yaml-header-never-says-models-are-wired-up-by-authenticating-a-provider.md`).
+ */
 export function starterDocument(defaultPersona = 'orchestrator'): string {
   return [
-    '# Rotaris configuration for this scope.',
-    '# Anything stated here overrides the built-in roles, models and tool servers; anything left null or',
-    '# absent is inherited from the layer below (the global file, then the built-in defaults). Sections',
-    '# merge per field; lists are restated whole. See the Settings screen for the same keys with hints.',
+    '# A minimal starting configuration for this scope; anything left null or absent is inherited from the layer below.',
+    '# Editing it overrides the built-in personas, models and tool servers; sections merge per field, lists whole.',
+    '# Real models are wired up by authenticating a provider in the Models category of Settings.',
     `default_persona: ${defaultPersona}`,
     'default_summary_model: null',
     'default_summary_model_thinking: null',

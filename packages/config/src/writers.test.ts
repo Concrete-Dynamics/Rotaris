@@ -109,8 +109,18 @@ describe('REQ-CONFIG-025..030 the bootstrap', () => {
     // The fourteen explicit nulls do not clear the built-in slots (REQ-CONFIG-052); PD-LIBRARY-002 added two.
     const c = loadConfiguration({ globalDir: join(tmp(), 'none'), workspaceRoot: s.workspaceRoot, keepIgnored: false });
     expect(c.ok && c.value.slots.large_model).toBe('gpt-4o');
-    expect(starterDocument()).toMatch(/^# Rotaris configuration/);
     expect((starterDocument().match(/: null$/gm) ?? []).length).toBe(14);
+  });
+
+  it('opens with REQ-WORKSPACE-038\'s three-line header: a minimal start, an override of the built-ins, and a provider authenticated in Settings → Models', () => {
+    const lines = starterDocument().split('\n');
+    const header = lines.slice(0, lines.findIndex((l) => !l.startsWith('#')));
+    expect(header).toHaveLength(3);
+    expect(lines[3]).toBe('default_persona: orchestrator');
+    expect(header[0]).toMatch(/minimal starting configuration/);
+    expect(header[1]).toMatch(/overrides the built-in personas, models and tool servers/);
+    // REQ-WORKSPACE-152: the guided provider setup starts from the Settings Models category.
+    expect(header[2]).toMatch(/real models are wired up by authenticating a provider in the Models category of Settings/i);
   });
 });
 
@@ -249,7 +259,7 @@ describe('REQ-CONFIG-248..255 the model-preference path and its read-back', () =
     const r = await writeModelPreferences(s.gFile, { slots: { medium_model: null, large_model: 'gpt-4o' }, thinking: { large_model: 'high', medium_model: null } });
     expect(r.ok).toBe(true);
     const text = readFileSync(s.gFile, 'utf8');
-    expect(text).toMatch(/^# Rotaris configuration/);
+    expect(text.startsWith(starterDocument().slice(0, starterDocument().indexOf('default_persona: ')))).toBe(true);
     expect(text).toContain('medium_model: null\n');
     expect(text).not.toContain('medium_model_thinking');
     expect(text).toContain('large_model: gpt-4o\nlarge_model_thinking: high\n');

@@ -39,7 +39,7 @@ import { deliverSetupCancel, InitializationCoordinator } from './initialization.
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
 import { authRecoveryCommands } from './commands/auth-recovery.js';
 import { checkpointsCommands } from './commands/checkpoints.js';
-import { configCommands } from './commands/config.js';
+import { configAnnouncer, configCommands } from './commands/config.js';
 import { dialogsCommands } from './commands/dialogs.js';
 import { gitCommands } from './commands/git.js';
 import { hooksCommands } from './commands/hooks.js';
@@ -792,7 +792,8 @@ async function main(): Promise<void> {
     const svc = services.get(root);
     if (!svc) return;
     const r = await svc.link.request({ kind: 'config.bootstrap', workspaceRoot: root }, millis(30_000)).catch(() => null);
-    if (r?.kind === 'config.snapshot') for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: r.snapshot });
+    // A credential reaches every workspace: the active one's reloaded snapshot to its window, each other window its own (`announceConfig`).
+    if (r?.kind === 'config.snapshot') void configAnnouncer(mainWindows, services)(root, r.snapshot);
     // ADR-0037 Tier B: the run host's next load folds the snapshot itself; nothing to hand over.
     if (notices.current()?.title === NO_PROVIDER_HEADLINE && providers.list().some((row) => row.authenticated)) void notices.dismiss(notices.current()?.id);
   };

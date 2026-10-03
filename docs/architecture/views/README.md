@@ -43,13 +43,15 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-10-02**
+## Last reconciled with the code: **2026-10-03**
 
 **The status strip is REQ-SHELL-038's (REQ-SHELL-038..047, REQ-TOOLS-131/184; fin10).** `stripItems` in
 `packages/ui/src/composer.ts` answers the strip's items in REQ-SHELL-038's order with its accessible names and REQ-SHELL-047's
 two thresholds; the run state, the theme's name, the child services and the replica counters are gone from it; the
 file-access flag reads `runtime.allow_outside_workspace`. Two commands are new: `workspace.openFolder` (the path link,
 REQ-SHELL-040) and `workspace.usage` (the tokens and cost, relayed to the run host, which answers from the stored sessions).
+Since 2026-10-03 `● CB armed` follows the saved `circuit_breaker.enabled` from the snapshot (`stripCircuitBreakerArmed`), and
+`config:changed` carries each main window its own workspace's snapshot (`announceConfig`, `main/config-broadcast.ts`).
 The **process view**'s command and run-host request lists, the **state ownership view**'s Settings row (the dirty flag the
 strip reads) and the **seams view** §8 (the status-strip item, rewritten) say so. No package, edge, process, channel or
 store column changed.

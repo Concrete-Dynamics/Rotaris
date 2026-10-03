@@ -66,7 +66,7 @@ workspace's stored sessions, `packages/engine/src/workspace-usage.ts`).
 
 **Readings the build proceeds under, raised:** the tokens item counts **this workspace's runs**, as the cost does — REQ-SHELL-044
 names no scope (OQ-188); where the workspace domain states the strip otherwise (REQ-WORKSPACE-019's silent failure,
-REQ-WORKSPACE-022's `unsaved settings` and mode explanations) the shell domain's statements are built, the file-access pair
+REQ-WORKSPACE-022's `unsaved settings`, mode, redaction and circuit-breaker explanations) the shell domain's statements are built, the file-access pair
 being REQ-WORKSPACE-022's fixed one (OQ-189).
 
 **Pinned by** `packages/ui/src/composer.test.ts` ("REQ-SHELL-038/047: the status strip, item by item": order, names, the one
@@ -86,3 +86,20 @@ the path link on this host (no `xdg-open`) raised "The workspace folder could no
 Noticed while building and recorded, not repaired:
 [the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md](../the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md),
 [the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md](../the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md).
+
+**Repair round, 2026-10-03 (the verifier's two findings against this repair).** Two flags still did not follow the
+configuration the file-access flag had been made to read:
+
+- `● CB armed` was `shell.hello`'s boot answer alone, so after `circuit_breaker.enabled: false` was saved the strip still
+  read armed while the next run had no breaker (REQ-SHELL-041's display condition, REQ-TOOLS-184's 100 ms). It now follows
+  the saved snapshot (`stripCircuitBreakerArmed` in `packages/ui/src/composer.ts`), the boot answer standing only until the
+  first snapshot arrives and the host override `ROTARIS_CIRCUIT_BREAKER=off` (carried on `shell.hello` as
+  `circuitBreakerHostOff`) still disarming it. Pinned by `composer.test.ts` ("`● CB armed` follows the saved
+  configuration…") and `recovery-wiring.test.ts` ("main.tsx arms the strip's circuit-breaker flag from the configuration
+  snapshot…", red before).
+- Main sent every `config:changed` snapshot to every window, and each renderer adopted it, so with two main windows on two
+  workspaces (REQ-SHELL-020) a Settings save in one rewrote the other's file-access, mode and circuit-breaker flags — and its
+  Settings view — to the first workspace's values. Main now announces each main window its own workspace's snapshot
+  (`announceConfig`, `apps/desktop/src/main/config-broadcast.ts`, used by `config.save`/`config.setField` and after a
+  provider change). Pinned by `config-broadcast.test.ts` and `commands/config.test.ts` ("config.setField — every main window
+  repopulates from its own workspace", red before).

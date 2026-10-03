@@ -502,8 +502,11 @@ windows holding that workspace (`MainWindows.holding`) whichever view each is sh
 (REQ-NOTIFY-071) or null when it closes, to EVERY main window: each holds the prompts by session and draws only the
 followed session's, so the prompt moves with the focused session (REQ-NOTIFY-030). *Corrected 2026-10-02 (the repair
 round): it first went to the one window following the session (`ownerOf`) and was drawn there whatever that window
-focused next, so another session's prompt stood over the focused one and acted on its own session;* `theme:changed` and `config:changed`
-repaint or repopulate every live window.
+focused next, so another session's prompt stood over the focused one and acted on its own session;* `theme:changed` repaints
+every live window; `config:changed` repopulates every main window from **its own** workspace's snapshot (`announceConfig`,
+`main/config-broadcast.ts`): the windows holding the written workspace take the reloaded snapshot, every other window its
+own workspace's, read again from its service. *Corrected 2026-10-03 (fin10's repair round): every window was sent the
+written workspace's snapshot, so a second main window's status strip and Settings read the first workspace's values.*
 
 **Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Since 2026-09-09 (Part AL): the seven `terminal.*` requests, the `terminal.streams` reply and the `publish.terminal` event, listed above. Requests:
 `workspace.opened/closing/refuseRuns/renewLease/closeStore/release`, `session.*` (start, list, resume,

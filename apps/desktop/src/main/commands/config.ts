@@ -1,8 +1,30 @@
-import { BrowserWindow } from 'electron';
-import { CHANNEL, CONTRACT_SCHEMA_VERSION, type CommandOutcome, type CommandRequest } from '@rotaris/contracts';
-import { canonicalPath } from '@rotaris/platform';
+import type { BrowserWindow } from 'electron';
+import { CHANNEL, CONTRACT_SCHEMA_VERSION, type CommandOutcome, type CommandRequest, type ConfigSnapshot } from '@rotaris/contracts';
+import { canonicalPath, samePath } from '@rotaris/platform';
 import { millis } from '@rotaris/kernel';
+import { announceConfig } from '../config-broadcast.js';
 import { refusal, type CommandAt, type CommandContext, type CommandHandlers } from './context.js';
+
+/**
+ * `config:changed` for one workspace's reloaded snapshot, to each main window as its own workspace reads (`announceConfig`):
+ * the holders of `root` take `snapshot`, every other window its own workspace's snapshot read again from its service.
+ */
+export function configAnnouncer(
+  mainWindows: { ordered(): readonly { readonly win: BrowserWindow; readonly workspace: string }[] },
+  services: CommandContext['services'],
+): (root: string, snapshot: ConfigSnapshot) => Promise<void> {
+  const readOwn = async (workspace: string): Promise<ConfigSnapshot | null> => {
+    const own = canonicalPath(workspace);
+    const svc = services.get(own);
+    if (!svc) return null;
+    const r = await svc.link.request({ kind: 'config.read', workspaceRoot: own }, millis(10_000));
+    return r.kind === 'config.snapshot' ? r.snapshot : null;
+  };
+  return (root, snapshot) => announceConfig(root, snapshot, mainWindows.ordered().map((m) => ({
+    workspace: m.workspace,
+    send: (s) => { if (!m.win.isDestroyed()) m.win.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: s }); },
+  })), { samePath, readOwn });
+}
 
 /**
  * CONFIGURATION — the layered read, one field written, and the live state a running session is subject to
@@ -10,11 +32,13 @@ import { refusal, type CommandAt, type CommandContext, type CommandHandlers } fr
  * never parses YAML of its own.
  */
 export function configCommands(
-  ctx: Pick<CommandContext, 'log' | 'raiseNotice' | 'runHost' | 'services'>,
+  ctx: Pick<CommandContext, 'log' | 'mainWindows' | 'raiseNotice' | 'runHost' | 'services'>,
 ): Pick<CommandHandlers, 'config.read' | 'repository.read' | 'config.save' | 'config.setField' | 'config.liveState'> {
-  const { log, raiseNotice, runHost, services } = ctx;
+  const { log, mainWindows, raiseNotice, runHost, services } = ctx;
+  const announce = configAnnouncer(mainWindows, services);
   const onConfigSave = async (req: Extract<CommandRequest, { kind: 'config.save' | 'config.setField' }>, { w }: CommandAt): Promise<CommandOutcome> => {
-    // ADR-0037 Tier A: the service writes and loads again; every window repopulates from the reloaded snapshot (decision 4 of the plan for REQ-CONFIG-423).
+    // ADR-0037 Tier A: the service writes and loads again; every window repopulates from the reloaded snapshot (decision 4 of the plan for REQ-CONFIG-423)
+    // — its own workspace's: the holders of this one take it, every other window its own read again (`announceConfig`).
     if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before changing its configuration' };
     const svc = services.get(canonicalPath(w.workspace));
     if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
@@ -34,7 +58,7 @@ export function configCommands(
     }
     const r = await svc.link.request(req.kind === 'config.save' ? { kind: 'config.save', workspaceRoot: root, save: req.save } : { kind: 'config.setField', workspaceRoot: root, ...(req.scope ? { scope: req.scope } : {}), patch: req.patch }, millis(30_000));
     if (r.kind !== 'config.snapshot') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The configuration could not be written'); }
-    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: r.snapshot });
+    void announce(root, r.snapshot);
     log(`configuration ${req.kind === 'config.save' ? 'saved' : 'field written'} for ${root}`);
     return { ok: true, value: r.snapshot };
   };

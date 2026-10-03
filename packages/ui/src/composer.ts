@@ -114,6 +114,14 @@ export type StripItem =
 export const STRIP_PATH_MIN_WIDTH = 1180;
 /** REQ-SHELL-047: below this window width the background-session item is hidden as well. */
 export const STRIP_BACKGROUND_MIN_WIDTH = 1080;
+/**
+ * The window width as the strip reads it: the lowest width of its REQ-SHELL-047 band (at least 1180, at least 1080, below).
+ * `stripItems` answers the same items for every width in a band, so a renderer memoising on the band rebuilds the strip
+ * only when a threshold is crossed — REQ-TOOLS-184's "never redraws when nothing it displays has changed".
+ */
+export function stripWidthBand(width: number): number {
+  return width >= STRIP_PATH_MIN_WIDTH ? STRIP_PATH_MIN_WIDTH : width >= STRIP_BACKGROUND_MIN_WIDTH ? STRIP_BACKGROUND_MIN_WIDTH : 0;
+}
 
 /** REQ-SHELL-038: the accessible names, word for word. */
 export const STRIP_NAMES = {

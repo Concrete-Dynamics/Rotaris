@@ -6,7 +6,7 @@ import {
   COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, COMPOSER_PLACEHOLDERS, COMPOSER_WIDGET_MIN_HEIGHT, DEFAULT_REASONING, DRAFT_PUBLISH_MS,
   DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, MODELS_LOADING_LABEL, pausePendingAfter,
   PROJECT_SETUP_REFUSAL, reasoningChipLabel, runControlReason, runHeaderControlReason, RUN_STATE_LABELS, runStateOf, runTimingLabel,
-  runTimingSeconds, sendRefusal, statusStripModeItem, statusStripSandboxItem, STRIP_BACKGROUND_MIN_WIDTH, STRIP_NAMES, STRIP_PATH_MIN_WIDTH, stripCircuitBreakerArmed, stripCostText, stripItems, stripModelItem,
+  runTimingSeconds, sendRefusal, statusStripModeItem, statusStripSandboxItem, STRIP_BACKGROUND_MIN_WIDTH, STRIP_NAMES, STRIP_PATH_MIN_WIDTH, stripCircuitBreakerArmed, stripCostText, stripItems, stripModelItem, stripWidthBand,
   stripTokensText, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk, type StripFacts, type StripItem,
 } from './composer.js';
 import { STRIP_NARROW_BELOW, STRIP_TIGHT_BELOW, stripDensity, stripIconTitle } from './WorkspaceView.js';
@@ -148,6 +148,9 @@ describe('REQ-SHELL-038/047: the status strip, item by item', () => {
     expect(at(1179)).toContain('3 bg sessions');
     expect(at(1080)).toContain('3 bg sessions');
     expect(at(1079)).not.toContain('3 bg sessions');
+    // The band a renderer memoises on answers the same items as every width inside it, and changes only at a threshold.
+    for (const w of [1000, 1079, 1080, 1179, 1180, 1400]) expect(at(stripWidthBand(w))).toEqual(at(w));
+    expect([1000, 1079, 1080, 1179, 1180, 1400].map(stripWidthBand)).toEqual([0, 0, 1080, 1080, 1180, 1180]);
     // At REQ-MONITOR-051's 1000 px floor, every other item stays.
     expect(at(1000)).toEqual(['main ↑1', '|', '● CB armed', 'redaction: always on', 'workspace-scoped', 'sandbox: bubblewrap', 'mode: ask', 'model: scripted', '12,480 tok', '0.0042 cost']);
   });

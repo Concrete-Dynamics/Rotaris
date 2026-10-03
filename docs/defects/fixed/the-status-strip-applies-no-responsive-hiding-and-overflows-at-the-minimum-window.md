@@ -103,3 +103,7 @@ configuration the file-access flag had been made to read:
   (`announceConfig`, `apps/desktop/src/main/config-broadcast.ts`, used by `config.save`/`config.setField` and after a
   provider change). Pinned by `config-broadcast.test.ts` and `commands/config.test.ts` ("config.setField — every main window
   repopulates from its own workspace", red before).
+- Carried from the same verifier's optional findings: a session with a priced cost qualifier but no tokens yet counted as
+  priced, drawing `0.00 cost` before any usage (REQ-SHELL-045); `workspaceUsage` now counts a row's cost only once it
+  reported usage (`workspace-usage.test.ts`, red before). And the strip memoises on its REQ-SHELL-047 band
+  (`stripWidthBand`), so a resize that crosses no threshold rebuilds nothing (REQ-TOOLS-184; `composer.test.ts`).

@@ -41,6 +41,10 @@ the annotation) that the design material does not settle. Size S once chosen.
   guard now lets the shown key through when it is excluded (`Inspector.tsx`), the case left when the root waits on that pair
   with no candidate (since the companion repair it names the live key, so after a move it shows the candidate and the
   excluded key is another row).
+- **A consequence, accepted.** The chip's same-value re-choice goes through `setNextModel`, whose configuration write sets
+  `personas.<entry>.model` even when the entry model was inherited from a slot or the global scope, so it pins an explicit
+  value there. The choose-another-then-back sequence it replaces wrote the same field twice, so nothing is worse than before;
+  the triage accepted it.
 - **Pinned** by `design-system.test.ts` ("fires a choice of the current value only for a row marked rechoosable …") and two
   cases in `packages/ui/src/excluded-model-selectors.test.ts` (the chip and the inspector: the shown excluded key is sent
   once, the shown plain key sends nothing); the chip case fails without the `rechoosable` mark, the inspector case without
@@ -59,7 +63,8 @@ the annotation) that the design material does not settle. Size S once chosen.
 
 - `packages/ui/src/WorkspaceView.tsx` — the composer's next-run chip (`onSetNextModel` on the select's change).
 - `apps/desktop/src/renderer/session-actions.ts` — `setNextModel`, which sends `session.chooseNextModel` after the write.
-- `apps/desktop/scripts/resilience-proof.mjs` — `next-run-choice`, which chooses another key first.
+- `apps/desktop/scripts/resilience-proof.mjs` — `next-run-choice`, which chose another key first as found (it now chooses the
+  shown key directly).
 - `packages/ui/src/design-system/searchable-select.tsx` — `choose`: `onChange` only for a value other than the current one.
 - `packages/ui/src/model-options.ts` — `annotatedModelOptions`, which marks an excluded key with its reason.
 - `packages/ui/src/Inspector.tsx` — the Model field's own `v !== currentModel` guard.

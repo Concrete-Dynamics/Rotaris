@@ -12,10 +12,12 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
  * (REQ-MONITOR-117..119), and since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
- * Eighteen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
+ * Nineteen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
  * REQ-NOTIFY-064's notice, `auth-fallback` the first failure's automatic fallback and its re-authentication prompt,
  * `auth-fallback-dialog` the two together, `auth-fallback-revise` a failed revise cycle restarted as the same revise; and
- * `quota-retry`, REQ-MONITOR-194's explicit choice of the waiting pair clearing its exclusion), each
+ * `quota-retry`, REQ-MONITOR-194's explicit choice of the waiting pair clearing its exclusion; since fin10 `two-waits`, one
+ * choice resolving two waits on two pairs and persisting both overrides across a reload; and `next-run-choice`, the
+ * composer's next-run model chip clearing the exclusion of the pair it chooses), each
  * asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
@@ -330,6 +332,99 @@ await scenarioRun('same-tier', async () => {
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/beta', `the calls did not move to beta: ${JSON.stringify(calls)}`);
   results.sameTier = { status: row.execution_status, fallback: meta, calls, png: r.png, elapsedMs: r.elapsedMs };
+  // REQ-MONITOR-194 (the repair of an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it): a
+  // second prompt, in a relaunch that resumes the session. Its root is built on the configured alpha, which the session holds
+  // out of quota (no override replaces it); it moves to beta BEFORE calling (`pre_call`), and alpha is never called. Before
+  // the repair its first call went to alpha, which the scripted provider answered and a real one would have refused.
+  const again = await launch('same-tier-resume', s3, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PROMPT: 'a second prompt on the excluded alpha', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const calls2 = modelCalls(again.log).filter((c) => c.who === 'orchestrator');
+  expect(calls2.length > 0 && calls2.every((c) => c.model === 'scripted/beta'), `the second prompt called the pair the session holds out of quota: ${JSON.stringify(calls2)}`);
+  const db2 = open(s3);
+  const row2 = session(db2);
+  const list2 = names(db2, row2.session_id);
+  db2.close();
+  expect(row2.execution_status === 'completed' && row2.iterations_completed >= 2, `the second prompt did not complete: ${JSON.stringify(row2)}`);
+  const moves = list2.filter((t) => t.name === 'quota_fallback_model').map((t) => JSON.parse(t.metadata));
+  expect(moves.length === 2 && moves[0].pre_call === undefined && moves[1].pre_call === true && moves[1].from_model === 'alpha' && moves[1].to_model === 'beta', `the second prompt's move was not made before its call: ${JSON.stringify(moves)}`);
+  expect(list2.filter((t) => t.name === 'model_exhausted').length === 1, `the move without a call recorded a second exclusion: ${list2.map((t) => t.name).join(',')}`);
+  results.sameTierResume = { calls: calls2, session: row2, moves, png: again.png, elapsedMs: again.elapsedMs };
+});
+
+// 3c. REQ-MONITOR-194 / REQ-MONITOR-146 (the repair of a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion):
+// the composer's "Model for the next run" is a model selector, so choosing a pair the session holds out of quota there clears
+// its exclusion. A first launch meets insufficient quota on alpha and moves to beta (same tier); a driven relaunch resumes the
+// session, chooses beta and then alpha in the composer's model chip (a select fires only on a change, and the chip shows the
+// configured alpha), and sends a further prompt, which runs on alpha. Before the repair the chip wrote the configuration
+// alone, the exclusion stood, and the prompt's root moved to beta before calling (`pre_call`).
+const s3c = scenario('next-run-choice', [], { snapshot: true });
+await scenarioRun('next-run-choice', async () => {
+  await launch('next-run-choice', s3c, { ROTARIS_SCRIPT: 'fail:quota,answer', ROTARIS_CAPTURE_PROMPT: 'quota, then the next run on alpha', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const cleared = () => { const db = open(s3c); try { const row = session(db); return row === undefined ? [] : names(db, row.session_id).filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata)); } finally { db.close(); } };
+  const iterations = () => { const db = open(s3c); try { return session(db)?.iterations_completed ?? 0; } finally { db.close(); } };
+  // The relaunch's root continues after the steps the record says it took (the first launch's two): its third step holds
+  // the held prompt's call on beta for 8 s, while the run header's and the inspector's selectors are read.
+  const r = await drivenLaunch('next-run-choice-resume', s3c, { ROTARIS_SCRIPT: 'answer,answer,wait:8000,answer,answer' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    // The user's route to a stored session (REQ-SHELL-126, REQ-SESSION-118): the title bar's Sessions, then the row's Open.
+    await step('Sessions', d.click('.title-bar__sessions', { timeoutMs: 15_000 }));
+    await step('the row\'s Open', d.click('.session-browser tr[data-session-id] button', { timeoutMs: 15_000 }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the resumed transcript', until(() => d.eval(`[...document.querySelectorAll('.composer__input')].length > 0 && document.body.innerText.includes('quota, then the next run on alpha') && !document.querySelector('.session-browser')`), (v) => v === true, { timeoutMs: 60_000, what: 'the resumed session on screen', signal }));
+    const chip = 'button[aria-label="Model for the next run"]';
+    await step('the chip enabled', until(() => d.eval(`document.querySelector(${JSON.stringify(chip)})?.disabled === false`), (v) => v === true, { timeoutMs: 30_000, what: 'the model chip enabled', signal }));
+    // REQ-MONITOR-194 (the repair of the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota): each selector opened
+    // while alpha is held out of quota lists it with the reason, choosable. The rows as drawn, and a picture of each.
+    const optionRows = () => d.eval(`[...document.querySelectorAll('[role="option"]')].map((o) => ({ value: o.dataset.value ?? '', hint: o.querySelector('.chip-menu__hint')?.textContent ?? null, disabled: o.getAttribute('aria-disabled') === 'true' }))`);
+    const readOpen = async (label, trigger, picture) => {
+      await step(`${label} opened`, d.click(trigger, { timeoutMs: 15_000 }));
+      const drawn = await step(`${label}'s rows`, until(optionRows, (list) => Array.isArray(list) && list.some((o) => o.value === 'alpha'), { timeoutMs: 10_000, what: `${label}'s rows`, signal }));
+      await step(`${label} pictured`, d.screenshot(join(output, picture)));
+      await step(`${label} closed`, d.chord('Escape'));
+      return drawn;
+    };
+    const chipRows = await readOpen('the composer chip', chip, 'next-run-choice-chip.png');
+    // A run held on beta (alpha excluded, the pre-call move), so the run header's switch is live while it is read.
+    await step('Ctrl+L (held prompt)', d.chord('Ctrl+L'));
+    await step('the caret in the composer (held prompt)', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the held prompt', d.type('a prompt held on beta while the selectors are read', { enter: true }));
+    const header = 'button[aria-label="Active run model"]';
+    await step('the run header\'s switch live', until(() => d.eval(`document.querySelector(${JSON.stringify(header)})?.disabled === false`), (v) => v === true, { timeoutMs: 30_000, what: 'the run header\'s model switch enabled', signal }));
+    const headerRows = await readOpen('the run header\'s switch', header, 'next-run-choice-run-header.png');
+    // The inspector's Model field is writable for the run-level agent of a live run; read it where it is drawn writable.
+    const inspector = '[data-testid="inspector-model"]';
+    const inspectorLive = await step('the inspector\'s Model field', d.eval(`(() => { const b = document.querySelector(${JSON.stringify(inspector)}); return b === null ? 'absent' : b.disabled ? 'disabled' : 'live'; })()`));
+    const inspectorRows = inspectorLive === 'live' ? await readOpen('the inspector\'s Model field', inspector, 'next-run-choice-inspector.png') : null;
+    await step('the held run settled', until(iterations, (n) => n >= 2, { timeoutMs: 60_000, what: 'the held prompt completing', signal }));
+    await step('the chip enabled again', until(() => d.eval(`document.querySelector(${JSON.stringify(chip)})?.disabled === false`), (v) => v === true, { timeoutMs: 30_000, what: 'the model chip enabled', signal }));
+    await step('the chip → beta', choose(d, chip, 'beta'));
+    const choice = await step('the chip → alpha', choose(d, chip, 'alpha'));
+    const entries = await step('the exclusion cleared', until(cleared, (list) => list.some((m) => m.cleared === true && m.model === 'alpha'), { timeoutMs: 30_000, what: "alpha's exclusion cleared", signal }));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('a further prompt on alpha', { enter: true }));
+    await step('the further run settled', until(iterations, (n) => n >= 3, { timeoutMs: 90_000, what: 'the third iteration completing', signal }));
+    return { choice, entries, chipRows, headerRows, inspectorLive, inspectorRows };
+  });
+  const db = open(s3c);
+  const row = session(db);
+  const list = names(db, row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed' && row.iterations_completed >= 3, `the further prompt did not complete: ${JSON.stringify(row)}`);
+  // REQ-MONITOR-194: alpha listed in each selector read, with the reason, never greyed out; beta plain.
+  const annotated = (list) => Array.isArray(list) && list.some((o) => o.value === 'alpha' && o.hint === 'provider reported insufficient quota in this session' && !o.disabled) && list.some((o) => o.value === 'beta' && o.hint === null);
+  expect(annotated(r.value.chipRows), `the composer chip did not annotate alpha: ${JSON.stringify(r.value.chipRows)}`);
+  expect(annotated(r.value.headerRows), `the run header's switch did not annotate alpha: ${JSON.stringify(r.value.headerRows)}`);
+  // The field is live during the run held on beta; a disabled or absent field would leave the annotation unread, so it fails here.
+  expect(r.value.inspectorLive === 'live', `the inspector's Model field was ${r.value.inspectorLive} during the run, so its options were never read`);
+  expect(annotated(r.value.inspectorRows), `the inspector's Model field did not annotate alpha: ${JSON.stringify(r.value.inspectorRows)}`);
+  const exhausted = list.filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata));
+  expect(exhausted.length === 2 && exhausted[0].cleared === undefined && exhausted[1].cleared === true && exhausted[1].model === 'alpha' && exhausted[1].model_key === 'alpha', `the choice did not clear alpha's exclusion: ${JSON.stringify(exhausted)}`);
+  // The held prompt ran on beta (alpha excluded, moved before calling); the further prompt, after the choice, on alpha.
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
+  expect(calls.map((c) => c.model).join(',') === 'scripted/beta,scripted/alpha', `the held prompt did not run on beta and the further one on alpha: ${JSON.stringify(calls)}`);
+  const moves = list.filter((t) => t.name === 'quota_fallback_model').map((t) => JSON.parse(t.metadata));
+  expect(moves.length === 2 && moves[0].pre_call === undefined && moves[1].pre_call === true, `the further prompt moved off alpha: ${JSON.stringify(moves)}`);
+  results.nextRunChoice = { status: row.execution_status, exhausted, calls, chipRows: r.value.chipRows, headerRows: r.value.headerRows, inspector: r.value.inspectorLive, inspectorRows: r.value.inspectorRows, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 // 3b. OQ-177 (REQ-MONITOR-142 over REQ-ORCH-091 b): after the same-tier move the user switches the entry model back to the
@@ -446,6 +541,55 @@ await scenarioRun('quota-retry', async () => {
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/alpha,scripted-b/beta', `the calls were not alpha, alpha (the retry), beta: ${JSON.stringify(calls)}`);
   expect(kinds.filter((i) => i.kind === 'model_wait').length === 2, 'the retry did not park the run a second time');
   results.quotaRetry = { status: row.execution_status, exhausted, overrides, calls, headerDuringSecondWait: r.value.during[0]?.text ?? null, png: r.png, elapsedMs: r.elapsedMs };
+});
+
+// 4c. REQ-ORCH-091 (d) / REQ-SESSION-026 (the repair of a-wait-choice-persists-the-override-for-the-shown-wait-alone): two
+// agents parked at once on different pairs — the root on alpha, a child of `coding-agent` (configured on beta) on beta, both
+// refused on quota with no same-tier candidate — and one choice of gamma in the shown wait resolves both. Every waiting pair
+// gets its own `model_override` entry; a relaunch that resumes the session and delegates again runs the root and the new
+// child on gamma, as the run that made the choice did. Before the repair only the shown wait's pair was written, so after the
+// reload one of the two agents returned to its pair (the child called beta, or the root parked on alpha).
+const s4c = scenario('two-waits', ['  max_active_children: 2'], { delegation: true, models: ['  gamma: { provider: scripted-c, model_id: gamma }'], personas: ['personas:', '  coding-agent:', '    model: beta'] });
+await scenarioRun('two-waits', async () => {
+  const waits = () => { const db = open(s4c); try { const row = session(db); return row === undefined ? 0 : issues(db, row.session_id).filter((i) => i.kind === 'model_wait').length; } finally { db.close(); } };
+  const r = await drivenLaunch('two-waits', s4c, { ROTARIS_SCRIPT: 'delegate:coding-agent:side,fail:quota,answer', ROTARIS_CHILD_SCRIPT: 'fail:quota,answer' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('two agents parked on two pairs', { enter: true }));
+    await step('both waits', until(waits, (n) => n >= 2, { timeoutMs: 60_000, what: 'two model_wait issues', signal }));
+    await step('the wait header', d.waitFor('.wait-header', { timeoutMs: 60_000 }));
+    const during = await step('the header during the waits', d.probe('.wait-header'));
+    await step('Change model', d.click('.wait-header .btn-secondary', { text: 'Change model' }));
+    const chosen = await step('the chooser → gamma', choose(d, '.wait-header button[aria-label="Change model"]', 'gamma'));
+    const row = await step('the run settled', until(() => { const db = open(s4c); try { return session(db); } finally { db.close(); } }, (x) => x !== undefined && SETTLED.has(x.execution_status), { timeoutMs: 90_000, what: 'the session settling', signal }));
+    return { during, chosen, row };
+  });
+  const db = open(s4c);
+  const row = session(db);
+  const list = names(db, row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed', `the run did not complete after the choice: ${JSON.stringify(row)}`);
+  const overrides = list.filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata));
+  const pairs = overrides.map((o) => `${o.provider}/${o.model}→${o.model_key}`).sort();
+  expect(pairs.join(',') === 'scripted-b/beta→gamma,scripted/alpha→gamma', `the choice did not persist an override for each waiting pair: ${JSON.stringify(overrides)}`);
+  const calls = modelCalls(r.log);
+  // The relaunch: the session resumed from the browser, a further prompt delegating again — every call on gamma.
+  const again = await launch('two-waits-resume', s4c, { ROTARIS_SCRIPT: 'delegate:coding-agent:again,answer', ROTARIS_CHILD_SCRIPT: 'answer', ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PROMPT: 'delegate again after the reload', ROTARIS_CAPTURE_PROBE: '[data-testid="chip-model"]', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '60000', ROTARIS_CAPTURE_AFTER_MS: '800' }, { timeout: 150_000 });
+  // The run's own agents, up to its end: the intent classifier and the post-run analyst take configured slots and follow no
+  // override (a residual recorded on its own note), and the scripted client names the analyst `child` as well.
+  const ended = again.log.search(/run [0-9a-f-]+ ended /);
+  const calls2 = modelCalls(ended < 0 ? again.log : again.log.slice(0, ended)).filter((c) => c.who === 'orchestrator' || c.who === 'child');
+  expect(calls2.some((c) => c.who === 'child') && calls2.some((c) => c.who === 'orchestrator'), `the relaunch did not call both the root and a child: ${JSON.stringify(calls2)}`);
+  expect(calls2.every((c) => c.model === 'scripted-c/gamma'), `an agent returned to a pair the choice replaced after the reload: ${JSON.stringify(calls2)}`);
+  const db2 = open(s4c);
+  const row2 = session(db2);
+  db2.close();
+  expect(row2.execution_status === 'completed' && row2.iterations_completed >= 2, `the continuation did not complete: ${JSON.stringify(row2)}`);
+  const chip = probes(again.log, 'probe').find((p) => p.selector === '[data-testid="chip-model"]')?.found[0]?.text ?? null;
+  results.twoWaits = { status: row.execution_status, shownWait: r.value.during[0]?.text ?? null, overrides, calls, relaunchCalls: calls2, relaunchAllCalls: modelCalls(again.log), chipAfterReload: chip, session: row2, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 // 5. An unresponsive model: no event for 30 s with a fallback slot → the fallback; the same script with no fallback keeps waiting.

@@ -18,7 +18,7 @@ import { cut } from './run/cut.js';
 export { offersToldIn, openOffersText } from './run/offers.js';
 import { planSection } from './run/plan-text.js';
 export { planRequestSection, planSection } from './run/plan-text.js';
-import { entryOf, overridesInForce, pairKey, providerIdentity, ResilienceMemory, withSettings, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
+import { entryOf, excludedModelKeys, overridesInForce, pairKey, providerIdentity, ResilienceMemory, withSettings, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
 import type { ResolvedTrigger } from './run/compression.js';
 import { SessionLog, type LogLevel } from './session-log.js';
 import { UserPresence } from './run/presence.js';
@@ -327,7 +327,8 @@ export interface AuthRecoveryModel {
 export interface AuthRecoveryFacts {
   readonly failed: AuthRecoveryModel | null;
   readonly active: AuthRecoveryModel | null;
-  readonly models: readonly (AuthRecoveryModel & { readonly key: string })[];
+  /** REQ-MONITOR-194: `excluded` marks a pair the session holds out of quota — listed, annotated, still choosable. */
+  readonly models: readonly (AuthRecoveryModel & { readonly key: string; readonly excluded?: true })[];
   readonly lastPrompt: boolean;
 }
 
@@ -355,11 +356,14 @@ interface Live {
   memory: ResilienceMemory | null;
   /**
    * REQ-CHAT-006 / REQ-SESSION-026: for a session no run of this process has started, the catalogue its record's
-   * `modelOverrides` are read against — resolved once, the first time its record is read, and only where its timeline holds
-   * a `model_override` entry (`null` otherwise, or where the configuration does not resolve). Absent until then.
-   * Never re-read for the life of the process: every path that writes a `model_override` (a wait choice, an
-   * authentication pin or its take-back) acts on a run this process started, and `s.run`, once set, is never cleared and
-   * is read first, so a `null` cached before an override existed never hides one written after.
+   * `modelOverrides` and (since fin10, REQ-MONITOR-194) `excludedModels` are read against — resolved once, the first time its
+   * record is read, and only where its timeline holds a `model_override` or `model_exhausted` entry (`null` otherwise, or
+   * where the configuration does not resolve). Absent until then.
+   * Never re-read for the life of the process: every path that writes a `model_override` or records an exclusion (a wait
+   * choice, an authentication pin or its take-back, a quota answer) acts on a run this process started, and `s.run`, once
+   * set, is never cleared and is read first, so a `null` cached before an entry existed never hides one written after. The
+   * one write at rest, `chooseNextModel`'s clearing, clears `restingMemory` itself where one was built, and needs none where
+   * none was (no exclusion was there to clear).
    */
   restingCatalogue?: readonly CatalogueEntry[] | null;
   /**
@@ -847,6 +851,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     worktreeBranch: parseBinding(r.worktree)?.branch ?? null,
     wait: null,
     modelOverrides: [],
+    excludedModels: [],
   };
 }
 
@@ -1340,7 +1345,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), excludedModels: this.excludedModelsFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1400,7 +1405,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), excludedModels: this.excludedModelsFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -2507,12 +2512,38 @@ export class Sessions {
   }
   private modelOverridesOf(s: Live, sessionId: SessionId): { from: string; to: string }[] {
     if (s.run) return s.run.modelOverridesInForce;
+    const resting = this.restingReadOf(s, sessionId);
+    return resting ? overridesInForce(resting.catalogue, resting.memory) : [];
+  }
+
+  /**
+   * REQ-MONITOR-194: the configured model keys the session holds out of quota, for the record's `excludedModels` — the run's
+   * own reading while one of this process exists, else the resting read's (`restingReadOf`), so a selector annotates them
+   * after a restart too. Until 2026-10-02 (fin10) they reached the record only inside `wait`
+   * (`docs/defects/fixed/the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md`).
+   */
+  private excludedModelsFor(sessionId: SessionId): string[] {
+    const s = this.live.get(sessionId);
+    if (!s) return [];
+    if (s.run) return s.run.excludedModelKeys;
+    const resting = this.restingReadOf(s, sessionId);
+    return resting ? excludedModelKeys(resting.catalogue, resting.memory.exhausted) : [];
+  }
+
+  /**
+   * The catalogue and memory a record of a session no run of this process has started is read against: the catalogue once,
+   * through the side-effect-free `restingCatalogue` port, and only where the timeline holds a `model_override` or a
+   * `model_exhausted` entry (since fin10 the latter too, for `excludedModels`); the memory the session's own where a control
+   * at rest has rehydrated it, else one of the read's own. Null where there is nothing to read or the configuration does not
+   * resolve.
+   */
+  private restingReadOf(s: Live, sessionId: SessionId): { readonly catalogue: readonly CatalogueEntry[]; readonly memory: ResilienceMemory } | null {
     if (s.restingCatalogue === undefined) {
       s.restingCatalogue = null;
       s.restingMemory = null;
       const stored = s.dal.getSession(sessionId);
       const timeline = stored && this.deps.restingCatalogue ? s.dal.timelineOf(sessionId) : [];
-      if (stored && timeline.some((t) => t.name === 'model_override')) {
+      if (stored && timeline.some((t) => t.name === 'model_override' || t.name === 'model_exhausted')) {
         // A read: the side-effect-free catalogue port, never `setupFor`/`configure`, which is a run start's (the verifier's
         // finding: it re-loaded the run host's MCP configuration and wrote its per-run maps for a session with no run).
         const catalogue = this.deps.restingCatalogue!(stored.workspace_root);
@@ -2525,7 +2556,7 @@ export class Sessions {
       }
     }
     const memory = s.memory ?? s.restingMemory ?? null;
-    return s.restingCatalogue && memory ? overridesInForce(s.restingCatalogue, memory) : [];
+    return s.restingCatalogue && memory ? { catalogue: s.restingCatalogue, memory } : null;
   }
 
   /** The session's memory (REQ-ORCH-091 a/d, REQ-SESSION-026), rehydrated from its timeline once, as a continuation does. */
@@ -2571,13 +2602,14 @@ export class Sessions {
     const config = setup.value.model.config;
     const active = memory.effective(withSettings(catalogue, { model: config.model, thinking: config.thinking }), catalogue).model;
     const seen = new Set<string>();
-    const models: (AuthRecoveryModel & { readonly key: string })[] = [];
+    const models: (AuthRecoveryModel & { readonly key: string; readonly excluded?: true })[] = [];
     for (const e of catalogue) {
       if (!e.usable || seen.has(e.key)) continue;
       const resolved = setup.value.models?.(e.key);
       if (!resolved?.ok) continue;
       seen.add(e.key);
-      models.push({ key: e.key, provider: e.provider, model: e.model.modelId });
+      // REQ-MONITOR-194: the dialog is a model selector — a pair the session holds out of quota is listed with the reason.
+      models.push({ key: e.key, provider: e.provider, model: e.model.modelId, ...(memory.isExhausted(e.provider, e.model.modelId) ? { excluded: true as const } : {}) });
     }
     return ok({ failed: failed === null ? null : named(failed), active: named(active), models, lastPrompt: this.lastPromptOf(s, sessionId).ok });
   }
@@ -2626,6 +2658,10 @@ export class Sessions {
     // A model chosen by hand is the one to use: a pin that moved it away (an earlier choice in this dialog, REQ-NOTIFY-075) is
     // taken back first, so the override chain cannot lead off it again — or back and forth between the two.
     if (memory.clearOverride(to.provider, to.model)) s.writer.appendTimeline('model_override', 'user', `${modelKey} (${to.provider}/${to.model}) was chosen in the recovery dialog; the pin that replaced it is taken back.`, { provider: to.provider, model: to.model, cleared: true, cause: 'authentication' });
+    // REQ-MONITOR-194: the dialog is a model selector, so choosing a pair the session holds out of quota clears its exclusion,
+    // as the run's own selectors do (`Run.clearChosenExclusion`); until 2026-10-02 (fin10) the restart's first call on it was
+    // refused by the ladder's pre-call read and went to its same-tier candidate or a wait.
+    const exclusionCleared = this.clearChosenExclusion(s, sessionId, modelKey, to.provider, to.model, 'in the recovery dialog');
     memory.setOverride(from.provider, from.model, { key: modelKey, choice: withSettings(catalogue, resolved.choice) });
     s.writer.appendTimeline('model_override', 'user', `Authentication failed on ${from.provider}/${from.model}; ${modelKey} (${to.provider}/${to.model}), chosen in the recovery dialog, is pinned for the rest of the session and the run restarts with the same prompt.`, { provider: from.provider, model: from.model, model_key: modelKey, to_provider: to.provider, to_model: to.model, cause: 'authentication' });
     const restarted = this.relaunchAfterAuthFailure(s, sessionId, lastPrompt, hold, () => {
@@ -2635,9 +2671,52 @@ export class Sessions {
       hold.release?.();
       memory.clearOverride(from.provider, from.model);
       s.writer.appendTimeline('model_override', 'rotaris', `The run could not restart on ${modelKey} (${restarted.error.reason}); the pin on ${from.provider}/${from.model} is taken back.`, { provider: from.provider, model: from.model, cleared: true, cause: 'authentication' });
+      // The choice did not take: the exclusion it cleared stands again, so the session is left as it was.
+      if (exclusionCleared) {
+        memory.markExhausted(to.provider, to.model);
+        s.restingMemory?.markExhausted(to.provider, to.model);
+        s.writer.appendTimeline('model_exhausted', 'rotaris', `The run could not restart on ${modelKey}; ${to.provider}/${to.model} is excluded as out of quota again, as it was before the choice.`, { provider: to.provider, model: to.model, model_key: modelKey, restored: true });
+      }
       return err({ code: 'restart-failed', reason: restarted.error.reason });
     }
     return ok({ pinned: { from, to } });
+  }
+
+  /**
+   * REQ-MONITOR-194 / REQ-MONITOR-146: the composer's "Model for the next run" — a model selector — chose `modelKey` for this
+   * session. The choice itself is configuration (`personas.<entry>.model`, written by the renderer first); what reaches the
+   * engine here is that it was chosen explicitly, which clears the exclusion of its pair if the session holds it out of
+   * quota — in the memory a run reads and in a resting read's — and writes the `model_exhausted` entry carrying `cleared: true`
+   * that `ResilienceMemory.rehydrate` replays. The key is resolved against the workspace's catalogue through the
+   * side-effect-free `restingCatalogue` port, never a run start's `configure`. Until 2026-10-02 (fin10) the chip wrote the
+   * configuration alone and the exclusion stood
+   * (`docs/defects/fixed/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md`).
+   */
+  chooseNextModel(sessionId: SessionId, modelKey: string): Result<{ readonly cleared: boolean }, { readonly code: string; readonly reason: string }> {
+    const s = this.live.get(sessionId);
+    if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    const stored = s.dal.getSession(sessionId);
+    if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+    const catalogue = this.deps.restingCatalogue?.(stored.workspace_root) ?? null;
+    if (catalogue === null) return err({ code: 'no-catalogue', reason: 'The workspace\'s model configuration does not load, so the model chosen for the next run cannot be resolved.' });
+    const e = catalogue.find((c) => c.key === modelKey);
+    if (!e) return err({ code: 'unknown-model', reason: `'${modelKey}' is not a configured model` });
+    return ok({ cleared: this.clearChosenExclusion(s, sessionId, modelKey, e.provider, e.model.modelId, 'as the model for the next run') });
+  }
+
+  /**
+   * REQ-MONITOR-194: an explicit choice of a pair the session holds out of quota clears its exclusion — in the session's memory
+   * (`s.memory`, the one every run of it reads) and a resting read's (`s.restingMemory`), and as a `model_exhausted` entry
+   * carrying `cleared: true`, the shape `Run.clearChosenExclusion` writes. Where no memory is built yet the timeline says
+   * whether the pair is excluded. True when it was.
+   */
+  private clearChosenExclusion(s: Live, sessionId: SessionId, key: string, provider: string, modelId: string, where: string): boolean {
+    const memories = [s.memory, s.restingMemory].filter((m): m is ResilienceMemory => m !== null && m !== undefined);
+    const excluded = s.memory !== null ? s.memory.isExhausted(provider, modelId) : memories.some((m) => m.isExhausted(provider, modelId)) || ResilienceMemory.rehydrate(s.dal.timelineOf(sessionId), () => null).isExhausted(provider, modelId);
+    if (!excluded) return false;
+    for (const m of memories) m.clearExhausted(provider, modelId);
+    s.writer.appendTimeline('model_exhausted', 'user', `The user chose ${key} (${provider}/${modelId}) explicitly ${where}; the pair is no longer excluded as out of quota and is eligible again until a further insufficient-quota response.`, { provider, model: modelId, model_key: key, cleared: true });
+    return true;
   }
 
   /**

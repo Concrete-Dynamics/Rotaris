@@ -1,0 +1,42 @@
+## Keep waiting on the quota-wait header sends nothing where it should resolve the wait as a retry
+
+The wait header's "Keep waiting" (`WaitHeader` in `packages/ui/src/WorkspaceView.tsx`) sets a local "Still waiting." and
+sends nothing: no operation exists for it (`docs/architecture/views/03-runtime-view.md` §5, the *keep waiting* row). The
+reading is ADR-0010's third execution (2026-09-05): "keep waiting is the absence of a decision", read from REQ-MONITOR-192
+("continues indefinitely until a person decides") and REQ-NOTIFY-263, which it cites; it predates REQ-MONITOR-303, which
+says keep waiting "resolves the wait as a retry and returns the status to `running`", and spec resolution 29
+(`docs/spec/resolutions/02-run-monitoring-steering.md`) fixes "what each does" as part of the three-choice contract. In the
+wait that never auto-resumes (an exhausted pair) the run therefore stays parked after the user chose to keep waiting, and in
+the auto-resuming wait it waits out the interval rather than retrying. Found by the sixth triage of the open notes (fin10,
+origin/main 97e1de4) reading the code; recorded 2026-10-02 by the bundle that made the ladder read the exclusion before every
+call (task 1 of `fin10-quota-exclusions-and-choices`), since it is in that code. Not repaired: REQ-MONITOR-303 and ADR-0010
+do not agree on the auto-resume variant — an immediate retry there reads against REQ-MONITOR-192 ("the wait timing out
+resolves as a retry") and REQ-NOTIFY-087 ("the wait ends by itself once the computed interval has elapsed") — and REQ-MONITOR-004's
+enumeration of operations is closed at twenty-two, none of them a keep-waiting; the question is raised as OQ-188 in
+[`open-questions.md`](../architecture/open-questions.md), with the reading the build proceeds under (as built).
+
+**What any repair must carry.** Since the same bundle the ladder reads the exclusion before every call
+([an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md](fixed/an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md)):
+an agent on a pair the session holds out of quota is not called but moved, or parked in the wait that never auto-resumes.
+A keep waiting that resolves the exhausted variant as a retry must count as an explicit choice of the waiting pair
+(REQ-MONITOR-194: it clears the exclusion, as `Run.setEntryModel`'s quota-retry branch does through
+`clearChosenExclusion`), or the pre-call check sends the retry straight back into the wait. As built no loop is possible:
+keep waiting sends nothing, and the wait ends only by a change of model (which clears or overrides) or a cancel.
+
+## Specs
+
+- REQ-MONITOR-303 — keep waiting "resolves the wait as a retry and returns the status to `running`"; spec resolution 29 fixes
+  what each of the three choices does.
+- REQ-NOTIFY-263 — exactly three choices in the header; it does not say what keep waiting does.
+- REQ-MONITOR-192 / REQ-NOTIFY-087 — the auto-resume variant ends by itself when the interval elapses; the exhausted
+  variant continues until a person decides.
+- REQ-MONITOR-194 — a retry of an excluded pair the user chose is an explicit choice, which clears the exclusion.
+
+## Relevant files
+
+- `packages/ui/src/WorkspaceView.tsx` — `WaitHeader`: "Keep waiting" sets `acknowledged` and sends nothing.
+- `docs/architecture/adr/0010-three-channels-between-run-and-surfaces.md` — the third execution's reading (a).
+- `docs/architecture/views/03-runtime-view.md` — §5, the *keep waiting* row.
+- `packages/engine/src/run/waits.ts` — `WaitRegistry`: `resolveWithModel` and `releaseForRest`, no resolve-as-retry for one
+  session's waits.
+- `packages/engine/src/run/run.ts` — `setEntryModel`'s quota-retry branch, the explicit choice a retry would have to count as.

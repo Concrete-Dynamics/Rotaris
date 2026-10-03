@@ -144,7 +144,7 @@ export interface ChildrenDeps {
    * Part AH (ADR-0060): compression for a child — the trigger resolved against the model THIS child calls, and
    * the child's OWN task plan carried across (REQ-MONITOR-078, REQ-MONITOR-084 (4)).
    */
-  readonly compressionFor?: ((current: ModelChoice, todoLines: () => readonly string[]) => TurnCompression | undefined) | undefined;
+  readonly compressionFor?: ((current: () => ModelChoice, todoLines: () => readonly string[]) => TurnCompression | undefined) | undefined;
   /** Part Y (REQ-LIBRARY-092/097/098): the session artifact store — child reports land in it and its two context blocks reach every child. */
   readonly artifacts?: ArtifactStore | undefined;
   /**
@@ -1103,8 +1103,12 @@ export class IterationChildren implements DelegationOps {
     let corrected = resume !== null && (hadCorrectiveMessage(resume.history) || hadCorrectiveMessage(deps.record?.everRecorded(row.task_id) ?? []));
     // Part Q: the child's own cell — its model (an override of the session applied), its role's fallback, one fallback across both routes.
     const resilience = deps.resilience?.forChild(persona, { model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, childTimeoutMs) ?? null;
-    // Part AH: this child's own capacity and its own plan — the ledger row is where a child's task plan lives.
-    const compression = deps.compressionFor?.({ model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, () => todoLinesFromStored(this.ledger.get(row.task_id)?.todo ?? null));
+    // Part AH: this child's own capacity and its own plan — the ledger row is where a child's task plan lives. REQ-MONITOR-080:
+    // the model its cell calls next (the session's overrides followed, as the ladder follows them), read at each pass, so a
+    // child under an override compresses on the override's model and a ladder move takes its compression along; until
+    // 2026-10-02 (fin10) it was the persona's configured model, fixed at the turn's start.
+    const configured: ModelChoice = { model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking };
+    const compression = deps.compressionFor?.(() => (resilience ? resilience.memory.effective(resilience.cell.model, resilience.catalogue) : configured), () => todoLinesFromStored(this.ledger.get(row.task_id)?.todo ?? null));
     // REQ-TOOLS-006 (4), OQ-145: the delegating agent's persona, whose `tool_restrictions` may name this child's.
     const tools = deps.toolsFor(row.persona, row.canonical_name, this, row.task_id, row.depth, undefined, this.parentPersonaOf(row.parent_id));
     /*

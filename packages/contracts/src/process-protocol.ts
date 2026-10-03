@@ -127,6 +127,8 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().min(1), text: z.string() }),
   z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().optional() }),
   z.object({ kind: z.literal('session.planRearm'), sessionId: z.string().min(1) }),
+  /** REQ-MONITOR-194 / REQ-MONITOR-146: the composer's next-run model chosen explicitly (`Sessions.chooseNextModel`); answered `ack`. */
+  z.object({ kind: z.literal('session.chooseNextModel'), sessionId: z.string().min(1), modelKey: z.string().min(1) }),
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   /** REQ-NOTIFY-045 (OQ-178): resubmit the session's last submitted prompt, images included (`Sessions.retry`); answered `ack`. */
   z.object({ kind: z.literal('session.retry'), sessionId: z.string().min(1) }),
@@ -469,7 +471,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
     kind: z.literal('session.authRecovery'), sessionId: z.string(),
     failed: z.object({ key: z.string().nullable(), provider: z.string(), model: z.string() }).nullable(),
     active: z.object({ key: z.string().nullable(), provider: z.string(), model: z.string() }).nullable(),
-    models: z.array(z.object({ key: z.string(), provider: z.string(), model: z.string() })),
+    models: z.array(z.object({ key: z.string(), provider: z.string(), model: z.string(), excluded: z.literal(true).optional() })),
     lastPrompt: z.boolean(),
   }),
   /** REQ-NOTIFY-074/076: the restart has begun; `pinned` names the pair that failed and the model now pinned, null after a re-authentication. */

@@ -494,3 +494,16 @@ on `c1` from its first pass — each with no pass at all before the repair (the 
 app, `compression-proof`'s new `after-a-move` scenario: the root starts on alpha (10,000 tokens), meets insufficient quota,
 moves to beta (1,000), and its 900-token step compresses on beta at beta's 600-token trigger. The row is in
 [`../first-executions.md`](../first-executions.md).
+
+**Corrected at the bundle's first repair round, 2026-10-03.** "From the pair the agent's cell calls next, the session's
+overrides followed" left the exclusion out: `Run.callsOn` follows an override but not a pair the session holds out of quota,
+and the turn's automatic check ran before the ladder's pre-call move, so a root resumed on a pair its child had just excluded
+compressed on it at its threshold and then moved. That reason is kept beside its replacement: `runTurn` settles the cell
+(`settleBeforeCall`, ADR-0027's ninth execution as corrected) before the check, so the pass reads the pair the step will
+call; and `TurnCompression.withheld`, read at each pass, makes no call when the compressing model is the agent's own pair and
+the session holds it out of quota — reachable only by a manual pass while the agent awaits a tool or a child, which then fails
+with the reason (`due()` answers false for the automatic one). A configured `compressor.model` is still called as configured
+(OQ-189). Measured in `ladder.test.ts` (a root stepping again after the exclusion makes no pass; with no candidate it waits,
+then compresses on the model chosen at its trigger; a manual pass in the span calls nothing — each red before) and by
+`compression-proof`'s `excluded-before-pass` scenario (red before: a pass at alpha's 600-token trigger; after: none, the root
+on beta, whose trigger is 60,000).

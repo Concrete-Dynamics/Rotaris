@@ -566,7 +566,9 @@ memory and as the `model_exhausted` timeline entry; an explicit choice of the pa
 run header's and the inspector's switch and the wait's picker (`Run.clearChosenExclusion`), and since fin10 the composer's
 next-run chip (`session.chooseNextModel` → `Sessions.chooseNextModel`, which reaches a session with no run too) and the
 recovery dialog (`restartAfterAuthFailure`, restored if the restart cannot begin); the exclusion is read
-**before every call** too (since fin10, `resilientStep` after `followOverride`): a cell on a pair the session holds out of
+**before every call** too (since fin10, `settleBeforeCall`: `followOverride`, then the exclusion; `runTurn` calls it
+before its compression check and `resilientStep` before every call, a cell with nothing to settle taking the synchronous
+`onExcludedPair`): a cell on a pair the session holds out of
 quota — another agent's answer, or an earlier run's rehydrated — is not called but takes (b) then (c) at once (`limitPath`,
 the move or the `model_wait` issue carrying `pre_call: true`, no second `model_exhausted`); (b) at most one same-tier candidate per agent (`sameTierCandidates` over the
 run host's **catalogue**: same recorded role, a different provider identity — `auth_provider` else the family — configured first
@@ -620,7 +622,11 @@ whose capacity is read, and the compressing model when `compressor.model` is not
 the pair the agent's cell calls next, the session's overrides followed (`TurnCompression.compressor()`/`trigger()`;
 `Run.callsOn` for the root, the child's own cell in `IterationChildren`), so a ladder move within the turn — a same-tier or
 unresponsive fallback, a wait's choice, an override followed — takes the compression with it (REQ-MONITOR-079/080; until
-2026-10-02, fin10, both were captured when the turn started, and a child's from its persona's configured model).
+2026-10-02, fin10, both were captured when the turn started, and a child's from its persona's configured model). The
+automatic check comes **after** the cell is settled (`settleBeforeCall`), so it never reads, nor calls, a pair the session
+holds out of quota; a pass that would call the agent's own excluded pair — a manual one while the agent awaits a tool or a
+child — is withheld (`TurnCompression.withheld`): no call, a failure naming the reason (since the repair round of
+2026-10-03; a configured `compressor.model` is called as configured, OQ-189).
 **Recovery** (REQ-ORCH-093), in the ladder's `context_window` arm: condense and retry, **at most twice for one
 call**, the original rejection surfaced unchanged when the condensation itself fails; the issue is
 `llm_bad_request`, or `parent_resume_bad_request` on the first call of a turn resumed with child reports. A

@@ -1289,6 +1289,19 @@ export class Run {
         return { backend: c.backend, model: chosen.model, thinking: chosen.thinking, timers: c.timers, credentialFor: c.credentialFor, timeoutMs: c.timeoutMs, inputTokens: c.triggerFor(chosen.model).tokens };
       },
       trigger: () => c.triggerFor(current().model), charsPerToken: c.charsPerToken, preserveRecentTurns: c.preserveRecentTurns, todoLines,
+      /**
+       * REQ-MONITOR-194 with REQ-MONITOR-080: the agent's own pair, when the session holds it out of quota, is not called to
+       * compress. The turn settles the cell before its automatic check (`settleBeforeCall`), so this answers only in the
+       * span before the agent's next call — a manual pass while it awaits a tool or a child. A configured
+       * `compression.model` is a configured slot and is called as configured (OQ-189).
+       */
+      withheld: () => {
+        if (c.model) return null;
+        const chosen = current();
+        const provider = providerIdentity(this.catalogue, chosen.model);
+        if (!this.memory.isExhausted(provider, chosen.model.modelId)) return null;
+        return `${provider}/${chosen.model.modelId}, the model this agent runs on, is held out of quota for this session; no compressing call is made on it, and the agent's next call moves it to another model first`;
+      },
       // Part AO: every turn of this run — the root's and each child's — registers its conversation for the manual pass.
       registry: this.conversations,
       /**

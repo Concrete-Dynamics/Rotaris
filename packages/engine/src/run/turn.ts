@@ -7,7 +7,7 @@ import type { AgentBackend, ChatMessage, ContentPart, DispatchRetry, ModelRef, T
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import type { LoopSupervisor, SupervisorEscalation } from './supervisor.js';
-import { resilientStep, type StepOutcome, type TurnResilience } from './ladder.js';
+import { onExcludedPair, resilientStep, settleBeforeCall, type LadderDeps, type StepOutcome, type TurnResilience } from './ladder.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
 import { providerIdentity, type ModelChoice } from './resilience.js';
 import { CompressionRunner, type TurnCompression } from './compression.js';
@@ -321,7 +321,15 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
      */
     const afterSupervision = stopsHere();
     if (afterSupervision) return afterSupervision;
-    if (compression && !signal.aborted && compression.due(conv, condensed)) {
+    /**
+     * REQ-MONITOR-194 with REQ-MONITOR-080: the cell is settled BEFORE the compression check — the session's overrides
+     * followed and a pair it holds out of quota left for the same-tier candidate, else the wait (`settleBeforeCall`) — so
+     * the pass compresses on the pair this step will call, at that pair's threshold, and never calls an excluded one. A
+     * report here (a wait cancelled, a rest accepted meanwhile) is the step's, exactly as the ladder would have returned it.
+     */
+    const ladderDeps: LadderDeps = { writer, clocks, warn: deps.warn, agent: deps.agentName, onRequestUsage: observeRequestUsage, imposedWait: deps.onImposedWait };
+    const settled = deps.resilience && onExcludedPair(deps.resilience) ? await settleBeforeCall(ladderDeps, deps.resilience, signal) : null;
+    if (settled === null && compression && !signal.aborted && compression.due(conv, condensed)) {
       if (await compressing(() => compression.run(conv, 'automatic', condensed, signal))) condensed = true;
       const afterCompression = stopsHere();
       if (afterCompression) return afterCompression;
@@ -343,9 +351,9 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       : deps.resilience;
     // PD-MONITOR-001 revision 2: the ladder prices each request at its cell's model. The bare path has no catalogue to read
     // rates from — it runs only where no resilience was configured — so it keeps a reported figure and prices nothing itself.
-    const report = resilience
-      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName, onRequestUsage: observeRequestUsage, imposedWait: deps.onImposedWait }, resilience, (choice, unresponsiveMs) => step(stepDeps, choice, conv.snapshot(), specs, signal, unresponsiveMs, segment), signal)
-      : await (async () => { const o = await step(stepDeps, { model: deps.model, thinking: deps.thinking }, conv.snapshot(), specs, signal, null, segment); observeRequestUsage(priceRequest(o.report.usage, null)); return o.report; })();
+    const report = settled ?? (resilience
+      ? await resilientStep(ladderDeps, resilience, (choice, unresponsiveMs) => step(stepDeps, choice, conv.snapshot(), specs, signal, unresponsiveMs, segment), signal)
+      : await (async () => { const o = await step(stepDeps, { model: deps.model, thinking: deps.thinking }, conv.snapshot(), specs, signal, null, segment); observeRequestUsage(priceRequest(o.report.usage, null)); return o.report; })());
     lastReport = report;
     if (deps.detached?.() === true) return { report: { ...report, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
     // REQ-MONITOR-049 (Part R): the step's input count is this agent's latest prompt-token reading; the surface reads it from the record.

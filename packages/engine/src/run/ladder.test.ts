@@ -1597,6 +1597,105 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(compressorModels(client)).toEqual(['c1']);
       expect(compressions(sid)).toEqual([expect.objectContaining({ agent: 'side', capacity: 200, trigger_tokens: 100 })]);
     });
+
+    /*
+     * REQ-MONITOR-194 with REQ-MONITOR-080: the pre-call move off an excluded pair is made BEFORE the turn's compression check,
+     * so the automatic pass compresses on the pair the agent moves to, at its threshold, and never calls the excluded one.
+     * Until the repair round of 2026-10-03 the check ran first: a root on a1 resumed after its child's quota answer on a1
+     * compressed on a1 at a1's threshold and only then moved to b1 (the verifier's reproduction).
+     */
+    it('a root on a1 that steps again after its child excluded a1 moves before its compression check: no pass calls a1 or reads a1\'s threshold', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      let childMoved!: () => void;
+      const moved = new Promise<void>((r) => { childMoved = r; });
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'g1', name: 'glob', args: {} }], 'looking', { input: 20, output: 5 });
+          if (turn === 2) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }], 'delegating', { input: 20, output: 5 });
+          // The root's third call answers once the child's quota answer on a1 has excluded it and the child has moved to b1.
+          if (turn === 3) return { parts: [{ hold: moved }, ...toolCalls([{ callId: 'g2', name: 'glob', args: {} }], 'looking again', { input: 500, output: 5 }).parts] };
+          return answer(`root ${turn}`);
+        }
+        if (turn === 1) return failing(quota());
+        childMoved();
+        return answer('I did it.');
+      };
+      const { sessions, client } = sessionsWith(script, { catalogue, delegation: true, tool: glob, childTimeoutMs: 600_000, inputLimits: { a1: 2000, b1: 20_000_000 }, triggerTokens: { a1: 100, b1: 10_000_000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Before: ['a1'] — the pass called the excluded a1, at a1's 100-token trigger, which b1's would not have reached, and
+      // the root moved to b1 only after it.
+      expect(compressorModels(client)).toEqual([]);
+      expect(compressions(sid)).toEqual([]);
+      const rootCalls = client.requests.filter((r) => /^You are the orchestrator/.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '')).map((r) => r.model.modelId);
+      // Its first three calls were made before the exclusion (the third answered after it); every later one is on b1.
+      expect(rootCalls.slice(0, 3)).toEqual(['a1', 'a1', 'a1']);
+      expect(rootCalls.length).toBeGreaterThan(3);
+      expect(rootCalls.slice(3).every((m) => m === 'b1')).toBe(true);
+    });
+
+    it('a root on an excluded a1 with no same-tier candidate waits before its compression check, then compresses on the model chosen, at its threshold', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'g1', name: 'glob', args: {} }], 'looking', { input: 20, output: 5 });
+          if (turn === 2) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }], 'delegating', { input: 20, output: 5 });
+          if (turn === 3) return { parts: [{ hold: held }, ...toolCalls([{ callId: 'g2', name: 'glob', args: {} }], 'looking again', { input: 500, output: 5 }).parts] };
+          return answer(`root ${turn}`);
+        }
+        return turn === 1 ? failing(quota()) : answer('I did it.');
+      };
+      const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, tool: glob, childTimeoutMs: 600_000, inputLimits: { a1: 2000, c1: 200 }, triggerTokens: { a1: 100, c1: 300 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 60 && lastWait(pub) === null; i++) await tick();
+      // The child waits on a1, excluded by its quota answer; then the root's third call answers and the root steps again.
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true });
+      release();
+      const rootWaiting = () => dal.issuesOf(sid).some((i) => i.kind === 'model_wait' && i.actor === 'orchestrator');
+      for (let i = 0; i < 60 && !rootWaiting(); i++) await tick();
+      // Before: the root compressed on a1 at a1's trigger here, and waited only after.
+      expect(rootWaiting()).toBe(true);
+      expect(compressorModels(client)).toEqual([]);
+      // c1 chosen resolves both waits; the root compresses on c1, at c1's trigger, before its call on c1.
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(compressorModels(client)).toEqual(['c1']);
+      expect(compressions(sid)).toEqual([expect.objectContaining({ agent: 'orchestrator', trigger: 'automatic', capacity: 200, trigger_tokens: 300 })]);
+    });
+
+    it('a manual pass while the root sits on a pair its child excluded, before its next call moves it, calls no model for the root and says why', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'g1', name: 'glob', args: {} }], 'looking', { input: 20, output: 5 });
+          if (turn === 2) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }], 'delegating', { input: 20, output: 5 });
+          if (turn === 3) return { parts: [{ hold: held }, ...answer('waiting on the child', { input: 20, output: 5 }).parts] };
+          return answer(`root ${turn}`);
+        }
+        return turn === 1 ? failing(quota()) : answer('I did it.');
+      };
+      const { sessions, client } = sessionsWith(script, { catalogue, delegation: true, tool: glob, childTimeoutMs: 600_000, ...limits });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      const childEnded = () => timeline(sid).includes('child_end');
+      for (let i = 0; i < 60 && !childEnded(); i++) await tick();
+      expect(childEnded()).toBe(true);
+      expect(timeline(sid)).toContain('model_exhausted');
+      // The root's third call went out on a1 before the exclusion and is still in flight: its cell sits on a1.
+      const r = await sessions.controlAsync({ op: 'forceCompression', sessionId: sid, args: {} });
+      // Before: the pass called a1 for the root ('a1' among the compressor's requests) and compressed it.
+      expect(compressorModels(client)).toEqual([]);
+      expect(r).toEqual({ ok: true, compression: { compressed: 0, unchanged: 0, failed: [{ agent: 'orchestrator', reason: expect.stringContaining('a/a1, the model this agent runs on, is held out of quota for this session') }] } });
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(compressorModels(client)).toEqual([]);
+    });
   });
 
   it('an unresponsive model: no event within llm_response_timeout closes the call and re-runs it once on the fallback; without a fallback the call keeps waiting (REQ-ORCH-090, REQ-CONFIG-114)', async () => {

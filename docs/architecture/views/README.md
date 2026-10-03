@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-03**
 
+**The cell is settled before the compression check, and no pass calls the agent's own excluded pair (REQ-MONITOR-194,
+REQ-MONITOR-080; fin10's first repair round).** `settleBeforeCall` (ladder.ts) follows the overrides and reads the exclusion;
+`runTurn` calls it before the automatic compression check as well as `resilientStep` before every call, and
+`TurnCompression.withheld` makes no call for a pass on the agent's own excluded pair. The **runtime view**'s ladder and
+compression paragraphs say so. No package, edge, process, channel, command, timeline name or store column changed.
+
 **Every model selector annotates a pair held out of quota, and every one's choice clears it (REQ-MONITOR-194,
 REQ-MONITOR-146, REQ-NOTIFY-074; fin10).** The record gains `excludedModels` (the live run's `excludedModelKeys`, else a
 resting read's, now taken where the timeline holds a `model_exhausted` entry too), which the run header, the inspector and the

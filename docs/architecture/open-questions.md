@@ -9239,9 +9239,15 @@ Numbered 189, the next free on the branch after its OQ-188; renumbered at the me
 every question this round raises.)*
 
 The run's auxiliary calls — the intent classifier and the pre-flight, the loop classifier, a configured compressor, the
-post-run analyst, and the summariser — take configured slots. Since fin10 an agent's own calls never reach a pair the
-session holds out of quota (the ladder's pre-call read sends the agent to its same-tier candidate or a wait), and since fin8
-they follow a session-wide override; the summariser follows the override but not the exclusion, and the others follow
+post-run analyst, and the summariser — take configured slots. Since fin10 an agent's own calls — its model steps, and a
+compression pass on its own model where no `compressor.model` is configured — never reach a pair the session holds out of
+quota: the cell is settled before every call and before the turn's compression check (`settleBeforeCall`, which sends the
+agent to its same-tier candidate or a wait), and a manual pass in the span before the agent's next call moves it makes no
+call and fails with its reason. (Corrected in place at the bundle's first repair round, 2026-10-03. The sentence first read
+"Since fin10 an agent's own calls never reach a pair the session holds out of quota (the ladder's pre-call read sends the
+agent to its same-tier candidate or a wait)", which was false of the branch as first built: the turn's automatic compression
+check ran before the ladder's pre-call move, so a root resumed on a pair its child had just excluded compressed on that pair,
+at its threshold, and only then moved — the verifier's reproduction.) Since fin8 these slots follow a session-wide override; the summariser follows the override but not the exclusion, and the others follow
 neither. For the override the requirements point one way (REQ-ORCH-091 d keeps it "for the rest of the session", and it
 replaces a pair, not an agent's choice); for the exclusion they do not say what replaces the slot: a same-tier candidate
 (REQ-ORCH-091 b is an agent's ladder, and these calls have none), the slot order's next entry (REQ-ORCH-114 names one for the

@@ -210,6 +210,14 @@ export interface TurnCompression {
    */
   readonly compressor: () => CompressorDeps;
   readonly trigger: () => ResolvedTrigger;
+  /**
+   * REQ-MONITOR-194 with REQ-MONITOR-080: read at each pass — why the pass may not call its compressing model now, or null.
+   * The run answers with a reason when that model is the agent's own pair and the session holds it out of quota: the
+   * agent has not yet made the call that moves it (its cell is settled only before its next call), so a manual pass in
+   * that span, or an automatic one should the settle ever be skipped, makes no call and fails with the reason. Absent
+   * means never withheld.
+   */
+  readonly withheld?: (() => string | null) | undefined;
   /** `REQ-CONFIG-132`: `chars_per_token`, default 4. */
   readonly charsPerToken: number;
   /** `REQ-CONFIG-132`: `preserve_recent_turns`, default 4. */
@@ -335,6 +343,8 @@ export class CompressionRunner {
   due(conversation: Conversation, condensed: boolean): boolean {
     // Part AO: a pass in flight (manual or automatic) is never doubled.
     if (this.inFlight !== null) return false;
+    // REQ-MONITOR-194: no pass on a pair the session holds out of quota; the agent's next call moves it first.
+    if (this.svc.withheld?.() != null) return false;
     const trigger = this.svc.trigger();
     if (trigger.tokens <= 0 || this.futile) return false;
     const counted = this.count(conversation, condensed);
@@ -370,12 +380,19 @@ export class CompressionRunner {
     const compressor = this.svc.compressor();
     const t = this.svc.trigger();
     const startedMs = clocks.monotonic.now();
-    this.svc.onState?.(agent, agent);
-    let outcome;
-    try {
-      outcome = await compress({ conversation, preserveRecentTurns: this.svc.preserveRecentTurns, charsPerToken: this.svc.charsPerToken, todoLines: this.svc.todoLines() }, compressor, signal);
-    } finally {
-      this.svc.onState?.(null, agent);
+    // REQ-MONITOR-194: a pass whose compressing model the session holds out of quota makes no call; it fails with the reason.
+    const withheld = this.svc.withheld?.() ?? null;
+    let outcome: CompressionOutcome;
+    if (withheld !== null) {
+      const messages = conversation.snapshot().length;
+      outcome = { ok: false, reason: withheld, nothingToDo: false, beforeTokens: counted.tokens, afterTokens: counted.tokens, beforeMessages: messages, afterMessages: messages, summary: '' };
+    } else {
+      this.svc.onState?.(agent, agent);
+      try {
+        outcome = await compress({ conversation, preserveRecentTurns: this.svc.preserveRecentTurns, charsPerToken: this.svc.charsPerToken, todoLines: this.svc.todoLines() }, compressor, signal);
+      } finally {
+        this.svc.onState?.(null, agent);
+      }
     }
     this.lastOutcome = outcome;
     if (!outcome.ok) {

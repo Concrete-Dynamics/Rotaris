@@ -44,9 +44,27 @@ REQ-ORCH-091's own order, (b) then (c).
   the session (`same-tier-resume`): the continuation's calls `scripted/beta` alone, a second `quota_fallback_model` carrying
   `pre_call: true`, one `model_exhausted`; red on a build of the code before (`scripted/alpha` called), green after.
 
+- **Repair round 1 (2026-10-03), the compression pass.** As first built the pre-call read sat inside `resilientStep` alone,
+  and the turn's automatic compression check runs before the ladder is called, so an agent resumed on a pair another agent had
+  just excluded compressed on that pair, at its threshold, and only then moved (the verifier reproduced it: a root on `a1`
+  after its child's quota answer on `a1` compressed on `a1` at `a1`'s 100-token trigger, where `b1`'s would not have
+  triggered). This note first called that "outside this note"; it is not — REQ-MONITOR-194 forbids the call and
+  REQ-MONITOR-080 names the model the agent is itself using, which after the move is `b1`. The settle is now its own function,
+  `settleBeforeCall` in `packages/engine/src/run/ladder.ts` (`followOverride`, then the exclusion's `limitPath`), and
+  `runTurn` (`packages/engine/src/run/turn.ts`) calls it before the compression check as well as `resilientStep` before every
+  call; a cell with nothing to settle takes the synchronous `onExcludedPair` and no extra await. A pass that would still call
+  the agent's own excluded pair — a manual pass while the agent awaits a tool or a child, before its next call moves it — is
+  withheld (`TurnCompression.withheld`, answered by `Run.compressionFor`): it makes no call and fails with the reason, which
+  the manual arm reports per agent. A configured `compressor.model` is a configured slot and is still called as configured
+  ([OQ-189](../../architecture/open-questions.md), whose sentence claiming this was closed is corrected in place). Pinned in
+  `ladder.test.ts` ("REQ-MONITOR-078/080: compression follows the model the agent's cell is on"): a root that steps again
+  after its child excluded `a1` makes no pass and calls `b1` (red before: compressor `a1`); with no candidate the root waits
+  before its check and compresses on the model chosen at that model's trigger (red before: `a1`); a manual pass while the
+  root sits on the excluded `a1` calls nothing and names the reason (red before: compressor `a1`). Shown by
+  `compression-proof`'s `excluded-before-pass` scenario, red on a build of the code before and green after.
+
 Not covered, and outside this note: the intent classifier, the analyst and the summariser make model calls outside the
-ladder, so they read no exclusion (recorded by task 2 of the same bundle); and a compression pass due before the cell's
-first step on an excluded pair is made before the ladder moves the cell.
+ladder, so they read no exclusion (recorded by task 2 of the same bundle, OQ-189).
 
 ## Specs
 

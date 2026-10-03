@@ -444,6 +444,16 @@ after the child's exclusion; `a1, b1, a1` and `a1, a1` for a continuation) and b
 with a second prompt (red before: `scripted/alpha`; after: `scripted/beta` alone). Keep waiting, which sends nothing, is
 OQ-188's; a retry it might become must count as an explicit choice of the pair.
 
+**Corrected at the bundle's first repair round, 2026-10-03.** "`resilientStep` now reads the exclusion before every call"
+held of the ladder's calls and not of the turn's compression check, which `runTurn` makes before it calls the ladder: an
+agent resumed on a pair another agent had just excluded compressed on that pair, at that pair's threshold, and only then
+moved (the verifier's reproduction in `ladder.test.ts`). That reason is kept here beside its replacement: the settle is its
+own function, `settleBeforeCall` (`followOverride`, then the exclusion's `limitPath`), which `runTurn` calls before the
+compression check and `resilientStep` before every call (a cell with nothing to settle takes the synchronous
+`onExcludedPair`, so its step is scheduled as before); ADR-0060's note carries the compression half. Measured in
+`ladder.test.ts` (three cases, red before: the compressor called `a1`) and by `compression-proof`'s `excluded-before-pass`
+scenario (red before: a pass at alpha's 600-token trigger; after: the root moved to beta, `pre_call: true`, and no pass).
+
 ## Tenth execution — 2026-10-02, every waiting pair's override persisted (REQ-ORCH-091 d, REQ-SESSION-026/196)
 
 *The repair of [`a-wait-choice-persists-the-override-for-the-shown-wait-alone.md`](../../defects/fixed/a-wait-choice-persists-the-override-for-the-shown-wait-alone.md)

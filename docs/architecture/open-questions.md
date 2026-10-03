@@ -9228,3 +9228,33 @@ because nothing is retried.
 **What a ruling decides.** Whether keep waiting resolves the exhausted variant as a retry of the waiting pair (and then that
 it clears the pair's exclusion as an explicit choice does); whether it retries the auto-resume variant at once or leaves its
 timer to retry; and whether either is a new operation or a reading of an existing one.
+
+**OQ-189 — What does a configured model slot call when the session holds its pair out of quota or has replaced it?**
+*(REQ-MONITOR-194, "neither retried automatically nor offered as an automatic fallback candidate", and spec resolution 21,
+which reads the exclusion as governing automatic behaviour; REQ-ORCH-091 (d), the override "for the rest of the session";
+REQ-MONITOR-080, a configured compression model used, else the agent's own; REQ-ORCH-114, the classifier's slot order.
+Raised 2026-10-03 by task 2 of plan fin10's `fin10-quota-exclusions-and-choices` bundle, recording
+[`a-configured-model-slot-is-called-on-a-pair-the-session-replaced-or-holds-out-of-quota.md`](../defects/a-configured-model-slot-is-called-on-a-pair-the-session-replaced-or-holds-out-of-quota.md).
+Numbered 189, the next free on the branch after its OQ-188; renumbered at the merge if taken meanwhile. Open; owner-only, as
+every question this round raises.)*
+
+The run's auxiliary calls — the intent classifier and the pre-flight, the loop classifier, a configured compressor, the
+post-run analyst, and the summariser — take configured slots. Since fin10 an agent's own calls never reach a pair the
+session holds out of quota (the ladder's pre-call read sends the agent to its same-tier candidate or a wait), and since fin8
+they follow a session-wide override; the summariser follows the override but not the exclusion, and the others follow
+neither. For the override the requirements point one way (REQ-ORCH-091 d keeps it "for the rest of the session", and it
+replaces a pair, not an agent's choice); for the exclusion they do not say what replaces the slot: a same-tier candidate
+(REQ-ORCH-091 b is an agent's ladder, and these calls have none), the slot order's next entry (REQ-ORCH-114 names one for the
+classifier alone), the calling agent's own model (REQ-MONITOR-080's default for the compressor), or skipping the call (which
+REQ-ORCH-114 allows for the classifier when no slot resolves) — nor whether a configured `compressor.model` still "wins" over
+an exclusion of its pair.
+
+**What the build proceeds under** (as built, unchanged): each configured slot is called as configured. A session that has
+recorded its small model out of quota still sends the classifier, the loop classifier, a configured compressor and the
+analyst to it; a real provider refuses those calls and each path's own failure handling applies (the classifier skips, the
+compression pass fails and is reported, the analyst's run is reported failed).
+
+**What a ruling decides.** Whether these calls follow a session-wide override (and then all of them, as the summariser does);
+what each calls when its configured pair is excluded and nothing replaces it; and whether a configured `compressor.model`
+yields to the exclusion of its pair.
+

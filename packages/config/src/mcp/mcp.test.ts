@@ -13,6 +13,10 @@ import { MCP_ENTRY_DEFAULTS, MCP_ENTRY_KEYS, readMcpServerEntry, type McpServerE
 import { candidateSpellings, filterServerTools, grantDecision, resolvePersonaMcp, narrowAfterUpdate } from './persona.js';
 import { MCP_SECTION_HEADING, NO_MCP_SERVERS_LINE, renderMcpSection } from './prompt.js';
 import { SHIPPED_MCP_SERVERS, BUILT_IN_PERSONA_MCP_SERVERS } from './defaults.js';
+import { CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS } from './code-intelligence.js';
+import { CODE_INTELLIGENCE_TOKEN } from './commands.js';
+import type { DiscoveredServers } from './discovery-files.js';
+import { launchedProjectOf, mcpConfigurationForExecutionRoot, resolveMcpConfiguration } from './index.js';
 
 const entry = (over: Partial<McpServerEntry> = {}): McpServerEntry => ({ ...MCP_ENTRY_DEFAULTS, command: 'node', ...over });
 const tool = (name: string, description = '') => ({ name, description, inputSchema: { type: 'object' } });
@@ -340,5 +344,73 @@ describe('the diagnostic sink applies the scopes', () => {
     expect(sink.admit(p)).toBe(true); sink.newLoad(); expect(sink.admit(p)).toBe(false);
     expect(sink.admit(s, 'A')).toBe(true); expect(sink.admit(s, 'A')).toBe(false); expect(sink.admit(s, 'B')).toBe(true);
     expect(sink.admit(warn('x', 'load', ''))).toBe(true); expect(sink.admit(warn('x', 'load', ''))).toBe(true);
+  });
+});
+
+/**
+ * REQ-MCP-034's isolated-run clause (live-run finding D1 at 1763f7f): the load binds against the workspace root, and a run in
+ * a worktree takes the view in which the path that stage appended is the tree's root — in the resolved arguments and the
+ * description launch and discovery read (REQ-MCP-050) — and nothing else changes.
+ */
+describe('REQ-MCP-034: the configuration a run in an isolated working tree launches from', () => {
+  const ws = '/work/ws';
+  const tree = '/work/ws/.rotaris/requirements/worktrees/rotaris-req-req-104-u1';
+  const binding = CODE_INTELLIGENCE_BINDING;
+  const configured = (servers: Record<string, McpServerEntry>) => resolveMcpConfiguration({
+    servers, yamlNamed: new Set(Object.keys(servers)), discovered: { servers: {}, stated: {}, origins: {}, files: [] } satisfies DiscoveredServers,
+    workspaceRoot: ws, globalDir: '/nowhere', env: {}, onPath: () => true, readFile: () => null,
+    builtinLaunch: { command: '/opt/rotaris/rotaris', args: [CODE_INTELLIGENCE_TOKEN, '--'] },
+  });
+  const argsOf = (cfg: ReturnType<typeof configured>, name: string): readonly string[] => {
+    const d = cfg.servers[name]!.description;
+    if (d.transport !== 'stdio') throw new Error('not stdio');
+    return d.args;
+  };
+
+  it('the shipped entry\'s command line ends with the project-path option and the tree\'s root, and the anchoring root is absent', () => {
+    const cfg = configured({ code_intelligence: entry({ command: CODE_INTELLIGENCE_TOKEN, args: [...CODE_INTELLIGENCE_DEFAULT_ARGS] }) });
+    expect(argsOf(cfg, 'code_intelligence').slice(-2)).toEqual([binding.projectPathOption, ws]);
+    const isolated = mcpConfigurationForExecutionRoot(cfg, ws, tree);
+    const args = argsOf(isolated, 'code_intelligence');
+    expect(args).toEqual([CODE_INTELLIGENCE_TOKEN, '--', ...CODE_INTELLIGENCE_DEFAULT_ARGS, binding.projectPathOption, tree]);
+    expect(args).not.toContain(ws);
+    expect(isolated.servers['code_intelligence']!.resolved?.args).toEqual(args);
+    // The command, the working directory (REQ-MCP-043 names the workspace root) and the loaded object are untouched.
+    const d = isolated.servers['code_intelligence']!.description;
+    expect(d.transport === 'stdio' ? [d.command, d.cwd] : null).toEqual(['/opt/rotaris/rotaris', ws]);
+    expect(argsOf(cfg, 'code_intelligence').slice(-2)).toEqual([binding.projectPathOption, ws]);
+  });
+
+  it('a run in the workspace itself gets the loaded configuration back, the same object', () => {
+    const cfg = configured({ code_intelligence: entry({ command: CODE_INTELLIGENCE_TOKEN, args: [...CODE_INTELLIGENCE_DEFAULT_ARGS] }) });
+    expect(mcpConfigurationForExecutionRoot(cfg, ws, ws)).toBe(cfg);
+    expect(mcpConfigurationForExecutionRoot(cfg, ws, tree, null)).toBe(cfg);
+  });
+
+  it('binds on the launch subcommand whatever the entry is named, and leaves every other server and any configured selection as it is', () => {
+    const cfg = configured({
+      ci_by_hand: entry({ command: 'uvx:serena-agent', args: [binding.launchSubcommand] }),
+      pinned: entry({ command: CODE_INTELLIGENCE_TOKEN, args: [binding.launchSubcommand, binding.projectPathOption, ws] }),
+      from_cwd: entry({ command: CODE_INTELLIGENCE_TOKEN, args: [binding.launchSubcommand, binding.projectFromCwdOption] }),
+      files: entry({ command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem'] }),
+      remote: entry({ type: 'http', command: null, url: 'https://example.invalid/mcp' }),
+    });
+    const isolated = mcpConfigurationForExecutionRoot(cfg, ws, tree);
+    expect(argsOf(isolated, 'ci_by_hand')).toEqual(['serena-agent', binding.launchSubcommand, binding.projectPathOption, tree]);
+    // A selection the user wrote — even one naming the workspace root itself — is left exactly as configured.
+    expect(argsOf(isolated, 'pinned')).toEqual(argsOf(cfg, 'pinned'));
+    expect(argsOf(isolated, 'from_cwd')).toEqual(argsOf(cfg, 'from_cwd'));
+    // REQ-MCP-035's fill-in names the workspace root and is not REQ-MCP-034's stage.
+    expect(argsOf(isolated, 'files')).toEqual(['-y', '@modelcontextprotocol/server-filesystem', ws]);
+    expect(isolated.servers['remote']).toBe(cfg.servers['remote']);
+  });
+
+  it('a launch line reads the project from the description it launched', () => {
+    const cfg = configured({ code_intelligence: entry({ command: CODE_INTELLIGENCE_TOKEN, args: [...CODE_INTELLIGENCE_DEFAULT_ARGS] }), plain: entry({ command: 'node', args: ['s.js'] }), from_cwd: entry({ command: CODE_INTELLIGENCE_TOKEN, args: [binding.launchSubcommand, binding.projectFromCwdOption] }) });
+    expect(launchedProjectOf(cfg.servers['code_intelligence']!.description)).toBe(ws);
+    expect(launchedProjectOf(mcpConfigurationForExecutionRoot(cfg, ws, tree).servers['code_intelligence']!.description)).toBe(tree);
+    expect(launchedProjectOf(cfg.servers['plain']!.description)).toBeNull();
+    expect(launchedProjectOf(cfg.servers['from_cwd']!.description)).toBe(ws);
+    expect(launchedProjectOf({ transport: 'http', url: 'https://example.invalid' })).toBeNull();
   });
 });

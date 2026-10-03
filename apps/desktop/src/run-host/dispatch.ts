@@ -5,7 +5,7 @@ import { analyzeImprovement, captureRetrospectiveJob, CATALOGUE, relativeTime, t
 import { renderUnavailability } from '@rotaris/agent-tools';
 import { clearHooksDecision, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
 import { REFS_ASK_BOUND } from './checkpoints.js';
-import type { McpHost } from './mcp.js';
+import { configurationForExecutionRoot, type McpHost } from './mcp.js';
 import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessionFiles } from './session-actions.js';
 import { CHECKPOINTS_DEFAULTS, type LiveState } from '@rotaris/config';
 import { improvementCollectorOf, retrospectiveOf } from './configuration.js';
@@ -231,13 +231,14 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
            */
           skills.onSessionCreated(s.root, sessionId);
           mcp.newConfiguration(setup.cfg);
-          void mcp.prepare(setup.cfg, s.root).catch((e: unknown) => log(`mcp: discovery ahead of the run failed: ${String(e)}`, 'warn'));
+          const executionRoot = req.worktree?.worktree_path ?? req.effectiveRoot ?? s.root;
+          // REQ-MCP-034/050: discovery ahead of the run launches what the run will — against the tree it executes in.
+          void mcp.prepare(configurationForExecutionRoot(setup.cfg, executionRoot), executionRoot).catch((e: unknown) => log(`mcp: discovery ahead of the run failed: ${String(e)}`, 'warn'));
           if (req.effectiveRoot !== undefined && req.effectiveRoot !== s.root) log(`session ${sessionId} is isolated: the run works in ${req.effectiveRoot}${req.worktree ? ` on branch ${req.worktree.branch}` : ''}; the record stays under ${s.root}`);
           try {
             // REQ-WORKSPACE-060 (ADR-0063): the session's context units reach the launch as a getter, read at every
             // agent construction. REQ-WORKSPACE-050: the catalog from the BASE workspace, the context files from the
             // root the run EXECUTES in — the worktree's own `AGENTS.md` where the branch changed it.
-            const executionRoot = req.worktree?.worktree_path ?? req.effectiveRoot ?? s.root;
             const r = sessions.start(s.dal!, s.root, req.prompt, { setup: { ...setup, contextUnits: () => skills.contextUnits(s.root, sessionId, executionRoot) }, sessionId, runType: req.runType ?? 'task_run', ...(req.worktree === undefined ? {} : { worktree: req.worktree }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }), ...(req.attachments === undefined ? {} : { attachments: req.attachments }), ...(req.initialTodo === undefined ? {} : { initialTodo: req.initialTodo }) });
             if (r.ok) log(`session ${r.value} started; row 0 recorded; the run is executing`);
             else restore();

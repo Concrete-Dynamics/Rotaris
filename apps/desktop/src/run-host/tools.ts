@@ -9,7 +9,7 @@ import {
 import { BUILT_IN_PERSONAS, EMPTY_MCP_EVIDENCE, toolRestrictionsFor, type AgentGrant, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
-import { grantEvidence, type McpHost } from './mcp.js';
+import { configurationForExecutionRoot, grantEvidence, type McpHost } from './mcp.js';
 import { artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
@@ -407,6 +407,14 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // altogether; under `ask` the gate's default decision asks; under `autonomous` it allows — nothing here special-cases
   // the gate, which decides every dispatch as for any tool.
   const run = deps.configured?.(ctx.workspaceRoot) ?? null;
+  /*
+   * REQ-MCP-034's isolated-run clause: a run in an isolated working tree launches its servers against that tree's root. The
+   * configuration is LOOKED UP by the anchoring workspace (it is loaded there) and handed on as the execution root's view;
+   * discovery and the surface are memoised per that root, so a base-tree run's memo is never reused for a worktree. The
+   * executors keep `ctx.workspaceRoot`: their only use of it is REQ-MCP-070's `lsp_init` root, which names the workspace
+   * root (OQ-194's literal reading). Until 2026-10-03 all three calls read the loaded configuration and the anchoring root.
+   */
+  const mcpRoot = ctx.effectiveRoot ?? ctx.workspaceRoot;
   const withhold = mode === 'restricted' || persona.readOnly;
   let mcpSection = '';
   /*
@@ -421,9 +429,10 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     readiness = (async () => {
       if (!deps.mcp || !run) { grant = { tools: nativeResolved, mcp: EMPTY_MCP_EVIDENCE }; return; }
       const mcp = deps.mcp;
-      await mcp.prepare(run.cfg, ctx.workspaceRoot);
+      const cfg = configurationForExecutionRoot(run.cfg, mcpRoot);
+      await mcp.prepare(cfg, mcpRoot);
       const session = { sessionId: ctx.sessionId, writer: ctx.writer };
-      const offered = mcp.surfaceFor(run.cfg, ctx.workspaceRoot, ctx.persona, session, new Set(callable.keys()));
+      const offered = mcp.surfaceFor(cfg, mcpRoot, ctx.persona, session, new Set(callable.keys()));
       if (withhold) {
         if (offered.active.some((s) => s.tools.length > 0)) ctx.warn(`mcp: ${ctx.persona}'s MCP tools are withheld under ${mode === 'restricted' ? "the 'restricted' preset" : 'read_only'} (ADR-0016: a tool outside the registry declares no facet, so a withholding rule withholds it)`);
         mcpSection = mcp.section({ ...offered, active: offered.active.map((s) => ({ ...s, tools: [] })) });
@@ -449,7 +458,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       };
       const remove = (name: string) => { callable.delete(name); };
       const joined = new Set<string>();
-      for (const e of mcp.executorsFor({ cfg: run.cfg, workspaceRoot: ctx.workspaceRoot, role: ctx.persona, surface, ctx: session, remove, log: (m) => ctx.warn(m) })) {
+      for (const e of mcp.executorsFor({ cfg, workspaceRoot: ctx.workspaceRoot, role: ctx.persona, surface, ctx: session, remove, log: (m) => ctx.warn(m) })) {
         // REQ-ORCH-153: an MCP tool carries no declaration, so the fail-closed predicate withholds it while the
         // gate is held (ADR-0016's reading, the same one `restricted` and `read_only` already take above). The
         // gate's dispatch check would refuse it anyway; removing it here keeps the listing honest. Every executor

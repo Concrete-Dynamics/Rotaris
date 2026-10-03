@@ -18,8 +18,15 @@ import { rowLabel } from './workspace-label.js';
  * measured width plus what the box spends beside it, `rowLabel`) and may be shrunk below that, to nothing (the
  * `data-middle` rule in shell.css); the label is then shortened against the box's border-box width less the same spend. The box's width
  * comes from that basis and the row, never from the text drawn in it, so shortening the label cannot move the width that
- * shortened it. A ResizeObserver on the box re-runs the measurement on every change — a window resize, a neighbour's text
- * changing, a theme moving a font. The tooltip and the accessible description always carry the full text (REQ-SHELL-022).
+ * shortened it. A ResizeObserver on the box re-runs the measurement on every change of the box — a window resize, a
+ * neighbour's text changing. A font change alone does not resize the box (its basis is a px figure from the last
+ * measurement), so the measurement also re-runs when the document finishes loading a font (`document.fonts`
+ * `loadingdone`): a swapped-in face measures differently from the fallback the first measurement used. (Until the
+ * 2026-10-03 repair round this comment claimed the observer covered "a theme moving a font"; it does not.) The tooltip
+ * and the accessible description always carry the full text (REQ-SHELL-022).
+ *
+ * The path link gives up its width before the branch name (shell.css), and where rule 2 hides the link's label the link
+ * is hidden whole (`data-label-hidden`) rather than left an empty focus stop.
  */
 export function StatusStripItem({ item }: { readonly item: Exclude<StripItem, { kind: 'spacer' }> }) {
   const box = useRef<HTMLElement | null>(null);
@@ -47,6 +54,14 @@ export function StatusStripItem({ item }: { readonly item: Exclude<StripItem, { 
     observer.observe(el);
     return () => { observer.disconnect(); };
   }, [middle, remeasure]);
+  // A face loaded after the first measurement changes every width the canvas reports, and resizes nothing by itself.
+  useLayoutEffect(() => {
+    const fonts = typeof document === 'undefined' ? undefined : document.fonts;
+    if (!middle || !fonts || typeof fonts.addEventListener !== 'function') return;
+    const onLoaded = () => { remeasure(); };
+    fonts.addEventListener('loadingdone', onLoaded);
+    return () => { fonts.removeEventListener('loadingdone', onLoaded); };
+  }, [middle, remeasure]);
 
   const setBox = useCallback((el: HTMLElement | null) => { box.current = el; }, []);
   const suffix = item.kind === 'text' ? item.suffix : undefined;
@@ -64,7 +79,7 @@ export function StatusStripItem({ item }: { readonly item: Exclude<StripItem, { 
   const elide = !middle && item.text.length > 28 ? '1' : undefined;
   if (item.kind === 'link') {
     return (
-      <DesignButton ref={setBox} type="button" className="btn btn-link status-strip__item status-strip__link" data-elide={elide} data-middle={middle ? '1' : undefined} style={sizing}
+      <DesignButton ref={setBox} type="button" className="btn btn-link status-strip__item status-strip__link" data-elide={elide} data-middle={middle ? '1' : undefined} data-label-hidden={middle && label === null ? '1' : undefined} style={sizing}
         aria-label={item.name} aria-description={item.title} title={item.title} data-testid={item.testId} onClick={item.onActivate}>{content}</DesignButton>
     );
   }

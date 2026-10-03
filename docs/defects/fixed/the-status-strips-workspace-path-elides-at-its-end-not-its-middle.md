@@ -38,8 +38,28 @@ text.
 Pinned by `workspace-label.test.ts` (rule 2 in a flex row: the basis, one middle `…` keeping `/tmp/` and the folder name,
 null → hidden, a zero measurer), `composer.test.ts` (exactly the path link and the branch item are `middle`; the marker a
 suffix), `ui.test.ts` (`branchStripItem`'s suffix) and `layout-regression.test.ts` (the `data-middle` rule); each fails
-without the change. Shown by `pnpm layout-proof` section 7 (load 2.1 on 4 CPUs): at 1180 px under a 183-character workspace
+without the change. Shown by `pnpm layout-proof` section 7 (load 2.1 on 4 CPUs; the figures below are that run's, and vary
+run to run with the checkout's own path and branch, which the workspace then inherited): at 1180 px under a 183-character workspace
 path the link reads `/home/user/Rotaris-crw-wt-…-818d53f7b76a/proj-folder` (52 characters, content 306 in 306 px,
 `text-overflow: clip`, the tooltip the full path), the branch label `fin11…dows ↑2` unclipped beside it, the strip not
 overflowing (scrollWidth 1180 against 1180); at 1400 px the label grows to
 `/home/user/Rotaris-crw-wt-fin11-striplabe…-6880-59f4-942d-818d53f7b76a/proj-folder`. 27 passed, 0 failed.
+
+**Repair round, 2026-10-03 (fin11, the verifier's blocking finding).** The repair above let both labels shrink in
+proportion to their basis, so a long path took the branch item's share too: under a 169-character path on `main` the
+branch label read `m…` at 1440 px, `…` at 1250 px and nothing at 1180 px while the row had room for `main`, and the item's
+state words were middle-shortened as well (`no …ry` for `no git repository`) — a regression against origin/main, where a
+branch label of 28 characters or fewer never shrank. Rule 2 shortens a label only when it is wider than the space available
+to it, and REQ-SHELL-047 already makes the path the first label to go. Now the path link's shrink factor dwarfs every other
+item's (`.status-strip__link[data-middle='1'] { flex-shrink: 1000000 }`), so it absorbs the whole shortfall until it
+reaches nothing; the branch item is `middle` only while it shows a branch name (`stripItems`, `composer.ts`), so its state
+words are never cut; a link whose label rule 2 hid is hidden whole (`data-label-hidden`, `visibility: hidden`), no empty
+focus stop; and the label is re-measured when the document finishes loading a font (`document.fonts` `loadingdone`), which
+the ResizeObserver alone did not cover although the comment said it did. Pinned by `composer.test.ts` (state words never
+`middle`), `StatusStripItem.test.ts` (the state words drawn whole as plain text; a branch name as the rule-2 label after the
+icon) and `layout-regression.test.ts` (the path's factor, the hidden link), each failing without the change. The
+proofs now assert it: `pnpm layout-proof` gives its workspace its own repository on `main` and requires the branch label
+to read `main` whole at 1180 px (the old check accepted a hidden label, `label === null`, and passed over exactly this) —
+on the unrepaired build it failed (`label "null"`, load 1.3), on the repaired one it passed (`main`, 26 in 26 px, beside
+the path's 351 px box; load 1.9); `pnpm git-proof` opens its plain folder under a deep path and requires `no git
+repository` and `no git` whole and never `data-middle` (passed, load 2.4).

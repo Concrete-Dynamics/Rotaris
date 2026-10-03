@@ -112,7 +112,9 @@ export type StripItem =
 /*
  * `middle`: REQ-WORKSPACE-149 rule 2 — the item's `text` is a workspace path or a branch name, shortened from the MIDDLE
  * against the width the strip gives it (`StatusStripItem.tsx`, `rowLabel`), and hidden rather than clipped where even `…`
- * does not fit; every other item that is too long keeps REQ-SHELL-038's end ellipsis. `suffix`: fixed text drawn after the
+ * does not fit; every other item that is too long keeps REQ-SHELL-038's end ellipsis. The path link gives up its width
+ * before the branch name does (shell.css, `.status-strip__link[data-middle='1']`), so a short branch name stays whole
+ * beside a long path; the branch item carries `middle` only while it shows a branch name. `suffix`: fixed text drawn after the
  * label and never shortened — the branch item's ` ↑{n}` ahead marker, which is not part of the branch name. `icon`: a
  * Phosphor glyph drawn before the label in the accent colour — the branch item's `ph-git-branch` (REQ-SHELL-042,
  * REQ-WORKSPACE-020), only where the item shows a branch name.
@@ -242,10 +244,12 @@ export function stripItems(width: number, f: StripFacts): StripItem[] {
     items.push({ kind: 'link', text: f.workspace.label, name: STRIP_NAMES.workspace, title: `Workspace folder: ${f.workspace.path}. Opens it in your file manager.`, testId: 'strip-workspace', onActivate: f.workspace.open, middle: true });
   }
   items.push({
-    kind: 'text', text: f.branch.text, name: STRIP_NAMES.branch, title: f.branch.title, testId: 'strip-branch', figure: true, middle: true,
-    // REQ-SHELL-042 / REQ-WORKSPACE-020: a branch icon before the branch name. The detached, non-repository and unread states
-    // carry words rather than a branch name (REQ-GIT-161's reading, OQ-193), and no icon.
-    ...(f.branch.state === 'branch' ? { icon: 'ph-git-branch' } : {}),
+    kind: 'text', text: f.branch.text, name: STRIP_NAMES.branch, title: f.branch.title, testId: 'strip-branch', figure: true,
+    // REQ-SHELL-042 / REQ-WORKSPACE-020: a branch icon before the branch name, and REQ-WORKSPACE-149 rule 2's middle
+    // shortening of that name. The detached, non-repository and unread states carry words rather than a branch name
+    // (REQ-GIT-161's reading, OQ-193): no icon, and never shortened — `no …ry` conveys no state at all. Until the 2026-10-03
+    // repair round `middle` was set in every state and a long path beside the item cut `no git repository` to `no …ry`.
+    ...(f.branch.state === 'branch' ? { icon: 'ph-git-branch', middle: true as const } : {}),
     ...(f.branch.suffix ? { suffix: f.branch.suffix } : {}),
     ...(f.branch.state === undefined ? {} : { state: f.branch.state }),
   });

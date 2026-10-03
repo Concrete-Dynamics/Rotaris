@@ -23,13 +23,15 @@
  *      the sidebar's content edge and the sidebar's scroll width.
  *   7. THE STRIP'S PATH LINK IS SHORTENED FROM THE MIDDLE. REQ-WORKSPACE-149 rule 2: at 1180 px, the narrowest width at
  *      which REQ-SHELL-047 still shows it, a deep workspace path keeps its head and its folder name with one `…` between,
- *      drawn unclipped, its tooltip the full path; the branch item's label is unclipped too, after the branch icon in the
- *      accent colour (REQ-SHELL-042); widening the window
+ *      drawn unclipped, its tooltip the full path; the branch name beside it (`main`, the workspace's own repository) is
+ *      drawn WHOLE, after the branch icon in the accent colour (REQ-SHELL-042), because the path gives up its width first;
+ *      widening the window
  *      re-measures it. The workspace sits at a deliberately deep path for this
  *      (`docs/defects/fixed/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md`).
  *
  * Evidence under `.proof/layout-proof/`: a PNG per size, `results.json`. `--skip-build` skips the build.
  */
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
@@ -52,6 +54,12 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
   'mcp_servers:', '  code_intelligence: { enabled: false }',
   'rotaris:', '  delegation_strategy: single', '',
 ].join('\n'));
+// Its own repository on `main`, a SHORT branch name: section 7 asserts the branch name is drawn whole while the path beside
+// it is shortened. Without it the workspace sat inside this checkout and showed whatever branch the checkout was on.
+const git = (...args) => execFileSync('git', ['-c', 'user.name=layout-proof', '-c', 'user.email=layout-proof@localhost', ...args], { cwd: workspace, stdio: 'ignore' });
+git('init', '-q', '-b', 'main');
+git('add', 'README.md');
+git('commit', '-q', '-m', 'layout proof');
 
 const results = [];
 let failures = 0;
@@ -314,8 +322,11 @@ try {
     p7 !== null && p7.labelScroll <= p7.labelClient + 1 && p7.overflow === 'clip' && p7.title === `Workspace folder: ${workspace}. Opens it in your file manager.`,
     p7 === null ? 'no link' : `label content ${p7.labelScroll} in ${p7.labelClient} px; text-overflow ${p7.overflow}; title ${JSON.stringify(p7.title)}`);
   const b7 = narrow.branch;
-  check('1180 px: the branch item\'s label is drawn whole, shortened from the middle if at all, beside the path and not over it',
-    b7 !== null && (b7.label === null || b7.labelScroll <= b7.labelClient + 1) && (p7 === null || p7.right <= b7.left + 1),
+  // The path gives up its width before the branch name does. Until the 2026-10-03 repair round both shrank in proportion to
+  // their basis, so a long path squeezed `main` to `m…`, `…` or nothing while the row had room for it; this check then
+  // accepted a hidden label (`label === null`) and passed over exactly that.
+  check('1180 px: a short branch name is drawn WHOLE beside the shortened path — the path gives up its width first (REQ-WORKSPACE-149 rule 2, REQ-WORKSPACE-020)',
+    b7 !== null && b7.label === 'main' && b7.text === 'main' && b7.labelScroll <= b7.labelClient + 1 && (p7 === null || p7.right <= b7.left + 1),
     b7 === null ? 'no branch item' : `branch "${b7.text}" (label "${b7.label}", content ${b7.labelScroll} in ${b7.labelClient} px) at [${b7.left}..${b7.right}]; path ends at ${p7?.right}`);
   check('1180 px: the branch item draws the branch icon before the branch name, in the accent colour (REQ-SHELL-042, REQ-WORKSPACE-020)',
     narrow.icon !== null && /\bph-git-branch\b/.test(narrow.icon.cls) && narrow.icon.color === narrow.icon.accent && narrow.icon.before === 'status-strip__label',

@@ -17,7 +17,8 @@
  *                  the row is gone, the directory is gone, `Worktree deleted.` (REQ-GIT-111/117).
  *   5. relaunch  — the split dragged in (1) is restored (REQ-SHELL-069, `panels/git`).
  *   6. no-git    — PATH without Git: the header's empty version, `Working without Git` raised, no dialog; then a plain
- *                  folder that is not a repository: no notice (REQ-GIT-104).
+ *                  folder that is not a repository: no notice (REQ-GIT-104). In both the strip's branch item reads its
+ *                  state words whole and unshortened, the plain folder under a deep path (REQ-GIT-161, OQ-193).
  *
  * Evidence under `.proof/git-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
@@ -52,6 +53,8 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 
 
 const STRIP_BRANCH_ICON = '[data-testid="strip-branch"] i.ph-git-branch.status-strip__icon';
+// REQ-WORKSPACE-149 rule 2 shortens a branch NAME from the middle; the state words are never shortened (REQ-GIT-161, OQ-193).
+const STRIP_BRANCH_MIDDLE = '[data-testid="strip-branch"][data-middle="1"]';
 const STRIP_BRANCH_AHEAD_ONE = '[data-testid="strip-branch"][title="Branch this workspace is on: main, 1 commit ahead."][aria-description="Branch this workspace is on: main, 1 commit ahead."]';
 const PROBES = [
   '[data-testid="git-branch"]', '[data-testid="git-sync"]', '[data-testid="git-worktrees"] tr.git__row', '[data-testid="git-tag-base"]', '[data-testid="git-tag-active"]',
@@ -59,7 +62,7 @@ const PROBES = [
   '[data-testid="git-checkpoint-session"]', '[data-testid="git-divider"]', '[data-testid="acknowledgement-title"]', '[data-testid="strip-branch"]', '.notice__headline', '.app-shell',
   '[data-testid="git-new-worktree"]', '[data-testid="git-merge"]', '[data-testid="worktree-dialog"]', '[data-testid="start-session-dialog"]', '[data-testid="git-confirm-force"]', '[data-testid="git-failure"]',
   // REQ-SHELL-042 / REQ-WORKSPACE-020: the strip's branch icon, and the base checkout's tooltip sentence with its full stop.
-  STRIP_BRANCH_ICON, STRIP_BRANCH_AHEAD_ONE,
+  STRIP_BRANCH_ICON, STRIP_BRANCH_AHEAD_ONE, STRIP_BRANCH_MIDDLE,
 ];
 
 async function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
@@ -158,6 +161,7 @@ const painted = await launch('painted', workspace, local, preferences, {
   if (text(p, '[data-testid="strip-branch"]')[0] !== 'main ↑1') throw new Error(`the strip's branch item reads "${text(p, '[data-testid="strip-branch"]')[0]}"`);
   if ((p[STRIP_BRANCH_ICON] ?? []).length !== 1) throw new Error(`the strip's branch item draws ${(p[STRIP_BRANCH_ICON] ?? []).length} branch icon(s), expected 1 (REQ-SHELL-042)`);
   if ((p[STRIP_BRANCH_AHEAD_ONE] ?? []).length !== 1) throw new Error('the strip\'s branch tooltip and description are not "Branch this workspace is on: main, 1 commit ahead." (REQ-WORKSPACE-020)');
+  if ((p[STRIP_BRANCH_MIDDLE] ?? []).length !== 1) throw new Error('the strip\'s branch name is not drawn under REQ-WORKSPACE-149 rule 2 (no data-middle)');
   const merge = first(p, '[data-testid="git-merge"]');
   if (!merge) throw new Error('no Merge selected button');
   const divider = first(p, '[data-testid="git-divider"]');
@@ -281,11 +285,15 @@ const noGit = await launch('no-git', workspace, local, preferences, { ROTARIS_CA
   // ADR-0049 holds ONE current notice: the first-launch provider notice, raised 800 ms after the workspace opened, may have replaced it by capture time.
   // OQ-193's build reading: the item conveys the state in words (REQ-GIT-161), and carries no branch icon, as it shows no branch name.
   if ((p[STRIP_BRANCH_ICON] ?? []).length !== 0) throw new Error('with no git the strip\'s branch item draws a branch icon');
+  if (text(p, '[data-testid="strip-branch"]')[0] !== 'no git' || (p[STRIP_BRANCH_MIDDLE] ?? []).length !== 0) throw new Error(`with no git the strip's branch item reads "${text(p, '[data-testid="strip-branch"]')[0]}" (middle-shortened: ${(p[STRIP_BRANCH_MIDDLE] ?? []).length})`);
   results.noGit = { header: 'not a git repository', noticeRaised: true, noticeOnScreenAtCapture: headlines.some((h) => /Working without Git/.test(h)), headlinesAtCapture: headlines, dialog: false, strip: text(p, '[data-testid="strip-branch"]')[0], png: noGit.png };
 }
 // 6b. A plain folder that is not a repository: the same header, and no notice. It must live OUTSIDE this repository —
 // a folder under `.proof/git-proof/` is inside the product's own checkout, and Git (asked, REQ-GIT-103) rightly says so.
-const plain = mkdtempSync(join(tmpdir(), 'rotaris-git-proof-plain-'));
+// Deep on purpose: the strip's path link beside the branch item must be shortened, and the state words `no git repository`
+// must still read whole (REQ-GIT-161, OQ-193). Until the 2026-10-03 repair round they were middle-shortened to `no …ry`.
+const plainRoot = mkdtempSync(join(tmpdir(), 'rotaris-git-proof-plain-'));
+const plain = join(plainRoot, 'a-plain-folder-deep-enough-that-the-status-strip-must-shorten-its-path-beside-the-branch-item', '349f6b0e-6880-59f4-942d-818d53f7b76a', 'plain');
 mkdirSync(join(plain, '.rotaris'), { recursive: true });
 writeFileSync(join(plain, '.rotaris', 'agents.yaml'), readFileSync(join(workspace, '.rotaris', 'agents.yaml'), 'utf8'));
 const notRepo = await launch('not-a-repository', plain, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
@@ -296,8 +304,9 @@ const notRepo = await launch('not-a-repository', plain, local, preferences, { RO
   if (text(p, '.notice__headline').some((h) => /Working without Git/.test(h))) throw new Error('the Working without Git notice is on screen for a plain folder');
   if ((p['[data-testid="git-worktrees-empty"]'] ?? []).length !== 1 || (p['[data-testid="git-history-empty"]'] ?? []).length !== 1) throw new Error('the two empty states were not painted for a plain folder');
   if ((p[STRIP_BRANCH_ICON] ?? []).length !== 0) throw new Error('for a plain folder the strip\'s branch item draws a branch icon');
+  if (text(p, '[data-testid="strip-branch"]')[0] !== 'no git repository' || (p[STRIP_BRANCH_MIDDLE] ?? []).length !== 0) throw new Error(`for a plain folder under a deep path the strip's branch item reads "${text(p, '[data-testid="strip-branch"]')[0]}" (middle-shortened: ${(p[STRIP_BRANCH_MIDDLE] ?? []).length})`);
   results.notRepository = { header: 'not a git repository', notice: false, emptyStates: 2, strip: text(p, '[data-testid="strip-branch"]')[0], png: notRepo.png };
-  try { rmSync(plain, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* scratch left to the temp folder */ }
+  try { rmSync(plainRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* scratch left to the temp folder */ }
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

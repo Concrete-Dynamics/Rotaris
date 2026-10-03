@@ -318,8 +318,12 @@ the window's own width. `AppShell` (`packages/ui/src/AppShell.tsx`) only draws t
 slack and giving it back first. An item that is a workspace path or a branch name carries `middle` (the path link and the
 branch item, 2026-10-03): its label is shortened from the middle against the width the row gives it (REQ-WORKSPACE-149
 rule 2 — `rowLabel` in `workspace-label.ts`, the canvas measurer in `label-measure.ts`, shared with the title-bar chip), the
-box asking the row for its whole label as a flex basis and re-eliding on every ResizeObserver change, and fixed text after
-it (the branch's ` ↑{n}`) rides as `suffix`, never shortened; every other item keeps REQ-SHELL-038's end ellipsis. A glyph
+box asking the row for its whole label as a flex basis and re-eliding on every ResizeObserver change (and on
+`document.fonts`' `loadingdone`), and fixed text after it (the branch's ` ↑{n}`) rides as `suffix`, never shortened; every
+other item keeps REQ-SHELL-038's end ellipsis. The path link gives up its width **first** (`flex-shrink: 1000000` on
+`.status-strip__link[data-middle='1']`; equal factors let a long path squeeze `main` to `m…` or nothing), and a link whose
+label rule 2 hid is hidden whole (`data-label-hidden`), no empty focus stop. The branch item is `middle` only while it shows
+a branch name: its detached, non-repository and unread words are never shortened (REQ-GIT-161, OQ-193). A glyph
 before the label rides as `icon` (the branch item's `ph-git-branch`, REQ-SHELL-042), coloured by a token in
 `.status-strip__icon` so a theme change redraws it. An item is text in the strip's own
 craft — the mockup's strip is plain tertiary text at `--rt-text-xs`, mono only for figures — so a new item takes no new

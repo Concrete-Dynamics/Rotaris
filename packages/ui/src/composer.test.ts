@@ -136,6 +136,24 @@ describe('REQ-SHELL-038/047: the status strip, item by item', () => {
     expect(items.find((i) => i.kind === 'link')).toMatchObject({ text: '~/work/rotaris', title: 'Workspace folder: /home/u/work/rotaris. Opens it in your file manager.' });
   });
 
+  it('never shortens the branch item\'s state words — only a branch name is shortened from the middle (REQ-GIT-161, OQ-193)', () => {
+    // Until the 2026-10-03 repair round `middle` was set in every state, and a long path beside the item cut
+    // `no git repository` to `no …ry`, which conveys no state (REQ-GIT-161 requires each conveyed and distinguishable).
+    const words = [
+      { text: 'no git repository', title: 'This folder is not a Git repository.', state: 'none' },
+      { text: 'no git', title: 'Git is not installed or not on PATH.', state: 'none' },
+      { text: 'detached HEAD', title: 'This workspace is on no branch (detached HEAD).', state: 'detached' },
+      { text: '—', title: 'Branch this workspace is on: not read yet', state: 'unknown' },
+    ];
+    for (const branch of words) {
+      const item = stripItems(1400, facts({ branch })).find((i) => i.kind === 'text' && i.testId === 'strip-branch');
+      expect(item).toMatchObject({ text: branch.text, state: branch.state });
+      expect(item).not.toHaveProperty('middle');
+    }
+    const named = stripItems(1400, facts()).find((i) => i.kind === 'text' && i.testId === 'strip-branch');
+    expect(named).toMatchObject({ text: 'main', middle: true });
+  });
+
   it('draws the branch icon before a branch name, and only there (REQ-SHELL-042, REQ-WORKSPACE-020)', () => {
     const branchOf = (items: readonly StripItem[]) => items.find((i) => i.kind === 'text' && i.testId === 'strip-branch');
     expect(branchOf(stripItems(1400, facts()))).toMatchObject({ icon: 'ph-git-branch', text: 'main', suffix: ' ↑1', title: 'Branch this workspace is on: main, 1 commit ahead.' });

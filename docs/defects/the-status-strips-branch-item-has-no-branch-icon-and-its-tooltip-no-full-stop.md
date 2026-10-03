@@ -10,7 +10,6 @@ empty text with no tooltip "exactly when the snapshot's branch name is empty", w
 disagree, and the build follows REQ-GIT-161 without a recorded reading. Noticed 2026-10-02 while rebuilding the strip
 around it (fin10); not repaired there.
 
-
 **Amended 2026-10-03 (the seventh triage, fin11): the worktree branch is drawn without its ahead marker.** While the active
 run executes in an isolated worktree the item shows that worktree's branch (`branchStripItem`'s first line, from the focused
 session's `worktreeBranch`), but with no ` ↑{n}` at all: REQ-WORKSPACE-020 requires the ahead count and the suffix "computed
@@ -37,7 +36,8 @@ found by reading, not driven; not repaired by fin11, which repairs the icon and 
   `main ↑1`, one `i.ph-git-branch.status-strip__icon`, title and description "Branch this workspace is on: main, 1 commit
   ahead."; no icon with no git or in a plain folder) and `pnpm layout-proof` section 7 (the icon's computed colour equals
   `--rt-accent`'s, `oklch(0.59 0.16 292)`, and it stands before the label). Since fin11 the branch name is also shortened
-  from the middle (`docs/defects/fixed/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md`).
+  from the middle (`docs/defects/fixed/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md`), only while
+  the item shows a branch name and only once the path beside it has given up its width; the state words are never cut.
 - **Open on the owner:** [OQ-193](../architecture/open-questions.md) ("What does the status strip's branch item show on a
   detached HEAD, outside a repository and before the first read"). The build proceeds under REQ-GIT-161's words; that text
   is untouched.

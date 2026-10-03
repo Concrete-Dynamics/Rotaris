@@ -130,4 +130,4 @@ windows, then `config.setField {runtime: {allow_outside_workspace: true}}` from 
 snapshot reading `true`, and the write back to `false` reached the persona window too (`[true, false]`). ADR-0037's first
 execution and views 02 and 03 are amended in place beside their earlier sentences. Noticed alongside, not repaired: a
 persona window's own commands, its mount read of the configuration among them, answer for the active main window rather
-than its owner ([a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md](../a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md)).
+than its owner ([a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md](a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md)).

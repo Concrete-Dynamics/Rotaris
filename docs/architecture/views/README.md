@@ -45,6 +45,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-03**
 
+**A persona or terminal window's commands answer for the main window that owns it (REQ-MONITOR-069, REQ-STARTUP-163;
+fin11).** `runCommand` resolves its window through `MainWindows.forCommand` — the sender's main window, else the owner of
+the auxiliary window that sent it, else the active window (process view, main's row; seams §1).
+
 **The cell is settled before the compression check, and no pass calls the agent's own excluded pair (REQ-MONITOR-194,
 REQ-MONITOR-080; fin10's first repair round).** `settleBeforeCall` (ladder.ts) follows the overrides and reads the exclusion;
 `runTurn` calls it before the automatic compression check as well as `resilientStep` before every call, and

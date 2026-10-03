@@ -62,8 +62,9 @@ method there.
 
 Invariants:
 
-- A command is answered **for the window that raised it** — `windowFor(senderId) ?? activeWindow()` — not for
-  "the main window" (`REQ-SHELL-020`). With two main windows alive those are different answers.
+- A command is answered **for the window that raised it** — `MainWindows.forCommand(senderId)`: the sender's main
+  window, else the main window owning the persona or terminal window that sent it, else the active window — not for
+  "the main window" (`REQ-SHELL-020`, `REQ-STARTUP-163`). With two main windows alive those are different answers.
 - A request that does not parse is `command.malformed`. Nothing throws out of `runCommand`: an uncaught
   exception in main raises the platform's native error box and wedges the loop (`ADR-0019`). `runCommand`
   itself is now three moves — resolve the window, read the request, call the handler — and holds no case.

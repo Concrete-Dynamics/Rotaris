@@ -896,8 +896,9 @@ describe('ADR-0046 step 4 — the projection', () => {
   });
 
   it('REQ-CHAT-061/166: expanding a member of an activity line lifts the display caps for THAT member', () => {
-    // The defect this pins (docs/defects/…, R0-4): the member opened onto the capped projection because the
-    // card's key (`callKey ?? index`) stranded from the key `hygiene` holds the caps against (`rowKey`).
+    // The defect this pins (R0-4;
+    // docs/defects/fixed/expanding-a-member-of-an-activity-line-does-not-lift-the-display-caps.md): the member
+    // opened onto the capped projection because the card's key (`callKey ?? index`) stranded from the key `hygiene` holds the caps against (`rowKey`).
     const output = Array.from({ length: 30 }, (_, i) => `member line ${i}`).join('\n');
     const rows = [tool(0, 'read_file', { output }), tool(1, 'glob', { output })];
     // Collapsed: the caps hold — the members are projected THROUGH the group's hygiene, thirty lines in the

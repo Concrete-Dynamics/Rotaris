@@ -248,7 +248,7 @@ export function commandsFrom(messages: readonly ChatMessage[]): readonly { comma
  * be listed whatever answered it. A write a sibling's claim refused (PD-TOOLS-006), one the permission gate or a
  * pre-tool hook refused, a `haet_edit` whose find text matched nothing — each changed nothing, and each reached
  * `edited_files`, the fallback's "Files touched" and, since OQ-111, the facts the pass is told never to deny
- * (`a-reports-edited-files-counts-refused-writes`, docs/defects/fixed/). Every such refusal is answered with
+ * (`docs/defects/fixed/a-reports-edited-files-counts-refused-writes.md`). Every such refusal is answered with
  * `isError: true` (the gate's `finish`, the file tools' `errorObservation`).
  *
  * A call cut off is answered with `isError: true` too, and it is NOT one reading. A call a rest cut before it

@@ -1023,9 +1023,9 @@ try {
      * marker file is present); …", "skipped: the workspace contains no file the runtime indexes" and "exited with code N;
      * its last output: …" (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`).
      * Four projects: one carrying the runtime's marker (and a source file, so its other steps run), its documentation-only
-     * twin whose every step ends inside the run host's start (`docs/defects/fixed/a-setup-that-finishes-before-its-start-is-
-     * answered-is-never-seen-to-finish.md`), one holding documentation only whose stand-in creation reports itself, and one
-     * whose creation writes to both streams and exits 3.
+     * twin whose every step ends inside the run host's start (recorded as
+     * `docs/defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`), one
+     * holding documentation only whose stand-in creation reports itself, and one whose creation writes to both streams and exits 3.
      */
     const waitUntil = async (predicate, timeoutMs) => {
       const began = Date.now();

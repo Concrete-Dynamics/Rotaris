@@ -1451,7 +1451,9 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   (`adoptSnapshot` → `rebasePending`, `packages/ui/src/settings/config-state.ts`): a field the user has not changed takes
   the file's new value, a changed one stays, rebased against the saved half of the one form state the hook holds, so two
   announcements landing in one tick chain (since 2026-10-03, fin13: before, the previous saved values came from a ref an
-  effect refreshed after render, and the second was rebased against the values from before the first).
+  effect refreshed after render, and the second was rebased against the values from before the first). The permission
+  mode is the one exception (REQ-CONFIG-423): a snapshot whose mode differs from the last saved one displaces an unsaved
+  selection; one whose mode is unchanged keeps it (the reading OQ-196 raises).
 - **Tier B** — at every run start the run host loads the files — layer 3, the discovery snapshot, folded first
   (REQ-CONFIG-034: an authenticated provider's models as entries keyed by qualified id with `auth_provider`, and its
   slot picks) — and overlays the screen's live state (`config.liveState`, handed over on every pending change), then

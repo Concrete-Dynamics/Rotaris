@@ -45,9 +45,12 @@
  *                     announced back to this window, as a sign-in's is. With nothing edited the strip carries no
  *                     `unsaved settings` and the save bar stays saved; after a real edit, a second reload keeps the edit
  *                     and the flag (`docs/defects/fixed/a-sign-in-reload-marks-settings-unsaved-though-nothing-was-edited.md`).
- *  11′. reload-last-write — the same workspace (REQ-CONFIG-419): two real writes of the circuit breaker (off, then on)
- *                     whose announcements the capture hands the window in one tick leave the form clean with the breaker
- *                     on (`docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`).
+ *  11′. reload-last-write — the same workspace (REQ-CONFIG-419, REQ-CONFIG-423): two real writes of the circuit breaker
+ *                     (off, then on) whose announcements the capture hands the window in one tick leave the form clean
+ *                     with the breaker on (`docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`);
+ *                     then `restricted` picked here and left unsaved is displaced by `autonomous` written through the
+ *                     composer's path, and the form reads clean
+ *                     (`docs/defects/fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md`).
  *
  * The legal links and the licence bundle are exercised through the capture seam's scripted opener
  * (`ROTARIS_CAPTURE_OPEN_EXTERNAL`), which reports success or the platform refusal without launching a browser.
@@ -705,36 +708,51 @@ const rYaml = readFileSync(rConfig, 'utf8');
 if (!/memory_diagnostics_enabled: false/.test(rYaml) || /circuit_breaker/.test(rYaml)) throw new Error(`reload-clean: the file is not the switch's alone:\n${rYaml}`);
 results.reloadClean = { opened: r0, afterReloadNoEdit: r1, afterEdit: r2, afterReloadWithEdit: r3, fieldWrites };
 
-// ── 11′. Two reloads in one tick stay clean (REQ-CONFIG-419) ──
+// ── 11′. Two reloads in one tick stay clean, and a permission mode written elsewhere wins (REQ-CONFIG-419, REQ-CONFIG-423) ──
 // Launch 11 spaces its writes seconds apart, so the hook's saved state has always settled between them. Here the capture's
 // pair seam makes two real writes of the circuit breaker (off, then on again) and hands the window both announcements in
 // one tick: the unrepaired hook rebased the second against the saved state from before the first, kept the first's `off`
-// as an edit and read dirty (`docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`).
-const lastProbes = [STRIP_UNSAVED, '.save-bar__status', BREAKER_ON];
+// as an edit and read dirty (`docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`). Then the
+// user picks `restricted` here and does not save, and the composer's write path (`config.setField` of the permission mode
+// alone, REQ-CONFIG-288) writes `autonomous`: for this one field the last write wins over the unsaved selection, so the
+// control shows `autonomous` and, nothing else being edited, the form is clean
+// (`docs/defects/fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md`).
+const MODE_GROUP = '[aria-label="Permission mode, strictest first"]';
+const MODE_ACTIVE = `${MODE_GROUP} .seg-opt.is-active`;
+const lastProbes = [STRIP_UNSAVED, '.save-bar__status', BREAKER_ON, MODE_ACTIVE];
 const lastWrite = await launch('reload-last-write', rWorkspace, rLocal, rPreferences, {
   ...openCategory('Runtime'),
-  ROTARIS_CAPTURE_PROBE_AT: [2000, 3400].flatMap((ms) => lastProbes.map((sel) => `${sel}@${ms}`)).join(';;'),
-  // 2400: the pair of writes, announced together.
+  ROTARIS_CAPTURE_PROBE_AT: [2000, 3400, 4600, 6000].flatMap((ms) => lastProbes.map((sel) => `${sel}@${ms}`)).join(';;'),
+  // 2400: the pair of writes, announced together. 3800: `restricted` picked here, unsaved. 5000: the composer's write.
   ROTARIS_CAPTURE_CONFIG_PAIR_AT: '{"circuit_breaker":{"enabled":false}}>>{"circuit_breaker":{"enabled":true}}@2400',
+  ROTARIS_CAPTURE_CLICKS: `${MODE_GROUP} [role="radio"]:nth-child(1)@3800`,
+  ROTARIS_CAPTURE_EVAL_AT: `window.rotaris.command({ kind: 'config.setField', patch: { runtime: { permission_mode: 'autonomous' } } }).then((r) => r.ok)@5000`,
   ROTARIS_CAPTURE_PROBE: [...PROBES, ...lastProbes].join(';;'),
-  ROTARIS_CAPTURE_AFTER_MS: '4500',
+  ROTARIS_CAPTURE_AFTER_MS: '7000',
 });
 const lastAt = (ms, selector) => JSON.parse(new RegExp(`probe-at ${ms} ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])`).exec(lastWrite.log)?.[1] ?? 'null');
 const lastReading = (ms) => {
   const read = Object.fromEntries(lastProbes.map((sel) => [sel, lastAt(ms, sel)]));
   const missing = lastProbes.filter((sel) => read[sel] === null);
   if (missing.length > 0) throw new Error(`reload-last-write: the probes at ${ms} ms did not run: ${missing.join(', ')}`);
-  return { unsavedFlag: read[STRIP_UNSAVED].length > 0, status: read['.save-bar__status'][0]?.text ?? '', breaker: read[BREAKER_ON].length > 0 };
+  return { unsavedFlag: read[STRIP_UNSAVED].length > 0, status: read['.save-bar__status'][0]?.text ?? '', breaker: read[BREAKER_ON].length > 0, mode: read[MODE_ACTIVE][0]?.text ?? '' };
 };
 const pairLine = /capture: config-pair-at 2400 → (.*)$/m.exec(lastWrite.log)?.[1] ?? '';
 if (pairLine !== 'writes [true,true], 2 announcements delivered in one tick') throw new Error(`reload-last-write: the pair seam did not deliver two written announcements together: "${pairLine}" (see reload-last-write.log)`);
+const composerWrite = /capture: eval-at 5000 .* → (.*)$/m.exec(lastWrite.log)?.[1] ?? '';
+if (composerWrite !== 'true') throw new Error(`reload-last-write: the composer's permission-mode write was refused: ${composerWrite} (see reload-last-write.log)`);
 const l0 = lastReading(2000);
 const l1 = lastReading(3400);
-if (l0.unsavedFlag || l0.status !== 'All changes saved' || !l0.breaker) throw new Error(`reload-last-write: the form did not open clean with the breaker on: ${JSON.stringify(l0)}`);
+const l2 = lastReading(4600);
+const l3 = lastReading(6000);
+if (l0.unsavedFlag || l0.status !== 'All changes saved' || !l0.breaker || l0.mode === '' || l0.mode === 'restricted' || l0.mode === 'autonomous') throw new Error(`reload-last-write: the form did not open clean, breaker on, on a mode the steps can move: ${JSON.stringify(l0)}`);
 if (l1.unsavedFlag || l1.status !== 'All changes saved' || !l1.breaker) throw new Error(`reload-last-write: two reloads in one tick marked the form dirty or left the first write's value on screen (REQ-CONFIG-419, REQ-SHELL-041): ${JSON.stringify(l1)}`);
+if (!l2.unsavedFlag || l2.status !== 'Unsaved changes' || l2.mode !== 'restricted') throw new Error(`reload-last-write: the unsaved selection of restricted did not take: ${JSON.stringify(l2)}`);
+if (l3.mode !== 'autonomous') throw new Error(`reload-last-write: the unsaved selection outlived a permission mode written elsewhere (REQ-CONFIG-423): ${JSON.stringify(l3)}`);
+if (l3.unsavedFlag || l3.status !== 'All changes saved') throw new Error(`reload-last-write: the displaced selection still reads as an edit (REQ-CONFIG-419, REQ-CONFIG-423): ${JSON.stringify(l3)}`);
 const lYaml = readFileSync(rConfig, 'utf8');
-if (!/enabled: true/.test(lYaml)) throw new Error(`reload-last-write: the file does not hold the second write's outcome:\n${lYaml}`);
-results.reloadLastWrite = { opened: l0, afterPairInOneTick: l1, pair: pairLine };
+if (!/permission_mode: autonomous/.test(lYaml) || !/enabled: true/.test(lYaml)) throw new Error(`reload-last-write: the file does not hold the two writes' outcome:\n${lYaml}`);
+results.reloadLastWrite = { opened: l0, afterPairInOneTick: l1, afterUnsavedSelection: l2, afterWriteElsewhere: l3, pair: pairLine };
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 2));

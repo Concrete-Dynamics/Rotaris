@@ -99,6 +99,19 @@ describe('REQ-CONFIG-419/423: a reload from elsewhere keeps only what the user c
     const fresh = { ...saved, runtime: { ...saved.runtime, sandbox_writable_roots: ['C:/from-file'] } };
     expect(rebasePending(saved, putBack, fresh).runtime.sandbox_writable_roots).toEqual(['C:/from-file']);
   });
+  it('REQ-CONFIG-423: a permission mode written elsewhere wins over an unsaved selection, and only that field (defect note a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md)', async () => {
+    const { rebasePending, pendingFrom, applyChange, isDirty } = await import('./config-state.js');
+    const saved = pendingFrom(snapshot);
+    // The user picked `plan` here and has not saved; meanwhile the composer wrote `autonomous`, and another key moved too.
+    const pending = applyChange(applyChange(saved, { kind: 'runtime', key: 'permission_mode', value: 'plan' }), { kind: 'runtime', key: 'max_depth', value: 9 });
+    const fresh = pendingFrom({ ...snapshot, runtime: { ...snapshot.runtime, permission_mode: 'autonomous', max_depth: 4 } });
+    const rebased = rebasePending(saved, pending, fresh);
+    expect(rebased.runtime.permission_mode).toBe('autonomous');
+    // REQ-CONFIG-420: every other edit in progress survives the refresh.
+    expect(rebased.runtime.max_depth).toBe(9);
+    // The displaced selection is no edit any more: with nothing else pending the form is clean.
+    expect(isDirty(fresh, rebasePending(saved, applyChange(saved, { kind: 'runtime', key: 'permission_mode', value: 'plan' }), fresh))).toBe(false);
+  });
   it('two reloads adopted back to back leave the form clean and on the second file values (defect note two-quick-configuration-reloads-mark-settings-unsaved.md)', async () => {
     const { adoptSnapshot, applyChange, pendingFrom, isDirty, rebasePending } = await import('./config-state.js');
     const opened = adoptSnapshot(null, pendingFrom(snapshot), false);
@@ -119,6 +132,16 @@ describe('REQ-CONFIG-419/423: a reload from elsewhere keeps only what the user c
     expect(isDirty(kept.saved, kept.pending)).toBe(true);
     // A read or a save repopulates both halves, clean.
     expect(isDirty(adoptSnapshot(kept, second, false).saved, adoptSnapshot(kept, second, false).pending)).toBe(false);
+  });
+  it('REQ-CONFIG-420: a reload that did not change the permission mode keeps the unsaved selection', async () => {
+    const { rebasePending, pendingFrom, applyChange, isDirty } = await import('./config-state.js');
+    const saved = pendingFrom(snapshot);
+    const pending = applyChange(saved, { kind: 'runtime', key: 'permission_mode', value: 'plan' });
+    // A sign-in's reload: the file gains a model; its permission mode is the one Settings last saved.
+    const fresh = pendingFrom({ ...snapshot, slots: [...snapshot.slots, { slot: 'medium_model', value: 'katalyst/m', origin: 'workspace', thinking: null }] });
+    const rebased = rebasePending(saved, pending, fresh);
+    expect(rebased.runtime.permission_mode).toBe('plan');
+    expect(isDirty(fresh, rebased)).toBe(true);
   });
   it('equal values are clean whatever their key order, at every depth; a different value is dirty', async () => {
     const { pendingFrom, isDirty } = await import('./config-state.js');

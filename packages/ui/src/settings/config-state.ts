@@ -186,6 +186,10 @@ export function rebasePending(previousSaved: PendingSettings, pending: PendingSe
   const runtime = { ...fresh.runtime };
   // By value, not by reference: a list the user edited and put back is untouched, so it takes the file's new value.
   for (const key of Object.keys(runtime) as (keyof PendingSettings['runtime'])[]) if (!sameValue(pending.runtime[key], previousSaved.runtime[key])) (runtime as Record<string, unknown>)[key] = pending.runtime[key];
+  // REQ-CONFIG-423: for the permission mode alone the last write wins over an unsaved selection — a mode written elsewhere
+  // (the composer's control, REQ-CONFIG-288) displaces what the user picked here and has not saved, so the control never
+  // shows a mode no run operates under. A reload that did not change the mode keeps the selection (REQ-CONFIG-420).
+  if (fresh.runtime.permission_mode !== previousSaved.runtime.permission_mode) runtime.permission_mode = fresh.runtime.permission_mode;
   const display = { ...fresh.display };
   for (const key of Object.keys(display) as (keyof DisplayView)[]) if (pending.display[key] !== previousSaved.display[key]) (display as Record<string, unknown>)[key] = pending.display[key];
   // ADR-0063: the skills block rebases as a whole rather than per key. A per-key rebase would need a third

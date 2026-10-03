@@ -45,9 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-03**
 
-**Settings adopts a reload in one update of the whole form (REQ-CONFIG-419; fin13).** The Settings hook holds the saved and
-pending values as one form (`SettingsForm`) and folds each `config:changed` through `adoptSnapshot`, so a second announcement
-in the same tick is rebased against what the first left. The **runtime view**'s Tier A paragraph says so. No package, edge, process, channel, command or store column changed.
+**Settings adopts a reload in one update of the whole form, and a permission mode written elsewhere wins (REQ-CONFIG-419,
+REQ-CONFIG-423; fin13).** The Settings hook holds the saved and pending values as one form (`SettingsForm`) and folds each
+`config:changed` through `adoptSnapshot`, so a second announcement in the same tick is rebased against what the first left;
+`rebasePending` lets a changed permission mode displace an unsaved selection. The **runtime view**'s Tier A paragraph says
+so. No package, edge, process, channel, command or store column changed.
 
 **A child moved by a fallback is drawn on the model it runs on (REQ-MONITOR-052, REQ-MONITOR-066, REQ-MONITOR-069,
 REQ-MONITOR-049; finacc F7).** `resilience.forChild` takes the execution (`{ taskId, key }`), and the run keeps each child's

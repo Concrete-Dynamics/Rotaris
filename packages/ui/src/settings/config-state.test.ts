@@ -78,6 +78,38 @@ describe('REQ-CONFIG-419/423: a reload from elsewhere keeps only what the user c
     expect(rebased.runtime.max_iterations).toBe(77);
     expect(rebasePending(saved, saved, fresh)).toEqual(fresh);
   });
+  it('a reload with no edit leaves the form clean, whatever order the rebuilt state holds its keys in (defect note a-sign-in-reload-marks-settings-unsaved-though-nothing-was-edited.md)', async () => {
+    const { rebasePending, pendingFrom, applyChange, isDirty } = await import('./config-state.js');
+    const saved = pendingFrom(snapshot);
+    // The sign-in's reload: the file gains a discovered model; the user edited nothing.
+    const fresh = pendingFrom({ ...snapshot, slots: [...snapshot.slots, { slot: 'medium_model', value: 'katalyst/m', origin: 'workspace', thinking: null }] });
+    expect(isDirty(fresh, rebasePending(saved, saved, fresh))).toBe(false);
+    // An identical reload is clean too.
+    expect(isDirty(saved, rebasePending(saved, saved, pendingFrom(snapshot)))).toBe(false);
+    // A real edit stays dirty across the reload, and an edit undone after it is clean again.
+    const edited = applyChange(saved, { kind: 'runtime', key: 'max_depth', value: 9 });
+    const rebased = rebasePending(saved, edited, fresh);
+    expect(isDirty(fresh, rebased)).toBe(true);
+    expect(isDirty(fresh, applyChange(rebased, { kind: 'runtime', key: 'max_depth', value: 3 }))).toBe(false);
+  });
+  it('a list the user edited and put back counts as untouched, so a reload gives it the file’s new value', async () => {
+    const { rebasePending, pendingFrom, applyChange } = await import('./config-state.js');
+    const saved = pendingFrom(snapshot);
+    const putBack = applyChange(applyChange(saved, { kind: 'runtime', key: 'sandbox_writable_roots', value: ['C:/x'] }), { kind: 'runtime', key: 'sandbox_writable_roots', value: [] });
+    const fresh = { ...saved, runtime: { ...saved.runtime, sandbox_writable_roots: ['C:/from-file'] } };
+    expect(rebasePending(saved, putBack, fresh).runtime.sandbox_writable_roots).toEqual(['C:/from-file']);
+  });
+  it('equal values are clean whatever their key order, at every depth; a different value is dirty', async () => {
+    const { pendingFrom, isDirty } = await import('./config-state.js');
+    const saved = pendingFrom({ ...snapshot, skills: { enabled: true, overrides: { a: 'auto', b: 'manual' } as never, invocation_overrides: {} } });
+    const reordered = { ...saved, skills: { invocationOverrides: {}, overrides: { b: saved.skills.overrides['b']!, a: saved.skills.overrides['a']! }, enabled: true }, runtime: Object.fromEntries(Object.entries(saved.runtime).reverse()) as unknown as typeof saved.runtime };
+    expect(isDirty(saved, reordered)).toBe(false);
+    expect(isDirty(saved, { ...reordered, skills: { ...reordered.skills, overrides: { a: saved.skills.overrides['a']! } } })).toBe(true);
+    expect(isDirty(saved, { ...saved, runtime: { ...saved.runtime, sandbox_writable_roots: ['x'] } })).toBe(true);
+    // An array's order is a value: a reordered list is an edit.
+    const two = { ...saved, runtime: { ...saved.runtime, network_allowed_hosts: ['a', 'b'] } };
+    expect(isDirty(two, { ...two, runtime: { ...two.runtime, network_allowed_hosts: ['b', 'a'] } })).toBe(true);
+  });
 });
 
 describe('REQ-CONFIG-472 — the Display category in the pending state', () => {

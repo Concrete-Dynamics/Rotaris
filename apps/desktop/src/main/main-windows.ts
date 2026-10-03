@@ -2,6 +2,7 @@ import type { AcknowledgementAction, CommandOutcome } from '@rotaris/contracts';
 import type { HandOver } from '@rotaris/platform';
 import type { BrowserWindow, BrowserWindowConstructorOptions, OpenDialogOptions } from 'electron';
 import { PersonaWindows, TerminalWindows } from './windows.js';
+import { onConsoleWarning } from './capture/console-relay.js';
 
 export type MainWindowOrigin = 'launch' | 'open-request' | 'hand-over';
 
@@ -703,9 +704,7 @@ export function createElectronMainWindowAdapter(
           .then(() => undefined),
         onCreated: (personaWin, persona) => {
           dependencies.relayAttach(personaWin);
-          if (dependencies.capturing) personaWin.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-            if (level >= 2) dependencies.log(`capture: persona "${persona}" renderer console: ${message} (${sourceId}:${line})`);
-          });
+          if (dependencies.capturing) onConsoleWarning(personaWin.webContents, ({ message, sourceId, lineNumber }) => dependencies.log(`capture: persona "${persona}" renderer console: ${message} (${sourceId}:${lineNumber})`));
         },
         onDestroyed: dependencies.relayDetach,
         log: dependencies.log,

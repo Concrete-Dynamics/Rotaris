@@ -5886,6 +5886,13 @@ None of them says what ends a silent child's step so that there is an outcome to
   Recommendation: three words in domain 01's list, since the timeline is what an autopsy reads first and the export
   reaches it (REQ-SESSION-199); the log is neither. *(Added 2026-10-01: OQ-157 asks the same of every timeline name the product
   writes that no list has, and recommends one ruling for all of them and for these three.)*
+  *(Added 2026-10-03, the live run at `1763f7f`, an all-PASS run: REQ-MONITOR-118's line ×4 and REQ-MONITOR-120's ×1 were
+  written at WARNING again, and a further case of the same level sits outside these three records —
+  `iteration 1: 2 child(ren) left paused by pause (PD-ORCH-005)`, written through the run's `warn` when the user's own
+  pause rests the children, as PD-ORCH-005 clause 2 says it does
+  ([`the-users-own-pause-is-logged-at-warning.md`](../defects/the-users-own-pause-is-logged-at-warning.md)). What the
+  build proceeds under: every one of these lines keeps its level until the owner rules; a ruling on the level of an
+  intended state answers this case with the three.)*
 
   *Corrected in place, 2026-09-29, by the verifier's second round.* The first round wrote them as the timeline entries
   `child_waiting_on_tools`, `child_stall_recovered` and `child_corrective_message`, for this reason, kept here as the

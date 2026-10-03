@@ -13,6 +13,12 @@
  *   3. isolated  — Overview → New session → isolation on → accept → the composer's prompt; the scripted run writes
  *                  NOTES.md IN the session worktree under `.rotaris/worktrees/<sid>` and not in the base, the session row
  *                  carries the binding, the worktree table shows the session id and `completed`, the base stays clean.
+ *                  The strip names the worktree's branch (REQ-WORKSPACE-020): no ` ↑{n}` (the branch has no upstream yet),
+ *                  the base checkout's sentence as its tooltip, and the worktree named in its accessible description alone.
+ *   3b. ahead    — the session branch pushed with an upstream, then NOTES.md committed in the worktree; the session reopened
+ *                  through the browser: the strip reads `rotaris/session/<sid> ↑1`, tooltip "Branch this workspace is on:
+ *                  rotaris/session/<sid>, 1 commit ahead." and the same sentence plus the worktree in its description —
+ *                  the count against THAT branch's upstream, while the base checkout is 1 ahead of its own as well.
  *   4. delete    — a file dropped into `feature/proof`; Delete → Yes → Git refuses → the second confirmation → force:
  *                  the row is gone, the directory is gone, `Worktree deleted.` (REQ-GIT-111/117).
  *   5. relaunch  — the split dragged in (1) is restored (REQ-SHELL-069, `panels/git`).
@@ -56,6 +62,12 @@ const STRIP_BRANCH_ICON = '[data-testid="strip-branch"] i.ph-git-branch.status-s
 // REQ-WORKSPACE-149 rule 2 shortens a branch NAME from the middle; the state words are never shortened (REQ-GIT-161, OQ-193).
 const STRIP_BRANCH_MIDDLE = '[data-testid="strip-branch"][data-middle="1"]';
 const STRIP_BRANCH_AHEAD_ONE = '[data-testid="strip-branch"][title="Branch this workspace is on: main, 1 commit ahead."][aria-description="Branch this workspace is on: main, 1 commit ahead."]';
+// REQ-WORKSPACE-020: while the item names an isolated worktree's branch, only its accessible description says so.
+const WORKTREE_NOTE = 'It belongs to the isolated worktree the active run is using, not to the folder this window is open on.';
+const STRIP_BRANCH_WORKTREE_NOTE = `[data-testid="strip-branch"][aria-description$="${WORKTREE_NOTE}"]`;
+const STRIP_BRANCH_WORKTREE_TITLE = '[data-testid="strip-branch"][title^="Branch this workspace is on: rotaris/session/"]';
+// The sentence the worktree branch carried until the acceptance repair (F8), for tooltip and description alike.
+const STRIP_BRANCH_OLD_WORKTREE_SENTENCE = '[data-testid="strip-branch"][title^="Branch this session\'s worktree is on"]';
 const PROBES = [
   '[data-testid="git-branch"]', '[data-testid="git-sync"]', '[data-testid="git-worktrees"] tr.git__row', '[data-testid="git-tag-base"]', '[data-testid="git-tag-active"]',
   '[data-testid="git-worktrees-empty"]', '[data-testid="git-history"] tr.git__commit', '[data-testid="git-history-empty"]', '[data-testid="git-checkpoints-empty"]', '[data-testid="git-checkpoint-row"]',
@@ -63,15 +75,16 @@ const PROBES = [
   '[data-testid="git-new-worktree"]', '[data-testid="git-merge"]', '[data-testid="worktree-dialog"]', '[data-testid="start-session-dialog"]', '[data-testid="git-confirm-force"]', '[data-testid="git-failure"]',
   // REQ-SHELL-042 / REQ-WORKSPACE-020: the strip's branch icon, and the base checkout's tooltip sentence with its full stop.
   STRIP_BRANCH_ICON, STRIP_BRANCH_AHEAD_ONE, STRIP_BRANCH_MIDDLE,
+  STRIP_BRANCH_WORKTREE_NOTE, STRIP_BRANCH_WORKTREE_TITLE, STRIP_BRANCH_OLD_WORKTREE_SENTENCE,
 ];
 
-async function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
+async function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000, moreProbes = []) {
   const png = join(output, `${name}.png`);
   const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
-      ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: [...PROBES, ...moreProbes].join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ...extra,
     },
   });
@@ -238,7 +251,36 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   // (Until then this line asserted the card's empty sentence; the checkpoint proof owns the card's rows in detail.)
   const ckptRows = p['[data-testid="git-checkpoint-row"]'] ?? [];
   if (ckptRows.length !== 1) throw new Error(`the checkpoints card lists ${ckptRows.length} row(s) for the isolated session, expected 1`);
-  results.isolated = { sessionId: session.session_id, status: session.execution_status, binding, checkpointRows: ckptRows.length, notesInWorktree: true, notesInBase: false, baseClean: true, rowText: bound.text, png: isolated.png };
+  // REQ-WORKSPACE-020: the strip names the worktree's branch as any branch name is named; it has no upstream, so no marker
+  // (the base checkout is 1 ahead of ITS upstream, which must not be borrowed); only the description names the worktree.
+  const strip = text(p, '[data-testid="strip-branch"]')[0];
+  if (strip !== `rotaris/session/${session.session_id}`) throw new Error(`the strip's branch item reads "${strip}" for the isolated session, expected rotaris/session/${session.session_id} with no ahead marker`);
+  if ((p[STRIP_BRANCH_WORKTREE_TITLE] ?? []).length !== 1 || (p[STRIP_BRANCH_WORKTREE_NOTE] ?? []).length !== 1) throw new Error('the strip\'s worktree branch does not carry the base sentence as its tooltip and the worktree in its description (REQ-WORKSPACE-020)');
+  if ((p[STRIP_BRANCH_OLD_WORKTREE_SENTENCE] ?? []).length !== 0) throw new Error('the strip\'s worktree branch still carries "Branch this session\'s worktree is on: …"');
+  results.isolated = { sessionId: session.session_id, status: session.execution_status, binding, checkpointRows: ckptRows.length, notesInWorktree: true, notesInBase: false, baseClean: true, rowText: bound.text, strip, png: isolated.png };
+}
+
+// 3b. The session branch given an upstream and one commit beyond it; the session reopened: the strip's ` ↑1` is THAT
+// branch's count against ITS upstream (REQ-WORKSPACE-020), read by the workspace service (`upstreamAhead`).
+{
+  const sid = results.isolated.sessionId;
+  const tree = join(workspace, '.rotaris', 'worktrees', sid);
+  const branch = `rotaris/session/${sid}`;
+  git(tree, 'push', '-q', '-u', 'origin', branch);
+  git(tree, 'add', 'NOTES.md');
+  git(tree, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'notes (worktree, local only)');
+  const title = `Branch this workspace is on: ${branch}, 1 commit ahead.`;
+  const exact = `[data-testid="strip-branch"][title="${title}"][aria-description="${title} ${WORKTREE_NOTE}"]`;
+  const ahead = await launch('worktree-ahead', workspace, local, preferences, {
+    ROTARIS_CAPTURE_RESUME: sid, ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '2500', ROTARIS_CAPTURE_AFTER_MS: '3000',
+  }, 120_000, [exact]);
+  const p = ahead.probes;
+  if (!ahead.log.includes(`capture: opened session "${sid}" from the browser`)) throw new Error(`the session ${sid} was not reopened through the browser (see worktree-ahead.log)`);
+  const strip = text(p, '[data-testid="strip-branch"]')[0];
+  if (strip !== `${branch} ↑1`) throw new Error(`the strip's branch item reads "${strip}", expected "${branch} ↑1" (REQ-WORKSPACE-020: the ahead count against the worktree branch's upstream)`);
+  if ((p[exact] ?? []).length !== 1) throw new Error(`the strip's worktree branch tooltip is not "${title}" with the worktree named in its description alone`);
+  if ((p[STRIP_BRANCH_ICON] ?? []).length !== 1) throw new Error('the strip\'s worktree branch draws no branch icon');
+  results.worktreeAhead = { strip, title, description: `${title} ${WORKTREE_NOTE}`, png: ahead.png };
 }
 
 // 4. Delete the manual worktree through the two-step confirmation: a file dropped in first so Git refuses without --force.

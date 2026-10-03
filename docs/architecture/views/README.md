@@ -93,6 +93,9 @@ workspace service's `workspace.open` bootstraps `<workspace>/.rotaris/agents.yam
 answers (`workspace-service/open-bootstrap.ts`), so initialization's first record, which main starts only after that
 answer and which goes through the per-field writer that never bootstraps (REQ-CONFIG-030), lands in the starter rather
 than creating the file without it. The **process view**'s main-to-service requests and the **sequences view**'s launch
+say so. Initialization's marker writer (`serviceMarkerWriter` in `main/initialization.ts`) asks `config.bootstrap`
+before each `config.setField`, so a file removed while the workspace is open is given the starter before the record
+(REQ-WORKSPACE-040); the **process view**'s initialization paragraph and the **runtime view**'s `initialization:` block
 say so. No package, edge, process, channel, command or store column changed.
 
 **A child's closing scheduler pass cannot outlive its store (REQ-ORCH-053, REQ-ORCH-098; fin11).** `Scheduler.close`, called

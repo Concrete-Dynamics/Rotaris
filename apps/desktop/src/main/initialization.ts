@@ -176,6 +176,35 @@ export async function deliverSetupCancel(
   throw new Error(r.kind === 'refused' ? `the run host refused it: ${r.headline ?? ''}` : `the run host answered ${r.kind}`);
 }
 
+/** The two workspace-service requests the marker writer makes, in the contract's own shapes. */
+export type MarkerServiceRequest =
+  | { readonly kind: 'config.bootstrap'; readonly workspaceRoot: string }
+  | { readonly kind: 'config.setField'; readonly workspaceRoot: string; readonly scope: 'workspace'; readonly patch: PlainMap };
+
+/**
+ * The marker's one writer as main wires it (REQ-WORKSPACE-085): the scoped per-field write (`config.setField`,
+ * REQ-CONFIG-441) of the `initialization:` patch into the workspace file, preceded by the starter bootstrap.
+ *
+ * REQ-WORKSPACE-040: "when no `agents.yaml` exists, the minimal bootstrap file SHALL be written first". The per-field
+ * path never bootstraps (REQ-CONFIG-030) and is not changed here; the initialization writer asks for the bootstrap
+ * (`config.bootstrap`, which writes only where the file is absent or blank and never over one, REQ-CONFIG-026/028)
+ * before its own write. The workspace's open already bootstraps (`workspace-service/open-bootstrap.ts`), so this covers
+ * a file removed while the workspace is open. Until 2026-10-03 the record went straight to the per-field path, and on a
+ * first run it created the file without the starter
+ * (`docs/defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`). A bootstrap that is refused or not
+ * answered does not stop the record: the per-field write then answers for the file as it finds it (REQ-CONFIG-442).
+ *
+ * `ask` answers null when the workspace's service is not running.
+ */
+export function serviceMarkerWriter(ask: (root: string, request: MarkerServiceRequest) => Promise<{ readonly kind: string; readonly headline?: string } | null>): InitializationDeps['writeMarker'] {
+  return async (root, patch) => {
+    await ask(root, { kind: 'config.bootstrap', workspaceRoot: root }).catch(() => null);
+    const r = await ask(root, { kind: 'config.setField', workspaceRoot: root, scope: 'workspace', patch });
+    if (r === null) return { ok: false, reason: 'the workspace service is not running' };
+    return r.kind === 'config.snapshot' ? { ok: true } : { ok: false, reason: r.kind === 'refused' ? (r.headline ?? 'refused') : `the service answered ${r.kind}` };
+  };
+}
+
 export interface InitializationDeps {
   readonly clocks: Clocks;
   readonly log: (message: string, level?: 'info' | 'warn') => void;

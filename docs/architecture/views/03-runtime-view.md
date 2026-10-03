@@ -1520,7 +1520,9 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   through the merge, a *global* `agents.yaml` could declare one machine's marker for every workspace on it. That
   is also what lets REQ-WORKSPACE-115's refresh promise to show "the values the persisted section holds at that
   moment" while disturbing nothing else — it is one file, read on its own, on demand. Writes go the ordinary
-  Tier A way (`config.setField` → `writeConfigFields`), and `overlaySection` replaces both id lists wholesale
+  Tier A way (`config.setField` → `writeConfigFields`), each preceded by `config.bootstrap` so a missing file gets the
+  starter first (REQ-WORKSPACE-040; `serviceMarkerWriter`, 2026-10-03: the per-field path itself still never
+  bootstraps, REQ-CONFIG-030), and `overlaySection` replaces both id lists wholesale
   (REQ-CONFIG-050) while every other top-level key stays put. Because the lists are replaced wholesale, main's
   coordinator makes every marker write through a queue, one per workspace root (`InitializationCoordinator.marker`),
   one write at a time in the order asked, and builds each patch — a skip's, each of a run's recordings through

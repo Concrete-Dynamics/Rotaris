@@ -35,7 +35,7 @@ import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, unavailableMethodMessage, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
-import { deliverSetupCancel, InitializationCoordinator } from './initialization.js'; // Part AS (ADR-0064)
+import { deliverSetupCancel, InitializationCoordinator, serviceMarkerWriter } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
 import { authRecoveryCommands } from './commands/auth-recovery.js';
 import { checkpointsCommands } from './commands/checkpoints.js';
@@ -1123,12 +1123,11 @@ async function main(): Promise<void> {
   const initialization = new InitializationCoordinator({
     clocks,
     log,
-    writeMarker: async (root, patch) => {
+    // REQ-WORKSPACE-040: the starter first when the file is missing, then the record (`serviceMarkerWriter`).
+    writeMarker: serviceMarkerWriter(async (root, request) => {
       const svc = services.get(root);
-      if (!svc) return { ok: false, reason: 'the workspace service is not running' };
-      const r = await svc.link.request({ kind: 'config.setField', workspaceRoot: root, scope: 'workspace', patch }, millis(30_000));
-      return r.kind === 'config.snapshot' ? { ok: true } : { ok: false, reason: r.kind === 'refused' ? r.headline : `the service answered ${r.kind}` };
-    },
+      return svc ? await svc.link.request(request, millis(30_000)) : null;
+    }),
     setup: {
       start: async (id) => {
         const r = await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'start' }, millis(15_000));

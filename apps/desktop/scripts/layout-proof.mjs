@@ -23,7 +23,8 @@
  *      the sidebar's content edge and the sidebar's scroll width.
  *   7. THE STRIP'S PATH LINK IS SHORTENED FROM THE MIDDLE. REQ-WORKSPACE-149 rule 2: at 1180 px, the narrowest width at
  *      which REQ-SHELL-047 still shows it, a deep workspace path keeps its head and its folder name with one `…` between,
- *      drawn unclipped, its tooltip the full path; the branch item's label is unclipped too; widening the window
+ *      drawn unclipped, its tooltip the full path; the branch item's label is unclipped too, after the branch icon in the
+ *      accent colour (REQ-SHELL-042); widening the window
  *      re-measures it. The workspace sits at a deliberately deep path for this
  *      (`docs/defects/fixed/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md`).
  *
@@ -288,8 +289,16 @@ try {
         labelScroll: label ? label.scrollWidth : 0, labelClient: label ? label.clientWidth : 0, overflow: getComputedStyle(item).textOverflow,
         left: Math.round(b.left), right: Math.round(b.right), w: Math.round(b.width) };
     };
+    // REQ-SHELL-042: the branch icon's computed colour against the accent token's, resolved on a probe element.
+    const icon = document.querySelector('[data-testid="strip-branch"] .status-strip__icon');
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--rt-accent)';
+    document.body.appendChild(probe);
+    const accent = getComputedStyle(probe).color;
+    probe.remove();
     return { viewport: innerWidth, stripScroll: strip ? strip.scrollWidth : 0, stripClient: strip ? strip.clientWidth : 0,
-      path: read('strip-workspace'), branch: read('strip-branch') };
+      path: read('strip-workspace'), branch: read('strip-branch'),
+      icon: icon ? { cls: icon.className, color: getComputedStyle(icon).color, accent, before: icon.nextElementSibling ? icon.nextElementSibling.className : null } : null };
   })())`;
   await d.resize(1180, 800);
   await sleep(800);
@@ -308,6 +317,9 @@ try {
   check('1180 px: the branch item\'s label is drawn whole, shortened from the middle if at all, beside the path and not over it',
     b7 !== null && (b7.label === null || b7.labelScroll <= b7.labelClient + 1) && (p7 === null || p7.right <= b7.left + 1),
     b7 === null ? 'no branch item' : `branch "${b7.text}" (label "${b7.label}", content ${b7.labelScroll} in ${b7.labelClient} px) at [${b7.left}..${b7.right}]; path ends at ${p7?.right}`);
+  check('1180 px: the branch item draws the branch icon before the branch name, in the accent colour (REQ-SHELL-042, REQ-WORKSPACE-020)',
+    narrow.icon !== null && /\bph-git-branch\b/.test(narrow.icon.cls) && narrow.icon.color === narrow.icon.accent && narrow.icon.before === 'status-strip__label',
+    narrow.icon === null ? 'no icon in the branch item' : `icon "${narrow.icon.cls}" coloured ${narrow.icon.color} against --rt-accent ${narrow.icon.accent}, followed by ${narrow.icon.before}`);
   check('1180 px: the strip itself does not overflow', narrow.stripScroll <= narrow.stripClient + 1, `scrollWidth ${narrow.stripScroll} against clientWidth ${narrow.stripClient}`);
   await d.resize(1400, 900);
   await sleep(800);

@@ -50,13 +50,16 @@ export function StatusStripItem({ item }: { readonly item: Exclude<StripItem, { 
 
   const setBox = useCallback((el: HTMLElement | null) => { box.current = el; }, []);
   const suffix = item.kind === 'text' ? item.suffix : undefined;
+  // REQ-SHELL-042: the branch icon in the accent colour, a CSS token, so a theme change redraws it with the rest.
+  const icon = item.kind === 'text' && item.icon ? <i className={`ph ${item.icon} status-strip__icon`} aria-hidden="true" /> : null;
   const content = middle
     ? (<>
+        {icon}
         {/* Hidden entirely rather than drawn clipped where even `…` will not fit (rule 2, REQ-WORKSPACE-021). */}
         {label !== null && <span ref={text} className="status-strip__label">{label}</span>}
         {suffix && <span className="status-strip__suffix">{suffix}</span>}
       </>)
-    : `${item.text}${suffix ?? ''}`;
+    : (<>{icon}{`${item.text}${suffix ?? ''}`}</>);
   const sizing = middle && basis !== null ? ({ '--status-strip-label-basis': `${basis}px` } as CSSProperties) : undefined;
   const elide = !middle && item.text.length > 28 ? '1' : undefined;
   if (item.kind === 'link') {

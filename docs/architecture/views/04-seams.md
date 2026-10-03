@@ -319,7 +319,9 @@ slack and giving it back first. An item that is a workspace path or a branch nam
 branch item, 2026-10-03): its label is shortened from the middle against the width the row gives it (REQ-WORKSPACE-149
 rule 2 — `rowLabel` in `workspace-label.ts`, the canvas measurer in `label-measure.ts`, shared with the title-bar chip), the
 box asking the row for its whole label as a flex basis and re-eliding on every ResizeObserver change, and fixed text after
-it (the branch's ` ↑{n}`) rides as `suffix`, never shortened; every other item keeps REQ-SHELL-038's end ellipsis. An item is text in the strip's own
+it (the branch's ` ↑{n}`) rides as `suffix`, never shortened; every other item keeps REQ-SHELL-038's end ellipsis. A glyph
+before the label rides as `icon` (the branch item's `ph-git-branch`, REQ-SHELL-042), coloured by a token in
+`.status-strip__icon` so a theme change redraws it. An item is text in the strip's own
 craft — the mockup's strip is plain tertiary text at `--rt-text-xs`, mono only for figures — so a new item takes no new
 control and no new token. The path, in order: the fact on the record the renderer already receives (`SessionRecord` in
 `packages/contracts/src/channels.ts`, filled by `toSessionRecord` in `packages/engine/src/sessions.ts`; a store column

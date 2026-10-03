@@ -9361,3 +9361,34 @@ is read from, so building the list still reads one row per session and nothing e
 
 **What a ruling decides.** Whether the three labels stay on the card (and REQ-SESSION-030's field set gains them, the
 "change to this field set" it names), or leave it (and REQ-MONITOR-171 is amended).
+
+**OQ-193 — What does the status strip's branch item show on a detached HEAD, outside a repository and before the first
+read: REQ-GIT-161's conveyed states, or REQ-WORKSPACE-020's empty item?** *(REQ-GIT-161, the item "SHALL convey that the
+checkout is on no branch when the workspace, or the focused session's worktree, is on a detached HEAD, and SHALL convey that
+there is no branch to show when the folder is not a Git repository at all — a state distinct from a repository whose branch
+could not be read", each "distinguishable from an ordinary branch name and from the other"; REQ-WORKSPACE-020, "The item
+SHALL render as empty text — no icon, no arrow, no tooltip — exactly when the snapshot's branch name is empty, which per
+REQ-WORKSPACE-029 covers git being unavailable, the folder not being a repository, a detached HEAD, and an unborn branch";
+REQ-SHELL-042, which owns the item and names neither state. Raised 2026-10-03 by the repair of
+[`the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md`](../defects/the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md)
+(fin11, bundle `fin11-strip-labels-and-auxiliary-windows`). Open.)*
+
+REQ-GIT-161 requires a detached checkout and a non-repository to be conveyed, each in words or markers distinct from a branch
+name and from each other, and a repository whose branch could not be read to take REQ-GIT-112's empty value. REQ-WORKSPACE-020
+requires the item to be empty, with no tooltip, in exactly those cases (and for git being unavailable and an unborn branch).
+One item cannot do both. Neither requirement names the other, and no directive governs either.
+
+**What the build proceeds under** (`branchStripItem`, `packages/ui/src/GitView.tsx`; `stripItems`,
+`packages/ui/src/composer.ts`): REQ-GIT-161's words, unchanged by this repair. A detached HEAD reads `detached HEAD` with the
+tooltip "This workspace is on no branch (detached HEAD)."; a folder that is not a repository reads `no git repository`
+("This folder is not a Git repository."), and with git unavailable `no git` ("Git is not installed or not on PATH."); before
+the first read the item reads `—` ("Branch this workspace is on: not read yet"). The detached and absent states are set in
+italics. None of these draws REQ-SHELL-042's branch icon, which is drawn only before a branch name.
+
+Two readings recorded beside it, which a ruling may revisit: the base checkout's tooltip ends with REQ-WORKSPACE-020's full
+stop ("Branch this workspace is on: main.", "…, 1 commit ahead.", "…, {n} commits ahead."), since REQ-SHELL-042 leaves the
+wording to the implementation; and REQ-GIT-122's backticked `Branch this workspace is on: <branch>` with `, N commit(s)
+ahead` is read as a template rather than a literal, since REQ-SHELL-044 forbids rendering `(s)` as written.
+
+**What a ruling decides.** Which requirement's treatment of the detached, non-repository, git-unavailable and unread states
+stands for the strip's branch item, and an amendment to the other.

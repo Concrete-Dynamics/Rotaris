@@ -1454,6 +1454,9 @@
 }
 .status-strip__label { white-space: nowrap; overflow: hidden; }
 .status-strip__suffix { flex: none; white-space: nowrap; }
+/* REQ-SHELL-042 / REQ-WORKSPACE-020: the branch icon before the branch name, in the accent colour (the mockup's strip draws
+   `ph-git-branch` there in tertiary; the specification's accent governs). A token, so a theme change re-renders it. */
+.status-strip__icon { flex: none; color: var(--rt-accent); }
 /* REQ-SHELL-038's spacer between the branch and the safety flags: it takes the slack and gives it back first. */
 .status-strip__spacer { flex: 1 1 0; min-width: 0; }
 .status-strip__item[data-figure='1'] { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); }

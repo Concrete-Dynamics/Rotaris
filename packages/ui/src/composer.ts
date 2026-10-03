@@ -106,14 +106,16 @@ export function statusStripSandboxItem(session: { readonly sandboxed: boolean; r
  * the list never carries it.
  */
 export type StripItem =
-  | { readonly kind: 'text'; readonly text: string; readonly name: string; readonly title: string; readonly testId: string; readonly state?: string; readonly figure?: true; readonly strong?: true; readonly middle?: true; readonly suffix?: string }
+  | { readonly kind: 'text'; readonly text: string; readonly name: string; readonly title: string; readonly testId: string; readonly state?: string; readonly figure?: true; readonly strong?: true; readonly middle?: true; readonly suffix?: string; readonly icon?: string }
   | { readonly kind: 'link'; readonly text: string; readonly name: string; readonly title: string; readonly testId: string; readonly onActivate: () => void; readonly middle?: true }
   | { readonly kind: 'spacer' };
 /*
  * `middle`: REQ-WORKSPACE-149 rule 2 — the item's `text` is a workspace path or a branch name, shortened from the MIDDLE
  * against the width the strip gives it (`StatusStripItem.tsx`, `rowLabel`), and hidden rather than clipped where even `…`
  * does not fit; every other item that is too long keeps REQ-SHELL-038's end ellipsis. `suffix`: fixed text drawn after the
- * label and never shortened — the branch item's ` ↑{n}` ahead marker, which is not part of the branch name.
+ * label and never shortened — the branch item's ` ↑{n}` ahead marker, which is not part of the branch name. `icon`: a
+ * Phosphor glyph drawn before the label in the accent colour — the branch item's `ph-git-branch` (REQ-SHELL-042,
+ * REQ-WORKSPACE-020), only where the item shows a branch name.
  */
 
 /** REQ-SHELL-047: below this window width the workspace-path item is hidden (a specification value, stated as it states it). */
@@ -241,6 +243,9 @@ export function stripItems(width: number, f: StripFacts): StripItem[] {
   }
   items.push({
     kind: 'text', text: f.branch.text, name: STRIP_NAMES.branch, title: f.branch.title, testId: 'strip-branch', figure: true, middle: true,
+    // REQ-SHELL-042 / REQ-WORKSPACE-020: a branch icon before the branch name. The detached, non-repository and unread states
+    // carry words rather than a branch name (REQ-GIT-161's reading, OQ-193), and no icon.
+    ...(f.branch.state === 'branch' ? { icon: 'ph-git-branch' } : {}),
     ...(f.branch.suffix ? { suffix: f.branch.suffix } : {}),
     ...(f.branch.state === undefined ? {} : { state: f.branch.state }),
   });

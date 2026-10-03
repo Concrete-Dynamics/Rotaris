@@ -51,11 +51,15 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 
 
 
+const STRIP_BRANCH_ICON = '[data-testid="strip-branch"] i.ph-git-branch.status-strip__icon';
+const STRIP_BRANCH_AHEAD_ONE = '[data-testid="strip-branch"][title="Branch this workspace is on: main, 1 commit ahead."][aria-description="Branch this workspace is on: main, 1 commit ahead."]';
 const PROBES = [
   '[data-testid="git-branch"]', '[data-testid="git-sync"]', '[data-testid="git-worktrees"] tr.git__row', '[data-testid="git-tag-base"]', '[data-testid="git-tag-active"]',
   '[data-testid="git-worktrees-empty"]', '[data-testid="git-history"] tr.git__commit', '[data-testid="git-history-empty"]', '[data-testid="git-checkpoints-empty"]', '[data-testid="git-checkpoint-row"]',
   '[data-testid="git-checkpoint-session"]', '[data-testid="git-divider"]', '[data-testid="acknowledgement-title"]', '[data-testid="strip-branch"]', '.notice__headline', '.app-shell',
   '[data-testid="git-new-worktree"]', '[data-testid="git-merge"]', '[data-testid="worktree-dialog"]', '[data-testid="start-session-dialog"]', '[data-testid="git-confirm-force"]', '[data-testid="git-failure"]',
+  // REQ-SHELL-042 / REQ-WORKSPACE-020: the strip's branch icon, and the base checkout's tooltip sentence with its full stop.
+  STRIP_BRANCH_ICON, STRIP_BRANCH_AHEAD_ONE,
 ];
 
 async function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
@@ -152,6 +156,8 @@ const painted = await launch('painted', workspace, local, preferences, {
   if (local1.length !== 1 || !/third \(local only\)/.test(local1[0].text)) throw new Error(`the local rows are ${JSON.stringify(local1.map((c) => c.text))}`);
   if (text(p, '[data-testid="git-checkpoints-empty"]')[0] !== 'Start or open a session to see the checkpoints recorded for it.') throw new Error(`the checkpoints card reads "${text(p, '[data-testid="git-checkpoints-empty"]')[0]}"`);
   if (text(p, '[data-testid="strip-branch"]')[0] !== 'main ↑1') throw new Error(`the strip's branch item reads "${text(p, '[data-testid="strip-branch"]')[0]}"`);
+  if ((p[STRIP_BRANCH_ICON] ?? []).length !== 1) throw new Error(`the strip's branch item draws ${(p[STRIP_BRANCH_ICON] ?? []).length} branch icon(s), expected 1 (REQ-SHELL-042)`);
+  if ((p[STRIP_BRANCH_AHEAD_ONE] ?? []).length !== 1) throw new Error('the strip\'s branch tooltip and description are not "Branch this workspace is on: main, 1 commit ahead." (REQ-WORKSPACE-020)');
   const merge = first(p, '[data-testid="git-merge"]');
   if (!merge) throw new Error('no Merge selected button');
   const divider = first(p, '[data-testid="git-divider"]');
@@ -164,7 +170,7 @@ const painted = await launch('painted', workspace, local, preferences, {
   if (restated.length > 0) throw new Error(`a fact reached the log twice: ${restated.map((r) => `line ${r.line}, ${r.fact} (owner: ${r.owner}): ${r.text}`).join(' | ')}`);
   const stored = JSON.parse(readFileSync(join(preferences, 'preferences.json'), 'utf8'));
   if (JSON.stringify(stored['panels/git']?.sizes?.[1]) !== '528') throw new Error(`panels/git was not written as [.., 528]: ${JSON.stringify(stored['panels/git'])}`);
-  results.painted = { branch: 'main', sync: text(p, '[data-testid="git-sync"]')[0], rows: r.length, history: commits.length, local: local1.length, reads: read.reads, readMs: read.ms, divider: 528, png: painted.png };
+  results.painted = { branch: 'main', sync: text(p, '[data-testid="git-sync"]')[0], rows: r.length, history: commits.length, local: local1.length, reads: read.reads, readMs: read.ms, divider: 528, strip: { text: 'main ↑1', icon: 'ph-git-branch', title: 'Branch this workspace is on: main, 1 commit ahead.' }, png: painted.png };
 }
 
 // 2. Create a worktree through the dialog: the branch typed into the focused Branch field, the directory derived, Create.
@@ -273,6 +279,8 @@ const noGit = await launch('no-git', workspace, local, preferences, { ROTARIS_CA
   if (/Error box|dialog/i.test(noGit.log.split('\n').filter((l) => /git view/.test(l)).join('\n'))) throw new Error('a dialog was raised for a missing git');
   const headlines = text(p, '.notice__headline');
   // ADR-0049 holds ONE current notice: the first-launch provider notice, raised 800 ms after the workspace opened, may have replaced it by capture time.
+  // OQ-193's build reading: the item conveys the state in words (REQ-GIT-161), and carries no branch icon, as it shows no branch name.
+  if ((p[STRIP_BRANCH_ICON] ?? []).length !== 0) throw new Error('with no git the strip\'s branch item draws a branch icon');
   results.noGit = { header: 'not a git repository', noticeRaised: true, noticeOnScreenAtCapture: headlines.some((h) => /Working without Git/.test(h)), headlinesAtCapture: headlines, dialog: false, strip: text(p, '[data-testid="strip-branch"]')[0], png: noGit.png };
 }
 // 6b. A plain folder that is not a repository: the same header, and no notice. It must live OUTSIDE this repository —
@@ -287,6 +295,7 @@ const notRepo = await launch('not-a-repository', plain, local, preferences, { RO
   if (/Working without Git/.test(notRepo.log)) throw new Error('a plain folder raised the Working without Git notice');
   if (text(p, '.notice__headline').some((h) => /Working without Git/.test(h))) throw new Error('the Working without Git notice is on screen for a plain folder');
   if ((p['[data-testid="git-worktrees-empty"]'] ?? []).length !== 1 || (p['[data-testid="git-history-empty"]'] ?? []).length !== 1) throw new Error('the two empty states were not painted for a plain folder');
+  if ((p[STRIP_BRANCH_ICON] ?? []).length !== 0) throw new Error('for a plain folder the strip\'s branch item draws a branch icon');
   results.notRepository = { header: 'not a git repository', notice: false, emptyStates: 2, strip: text(p, '[data-testid="strip-branch"]')[0], png: notRepo.png };
   try { rmSync(plain, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* scratch left to the temp folder */ }
 }

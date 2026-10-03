@@ -27,6 +27,11 @@ describe('minimum-window layout regressions', () => {
     expect(rule('.status-strip__suffix')).toContain('flex: none');
   });
 
+  it('colours the strip\'s branch icon with the accent token, so a theme change re-renders it (REQ-SHELL-042)', () => {
+    expect(rule('.status-strip__icon')).toContain('color: var(--rt-accent)');
+    expect(rule('.status-strip__icon')).toContain('flex: none');
+  });
+
   it('makes status items and checkpoint columns keyboard-reachable through horizontal scrolling', () => {
     expect(rule('.status-strip')).toContain('overflow-x: auto');
     expect(rule('.git__table-scroll')).toContain('overflow-x: auto');

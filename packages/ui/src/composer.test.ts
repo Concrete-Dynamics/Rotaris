@@ -136,6 +136,17 @@ describe('REQ-SHELL-038/047: the status strip, item by item', () => {
     expect(items.find((i) => i.kind === 'link')).toMatchObject({ text: '~/work/rotaris', title: 'Workspace folder: /home/u/work/rotaris. Opens it in your file manager.' });
   });
 
+  it('draws the branch icon before a branch name, and only there (REQ-SHELL-042, REQ-WORKSPACE-020)', () => {
+    const branchOf = (items: readonly StripItem[]) => items.find((i) => i.kind === 'text' && i.testId === 'strip-branch');
+    expect(branchOf(stripItems(1400, facts()))).toMatchObject({ icon: 'ph-git-branch', text: 'main', suffix: ' ↑1', title: 'Branch this workspace is on: main, 1 commit ahead.' });
+    // The detached, non-repository and unread states are words, not a branch name (REQ-GIT-161's reading, OQ-193): no icon.
+    for (const state of ['detached', 'none', 'unknown']) {
+      expect(branchOf(stripItems(1400, facts({ branch: { text: 'detached HEAD', title: 'This workspace is on no branch (detached HEAD).', state } })))).not.toHaveProperty('icon');
+    }
+    // Only the branch item carries an icon.
+    expect(stripItems(1400, facts()).filter((i) => i.kind === 'text' && i.icon !== undefined).map((i) => i.kind === 'text' && i.testId)).toEqual(['strip-branch']);
+  });
+
   it('gives every item REQ-SHELL-038\'s accessible name, and exactly the workspace path is a link (REQ-SHELL-039/040)', () => {
     const items = stripItems(1400, facts());
     const names = items.flatMap((i) => (i.kind === 'spacer' ? [] : [i.name]));

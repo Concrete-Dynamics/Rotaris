@@ -147,3 +147,12 @@ run sharing the endpoint) passed all seven scenarios: the run completed `tasks_c
 intents were `question`, `explicit_trivial` and `small_feature`; the refusal was "Provider authentication required".
 The re-run on the merged branch, with `starterMissing`, is recorded below.
 
+**Run 8, on the merged branch** (build `c10e2ce`: origin/main `43e3958` merged, slice-proof asking `starterMissing`,
+the code-intelligence bundle present; 07:56:58 to 08:04:39 UTC, load 6.6 at start and 5.1 at end, other agents' work on
+the host): exit 0, all seven scenarios. The first launch logged the open's bootstrap `written` at 07:57:19.795,
+`code-intelligence-setup → success` at 07:57:23.555 (the marker writer's bootstrap `exists` 88 ms before it),
+`Added Katalyst` at 07:57:26.959 and the sign-in's bootstrap `exists` 12 ms later. The workspace file held the comment
+header, `default_persona: orchestrator`, the nulls, then `initialization:` and the proof's `runtime:` section. The run
+completed `tasks_complete` with one settled tool row; the intents were `question`, `explicit_trivial` and
+`small_feature`; spike 6 passed its four tests; the sign-out removed the credential file; the refusal was "Provider
+authentication required". Log and evidence: the session scratchpad's `a13r/slice-proof.r8.log` and `a13r/slice-proof-r8/`.

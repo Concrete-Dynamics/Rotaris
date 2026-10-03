@@ -49,6 +49,19 @@ old line as a fifth restatement (`KNOWN_RESTATEMENTS`, which the live run's chec
 `apps/desktop/scripts/lib/code-intelligence-binding.mjs` reads the project from the warning as well as from an older pack's
 run-host line. `mcp-proof`'s exit-bound launch reads the 35 s bound from the warning.
 
+**Two more readers of the removed line, repaired 2026-10-03 in the same plan's repair round** (the verifier's finding: the
+first repair left them matching only the run host's line). `apps/desktop/scripts/plan-gate-proof.mjs`'s guard that its
+fixture turned code intelligence off (launch 1, from the fixed
+[`plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md`](plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md))
+tested the log for `discovery of 'code_intelligence'`; on a proof tree, which has no bundle, the only discovery is a failed
+one, so after the first repair the guard could no longer fail. It now reads `codeIntelligenceDiscovered`
+(`lib/code-intelligence-discovery.mjs`): a discovery that listed tools or failed, in either form, and never a setup step,
+which runs while the server is disabled. `apps/desktop/scripts/mcp-console-spike.mjs` read its `token` server's failure as
+`discovery of 'token' failed`, which left `reservedToken` empty; it now reads `discoveryFailed('token')`, the same module's
+pattern for one server's failure in either form. `code-intelligence-discovery.test.ts` pins both readers, and it fails
+on any script under `apps/desktop/scripts/` that still matches a named server's `discovery of '<name>'` for anything but a
+listing. Run against the two scripts as they were, that test named both lines.
+
 Pinned by (each red before the repair, run against the unrepaired code with the tests in place):
 
 - `packages/mcp/src/mcp.test.ts` — "warns a failure once, on one line that keeps the child's whole standard error and the
@@ -59,6 +72,9 @@ Pinned by (each red before the repair, run against the unrepaired code with the 
   line taken for none;
 - `apps/desktop/scripts/lib/code-intelligence-binding.test.ts` — a failed discovery read from the warning, with and without
   a project;
+- `apps/desktop/scripts/lib/code-intelligence-discovery.test.ts` — "every reader of a failed discovery reads its one form
+  since 2026-10-03 (U4)": `discoveryFailed` and `codeIntelligenceDiscovered` over both forms, and no script left matching
+  the removed line (red on the two scripts as they were);
 - `mcp-proof` launch 6 (drop rules) — `broken`'s failure is one `warning` record on one line carrying both of its stderr
   lines, and `restatedFacts` finds nothing in the launch's log.
 

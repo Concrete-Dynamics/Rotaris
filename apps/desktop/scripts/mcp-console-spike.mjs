@@ -20,6 +20,7 @@ import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { discoveryFailed } from './lib/code-intelligence-discovery.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -100,7 +101,9 @@ if (dbFile) {
   echo = s ? db.prepare("SELECT status, entry FROM tool_calls WHERE session_id = ? AND tool_name = 'echo'").all(s.session_id).map((r) => ({ status: r.status, result: JSON.parse(r.entry).result })) : [];
   db.close();
 }
-const tokenLine = log.split('\n').find((l) => /discovery of 'token' failed/.test(l)) ?? '';
+// Either form of the failure: ToolDiscovery's one warning since 2026-10-03 (finding U4), or the run host's line before it.
+const tokenFailed = discoveryFailed('token');
+const tokenLine = log.split('\n').find((l) => tokenFailed.test(l)) ?? '';
 const results = {
   exit, samples: samples.length, sawCmd: seenCmd, sawNode: seenNode, postLaunchProcesses: [...new Set(samples.flatMap((s) => s.processes.map((p) => `${p.name}#${p.id}`)))], windowedProcesses: windowed, headlessConhostSightings: conhosts, titledProcesses: cmdTitled,
   consoleToolsArrived: Array.isArray(echo) && echo.length === 1 && echo[0].status === 'ok', echo,

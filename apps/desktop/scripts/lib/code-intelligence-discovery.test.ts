@@ -3,8 +3,10 @@
  * 1763f7f: the tree had no bundle and the run passed without a line saying code intelligence never ran). The failure lines
  * are that pack's own (`sign-in/app.log:22`, `duress/app.log:37-42`), the instants shortened.
  */
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { codeIntelligenceDiscovery } from './code-intelligence-discovery.mjs';
+import { codeIntelligenceDiscovered, codeIntelligenceDiscovery, discoveryFailed } from './code-intelligence-discovery.mjs';
 
 const info = '[main 2026-10-03T06:16:07.855Z] info    run host: ';
 const warning = '[main 2026-10-03T06:16:07.854Z] warning run host: ';
@@ -51,5 +53,44 @@ describe('whether a launch\'s code-intelligence discovery succeeded (U5)', () =>
 
   it('a discovery of another server is not code intelligence\'s', () => {
     expect(codeIntelligenceDiscovery(`${info}mcp: discovery of 'web_search' listed 1 tool(s) in 3 ms`).outcome).toBe('absent');
+  });
+});
+
+/*
+ * The repair round of 2026-10-03: U4 removed the run host's "mcp: discovery of '<name>' … failed (…)" line, and two
+ * readers still matched only it — plan-gate-proof's guard that its fixture turned code intelligence off, and the console
+ * spike's read of its `token` server's failure. Both now read the failure through this module.
+ */
+describe('every reader of a failed discovery reads its one form since 2026-10-03 (U4)', () => {
+  const warned = (name: string) => `${warning}mcp ${name} (project ${ws}): tool discovery failed in 12 ms (spawn ENOENT); the persona prompt will list this server with no tool details attached (REQ-MCP-048)`;
+
+  it('discoveryFailed reads one server\'s failure in the warning and in the old run-host line, and no other server\'s', () => {
+    expect(discoveryFailed('token').test(warned('token'))).toBe(true);
+    expect(discoveryFailed('token').test(`${warning}mcp token: tool discovery failed in 3 ms (spawn ENOENT); the persona prompt …`)).toBe(true);
+    expect(discoveryFailed('token').test(`${info}mcp: discovery of 'token' failed (spawn ENOENT) in 3 ms`)).toBe(true);
+    expect(discoveryFailed('token').test(warned('console'))).toBe(false);
+    expect(discoveryFailed('token').test(`${info}mcp: discovery of 'token' listed 1 tool(s) in 3 ms`)).toBe(false);
+  });
+
+  it('codeIntelligenceDiscovered sees a failed discovery in its one warning, and a setup step is not a discovery', () => {
+    expect(codeIntelligenceDiscovered(warned('code_intelligence'))).toBe(true);
+    expect(codeIntelligenceDiscovered(`${info}mcp: discovery of 'code_intelligence' failed (spawn ENOENT) in 12 ms`)).toBe(true);
+    expect(codeIntelligenceDiscovered(`${info}mcp: discovery of 'code_intelligence' listed 22 tool(s) in 1968 ms`)).toBe(true);
+    expect(codeIntelligenceDiscovered(`${info}mcp setup: create failed — exited with code 127; its last output: …`)).toBe(false);
+    expect(codeIntelligenceDiscovered(`${info}session list: 0 sessions`)).toBe(false);
+  });
+
+  it('no script outside this module matches a named server\'s discovery by the removed line alone', () => {
+    const scripts = resolve(import.meta.dirname, '..');
+    const stale: string[] = [];
+    for (const file of readdirSync(scripts).filter((f) => f.endsWith('.mjs'))) {
+      readFileSync(join(scripts, file), 'utf8').split('\n').forEach((line, at) => {
+        const code = line.trim();
+        if (code.startsWith('//') || code.startsWith('*') || code.startsWith('/*')) return;
+        // A named server's "discovery of '<name>'" read for anything but a listing is the removed failure line.
+        if (/discovery of '[a-z_]+'(?! listed)/.test(code)) stale.push(`${file}:${at + 1}: ${code}`);
+      });
+    }
+    expect(stale).toEqual([]);
   });
 });

@@ -13,11 +13,27 @@
  *
  * Discovery runs when a run starts (`McpHost.prepare`), so a launch that starts none — the sign-in, the shell relaunch —
  * has nothing to read; that is `absent`, and the setup's own failure, where the log holds one, is `setup-failed`.
+ *
+ * The failure's two forms are also read for any server by `discoveryFailed`, so no reader of a failed discovery is left
+ * matching only the run-host line U4 removed (plan-gate-proof's guard and the console spike's `token` read it until the
+ * repair round of 2026-10-03).
  */
 const SERVER = 'code_intelligence';
+const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const LISTED = new RegExp(`mcp: discovery of '${SERVER}'(?: \\(project (.+?)\\))? listed (\\d+) tool\\(s\\) in (\\d+) ms`);
-const FAILED = new RegExp(`mcp ${SERVER}(?: \\(project (.+?)\\))?: tool discovery failed(?: in (\\d+) ms)? \\((.*)$`);
-const FAILED_BEFORE = new RegExp(`mcp: discovery of '${SERVER}'(?: \\(project (.+?)\\))? failed \\((.*)$`);
+const failedNow = (server) => new RegExp(`mcp ${escape(server)}(?: \\(project (.+?)\\))?: tool discovery failed(?: in (\\d+) ms)? \\((.*)$`);
+const failedBefore = (server) => new RegExp(`mcp: discovery of '${escape(server)}'(?: \\(project (.+?)\\))? failed \\((.*)$`);
+const FAILED = failedNow(SERVER);
+const FAILED_BEFORE = failedBefore(SERVER);
+
+/**
+ * A pattern matching one server's failed tool discovery in either form: ToolDiscovery's REQ-MCP-048 warning
+ * (`mcp <name> (project …): tool discovery failed in N ms (…)`, the one record since 2026-10-03) or the run host's line
+ * of the packs before it (`mcp: discovery of '<name>' … failed (…)`).
+ */
+export function discoveryFailed(server) {
+  return new RegExp(`${failedNow(server).source}|${failedBefore(server).source}`);
+}
 const SETUP_FAILED = /mcp setup: (\S+) failed — (.*)$/;
 
 const clip = (text, max = 240) => (text.length > max ? `${text.slice(0, max)}…` : text);
@@ -45,3 +61,14 @@ export function codeIntelligenceDiscovery(log) {
   if (setup.length > 0) return { outcome: 'setup-failed', detail: `no discovery ran in this launch, and ${setup.join(' | ')}` };
   return { outcome: 'absent', detail: 'no run started a discovery in this launch' };
 }
+
+/**
+ * Whether the launch discovered the server at all — a discovery that listed its tools or one that failed, never a setup
+ * step (which runs while the server is disabled: open-questions.md, "Does a `code_intelligence` entry configured
+ * `enabled: false` still make `code-intelligence-setup` applicable?"). plan-gate-proof's guard that its fixture turned
+ * code intelligence off reads this.
+ */
+export function codeIntelligenceDiscovered(log) {
+  return ['listed', 'failed'].includes(codeIntelligenceDiscovery(log).outcome);
+}
+

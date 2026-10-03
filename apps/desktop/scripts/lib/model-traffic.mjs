@@ -202,7 +202,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
           const after = rule?.afterChunks ?? 1;
           /*
            * `stall`: the bytes stop but the connection stays OPEN. This is the shape of
-           * `docs/defects/single-retry-stream-stall-aborted-a-76-minute-run.md` and the one the product cannot
+           * `docs/defects/fixed/single-retry-stream-stall-aborted-a-76-minute-run.md` and the one the product cannot
            * distinguish from a slow model without an idle bound — which is why it is worth inducing at all.
            * Nothing is closed: the run must be the thing that decides the stream is dead.
            */

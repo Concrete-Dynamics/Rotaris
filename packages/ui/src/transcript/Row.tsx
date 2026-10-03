@@ -250,7 +250,7 @@ export function reasoningSummary(row: TranscriptRow, nowMs: number, runActive = 
   const started = row.startedAt === undefined ? Number.NaN : Date.parse(row.startedAt);
   /**
    * REQ-CHAT-062's settled form is FINAL figures, so a settled row never reads the tick: a stamp settles it,
-   * and a row the engine settled without one (older records; docs/defects/settled-reasoning-row-counts-forever.md)
+   * and a row the engine settled without one (older records — a defect whose note was removed once repaired)
    * freezes at the span its own record closes — `at` minus `startedAt` — rather than counting against `nowMs`
    * for the rest of the session.
    */
@@ -354,7 +354,8 @@ export function trailerText(t: TrailerRow): string {
  * REQ-CHAT-057 breaks a block on the *role*. Together they drew one agent thinking and reading in turn as
  * `ORCHESTRATOR / READING / ORCHESTRATOR / READING`, four blocks at PD-CHAT-003's full 12 px separation,
  * with the persona continuation bar never drawn — reported by the owner as two speakers where there was
- * one agent, and recorded as `docs/defects/group-header-claims-the-role-gutter.md`.
+ * one agent, and recorded in a defect note removed once repaired; its repair is the 2026-09-15 row of
+ * `docs/architecture/first-executions.md`.
  */
 export function placements(displays: readonly DisplayRow[]): readonly RowPlace[] {
   return placementsFrom(null, displays).places;

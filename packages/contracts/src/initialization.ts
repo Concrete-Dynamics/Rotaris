@@ -131,7 +131,7 @@ export const BACKGROUND_BROKE_DOWN = 'Runs are not blocked; you can try again.';
  * than in `packages/ui/src/composer.ts`, whose `PROJECT_SETUP_REFUSAL` was written against
  * REQ-CHAT-007 — which leaves this wording to the implementation where REQ-WORKSPACE-112 fixes it,
  * and fixes it differently. The two requirements disagree; the disagreement is recorded at
- * `docs/defects/two-requirements-fix-the-composer-setup-refusal-differently.md` and the more specific
+ * `docs/defects/fixed/two-requirements-fix-the-composer-setup-refusal-differently.md` and the more specific
  * statement is followed here, its text satisfying both facts REQ-CHAT-007 requires.
  */
 export const PROJECT_SETUP_SEND_REASON = 'Answer the project setup prompt first. Initialize or skip it in the setup window; nothing else in Rotaris is blocked.';

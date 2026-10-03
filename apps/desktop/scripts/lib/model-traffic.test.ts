@@ -196,7 +196,7 @@ describe('the live run\'s recording proxy', () => {
   /**
    * The fault rules. Each is the mechanism behind one `faults`-scenario check, and each pins the thing that
    * makes a fault a REPRODUCTION rather than a coincidence: that it fires on the call the rule names, and on
-   * no other. `docs/defects/single-retry-stream-stall-aborted-a-76-minute-run.md` and the exit-trace gap are
+   * no other. `docs/defects/fixed/single-retry-stream-stall-aborted-a-76-minute-run.md` and the exit-trace gap are
    * the two frictions `live-run.mjs` has always had to record as "not inducible on demand"; these are what
    * make the first of them inducible.
    */

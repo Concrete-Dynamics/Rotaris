@@ -140,7 +140,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
    * A row that grew by one token is within a line of the height it had a moment ago; an estimate recomputed from
    * scratch is not. Falling back to the estimate on every chunk is what made the rows below a streaming message
    * jump twice per chunk — estimate, paint, observe, paint — and made two producing agents flicker against each
-   * other (docs/defects/live-rows-are-never-measured.md).
+   * other (docs/defects/fixed/live-rows-are-never-measured.md).
    */
   const [lastByIdentity] = useState(() => createMeasurementCache((identity) => markMeasured(ledger, identity)));
   const [renderings] = useState(createRenderCache<ReactElement>);

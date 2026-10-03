@@ -229,7 +229,7 @@ function plant(sid, total, opts = {}) {
   });
 }
 /**
- * docs/defects/live-rows-are-never-measured.md: one agent, a name too long for the 112 px role column, and a run
+ * docs/defects/fixed/live-rows-are-never-measured.md: one agent, a name too long for the 112 px role column, and a run
  * long enough that `.activity__segments` MUST wrap — with the last call still `running`, so the activity line is
  * LIVE. That combination is the one the pool used to position by `estimateHeight` for the whole time it was live,
  * drawing three wrapped lines into a 36 px allocation and through the row beneath it.
@@ -486,7 +486,7 @@ const behaviour = await launch('behaviour', {
 // REQ-CHAT-058 says heights are MEASURED rather than assumed, and the pool positions every slot from the prefix
 // sum of those heights. The property that makes the sum right is the one a reader actually sees: no two slots
 // overlap. This reads boxes rather than attributes, because a row drawn through another row is in the DOM,
-// focusable, carrying every identifier it should — and unreadable (docs/defects/live-rows-are-never-measured.md).
+// focusable, carrying every identifier it should — and unreadable (docs/defects/fixed/live-rows-are-never-measured.md).
 if (wanted('geometry')) {
   // One line, deliberately: the log reader's `capture: eval-at (\d+) (.*?) → (.*)$` cannot span newlines, and a
   // multi-line expression parses as no result at all rather than as an error.

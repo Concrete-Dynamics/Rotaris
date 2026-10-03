@@ -15,7 +15,7 @@ import { readWorkspaceDocument, sourceExtensionOverrideOf, type WorkspaceClassif
  * binds the indexing and memory stages to "a workspace classified `non-code` (REQ-WORKSPACE-098)". So
  * the runtime's list was answering a question this domain owns. The manifest is not wrong for what it
  * is — it is the runtime's indexing coverage, generated and diff-checked by `pnpm package` — it is
- * simply not this set. Recorded as `docs/defects/classification-decided-by-the-runtimes-extension-list.md`.
+ * simply not this set. Recorded as `docs/defects/fixed/classification-decided-by-the-runtimes-extension-list.md`.
  *
  * The two lists disagree on real trees in both directions: a workspace of `main.tf` and `deploy.sh`
  * is `code` under the manifest and `non-code` here.

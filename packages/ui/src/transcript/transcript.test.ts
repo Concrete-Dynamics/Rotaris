@@ -289,7 +289,7 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     }
   });
 
-  // ---- the estimate models WRAPPING (docs/defects/live-rows-are-never-measured.md) ------------------------
+  // ---- the estimate models WRAPPING (docs/defects/fixed/live-rows-are-never-measured.md) ------------------------
   // The three below are the regression for the constant that used to sit in `estimateHeight`: a group was 36 px
   // however many segments it drew, a body line was a `\n` rather than a drawn line, and the role gutter's own
   // wrapping was not modelled at all. Each one put the row beneath through the middle of the text.

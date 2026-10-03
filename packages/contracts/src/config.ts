@@ -69,7 +69,7 @@ export const RuntimeViewSchema = z.object({
    * REQ-SANDBOX-113 (Part AR): all SIX sandbox and egress settings, so that no YAML has to be edited
    * by hand. `sandbox_mode` was carried here alone, read for the launch dialog's preselection
    * (REQ-SHELL-125, REQ-TOOLS-114), while the surface told the user the six were "read from the file
-   * and not edited here" (`docs/defects/settings-surface-refuses-the-six-security-keys.md`).
+   * and not edited here" (`docs/defects/fixed/settings-surface-refuses-the-six-security-keys.md`).
    * All six round-trip: REQ-SANDBOX-054 requires the configuration loaded after a save be the same
    * effective configuration that was saved, and a further save-and-load change nothing again.
    */

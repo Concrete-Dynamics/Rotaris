@@ -178,7 +178,7 @@ results.verdict = verdictLine.slice(verdictLine.indexOf('confinement:')).trim();
  * 2. REQ-SANDBOX-130: the settings surface carries the plain disclosure with `sandbox_mode` at its
  *    shipped `off` default — WITHOUT the user having to select a confinement mode first — and
  *    REQ-SANDBOX-113's six controls are drawn where a sentence used to stand in for them
- *    (`docs/defects/settings-surface-refuses-the-six-security-keys.md`).
+ *    (`docs/defects/fixed/settings-surface-refuses-the-six-security-keys.md`).
  */
 const READ_SECURITY = `({
   disclosure: document.querySelector('[data-testid="confinement-disclosure"]')?.textContent ?? '',

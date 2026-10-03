@@ -103,3 +103,57 @@ export function resolveMcpConfiguration(input: McpResolveInput): McpConfiguratio
   }
   return { servers, origins, secrets, diagnostics };
 }
+
+type ProjectBinding = { readonly launchSubcommand: string; readonly projectPathOption: string; readonly projectFromCwdOption: string };
+
+/**
+ * REQ-MCP-034's isolated-run clause: "For a run against an isolated working tree, the appended path SHALL be that tree's
+ * root." The configuration is resolved once per load, against the workspace root (`resolveMcpConfiguration`), so the path
+ * its binding stage appended is the ANCHORING root; a run whose execution root is a worktree (REQ-GIT-140's unit tree, the
+ * start-session dialog's isolated worktree) takes this view of it, in which every server the stage bound carries the tree's
+ * root instead — in its resolved arguments and in the runtime description launch and discovery both read (REQ-MCP-050).
+ *
+ * "The stage bound it" is read exactly: the entry's CONFIGURED arguments carry neither project-selection option (a
+ * selection already present is left as configured), its resolved arguments carry the launch subcommand, and they end with
+ * the project-path option and the workspace root the load appended. Nothing else changes: REQ-MCP-035's fill-in and
+ * REQ-MCP-043's default `cwd` name the workspace root, and stay it (OQ-194's literal reading; OQ-195 asks whose project
+ * memories the tree-bound runtime then serves).
+ * Found unfixed by the default live run at 1763f7f (ADR-0034, Part T's stated gap). Pure; the same object back when
+ * nothing is rebound.
+ */
+export function mcpConfigurationForExecutionRoot(mcp: McpConfiguration, workspaceRoot: string, executionRoot: string, binding: ProjectBinding | null = CODE_INTELLIGENCE_BINDING): McpConfiguration {
+  if (binding === null || executionRoot === workspaceRoot) return mcp;
+  let changed = false;
+  const servers: Record<string, McpResolvedServer> = {};
+  for (const [name, server] of Object.entries(mcp.servers)) {
+    const rebound = rebindProject(server, workspaceRoot, executionRoot, binding);
+    if (rebound !== server) changed = true;
+    servers[name] = rebound;
+  }
+  return changed ? { ...mcp, servers } : mcp;
+}
+
+function rebindProject(server: McpResolvedServer, workspaceRoot: string, executionRoot: string, binding: ProjectBinding): McpResolvedServer {
+  const { entry, resolved, description } = server;
+  if (entry.type !== 'stdio' || resolved === null || description.transport !== 'stdio') return server;
+  if (entry.args.includes(binding.projectPathOption) || entry.args.includes(binding.projectFromCwdOption)) return server;
+  if (!resolved.args.includes(binding.launchSubcommand)) return server;
+  const n = resolved.args.length;
+  if (n < 2 || resolved.args[n - 2] !== binding.projectPathOption || resolved.args[n - 1] !== workspaceRoot) return server;
+  const args = [...resolved.args.slice(0, n - 1), executionRoot];
+  return { ...server, resolved: { ...resolved, args }, description: { ...description, args: [...args] } };
+}
+
+/**
+ * The project a stdio description launches the code-intelligence runtime against, read from the arguments it carries —
+ * what the run host's launch lines name (REQ-MCP-034), so a log reader sees the binding a run launched with and not the
+ * one it was meant to have. The value after the project-path option; the working directory under the
+ * project-from-working-directory option; null for a remote server or arguments holding neither.
+ */
+export function launchedProjectOf(description: RuntimeDescription, binding: ProjectBinding = CODE_INTELLIGENCE_BINDING): string | null {
+  if (description.transport !== 'stdio') return null;
+  const at = description.args.indexOf(binding.projectPathOption);
+  if (at !== -1 && at + 1 < description.args.length) return description.args[at + 1]!;
+  if (description.args.includes(binding.projectFromCwdOption)) return description.cwd;
+  return null;
+}

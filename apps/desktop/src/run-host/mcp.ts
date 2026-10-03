@@ -7,7 +7,7 @@ import { resolveUserDirs, WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import {
   AGENTS_FILE_NAME, classifyWorkspaceRoot, CODE_INTELLIGENCE_LANGUAGE_SERVERS, CODE_INTELLIGENCE_MARKER_SEGMENTS, CODE_INTELLIGENCE_MEMORY_LISTING_TOOL, CODE_INTELLIGENCE_SERVER_NAME,
   CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceLanguageServerStore,
-  deriveSetupInvocation, DiagnosticSink, narrowAfterUpdate, renderMcpSection, resolvePersonaMcp,
+  deriveSetupInvocation, DiagnosticSink, launchedProjectOf, mcpConfigurationForExecutionRoot, narrowAfterUpdate, renderMcpSection, resolvePersonaMcp,
   type Diagnostic, type LoadedConfiguration, type McpResolvedServer, type PersonaMcpSurface,
 } from '@rotaris/config';
 import { errorObservation, observation, type ToolExecutor } from '@rotaris/agent-tools';
@@ -32,6 +32,25 @@ import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SETUP_SHUTDOWN_GRA
  * only where a server tool collides with a native name and is offered under its prefix; the second resolution now
  * writes no line the first already wrote (`announced`), which is what the doubled log lines were.
  */
+/**
+ * REQ-MCP-034's isolated-run clause, at the one place a run's MCP configuration is handed on: the configuration a run in
+ * `executionRoot` launches its servers from — the loaded one when the run works in the workspace itself, and otherwise the
+ * view in which every server REQ-MCP-034's stage bound carries the working tree's root (`mcpConfigurationForExecutionRoot`).
+ * The tool port's `ready()` and the discovery `session.start` runs ahead of the run both read it, so discovery and launch
+ * agree (REQ-MCP-050). Until 2026-10-03 both handed on the loaded configuration, bound to the anchoring checkout
+ * (`docs/defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`).
+ */
+export function configurationForExecutionRoot(cfg: LoadedConfiguration, executionRoot: string): LoadedConfiguration {
+  const mcp = mcpConfigurationForExecutionRoot(cfg.mcp, cfg.workspaceRoot, executionRoot);
+  return mcp === cfg.mcp ? cfg : { ...cfg, mcp };
+}
+
+/** The `project <path>` words a launch line carries for a server launched against a project (REQ-MCP-034), or ''. */
+function projectWords(description: ServerDescription): string {
+  const project = launchedProjectOf(description as McpResolvedServer['description']);
+  return project === null ? '' : `project ${project}`;
+}
+
 export interface McpHostDeps {
   readonly clocks: Clocks;
   readonly log: (message: string, level?: 'info' | 'warn' | 'debug') => void;
@@ -206,7 +225,9 @@ export class McpHost {
     const servers = this.carriedAndLaunchable(cfg);
     const p = Promise.all(servers.map(async (s) => {
       const r = await this.discovery.discover({ name: s.name, description: this.descriptionOf(s), workspaceRoot });
-      if (!r.memoised) this.deps.log(`mcp: discovery of '${s.name}' ${r.failed ? `failed (${r.detail})` : `listed ${r.tools.length} tool(s)`} in ${r.elapsedMs.toFixed(0)} ms`);
+      const project = projectWords(this.descriptionOf(s));
+      // The project ahead of the outcome: a failure's detail can run over several lines (a child's standard error).
+      if (!r.memoised) this.deps.log(`mcp: discovery of '${s.name}'${project === '' ? '' : ` (${project})`} ${r.failed ? `failed (${r.detail})` : `listed ${r.tools.length} tool(s)`} in ${r.elapsedMs.toFixed(0)} ms`);
     })).then(() => { this.deps.log(`mcp: discovery for ${servers.length} server(s) finished in ${(this.deps.clocks.monotonic.now() - started).toFixed(0)} ms`); });
     this.preparing.set(key, p);
     return p;
@@ -264,6 +285,8 @@ export class McpHost {
         unreachable: (server, detail) => { this.deliver({ severity: 'warning', scope: 'session', key: `mcp.unreachable.${server}`, channels: 'user', message: `MCP server '${server}' became unreachable: ${redact(detail)}; the call failed and later calls will try again (REQ-MCP-069)`, server }, ctx); },
         // REQ-MCP-071 (ADR-0035, Part T): the binding probe's tool from the manifest; a failure warns through REQ-MCP-044 and changes nothing else.
         codeIntelligenceMemoryTool: CODE_INTELLIGENCE_MEMORY_LISTING_TOOL, codeIntelligenceServerName: CODE_INTELLIGENCE_SERVER_NAME,
+        // REQ-MCP-034: the connected line names the project the description it LAUNCHED carried, so the log shows the binding in force.
+        launchNote: (_server, description) => projectWords(description),
         probeFailed: (server, detail) => { this.deliver({ severity: 'warning', scope: 'session', key: `mcp.binding-probe.${server}`, channels: 'user', message: `MCP server '${server}' did not answer its project-memory listing: ${redact(detail)}. Its symbol-level tools remain usable but may not be pointed at this project (REQ-MCP-071)`, server }, ctx); },
       });
       this.sessions.set(sessionId, s);

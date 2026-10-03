@@ -303,6 +303,32 @@ resolved per *workspace* (`configureRun(workspaceRoot)`), so the path REQ-MCP-03
 a run in an isolated working tree, where the requirement wants the tree's root; nothing exercised it (no proof starts an
 isolated session through this path) and it is owed to whoever next touches the isolated-run start.
 
+**The isolated-run binding, executed — 2026-10-03 (fin12; the gap above, kept as stated).** The gap was real and it reached
+the user before anyone touched the isolated-run start: the orchestrator's default live run at origin/main 1763f7f had a
+Requirements board run confined to its worktree whose `get_diagnostics_for_file` answered from the main checkout — the edit
+scenario's uncommitted `clearCompleted`, not the `completedCount` just written in the tree — and three agents read the
+answer and saved two false explanations into project memory
+([note](../../defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md)). The
+reading "resolved per workspace" held; what it implied was that the tool port handed `configured(ctx.workspaceRoot).cfg` and
+the anchoring root to `prepare`, `surfaceFor` and `executorsFor`, and `session.start` ran discovery the same way, while the
+port's context already carried the worktree as `effectiveRoot`. **The repair keeps the load per workspace and binds at the
+hand-off:** `mcpConfigurationForExecutionRoot` (`config/src/mcp/index.ts`) gives a run whose execution root is a worktree the
+view in which every server REQ-MCP-034's stage bound — its configured arguments carry neither selection option, its resolved
+ones the launch subcommand and, last, the project-path option and the workspace root — carries the tree's root, in the
+resolved arguments and the description launch and discovery read (REQ-MCP-050); a configured selection, every other server,
+`cwd` and REQ-MCP-035's fill-in are untouched (OQ-194 asks whether those should follow). The run host's
+`configurationForExecutionRoot` is read by the port's `ready()` and by the discovery ahead of the run, both memoised on the
+execution root, and the discovery and connected lines now name the project the launched description carried, since the
+transport's launch line is written at debug. Every isolated run takes the same path — the start-session dialog's worktree
+and the board's unit trees alike reach the port as `effectiveRoot`, a continuation through the session row's binding. **What
+the first execution found beyond the gap:** against the pinned runtime, a linked worktree holds no marker (its directory is
+excluded, OQ-161's reading, and so never checked out); the runtime's first launch against the tree generates the tree's own
+project (named after its directory) and registers it in the runtime's home, answers from the tree and never falls back to the
+main checkout; the binding probe and REQ-MCP-102's block read that project, whose memories are the tree's own and not the
+anchoring project's (OQ-195). Shown by `injection-proof`'s isolated launch, red on a build without the repair ("not every
+launch named <the worktree> — discovery: <the workspace>") and green after it, and by the live run's requirements check,
+which now reads the binding the run launched with as well as the session's worktree record.
+
 **Launches 6 and 7 driven — 2026-09-28, R-062.** The proof's toggle launch (REQ-MCP-115) and its Settings launch
 (REQ-MCP-054) are now driven through `scripts/lib/driver.mjs`: every click, choice and read waits for its condition
 instead of firing at an offset from the window's load. On a loaded Linux host the offsets had produced two

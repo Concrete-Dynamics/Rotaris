@@ -9392,3 +9392,55 @@ ahead` is read as a template rather than a literal, since REQ-SHELL-044 forbids 
 
 **What a ruling decides.** Which requirement's treatment of the detached, non-repository, git-unavailable and unread states
 stands for the strip's branch item, and an amendment to the other.
+
+**OQ-194 — Which root do REQ-MCP-035's filesystem fill-in, REQ-MCP-043's default working directory and REQ-MCP-070's
+`lsp_init` call name for a run in an isolated working tree?** *(REQ-MCP-034, "For a run against an isolated working tree,
+the appended path SHALL be that tree's root"; REQ-MCP-035, "with no path arguments, the workspace root SHALL be appended";
+REQ-MCP-043 and REQ-MCP-050, `cwd` "the entry's configured value, or the workspace root when unset"; REQ-MCP-070, `lsp_init`
+"called once with the arguments `{"root": "<workspace_root>"}`". Raised 2026-10-03 by the repair of
+[`fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`](../defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md)
+(fin12, bundle `fin12-worktree-bound-code-intelligence`). Open.)*
+
+REQ-MCP-034 names the isolated tree's root for the one path it appends. The three neighbouring rules say "the workspace root"
+and say nothing of an isolated run, while the requirements domain separates the anchoring workspace (where the record stays)
+from the root a run executes in (REQ-WORKSPACE-050, REQ-GIT-140). Read literally, a filesystem server carried by a persona of
+an isolated run is pointed at the main checkout — the escape REQ-MCP-034's clause closes for code intelligence — and a server
+named `lsp` is initialised on it.
+
+**What the build proceeds under** (`mcpConfigurationForExecutionRoot`, `packages/config/src/mcp/index.ts`; the tool port's
+`ready()`, `apps/desktop/src/run-host/tools.ts`): the literal reading. Only the path REQ-MCP-034's stage appended is
+rebound to the tree's root; REQ-MCP-035's fill-in and the default `cwd` stay the workspace root, and the session's
+connections keep the workspace root for `lsp_init`. The shipped configuration carries no filesystem server and no server
+named `lsp`, so nothing a default run launches is affected.
+
+**What a ruling decides.** Whether "the workspace root" in REQ-MCP-035, REQ-MCP-043/050 and REQ-MCP-070 reads as the run's
+execution root for an isolated run (an amendment naming it, as REQ-MCP-034 does), or stays the anchoring workspace.
+
+**OQ-195 — Whose project memories does a run in an isolated working tree read and write, and what becomes of the project the
+runtime creates there?** *(REQ-MCP-034's isolated-run clause; REQ-MCP-102, the block telling the agent "to read the memories
+that already exist before it starts exploring the codebase" and "to write durable findings … back through the
+memory-writing tools it holds"; REQ-MCP-099, project creation "SHALL be skipped when the runtime's per-project marker file is
+already present, and SHALL never overwrite an existing project"; OQ-161's reading, which keeps the marker's directory in the
+repository's own exclude file. Raised 2026-10-03 by the repair of
+[`fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`](../defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md)
+(fin12). Open.)*
+
+Bound to the tree's root as REQ-MCP-034 requires, the runtime works on a project of its own. Measured on 2026-10-03 against the
+pinned runtime (serena-agent 1.7.0, launched as the product launches it, in a scratch repository whose main tree had been set
+up by REQ-MCP-099's creation step and whose marker directory was excluded the OQ-161 way): the linked worktree held no marker,
+because the directory is ignored and so never checked out; the runtime's first launch against the tree generated the project
+there itself (`.serena/project.yml`, named after the tree's directory, its languages detected from the tree's files) and
+registered the tree's path as a second project in the runtime's home; `git status` in the tree showed only the run's own
+change, the generated directory being excluded too. It answered from the tree — a pattern search found the function written
+in the tree and not the main tree's uncommitted one — and never fell back to the main checkout. But `list_memories`
+answered empty although the main tree held a memory, and a memory written in the run landed in the tree's own ignored
+`.serena/memories/`, which the main tree never sees and which goes when the tree is removed. Every unit worktree also adds an
+entry to the runtime home's project list that nothing removes.
+
+**What the build proceeds under**: the tree's own project, as the runtime makes it. Nothing is copied into the tree before the
+launch (a copied marker would carry the main tree's project name and its registration), nothing is merged back when the run
+ends, and no entry is removed from the runtime's project list. REQ-MCP-102's block is printed unchanged.
+
+**What a ruling decides.** Whether an isolated run should read the anchoring project's memories (and how — a copy at the
+tree's creation, or the runtime pointed at a shared memory store), whether what it writes there should reach the anchoring
+project (at accept, or never), and whether the runtime's project registration of a removed tree is cleaned up.

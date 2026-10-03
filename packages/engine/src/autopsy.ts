@@ -73,7 +73,8 @@ export interface AutopsyCoherence {
   readonly null_summary_on_stopped: boolean;
   readonly zero_cost_with_tokens: boolean;
   readonly duplicate_reads: readonly { readonly path: string; readonly reads: number }[];
-  readonly retried_commands: readonly { readonly command: string; readonly times: number }[];
+  /** Terminal calls run again: the whole command and its `session_action` (absent when the calls carried none), two or more times. */
+  readonly retried_commands: readonly { readonly command: string; readonly session_action?: string; readonly times: number }[];
 }
 
 export interface AutopsyEndpointRow {
@@ -589,17 +590,28 @@ export function readAutopsy(dal: StoreDal, sessionId: SessionId, _wall: WallCloc
       .map(([path, reads]) => ({ path, reads }))
       .sort((a, b) => b.reads - a.reads)
       .slice(0, 10);
-    const commands = new Map<string, number>();
+    // A retry is the same thing RUN again: the whole command (whitespace collapsed) and the call's `session_action`. Until
+    // 2026-10-03 the key was the command's first 120 characters alone, so a long `cd <worktree> && ` prefix collapsed
+    // different commands and a `send_signal` and a `query` of one session, both carrying `true`, read as one retried
+    // (`docs/defects/fixed/the-autopsy-reader-counts-different-commands-as-one-retried-command.md`; the script reader
+    // keys the same way in `apps/desktop/scripts/lib/autopsy-retries.mjs`).
+    const commands = new Map<string, { command: string; session_action: string | null; times: number }>();
     for (const t of toolCalls) {
       if (t.tool_name !== 'terminal') continue;
       const entry = parseJson(t.entry);
-      const args = entry?.['args'];
-      const command = args !== null && typeof args === 'object' && !Array.isArray(args) ? head(str((args as Record<string, unknown>)['command']).replace(/\s+/g, ' '), 120) : '';
-      if (command !== '') commands.set(command, (commands.get(command) ?? 0) + 1);
+      const raw = entry?.['args'];
+      const args = raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : null;
+      const command = args === null ? '' : str(args['command']).replace(/\s+/g, ' ').trim();
+      if (command === '') continue;
+      const action = args !== null && typeof args['session_action'] === 'string' && args['session_action'] !== '' ? args['session_action'] : null;
+      const key = JSON.stringify([action, command]);
+      const known = commands.get(key) ?? { command, session_action: action, times: 0 };
+      known.times += 1;
+      commands.set(key, known);
     }
-    const retriedCommands = [...commands.entries()]
-      .filter(([, n]) => n > 1)
-      .map(([command, times]) => ({ command, times }))
+    const retriedCommands = [...commands.values()]
+      .filter((c) => c.times > 1)
+      .map((c) => (c.session_action === null ? { command: c.command, times: c.times } : { command: c.command, session_action: c.session_action, times: c.times }))
       .sort((a, b) => b.times - a.times)
       .slice(0, 10);
 

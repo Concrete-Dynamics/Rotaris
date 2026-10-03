@@ -716,7 +716,8 @@ host asks `credentials.lease` per run start and is answered the bearers. Contrac
 command carrying a pasted key inward. Surfaces: the providers card under Settings → Models (`ui/src/settings/
 Providers.tsx`), the authentication window `?role=provider` (`ui/src/ProviderDialog.tsx`), the first-launch notice
 with "Add a provider", the two refusals with "Open Settings"; a sign-in asks the workspace service `config.bootstrap`
-for the starter `agents.yaml`. Decisions taken here for the owner: the OpenAI-compatible instance only (the other
+for the starter `agents.yaml`, which the workspace's open has normally written already (`workspace-service/open-bootstrap.ts`,
+2026-10-03: before it, initialization's record created the file first and the starter never came). Decisions taken here for the owner: the OpenAI-compatible instance only (the other
 two sign-in methods, Copilot's and codex's discovery, the bridges, the usage and credit tiles owed); `/reset` before
 the grant on Windows; `<data>/tokens` replacing the reserved `credentials`; the lock inside the directory (OQ-19); the
 shipped capability metadata empty (OQ-18); REQ-PROVIDER-091's override read as the named-entry overlay; the zero-model

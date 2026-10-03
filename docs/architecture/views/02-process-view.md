@@ -165,7 +165,8 @@ delete/refresh`, `provider.payload/signIn`. Main relays a session or hook comman
 config command to the workspace service, and answers preference, theme and **provider** commands itself (the
 credential store lives in main). `provider.signIn` is the one command carrying a pasted key inward; no outcome
 carries one back — the list shows the display mask. A sign-in that succeeds asks the workspace service
-`config.bootstrap` (the starter `agents.yaml` if absent, then the load again) and broadcasts `config:changed` (to each main
+`config.bootstrap` (the starter `agents.yaml` if absent, then the load again; since 2026-10-03 the open has already
+written it, so the answer is normally `exists`) and broadcasts `config:changed` (to each main
 window's family with its own workspace's snapshot, `announceConfig`, since 2026-10-03). **`repository.read`
 {workspaceRoot}` → `repository.state {gitAvailable, isRepository, branch, base, ahead, behind, touched, uncommitted, failed,
 readMs}`** is the workspace service's answer for the Overview's repository card — ADR-0038's helper lives there and
@@ -561,7 +562,10 @@ asks back to main** (on the `ServiceAsk` envelope): `credentials.lease {provider
 `credentials.leased {bearers, report}` — the only message in the product that carries a credential value, and it never
 crosses a renderer boundary — and the three checkpoint asks of the paragraph above, relayed to the workspace service.
 
-**Main ↔ workspace service.** Since 2026-09-09: `prompts.roots.read` → `prompts.roots` (Part AO, above), `requirements.command` → `requirements.result` (Part AK) and `traceability.operate`/`traceability.cancel` → `traceability.result`/`traceability.cancelled` (Part AJ), listed above. Requests: `workspace.open/close/backup/restore.assess/restore.perform`,
+**Main ↔ workspace service.** Since 2026-09-09: `prompts.roots.read` → `prompts.roots` (Part AO, above), `requirements.command` → `requirements.result` (Part AK) and `traceability.operate`/`traceability.cancel` → `traceability.result`/`traceability.cancelled` (Part AJ), listed above. Requests: `workspace.open/close/backup/restore.assess/restore.perform`
+(`workspace.open` writes the starter `<workspace>/.rotaris/agents.yaml` when it is absent or blank, once the store is open
+and before it answers, so main's initialization, opened only after that answer, never records into a file it created
+without the starter: REQ-CONFIG-025/028, `workspace-service/open-bootstrap.ts`, 2026-10-03),
 `config.read/save/setField/bootstrap`, `repository.read`, `git.view`, `worktree.*`, `checkpoint.capture/refs/preview/
 restore/prune` (Part P), `shutdown`. The service's narrow asks back to main (`ServiceAskSchema`, ADR-0002 c.7) —
 `runHost.refuseRuns/renewLease/closeStore/release/reopen` — are forwarded by main to the run host; the two children never

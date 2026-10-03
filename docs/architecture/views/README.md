@@ -88,6 +88,13 @@ what the tool port's `ready()` and `session.start`'s discovery ahead of the run 
 root; the discovery and connected lines name the project the launch carried. The **runtime view**'s code-intelligence
 paragraph says so. No package, edge, process, channel, command or store column changed.
 
+**The starter agents.yaml is written at the workspace's open (REQ-CONFIG-025, REQ-CONFIG-028; finacc-accept1-3).** The
+workspace service's `workspace.open` bootstraps `<workspace>/.rotaris/agents.yaml` once the store is open and before it
+answers (`workspace-service/open-bootstrap.ts`), so initialization's first record, which main starts only after that
+answer and which goes through the per-field writer that never bootstraps (REQ-CONFIG-030), lands in the starter rather
+than creating the file without it. The **process view**'s main-to-service requests and the **sequences view**'s launch
+say so. No package, edge, process, channel, command or store column changed.
+
 **A child's closing scheduler pass cannot outlive its store (REQ-ORCH-053, REQ-ORCH-098; fin11).** `Scheduler.close`, called
 through `IterationChildren.close` by `Run.turn` once the iteration's children are torn down, stops every later pass; every
 unawaited pass after a child's end — `startOne`'s and a resumed child's in `resumePaused` — goes through `Scheduler.passAfter`,

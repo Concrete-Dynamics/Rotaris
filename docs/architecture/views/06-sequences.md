@@ -55,6 +55,7 @@ sequenceDiagram
     end
     MW->>WS: open(root) — fork one service per workspace
     WS->>WS: identify workspace, open and migrate the store
+    WS->>WS: starter agents.yaml if absent or blank (REQ-CONFIG-025/028), never over a file
     WS-->>MW: workspaceId, storeFile
     MW->>RH: workspace.opened
     opt no folder was resolved

@@ -9,6 +9,7 @@ import { mkdirSync } from 'node:fs';
 import { deliveryServiceFor } from './delivery.js'; // Part AK
 import { promptsRootsRead } from './prompts.js'; // Part AO
 import { improvementServiceFor } from './improvements.js';
+import { bootstrapAtOpen } from './open-bootstrap.js';
 
 /**
  * WORKSPACE SERVICE — one utilityProcess per open workspace, keyed by
@@ -118,8 +119,13 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       return { kind: 'hello', process: 'workspace-service', pid: process.pid };
     case 'ping':
       return { kind: 'pong' };
-    case 'workspace.open':
-      return openOwn(req.workspaceRoot);
+    case 'workspace.open': {
+      const opened = openOwn(req.workspaceRoot);
+      // REQ-CONFIG-025/028: the starter file at the open, before main can start initialization's first recording, whose
+      // per-field write would otherwise create the file without it (REQ-CONFIG-030; `open-bootstrap.ts`).
+      if (opened.kind === 'workspace.opened') bootstrapAtOpen(dirs.config, req.workspaceRoot, log);
+      return opened;
+    }
     case 'workspace.close': {
       closeOwn();
       return { kind: 'ack' };

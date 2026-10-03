@@ -121,3 +121,15 @@ recorded per run in the session scratchpad's `a13-slice-proof.r<N>.log`):
 the bootstrap to write over a non-blank file, so the starter does not come back for those workspaces. Recorded beside
 this repair: the starter writes fourteen nulls where REQ-WORKSPACE-038 names exactly twelve
 ([the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md](../the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md)).
+
+## F2: slice-proof's scenario 1, on the repaired head
+
+The proof's assertion was right (F2), so nothing in it needed repair. It was strengthened in the same terms as
+live-run's: scenario 1 now asks `starterProblem` for the whole starter (the comment header first, `default_persona:
+orchestrator`, the twelve nulls) rather than the persona line alone, and its error names what is missing.
+`apps/desktop/scripts/lib/starter-config.test.ts` checks that both scripts ask the reader and that neither keeps its
+weaker check; that case fails on the script as it stood. **Run 7** (build `f9365cd`, the strengthened script, 06:25 to
+06:33 UTC, load 2.4 to 2.9, another live run sharing the endpoint) passed all seven scenarios: the run completed
+`tasks_complete` with a settled tool row; the intents were `question`, `explicit_trivial` and `small_feature`; the
+refusal was "Provider authentication required". The shipped head has live-model slice evidence again.
+

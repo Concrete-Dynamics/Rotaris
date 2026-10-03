@@ -7,6 +7,7 @@ import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabas
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { primingProblem } from './lib/priming-report.mjs';
 import { proofEndpoint } from './lib/endpoint-registry.mjs';
+import { starterMissing } from './lib/starter-config.mjs';
 
 /**
  * The vertical slice's proof (Part K.4): sign in to a real OpenAI-compatible endpoint through the product and complete
@@ -32,7 +33,8 @@ import { proofEndpoint } from './lib/endpoint-registry.mjs';
  *
  *   1. first-launch  — the notice; Settings → Models → Add endpoint; label, URL (and the stored key) filled and the
  *                      dialog's own button pressed (or the owner pastes, `--paste-key`); the credential file, its
- *                      protection, the snapshot, the discovered-models count and the starter agents.yaml asserted;
+ *                      protection, the snapshot, the discovered-models count and the starter agents.yaml (its
+ *                      header, persona and twelve nulls, `lib/starter-config.mjs`) asserted;
  *                      the log holds no credential.
  *   2. slots         — the three tier slots set to the registered model and saved, or, on a one-model endpoint whose
  *                      discovery picks already name it, asserted through the discovered picks.
@@ -231,7 +233,12 @@ if (!snapshot.startsWith('version: 1\n')) throw new Error('the snapshot does not
 if (/access_token|sk-or-/.test(snapshot) || [...secrets].some((secret) => snapshot.includes(secret))) throw new Error('the snapshot carries a credential');
 const picks = Object.fromEntries(['large_model', 'medium_model', 'small_model', 'fallback_model', 'default_summary_model'].map((k) => [k, new RegExp(`^    ${k}: (.+)$`, 'm').exec(snapshot)?.[1] ?? null]));
 if (!snapshot.includes(`      - id: ${QUALIFIED}\n`)) throw new Error(`the catalog did not carry ${MODEL}`);
-if (!existsSync(agentsFile) || !readFileSync(agentsFile, 'utf8').includes('default_persona: orchestrator')) throw new Error('the starter agents.yaml was not bootstrapped after sign-in');
+// REQ-CONFIG-025 / REQ-WORKSPACE-038: the whole starter (header, persona, the twelve nulls), written at the workspace's open
+// and found by the sign-in's bootstrap (REQ-WORKSPACE-135). Until 2026-10-03 initialization's record created the file
+// first and this check was red on every run whose code-intelligence setup succeeded before the sign-in
+// (`docs/defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`).
+const starterLacks = existsSync(agentsFile) ? starterMissing(readFileSync(agentsFile, 'utf8')) : ['the file itself'];
+if (starterLacks.length > 0) throw new Error(`the starter agents.yaml was not bootstrapped: it lacks ${starterLacks.join(', ')}`);
 // The starter runs in `ask` mode, which put the owner at the approval dialog for every tool call of every real run. This
 // scratch workspace is the proof's: its runs are unattended from here on (REQ-TOOLS-071's unsandboxed-autonomous consent
 // given in the file, as a person would give it in Settings → Runtime).

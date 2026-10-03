@@ -33,10 +33,17 @@ export interface AgentResilienceCell {
   waitAttempt: number;
   /** The pairs this agent has already run on, for the candidate rule. */
   readonly attempted: Set<string>;
+  /**
+   * REQ-MONITOR-052 / REQ-MONITOR-066: the `models:` key `model` was taken from, where the code that set it knew one — the
+   * configured or switched entry key, the override followed, the same-tier candidate's key, the key chosen during a wait —
+   * and null where it did not (a role's fallback, which the configuration names by reference). Set at every assignment of
+   * `model`, so two keys naming one provider's model (each with its own thinking) are told apart; `Run.entryModelKey` reads it.
+   */
+  key: string | null;
 }
 
-export function agentCell(model: ModelChoice, fallback: ModelChoice | null): AgentResilienceCell {
-  return { model, fallback, fallbackAttempted: false, sameTierAttempted: false, waitAttempt: 0, attempted: new Set() };
+export function agentCell(model: ModelChoice, fallback: ModelChoice | null, key: string | null = null): AgentResilienceCell {
+  return { model, fallback, fallbackAttempted: false, sameTierAttempted: false, waitAttempt: 0, attempted: new Set(), key };
 }
 
 export interface TurnResilience {
@@ -74,7 +81,8 @@ export interface TurnResilience {
    * REQ-MONITOR-052/066 with REQ-MONITOR-049: the cell's model changed — a move to a same-tier candidate or a fallback, an
    * override followed, a model chosen during a wait — with no save behind it, so the run republishes the record and the
    * surfaces name the model the agent now calls (`SessionRecord.entryModelKey`) and measure its limit (`entryContext`) before
-   * the next call returns. Absent means nobody is told.
+   * the next call returns. The run passes the same hook for a child's cell (`resilienceFor` is shared), so a child's move
+   * republishes the record too — harmless, coalesced at `RECORD_TICK`. Absent means nobody is told.
    */
   readonly moved?: (() => void) | undefined;
 }
@@ -143,8 +151,10 @@ function followOverride(r: TurnResilience): void {
   const { cell, memory, catalogue } = r;
   const followed = memory.effective(cell.model, catalogue);
   if (sameRef(followed.model, cell.model.model)) return;
+  const reached = memory.overrideReaching(cell.model, catalogue);
   cell.attempted.add(pairKey(providerIdentity(catalogue, cell.model.model), cell.model.model.modelId));
   cell.model = withSettings(catalogue, followed);
+  cell.key = reached?.key ?? null;
   r.moved?.();
 }
 
@@ -187,6 +197,7 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
       deps.warn(message);
       cell.attempted.add(pairKey(provider, modelId));
       cell.model = withSettings(catalogue, fb);
+      cell.key = null;
       r.moved?.();
       continue;
     }
@@ -311,6 +322,7 @@ async function limitPath(deps: LadderDeps, r: TurnResilience, signal: AbortSigna
       writer.recordIssue({ kind: 'quota_fallback', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${candidate.provider}/${candidate.model.modelId}`, provider_exhausted: exhausted, condition: cls, ...preCallMeta } });
       deps.warn(message);
       cell.model = withSettings(catalogue, { model: candidate.model, thinking: candidate.thinking });
+      cell.key = candidate.key;
       r.moved?.();
       return null;
     }
@@ -332,6 +344,7 @@ async function limitPath(deps: LadderDeps, r: TurnResilience, signal: AbortSigna
   if (decision.kind === 'model') {
     cell.attempted.add(pairKey(provider, modelId));
     cell.model = withSettings(catalogue, decision.choice);
+    cell.key = decision.key;
     r.moved?.();
     return null;
   }

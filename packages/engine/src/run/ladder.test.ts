@@ -975,6 +975,56 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect((pub.snapshots as unknown as { entryModelKey: string | null }[]).map((p) => p.entryModelKey).filter((k) => k !== null).at(-1)).toBe('b1');
   });
 
+  // The verifier's case (repair round 1): two configured keys for one provider's model (a fast and a deep key, each with its
+  // own thinking). A root configured on the second runs on it with no move at all; the record names it, not the first key
+  // for the pair. The cell carries the key it was taken from (`AgentResilienceCell.key`); until this round the getter
+  // matched the pair alone and named a-fast, where origin/main had named the configured a-deep.
+  it('REQ-MONITOR-052 / REQ-MONITOR-066: a root on the second of two configured keys for one pair is named by that key, with no move', async () => {
+    const catalogue = [entry('a-fast', 'a', A1, [], { thinking: 'low' }), entry('a-deep', 'a', A1, ['small_model'], { thinking: 'high' })];
+    const { sessions, client, pub } = sessionsWith(() => answer('plain'), { catalogue, over: { modelKey: 'a-deep', thinking: 'high' } });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+    const keys = (pub.snapshots as unknown as { entryModelKey: string | null }[]).map((p) => p.entryModelKey).filter((k) => k !== null);
+    expect(keys.length).toBeGreaterThan(0);
+    expect(new Set(keys)).toEqual(new Set(['a-deep']));
+  });
+
+  // A carried key that is a loader-made copy (a slot's reasoning synthesis carries the slot's tier role, so it can be the
+  // same-tier candidate) is no key a selector lists: the record names the configured key for its pair, as before the cell
+  // carried keys.
+  it('REQ-MONITOR-052 / REQ-MONITOR-066: a move onto a loader-made copy is named by the configured key it shares its pair with', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, []), entry('__startup_slot__:small_model', 'b', B1, ['small_model'], { thinking: 'high' })];
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('from b')), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+    expect(dal.timelineOf(sid).filter((t) => t.name === 'quota_fallback_model').map((t) => (JSON.parse(t.metadata) as { to_key: string }).to_key)).toEqual(['__startup_slot__:small_model']);
+    expect((pub.snapshots as unknown as { entryModelKey: string | null }[]).map((p) => p.entryModelKey).filter((k) => k !== null).at(-1)).toBe('b1');
+  });
+
+  // The same, for a key chosen during a wait: the choice names b-deep, which shares its pair with b-fast; the record names
+  // the key chosen (the wait's decision carries it onto the cell), not the first key for the pair.
+  it('REQ-MONITOR-052 / REQ-MONITOR-066: a wait choice of the second of two keys for one pair is named by the key chosen', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b-fast', 'b', B1, [], { thinking: 'low' }), entry('b-deep', 'b', B1, [], { thinking: 'high' })];
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : { parts: [{ hold: held }, ...answer('from b').parts] }), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1' });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'b-deep' } })).toEqual({ ok: true });
+    for (let i = 0; i < 40 && client.requests.length < 2; i++) await tick();
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+    clock.advance(200);
+    await tick();
+    const last = pub.snapshots.at(-1) as unknown as { entryModelKey: string | null; executionStatus: string };
+    expect(last.executionStatus).toBe('running');
+    expect(last.entryModelKey).toBe('b-deep');
+    release();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+  });
+
   // The same repair, in flight: the move itself changes no row and saves nothing, so until the cell told the run
   // (`TurnResilience.moved`) the record was not republished, and the inspector named the configured a1 for as long as the
   // call on b1 ran — 8 s in resilience-proof's `next-run-choice`.

@@ -56,8 +56,9 @@ guard lets the shown key through when it is excluded. The **process view**'s `Se
 edge, process, channel, command or store column changed.
 
 **The run-level agent's Model names the key its root runs on while the run is live (REQ-MONITOR-052, REQ-MONITOR-066,
-REQ-MONITOR-069; fin11).** The record gains `entryModelKey` (the live run's `Run.entryModelKey`: the configured key of the pair
-the root's ladder cell calls; null at rest), which `runLevelAgent` names through `runLevelModel`; `entryRole`, and with it the
+REQ-MONITOR-069; fin11).** The record gains `entryModelKey` (the live run's `Run.entryModelKey`: the key the root's ladder cell
+carries, `AgentResilienceCell.key`, set at every assignment of its model, when that is a configured non-copy key, else the
+configured key for the cell's pair; null at rest), which `runLevelAgent` names through `runLevelModel`; `entryRole`, and with it the
 composer's chip and the strip's model item, is unchanged. A ladder move republishes the record (`TurnResilience.moved` →
 `ProjectionOwner.refreshRecord`), since it writes no row and saves nothing. The **process view**'s `SessionRecord` sentence and the **runtime
 view**'s run-level agent paragraph say so. No package, edge, process, channel, command or store column changed.

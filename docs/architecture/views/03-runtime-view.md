@@ -685,9 +685,14 @@ its chips show (the reading recorded beside OQ-97). Until 2026-10-01 the first r
 read the last root's `agent` row alone, and a live root whose first steps were tool calls, or that had written no row yet,
 was drawn as the root before it (`after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`).
 The run-level agent's **model** alone departs from the entry role while its run is live: **`SessionRecord.entryModelKey`**
-(2026-10-03, REQ-MONITOR-052/066/069) is the configured key of the pair the root's ladder cell calls (`Run.entryModelKey`,
-`entryOf(catalogue, rootCell.model.model)`; null before the cell exists, on a stored record, or for a pair no catalogue entry
-carries), which a same-tier, unresponsive-model or pre-call move changes without touching the configuration, and
+(2026-10-03, REQ-MONITOR-052/066/069) is the key the root's ladder cell runs on (`Run.entryModelKey`). The cell carries the
+`models:` key its model was taken from (`AgentResilienceCell.key`), set at every assignment: the configured `RunConfig.modelKey`
+or the switched key when the cell is built, the override followed, the same-tier candidate's key, the key chosen during a wait,
+and null after a role's fallback (named by reference). A carried key that is a configured, non-copy key is the answer — so two
+keys naming one provider's model (each with its own thinking) are told apart; otherwise (a discovered tier pick, a loader-made
+copy, no carried key) it is the first configured non-copy key for the cell's provider-and-model pair, as the exclusions are
+matched, else the carried key or `entryOf(catalogue, rootCell.model.model)`; null before the cell exists, on a stored record, or
+when nothing names the pair. A same-tier, unresponsive-model or pre-call move changes it without touching the configuration, and
 `runLevelAgent` names it (`runLevelModel`) — the inspector's Model field and the persona window's read-only model. A move
 writes no row and saves nothing, so the ladder tells the run when a cell's model changes (`TurnResilience.moved`, at each
 `cell.model` assignment in `ladder.ts`) and the run republishes the record (`ProjectionOwner.refreshRecord`, coalesced at

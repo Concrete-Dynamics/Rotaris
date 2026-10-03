@@ -1317,6 +1317,7 @@ export class IterationChildren implements DelegationOps {
         const from = cell.model;
         cell.fallbackAttempted = true;
         cell.model = fb;
+        cell.key = null;
         const seconds = childTimeoutMs / 1000;
         const message = `Child ${row.canonical_name} timed out after ${seconds}s on ${providerIdentity(resilience.catalogue, from.model)}/${from.model.modelId}; retried once on the fallback model ${providerIdentity(resilience.catalogue, cell.model.model)}/${cell.model.model.modelId} (REQ-ORCH-088).`;
         // REQ-ORCH-139: the vocabulary's words for REQ-ORCH-088's retry on the role's fallback — the `fallback_model` entry and

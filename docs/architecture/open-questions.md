@@ -5426,6 +5426,29 @@ recursive-delete rule should admit a scratch directory, and whether a continuati
 record or report beyond the offer. Each is a change to a requirement or a directive that states the behavioural target
 or the owner's choice, so each would be a directive or a revision, not a repair.
 
+*(Added 2026-10-03, a further case of the continuation that starts from nothing, from finding U2 of the orchestrator's
+duress live run at `1763f7f` (pack `2026-10-03T06-15-52-273Z`)
+([`a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md`](../defects/a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md)).
+The parent is not told that a continuation starts from nothing: neither the cut-off offer ("the remaining work may be
+delegated to a new child as a continuation of this one", `packages/engine/src/children/cut-off.ts`) nor `delegate`'s
+description of `continuation_of` (`packages/agent-tools/src/tools/delegation.ts`) says so, and no requirement fixes either
+wording. The orchestrator briefed both of the run's continuations as if they remembered — #287 "You had already run
+everything … each of the nine claims from your brief adjudicated", #170 "You had already read the sources". The
+verification continuation, holding no brief, rebuilt it from the product's own session store through its terminal: 31
+calls on the per-user data directory (#301 to #328, #341, #342, #344) of `strings`, `grep -a` and `python3` `sqlite3` reads,
+two of which opened the live store without `mode=ro`, and one `grep -rl` through the tree that holds the leased credential
+file, printing only names. The 146,921 characters it read took its prompt from 22,621 to 74,608 tokens and were re-sent in
+33 later requests, about 1.7M input tokens, roughly 18 % of the session. The orchestrator told the user. The run was
+unconfined by the live-run harness's choice (`permission_mode: autonomous` with REQ-SANDBOX-052's
+`allow_unsandboxed_autonomous: true`, `sandbox_mode` left `off`), but REQ-SANDBOX-060 leaves reads unrestricted under
+confinement too, so the reads were within what the specification allows either way. What the build proceeds under: the
+current behaviour, unchanged until the owner rules — the payload carries nothing of the continued child, and the offer and
+the description keep their wording. What a ruling of this question adds for this case: if a continuation is to go on
+starting from nothing, whether the offer and `delegate`'s description should tell the parent so, so that it writes a
+self-contained brief; and if it is to be given its predecessor's brief, record or report, the case does not arise. Whether
+an agent's terminal may read the product's own data directory is not asked here: REQ-SANDBOX-060 answers it, and a change
+there would be a directive of its own.)*
+
 **OQ-115 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open. Raised as OQ-114 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `packages/config/src/mcp/prompt.ts:29` renders each server tool's description as REQ-MCP-101 requires, and the bundled
@@ -9452,14 +9475,48 @@ ends, and no entry is removed from the runtime's project list. REQ-MCP-102's blo
 tree's creation, or the runtime pointed at a shared memory store), whether what it writes there should reach the anchoring
 project (at accept, or never), and whether the runtime's project registration of a removed tree is cleaned up.
 
-**OQ-196 — Does a write of the permission mode that leaves the file's value unchanged displace an unsaved Settings
+**OQ-196 — How long may a child at its time limit take to finish the model step in flight, and what is kept when that bound
+is reached?** *(REQ-ORCH-088, on expiry "gracefully pause the child", narrowed by `PD-ORCH-004`; REQ-MONITOR-123, a pause
+"finishes its current step and then stops", narrowed by `PD-ORCH-005` revision 2; REQ-CONFIG-131's
+`graceful_pause_tool_deadline`, which bounds in-flight tool calls only; REQ-CONFIG-113's `child_timeout`, the "hard per-child
+wall clock". Raised 2026-10-03 from finding U1 of the orchestrator's duress live run at `1763f7f`
+([`a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md`](../defects/a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md)).
+Open, the owner's.)*
+
+The duress run of 2026-10-03 (pack `2026-10-03T06-15-52-273Z`, endpoint `katalyst`, a model that reasons before it answers)
+had two children reach the 1200 s ceiling, each in the middle of a model step. The ceiling asked each to land; the landing
+backstop aborted each step at exactly ceiling + 30.0 s — traffic #100 after 115.4 s and traffic #186 after 87.0 s, 202.4 s of
+generation in all. Neither step had produced text or a tool call. Their streamed reasoning stayed in the transcript as
+`thinking` rows; nothing of either reached the child's conversation, its report or its continuation. #186's reasoning ended
+"Now let me write docs/verification.md"; the continuation that then wrote the file took 746 s. At `71ad8e8` all three
+landings finished their step. Both children were continued once and both continuations succeeded.
+
+The specification asks for a graceful pause and a hard ceiling, and states one bound between them for tool calls alone.
+A model step's landing has none, and single steps of the two cut-off children took up to 131.9 s in this run, four times
+the 30 s the build allows.
+
+**What the build proceeds under** (`CHILD_LANDING_GRACE` in `packages/engine/src/children/orchestration.ts`, which is
+ADR-0014 rule 1's one 30 s allowance, `STOP_GRACE` in `packages/engine/src/run/grace.ts`): the current behaviour, unchanged
+until the owner rules. At the ceiling the turn stops before its next model step, and a step in flight then has 30 s to end;
+at that bound it is aborted, and its partial output reaches nothing but the transcript's reasoning rows. The report is
+built from the last assistant message that carried text, the child ends `failed` with REQ-ORCH-088's timeout report, and
+`PD-ORCH-004`'s cut-off lines and continuation offer follow where it was making progress.
+
+**What a ruling decides.** How long a model step in flight at the ceiling may run to land — the same 30 s, the configured
+`graceful_pause_tool_deadline`, a bound of its own, or until the step ends — and what is kept when the bound is reached:
+nothing, as now; the step's partial text or reasoning in the child's report; or the partial step handed to the
+continuation. A longer landing pushes back the ceiling REQ-CONFIG-113 calls hard, so either answer changes a requirement
+or a directive; neither is a repair.
+
+**OQ-197 — Does a write of the permission mode that leaves the file's value unchanged displace an unsaved Settings
 selection?** *(REQ-CONFIG-423, "for this one field the last write wins over an unsaved selection on this screen" and "a
 change to the same field made while Settings is open by any other surface … lands in that pending state"; REQ-CONFIG-420, a
 refresh never discards an edit in progress "with the single exception REQ-CONFIG-423 states for the permission-mode field,
 where a mode already applied to a live run displaces an unsaved selection"; REQ-CONFIG-288, the composer's control writes
 that key alone. Raised 2026-10-03 by the repair of
 [`fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md`](../defects/fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md)
-(fin13). Open.)*
+(fin13, bundle `fin13-settings-last-write-and-record-pointers`), as OQ-196, and renumbered OQ-197 at its merge of
+`origin/main` because the landing-grace question had taken OQ-196 meanwhile. Open.)*
 
 The screen learns of a write made elsewhere only from the reloaded snapshot main announces after it, and a snapshot carries
 values, not the writes that produced them. Settings holding an unsaved `plan` over a saved `ask`, the composer writing `ask`

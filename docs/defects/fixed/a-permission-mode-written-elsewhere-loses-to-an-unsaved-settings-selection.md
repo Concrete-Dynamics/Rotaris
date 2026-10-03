@@ -42,7 +42,7 @@ not change the mode — a sign-in's, the diagnostics toggle's — keeps the unsa
 when its selection is overwritten: REQ-CONFIG-423 asks only that the control show the mode the pending state holds.
 
 What the snapshot cannot tell apart is left to the owner as
-[OQ-196](../../architecture/open-questions.md) (a write of the value the file already holds, while a different selection
+[OQ-197](../../architecture/open-questions.md) (a write of the value the file already holds, while a different selection
 is unsaved): the build proceeds under the change reading and keeps the selection.
 
 Evidence:

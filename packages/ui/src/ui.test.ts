@@ -132,7 +132,7 @@ describe('ui — the Overview view (REQ-MONITOR-165..171)', () => {
 
 describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
   const state = (over: Partial<GitViewState>): GitViewState => ({ workspaceRoot: 'D:/ws', gitAvailable: true, isRepository: true, branch: 'main', detached: false, upstream: 'origin/main', ahead: 1, behind: 0, uncommitted: 0, additions: 0, deletions: 0, files: 0, baseBranch: 'main', worktrees: [], history: [], failed: [], reads: 11, readMs: 400, ...over });
-  const wt = (over: Partial<GitWorktreeRow>): GitWorktreeRow => ({ path: 'D:/ws', branch: 'main', head: 'h', isBase: true, isActive: true, ahead: 0, behind: 0, additions: 0, deletions: 0, files: 0, ...over });
+  const wt = (over: Partial<GitWorktreeRow>): GitWorktreeRow => ({ path: 'D:/ws', branch: 'main', head: 'h', isBase: true, isActive: true, ahead: 0, behind: 0, upstreamAhead: 0, additions: 0, deletions: 0, files: 0, ...over });
   const row = (over: Partial<SessionListItemPayload>): SessionListItemPayload => ({ sessionId: 'S', label: 'l', status: 'idle', branch: '—', relativeTime: 'now', detail: 'd', awaitingInput: false, stale: false, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, unreadable: null, ...over });
   const binding = (path: string, over: Partial<NonNullable<SessionListItemPayload['worktree']>> = {}) => ({ worktree_path: path, branch: 'rotaris/session/S', base_branch: 'main', base_revision: 'r', created_by_session: true, merge_status: 'ready' as const, integration_session_id: null, ...over });
   it('REQ-GIT-075/081: the header texts — the branch, the literal for a non-repository, the sync label and its refreshing form', () => {
@@ -191,6 +191,30 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
     expect(branchStripItem(state({ isRepository: false }), null)).toMatchObject({ text: 'no git repository', state: 'none' });
     expect(branchStripItem(state({ isRepository: false, gitAvailable: false }), null)).toMatchObject({ text: 'no git', state: 'none' });
     expect(branchStripItem(null, null)).toMatchObject({ state: 'unknown' });
+  });
+  it('REQ-WORKSPACE-020: an isolated worktree\'s branch takes ITS upstream\'s ahead count and the base checkout\'s sentences; only the description names the worktree', () => {
+    // Until the acceptance repair (F8) the item drew the worktree branch with no ` ↑{n}` and one string for tooltip and
+    // description, "Branch this session's worktree is on: {branch}".
+    const sid = 'rotaris/session/S';
+    const linked = (upstreamAhead: number) => wt({ path: 'D:/ws/.rotaris/worktrees/S', branch: sid, isBase: false, isActive: false, ahead: 4, upstreamAhead });
+    const note = 'It belongs to the isolated worktree the active run is using, not to the folder this window is open on.';
+    const two = branchStripItem(state({ ahead: 1, worktrees: [wt({ upstreamAhead: 1 }), linked(2)] }), sid);
+    expect(two).toMatchObject({ text: sid, suffix: ' ↑2', title: `Branch this workspace is on: ${sid}, 2 commits ahead.`, state: 'branch' });
+    expect(two.description).toBe(`Branch this workspace is on: ${sid}, 2 commits ahead. ${note}`);
+    const one = branchStripItem(state({ ahead: 3, worktrees: [wt({}), linked(1)] }), sid);
+    expect(one).toMatchObject({ suffix: ' ↑1', title: `Branch this workspace is on: ${sid}, 1 commit ahead.` });
+    // No upstream (or a comparison that could not be made) is a count of zero: no marker, the base checkout's ahead not borrowed,
+    // and the row's `ahead` (against the base branch, REQ-GIT-085) never stands in for it.
+    const none = branchStripItem(state({ ahead: 3, worktrees: [wt({}), linked(0)] }), sid);
+    expect(none).not.toHaveProperty('suffix');
+    expect(none.title).toBe(`Branch this workspace is on: ${sid}.`);
+    expect(none.description).toBe(`Branch this workspace is on: ${sid}. ${note}`);
+    // Before the first read, or with the worktree not (yet) listed, the count is zero too.
+    expect(branchStripItem(null, sid)).toMatchObject({ text: sid, title: `Branch this workspace is on: ${sid}.`, state: 'branch' });
+    expect(branchStripItem(state({ ahead: 3, worktrees: [] }), sid)).not.toHaveProperty('suffix');
+    // The base checkout's tooltip and description stay one and the same string.
+    const base = branchStripItem(state({ ahead: 1 }), null);
+    expect(base.description).toBe(base.title);
   });
 });
 

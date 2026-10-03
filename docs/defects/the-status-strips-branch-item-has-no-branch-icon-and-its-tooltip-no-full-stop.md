@@ -20,6 +20,33 @@ base checkout's sentences ("rendered exactly as any other branch name is") and l
 that the branch is the isolated worktree's. Size M (the worktree's ahead count has to be read and carried to the renderer);
 found by reading, not driven; not repaired by fin11, which repairs the icon and the base checkout's sentences.
 
+## Status (2026-10-03, acceptance repair F8) — the worktree finding fixed; open on OQ-193 alone
+
+- **Fixed: the worktree branch's ahead marker and sentences** (REQ-WORKSPACE-020, REQ-SHELL-042, REQ-GIT-122). The workspace
+  service reads each local branch's tracking summary once per Git-view refresh (`git for-each-ref
+  --format=%(refname)%00%(upstream:track) refs/heads`, `parseUpstreamAhead`, `packages/workspace/src/git/view.ts`) and
+  every worktree row carries `upstreamAhead` — its branch's commits ahead of THAT branch's own upstream, 0 with no
+  branch, no upstream, a gone one or a failed read (REQ-WORKSPACE-029's zero), and never the row's base-branch `ahead`
+  (REQ-GIT-085) (`GitWorktreeRowSchema`, `packages/contracts/src/repository.ts`). `branchStripItem`
+  (`packages/ui/src/GitView.tsx`) finds the focused session's worktree branch among the rows and draws it exactly as a
+  base branch is drawn: ` ↑{n}` from that count, and the tooltip "Branch this workspace is on: {branch}." / "…, 1 commit
+  ahead." / "…, {n} commits ahead."; only its accessible description adds "It belongs to the isolated worktree the active
+  run is using, not to the folder this window is open on." (`WORKTREE_BRANCH_NOTE`), carried as the strip item's new
+  `description` (`packages/ui/src/composer.ts`, drawn by `packages/ui/src/StatusStripItem.tsx`). Before the first read, or
+  with the tree not listed, the count is 0. The base checkout's tooltip and description stay one string.
+- Pinned by `ui.test.ts` (the worktree branch's marker at 1 and 2, none with no upstream though the base is ahead, the base
+  sentences, the description with the worktree clause, the base item's description equal to its title), `composer.test.ts`
+  and `StatusStripItem.test.ts` (the tooltip and the description drawn apart only for the worktree branch), each failing
+  without the change, and `view.test.ts` (a worktree branch pushed with an upstream and two commits reads `upstreamAhead` 2,
+  one with no upstream 0 though 1 ahead of main, a detached tree 0; the parser over every tracking form). Shown by `pnpm
+  git-proof`: launch 3 (the isolated run) draws `rotaris/session/<sid>` with no marker, the base sentence as its title and the
+  worktree in its description, where the base checkout is 1 ahead of its own upstream; the new launch 3b (`worktree-ahead`)
+  pushes the session branch with an upstream, commits in the worktree, reopens the session through the browser, and reads
+  `rotaris/session/<sid> ↑1` with the title "Branch this workspace is on: rotaris/session/<sid>, 1 commit ahead." and that
+  sentence plus the worktree clause as `aria-description`.
+- **Still open on the owner:** [OQ-193](../architecture/open-questions.md) ("What does the status strip's branch item show
+  on a detached HEAD, outside a repository and before the first read"), unchanged by this repair.
+
 ## Status (2026-10-03, fin11) — partly fixed; open on OQ-193 and on the worktree finding
 
 - **Fixed: the icon.** The item draws Phosphor's `ph-git-branch` before the branch name (`icon` on `StripItem`,
@@ -41,7 +68,8 @@ found by reading, not driven; not repaired by fin11, which repairs the icon and 
 - **Open on the owner:** [OQ-193](../architecture/open-questions.md) ("What does the status strip's branch item show on a
   detached HEAD, outside a repository and before the first read"). The build proceeds under REQ-GIT-161's words; that text
   is untouched.
-- **Open, recorded above:** the worktree branch's ahead marker and sentence (size M, not repaired in fin11).
+- **Open, recorded above:** the worktree branch's ahead marker and sentence (size M, not repaired in fin11; fixed by the
+  acceptance repair F8, status above).
 
 ## Specs
 
@@ -54,4 +82,5 @@ found by reading, not driven; not repaired by fin11, which repairs the icon and 
 
 - `packages/ui/src/GitView.tsx`: `branchStripItem`, the item's text, tooltip and state.
 - `packages/ui/src/composer.ts`: `stripItems` places it (`strip-branch`); `packages/ui/src/AppShell.tsx` draws it.
-- `apps/desktop/scripts/git-proof.mjs`: reads `strip-branch`'s text (`main ↑1`).
+- `apps/desktop/scripts/git-proof.mjs`: reads `strip-branch`'s text (`main ↑1`; the worktree branch in launches 3 and 3b).
+- `packages/workspace/src/git/view.ts`: `parseUpstreamAhead`, each worktree row's `upstreamAhead`.

@@ -13,6 +13,9 @@ describe('workspaceUsage — the status strip\'s tokens and cost', () => {
   it('has no cost before any session reported usage, and `0 tok` is a known value', () => {
     expect(workspaceUsage([], '/w')).toEqual({ tokens: 0, cost: null });
     expect(workspaceUsage([row('/w', 0, 0, '0', 'unknown')], '/w')).toEqual({ tokens: 0, cost: null });
+    // A priced qualifier stored before the session reported any usage is not a figure yet (no `0.00 cost`).
+    expect(workspaceUsage([row('/w', 0, 0, '0', 'configured')], '/w')).toEqual({ tokens: 0, cost: null });
+    expect(workspaceUsage([row('/w', 0, 0, '0', 'configured'), row('/w', 3, 1, '0.5', 'reported')], '/w')).toEqual({ tokens: 4, cost: '0.5' });
   });
 
   it('reads `n/a` where usage was reported on unpriced models only, and the priced figure beside an unpriced one', () => {

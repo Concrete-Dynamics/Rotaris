@@ -25,7 +25,9 @@ export function workspaceUsage(rows: readonly Pick<SessionRow, 'workspace_root' 
     const spent = row.tokens_input + row.tokens_output;
     tokens += spent;
     if (spent > 0) used = true;
-    if (row.cost_qualifier !== '' && row.cost_qualifier !== 'unknown') {
+    // A row counts as priced only once it reported usage: a stored qualifier on a session with no tokens yet is no figure
+    // (REQ-SHELL-045), which until 2026-10-03 drew `0.00 cost` before any usage.
+    if (spent > 0 && row.cost_qualifier !== '' && row.cost_qualifier !== 'unknown') {
       priced = true;
       cost = addAmounts(cost, row.cost);
     }

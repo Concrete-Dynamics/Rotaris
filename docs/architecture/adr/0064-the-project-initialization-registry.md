@@ -53,7 +53,7 @@ So:
 | Where | What |
 | --- | --- |
 | `packages/config/src/init/` | the **pure core** — the persisted state and its outcome patch, the task registry, the five set derivations, the nine-value view and its set-wise equality, one execution, and workspace classification |
-| `apps/desktop/src/main/initialization.ts` | the **coordinator**: one resolution per workspace open, the single marker write routed through `config.setField`, the `code-intelligence-setup` runner, and the publication |
+| `apps/desktop/src/main/initialization.ts` | the **coordinator**: one resolution per workspace open, the single marker write routed through `config.setField` (since 2026-10-03 preceded by `config.bootstrap`, REQ-WORKSPACE-040: see the seventeenth round), the `code-intelligence-setup` runner, and the publication |
 | `apps/desktop/src/run-host/mcp.ts` | unchanged in what it does — it gains `applicable` on its status and the corrected classification |
 | channel 12, `initialization:state` | the nine values, their labels and descriptions, and the live run report |
 
@@ -517,3 +517,15 @@ run had not ended 18.2 s after the launch, and on the repair it ended 2.9 s afte
 steps and the non-code summary (51 passed, 0 failed, 2 skipped; as root under Xvfb, Node 24, `--skip-build` after
 `pnpm build`, load average 10 to 13 from other agents). OQ-169's bound and its readings are unchanged.
 
+**Seventeenth round (2026-10-03): the marker write asks for the starter first.** "The single marker write routed through
+`config.setField`" holds, with a step this record left unstated: REQ-WORKSPACE-040 has the writers of the persisted
+initialization state write the minimal bootstrap first when no `agents.yaml` exists, and no code cited it. The per-field
+writer never bootstraps (REQ-CONFIG-030), so on a first run whose code-intelligence setup succeeded before any sign-in,
+the first recording created the workspace file holding `initialization:` alone, and the starter of REQ-CONFIG-025 never
+came (`../../defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`). The workspace service's
+`workspace.open` now writes the starter before it answers, which main awaits before `open` here; and main's marker writer
+(`serviceMarkerWriter`) asks `config.bootstrap` before each `config.setField`, so a file removed while the workspace is
+open gets the starter before the record. A bootstrap that fails does not stop the record. REQ-WORKSPACE-085's one writer
+is unchanged. **Measured** by `initialization-marker-writer.test.ts` over the real writers and by `pnpm slice-proof`
+against the registered endpoint, whose first launch logged the open's bootstrap `written` before code-intelligence setup
+recorded `success`, and the file then held the starter followed by `initialization:` (the note gives the runs and loads).

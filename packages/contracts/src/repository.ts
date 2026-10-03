@@ -62,6 +62,12 @@ export const GitWorktreeRowSchema = z.object({
   /** REQ-GIT-085: against the base branch, never an upstream; 0/0 for the base tree; null with no base branch. */
   ahead: z.number().int().nonnegative().nullable(),
   behind: z.number().int().nonnegative().nullable(),
+  /**
+   * REQ-WORKSPACE-020 / REQ-WORKSPACE-029: commits the tree's branch is ahead of THAT branch's own upstream, which the status
+   * strip's branch item shows as ` ↑{n}` while it names an isolated worktree's branch. 0 with no branch, no upstream, or a
+   * comparison that could not be made — never the base-branch count above (REQ-GIT-085), which answers another question.
+   */
+  upstreamAhead: z.number().int().nonnegative(),
   /** REQ-GIT-107's three figures under REQ-GIT-003's exclusion. */
   additions: z.number().int().nonnegative().nullable(),
   deletions: z.number().int().nonnegative().nullable(),

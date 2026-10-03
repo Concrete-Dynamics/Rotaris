@@ -58,6 +58,12 @@ bare (REQ-MCP-048, REQ-MCP-101). The inspector and the persona window print the 
 view**'s MCP surface paragraph and its `children` row say so. No package, edge, process, channel, command or store column
 changed (`granted_mcp` is the existing JSON column).
 
+**The status strip names an isolated worktree's branch with its own ahead count (REQ-WORKSPACE-020, REQ-SHELL-042; acceptance
+repair F8).** `GitWorktreeRow` gains `upstreamAhead` (the tree's branch against its own upstream, one `for-each-ref` read in
+`readGitView`), `branchStripItem` draws the worktree branch's ` ↑{n}` from it with the base checkout's sentences, and a strip
+item gains an optional `description` for the accessible description alone. The **process view**'s Git-view paragraph and the
+**seams view**'s status-strip item say so. No package, edge, process, channel, command or store column changed.
+
 **A child moved by a fallback is drawn on the model it runs on (REQ-MONITOR-052, REQ-MONITOR-066, REQ-MONITOR-069,
 REQ-MONITOR-049; finacc F7).** `resilience.forChild` takes the execution (`{ taskId, key }`), and the run keeps each child's
 cell by task id (`Run.childCells`). `Run.childModel` names a moved cell's key by the run-level agent's rule (`Run.keyOfCell`)

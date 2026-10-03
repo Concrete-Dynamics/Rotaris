@@ -325,7 +325,10 @@ other item keeps REQ-SHELL-038's end ellipsis. The path link gives up its width 
 label rule 2 hid is hidden whole (`data-label-hidden`), no empty focus stop. The branch item is `middle` only while it shows
 a branch name: its detached, non-repository and unread words are never shortened (REQ-GIT-161, OQ-193). A glyph
 before the label rides as `icon` (the branch item's `ph-git-branch`, REQ-SHELL-042), coloured by a token in
-`.status-strip__icon` so a theme change redraws it. An item is text in the strip's own
+`.status-strip__icon` so a theme change redraws it. An accessible description that is not the tooltip rides as
+`description` — only the branch item's while it names an isolated worktree's branch (REQ-WORKSPACE-020: the base sentence as
+the tooltip, the worktree added to the description alone; `branchStripItem`, the ahead count from the snapshot row's
+`upstreamAhead`); every other item's description is its `title`. An item is text in the strip's own
 craft — the mockup's strip is plain tertiary text at `--rt-text-xs`, mono only for figures — so a new item takes no new
 control and no new token. The path, in order: the fact on the record the renderer already receives (`SessionRecord` in
 `packages/contracts/src/channels.ts`, filled by `toSessionRecord` in `packages/engine/src/sessions.ts`; a store column

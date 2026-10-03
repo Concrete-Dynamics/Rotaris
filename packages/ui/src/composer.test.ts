@@ -165,6 +165,18 @@ describe('REQ-SHELL-038/047: the status strip, item by item', () => {
     expect(stripItems(1400, facts()).filter((i) => i.kind === 'text' && i.icon !== undefined).map((i) => i.kind === 'text' && i.testId)).toEqual(['strip-branch']);
   });
 
+  it('REQ-WORKSPACE-020: an isolated worktree\'s branch keeps the base sentence as its tooltip and adds to its description alone', () => {
+    const branchOf = (items: readonly StripItem[]) => items.find((i) => i.kind === 'text' && i.testId === 'strip-branch');
+    const title = 'Branch this workspace is on: rotaris/session/S, 2 commits ahead.';
+    const description = `${title} It belongs to the isolated worktree the active run is using, not to the folder this window is open on.`;
+    expect(branchOf(stripItems(1400, facts({ branch: { text: 'rotaris/session/S', suffix: ' ↑2', title, description, state: 'branch' } })))).toMatchObject({
+      text: 'rotaris/session/S', suffix: ' ↑2', title, description, icon: 'ph-git-branch', middle: true,
+    });
+    // The base checkout's description is its tooltip: no separate field, so nothing can drift between the two.
+    expect(branchOf(stripItems(1400, facts()))).not.toHaveProperty('description');
+    expect(branchOf(stripItems(1400, facts({ branch: { text: 'main', title: 'Branch this workspace is on: main.', description: 'Branch this workspace is on: main.', state: 'branch' } })))).not.toHaveProperty('description');
+  });
+
   it('gives every item REQ-SHELL-038\'s accessible name, and exactly the workspace path is a link (REQ-SHELL-039/040)', () => {
     const items = stripItems(1400, facts());
     const names = items.flatMap((i) => (i.kind === 'spacer' ? [] : [i.name]));

@@ -42,4 +42,17 @@ describe('the status strip\'s branch item, drawn (REQ-GIT-161, REQ-WORKSPACE-149
     expect(html).toContain('data-middle="1"');
     expect(html).toMatch(/<i class="ph ph-git-branch status-strip__icon" aria-hidden="true"><\/i><span class="status-strip__label">main<\/span><span class="status-strip__suffix"> ↑1<\/span>/u);
   });
+
+  it('REQ-WORKSPACE-020: an isolated worktree\'s branch draws its own ahead marker, the base sentence as its title, and the worktree only in its description', () => {
+    const title = 'Branch this workspace is on: rotaris/session/S, 1 commit ahead.';
+    const description = `${title} It belongs to the isolated worktree the active run is using, not to the folder this window is open on.`;
+    const html = branchMarkup({ text: 'rotaris/session/S', suffix: ' ↑1', title, description, state: 'branch' });
+    expect(html).toContain(`title="${title}"`);
+    expect(html).toContain(`aria-description="${description}"`);
+    expect(html).toContain('<span class="status-strip__suffix"> ↑1</span>');
+    // The base checkout's item: the tooltip and the description one and the same string.
+    const base = branchMarkup({ text: 'main', title: 'Branch this workspace is on: main.', state: 'branch' });
+    expect(base).toContain('title="Branch this workspace is on: main."');
+    expect(base).toContain('aria-description="Branch this workspace is on: main."');
+  });
 });

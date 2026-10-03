@@ -172,7 +172,10 @@ readMs}`** is the workspace service's answer for the Overview's repository card 
 nowhere else; every read bounded at 15 s, every failure an empty value (REQ-GIT-102).
 
 **The Git view and the worktrees (Part O; ADR-0038's second execution).** Renderer → main: `git.read` → the whole
-`GitViewState` (header, worktrees with the base tree by common directory, 30 history rows with the local flag; a
+`GitViewState` (header, worktrees with the base tree by common directory — each row also carrying `upstreamAhead`, its
+branch's commits ahead of THAT branch's own upstream from one `for-each-ref … %(upstream:track)` read, 0 with none, for the
+status strip while it names an isolated worktree's branch (REQ-WORKSPACE-020; acceptance repair F8, 2026-10-03) — 30
+history rows with the local flag; a
 `gitAvailable: false` answer raises the fixed-identity notice `git.missing` "Working without Git", REQ-GIT-104);
 `worktree.create {branch, path}` (the user's own path, REQ-GIT-115); `worktree.remove {path, force}` (a refusal Git
 would lift with `--force` comes back as code `worktree.needs-force`, REQ-GIT-117); `worktree.chooseAttach` (main's

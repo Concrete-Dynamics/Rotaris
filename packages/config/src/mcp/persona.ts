@@ -156,7 +156,8 @@ export function resolvePersonaMcp(input: PersonaMcpInput): Staged<PersonaMcpSurf
     const grant = input.grants === null ? undefined : Object.prototype.hasOwnProperty.call(input.grants, name) ? input.grants[name] : undefined;
     if (disc === null || disc.failed) {
       if (disc?.failed) diagnostics.push(warn(`persona ${persona}: MCP server '${name}' failed tool discovery; its tools may be unavailable (REQ-MCP-042)`, 'process', `mcp.discovery-failed.${persona}.${name}`, { persona, server: name }));
-      // REQ-MCP-101: an active server with no known tools renders as its bare name; REQ-MCP-114 records it as carried.
+      // REQ-MCP-101: an active server with no known tools renders as its bare name. REQ-MCP-114 records one whose discovery
+      // failed as dropped for `discovery-failed` (`grantEvidence`, run-host/mcp.ts); until 2026-10-03 it was recorded carried.
       active.push({ name, entry, origin: origin ?? 'default', discoveryFailed: disc?.failed ?? false, tools: [] });
       continue;
     }

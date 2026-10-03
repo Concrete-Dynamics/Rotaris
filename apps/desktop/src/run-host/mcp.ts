@@ -8,7 +8,7 @@ import {
   AGENTS_FILE_NAME, classifyWorkspaceRoot, CODE_INTELLIGENCE_LANGUAGE_SERVERS, CODE_INTELLIGENCE_MARKER_SEGMENTS, CODE_INTELLIGENCE_MEMORY_LISTING_TOOL, CODE_INTELLIGENCE_SERVER_NAME,
   CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceLanguageServerStore,
   deriveSetupInvocation, DiagnosticSink, launchedProjectOf, mcpConfigurationForExecutionRoot, narrowAfterUpdate, renderMcpSection, resolvePersonaMcp,
-  type Diagnostic, type LoadedConfiguration, type McpResolvedServer, type PersonaMcpSurface,
+  type Diagnostic, type DropReason, type LoadedConfiguration, type McpResolvedServer, type PersonaMcpSurface,
 } from '@rotaris/config';
 import { errorObservation, observation, type ToolExecutor } from '@rotaris/agent-tools';
 import type { McpGrantEvidence, SessionWriter } from '@rotaris/engine';
@@ -526,12 +526,21 @@ export class McpHost {
  * controls, so the record lists what the agent could call. Until 2026-10-01 this was `McpHost.evidenceFor`, resolved for the
  * spawn with no names reserved and before any control
  * (`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
+ *
+ * A server whose tool discovery failed stays among the surface's `active` servers, because the persona prompt still lists
+ * it bare (REQ-MCP-048, REQ-MCP-101), but its fate here is `dropped` for `discovery-failed` with nothing granted under it:
+ * REQ-MCP-114 names tool discovery having failed (REQ-MCP-042) among the drop reasons. Until 2026-10-03 every active server
+ * was recorded `connected`, and a dead code-intelligence server read "connected / No tools granted" in the inspector
+ * (`docs/defects/fixed/an-mcp-server-whose-tool-discovery-failed-reads-as-connected.md`).
  */
 export function grantEvidence(surface: PersonaMcpSurface, granted: (server: string, callable: string) => boolean = () => true): McpGrantEvidence {
+  const carried = surface.active.filter((a) => !a.discoveryFailed);
   return {
-    granted: Object.fromEntries(surface.active.map((a) => [a.name, a.tools.map((t) => t.callable).filter((c) => granted(a.name, c))])),
+    granted: Object.fromEntries(carried.map((a) => [a.name, a.tools.map((t) => t.callable).filter((c) => granted(a.name, c))])),
     servers: [
-      ...surface.active.map((a) => ({ name: a.name, transport: a.entry.type, origin: a.origin, fate: 'connected' as const })),
+      ...surface.active.map((a) => a.discoveryFailed
+        ? { name: a.name, transport: a.entry.type, origin: a.origin, fate: 'dropped' as const, reason: 'discovery-failed' satisfies DropReason }
+        : { name: a.name, transport: a.entry.type, origin: a.origin, fate: 'connected' as const }),
       ...surface.dropped.map((d) => ({ name: d.name, transport: d.transport, origin: d.origin ?? '', fate: 'dropped' as const, reason: d.reason })),
     ],
   };

@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-03**
 
+**An MCP server whose tool discovery failed is recorded dropped for that reason (REQ-MCP-114, REQ-MCP-042; fin13).**
+`grantEvidence` (`run-host/mcp.ts`) records an active server flagged `discoveryFailed` as `fate: 'dropped'`,
+`reason: 'discovery-failed'`, with no entry under `granted`; the persona surface still keeps it active, so the prompt lists it
+bare (REQ-MCP-048, REQ-MCP-101). The inspector and the persona window print the recorded fate as they did. The **runtime
+view**'s MCP surface paragraph and its `children` row say so. No package, edge, process, channel, command or store column
+changed (`granted_mcp` is the existing JSON column).
+
 **A run in an isolated working tree launches its MCP servers bound to that tree's root (REQ-MCP-034, REQ-MCP-050; fin12).**
 `configurationForExecutionRoot` (`run-host/mcp.ts`, over `mcpConfigurationForExecutionRoot` in `config/src/mcp/index.ts`) is
 what the tool port's `ready()` and `session.start`'s discovery ahead of the run hand the MCP host, memoised on the execution

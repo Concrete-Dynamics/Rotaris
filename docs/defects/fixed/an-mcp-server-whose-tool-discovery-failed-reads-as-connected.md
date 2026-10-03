@@ -33,3 +33,30 @@ REQ-MCP-048 and REQ-MCP-101 still list it in the persona prompt with no tool det
 - `packages/engine/src/sessions.ts` (`mcpEvidenceOf`) — projects `granted_mcp` into `AgentRecord.mcpServers`.
 
 Noticed 2026-10-03 by the autopsy of the duress live run at `1763f7f`.
+
+## Repaired — 2026-10-03
+
+The fate is decided where the evidence is written. `grantEvidence` (`apps/desktop/src/run-host/mcp.ts`) records an active
+server flagged `discoveryFailed` as `{ fate: 'dropped', reason: 'discovery-failed' }` and leaves it out of `granted`, as
+every other dropped server is; the persona surface keeps it among its `active` servers, so the persona prompt still lists
+it bare (REQ-MCP-048, REQ-MCP-101) and REQ-MCP-042's warning and issue are unchanged. The inspector and the persona window
+needed no change: they print the recorded fate, now "dropped — discovery-failed" with "No tools granted.". A row written
+before the repair keeps the `connected` it recorded (REQ-MCP-114: the run's own recorded evidence).
+
+Pinned by:
+
+- `apps/desktop/src/run-host/mcp.test.ts` — "records the server dropped for failed discovery, with no granted tools under
+  it" (red before the repair: the fate read `connected`), beside "records a server whose discovery succeeded with no tools
+  as connected";
+- `packages/ui/src/agents.test.ts` — `mcpFateText` prints the reason as "dropped — discovery-failed";
+- `mcp-proof` launch 6 (drop rules) — a server `broken` that exits before `initialize` is carried by both personas; the
+  child's recorded fate is `discovery-failed`, `granted` holds `alpha` alone, the issue "failed tool discovery" is recorded,
+  and the child's inspector, selected in the built app, draws `data-fate="dropped"` and "MCP server broken · stdio · yaml ·
+  dropped — discovery-failed / No tools granted." beside alpha "connected".
+
+Shown on the built branch (fin13, worktree `Rotaris-crw-wt-fin13-mcpfateandli`): `mcp-proof --skip-build` passed after
+`pnpm build`, load average 7 to 10.7 with other agents building; its `results.json` `dropRules.fates.broken` reads
+`discovery-failed` and `dropRules.inspector` carries the row above. The live scenario that shows it in the product is a
+duress run, or any default run, on a tree without the bundled code-intelligence runtime (or with a code-intelligence server
+that fails discovery): the inspector of every agent draws `code_intelligence` "dropped — discovery-failed"; the orchestrator
+runs it after the merge.

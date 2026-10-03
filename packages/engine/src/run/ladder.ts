@@ -81,8 +81,10 @@ export interface TurnResilience {
    * REQ-MONITOR-052/066 with REQ-MONITOR-049: the cell's model changed — a move to a same-tier candidate or a fallback, an
    * override followed, a model chosen during a wait — with no save behind it, so the run republishes the record and the
    * surfaces name the model the agent now calls (`SessionRecord.entryModelKey`) and measure its limit (`entryContext`) before
-   * the next call returns. The run passes the same hook for a child's cell (`resilienceFor` is shared), so a child's move
-   * republishes the record too — harmless, coalesced at `RECORD_TICK`. Absent means nobody is told.
+   * the next call returns. The run passes the same hook for a child's cell (`resilienceFor` is shared), and a child's move
+   * republishes the record so its `AgentRecord.model` and `contextLimit` name the model it now calls (`Run.childModel`, since
+   * 2026-10-03; REQ-ORCH-088's timeout fallback in `children/orchestration.ts` calls it too), coalesced at `RECORD_TICK`.
+   * Absent means nobody is told.
    */
   readonly moved?: (() => void) | undefined;
 }

@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-03**
 
+**A child moved by a fallback is drawn on the model it runs on (REQ-MONITOR-052, REQ-MONITOR-066, REQ-MONITOR-069,
+REQ-MONITOR-049; finacc F7).** `resilience.forChild` takes the execution (`{ taskId, key }`), and the run keeps each child's
+cell by task id (`Run.childCells`). `Run.childModel` names a moved cell's key by the run-level agent's rule (`Run.keyOfCell`)
+and gives its model's maximum input, which `toAgentRecord` reads through `AgentFacts.liveModelFor`. REQ-ORCH-088's timeout
+fallback republishes the record (`TurnResilience.moved`). The **process view**'s `SessionRecord` sentence and the **runtime
+view**'s run-level agent paragraph say so. No package, edge, process, channel, command or store column changed.
+
 **A child's closing scheduler pass cannot outlive its store (REQ-ORCH-053, REQ-ORCH-098; fin11).** `Scheduler.close`, called
 through `IterationChildren.close` by `Run.turn` once the iteration's children are torn down, stops every later pass; every
 unawaited pass after a child's end — `startOne`'s and a resumed child's in `resumePaused` — goes through `Scheduler.passAfter`,

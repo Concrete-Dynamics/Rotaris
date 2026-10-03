@@ -700,9 +700,14 @@ writes no row and saves nothing, so the ladder tells the run when a cell's model
 `RECORD_TICK`) — which keeps `entryContext`'s limit current through the call too. `entryRole`
 keeps the configured key or the override in force, so the composer's chip and the strip's model item go on naming what the
 next run starts with (REQ-MONITOR-146, REQ-SHELL-043). Until then the inspector named the configured key while the root ran on
-the candidate (`fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md`); a child moved by
-a fallback is still drawn on its configured `model_key` (`a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md`,
-open). **`SessionRecord.entryStalledSeconds`**
+the candidate (`fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md`). A **child**
+follows the same rule (2026-10-03, finacc F7): the run's `resilience.forChild` builds each execution's cell carrying the
+row's `children.model_key` (or the override it follows) and keeps it by task id (`Run.childCells`). Once the cell has
+left that pair or key, `Run.childModel` returns the key it runs on (`Run.keyOfCell`, `entryModelKey`'s rule) and that model's
+advertised maximum input, and `toAgentRecord` reads both (`AgentFacts.liveModelFor`) for the agent's `model` and
+`contextLimit`. With no live run, or for a child this run did not execute, the row's key stands. REQ-ORCH-088's timeout fallback
+calls `TurnResilience.moved` too, so the record names the fallback while the retry runs. Until then a moved child was drawn
+on its configured key against its limit (`fixed/a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md`). **`SessionRecord.entryStalledSeconds`**
 (2026-09-30, OQ-153) is the same route for the root's stall watch's figure. **`SessionRecord.entryToolCalls`** (2026-10-01,
 acceptance A20) is the run-level agent's tool-call count (REQ-MONITOR-044/052): the roots' share of the persisted total — the
 total less every child's persisted `children.tool_calls` — plus the calls the live root has started in its running execution

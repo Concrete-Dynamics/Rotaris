@@ -414,7 +414,9 @@ await scenarioRun('next-run-choice', async () => {
   const annotated = (list) => Array.isArray(list) && list.some((o) => o.value === 'alpha' && o.hint === 'provider reported insufficient quota in this session' && !o.disabled) && list.some((o) => o.value === 'beta' && o.hint === null);
   expect(annotated(r.value.chipRows), `the composer chip did not annotate alpha: ${JSON.stringify(r.value.chipRows)}`);
   expect(annotated(r.value.headerRows), `the run header's switch did not annotate alpha: ${JSON.stringify(r.value.headerRows)}`);
-  expect(r.value.inspectorRows === null || annotated(r.value.inspectorRows), `the inspector's Model field did not annotate alpha: ${JSON.stringify(r.value.inspectorRows)}`);
+  // The field is live during the run held on beta; a disabled or absent field would leave the annotation unread, so it fails here.
+  expect(r.value.inspectorLive === 'live', `the inspector's Model field was ${r.value.inspectorLive} during the run, so its options were never read`);
+  expect(annotated(r.value.inspectorRows), `the inspector's Model field did not annotate alpha: ${JSON.stringify(r.value.inspectorRows)}`);
   const exhausted = list.filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata));
   expect(exhausted.length === 2 && exhausted[0].cleared === undefined && exhausted[1].cleared === true && exhausted[1].model === 'alpha' && exhausted[1].model_key === 'alpha', `the choice did not clear alpha's exclusion: ${JSON.stringify(exhausted)}`);
   // The held prompt ran on beta (alpha excluded, moved before calling); the further prompt, after the choice, on alpha.

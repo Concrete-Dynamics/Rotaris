@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
 import type { LoadedConfiguration } from '@rotaris/config';
 import { nodeClocks } from '@rotaris/platform';
-import { grantEvidence, McpHost } from './mcp.js';
+import { configurationForExecutionRoot, grantEvidence, McpHost } from './mcp.js';
 
 /**
  * Live-run finding D7 (R-067): the spawn evidence resolved a persona's MCP surface with no reserved names and the tool
@@ -223,5 +223,43 @@ describe('the setup step facts on the run host\'s status (REQ-WORKSPACE-091, REQ
     expect(create.startError).toContain('ENOENT');
     expect(create.detail).toBe(`the setup command could not be started: ${create.startError}`);
     expect(create.output).toBeUndefined();
+  });
+});
+
+/**
+ * REQ-MCP-034's isolated-run clause (live-run finding D1 at 1763f7f): the run host hands a run in a worktree the view of
+ * its configuration bound to that tree, and its launch lines name the project the launched description carried — what
+ * the live run's requirements check reads, since the launch line itself is written at debug.
+ */
+describe('the configuration and the launch lines of a run in an isolated working tree (REQ-MCP-034, REQ-MCP-050)', () => {
+  const ws = '/work/ws';
+  const tree = '/work/ws/.rotaris/requirements/worktrees/rotaris-req-req-104-u1';
+  const loaded = () => {
+    const args = ['builtin:code-intelligence', '--', 'start-mcp-server', '--transport', 'stdio', '--project', ws];
+    const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'builtin:code-intelligence', args: ['start-mcp-server', '--transport', 'stdio'] };
+    return {
+      workspaceRoot: ws,
+      personas: { 'coding-agent': { mcp_servers: ['code_intelligence'], mcp_tools: null, tools: [] } },
+      mcp: { servers: { code_intelligence: { name: 'code_intelligence', entry, origin: 'default', availability: { available: true }, resolved: { command: '/opt/rotaris', args, builtin: true }, description: { transport: 'stdio', command: '/opt/rotaris', args, env: {}, cwd: ws } } }, origins: { code_intelligence: 'default' }, secrets: [], diagnostics: [] },
+    } as unknown as LoadedConfiguration;
+  };
+
+  it('a run in the workspace gets the loaded configuration back; a run in a worktree gets the tree\'s root after the project-path option', () => {
+    const cfg = loaded();
+    expect(configurationForExecutionRoot(cfg, ws)).toBe(cfg);
+    const isolated = configurationForExecutionRoot(cfg, tree);
+    const d = isolated.mcp.servers['code_intelligence']!.description;
+    expect(d.transport === 'stdio' ? d.args.slice(-2) : null).toEqual(['--project', tree]);
+    expect(isolated.personas).toBe(cfg.personas);
+  });
+
+  it('the discovery line names the project the discovered description carried', async () => {
+    const lines: string[] = [];
+    const mcp = new McpHost({ clocks: new FakeClock(), log: (message) => { lines.push(message); }, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
+    const discovered: unknown[] = [];
+    vi.spyOn(mcp.discovery, 'discover').mockImplementation(async (req) => { discovered.push(req.description); return { tools: [], failed: false, memoised: false, elapsedMs: 5 } as unknown as Awaited<ReturnType<typeof mcp.discovery.discover>>; });
+    await mcp.prepare(configurationForExecutionRoot(loaded(), tree), tree);
+    expect(discovered).toHaveLength(1);
+    expect(lines).toContain(`mcp: discovery of 'code_intelligence' (project ${tree}) listed 0 tool(s) in 5 ms`);
   });
 });

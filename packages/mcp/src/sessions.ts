@@ -53,6 +53,11 @@ export interface SessionDeps {
   readonly codeIntelligenceServerName?: string;
   /** REQ-MCP-071: the probe failed or exhausted its budget — the run host delivers the warning through REQ-MCP-044; no corrective action. */
   readonly probeFailed?: (server: string, detail: string) => void;
+  /**
+   * Words the connected line carries about what was launched, read from the description handed to the launch — the run
+   * host names the project REQ-MCP-034 bound (`project <path>`); '' or absent adds nothing.
+   */
+  readonly launchNote?: (server: string, description: ServerDescription) => string;
 }
 
 export class ConnectionsClosed extends Error {
@@ -181,7 +186,8 @@ export class SessionConnections {
     opened.onClosed(() => { if (this.settled.get(name) === connected) { this.settled.delete(name); this.entries.delete(name); } });
     if (this.down) { await opened.close(); throw new ConnectionsClosed(name); }
     this.settled.set(name, connected);
-    log.info(`mcp ${name}: connected for the session (pid ${opened.pid() ?? 'remote'}, protocol ${connected.negotiatedVersion ?? '?'}, ${current.length} tool(s), hook ${connected.hook.kind}:${connected.hook.outcome}) in ${connected.connectMs.toFixed(0)} ms`);
+    const note = this.deps.launchNote?.(name, description) ?? '';
+    log.info(`mcp ${name}: connected for the session (pid ${opened.pid() ?? 'remote'}, protocol ${connected.negotiatedVersion ?? '?'}, ${current.length} tool(s), hook ${connected.hook.kind}:${connected.hook.outcome}${note === '' ? '' : `, ${note}`}) in ${connected.connectMs.toFixed(0)} ms`);
     return connected;
   }
 

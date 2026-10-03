@@ -375,6 +375,27 @@ describe('R-043 — the run-autopsy snapshot', () => {
     expect(s.failures).toEqual([]);
   });
 
+  it('D6 (1763f7f): only a command run again counts as retried — the whole command and its session action, never a shared prefix', () => {
+    const sid = plant('S-retries', 'completed');
+    const cd = 'cd /tmp/rotaris-live-run/2026-10-03T05-56-27-364Z/workspace/.rotaris/requirements/worktrees/rotaris-req-req-104-u1 && ';
+    const calls: Record<string, unknown>[] = [
+      { command: `${cd}git status --short && git log --oneline -5` }, { command: `${cd}git diff --stat` }, { command: `${cd}git diff` },
+      { command: `${cd}node --test 2>&1 | tail -30` }, { command: `${cd}node --test 2>&1 | tail -5` },
+      { command: 'true', session_action: 'send_signal', session_id: 'ts_92897550', signal: 'SIGINT' }, { command: 'true', session_action: 'query', session_id: 'ts_92897550' },
+      { command: `${cd}git diff` }, { command: 'true', session_action: 'query', session_id: 'ts_92897550' },
+    ];
+    dal.transaction(() => {
+      calls.forEach((args, i) => {
+        const entry = JSON.stringify({ timestamp: 't', agent_name: 'a', tool_name: 'terminal', status: 'ok', elapsed_ms: 1, is_error: false, args, result: 'ok' });
+        dal.ringInsert('tool_calls', sid, (o) => dal.insertToolCall({ session_id: sid, ordinal: o, call_id: `r${i}`, agent_name: 'a', tool_name: 'terminal', status: 'ok', started_at: 't', elapsed_ms: 1, is_error: 0, entry }));
+      });
+    });
+    expect(readAutopsy(dal, sid, clock.wall)!.coherence.retried_commands).toEqual([
+      { command: `${cd}git diff`, times: 2 },
+      { command: 'true', session_action: 'query', times: 2 },
+    ]);
+  });
+
   it('reads nothing but the session record: the snapshot writes no row, no event, no timeline entry', () => {
     const sid = plant('S-ro', 'completed');
     const before = { rows: dal.rowCount(sid), events: dal.eventCount(sid), timeline: dal.timelineOf(sid).length, updated: dal.getSession(sid)!.updated_at };

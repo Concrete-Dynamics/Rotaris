@@ -133,6 +133,18 @@ describe('who the client says it is — REQ-STARTUP-158', () => {
 });
 
 describe('SessionConnections (REQ-MCP-066/067/068/069/070)', () => {
+  it('REQ-MCP-034 (live-run finding D1): the connected line carries the launch note read from the description it launched, and nothing when there is none', async () => {
+    const seen: string[] = [];
+    const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined, launchNote: (server, d) => { seen.push(`${server} ${d.transport === 'stdio' ? d.args.at(-1) ?? '' : ''}`); return 'project /the/tree'; } });
+    registries.push(s);
+    await s.connect('noted', fixture('--tag', 'noted'));
+    expect(seen).toEqual(['noted noted']);
+    expect(lines.some((l) => /^I mcp noted: connected for the session \(pid \d+, protocol \S+, \d+ tool\(s\), hook none:skipped, project \/the\/tree\) in \d+ ms$/.test(l))).toBe(true);
+    const bare = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined });
+    registries.push(bare);
+    await bare.connect('bare', fixture());
+    expect(lines.some((l) => /^I mcp bare: connected for the session \(pid \d+, protocol \S+, \d+ tool\(s\), hook none:skipped\) in \d+ ms$/.test(l))).toBe(true);
+  });
   it('two concurrent first demands share one connection and one process; three interleaved calls each get their own answer', async () => {
     const pids = join(dir, 'sess.pids');
     writeFileSync(pids, '');

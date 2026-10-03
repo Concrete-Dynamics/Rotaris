@@ -773,8 +773,13 @@ the application manifest (`McpHost`'s `productVersion`, required as `clientVersi
 2026-09-05 deviation reverted, its record kept in `config/src/mcp/defaults.ts`), so every run whose persona carries it —
 twelve of the thirteen built-in roles — starts one runtime per session through the token. Its arguments come from the
 generated manifest (`start-mcp-server`, the transport and the host-integration context); REQ-MCP-034 appends
-`--project <root>` at command resolution for the root the run was configured with (an isolated tree's root when the
-run is configured with it — not exercised by the proof); the grant is the persona's tier union from the manifest (12 or
+`--project <root>` at command resolution for the workspace the configuration was loaded for, and a run whose execution
+root is a worktree is handed the view bound to that tree's root instead (`configurationForExecutionRoot` in
+`run-host/mcp.ts`, read by the tool port's `ready()` and by `session.start`'s discovery ahead of the run, both memoised on
+the execution root; `cwd`, REQ-MCP-035's fill-in and REQ-MCP-070's `lsp_init` root stay the workspace's, OQ-194). Until
+2026-10-03 the isolated run's server was bound to the anchoring checkout (ADR-0034, "The isolated-run binding, executed").
+The discovery and connected lines name the project the launch carried (`… (project <root>) listed …`, `…, project <root>)`);
+the grant is the persona's tier union from the manifest (12 or
 19 names; REQ-MCP-014/015). On connection the binding probe calls the memory-listing tool once under 15 s
 (REQ-MCP-071; a failure warns through REQ-MCP-044 and withholds nothing); the prompt's `## MCP servers` entry for the
 server carries the fixed project-memories block iff both gating names are granted (REQ-MCP-102). Measured cold: the

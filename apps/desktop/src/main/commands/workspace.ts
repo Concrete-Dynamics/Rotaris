@@ -17,7 +17,7 @@ export function workspaceCommands(
     /**
      * REQ-SHELL-040 / REQ-WORKSPACE-019: the strip's workspace-path link — the folder of the window that asked, in the OS
      * file manager. A failure is answered, never swallowed: the refusal names the path attempted, so the renderer's
-     * transient error says what could not be opened and where it is (REQ-SHELL-040's resolution; OQ-189 records that
+     * transient error says what could not be opened and where it is (REQ-SHELL-040's resolution; OQ-191 records that
      * REQ-WORKSPACE-019 still says silent). Verification seam (only with ROTARIS_CAPTURE_PNG): `record` opens nothing and
      * reports success, `fail` reports the platform refusal, as `shell.openExternal`'s does.
      */

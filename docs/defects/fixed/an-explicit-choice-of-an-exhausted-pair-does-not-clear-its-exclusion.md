@@ -42,7 +42,7 @@ next run receives it as its configured model and cannot tell it from the value t
 read a composer choice as an explicit choice of an excluded pair, and such a choice clears nothing. The recovery dialog's
 model choice (REQ-NOTIFY-074, `Sessions.restartAfterAuthFailure`) is a choice for an authentication failure and is not
 wired to the exclusion either. Both are recorded in
-[a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md](../a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md),
+[a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md](a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md),
 and the wait surface's picker, which does not list excluded pairs with their reason, in
 [the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md](the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md) (repaired since, by bundle `fin8-noticed-gaps-4`).
 

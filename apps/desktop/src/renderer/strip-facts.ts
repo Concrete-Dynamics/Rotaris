@@ -27,7 +27,7 @@ export interface WorkspaceUsageFacts {
 const USAGE_REFRESH_MS = 5_000;
 
 /**
- * REQ-SHELL-044/045: this workspace's tokens and cost (OQ-188's build reading for the tokens). Read at mount, again
+ * REQ-SHELL-044/045: this workspace's tokens and cost (OQ-190's build reading for the tokens). Read at mount, again
  * whenever `pulse` changes (the focused session's own usage, so the figures follow a run on screen), and every five
  * seconds for the sessions running in the background. A read that fails keeps the last figures.
  */

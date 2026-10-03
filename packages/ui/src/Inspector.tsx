@@ -7,6 +7,7 @@ import { ContextRing } from './ContextRing.js';
 import { markMotionStart } from './motion.js';
 import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, Select as DesignSelect } from './design-system/index.js';
 import { PopoverMenu } from './design-system/overlays.js';
+import { annotatedModelOptions } from './model-options.js';
 
 /**
  * REQ-MONITOR-050..067 (Part R): the per-agent inspector. One tab per configured persona (050); the selected
@@ -149,7 +150,8 @@ export function Inspector(props: InspectorProps) {
             <DesignSearchableSelect id="inspector-model" className="input select" ariaLabel="Agent model" value={currentModel} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-model"
               title={currentModel === '' ? undefined : currentModel}
               filterPlaceholder="Filter models…"
-              options={[...modelOptions.map((m) => ({ value: m, label: m })), ...withheldModels.map((w) => ({ value: w.model, label: w.model, unavailableReason: w.reason, suffix: `withheld: ${w.reason}` }))]}
+              /* REQ-MONITOR-194 beside REQ-MONITOR-067: a key held out of quota is annotated and stays choosable; a withheld one is not. */
+              options={[...annotatedModelOptions(modelOptions, session?.excludedModels ?? []), ...withheldModels.map((w) => ({ value: w.model, label: w.model, unavailableReason: w.reason, suffix: `withheld: ${w.reason}` }))]}
               onChange={(v) => { if (onSetModel && v !== '' && v !== currentModel) void onSetModel(v).then((r) => setError(r.ok ? null : r.reason)); }} />
             <label className="field-label" htmlFor="inspector-reasoning">Reasoning</label>
             <DesignSelect id="inspector-reasoning" className="input select" aria-label="Agent reasoning" value={['low', 'medium', 'high'].includes(shown.reasoning) ? shown.reasoning : 'medium'} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-reasoning" onChange={(e) => { const v = e.currentTarget.value; if (onSetReasoning) void onSetReasoning(v).then((r) => setError(r.ok ? null : r.reason)); }}>

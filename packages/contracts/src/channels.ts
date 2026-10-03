@@ -341,6 +341,13 @@ export const SessionRecordSchema = z.object({
    */
   modelOverrides: z.array(z.object({ from: z.string(), to: z.string() })),
   /**
+   * REQ-MONITOR-194: the configured model keys whose pair the session holds out of quota, in declaration order — outside a
+   * wait as inside one (`wait.excluded` is the same list while a wait is shown), from a live run's memory or, for a session at
+   * rest, the memory its timeline rehydrates. Every model selector lists these annotated with the reason, still choosable,
+   * and a choice of one clears it. Empty when none is excluded.
+   */
+  excludedModels: z.array(z.string()),
+  /**
    * REQ-MONITOR-085 (Part AH, ADR-0060): the compression in flight — the agent whose context is being
    * compressed and when it began — so a surface can state that compression is running without blocking.
    * Derived from the live run at every snapshot, like `wait` above; null while none is running.

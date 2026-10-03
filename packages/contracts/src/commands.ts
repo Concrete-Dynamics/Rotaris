@@ -163,6 +163,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * which is what keeps the release visible rather than permanent — nothing in the run re-arms itself.
    */
   z.object({ kind: z.literal('session.planRearm'), sessionId: z.string().min(1) }),
+  /**
+   * REQ-MONITOR-194 / REQ-MONITOR-146: the composer's "Model for the next run" chose `modelKey` for the session this window
+   * follows. The renderer writes the choice to the configuration first (`config.setField`); this tells the engine it was an
+   * explicit choice, which clears the exclusion of the pair if the session holds it out of quota (`Sessions.chooseNextModel`).
+   */
+  z.object({ kind: z.literal('session.chooseNextModel'), sessionId: z.string().min(1), modelKey: z.string().min(1) }),
   /** REQ-SESSION-109: a surface attached to a session paused at the limit asks main for the dialog; the dialog window reads its payload. */
   z.object({ kind: z.literal('pause.present'), payload: PausePayloadSchema }),
   z.object({ kind: z.literal('pause.payload') }),
@@ -214,7 +220,7 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * as a refusal naming the path, which the renderer reports through the transient error surface (REQ-SHELL-112).
    */
   z.object({ kind: z.literal('workspace.openFolder') }),
-  /** REQ-SHELL-044/045: the status strip's tokens and cost — this workspace's runs so far (OQ-188's build reading). */
+  /** REQ-SHELL-044/045: the status strip's tokens and cost — this workspace's runs so far (OQ-190's build reading). */
   z.object({ kind: z.literal('workspace.usage') }),
   z.object({ kind: z.literal('shell.switchView'), view: z.string() }),
   /**

@@ -525,6 +525,11 @@ cannot be applied answers `{ok: false}` as REQ-MONITOR-005 allows and the *reaso
 `wait.rejection` on the snapshot channel (channel 2), not through a third populated string on channel 1 — REQ-ORCH-091 (d)'s
 "the user is told" is met on the surface that already carries the wait. The contracts test that pins twenty-two still pins it.
 
+*Questioned 2026-10-02 (fin10, OQ-188):* reading (a) predates REQ-MONITOR-303, which says keep waiting "resolves the wait as a
+retry and returns the status to `running`" in both variants. The reading stands as built until the owner rules; the gap is
+recorded in [`keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`](../../defects/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md),
+with what a retry must then count as since the ladder reads the exclusion before every call (REQ-MONITOR-194).
+
 **The wait state on the record, not in a column.** `SessionRecordSchema.wait` (provider, model, exhausted, resumeAt, attempt,
 reason, agent, rejection) is derived from the live run at every snapshot — ADR-0043's rule that adding a field to the record
 adds it to the payload — and the persisted status is REQ-SESSION-073's own `waiting`, presented as `running` (REQ-NOTIFY-049),

@@ -65,9 +65,9 @@ answers counts after 5 s, `apps/desktop/src/main/open-folder.ts`) and `workspace
 workspace's stored sessions, `packages/engine/src/workspace-usage.ts`).
 
 **Readings the build proceeds under, raised:** the tokens item counts **this workspace's runs**, as the cost does — REQ-SHELL-044
-names no scope (OQ-188); where the workspace domain states the strip otherwise (REQ-WORKSPACE-019's silent failure,
+names no scope (OQ-190); where the workspace domain states the strip otherwise (REQ-WORKSPACE-019's silent failure,
 REQ-WORKSPACE-022's `unsaved settings`, mode, redaction and circuit-breaker explanations) the shell domain's statements are built, the file-access pair
-being REQ-WORKSPACE-022's fixed one (OQ-189).
+being REQ-WORKSPACE-022's fixed one (OQ-191).
 
 **Pinned by** `packages/ui/src/composer.test.ts` ("REQ-SHELL-038/047: the status strip, item by item": order, names, the one
 link, both thresholds at 1179/1180 and 1079/1080, every flag's tooltip, `outside-workspace!` under the opt-out, tokens, cost

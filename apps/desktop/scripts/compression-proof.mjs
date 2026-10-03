@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
@@ -20,6 +20,15 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *   6. root-and-child — the root and its child each cross the threshold and compress once: the inspector's ring caption
  *                       and the run-level agent's persona window draw the run-wide count, 2, the root's own included
  *                       (REQ-MONITOR-086/281, OQ-159's recorded reading).
+ *   7. after-a-move   — the root starts on alpha (capacity 10,000), meets insufficient quota and moves to its same-tier
+ *                       candidate beta (capacity 1,000); a 900-token step on beta compresses at beta's 600-token
+ *                       trigger (REQ-MONITOR-078/079/080; since fin10 — before, the trigger stayed alpha's 6,000 and no
+ *                       pass ran).
+ *   8. excluded-before-pass — the root on alpha (a 600-token trigger) delegates; its child's quota answer on alpha excludes
+ *                       it while the root's held call is in flight; that call reports 900 tokens. The root's next step
+ *                       moves it to beta (a 60,000-token trigger) BEFORE its compression check, so no pass runs
+ *                       (REQ-MONITOR-194 with REQ-MONITOR-080; the repair round of 2026-10-03 — before, the pass ran at
+ *                       alpha's trigger, then the root moved).
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -61,7 +70,7 @@ function scenario(name, compressorLines, opts = {}) {
   writeFileSync(join(workspace, 'README.md'), '# proof\n');
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
     'models:',
-    '  alpha: { provider: scripted, model_id: alpha, max_input_tokens: 1000 }',
+    `  alpha: { provider: scripted, model_id: alpha, max_input_tokens: ${opts.alphaInputTokens ?? 1000} }`,
     ...(opts.brokenCompressor ? ['  broken: { provider: scripted, model_id: broken }'] : []),
     'small_model: alpha', 'medium_model: alpha', 'large_model: alpha',
     'runtime:', '  permission_mode: autonomous', ...(opts.delegates ? ['  max_depth: 2'] : []),
@@ -70,6 +79,18 @@ function scenario(name, compressorLines, opts = {}) {
     // `single` withholds `delegate` (delegation_runtime_absent); scenario 5 needs a child, so it keeps the default strategy.
     ...(opts.delegates ? [] : ['rotaris:', '  delegation_strategy: single']), '',
   ].join('\n'));
+  if (opts.beta) {
+    // The per-user discovery snapshot names `scripted-b/beta` as that provider's pick for every tier, so beta is alpha's
+    // same-tier candidate on a different provider (REQ-NOTIFY-082), as resilience-proof's `same-tier` scenario sets it up.
+    // Its `context_window` (1,000) is the capacity the trigger reads for it (`snapshotLayer` → `max_input_tokens`).
+    const configDir = configDirFor(local);
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'project_settings.yaml'), [
+      'version: 1', 'providers:', '  scripted-b:', '    id: scripted-b', '    display_name: Scripted B', '    family: scripted', '    authenticated: true',
+      '    discovered_at: 2026-09-05T00:00:00Z', '    small_model: scripted-b/beta', '    medium_model: scripted-b/beta', '    large_model: scripted-b/beta',
+      '    models:', `      - { id: scripted-b/beta, discovered_at: 2026-09-05T00:00:00Z, capabilities: {}, limits: { context_window: ${opts.betaWindow ?? 1000} }, pricing: {} }`, '',
+    ].join('\n'));
+  }
   return { root, workspace, local };
 }
 async function launch(name, s, extra, opts = {}) {
@@ -258,6 +279,67 @@ const s6 = scenario('root-and-child', ['  threshold_percentage: 60', '  preserve
   expect(/^done · .+ · \d+ tool calls?$/.test(meta), `the inspector's meta line: "${meta}" (REQ-MONITOR-052)`);
   expect(personaName === 'orchestrator' && persona === RUN_WIDE, `the run-level agent's persona window: ${personaName}, "${persona}" — not "${RUN_WIDE}" (REQ-MONITOR-086/281)`);
   results.rootAndChild = { status: row.execution_status, compressedAgents: entries, sessionAggregate: row.compressions, inspector: { name: inspectorName, compressions: inspector, meta }, personaWindow: { name: personaName, compressions: persona }, png: r.png, elapsedMs: r.elapsedMs };
+}
+
+// 7. REQ-MONITOR-080 / REQ-MONITOR-078/079 (the repair of the-root-compresses-on-the-model-its-turn-started-on-after-its-cell-moves):
+// the root's compression follows its cell. Alpha (10,000 tokens: a 6,000-token trigger) refuses on quota; the root moves to
+// beta (1,000: 600), its same-tier candidate on another provider, within the same turn; the 900-token step on beta crosses
+// beta's trigger, so the next step compresses first, with beta's figures in the entry. Before the repair the trigger was
+// alpha's, captured when the turn started, and no pass ran. The compressing model is the configured `compressor.model` — its
+// default, the `small_model` alias, alpha here — which REQ-MONITOR-080 lets win over the agent's own; with none configured it
+// is the cell's (ladder.test.ts pins that). The pass's model is reported, not asserted: that a configured slot is not carried
+// through the session's exclusion of alpha is a separate note (the configured slots follow no override or exclusion).
+const s7 = scenario('after-a-move', ['  threshold_percentage: 60', '  preserve_recent_turns: 1'], { alphaInputTokens: 10_000, beta: true });
+{
+  const r = await launch('after-a-move', s7, { ROTARIS_SCRIPT: 'fail:quota,glob,glob,glob,tokens:900,answer', ROTARIS_CAPTURE_PROMPT: 'move, then fill the context', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const db = open(s7);
+  const row = session(db);
+  const entries = timeline(db, row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed', `the run did not complete: ${JSON.stringify(row)}`);
+  const moved = entries.find((t) => t.name === 'quota_fallback_model');
+  expect(moved !== undefined && JSON.parse(moved.metadata).to_model === 'beta', `the root did not move to beta: ${entries.map((t) => t.name).join(',')}`);
+  const entry = entries.find((t) => t.name === 'context_compressed');
+  expect(entry !== undefined, `no pass ran after the move (the trigger was not beta's): ${entries.map((t) => t.name).join(',')}`);
+  const meta = JSON.parse(entry.metadata);
+  expect(meta.capacity === 1000 && meta.trigger_tokens === 600 && meta.advertised_input_limit === 1000 && meta.counted_tokens === 900, `the entry does not carry beta's figures: ${entry.metadata}`);
+  const calls = modelCalls(r.log);
+  const compressor = calls.filter((c) => c.who === 'compressor').map((c) => c.model);
+  expect(compressor.length === 1, `not exactly one pass reached the compressing model: ${JSON.stringify(calls)}`);
+  results.afterAMove = { status: row.execution_status, move: JSON.parse(moved.metadata), metadata: meta, compressorModel: compressor[0], calls, png: r.png, elapsedMs: r.elapsedMs };
+}
+
+// 8. REQ-MONITOR-194 with REQ-MONITOR-080 (the repair round of 2026-10-03 on
+// docs/defects/fixed/an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md): the root's cell is
+// settled before its compression check. The root delegates on alpha (1,000 tokens: a 600-token trigger), then holds its next
+// call 3 s (`wait:3000`); the child's call, held 1 s, meets insufficient quota on alpha, which excludes it session-wide. The
+// root's held call — sent before the exclusion — reports 900 tokens. At the root's next step its cell is on an excluded pair:
+// it moves to beta (100,000: 60,000) before the check, so 900 tokens trigger nothing. Before the repair the check ran first,
+// at alpha's 600-token trigger, and a pass ran (on the configured compressor slot), and only then did the root move.
+const s8 = scenario('excluded-before-pass', ['  threshold_percentage: 60', '  preserve_recent_turns: 1'], { delegates: true, beta: true, betaWindow: 100_000 });
+{
+  const r = await launch('excluded-before-pass', s8, {
+    ROTARIS_SCRIPT: 'delegate:coding-agent:side,wait:3000,tokens:900,answer,answer', ROTARIS_CHILD_SCRIPT: 'wait:1000,fail:quota,answer',
+    ROTARIS_CAPTURE_PROMPT: 'delegate, then fill the context after the child excludes alpha', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800',
+  });
+  const db = open(s8);
+  const row = session(db);
+  const entries = timeline(db, row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed', `the run did not complete: ${JSON.stringify(row)}`);
+  const exhausted = entries.filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata));
+  expect(exhausted.length === 1 && exhausted[0].model === 'alpha', `alpha was not excluded once: ${JSON.stringify(exhausted)}`);
+  const moves = entries.filter((t) => t.name === 'quota_fallback_model').map((t) => JSON.parse(t.metadata));
+  const rootMove = moves.find((m) => m.agent === 'orchestrator');
+  expect(rootMove !== undefined && rootMove.to_model === 'beta' && rootMove.pre_call === true, `the root did not move to beta before a call: ${JSON.stringify(moves)}`);
+  const passes = entries.filter((t) => t.name === 'context_compressed').map((t) => JSON.parse(t.metadata));
+  expect(passes.length === 0, `a pass ran on the excluded alpha's trigger before the root moved: ${JSON.stringify(passes)}`);
+  const calls = modelCalls(r.log);
+  const rootCalls = calls.filter((c) => c.who === 'orchestrator').map((c) => c.model);
+  // The first two root calls were sent before the exclusion; every later one is on beta.
+  expect(rootCalls.length > 2 && rootCalls.slice(2).every((m) => /\/beta$/.test(m)), `the root called alpha after the exclusion: ${JSON.stringify(rootCalls)}`);
+  expect(calls.every((c) => c.who !== 'compressor'), `a pass reached a compressing model: ${JSON.stringify(calls)}`);
+  results.excludedBeforePass = { status: row.execution_status, rootMove, exhausted, passes, rootCalls, calls, png: r.png, elapsedMs: r.elapsedMs };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

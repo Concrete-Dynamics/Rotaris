@@ -722,7 +722,14 @@ export class Run {
    */
   get currentWait(): (WaitState & { readonly excluded: string[] }) | null {
     const wait = this.waits.current();
-    return wait === null ? null : { ...wait, excluded: excludedModelKeys(this.catalogue, this.memory.exhausted) };
+    return wait === null ? null : { ...wait, excluded: this.excludedModelKeys };
+  }
+  /**
+   * REQ-MONITOR-194: the configured model keys the session holds out of quota, for the record's `excludedModels` — read
+   * from the memory at every snapshot, inside a wait and outside one, so every model selector can annotate them.
+   */
+  get excludedModelKeys(): string[] {
+    return excludedModelKeys(this.catalogue, this.memory.exhausted);
   }
   /**
    * REQ-MONITOR-085 (Part AH): the compression in flight, published with the snapshot exactly as `wait` is —
@@ -1265,15 +1272,36 @@ export class Run {
    * Part AH (ADR-0060): the per-agent compression services. The trigger is resolved for the model THIS agent
    * calls, so a child on a small model compresses at its own capacity and not the run's (REQ-MONITOR-078).
    * `onState` is REQ-MONITOR-085's visible status, published with the session snapshot like `wait`.
+   *
+   * REQ-MONITOR-080 / REQ-MONITOR-079: `current` is read at each pass — the model the agent's cell calls next (`callsOn`) —
+   * so a ladder move within the turn moves the compressing model (unless `compression.model` is configured) and the
+   * trigger with it. Until 2026-10-02 (fin10) the root's were taken from its cell once when its turn started and a child's
+   * from its persona's configured model, not its cell, so a child under a session override compressed on the pair the
+   * override replaced (the-root-compresses-on-the-model-its-turn-started-on-after-its-cell-moves).
    */
-  private readonly compressionFor = (choice: ModelChoice, todoLines: () => readonly string[]): TurnCompression | undefined => {
+  private readonly compressionFor = (current: () => ModelChoice, todoLines: () => readonly string[]): TurnCompression | undefined => {
     const c = this.deps.compression;
     if (!c) return undefined;
-    const chosen = c.model ?? { model: choice.model, thinking: choice.thinking };
     return {
       // OQ-156: the compressing model is given the history it condenses up to its own threshold (REQ-MONITOR-078).
-      compressor: { backend: c.backend, model: chosen.model, thinking: chosen.thinking, timers: c.timers, credentialFor: c.credentialFor, timeoutMs: c.timeoutMs, inputTokens: c.triggerFor(chosen.model).tokens },
-      trigger: c.triggerFor(choice.model), charsPerToken: c.charsPerToken, preserveRecentTurns: c.preserveRecentTurns, todoLines,
+      compressor: () => {
+        const chosen = c.model ?? current();
+        return { backend: c.backend, model: chosen.model, thinking: chosen.thinking, timers: c.timers, credentialFor: c.credentialFor, timeoutMs: c.timeoutMs, inputTokens: c.triggerFor(chosen.model).tokens };
+      },
+      trigger: () => c.triggerFor(current().model), charsPerToken: c.charsPerToken, preserveRecentTurns: c.preserveRecentTurns, todoLines,
+      /**
+       * REQ-MONITOR-194 with REQ-MONITOR-080: the agent's own pair, when the session holds it out of quota, is not called to
+       * compress. The turn settles the cell before its automatic check (`settleBeforeCall`), so this answers only in the
+       * span before the agent's next call — a manual pass while it awaits a tool or a child. A configured
+       * `compression.model` is a configured slot and is called as configured (OQ-189).
+       */
+      withheld: () => {
+        if (c.model) return null;
+        const chosen = current();
+        const provider = providerIdentity(this.catalogue, chosen.model);
+        if (!this.memory.isExhausted(provider, chosen.model.modelId)) return null;
+        return `${provider}/${chosen.model.modelId}, the model this agent runs on, is held out of quota for this session; no compressing call is made on it, and the agent's next call moves it to another model first`;
+      },
       // Part AO: every turn of this run — the root's and each child's — registers its conversation for the manual pass.
       registry: this.conversations,
       /**
@@ -1343,6 +1371,14 @@ export class Run {
     const s = this.deps.summariser ?? null;
     if (s === null) return null;
     return { ...s, resolve: (c) => { const e = this.memory.effective(withSettings(this.catalogue, c), this.catalogue); return { model: e.model, thinking: e.thinking }; } };
+  }
+
+  /**
+   * REQ-MONITOR-080: the model an agent's cell calls next — its pair with the session's overrides followed, as the ladder
+   * follows them before the call (`followOverride`) — which its compression uses when none is configured.
+   */
+  private callsOn(cell: AgentResilienceCell): ModelChoice {
+    return this.memory.effective(cell.model, this.catalogue);
   }
 
   /** The per-agent ladder deps shared by the root and every child (the cell is the agent's own). */
@@ -1448,7 +1484,8 @@ export class Run {
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
         // Part Q: each child gets its own cell over the shared memory, catalogue and wait registry.
         resilience: { forChild: (persona, current, bound) => { const effective = this.memory.effective(withSettings(this.catalogue, current), this.catalogue); return this.resilienceFor(agentCell(effective, this.fallbackFor(persona, effective)), bound); } },
-        // Part AH (ADR-0060): each child compresses against its own model's capacity, with its own task plan.
+        // Part AH (ADR-0060): each child compresses against its own model's capacity, with its own task plan — the model its
+        // cell calls next, read at each pass (REQ-MONITOR-080).
         compressionFor: this.compressionFor,
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
@@ -1489,7 +1526,7 @@ export class Run {
     // REQ-MONITOR-142: the root's ladder for this whole turn, the resumes after its children included — a switch made
     // while it runs applies from the next iteration, not at this iteration's next resume.
     const rootResilience = this.rootResilience();
-    const compression = this.compressionFor(rootResilience.cell.model, () => this.plannerTodoLines());
+    const compression = this.compressionFor(() => this.callsOn(rootResilience.cell), () => this.plannerTodoLines());
     // PD-ORCH-005 revision 4 clause 14: one check per execution of the root, at its first model step.
     const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration);
     /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
@@ -2011,24 +2048,15 @@ export class Run {
         // another pair moves to it, as a change-model choice moves every parked agent.
         this.clearChosenExclusion(key, provider, resolved.choice.model.modelId);
         this.takeBackOverrideOf(waiting, key, choice, waiting.agent === this.rootName ? {} : { switch_pending: this.entrySwitchPending });
-        for (const w of this.waits.all()) if (pairKey(w.provider, w.model) !== chosen) this.memory.setOverride(w.provider, w.model, { key, choice });
+        this.overrideWaitingPairs(waiting, key, choice, provider, chosen);
         writer.appendRow('system', `${key} chosen during the wait on ${waiting.provider}/${waiting.model}: it is no longer treated as out of quota, and the call is retried on it now.`, true);
         this.waits.resolveWithModel(key, choice);
         return true;
       }
       this.clearChosenExclusion(key, provider, resolved.choice.model.modelId);
-      const root = waiting.agent === this.rootName;
-      this.takeBackOverrideOf(waiting, key, choice, root ? {} : { switch_pending: this.entrySwitchPending });
-      for (const w of this.waits.all()) this.memory.setOverride(w.provider, w.model, { key, choice });
-      // `supersedes`: the root's own wait choice replaces a switch recorded since its cell was last settled, which then
-      // never applies (`entrySwitchPending`); a child's wait leaves the root's switch as it stands. A child's choice records
-      // instead whether such a switch is pending at it (`switch_pending`), as a ladder move of the root does: the root
-      // follows the override from its next call (`followOverride`), on the cell from before the switch, and the switch's
-      // rebuild then resolves through it, so the autopsy reader reads the choice before the switch
-      // (the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it).
-      writer.appendTimeline('model_override', 'user', `The user chose ${key} (${provider}/${choice.model.modelId}) during the wait on ${waiting.provider}/${waiting.model}; it stands for the rest of the session.`, { provider: waiting.provider, model: waiting.model, model_key: key, to_provider: provider, to_model: choice.model.modelId, supersedes: root && this.entrySwitchPending, ...(root ? {} : { switch_pending: this.entrySwitchPending }) });
+      this.takeBackOverrideOf(waiting, key, choice, waiting.agent === this.rootName ? {} : { switch_pending: this.entrySwitchPending });
+      this.overrideWaitingPairs(waiting, key, choice, provider, chosen);
       writer.appendRow('system', `Model changed to ${key} during the wait; the run resumes on it now and keeps it for the rest of the session.`, true);
-      if (root) { this.entryOverride = { ...this.entryOverride, model: choice.model }; this.entrySwitchPending = false; }
       this.waits.resolveWithModel(key, choice);
       return true;
     }
@@ -2052,6 +2080,35 @@ export class Run {
     this.entrySwitchPending = true;
     writer.appendTimeline('entry_model_switched', 'user', `The entry model switched to ${key}.`, { model: key, rebuilds: this.rootRebuildsFor(resolved.choice.model), supersedes });
     return true;
+  }
+  /**
+   * REQ-ORCH-091 (d) / REQ-SESSION-026 / REQ-SESSION-196: a wait choice resolves every parked agent (`resolveWithModel`), so
+   * every waiting pair but the one chosen is overridden to it — in the memory and as a `model_override` entry of its own, so
+   * a reload (`ResilienceMemory.rehydrate`) and both autopsy readers replay every override the run holds. Each entry carries
+   * the placement of its own wait's agent: `supersedes` for the root's wait — its choice replaces a switch recorded since its
+   * cell was last settled, which then never applies (`entrySwitchPending`); a child's wait leaves the root's switch as it
+   * stands — and `switch_pending` for a child's, as a ladder move of the root records it: the root follows the override from
+   * its next call (`followOverride`), on the cell from before the switch, and the switch's rebuild then resolves through it,
+   * so the autopsy reader reads the choice before the switch
+   * (the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it). A root among the
+   * waits takes the choice as its entry model, as when its own wait is the one shown. Until 2026-10-02 (fin10) only the shown
+   * wait's pair was written, and on the quota-retry path none
+   * (a-wait-choice-persists-the-override-for-the-shown-wait-alone): a reload returned the other agents to the pairs replaced.
+   */
+  private overrideWaitingPairs(shown: WaitState, key: string, choice: ModelChoice, toProvider: string, chosen: string): void {
+    const pending = this.entrySwitchPending;
+    let rootMoved = false;
+    for (const w of this.waits.all()) {
+      if (pairKey(w.provider, w.model) === chosen) continue;
+      const root = w.agent === this.rootName;
+      rootMoved ||= root;
+      this.memory.setOverride(w.provider, w.model, { key, choice });
+      const message = w.agent === shown.agent
+        ? `The user chose ${key} (${toProvider}/${choice.model.modelId}) during the wait on ${w.provider}/${w.model}; it stands for the rest of the session.`
+        : `The user chose ${key} (${toProvider}/${choice.model.modelId}) during the wait on ${shown.provider}/${shown.model}; ${w.agent}, waiting on ${w.provider}/${w.model}, resumes on it, and it stands for the rest of the session.`;
+      this.deps.writer.appendTimeline('model_override', 'user', message, { provider: w.provider, model: w.model, model_key: key, to_provider: toProvider, to_model: choice.model.modelId, supersedes: root && pending, ...(root ? {} : { switch_pending: pending }) });
+    }
+    if (rootMoved) { this.entryOverride = { ...this.entryOverride, model: choice.model }; this.entrySwitchPending = false; }
   }
   /**
    * REQ-MONITOR-194: "Choosing it explicitly clears the recorded exclusion for that pair, so it is eligible again until a

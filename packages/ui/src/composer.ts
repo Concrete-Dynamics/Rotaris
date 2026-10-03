@@ -137,7 +137,7 @@ export const STRIP_NAMES = {
  * one joined string `{short form} — {explanation}`. The file-access explanations are REQ-WORKSPACE-022's fixed pair,
  * "the pair a reader compares", in the words of REQ-WORKSPACE-148's Settings control ("read and write outside this
  * workspace folder"). The unsaved-settings sentence is REQ-SHELL-041's two facts; REQ-WORKSPACE-022 states another second
- * fact (OQ-189). Until 2026-10-02 the file-access flag was the literal `workspace-scoped` whatever the opt-out said, so
+ * fact (OQ-191). Until 2026-10-02 the file-access flag was the literal `workspace-scoped` whatever the opt-out said, so
  * with it on the strip still told the user agents were confined.
  */
 export interface SafetyFacts {
@@ -215,7 +215,7 @@ export interface StripFacts {
   readonly sandbox: { readonly text: string; readonly name: string; readonly title: string; readonly testId: string } | null;
   /** REQ-SHELL-043: the model a run started from this window uses, and the short form the composer's chip shows. */
   readonly model: { readonly name: string; readonly label: string };
-  /** REQ-SHELL-044: the running total of tokens used by this workspace's runs (OQ-188's build reading). */
+  /** REQ-SHELL-044: the running total of tokens used by this workspace's runs (OQ-190's build reading). */
   readonly tokens: number;
   /** REQ-SHELL-045: the workspace's reported cost, `n/a`, or null before any session reported usage with a figure. */
   readonly cost: string | null;

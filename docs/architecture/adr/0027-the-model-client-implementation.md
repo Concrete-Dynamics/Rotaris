@@ -423,4 +423,76 @@ with no override persisted. A rate-limit wait's own pair is not excluded and sta
 `packages/engine/src/run/ladder.test.ts` and in the built app by `resilience-proof`'s `quota-retry` launch (driven: alpha
 chosen on the wait surface, retried, refused again and re-recorded, beta chosen; red on a build of the code before, the
 choice refused). The composer's "Model for the next run" and the recovery dialog's choice do not reach the exclusion, said
-so in [the note it left open](../../defects/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md).
+so in [the note it left open](../../defects/fixed/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md)
+(since fin10 both do: the eleventh execution).
+
+## Ninth execution — 2026-10-02, the exclusion read before every call (REQ-MONITOR-194, REQ-ORCH-091 a-c)
+
+*The repair of [`an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md`](../../defects/fixed/an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md)
+(fin10). Found a defect in the third execution's mechanism.*
+
+The third execution's memory said a continuation "never returns to an exhausted model"; the ladder read the exclusion only
+after a failed call (`markExhausted` then `isExhausted`), so that held of the same-tier candidates and not of the pair an
+agent's cell was on. A root on `a1` resumed after its child's quota answer on `a1`, and every later run whose configured
+model was `a1` (the memory rehydrated, the cell built on the configured pair), called `a1`, and only the provider's next
+quota answer moved it. That reason is kept here beside its replacement: `resilientStep` now reads the exclusion before every
+call, after `followOverride`, and a cell on an excluded pair takes `limitPath` without calling — the one same-tier fallback
+its budget allows, else the wait that never auto-resumes — recording `pre_call: true` on the move or the wait issue and no
+second `model_exhausted`. An explicit choice clears the exclusion before the ladder reads it (the eighth execution), so the
+choice is called and the wait cannot loop. Measured in `packages/engine/src/run/ladder.test.ts` (red before: `root a1`
+after the child's exclusion; `a1, b1, a1` and `a1, a1` for a continuation) and by `resilience-proof`'s `same-tier` scenario
+with a second prompt (red before: `scripted/alpha`; after: `scripted/beta` alone). Keep waiting, which sends nothing, is
+OQ-188's; a retry it might become must count as an explicit choice of the pair.
+
+**Corrected at the bundle's first repair round, 2026-10-03.** "`resilientStep` now reads the exclusion before every call"
+held of the ladder's calls and not of the turn's compression check, which `runTurn` makes before it calls the ladder: an
+agent resumed on a pair another agent had just excluded compressed on that pair, at that pair's threshold, and only then
+moved (the verifier's reproduction in `ladder.test.ts`). That reason is kept here beside its replacement: the settle is its
+own function, `settleBeforeCall` (`followOverride`, then the exclusion's `limitPath`), which `runTurn` calls before the
+compression check and `resilientStep` before every call (a cell with nothing to settle takes the synchronous
+`onExcludedPair`, so its step is scheduled as before); ADR-0060's note carries the compression half. Measured in
+`ladder.test.ts` (three cases, red before: the compressor called `a1`) and by `compression-proof`'s `excluded-before-pass`
+scenario (red before: a pass at alpha's 600-token trigger; after: the root moved to beta, `pre_call: true`, and no pass).
+
+## Tenth execution — 2026-10-02, every waiting pair's override persisted (REQ-ORCH-091 d, REQ-SESSION-026/196)
+
+*The repair of [`a-wait-choice-persists-the-override-for-the-shown-wait-alone.md`](../../defects/fixed/a-wait-choice-persists-the-override-for-the-shown-wait-alone.md)
+(fin10). Found a defect in the third execution's mechanism.*
+
+The third execution said the override is persisted "so a later run of the session never returns to an exhausted model and
+keeps the chosen one". One choice resolves every parked agent (`WaitRegistry.resolveWithModel`) and overrode every waiting pair
+in the memory, but only the shown wait's pair was written (and none on the quota-retry path), so a reload kept one override of
+several. That reason is kept beside its replacement: `Run.overrideWaitingPairs` writes one `model_override` entry per waiting
+pair the choice overrides, each with its own agent's placement against a pending entry switch. No reader changed: both
+autopsy readers already replay each entry by its pair. Measured in `ladder.test.ts` with two agents parked at once (red
+before: one entry) and by `resilience-proof`'s `two-waits` launch with a resuming relaunch (red before: one entry; after, two,
+and the relaunch on gamma throughout).
+
+## Eleventh execution — 2026-10-02, every selector's choice clears an exclusion (REQ-MONITOR-194, REQ-MONITOR-146, REQ-NOTIFY-074)
+
+*The repair of [`a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md`](../../defects/fixed/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md)
+(fin10). Completes the eighth execution's mechanism for the two selectors outside a run.*
+
+The eighth execution cleared an exclusion on the run's own two paths. The composer's "Model for the next run" wrote the
+configuration alone, so the engine could not tell its choice from the value the file held, and the recovery dialog pinned
+without clearing; with the ninth execution's pre-call read, a pair chosen there was then not called at all. The composer's
+choice now reaches the engine as a session-scoped command, `session.chooseNextModel`, sent after the configuration write;
+`Sessions.chooseNextModel` resolves the key through the side-effect-free `restingCatalogue` port and clears the pair in the
+session's memory and a resting read's, with the same `model_exhausted` `cleared: true` entry. The dialog clears beside its pin
+and restores the exclusion (`restored: true`) when the restart cannot begin. Measured in `ladder.test.ts` (four cases, red
+with the clearing disabled) and by `resilience-proof`'s driven `next-run-choice` launch (red on a build of the code before:
+no `cleared` entry; after: the further prompt on `scripted/alpha`).
+
+## Twelfth execution — 2026-10-03, every selector annotates a pair held out of quota (REQ-MONITOR-194, REQ-NOTIFY-074)
+
+*The repair of [`the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md`](../../defects/fixed/the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md)
+(fin10).*
+
+The exclusion reached a surface only inside the record's `wait`, so only the quota-wait chooser annotated it. The record now
+carries `excludedModels` outside a wait too — the run's memory, else the memory a resting read rehydrates (taken where the
+timeline holds a `model_exhausted` entry as well as a `model_override`) — and the run header's switch, the inspector's Model
+field and the composer's chip annotate each such key through one helper, still choosable; the recovery dialog's facts mark
+the pair `excluded` and its list writes the reason. Measured in `ladder.test.ts` and `excluded-model-selectors.test.ts`
+(red before) and by `resilience-proof`'s driven `next-run-choice` launch, which opens three of the four selectors while alpha
+is held out of quota and reads alpha annotated and choosable in each; the dialog has no launch that opens it so.
+

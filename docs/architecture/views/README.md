@@ -45,6 +45,28 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-03**
 
+**The cell is settled before the compression check, and no pass calls the agent's own excluded pair (REQ-MONITOR-194,
+REQ-MONITOR-080; fin10's first repair round).** `settleBeforeCall` (ladder.ts) follows the overrides and reads the exclusion;
+`runTurn` calls it before the automatic compression check as well as `resilientStep` before every call, and
+`TurnCompression.withheld` makes no call for a pass on the agent's own excluded pair. The **runtime view**'s ladder and
+compression paragraphs say so. No package, edge, process, channel, command, timeline name or store column changed.
+
+**Every model selector annotates a pair held out of quota, and every one's choice clears it (REQ-MONITOR-194,
+REQ-MONITOR-146, REQ-NOTIFY-074; fin10).** The record gains `excludedModels` (the live run's `excludedModelKeys`, else a
+resting read's, now taken where the timeline holds a `model_exhausted` entry too), which the run header, the inspector and the
+composer's chip annotate through `annotatedModelOptions`; the recovery dialog's facts mark such a pair `excluded`. A new
+renderer command, `session.chooseNextModel`, carries the composer's next-run choice to the engine after its configuration
+write, and `Sessions.chooseNextModel` clears the pair's exclusion; the recovery dialog's restart clears beside its pin. The
+**process view**'s command list and `SessionRecord` sentence and the **runtime view**'s ladder paragraph say so. No package,
+edge, process, channel or store column changed; one command was added.
+
+**The ladder reads the exclusion before every call, a wait choice persists every waiting pair's override, and compression
+follows the agent's cell (REQ-MONITOR-194, REQ-ORCH-091, REQ-SESSION-026, REQ-MONITOR-078/080; fin10).** `resilientStep` reads
+the exclusion after `followOverride` and takes `limitPath` without calling (`pre_call: true`); `Run.overrideWaitingPairs` writes
+one `model_override` entry per waiting pair; `TurnCompression.compressor()`/`trigger()` are read at each pass from the pair the
+cell calls next. The **runtime view**'s ladder and compression paragraphs and its control table say so. No package, edge,
+process, channel, command, timeline name or store column changed.
+
 **The status strip is REQ-SHELL-038's (REQ-SHELL-038..047, REQ-TOOLS-131/184; fin10).** `stripItems` in
 `packages/ui/src/composer.ts` answers the strip's items in REQ-SHELL-038's order with its accessible names and REQ-SHELL-047's
 two thresholds; the run state, the theme's name, the child services and the replica counters are gone from it; the

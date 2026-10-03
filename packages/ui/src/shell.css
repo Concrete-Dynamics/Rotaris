@@ -2499,6 +2499,8 @@
 .auth-recovery__option:hover:not(:disabled) { border-color: var(--rt-border-strong); }
 .auth-recovery__option.is-selected { border-color: var(--rt-accent-500); background: var(--rt-accent-tint-14); color: var(--rt-text); }
 .auth-recovery__option-label { font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); }
+/* REQ-MONITOR-194: the reason a pair held out of quota is annotated with, trailing the label as a select row's hint does (`.chip-menu__hint`). */
+.auth-recovery__option-hint { margin-left: auto; padding-left: var(--rt-space-3); font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
 /* REQ-NOTIFY-076: the masked key field and its save-and-retry control on one line. */
 .auth-recovery__key { display: flex; gap: var(--rt-space-2); align-items: center; }
 .auth-recovery__key .input { flex: 1; min-width: 0; }

@@ -24,7 +24,7 @@ export function confinementRefusalNotice(r: { readonly headline: string; readonl
  */
 export function sessionCommands(
   ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services'>,
-): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.retry' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.release' | 'session.reconcile' | 'session.pageOlder'> {
+): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.chooseNextModel' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.retry' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.release' | 'session.reconcile' | 'session.pageOlder'> {
   const { capturing, clocks, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runFailures, runHost, services } = ctx;
   return {
     'session.continue': async (req) => {
@@ -56,6 +56,15 @@ export function sessionCommands(
     'session.planRearm': async (req) => {
       const r = await runHost.request({ kind: 'session.planRearm', sessionId: req.sessionId }, millis(10_000));
       return r.kind === 'ack' ? { ok: true, value: null } : refusal(r, 'The plan gate could not be re-armed');
+    },
+    /*
+     * REQ-MONITOR-194 / REQ-MONITOR-146: the composer's next-run model, chosen explicitly — forwarded to the run host that owns
+     * the session, which clears the pair's exclusion if the session holds it out of quota. A session command, not a control:
+     * no run need be live, and REQ-MONITOR-004's twenty-two operations name none for it.
+     */
+    'session.chooseNextModel': async (req) => {
+      const r = await runHost.request({ kind: 'session.chooseNextModel', sessionId: req.sessionId, modelKey: req.modelKey }, millis(10_000));
+      return r.kind === 'ack' ? { ok: true, value: null } : refusal(r, 'The model for the next run could not be applied to the session');
     },
     'session.start': async (req, { w }) => {
       if (!w.workspaceId) { log('run refused before start: no workspace is open'); return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' }; }

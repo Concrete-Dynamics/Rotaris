@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AuthRecoveryPayload, AuthRecoveryResult } from '@rotaris/contracts';
 import { Button as DesignButton, Input as DesignInput } from './design-system/index.js';
 import { canSaveKey, modelLabel, providerErrorText, radioStep, recoveryModel, recoveryModelList, recoveryTitle } from './auth-recovery.js';
+import { EXCLUDED_MODEL_HINT } from './model-options.js';
 
 /**
  * REQ-NOTIFY-072..077, REQ-NOTIFY-079/080, REQ-MONITOR-147 (the 401 note's parts C and D) — the authentication recovery dialog,
@@ -98,10 +99,17 @@ export function AuthRecoveryDialog({ payload, onRetry, onReauthenticate, onCance
                     className={`auth-recovery__option${selected ? ' is-selected' : ''}`}
                     data-value={m.key}
                     data-provider={m.provider}
+                    // A hinted option is named by its label alone and described by its hint, as a select row is, so its name
+                    // is never the label and the reason run together.
+                    aria-labelledby={m.excluded === true ? `auth-recovery-option-${index}-label` : undefined}
+                    aria-describedby={m.excluded === true ? `auth-recovery-option-${index}-hint` : undefined}
                     disabled={busy}
                     onClick={() => setChosen(m.key)}
                   >
-                    <span className="auth-recovery__option-label">{modelLabel(m)}</span>
+                    <span className="auth-recovery__option-label" id={m.excluded === true ? `auth-recovery-option-${index}-label` : undefined}>{modelLabel(m)}</span>
+                    {/* REQ-MONITOR-194: a pair the session holds out of quota is listed with the reason and stays choosable;
+                      * choosing it clears the exclusion (`Sessions.restartAfterAuthFailure`). */}
+                    {m.excluded === true && <span className="auth-recovery__option-hint" id={`auth-recovery-option-${index}-hint`} data-testid="auth-recovery-excluded">{EXCLUDED_MODEL_HINT}</span>}
                   </DesignButton>
                 );
               })}

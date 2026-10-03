@@ -351,3 +351,9 @@ persona's first spawn whose `mcp_tools` narrows a server. `DiagnosticSeverity` n
 restores it. No other diagnostic changed level. Pinned by "REQ-MCP-059 (A41): …" in `config/src/mcp/mcp.test.ts` and
 "REQ-MCP-059, PD-MONITOR-002 (A41): …" in `run-host/mcp.test.ts`, both red on the unrepaired code
 ([note](../../defects/fixed/the-mcp-grant-count-is-logged-at-info-not-debug.md)).
+
+**A sixth fate in launch 6 — 2026-10-03 (fin13; the counts above kept as they were measured).** "The five fates" above
+is what launch 6 recorded until 2026-10-03. Since then it also declares a server `broken` that exits before initialize,
+and its child's row records `{ fate: 'dropped', reason: 'discovery-failed' }` (REQ-MCP-114 with REQ-MCP-042), so the
+launch records six. Before, `grantEvidence` recorded such a server `connected` with no tool
+([note](../../defects/fixed/an-mcp-server-whose-tool-discovery-failed-reads-as-connected.md)).

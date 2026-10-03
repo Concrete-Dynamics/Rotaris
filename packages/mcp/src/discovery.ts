@@ -30,6 +30,9 @@ export interface DiscoverRequest {
   /**
    * Words the failure's warning names the launch by, after the server's name — the run host's `project <root>`
    * (REQ-MCP-034) — so the one record of a failure says what was launched; not part of the identity. Omitted when empty.
+   * The warning is written at most once per identity (REQ-MCP-048), from the first discovery of it, so a later call's
+   * `context` never reaches it; a caller that wants the project named passes it on every call. `McpHost.prepare` is the
+   * only caller today, and it always does.
    */
   readonly context?: string;
 }

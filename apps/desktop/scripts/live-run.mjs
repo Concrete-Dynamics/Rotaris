@@ -97,7 +97,8 @@
  *   model-traffic.jsonl  what the model was SENT and what came back — bodies, status and duration per call,
  *                      recorded by a loopback proxy the sandbox is pointed at (`--no-record-traffic` skips it),
  *                      into the file of the scenario that made the call, each naming how it ended (`outcome`:
- *                      `complete`, `aborted` when the product let go, `in-flight at close`, …).
+ *                      `complete`, `aborted` when the product let go, `in-flight at close`, …) and, where the response
+ *                      carried one, its `usage`, read from the whole body (a body over 1 MB is recorded cut).
  *                      The product logs a method and a URL and nothing else, so this exists nowhere else.
  *   *.png              the end of the scenario, plus a fifth and three fifths of the way through its wait
  *   node-test.log, diff.txt, changed/   where the scenario produces them

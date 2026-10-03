@@ -634,6 +634,15 @@ export class IterationChildren implements DelegationOps {
   }
 
   /**
+   * REQ-ORCH-053 / REQ-ORCH-098: the run's teardown of this iteration's children is over — finalized, or left paused by a
+   * rest — so the scheduler is closed (`Scheduler.close`): a child's execution that settles later runs no pass against a
+   * store that may be closed by then. Called by `Run` once per iteration, after the teardown; idempotent.
+   */
+  close(): void {
+    this.scheduler.close();
+  }
+
+  /**
    * PD-ORCH-005 clauses 2 and 3: every agent of the iteration that has not reached a terminal state is left `paused` with
    * `cause` recorded. The children executing come to rest themselves, each in its own execution (its in-flight calls
    * finish or are cut at the deadline, and it stops before its next model step); this waits for all of them, then pauses
@@ -744,8 +753,9 @@ export class IterationChildren implements DelegationOps {
       catch (cause) { void this.track(this.settleRaised(row, cause, 'its record could not be loaded to resume it')).catch((e) => this.deps.warn(`child ${row.task_id} could not be settled: ${String(e)}`)); continue; }
       const resume: ChildResume = { history, assessed: summarising };
       // Started as the scheduler starts a child (`startOne`): a raise is warned, and its end is a pass, so a sibling held
-      // on the model slot it frees, or on it as a dependency, starts then (found by phase 4's review).
-      void this.track(this.executeSettling(row, resume)).catch((e) => this.deps.warn(`child ${row.task_id} raised out of its resumed execution: ${String(e)}`)).finally(() => this.scheduler.pass());
+      // on the model slot it frees, or on it as a dependency, starts then (found by phase 4's review). The pass is the
+      // guarded one (`passAfter`), which never rejects where nothing awaits it.
+      void this.track(this.executeSettling(row, resume)).catch((e) => this.deps.warn(`child ${row.task_id} raised out of its resumed execution: ${String(e)}`)).finally(() => this.scheduler.passAfter(row.task_id));
     }
     this.scheduler.pass();
     return n;
@@ -1308,6 +1318,7 @@ export class IterationChildren implements DelegationOps {
         const from = cell.model;
         cell.fallbackAttempted = true;
         cell.model = fb;
+        cell.key = null;
         const seconds = childTimeoutMs / 1000;
         const message = `Child ${row.canonical_name} timed out after ${seconds}s on ${providerIdentity(resilience.catalogue, from.model)}/${from.model.modelId}; retried once on the fallback model ${providerIdentity(resilience.catalogue, cell.model.model)}/${cell.model.model.modelId} (REQ-ORCH-088).`;
         // REQ-ORCH-139: the vocabulary's words for REQ-ORCH-088's retry on the role's fallback — the `fallback_model` entry and

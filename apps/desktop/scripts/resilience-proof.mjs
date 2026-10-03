@@ -353,8 +353,8 @@ await scenarioRun('same-tier', async () => {
 // 3c. REQ-MONITOR-194 / REQ-MONITOR-146 (the repair of a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion):
 // the composer's "Model for the next run" is a model selector, so choosing a pair the session holds out of quota there clears
 // its exclusion. A first launch meets insufficient quota on alpha and moves to beta (same tier); a driven relaunch resumes the
-// session, chooses beta and then alpha in the composer's model chip (a select fires only on a change, and the chip shows the
-// configured alpha), and sends a further prompt, which runs on alpha. Before the repair the chip wrote the configuration
+// session, chooses alpha — the key the chip already shows, annotated (until fin11 it chose beta first, the control firing only
+// on a change) — in the composer's model chip, and sends a further prompt, which runs on alpha. Before the repair the chip wrote the configuration
 // alone, the exclusion stood, and the prompt's root moved to beta before calling (`pre_call`).
 const s3c = scenario('next-run-choice', [], { snapshot: true });
 await scenarioRun('next-run-choice', async () => {
@@ -393,17 +393,22 @@ await scenarioRun('next-run-choice', async () => {
     // The inspector's Model field is writable for the run-level agent of a live run; read it where it is drawn writable.
     const inspector = '[data-testid="inspector-model"]';
     const inspectorLive = await step('the inspector\'s Model field', d.eval(`(() => { const b = document.querySelector(${JSON.stringify(inspector)}); return b === null ? 'absent' : b.disabled ? 'disabled' : 'live'; })()`));
+    // REQ-MONITOR-052/066 (the repair of the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate):
+    // the run-level agent's Model names the key the root runs on — beta, moved before its call — not the configured alpha.
+    const inspectorValue = await step('the inspector\'s Model value', d.eval(`document.querySelector(${JSON.stringify(inspector)})?.dataset.value ?? null`));
     const inspectorRows = inspectorLive === 'live' ? await readOpen('the inspector\'s Model field', inspector, 'next-run-choice-inspector.png') : null;
     await step('the held run settled', until(iterations, (n) => n >= 2, { timeoutMs: 60_000, what: 'the held prompt completing', signal }));
     await step('the chip enabled again', until(() => d.eval(`document.querySelector(${JSON.stringify(chip)})?.disabled === false`), (v) => v === true, { timeoutMs: 30_000, what: 'the model chip enabled', signal }));
-    await step('the chip → beta', choose(d, chip, 'beta'));
+    // The repair of the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows (REQ-MONITOR-194): the chip
+    // shows the configured alpha, annotated, and choosing it there is the explicit choice — no other key chosen first.
+    const chipValue = await step('the chip\'s value', d.eval(`document.querySelector(${JSON.stringify(chip)})?.dataset.value ?? null`));
     const choice = await step('the chip → alpha', choose(d, chip, 'alpha'));
     const entries = await step('the exclusion cleared', until(cleared, (list) => list.some((m) => m.cleared === true && m.model === 'alpha'), { timeoutMs: 30_000, what: "alpha's exclusion cleared", signal }));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
     await step('the prompt', d.type('a further prompt on alpha', { enter: true }));
     await step('the further run settled', until(iterations, (n) => n >= 3, { timeoutMs: 90_000, what: 'the third iteration completing', signal }));
-    return { choice, entries, chipRows, headerRows, inspectorLive, inspectorRows };
+    return { choice, chipValue, entries, chipRows, headerRows, inspectorLive, inspectorValue, inspectorRows };
   });
   const db = open(s3c);
   const row = session(db);
@@ -417,6 +422,9 @@ await scenarioRun('next-run-choice', async () => {
   // The field is live during the run held on beta; a disabled or absent field would leave the annotation unread, so it fails here.
   expect(r.value.inspectorLive === 'live', `the inspector's Model field was ${r.value.inspectorLive} during the run, so its options were never read`);
   expect(annotated(r.value.inspectorRows), `the inspector's Model field did not annotate alpha: ${JSON.stringify(r.value.inspectorRows)}`);
+  // The chip chose the key it already showed: one choice, one configuration write, and the exclusion cleared by it.
+  expect(r.value.chipValue === 'alpha', `the composer chip showed ${JSON.stringify(r.value.chipValue)} at rest, not the configured alpha, so re-choosing it was not exercised`);
+  expect(r.value.inspectorValue === 'beta', `the inspector's Model field named ${JSON.stringify(r.value.inspectorValue)} while the root ran on beta`);
   const exhausted = list.filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata));
   expect(exhausted.length === 2 && exhausted[0].cleared === undefined && exhausted[1].cleared === true && exhausted[1].model === 'alpha' && exhausted[1].model_key === 'alpha', `the choice did not clear alpha's exclusion: ${JSON.stringify(exhausted)}`);
   // The held prompt ran on beta (alpha excluded, moved before calling); the further prompt, after the choice, on alpha.
@@ -424,7 +432,7 @@ await scenarioRun('next-run-choice', async () => {
   expect(calls.map((c) => c.model).join(',') === 'scripted/beta,scripted/alpha', `the held prompt did not run on beta and the further one on alpha: ${JSON.stringify(calls)}`);
   const moves = list.filter((t) => t.name === 'quota_fallback_model').map((t) => JSON.parse(t.metadata));
   expect(moves.length === 2 && moves[0].pre_call === undefined && moves[1].pre_call === true, `the further prompt moved off alpha: ${JSON.stringify(moves)}`);
-  results.nextRunChoice = { status: row.execution_status, exhausted, calls, chipRows: r.value.chipRows, headerRows: r.value.headerRows, inspector: r.value.inspectorLive, inspectorRows: r.value.inspectorRows, png: r.png, elapsedMs: r.elapsedMs };
+  results.nextRunChoice = { status: row.execution_status, exhausted, calls, chipRows: r.value.chipRows, headerRows: r.value.headerRows, chipValue: r.value.chipValue, inspector: r.value.inspectorLive, inspectorValue: r.value.inspectorValue, inspectorRows: r.value.inspectorRows, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 // 3b. OQ-177 (REQ-MONITOR-142 over REQ-ORCH-091 b): after the same-tier move the user switches the entry model back to the

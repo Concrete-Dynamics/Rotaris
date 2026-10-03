@@ -24,9 +24,10 @@ describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
     // Listed in place, choosable (no unavailableReason: an explicit choice is what clears the exclusion), the reason as its hint.
     expect(waitModelOptions(['alpha', 'beta', 'gamma'], ['gamma', 'alpha'])).toEqual([
       { value: '', label: 'Choose a model…' },
-      { value: 'alpha', label: 'alpha', hint: EXCLUDED_MODEL_HINT },
+      // `rechoosable`: chosen when it is already the selector's value, it is still the explicit choice (fin11).
+      { value: 'alpha', label: 'alpha', hint: EXCLUDED_MODEL_HINT, rechoosable: true },
       { value: 'beta', label: 'beta' },
-      { value: 'gamma', label: 'gamma', hint: EXCLUDED_MODEL_HINT },
+      { value: 'gamma', label: 'gamma', hint: EXCLUDED_MODEL_HINT, rechoosable: true },
     ]);
     // A key the list does not carry is not added: the list is the configured keys (OQ on which list the picker offers).
     expect(waitModelOptions(['beta'], ['alpha']).map((o) => o.value)).toEqual(['', 'beta']);

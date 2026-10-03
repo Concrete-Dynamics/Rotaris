@@ -110,7 +110,7 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
   const childCalls = session.agents.reduce((n, a) => n + a.toolCalls, 0);
   return {
     id: RUN_AGENT_ID, name: entry.persona, givenName: entry.persona, persona: entry.persona, state: resting ? 'paused' : busy ? 'running' : presentationState === 'done' ? 'succeeded' : presentationState === 'failed' ? 'failed' : 'cancelled',
-    presentationState, parentId: '', dependencies: [], activity: session.summary?.message ?? '', model: entry.model, depth: 0, background: false, category: '',
+    presentationState, parentId: '', dependencies: [], activity: session.summary?.message ?? '', model: runLevelModel(session, entry.model, busy), depth: 0, background: false, category: '',
     spawnedAt: session.runStartedAt, completedAt: busy || resting ? null : session.updatedAt, toolCalls: session.entryToolCalls ?? Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
     // REQ-MONITOR-086: the run-wide count, which the synthetic root shows (OQ-159's recorded reading): the session's
     // maintained aggregate, the roots' own compressions included. Until 2026-10-02 it summed `session.agents`, which holds
@@ -127,6 +127,20 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     // REQ-MONITOR-117/119: the entry agent's own stall watch's figure, while its run is live.
     stalledSeconds: busy ? session.entryStalledSeconds : null,
   };
+}
+
+/**
+ * REQ-MONITOR-052 / REQ-MONITOR-066 / REQ-MONITOR-069: the model the run-level agent's Model names (the inspector's selector,
+ * a persona window's read-only value) — while its run is live, the key the root's ladder cell runs on
+ * (`SessionRecord.entryModelKey`), which a same-tier, unresponsive-model or pre-call move changes without touching the
+ * configuration; else, or before the cell exists, the entry role's (`entryRole`: the configured key or the override in force).
+ * Only the run-level agent reads it: the composer's chip and the strip's model item name what the next run starts with
+ * (REQ-MONITOR-146, REQ-SHELL-043), so `entryRole` keeps its model. Until 2026-10-03 the inspector named the configured key
+ * while the root ran on a candidate
+ * (docs/defects/fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md).
+ */
+export function runLevelModel(session: Pick<SessionRecord, 'entryModelKey'>, entryModel: string, live: boolean): string {
+  return live && session.entryModelKey !== null ? session.entryModelKey : entryModel;
 }
 
 /** The entry role as `runLevelAgent` draws it: its persona, model, reasoning and the declared tools that stand in for its grant. */

@@ -947,6 +947,105 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(limits.slice(limits.indexOf(5000))).toEqual(limits.slice(limits.indexOf(5000)).map(() => 5000));
   });
 
+  // The repair of the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate (REQ-MONITOR-052/066/069):
+  // the live record names the key the root's ladder cell runs on (`SessionRecord.entryModelKey`), so the run-level agent's Model
+  // follows the move as its limit does. Before: no record field, and the inspector named the configured a1 throughout.
+  it('REQ-MONITOR-052 / REQ-MONITOR-066: the live record names the key the root runs on, b1 after its same-tier move', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('from b')), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+    const keys = (pub.snapshots as unknown as { entryModelKey: string | null }[]).map((p) => p.entryModelKey).filter((k) => k !== null);
+    expect(keys.at(-1)).toBe('b1');
+    expect(keys.slice(keys.indexOf('b1'))).toEqual(keys.slice(keys.indexOf('b1')).map(() => 'b1'));
+    // A record read with no live run carries none: the surface falls back to the entry role's key.
+    expect(toSessionRecord(dal.getSession(sid)!).entryModelKey).toBeNull();
+  });
+
+  // resilience-proof's catalogue: the candidate is a discovered tier pick (`scripted-b/beta`) for a pair a configured key
+  // (`beta`) also names. The record names the configured key, the one the model selectors list.
+  it('REQ-MONITOR-052 / REQ-MONITOR-066: a move onto a discovered entry whose pair a configured key names is named by the configured key', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, []), entry('b/b1', 'b', B1, ['small_model'], { origin: 'discovered' })];
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('from b')), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+    expect(dal.timelineOf(sid).filter((t) => t.name === 'quota_fallback_model').map((t) => (JSON.parse(t.metadata) as { to_key: string }).to_key)).toEqual(['b/b1']);
+    expect((pub.snapshots as unknown as { entryModelKey: string | null }[]).map((p) => p.entryModelKey).filter((k) => k !== null).at(-1)).toBe('b1');
+  });
+
+  // The verifier's case (repair round 1): two configured keys for one provider's model (a fast and a deep key, each with its
+  // own thinking). A root configured on the second runs on it with no move at all; the record names it, not the first key
+  // for the pair. The cell carries the key it was taken from (`AgentResilienceCell.key`); until this round the getter
+  // matched the pair alone and named a-fast, where origin/main had named the configured a-deep.
+  it('REQ-MONITOR-052 / REQ-MONITOR-066: a root on the second of two configured keys for one pair is named by that key, with no move', async () => {
+    const catalogue = [entry('a-fast', 'a', A1, [], { thinking: 'low' }), entry('a-deep', 'a', A1, ['small_model'], { thinking: 'high' })];
+    const { sessions, client, pub } = sessionsWith(() => answer('plain'), { catalogue, over: { modelKey: 'a-deep', thinking: 'high' } });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+    const keys = (pub.snapshots as unknown as { entryModelKey: string | null }[]).map((p) => p.entryModelKey).filter((k) => k !== null);
+    expect(keys.length).toBeGreaterThan(0);
+    expect(new Set(keys)).toEqual(new Set(['a-deep']));
+  });
+
+  // A carried key that is a loader-made copy (a slot's reasoning synthesis carries the slot's tier role, so it can be the
+  // same-tier candidate) is no key a selector lists: the record names the configured key for its pair, as before the cell
+  // carried keys.
+  it('REQ-MONITOR-052 / REQ-MONITOR-066: a move onto a loader-made copy is named by the configured key it shares its pair with', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, []), entry('__startup_slot__:small_model', 'b', B1, ['small_model'], { thinking: 'high' })];
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('from b')), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+    expect(dal.timelineOf(sid).filter((t) => t.name === 'quota_fallback_model').map((t) => (JSON.parse(t.metadata) as { to_key: string }).to_key)).toEqual(['__startup_slot__:small_model']);
+    expect((pub.snapshots as unknown as { entryModelKey: string | null }[]).map((p) => p.entryModelKey).filter((k) => k !== null).at(-1)).toBe('b1');
+  });
+
+  // The same, for a key chosen during a wait: the choice names b-deep, which shares its pair with b-fast; the record names
+  // the key chosen (the wait's decision carries it onto the cell), not the first key for the pair.
+  it('REQ-MONITOR-052 / REQ-MONITOR-066: a wait choice of the second of two keys for one pair is named by the key chosen', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b-fast', 'b', B1, [], { thinking: 'low' }), entry('b-deep', 'b', B1, [], { thinking: 'high' })];
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : { parts: [{ hold: held }, ...answer('from b').parts] }), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1' });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'b-deep' } })).toEqual({ ok: true });
+    for (let i = 0; i < 40 && client.requests.length < 2; i++) await tick();
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+    clock.advance(200);
+    await tick();
+    const last = pub.snapshots.at(-1) as unknown as { entryModelKey: string | null; executionStatus: string };
+    expect(last.executionStatus).toBe('running');
+    expect(last.entryModelKey).toBe('b-deep');
+    release();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+  });
+
+  // The same repair, in flight: the move itself changes no row and saves nothing, so until the cell told the run
+  // (`TurnResilience.moved`) the record was not republished, and the inspector named the configured a1 for as long as the
+  // call on b1 ran — 8 s in resilience-proof's `next-run-choice`.
+  it('REQ-MONITOR-052 / REQ-MONITOR-066: the record is republished when the root moves, so it names b1 while the call on b1 is in flight', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : { parts: [{ hold: held }, ...answer('from b').parts] }), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && client.requests.length < 2; i++) await tick();
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+    // The record's coalescing interval (RECORD_TICK, 80 ms) passes with the call still held.
+    clock.advance(200);
+    await tick();
+    const last = pub.snapshots.at(-1) as unknown as { entryModelKey: string | null; executionStatus: string };
+    expect(last.executionStatus).toBe('running');
+    expect(last.entryModelKey).toBe('b1');
+    release();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+  });
+
   describe('PD-MONITOR-001 revision 2: a request is priced at the ladder cell, by the model it was sent to', () => {
     const A_RATES = { input: '0.000003', output: '0.000015' };
     const B_RATES = { input: '0.0000001', output: '0.0000002' };
@@ -1228,9 +1327,13 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
         if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]) : answer(`root ${turn}`);
         return turn === 1 ? failing(quota()) : answer('I did it.');
       };
-      const { sessions, client } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+      const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
       expect((await sessions.running(sid)!).status).toBe('completed');
+      // REQ-MONITOR-052/066: the live record names the key the root runs on — b1 once the pre-call move took it there, though
+      // the configured key is a1 (the repair of the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate).
+      const keys = (pub.snapshots as unknown as { entryModelKey: string | null }[]).map((p) => p.entryModelKey).filter((k) => k !== null);
+      expect(keys.at(-1)).toBe('b1');
       const calls = client.requests.map((r) => `${who(r)} ${r.model.modelId}`);
       // The child's call on a1 met insufficient quota and moved to b1 (its own same-tier fallback, after the call).
       const failed = calls.indexOf('child a1');

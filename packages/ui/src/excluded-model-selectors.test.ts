@@ -6,6 +6,7 @@ import type * as DesignSystem from './design-system/index.js';
 import type * as HostModule from './terminal/host.js';
 import { AuthRecoveryDialog } from './AuthRecoveryDialog.js';
 import { Inspector } from './Inspector.js';
+import { choiceFires } from './design-system/searchable-select.js';
 import { annotatedModelOptions, EXCLUDED_MODEL_HINT } from './model-options.js';
 import { RunHeader } from './RunHeader.js';
 import { WorkspaceView } from './WorkspaceView.js';
@@ -20,12 +21,16 @@ import { WorkspaceView } from './WorkspaceView.js';
  * The design system's SearchableSelect draws its rows only once opened, which a static render never does, so it is drawn here
  * as the rows it was handed (value, hint, and whether greyed out) — what the surface decides, which is what is under test.
  */
+/** Each select's props as last drawn, by accessible name, so a choice can be made through the control's own rule (`choiceFires`). */
+const drawn = vi.hoisted(() => new Map<string, { value: string; options: readonly DesignSystem.SearchableOption[]; onChange: (v: string) => void }>());
 vi.mock('./design-system/index.js', async (importOriginal) => {
   const original = await importOriginal<typeof DesignSystem>();
   return {
     ...original,
-    SearchableSelect: ({ ariaLabel, options }: { ariaLabel: string; options: readonly { value: string; label: string; hint?: string; unavailableReason?: string }[] }) =>
-      createElement('div', { 'data-select': ariaLabel }, options.map((o) => createElement('span', { key: o.value, 'data-option': o.value, 'data-hint': o.hint ?? '', 'data-unavailable': o.unavailableReason ?? '' }, o.label))),
+    SearchableSelect: ({ ariaLabel, options, value, onChange }: { ariaLabel: string; value: string; onChange: (v: string) => void; options: readonly { value: string; label: string; hint?: string; unavailableReason?: string }[] }) => {
+      drawn.set(ariaLabel, { value, options, onChange });
+      return createElement('div', { 'data-select': ariaLabel }, options.map((o) => createElement('span', { key: o.value, 'data-option': o.value, 'data-hint': o.hint ?? '', 'data-unavailable': o.unavailableReason ?? '' }, o.label)));
+    },
   };
 });
 vi.mock('./terminal/host.js', async (importOriginal) => ({ ...(await importOriginal<typeof HostModule>()), TerminalToolbarControl: () => null }));
@@ -38,7 +43,7 @@ const root: AgentRecord = {
 const session = (excludedModels: string[]): SessionRecord => ({
   id: 's1', executionStatus: 'completed', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-10-02T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [root], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: 'tasks_complete', runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-10-02T10:00:00.000Z', iterationsCompleted: 1, summary: null, permissionMode: 'ask', sandboxed: false, sandboxBackend: '', backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
-  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 0, agents: 0, byTool: [] }, worktreeBranch: null, wait: null, modelOverrides: [], excludedModels, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryStalledSeconds: null, entryToolCalls: null, compressions: 0,
+  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 0, agents: 0, byTool: [] }, worktreeBranch: null, wait: null, modelOverrides: [], excludedModels, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryModelKey: null, entryStalledSeconds: null, entryToolCalls: null, compressions: 0,
 } as SessionRecord);
 const ok = async () => ({ ok: true as const });
 const MODELS = ['alpha', 'beta', 'gamma'];
@@ -53,7 +58,7 @@ const H = EXCLUDED_MODEL_HINT;
 
 describe('REQ-MONITOR-194: every model selector annotates a pair the session holds out of quota, still choosable', () => {
   it('the shared helper: an excluded key keeps its place with the reason as its hint and no unavailable reason', () => {
-    expect(annotatedModelOptions(MODELS, ['gamma', 'alpha'])).toEqual([{ value: 'alpha', label: 'alpha', hint: H }, { value: 'beta', label: 'beta' }, { value: 'gamma', label: 'gamma', hint: H }]);
+    expect(annotatedModelOptions(MODELS, ['gamma', 'alpha'])).toEqual([{ value: 'alpha', label: 'alpha', hint: H, rechoosable: true }, { value: 'beta', label: 'beta' }, { value: 'gamma', label: 'gamma', hint: H, rechoosable: true }]);
     expect(annotatedModelOptions(MODELS, [])).toEqual(MODELS.map((m) => ({ value: m, label: m })));
   });
 
@@ -91,5 +96,61 @@ describe('REQ-MONITOR-194: every model selector annotates a pair the session hol
     expect(option('alpha')).not.toContain('disabled');
     expect(option('gamma')).not.toContain(H);
     expect(option('gamma')).not.toContain('aria-describedby');
+  });
+});
+
+/*
+ * The repair of the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows (REQ-MONITOR-194: "A user may still
+ * choose an excluded pair explicitly, from any model selector … Choosing it explicitly clears the recorded exclusion"). The
+ * chip shows the configured entry model, which is the pair held out of quota after its quota answer; choosing that listed,
+ * annotated row is the explicit choice. The control fired nothing for a choice of its current value, so the chip sent nothing
+ * and only choosing another key first cleared it. A choice is made here as the control makes it: the row as drawn, through
+ * the control's own rule (`choiceFires`), into the handler the surface passed.
+ */
+describe('REQ-MONITOR-194: the excluded key a selector already shows can be chosen there, and the choice is sent', () => {
+  const chooseIn = (select: string, value: string): void => {
+    const d = drawn.get(select);
+    if (d === undefined) throw new Error(`${select} was not drawn`);
+    const option = d.options.find((o) => o.value === value);
+    if (option === undefined) throw new Error(`${select} lists no ${value}`);
+    if (choiceFires(option, d.value)) d.onChange(option.value);
+  };
+  const counting = () => { const calls: string[] = []; return { calls, send: async (m: string) => { calls.push(m); return { ok: true as const }; } }; };
+  const entryOn = (model: string) => ({ persona: 'orchestrator', model, reasoning: 'medium', tools: [] as string[] });
+
+  it('the composer\'s next-run chip: the shown excluded key is sent once; the shown plain key sends nothing', () => {
+    const excluded = counting();
+    renderToStaticMarkup(createElement(WorkspaceView, { session: session(['alpha']), rows: [], onSubmit: ok, onStop: ok, models: MODELS, modelsLoaded: true, entry: entryOn('alpha'), onSetNextModel: excluded.send }));
+    expect(drawn.get('Model for the next run')?.value).toBe('alpha');
+    chooseIn('Model for the next run', 'alpha');
+    expect(excluded.calls).toEqual(['alpha']);
+    // Nothing excluded: re-choosing the shown key is no choice, as before.
+    const plain = counting();
+    renderToStaticMarkup(createElement(WorkspaceView, { session: session(['alpha']), rows: [], onSubmit: ok, onStop: ok, models: MODELS, modelsLoaded: true, entry: entryOn('beta'), onSetNextModel: plain.send }));
+    expect(drawn.get('Model for the next run')?.value).toBe('beta');
+    chooseIn('Model for the next run', 'beta');
+    expect(plain.calls).toEqual([]);
+    // Another key is a choice either way.
+    chooseIn('Model for the next run', 'gamma');
+    expect(plain.calls).toEqual(['gamma']);
+  });
+
+  it('the inspector\'s Model field: the shown excluded key is sent once; the shown plain key sends nothing', () => {
+    const props = (model: string, onSetModel: (m: string) => Promise<{ ok: true }>) => ({
+      session: session(['alpha']), rows: [], personas: [], runLevel: { ...root, model }, selectedAgentId: 'run', onSelect: () => undefined, models: MODELS,
+      compressionThresholdPercent: 60, runActive: true, resting: false, nowIso: null, onSteer: () => undefined, onCancel: () => undefined, onPopOut: () => undefined, onSetModel,
+    });
+    // The root waiting on the pair held out of quota (no same-tier candidate): the field shows alpha, annotated.
+    const excluded = counting();
+    renderToStaticMarkup(createElement(Inspector, props('alpha', excluded.send)));
+    expect(drawn.get('Agent model')?.value).toBe('alpha');
+    chooseIn('Agent model', 'alpha');
+    expect(excluded.calls).toEqual(['alpha']);
+    const plain = counting();
+    renderToStaticMarkup(createElement(Inspector, props('beta', plain.send)));
+    chooseIn('Agent model', 'beta');
+    expect(plain.calls).toEqual([]);
+    chooseIn('Agent model', 'alpha');
+    expect(plain.calls).toEqual(['alpha']);
   });
 });

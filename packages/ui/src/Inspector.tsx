@@ -152,7 +152,8 @@ export function Inspector(props: InspectorProps) {
               filterPlaceholder="Filter models…"
               /* REQ-MONITOR-194 beside REQ-MONITOR-067: a key held out of quota is annotated and stays choosable; a withheld one is not. */
               options={[...annotatedModelOptions(modelOptions, session?.excludedModels ?? []), ...withheldModels.map((w) => ({ value: w.model, label: w.model, unavailableReason: w.reason, suffix: `withheld: ${w.reason}` }))]}
-              onChange={(v) => { if (onSetModel && v !== '' && v !== currentModel) void onSetModel(v).then((r) => setError(r.ok ? null : r.reason)); }} />
+              /* REQ-MONITOR-194: the shown key re-chosen counts only when the session holds it out of quota — the explicit choice that clears it. */
+              onChange={(v) => { if (onSetModel && v !== '' && (v !== currentModel || (session?.excludedModels ?? []).includes(v))) void onSetModel(v).then((r) => setError(r.ok ? null : r.reason)); }} />
             <label className="field-label" htmlFor="inspector-reasoning">Reasoning</label>
             <DesignSelect id="inspector-reasoning" className="input select" aria-label="Agent reasoning" value={['low', 'medium', 'high'].includes(shown.reasoning) ? shown.reasoning : 'medium'} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-reasoning" onChange={(e) => { const v = e.currentTarget.value; if (onSetReasoning) void onSetReasoning(v).then((r) => setError(r.ok ? null : r.reason)); }}>
               {['low', 'medium', 'high'].map((l) => <option key={l} value={l}>{l}</option>)}

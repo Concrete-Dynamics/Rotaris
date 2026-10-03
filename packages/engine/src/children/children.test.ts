@@ -310,6 +310,54 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
     sched.pass();
     expect(warnings.filter((w) => /quiescence/.test(w))).toHaveLength(0);
   });
+
+  /*
+   * The repair of a-childs-closing-scheduler-pass-can-outlive-the-run-that-awaited-it (REQ-ORCH-053, REQ-ORCH-098): the pass
+   * that follows a child's end runs in an unawaited `.finally`, and reads the ledger. A child whose execution settles after
+   * the store was closed — at quit, or while the run host lives (`workspace.closeStore` before a backup or a restore,
+   * `workspace.closing`) — made that pass raise "The database connection is not open" as an unhandled rejection, which ends
+   * a process with no handler for one (the run host installs none).
+   */
+  describe('a child\'s closing pass and a closed store', () => {
+    const settlingAfterClose = (closeFirst: boolean) => async () => {
+      const rejections: unknown[] = [];
+      const onRejection = (e: unknown) => { rejections.push(e); };
+      process.on('unhandledRejection', onRejection);
+      try {
+        const l = ledger();
+        let finish!: () => void;
+        const execution = new Promise<void>((r) => { finish = r; });
+        let reads = 0;
+        const counted = new Proxy(l, { get: (t, p, r) => { if (p === 'all') reads += 1; const v = Reflect.get(t, p, r) as unknown; return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(t) : v; } });
+        const sched = new Scheduler({ ledger: counted, runChild: () => execution, warn: (m) => warnings.push(m) });
+        const a = spawn(l, 'a'); const idA = a.ok ? a.value.row.task_id : '';
+        sched.pass();
+        expect(dal.getChild(sid, idA)!.state).toBe('starting');
+        // The run's teardown of the iteration's children (`IterationChildren.close`), then the store closes under it.
+        if (closeFirst) sched.close();
+        const readsAtClose = reads;
+        dal.db.close();
+        finish();
+        await new Promise((r) => setTimeout(r, 20));
+        expect(rejections).toEqual([]);
+        if (closeFirst) {
+          // Closed: the follow-up pass returns at once — no ledger read, nothing warned.
+          expect(reads).toBe(readsAtClose);
+          expect(warnings).toEqual([]);
+        } else {
+          // Never closed: the pass raises on the closed store, and the raise is warned once instead of rejecting.
+          expect(warnings).toHaveLength(1);
+          expect(warnings[0]).toMatch(/the scheduler's pass after child .* raised: .*not open/i);
+        }
+      } finally {
+        process.off('unhandledRejection', onRejection);
+        // The suite's afterEach closes the store it finds: give it an open one.
+        dal = new StoreDal(openStore(join(dir, 'workspace.db')));
+      }
+    };
+    it('a pass the store closed under raises nothing unhandled: it is warned, once', settlingAfterClose(false));
+    it('after `close()`, the pass that follows a child\'s end returns at once and reads nothing', settlingAfterClose(true));
+  });
 });
 
 describe('an iteration with children, end to end against the run (REQ-ORCH-055..060, 072, 080, 088, 108..112, REQ-TOOLS-152..156)', () => {
@@ -3724,6 +3772,43 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(dal.agentConversation(sid, before.child.task_id)).toHaveLength(before.record);
     });
 
+    // REQ-ORCH-053 / REQ-ORCH-098, repair round 1 of a-childs-closing-scheduler-pass-can-outlive-the-run-that-awaited-it: the run
+    // closes the iteration's scheduler at its teardown (`IterationChildren.close` from `Run.turn`). Under the explicit cancel —
+    // a stop that rests nothing, so `hold` never stops the scheduler — a child's step that ignores the cancel is given up on at
+    // the grace and returns after the run's end and after its store closed (as the run host closes one before a backup or a
+    // restore, or when a window lets the workspace go): the pass that follows it returns at once, so it reads nothing, warns
+    // nothing and rejects nothing. Without the close it reads the closed store and its raise is warned.
+    it('REQ-ORCH-053 / REQ-ORCH-098: a child step the explicit cancel gave up on, returning after the run ended and its store closed, finds the scheduler closed by the run', async () => {
+      const g = gate();
+      const rootStep = { calls: 0 };
+      const { sessions, seen } = scriptedChild([() => ({ parts: [{ part: { kind: 'text', delta: 'Before. ' } }, { hold: g.hold }, ...answer('Child words after the run ended.').parts] })], {
+        deaf: ['child'],
+        root: (turn) => { rootStep.calls = turn; return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : { parts: [{ hold: new Promise<void>(() => undefined) }, ...answer('never').parts] }; },
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => rootStep.calls === 2 && seen.childSteps === 1);
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(30_000);
+      await sessions.running(sid)!;
+      expect(byName(sid, 'work')).toMatchObject({ state: 'cancelled' });
+      expect(warnings.some((w) => /child executions still running at the stop's 30 s grace were given up on/.test(w))).toBe(true);
+      const rejections: unknown[] = [];
+      const onRejection = (e: unknown) => { rejections.push(e); };
+      process.on('unhandledRejection', onRejection);
+      try {
+        dal.db.close();
+        g.open();
+        await new Promise((r) => setTimeout(r, 40));
+        expect(rejections).toEqual([]);
+        expect(warnings.filter((m) => /the scheduler's pass after child/.test(m))).toEqual([]);
+      } finally {
+        process.off('unhandledRejection', onRejection);
+        // The suite's afterEach closes the store it finds: give it an open one.
+        dal = new StoreDal(openStore(join(dir, 'workspace.db')));
+      }
+    });
+
     it('REQ-SESSION-094 (found by phase 3\'s third review): a summarising call the stop\'s grace gave up on writes no report when it returns', async () => {
       const g = gate();
       // The summariser ignores its abort, so its call outlives the stop.
@@ -4048,6 +4133,52 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(ops.backgroundOutput(childId, rootName, 'summary')).toEqual({ status: 'not_found', state: '', text: '' });
 
       w.value.release(1, HOST);
+    });
+
+    // REQ-ORCH-053 / REQ-ORCH-098, repair round 1 of a-childs-closing-scheduler-pass-can-outlive-the-run-that-awaited-it: a
+    // resumed child (PD-ORCH-005 clause 4) ends in the same unawaited pass a fresh one does. Its store closes before anything
+    // closed the scheduler; the pass that follows its end raises on the closed store, and that raise is warned once, never
+    // rejected (before: `.finally(() => this.scheduler.pass())`, an unhandled 'The database connection is not open').
+    it('a resumed child that settles after its store is closed: the pass that follows is warned once and rejects nothing', async () => {
+      const sid = 'S-resumed-close' as SessionId;
+      const w = SessionWriter.create({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { workspaceRoot: 'C:/ws', pid: 1, host: HOST });
+      if (!w.ok) throw new Error('writer');
+      const { IterationChildren } = await import('./orchestration.js');
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const client = new ScriptedModelClient([{ parts: [{ hold: held }, ...answer('resumed and done').parts] }]);
+      const warned: string[] = [];
+      const rejections: unknown[] = [];
+      const onRejection = (e: unknown) => { rejections.push(e); };
+      process.on('unhandledRejection', onRejection);
+      try {
+        const ops = new IterationChildren({
+          dal, writer: w.value, sessionId: sid, workspaceRoot: 'C:/ws', owner: null as unknown as ProjectionOwner,
+          backend: new DefaultAgentBackend(client), clocks: clock, model: MODEL, thinking: 'unset', modelTimeoutMs: 1000, modelRetries: 0,
+          // A cap of 0 holds the accepted child on its model's slot, so it never starts before the test rests it.
+          credentialFor: () => async () => '', maxStepsPerTurn: 10, budget: { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: () => 0,
+          toolsFor: () => null, summariser: null, runSignal: new AbortController().signal, warn: (m) => warned.push(m),
+        }, 1);
+        const accepted = await ops.delegate(ops.ledger.root.taskId, { persona: 'coding-agent', taskName: 'work', task: 'TASK: work', dependsOn: [], inheritedContext: [], category: '', runInBackground: true });
+        expect(accepted.status).toBe('waiting_on_model_slot');
+        const taskId = dal.childrenOf(sid)[0]!.task_id;
+        // Left paused by a stop while running, as a rest leaves it (PD-ORCH-005 clause 3); the continuation resumes it.
+        const rested = ops.ledger.rest(taskId, 'stop', 'running');
+        expect(rested.ok).toBe(true);
+        expect(ops.resumePaused()).toBe(1);
+        for (let i = 0; i < 40 && client.requests.length === 0; i++) await new Promise((r) => setTimeout(r, 5));
+        expect(client.requests).toHaveLength(1);
+        // The store closes under the resumed execution, before anything closed the scheduler; then the call returns.
+        dal.db.close();
+        release();
+        await new Promise((r) => setTimeout(r, 40));
+        expect(rejections).toEqual([]);
+        expect(warned.filter((m) => /the scheduler's pass after child .* raised: .*not open/i.test(m))).toHaveLength(1);
+      } finally {
+        process.off('unhandledRejection', onRejection);
+        // The suite's afterEach closes the store it finds: give it an open one.
+        if (!dal.db.open) dal = new StoreDal(openStore(join(dir, 'workspace.db')));
+      }
     });
 
     it('REQ-ORCH-034 / REQ-ORCH-153 (the repair of delegate-reads-no-alias-on-the-built-in-table): with no configured persona catalogue an alias is admitted as its target — refused while the plan gate holds, and granted its target\'s tools', async () => {

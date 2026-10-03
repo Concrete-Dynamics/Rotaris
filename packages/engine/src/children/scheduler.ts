@@ -45,6 +45,8 @@ export class Scheduler {
   private resting = false;
   private passing = false;
   private again = false;
+  /** The run's teardown of this iteration's children is over (`close`): no pass reads the ledger again. */
+  private closed = false;
 
   constructor(private readonly deps: SchedulerDeps) {}
 
@@ -66,9 +68,22 @@ export class Scheduler {
     return this.resting;
   }
 
+  /**
+   * REQ-ORCH-053 / REQ-ORCH-098: the run has torn this iteration's children down — every record terminal (REQ-ORCH-052) or
+   * paused (PD-ORCH-005 clause 2) — so no pass is owed and none may read the ledger again: a child's execution that settles
+   * later (one given up on at the stop's grace, or any whose `.finally` lands after the run's end) finds `pass` returning at
+   * once, so it cannot outlive the store it reads, which the run host closes while it lives (`workspace.closeStore` before a
+   * backup or a restore, `workspace.closing`). Every waiter is released. Idempotent. Until 2026-10-03 nothing stopped that
+   * pass (docs/defects/fixed/a-childs-closing-scheduler-pass-can-outlive-the-run-that-awaited-it.md).
+   */
+  close(): void {
+    this.closed = true;
+    for (const w of [...this.waiters]) { this.waiters.delete(w); w.resolve(); }
+  }
+
   /** The pass, re-entrant-safe: a change during a pass schedules exactly one more pass. */
   pass(): void {
-    if (this.resting) return;
+    if (this.resting || this.closed) return;
     if (this.passing) { this.again = true; return; }
     this.passing = true;
     try {
@@ -180,8 +195,19 @@ export class Scheduler {
     if (!this.deps.ledger.claimStart(c.task_id)) return false;
     const row = this.deps.ledger.get(c.task_id);
     if (!row) return false;
-    void this.deps.runChild(row).catch((e) => this.deps.warn(`child ${row.task_id} raised out of its execution: ${String(e)}`)).finally(() => this.pass());
+    void this.deps.runChild(row).catch((e) => this.deps.warn(`child ${row.task_id} raised out of its execution: ${String(e)}`)).finally(() => this.passAfter(row.task_id));
     return true;
+  }
+
+  /**
+   * REQ-ORCH-053 / REQ-ORCH-098: the pass that follows a child's end — a fresh child's (`startOne`) or a resumed one's
+   * (`IterationChildren.resumePaused`) — which runs where nothing awaits it, so it may never reject: a raise (a store closed
+   * under a scheduler the run never closed) is warned instead, and `close` keeps it from reading at all after the run's
+   * teardown. Every unawaited pass goes through here. (Until repair round 1 of 2026-10-03 only `startOne`'s was guarded and the
+   * resumed child's `.finally(() => this.scheduler.pass())` could still reject unhandled.)
+   */
+  passAfter(taskId: string): void {
+    try { this.pass(); } catch (e) { this.deps.warn(`the scheduler's pass after child ${taskId} raised: ${String(e)}`); }
   }
 
   /** REQ-ORCH-098: `deps.teardown` for a child settled here; a raise never keeps the scheduler from being told. */
@@ -201,7 +227,7 @@ export class Scheduler {
   /** REQ-TOOLS-156: resolves when every task in the set is terminal, or on cancellation; never on a deadline. */
   waitFor(ids: readonly string[]): Promise<void> {
     const set = new Set(ids);
-    if (this.cancelled || this.resting || [...set].every((id) => { const r = this.deps.ledger.get(id); return !r || isTerminalChildState(r.state); })) return Promise.resolve();
+    if (this.cancelled || this.resting || this.closed || [...set].every((id) => { const r = this.deps.ledger.get(id); return !r || isTerminalChildState(r.state); })) return Promise.resolve();
     return new Promise<void>((resolve) => { this.waiters.add({ ids: set, resolve }); });
   }
 

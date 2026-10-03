@@ -54,6 +54,15 @@ export function entryOf(catalogue: readonly CatalogueEntry[], ref: ModelRef): Ca
   return catalogue.find((e) => sameRef(e.model, ref));
 }
 
+/**
+ * REQ-CONFIG-076..081 / REQ-CONFIG-094: whether a `models:` key is a loader-made copy (a slot's or a role's reasoning
+ * synthesis) — no key a model selector lists, and counted against the key it was copied from. The loader's own prefixes
+ * (`packages/config/src/keys.ts`), as the autopsy reader reads them (`autopsy.ts`).
+ */
+export function isLoaderCopyKey(key: string): boolean {
+  return key.startsWith('__startup_slot__:') || key.startsWith('__persona__:');
+}
+
 /** REQ-NOTIFY-082's provider identity for a reference: the entry's when known, else the dispatch family. */
 export function providerIdentity(catalogue: readonly CatalogueEntry[], ref: ModelRef): string {
   return entryOf(catalogue, ref)?.provider ?? ref.providerId;

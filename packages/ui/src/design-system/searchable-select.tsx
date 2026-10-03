@@ -25,7 +25,8 @@ import { FILTER_DEBOUNCE_MS, useDebouncedValue } from './use-debounced-value.js'
  * `--rt-accent-tint-14` + `--rt-accent-200` (docs/design/README.md §1.2, per UIR-005).
  *
  * Value discipline is the native select's: `value` is the bare model identifier and `onChange`
- * receives that identifier, never display text (REQ-CONFIG-432). The empty option (Inherited /
+ * receives that identifier, never display text (REQ-CONFIG-432), and a choice of the current value
+ * fires nothing — except on a row marked `rechoosable` (REQ-MONITOR-194, `choiceFires`). The empty option (Inherited /
  * Unset / Leave as configured) is the first row and participates in filtering like any other.
  * An unavailable model (REQ-CONFIG-428/429) is listed, greyed and unselectable, never dropped:
  * its row is `aria-disabled`, skipped by keyboard movement and Enter, with the reason as its
@@ -47,6 +48,22 @@ export interface SearchableOption {
   readonly suffix?: string | undefined;
   /** Optional secondary text after the label (e.g. the effective model an Inherited row resolves to). */
   readonly hint?: string | undefined;
+  /**
+   * REQ-MONITOR-194, opt-in per option: choosing this row when it is already the current value still calls `onChange`. A
+   * model the session holds out of quota is listed, annotated, and "may still [be chosen] explicitly, from any model
+   * selector", the choice clearing the exclusion — so a click on it is that choice even when the selector already shows it.
+   * Absent (every other row, every other selector) keeps the native select's discipline: a same-value choice fires nothing.
+   */
+  readonly rechoosable?: boolean | undefined;
+}
+
+/**
+ * Whether choosing `option` with `value` current calls `onChange`: a usable row other than the current value, or a
+ * `rechoosable` one (REQ-MONITOR-194) even when it is the current value. An unavailable row never (REQ-CONFIG-428).
+ */
+export function choiceFires(option: SearchableOption, value: string): boolean {
+  if (option.unavailableReason !== undefined) return false;
+  return option.value !== value || option.rechoosable === true;
 }
 
 export interface SearchableSelectProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onChange' | 'value'> {
@@ -192,7 +209,7 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
     const option = filtered[index];
     if (option === undefined || option.unavailableReason !== undefined) return;
     close(true);
-    if (option.value !== value) onChange(option.value);
+    if (choiceFires(option, value)) onChange(option.value);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {

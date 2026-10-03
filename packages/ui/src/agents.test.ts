@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, entryRole, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedCancelWith, chipStates, compressionLine, countNoun, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, steerOffered, tableOrder } from './agents.js';
+import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, entryRole, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedCancelWith, chipStates, compressionLine, countNoun, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, runLevelModel, steerOffered, tableOrder } from './agents.js';
 import { personaColourToken } from './PersonaWindow.js';
 import { useShellState } from './shell-state.js';
 
@@ -13,7 +13,7 @@ const row = (over: Partial<TranscriptRow>): TranscriptRow => ({ index: 0, kind: 
 const session = (over: Partial<SessionRecord>): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-05T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-05T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, sandboxBackend: '', backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
-  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, modelOverrides: [], excludedModels: [], compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryStalledSeconds: null, entryToolCalls: null, compressions: 0, ...over,
+  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, modelOverrides: [], excludedModels: [], compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryModelKey: null, entryStalledSeconds: null, entryToolCalls: null, compressions: 0, ...over,
 });
 
 describe('agents — the shared selection (REQ-MONITOR-042) and the run-level agent (REQ-MONITOR-043/057)', () => {
@@ -48,6 +48,24 @@ describe('agents — the shared selection (REQ-MONITOR-042) and the run-level ag
     expect(metaLine(runLevelAgent(live, entry, false)!, live, '8s')).toBe('running · 8s · 2 tool calls');
     // A record with no projection still derives it.
     expect(runLevelAgent(session({ agents: [agent({ toolCalls: 2 })] }), entry, false)?.toolCalls).toBe(3);
+  });
+  /*
+   * docs/defects/fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md: the run-level
+   * agent's Model was the entry role's (the configured key, or the override in force), so with alpha held out of quota and the
+   * root moved to beta before its first call, the inspector read "alpha" while every call went to beta.
+   */
+  it('REQ-MONITOR-052/066/069: while the run is live the run-level agent names the key its root runs on; at rest, the entry role\'s', () => {
+    const entry = { persona: 'orchestrator', model: 'alpha', reasoning: 'high', tools: [] };
+    // A live record whose root's cell moved to beta (a same-tier or pre-call move) draws the run-level agent on beta.
+    expect(runLevelAgent(session({ entryModelKey: 'beta' }), entry, false)?.model).toBe('beta');
+    // Before the cell exists (null) the entry role's key stands in.
+    expect(runLevelAgent(session({ entryModelKey: null }), entry, false)?.model).toBe('alpha');
+    // At rest the entry role's key — the configured key or the override `entryRole` resolved — whatever a record carried.
+    expect(runLevelAgent(session({ executionStatus: 'completed', entryModelKey: 'beta' }), entry, false)?.model).toBe('alpha');
+    expect(runLevelAgent(session({ executionStatus: 'paused', resumable: { iteration: 1, agents: 2 }, entryModelKey: 'beta' }), entry, false)?.model).toBe('alpha');
+    // The entry role itself is untouched: what the composer's chip and the strip name for the next run (REQ-MONITOR-146, REQ-SHELL-043).
+    expect(runLevelModel(session({ entryModelKey: 'beta' }), 'gamma', true)).toBe('beta');
+    expect(runLevelModel(session({ entryModelKey: 'beta' }), 'gamma', false)).toBe('gamma');
   });
   /*
    * docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md: the

@@ -274,7 +274,12 @@ one the explicit cancel's own `outlast` gives up on — `Run.turn` calls it righ
 already ended `cancelled` by `finalize`, has its open calls answered as cut off, naming no rest (OQ-96), and is counted —
 and one already terminal when a rest's grace gave up on it, which the user had cancelled on its own while its call
 ignored the abort (`rest` calls it last). Its execution, if it ever returns, returns through `execute`'s detached
-return, before its count; both writes are idempotent. A rest that finds nothing unfinished closes the iteration as before. The cause is
+return, before its count; both writes are idempotent. Once the teardown is over — finalized or rested — `Run.turn` closes the
+iteration's scheduler (`IterationChildren.close` → `Scheduler.close`, 2026-10-03): the pass that follows a child's end — a
+fresh child's (`startOne`) or a resumed one's (`resumePaused`) — runs in an unawaited `.finally` through `Scheduler.passAfter`,
+which then returns at once, and any raise of it is warned instead of rejecting, so a child settling
+after the run's end reads no store the run host may have closed meanwhile (`workspace.closeStore`, `workspace.closing`; the
+repair of `a-childs-closing-scheduler-pass-can-outlive-the-run-that-awaited-it.md`). A rest that finds nothing unfinished closes the iteration as before. The cause is
 read again once the rest is done: the explicit cancel that arrived meanwhile ends every agent the rest paused
 `cancelled` and closes the iteration; one that arrives later, during teardown, closes the iteration this run holds —
 the one it left open, or the one a continue resumes or declines, which it holds from its start, so a cancel during the
@@ -679,7 +684,25 @@ last row a root authored, of any kind a turn writes under its agent's persona an
 `diff`), no child's, a row named for one of `SessionRecord.entryRoots` preferred. So they come from the persona whose tools
 its chips show (the reading recorded beside OQ-97). Until 2026-10-01 the first root's `agent` row was read; the first repair
 read the last root's `agent` row alone, and a live root whose first steps were tool calls, or that had written no row yet,
-was drawn as the root before it (`after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`). **`SessionRecord.entryStalledSeconds`**
+was drawn as the root before it (`after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`).
+The run-level agent's **model** alone departs from the entry role while its run is live: **`SessionRecord.entryModelKey`**
+(2026-10-03, REQ-MONITOR-052/066/069) is the key the root's ladder cell runs on (`Run.entryModelKey`). The cell carries the
+`models:` key its model was taken from (`AgentResilienceCell.key`), set at every assignment: the configured `RunConfig.modelKey`
+or the switched key when the cell is built, the override followed, the same-tier candidate's key, the key chosen during a wait,
+and null after a role's fallback (named by reference). A carried key that is a configured, non-copy key is the answer — so two
+keys naming one provider's model (each with its own thinking) are told apart; otherwise (a discovered tier pick, a loader-made
+copy, no carried key) it is the first configured non-copy key for the cell's provider-and-model pair, as the exclusions are
+matched, else the carried key or `entryOf(catalogue, rootCell.model.model)`; null before the cell exists, on a stored record, or
+when nothing names the pair. A same-tier, unresponsive-model or pre-call move changes it without touching the configuration, and
+`runLevelAgent` names it (`runLevelModel`) — the inspector's Model field and the persona window's read-only model. A move
+writes no row and saves nothing, so the ladder tells the run when a cell's model changes (`TurnResilience.moved`, at each
+`cell.model` assignment in `ladder.ts`) and the run republishes the record (`ProjectionOwner.refreshRecord`, coalesced at
+`RECORD_TICK`) — which keeps `entryContext`'s limit current through the call too. `entryRole`
+keeps the configured key or the override in force, so the composer's chip and the strip's model item go on naming what the
+next run starts with (REQ-MONITOR-146, REQ-SHELL-043). Until then the inspector named the configured key while the root ran on
+the candidate (`fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md`); a child moved by
+a fallback is still drawn on its configured `model_key` (`a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md`,
+open). **`SessionRecord.entryStalledSeconds`**
 (2026-09-30, OQ-153) is the same route for the root's stall watch's figure. **`SessionRecord.entryToolCalls`** (2026-10-01,
 acceptance A20) is the run-level agent's tool-call count (REQ-MONITOR-044/052): the roots' share of the persisted total — the
 total less every child's persisted `children.tool_calls` — plus the calls the live root has started in its running execution

@@ -45,6 +45,25 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-03**
 
+**A child's closing scheduler pass cannot outlive its store (REQ-ORCH-053, REQ-ORCH-098; fin11).** `Scheduler.close`, called
+through `IterationChildren.close` by `Run.turn` once the iteration's children are torn down, stops every later pass; every
+unawaited pass after a child's end — `startOne`'s and a resumed child's in `resumePaused` — goes through `Scheduler.passAfter`,
+which warns a raise instead of rejecting. The **runtime view**'s teardown paragraph says so. No
+package, edge, process, channel, command or store column changed.
+
+**A selector's shown excluded key can be chosen there (REQ-MONITOR-194; fin11).** `SearchableOption.rechoosable` and
+`choiceFires` in the design system's searchable select; `annotatedModelOptions` marks each excluded key; the inspector's
+guard lets the shown key through when it is excluded. The **process view**'s `SessionRecord` sentence says so. No package,
+edge, process, channel, command or store column changed.
+
+**The run-level agent's Model names the key its root runs on while the run is live (REQ-MONITOR-052, REQ-MONITOR-066,
+REQ-MONITOR-069; fin11).** The record gains `entryModelKey` (the live run's `Run.entryModelKey`: the key the root's ladder cell
+carries, `AgentResilienceCell.key`, set at every assignment of its model, when that is a configured non-copy key, else the
+configured key for the cell's pair; null at rest), which `runLevelAgent` names through `runLevelModel`; `entryRole`, and with it the
+composer's chip and the strip's model item, is unchanged. A ladder move republishes the record (`TurnResilience.moved` →
+`ProjectionOwner.refreshRecord`), since it writes no row and saves nothing. The **process view**'s `SessionRecord` sentence and the **runtime
+view**'s run-level agent paragraph say so. No package, edge, process, channel, command or store column changed.
+
 **The status strip's path link and branch item are shortened from the middle against their measured width (REQ-WORKSPACE-149
 rule 2; fin11).** `StatusStripItem` draws every strip item; one marked `middle` asks the row for its whole label and re-elides
 on resize (seams §8, the status-strip item). The path link gives up its width before the branch name, and the branch item

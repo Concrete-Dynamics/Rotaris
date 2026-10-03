@@ -28,7 +28,7 @@ import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
 import type { Persona, PersonaResolver } from '../children/personas.js';
 import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
-import { entryOf, excludedModelKeys, overridesInForce, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
+import { entryOf, excludedModelKeys, isLoaderCopyKey, overridesInForce, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
 import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
@@ -481,8 +481,11 @@ export class Run {
    * would take.
    */
   private steeringClosed = false;
-  /** REQ-MONITOR-142: the entry model/reasoning switched mid-run; applied from the next iteration. */
-  private entryOverride: { model?: ModelRef; thinking?: ThinkingLevel } = {};
+  /**
+   * REQ-MONITOR-142: the entry model/reasoning switched mid-run; applied from the next iteration. `key` is the `models:` key
+   * the switched model was chosen by, which the root's cell carries (`AgentResilienceCell.key`, `entryModelKey`).
+   */
+  private entryOverride: { model?: ModelRef; key?: string; thinking?: ThinkingLevel } = {};
   /** Part Q: the waits parked on a provider limit (REQ-NOTIFY-263 reads `current()`), the memory, the catalogue. */
   private readonly waits: WaitRegistry;
   private readonly memory: ResilienceMemory;
@@ -825,6 +828,36 @@ export class Run {
    */
   get entryPersona(): string {
     return this.deps.config.persona;
+  }
+  /**
+   * REQ-MONITOR-052 / REQ-MONITOR-066 / REQ-MONITOR-069: the configured model key of the pair the root's ladder cell calls —
+   * after a same-tier or unresponsive-model move (REQ-NOTIFY-082, REQ-ORCH-091 b, REQ-ORCH-090), a pre-call move off a pair
+   * held out of quota (REQ-MONITOR-194) or an override it follows (REQ-ORCH-091 d), none of which writes the configuration —
+   * so the run-level agent's Model names the model the root runs on (`SessionRecord.entryModelKey`), as `entryContext` reads
+   * its limit from that cell (REQ-MONITOR-049). The key the cell carries (`AgentResilienceCell.key`, set at every assignment
+   * of its model) when that is a configured key — so two configured keys for one pair are told apart; else the configured
+   * key for the cell's pair where one names it — the keys the model selectors list — else the entry the move took it to (a
+   * discovered tier pick, `scripted-b/beta` in resilience-proof). Null before the cell exists, or for a pair no catalogue
+   * entry and no carried key names. (Until the first repair round of 2026-10-03 the carried key did not exist and the first
+   * configured key for the pair was named, a-fast for a root configured on a-deep.) Until
+   * 2026-10-03 the inspector named the configured key or the override in force while the root ran on a candidate
+   * (docs/defects/fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md).
+   */
+  get entryModelKey(): string | null {
+    const cell = this.rootCell;
+    if (cell === null) return null;
+    const model = cell.model.model;
+    // The key the cell carries — set at every assignment of its model — when it is a configured key: two keys may name one
+    // provider's model, each with its own thinking, and only the carried key tells them apart.
+    const listed = (e: CatalogueEntry): boolean => e.origin === 'configured' && !isLoaderCopyKey(e.key);
+    const carried = cell.key === null ? undefined : this.catalogue.find((e) => e.key === cell.key);
+    if (carried !== undefined && listed(carried)) return carried.key;
+    // Else by pair, as the exclusions are keyed (`excludedModelKeys`): a discovered tier pick, a loader-made copy (a slot's
+    // reasoning synthesis, which carries a tier role and so can be a same-tier candidate) or a role's fallback (which carries
+    // no key) is named by the configured key for its pair where one names it — a configured key and a discovered pick for
+    // one provider's model can carry different dispatch references.
+    const pair = pairKey(providerIdentity(this.catalogue, model), model.modelId);
+    return (this.catalogue.find((e) => listed(e) && pairKey(e.provider, e.model.modelId) === pair) ?? carried ?? entryOf(this.catalogue, model))?.key ?? cell.key;
   }
   /** REQ-MONITOR-048 (Part R): the persona's configured thinking level as this run resolved it; null when the persona is unknown or states none. */
   reasoningFor(persona: string): string | null {
@@ -1384,7 +1417,7 @@ export class Run {
   /** The per-agent ladder deps shared by the root and every child (the cell is the agent's own). */
   private resilienceFor(cell: AgentResilienceCell, unresponsiveBoundMs: number, switchPending?: () => boolean): TurnResilience {
     const { config } = this.deps;
-    return { cell, memory: this.memory, catalogue: this.catalogue, waits: this.waits, transientRetries: config.transientRetries, validationRetries: config.validationRetries, llmResponseTimeoutMs: config.llmResponseTimeoutMs, unresponsiveBoundMs, resting: () => this.restCause !== null, switchPending };
+    return { cell, memory: this.memory, catalogue: this.catalogue, waits: this.waits, transientRetries: config.transientRetries, validationRetries: config.validationRetries, llmResponseTimeoutMs: config.llmResponseTimeoutMs, unresponsiveBoundMs, resting: () => this.restCause !== null, switchPending, moved: () => this.deps.owner.refreshRecord() };
   }
 
   /**
@@ -1415,7 +1448,9 @@ export class Run {
       const current = this.memory.effective(base, this.catalogue);
       const persona = this.deps.personas?.resolve(config.persona)?.persona;
       const previous = this.rootCell;
-      this.rootCell = agentCell(current, this.fallbackFor(persona, current));
+      // The key the cell is taken from: the override the memory followed, else the switched key, else the configured one.
+      const key = this.memory.overrideReaching(base, this.catalogue)?.key ?? (this.entryOverride.model === undefined ? config.modelKey : this.entryOverride.key) ?? null;
+      this.rootCell = agentCell(current, this.fallbackFor(persona, current), key);
       if (previous) { this.rootCell.fallbackAttempted = previous.fallbackAttempted; this.rootCell.sameTierAttempted = previous.sameTierAttempted; for (const p of previous.attempted) this.rootCell.attempted.add(p); }
       this.appliedEntryModel = entryModel;
     } else if (this.pendingEntrySwitch === 'reasoning') {
@@ -1713,6 +1748,10 @@ export class Run {
           children.closeGivenUpOn();
         }
       }
+      // REQ-ORCH-053 / REQ-ORCH-098: the iteration's children are torn down — finalized, or paused by the rest — so their
+      // scheduler is closed: a child execution settling after this runs no pass against a store that may be closed by then
+      // (the repair of a-childs-closing-scheduler-pass-can-outlive-the-run-that-awaited-it).
+      children?.close();
       // A root given up on, or whose turn raised, that no rest paused — the explicit cancel, an iteration that closes
       // failed — still leaves no call row running (REQ-SESSION-129): its open call is recorded cut off, naming no rest
       // (OQ-96, "A call cut by no rest").
@@ -2061,7 +2100,7 @@ export class Run {
       return true;
     }
     this.clearChosenExclusion(key, providerIdentity(this.catalogue, resolved.choice.model), resolved.choice.model.modelId);
-    this.entryOverride = { ...this.entryOverride, model: resolved.choice.model };
+    this.entryOverride = { ...this.entryOverride, model: resolved.choice.model, key };
     this.pendingEntrySwitch = 'model';
     // OQ-177: the switch applies over a ladder move; a change-model resolution persisted for the pair (REQ-ORCH-091 d)
     // stands for the rest of the session, and then the row says where the entry agent runs instead.
@@ -2108,7 +2147,7 @@ export class Run {
         : `The user chose ${key} (${toProvider}/${choice.model.modelId}) during the wait on ${shown.provider}/${shown.model}; ${w.agent}, waiting on ${w.provider}/${w.model}, resumes on it, and it stands for the rest of the session.`;
       this.deps.writer.appendTimeline('model_override', 'user', message, { provider: w.provider, model: w.model, model_key: key, to_provider: toProvider, to_model: choice.model.modelId, supersedes: root && pending, ...(root ? {} : { switch_pending: pending }) });
     }
-    if (rootMoved) { this.entryOverride = { ...this.entryOverride, model: choice.model }; this.entrySwitchPending = false; }
+    if (rootMoved) { this.entryOverride = { ...this.entryOverride, model: choice.model, key }; this.entrySwitchPending = false; }
   }
   /**
    * REQ-MONITOR-194: "Choosing it explicitly clears the recorded exclusion for that pair, so it is eligible again until a

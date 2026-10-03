@@ -85,6 +85,6 @@ export function StatusStripItem({ item }: { readonly item: Exclude<StripItem, { 
   }
   return (
     <span ref={setBox} className="status-strip__item" data-elide={elide} data-middle={middle ? '1' : undefined} style={sizing}
-      aria-label={item.name} aria-description={item.title} title={item.title} data-branch-state={item.state} data-figure={item.figure ? '1' : undefined} data-strong={item.strong ? '1' : undefined} data-testid={item.testId}>{content}</span>
+      aria-label={item.name} aria-description={item.description ?? item.title} title={item.title} data-branch-state={item.state} data-figure={item.figure ? '1' : undefined} data-strong={item.strong ? '1' : undefined} data-testid={item.testId}>{content}</span>
   );
 }

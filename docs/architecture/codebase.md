@@ -323,7 +323,10 @@ in `configuration.ts`'s header.)
    effective root the worktree while the record and the configuration stay with the base; REQ-GIT-104's
    fixed-identity notice; the strip's branch item. `pnpm git-proof` drives seven launches: painted, a worktree
    created through the dialog, an isolated run whose `write_file` lands in the worktree and not the base, the forced
-   delete against a real refusal, the split restored, `PATH` without Git, a plain folder. **Found:** nothing in the
+   delete against a real refusal, the split restored, `PATH` without Git, a plain folder (since the acceptance repair F8,
+   2026-10-03, an eighth launch reopens the isolated session with its branch one commit ahead of its own upstream: the
+   strip's ` ↑1` for the worktree branch, read as each worktree row's `upstreamAhead`, and REQ-WORKSPACE-020's worktree
+   clause in the accessible description alone). **Found:** nothing in the
    helper or the reads; three findings in the new screen and the seams, fixed in place (a fresh array per render
    looped React; an occluded window stops painting so the capture lagged the DOM — throttling off while capturing;
    a "plain folder" under the checkout is inside a repository, REQ-GIT-103 as written). ADR-0049's single notice slot

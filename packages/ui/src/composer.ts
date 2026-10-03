@@ -106,7 +106,7 @@ export function statusStripSandboxItem(session: { readonly sandboxed: boolean; r
  * the list never carries it.
  */
 export type StripItem =
-  | { readonly kind: 'text'; readonly text: string; readonly name: string; readonly title: string; readonly testId: string; readonly state?: string; readonly figure?: true; readonly strong?: true; readonly middle?: true; readonly suffix?: string; readonly icon?: string }
+  | { readonly kind: 'text'; readonly text: string; readonly name: string; readonly title: string; readonly testId: string; readonly state?: string; readonly figure?: true; readonly strong?: true; readonly middle?: true; readonly suffix?: string; readonly icon?: string; readonly description?: string }
   | { readonly kind: 'link'; readonly text: string; readonly name: string; readonly title: string; readonly testId: string; readonly onActivate: () => void; readonly middle?: true }
   | { readonly kind: 'spacer' };
 /*
@@ -117,7 +117,9 @@ export type StripItem =
  * beside a long path; the branch item carries `middle` only while it shows a branch name. `suffix`: fixed text drawn after the
  * label and never shortened — the branch item's ` ↑{n}` ahead marker, which is not part of the branch name. `icon`: a
  * Phosphor glyph drawn before the label in the accent colour — the branch item's `ph-git-branch` (REQ-SHELL-042,
- * REQ-WORKSPACE-020), only where the item shows a branch name.
+ * REQ-WORKSPACE-020), only where the item shows a branch name. `description`: the accessible description where it is not
+ * the tooltip — only the branch item's while it names an isolated worktree's branch, which adds that the branch is the
+ * worktree's (REQ-WORKSPACE-020); every other item's description is its `title`.
  */
 
 /** REQ-SHELL-047: below this window width the workspace-path item is hidden (a specification value, stated as it states it). */
@@ -220,7 +222,7 @@ export function stripCostText(cost: string | null): string | null {
 export interface StripFacts {
   /** The workspace folder's path, as the title bar's chip shows it, and the action opening it (REQ-SHELL-040). */
   readonly workspace: { readonly label: string; readonly path: string; readonly open: () => void } | null;
-  readonly branch: { readonly text: string; readonly suffix?: string | undefined; readonly title: string; readonly state?: string | undefined };
+  readonly branch: { readonly text: string; readonly suffix?: string | undefined; readonly title: string; readonly description?: string | undefined; readonly state?: string | undefined };
   readonly safety: SafetyFacts;
   readonly sandbox: { readonly text: string; readonly name: string; readonly title: string; readonly testId: string } | null;
   /** REQ-SHELL-043: the model a run started from this window uses, and the short form the composer's chip shows. */
@@ -251,6 +253,8 @@ export function stripItems(width: number, f: StripFacts): StripItem[] {
     // repair round `middle` was set in every state and a long path beside the item cut `no git repository` to `no …ry`.
     ...(f.branch.state === 'branch' ? { icon: 'ph-git-branch', middle: true as const } : {}),
     ...(f.branch.suffix ? { suffix: f.branch.suffix } : {}),
+    // REQ-WORKSPACE-020: an isolated worktree's branch adds to the description alone; the tooltip stays the base sentence.
+    ...(f.branch.description !== undefined && f.branch.description !== f.branch.title ? { description: f.branch.description } : {}),
     ...(f.branch.state === undefined ? {} : { state: f.branch.state }),
   });
   items.push({ kind: 'spacer' });

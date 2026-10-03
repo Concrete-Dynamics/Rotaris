@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { nodeClocks } from '@rotaris/platform';
-import { ageLabel, excludedPath, normalisePath, parseLog, parseNumstat, parseStatusPaths, parseWorktreeList, readGitView, resolvedPath, samePath } from '../index.js';
+import { ageLabel, excludedPath, normalisePath, parseLog, parseNumstat, parseStatusPaths, parseUpstreamAhead, parseWorktreeList, readGitView, resolvedPath, samePath } from '../index.js';
 
 /**
  * ADR-0038's second execution (Part O): the Git view's reads — the parsers as pure functions, REQ-GIT-003's exclusion,
@@ -43,6 +43,10 @@ describe('the parsers are pure functions of Git\'s machine-readable output', () 
   it('log records: hash, subject, author, an ISO instant from the unix seconds', () => {
     const line = ['0123456789abcdef0123456789abcdef01234567', 'first', 'r', '1700000000'].join('\u001f');
     expect(parseLog(`${line}\nnot-a-record\n`)).toEqual([{ hash: '0123456789abcdef0123456789abcdef01234567', subject: 'first', author: 'r', at: '2023-11-14T22:13:20.000Z' }]);
+  });
+  it('for-each-ref upstream:track: each branch\'s commits ahead of its own upstream, 0 with none, level or gone (REQ-WORKSPACE-020)', () => {
+    const text = ['refs/heads/main\0[ahead 1]', 'refs/heads/feature/x\0[ahead 2, behind 3]', 'refs/heads/behind-only\0[behind 4]', 'refs/heads/gone\0[gone]', 'refs/heads/level\0', 'refs/heads/no-upstream\0', 'garbage', ''].join('\n');
+    expect([...parseUpstreamAhead(text)]).toEqual([['main', 1], ['feature/x', 2], ['behind-only', 0], ['gone', 0], ['level', 0], ['no-upstream', 0]]);
   });
   it('normalises separators and, on win32, case', () => {
     expect(normalisePath('D:\\A\\B\\', 'win32')).toBe('d:/a/b');
@@ -133,6 +137,37 @@ describe.skipIf(!gitPresent)('readGitView against a repository this test creates
     expect(fromLinked.worktrees.find((w) => w.isBase)).toMatchObject({ branch: 'main', additions: 1, files: 2 });
     expect(fromLinked.upstream).toBeNull();
     expect(fromLinked.history.some((h) => h.local)).toBe(false);
+  }, 60_000);
+
+  it('REQ-WORKSPACE-020: each tree carries its branch\'s count ahead of ITS upstream, apart from the base-branch count', async () => {
+    git(ws, 'init', '-q', '-b', 'main');
+    writeFileSync(join(ws, '.gitignore'), '.rotaris/\n');
+    git(ws, 'add', '.');
+    commit(ws, 'first');
+    const bare = join(root, 'remote.git');
+    git(root, 'clone', '-q', '--bare', ws, bare);
+    git(ws, 'remote', 'add', 'origin', bare);
+    git(ws, 'push', '-q', '-u', 'origin', 'main');
+    // An isolated worktree's branch pushed with an upstream, then two commits of its own: 2 ahead of its upstream and of main.
+    const tracked = join(root, 'tracked');
+    git(ws, 'worktree', 'add', '-q', '-b', 'rotaris/session/S', tracked, 'HEAD');
+    git(tracked, 'push', '-q', '-u', 'origin', 'rotaris/session/S');
+    commit(tracked, 'one');
+    commit(tracked, 'two');
+    // A branch with no upstream and one commit: 1 ahead of main (REQ-GIT-085), 0 against an upstream it does not have.
+    const loose = join(root, 'loose');
+    git(ws, 'worktree', 'add', '-q', '-b', 'loose', loose, 'HEAD');
+    commit(loose, 'loose');
+    const det = join(root, 'det');
+    git(ws, 'worktree', 'add', '-q', '--detach', det, 'HEAD');
+
+    const state = await readGitView(ws, { clocks });
+    expect(state.failed).toEqual([]);
+    const row = (branch: string | null) => state.worktrees.find((w) => w.branch === branch && (branch !== null || !w.isBase))!;
+    expect(row('main')).toMatchObject({ isBase: true, ahead: 0, upstreamAhead: 0 });
+    expect(row('rotaris/session/S')).toMatchObject({ ahead: 2, upstreamAhead: 2 });
+    expect(row('loose')).toMatchObject({ ahead: 1, upstreamAhead: 0 });
+    expect(row(null)).toMatchObject({ upstreamAhead: 0 });
   }, 60_000);
 
   it('a detached base tree gives every non-base figure the empty value, and a commit-less repository shows no log', async () => {

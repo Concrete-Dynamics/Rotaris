@@ -1269,7 +1269,7 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
       // REQ-SHELL-038/039/040: the workspace path, as the title-bar chip shortens it, a link to the folder.
       workspace: workspace === '(no workspace)' ? null : { label: collapseHome(workspace, home), path: workspace, open: () => { openWorkspaceFolder(workspace); } },
       // REQ-SHELL-038 / REQ-GIT-122/161: the checked-out branch, the focused session's worktree branch first.
-      branch: { text: branchItem.text, suffix: branchItem.suffix, title: branchItem.title, state: branchItem.state },
+      branch: { text: branchItem.text, suffix: branchItem.suffix, title: branchItem.title, description: branchItem.description, state: branchItem.state },
       // REQ-SHELL-041 / REQ-TOOLS-184: text, never colour alone. With no session focused the mode is the configured preset
       // the next run starts from, never a literal (live-run finding L7).
       safety: { circuitBreakerArmed, unsavedSettings, outsideWorkspace, mode: statusStripModeItem(focusedMode, configuredMode) },

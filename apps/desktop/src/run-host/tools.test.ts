@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset } from '@rotaris/contracts';
-import { loadConfiguration, renderMcpSection, type PersonaMcpSurface } from '@rotaris/config';
+import { CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, loadConfiguration, renderMcpSection, type LoadedConfiguration, type PersonaMcpSurface } from '@rotaris/config';
 import { anySchema, gitReadTool, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type ToolExecutor } from '@rotaris/agent-tools';
 import { SessionWriter, UserPresence, type ToolPortContext } from '@rotaris/engine';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
@@ -706,6 +706,127 @@ ${coder('    tool_restrictions:\n      coding-agent: [read_file, grep, terminal]
     expect(warnings.some((w) => w.includes("the tool name 'grep' collides with a native tool of coding-agent"))).toBe(true);
     expect(p.promptSection?.()).toBe('## MCP servers\n\n- `srv`');
     expect(p.grant?.()?.mcp.granted).toEqual({ srv: [] });
+  });
+});
+
+/**
+ * REQ-MCP-034's isolated-run clause, found by the default live run at 1763f7f (finding D1): a run confined to a worktree had
+ * its code-intelligence server launched with `--project <the anchoring workspace root>`, so its diagnostics answered from
+ * the main checkout. The port hands the MCP host the configuration it launches from; the command line it carries is read
+ * here, whole, for a port whose context names a worktree as its execution root.
+ */
+describe('REQ-MCP-034: the code-intelligence binding of a run in an isolated working tree', () => {
+  let dir: string;
+  let worktree: string;
+  let dal: StoreDal;
+  let writer: SessionWriter;
+  const warnings: string[] = [];
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-port-isolated-'));
+    worktree = join(dir, '.rotaris', 'requirements', 'worktrees', 'rotaris-req-req-104-u1');
+    mkdirSync(worktree, { recursive: true });
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+    const created = SessionWriter.create(
+      { dal, sessionId: asSessionId('S1'), wall: new FakeClock(), retentionCap: 0, warn: (m) => warnings.push(m), onCommitted: () => undefined },
+      { workspaceRoot: dir, pid: 1, host: mintMachineId('0000000000000000000000000000000a') },
+    );
+    if (!created.ok) throw new Error('writer');
+    writer = created.value;
+    warnings.length = 0;
+  });
+  afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  /** What the port handed the MCP host: the configuration and the root, per call. */
+  interface Seen { readonly call: 'prepare' | 'surfaceFor' | 'executorsFor'; readonly cfg: LoadedConfiguration; readonly root: string }
+
+  async function readyPort(effectiveRoot: string | undefined, entry = '') {
+    mkdirSync(join(dir, '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), `default_persona: coding-agent
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+  coding-agent:
+    name: coding-agent
+    model: selected
+    mcp_servers: [code_intelligence]
+${entry}runtime:
+  permission_mode: autonomous
+`);
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
+    if (!loaded.ok) throw new Error('configuration');
+    const cfg = loaded.value;
+    const resolver = personaResolverFor(cfg, true, (m) => warnings.push(m));
+    const seen: Seen[] = [];
+    const deps: ToolPortDeps = {
+      clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver,
+      presenter: { present: async () => ({ ok: true }), close: () => undefined }, nextSequence: () => 1, fileStates: new Map(), terminal: null,
+      egress: () => permissivePolicyRead,
+      mcp: {
+        prepare: async (c: LoadedConfiguration, root: string) => { seen.push({ call: 'prepare', cfg: c, root }); },
+        surfaceFor: (c: LoadedConfiguration, root: string): PersonaMcpSurface => { seen.push({ call: 'surfaceFor', cfg: c, root }); return { persona: 'coding-agent', active: [], dropped: [] } as unknown as PersonaMcpSurface; },
+        section: () => '',
+        executorsFor: (a: { cfg: LoadedConfiguration; workspaceRoot: string }) => { seen.push({ call: 'executorsFor', cfg: a.cfg, root: a.workspaceRoot }); return []; },
+      } as unknown as McpHost,
+      configured: () => ({ cfg }) as unknown as ConfiguredRun,
+    };
+    const p = createToolPort({
+      sessionId: asSessionId('S1'), workspaceRoot: dir, ...(effectiveRoot === undefined ? {} : { effectiveRoot }), writer, persona: 'coding-agent', agentName: 'coding-agent',
+      requestedMode: 'autonomous', modeOverride: null, attended: () => true, warn: (m) => warnings.push(m), info: () => undefined, abortRun: () => undefined,
+    }, deps);
+    await p.ready?.();
+    return seen;
+  }
+
+  const argsOf = (cfg: LoadedConfiguration, name: string): readonly string[] => {
+    const d = cfg.mcp.servers[name]!.description;
+    if (d.transport !== 'stdio') throw new Error(`${name} is not a stdio server`);
+    return d.args;
+  };
+
+  it('the command line every MCP call is handed ends with the project-path option and the worktree\'s root, and the anchoring root is absent', async () => {
+    const seen = await readyPort(worktree);
+    expect(seen.map((s) => s.call)).toEqual(['prepare', 'surfaceFor', 'executorsFor']);
+    for (const s of seen) {
+      const args = argsOf(s.cfg, 'code_intelligence');
+      expect(args.slice(-2)).toEqual([CODE_INTELLIGENCE_BINDING.projectPathOption, worktree]);
+      expect(args).not.toContain(dir);
+      expect(args.filter((a) => a === CODE_INTELLIGENCE_BINDING.projectPathOption)).toHaveLength(1);
+      expect(s.cfg.mcp.servers['code_intelligence']!.resolved?.args.slice(-2)).toEqual([CODE_INTELLIGENCE_BINDING.projectPathOption, worktree]);
+    }
+    // Discovery and the surface are memoised per root: the worktree's, so a base-tree run's memo is never reused.
+    expect(seen.filter((s) => s.call !== 'executorsFor').map((s) => s.root)).toEqual([worktree, worktree]);
+  });
+
+  it('a run in the base tree keeps the workspace root, exactly as configured', async () => {
+    for (const effectiveRoot of [undefined, dir]) {
+      const seen = await readyPort(effectiveRoot);
+      for (const s of seen) expect(argsOf(s.cfg, 'code_intelligence').slice(-2)).toEqual([CODE_INTELLIGENCE_BINDING.projectPathOption, dir]);
+    }
+  });
+
+  it('a project selection the entry already carries is left exactly as configured, isolated or not', async () => {
+    const pinned = join(dir, 'elsewhere');
+    const entry = `mcp_servers:
+  code_intelligence:
+    type: stdio
+    command: builtin:code-intelligence
+    args: [${CODE_INTELLIGENCE_DEFAULT_ARGS.join(', ')}, ${CODE_INTELLIGENCE_BINDING.projectPathOption}, ${pinned}]
+`;
+    const seen = await readyPort(worktree, entry);
+    for (const s of seen) {
+      const args = argsOf(s.cfg, 'code_intelligence');
+      expect(args.slice(-2)).toEqual([CODE_INTELLIGENCE_BINDING.projectPathOption, pinned]);
+      expect(args).not.toContain(worktree);
+    }
   });
 });
 

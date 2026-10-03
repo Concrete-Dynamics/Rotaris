@@ -58,7 +58,7 @@ interface Harness {
   readonly coordinator: InitializationCoordinator;
   readonly published: InitializationStateView[];
   readonly publishedTo: string[];
-  readonly banners: { headline: string; detail: string }[];
+  readonly banners: { headline: string; message: string; detail: string }[];
   readonly writes: PlainMap[];
   readonly logs: { message: string; level: string }[];
   readonly root: string;
@@ -77,7 +77,7 @@ function harness(options: { applicable?: boolean; startRefusal?: { code: string;
   const published: InitializationStateView[] = [];
   /** The root each entry of `published` was sent for, index for index. */
   const publishedTo: string[] = [];
-  const banners: { headline: string; detail: string }[] = [];
+  const banners: { headline: string; message: string; detail: string }[] = [];
   const writes: PlainMap[] = [];
   const logs: { message: string; level: string }[] = [];
   const addressed: { call: 'start' | 'cancel' | 'status'; workspaceId: string }[] = [];
@@ -108,7 +108,7 @@ function harness(options: { applicable?: boolean; startRefusal?: { code: string;
       status: async (workspaceId) => { addressed.push({ call: 'status', workspaceId }); await options.statusGate; await options.hold?.current; if (options.statusRejects) throw options.statusRejects; return options.statusAnswer ?? status({ applicable: options.applicable !== false }); },
     },
     publish: (publishedRoot, s) => { publishedTo.push(publishedRoot); published.push(s); },
-    banner: (headline, detail) => banners.push({ headline, detail }),
+    banner: (headline, message, detail) => banners.push({ headline, message, detail }),
     modelReachable: () => options.modelReachable !== false,
     quitting: () => options.quitting?.current === true,
   });
@@ -242,7 +242,13 @@ describe('resolution on workspace open', () => {
     expect(task.retryable).toBe(true);
     // REQ-WORKSPACE-084: a failure records nothing, so the task stays pending.
     expect(readInitializationState(h.agents).completed).toEqual([]);
-    expect(h.banners[0]).toEqual({ headline: 'Project setup did not finish', detail: CODE_INTELLIGENCE_FAILED_SUMMARY });
+    // The summary is the banner's sentence; its detail area says which stage failed and what it printed (REQ-NOTIFY-005).
+    expect(h.banners[0]).toEqual({
+      headline: 'Project setup did not finish',
+      message: CODE_INTELLIGENCE_FAILED_SUMMARY,
+      detail: "Code intelligence could not index this project's symbols: indexer: no such language\n"
+        + 'Project configuration: succeeded — made\nSymbol indexing: failed — indexer: no such language\nMemory-layout seeding: not-attempted',
+    });
   });
 
   /**
@@ -384,7 +390,7 @@ describe('resolution on workspace open', () => {
     expect(task.summary).toBe(CODE_INTELLIGENCE_FAILED_SUMMARY);
     expect(`${task.error} ${task.summary}`).not.toContain('not a local launch');
     expect(`${task.error} ${task.summary}`).not.toContain('was skipped');
-    expect(h.banners).toEqual([{ headline: 'Project setup did not finish', detail: CODE_INTELLIGENCE_FAILED_SUMMARY }]);
+    expect(h.banners).toEqual([{ headline: 'Project setup did not finish', message: CODE_INTELLIGENCE_FAILED_SUMMARY, detail: task.error }]);
     expect(h.logs.some((l) => l.message.includes(`refused`) && l.message.includes(refusal.code))).toBe(true);
     // REQ-WORKSPACE-084: a failure records nothing, so the task stays pending for the next open.
     expect(readInitializationState(h.agents).completed).toEqual([]);
@@ -864,7 +870,7 @@ describe('closing a workspace', () => {
     const h = harness({ applicable: false, writeHold: { current: failing } });
     const state = await h.coordinator.resolve(h.root, true);
     expect(state.resolutionFailed).toBe(true);
-    expect(h.banners).toEqual([{ headline: 'Project setup could not be checked', detail: 'Rotaris could not work out whether this workspace still needs setting up. Runs are not blocked; you can check again.' }]);
+    expect(h.banners).toEqual([{ headline: 'Project setup could not be checked', message: 'Rotaris could not work out whether this workspace still needs setting up. Runs are not blocked; you can check again.', detail: 'Error: link closed' }]);
     expect(h.logs).toContainEqual({ level: 'warn', message: `initialization: resolution failed for ${h.root} (Error: link closed)` });
   });
 
@@ -1128,7 +1134,7 @@ describe('a setup request the run host never answers', () => {
     expect(task.error).toBe(`Code intelligence could not complete this project's setup: ${SETUP_START_UNANSWERED_DETAIL} (${NO_REPLY.message})`);
     expect(task.summary).toBe(CODE_INTELLIGENCE_FAILED_SUMMARY);
     expect(task.error).not.toContain('ended without reporting an outcome');
-    expect(h.banners).toEqual([{ headline: 'Project setup did not finish', detail: CODE_INTELLIGENCE_FAILED_SUMMARY }]);
+    expect(h.banners).toEqual([{ headline: 'Project setup did not finish', message: CODE_INTELLIGENCE_FAILED_SUMMARY, detail: task.error }]);
     expect(h.logs.some((l) => l.level === 'warn' && l.message.includes('did not answer') && l.message.includes(NO_REPLY.message))).toBe(true);
     // REQ-WORKSPACE-084: a failure records nothing, so the task stays pending for the next open.
     expect(readInitializationState(h.agents).completed).toEqual([]);
@@ -1189,7 +1195,7 @@ describe('a setup whose finished status never arrives', () => {
     expect(h.logs).toContainEqual({ level: 'info', message: `initialization: ${CODE_INTELLIGENCE_TASK_ID} → failure — ${error}` });
     expect(readInitializationState(h.agents).completed).toEqual([]);
     expect(readInitializationState(h.agents).lastRun).toBeNull();
-    expect(h.banners).toEqual([{ headline: 'Project setup did not finish', detail: CODE_INTELLIGENCE_FAILED_SUMMARY }]);
+    expect(h.banners).toEqual([{ headline: 'Project setup did not finish', message: CODE_INTELLIGENCE_FAILED_SUMMARY, detail: `${error}\nProject configuration: succeeded` }]);
     // The queued run's setup starts, and is followed to its own outcome.
     expect(starts).toBe(2);
     h.push(completedSetup());

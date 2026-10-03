@@ -118,6 +118,18 @@ const stepDetail = (s: McpSetupStatus['steps'][number]): string => {
   return lastUtf8Bytes(s.output ?? '', STEP_DETAIL_BYTES);
 };
 
+/**
+ * REQ-NOTIFY-005/037: the technical text of a failed background run's banner — what REQ-WORKSPACE-093 reports ("{reason}:
+ * {detail}") and, under it, each finished step with its own detail (the last 400 bytes of its output, REQ-WORKSPACE-092), so
+ * the banner's detail area says which stage failed and what it printed rather than restating the summary above it.
+ */
+export function failureDetail(failed: readonly { readonly error: string; readonly steps: readonly { readonly name: string; readonly status: string; readonly detail: string }[] }[]): string {
+  return failed
+    .map((t) => [t.error, ...t.steps.map((s) => (s.detail === '' ? `${s.name}: ${s.status}` : `${s.name}: ${s.status} — ${s.detail}`))].filter((line) => line !== '').join('\n'))
+    .filter((block) => block !== '')
+    .join('\n\n');
+}
+
 /** REQ-WORKSPACE-095: the two success summaries, by classification. */
 export const CODE_INTELLIGENCE_SUCCESS_CODE = 'Code intelligence is set up for this project and its symbols are indexed.';
 export const CODE_INTELLIGENCE_SUCCESS_NON_CODE = 'Code intelligence is set up for this project. No symbols were indexed because the workspace contains documentation only.';
@@ -175,8 +187,12 @@ export interface InitializationDeps {
    * workspace's). With two main windows open (PD-SHELL-001) the other window holds another workspace.
    */
   readonly publish: (root: string, state: InitializationStateView) => void;
-  /** REQ-WORKSPACE-103: a failed background run reaches a banner, never a dialog. */
-  readonly banner: (headline: string, detail: string) => void;
+  /**
+   * REQ-WORKSPACE-103: a failed background run reaches a banner, never a dialog. `message` is the banner's visible sentence
+   * (the task's own summary); `detail` is the technical text REQ-NOTIFY-005 keeps in the separate, copyable detail area —
+   * empty where there is none.
+   */
+  readonly banner: (headline: string, message: string, detail: string) => void;
   /** REQ-WORKSPACE-110: a consent task runs an agent, so it needs a reachable model. */
   readonly modelReachable: () => boolean;
   /**
@@ -675,7 +691,7 @@ export class InitializationCoordinator {
         return await this.viewFor(e);
       }
       this.deps.log(`initialization: resolution failed for ${e.root} (${String(cause)})`, 'warn');
-      this.deps.banner(RESOLUTION_FAILED_HEADLINE, RESOLUTION_FAILED_DETAIL);
+      this.deps.banner(RESOLUTION_FAILED_HEADLINE, RESOLUTION_FAILED_DETAIL, String(cause));
       await this.publish(e);
       return await this.viewFor(e);
     }
@@ -726,7 +742,8 @@ export class InitializationCoordinator {
       e.lastError = failed.length === 0 ? null : failed.map((t) => t.error).join(' ');
       if (background && failed.length > 0 && !e.closed) {
         // REQ-WORKSPACE-103: a banner carrying the task's own summary, with the stated fallback.
-        this.deps.banner(BACKGROUND_FAILED_HEADLINE, failed[0]?.summary ?? BACKGROUND_FAILED_FALLBACK);
+        // The summary is a fixed sentence and says nothing of what went wrong; what did is the task's error and its steps.
+        this.deps.banner(BACKGROUND_FAILED_HEADLINE, failed[0]?.summary ?? BACKGROUND_FAILED_FALLBACK, failureDetail(failed));
       }
       for (const t of result.report.tasks) this.deps.log(`initialization: ${t.id} → ${t.status}${t.error === '' ? '' : ` — ${t.error}`}`);
     } catch (cause) {
@@ -734,7 +751,7 @@ export class InitializationCoordinator {
       e.lastError = String(cause);
       e.report = { running: false, current: null, currentLabel: '', currentSteps: [], tasks: [], outcome: 'failed', error: String(cause) };
       this.deps.log(`initialization: the run broke down for ${e.root} (${String(cause)})`, 'warn');
-      if (background && !e.closed) this.deps.banner(BACKGROUND_FAILED_HEADLINE, `${BACKGROUND_FAILED_FALLBACK} ${BACKGROUND_BROKE_DOWN}`);
+      if (background && !e.closed) this.deps.banner(BACKGROUND_FAILED_HEADLINE, `${BACKGROUND_FAILED_FALLBACK} ${BACKGROUND_BROKE_DOWN}`, String(cause));
     } finally {
       e.running = null;
       e.attempting = new Set();

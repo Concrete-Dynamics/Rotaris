@@ -64,6 +64,11 @@ bare (REQ-MCP-048, REQ-MCP-101). The inspector and the persona window print the 
 view**'s MCP surface paragraph and its `children` row say so. No package, edge, process, channel, command or store column
 changed (`granted_mcp` is the existing JSON column).
 
+**A failed project setup's banner carries its technical text in its Details area (REQ-NOTIFY-005, REQ-WORKSPACE-092/093/103).** The
+initialization coordinator's `banner` dependency takes `(headline, message, detail)`: the task's summary is the message row,
+and the detail is the task's `{reason}: {detail}` error followed by one line per finished step (`failureDetail`), or the
+cause where the resolution or the run broke down. Main raises it as one `error` notice with all three parts.
+
 **The status strip names an isolated worktree's branch with its own ahead count (REQ-WORKSPACE-020, REQ-SHELL-042; acceptance
 repair F8).** `GitWorktreeRow` gains `upstreamAhead` (the tree's branch against its own upstream, one `for-each-ref` read in
 `readGitView`), `branchStripItem` draws the worktree branch's ` ↑{n}` from it with the base checkout's sentences, and a strip

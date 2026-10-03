@@ -1146,7 +1146,7 @@ async function main(): Promise<void> {
     publish: (root, state) => {
       for (const holder of mainWindows.holding(root)) holder.win.webContents.send(CHANNEL.initializationState, { v: CONTRACT_SCHEMA_VERSION, ...state });
     },
-    banner: (headline, detail) => raiseNotice('error', headline, detail),
+    banner: (headline, message, detail) => { void notices.report({ severity: 'error', title: headline, message, ...(detail === '' ? {} : { detail }) }); },
     modelReachable: () => providers.list().some((row) => row.authenticated),
     quitting,
   });

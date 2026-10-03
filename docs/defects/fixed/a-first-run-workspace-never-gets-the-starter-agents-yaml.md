@@ -43,9 +43,15 @@ repair.
   nulls); none of it reaches the file.
 - **REQ-WORKSPACE-135**: the guided provider setup writes the bootstrap only when no `agents.yaml` exists, so it cannot
   repair a file initialization already created. Not contradicted: it behaves as written.
-- **REQ-CONFIG-030**: names the desktop save and the per-field path as writers that do not bootstrap. The marker writer
-  is the per-field path, so having it bootstrap a missing file would contradict this requirement. The reading the
-  repair takes is REQ-CONFIG-025's own: the bootstrap happens at the open, before anything else writes the file.
+- **REQ-CONFIG-030**: names the desktop save and the per-field path as writers that do not bootstrap. *The reading at
+  recording time, superseded by the repair:* "The marker writer is the per-field path, so having it bootstrap a missing
+  file would contradict this requirement. The reading the repair takes is REQ-CONFIG-025's own: the bootstrap happens at
+  the open, before anything else writes the file." *Superseded because* the marker writer is not the per-field path
+  itself but a writer of the persisted initialization state, which REQ-WORKSPACE-040 has write the minimal bootstrap
+  first when no `agents.yaml` exists. The repair therefore has the marker writer ask `config.bootstrap` before its
+  record (`serviceMarkerWriter`, commit `f9365cd`), while the per-field path it then calls (`config.setField`,
+  REQ-CONFIG-441) still never bootstraps, so REQ-CONFIG-030 holds. The bootstrap at the open (REQ-CONFIG-025) stays the
+  first of the two; see the Outcome.
 - **REQ-WORKSPACE-078 / REQ-WORKSPACE-079**: the starter carries no `initialization:` key, so a bootstrapped file still
   reads as never initialized, and the marker write preserves every other top-level key; both hold under the repair.
 

@@ -12,12 +12,13 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
  * (REQ-MONITOR-117..119), and since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
- * Nineteen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
+ * Twenty-one scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
  * REQ-NOTIFY-064's notice, `auth-fallback` the first failure's automatic fallback and its re-authentication prompt,
  * `auth-fallback-dialog` the two together, `auth-fallback-revise` a failed revise cycle restarted as the same revise; and
  * `quota-retry`, REQ-MONITOR-194's explicit choice of the waiting pair clearing its exclusion; since fin10 `two-waits`, one
  * choice resolving two waits on two pairs and persisting both overrides across a reload; and `next-run-choice`, the
- * composer's next-run model chip clearing the exclusion of the pair it chooses), each
+ * composer's next-run model chip clearing the exclusion of the pair it chooses; since 2026-10-03 `child-timeout-inspector`,
+ * the inspector naming a child's REQ-ORCH-088 fallback and measuring its ring against it, REQ-MONITOR-052/049), each
  * asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
@@ -63,8 +64,8 @@ function scenario(name, agentsYaml, opts = {}) {
   writeFileSync(join(workspace, 'README.md'), '# proof\n');
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
     'models:',
-    `  alpha: { provider: ${opts.alphaProvider ?? 'scripted'}, model_id: alpha }`,
-    '  beta: { provider: scripted-b, model_id: beta }',
+    `  alpha: { provider: ${opts.alphaProvider ?? 'scripted'}, model_id: alpha${opts.limits?.alpha ? `, max_input_tokens: ${opts.limits.alpha}` : ''} }`,
+    `  beta: { provider: scripted-b, model_id: beta${opts.limits?.beta ? `, max_input_tokens: ${opts.limits.beta}` : ''} }`,
     ...(opts.models ?? []),
     ...['small_model', 'medium_model', 'large_model'].map((slot) => `${slot}: ${opts.tier ?? 'alpha'}`),
     ...(opts.fallback ? [`fallback_model: ${opts.fallback}`] : []),
@@ -663,6 +664,49 @@ await scenarioRun('child-timeout-no-fallback', async () => {
   expect(report.errors.some((e) => e.message === 'Child timed out after 8s'), `the report does not carry the timeout text: ${children[0].report}`);
   expect(kinds.includes('timeout') && !list.includes('fallback_model'), `the timeout issue or a spurious fallback: ${kinds.join(',')} / ${list.join(',')}`);
   results.childTimeoutNoFallback = { child: children[0].state, errors: report.errors.map((e) => e.message), status: row.execution_status, png: r.png, elapsedMs: r.elapsedMs };
+});
+
+// 6c. REQ-MONITOR-052/066/069 with REQ-MONITOR-049 (the repair of a-child-moved-by-a-fallback-is-drawn-on-its-configured-model):
+// the same timeout fallback, driven, with the child selected in the inspector. While the child hangs on alpha its Model reads
+// alpha and its ring alpha's 100,000-token maximum input; once REQ-ORCH-088 retries it on beta (held 3 s, its answers inside the 8 s
+// limit), its Model reads beta and its ring beta's 300,000. Before the repair the record carried `children.model_key` for
+// both, so the inspector read alpha against 100,000 while every call of the retry went to beta.
+const s6c = scenario('child-timeout-inspector', childYaml, { delegation: true, limits: { alpha: 100_000, beta: 300_000 }, personas: ['personas:', '  coding-agent:', '    fallback_model: beta'] });
+await scenarioRun('child-timeout-inspector', async () => {
+  const model = '[data-testid="inspector-model"]';
+  const read = (d) => d.eval(`(() => { const caption = document.querySelector('.inspector__ring-caption')?.textContent ?? ''; return { name: document.querySelector('[data-testid="inspector-name"]')?.textContent ?? null, model: document.querySelector(${JSON.stringify(model)})?.dataset.value ?? null, limit: /of ([\\d,]+) tokens/.exec(caption)?.[1] ?? null }; })()`);
+  const r = await drivenLaunch('child-timeout-inspector', s6c, { ROTARIS_SCRIPT: 'delegate:coding-agent:helper,answer', ROTARIS_CHILD_SCRIPT: 'hang,wait:3000,answer,answer' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('delegate a hanging child, watched in the inspector', { enter: true }));
+    await step('helper in the tree', d.waitFor('.agent-row__task', { text: 'helper', timeoutMs: 30_000 }));
+    await step('select helper', d.click('.agent-row__task', { text: 'helper' }));
+    const before = await step('the inspector on alpha', until(() => read(d), (v) => v?.name === 'helper' && v.model === 'alpha', { timeoutMs: 15_000, what: 'the inspector showing helper on alpha', signal }));
+    await step('the hanging picture', d.screenshot(join(output, 'child-timeout-inspector-alpha.png')));
+    // The ceiling (8 s) asks the child to land, the landing grace's backstop ends the hanging call, and the retry starts on beta.
+    const after = await step('the inspector on beta', until(() => read(d), (v) => v?.name === 'helper' && v.model === 'beta', { timeoutMs: 90_000, intervalMs: 100, what: 'the inspector showing helper on beta during the retry', signal }).catch(async () => read(d)));
+    await step('the retry picture', d.screenshot(join(output, 'child-timeout-inspector-beta.png')));
+    const settled = await step('the run settled', until(() => { const db = open(s6c); try { return session(db); } finally { db.close(); } }, (row) => row !== undefined && SETTLED.has(row.execution_status), { timeoutMs: 90_000, what: 'the session settling', signal }));
+    return { before, after, settled };
+  });
+  const db = open(s6c);
+  const row = session(db);
+  const list = names(db, row.session_id);
+  const children = db.prepare('SELECT canonical_name, state, model_key FROM children WHERE session_id = ?').all(row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed', `the run did not complete: ${JSON.stringify(row)}`);
+  expect(children.length === 1 && children[0].state === 'succeeded' && children[0].model_key === 'alpha', `the child did not succeed on the fallback under its configured key: ${JSON.stringify(children)}`);
+  const entry = list.find((t) => t.name === 'fallback_model');
+  expect(entry !== undefined && JSON.parse(entry.metadata).to_model === 'beta', `no fallback_model entry: ${list.map((t) => t.name).join(',')}`);
+  const childCalls = modelCalls(r.log).filter((c) => c.who === 'child');
+  expect(childCalls[0]?.model === 'scripted/alpha' && childCalls[1]?.model === 'scripted-b/beta', `the child was not retried on beta: ${JSON.stringify(childCalls)}`);
+  expect(r.value.before.limit === '100,000', `the inspector measured the child on alpha against ${JSON.stringify(r.value.before.limit)}, not alpha's 100,000`);
+  expect(r.value.after?.model === 'beta', `the inspector named ${JSON.stringify(r.value.after?.model)} while the child's retry ran on beta`);
+  expect(r.value.after.limit === '300,000', `the inspector measured the child on beta against ${JSON.stringify(r.value.after.limit)}, not beta's 300,000`);
+  results.childTimeoutInspector = { before: r.value.before, after: r.value.after, child: children[0], fallback: JSON.parse(entry.metadata), childCalls, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 // 7. The transient path unchanged (one retry after 1 s, transient_llm_error), and a 401 fails at once with no retry.

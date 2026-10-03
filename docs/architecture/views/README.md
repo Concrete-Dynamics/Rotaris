@@ -58,6 +58,13 @@ bare (REQ-MCP-048, REQ-MCP-101). The inspector and the persona window print the 
 view**'s MCP surface paragraph and its `children` row say so. No package, edge, process, channel, command or store column
 changed (`granted_mcp` is the existing JSON column).
 
+**A child moved by a fallback is drawn on the model it runs on (REQ-MONITOR-052, REQ-MONITOR-066, REQ-MONITOR-069,
+REQ-MONITOR-049; finacc F7).** `resilience.forChild` takes the execution (`{ taskId, key }`), and the run keeps each child's
+cell by task id (`Run.childCells`). `Run.childModel` names a moved cell's key by the run-level agent's rule (`Run.keyOfCell`)
+and gives its model's maximum input, which `toAgentRecord` reads through `AgentFacts.liveModelFor`. REQ-ORCH-088's timeout
+fallback republishes the record (`TurnResilience.moved`). The **process view**'s `SessionRecord` sentence and the **runtime
+view**'s run-level agent paragraph say so. No package, edge, process, channel, command or store column changed.
+
 **A run in an isolated working tree launches its MCP servers bound to that tree's root (REQ-MCP-034, REQ-MCP-050; fin12).**
 `configurationForExecutionRoot` (`run-host/mcp.ts`, over `mcpConfigurationForExecutionRoot` in `config/src/mcp/index.ts`) is
 what the tool port's `ready()` and `session.start`'s discovery ahead of the run hand the MCP host, memoised on the execution

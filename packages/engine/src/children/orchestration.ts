@@ -138,8 +138,13 @@ export interface ChildrenDeps {
   readonly cutCalls?: AbortSignal | undefined;
   /** PD-ORCH-005 clause 10: what a resumed agent is told of the background sessions it had started; null for none. */
   readonly resumeNotice?: ((taskId: string) => ChatMessage | null) | undefined;
-  /** Part Q: the ladder for a child — its own cell (one fallback across both routes, REQ-ORCH-144) over the run's memory and waits. */
-  readonly resilience?: { readonly forChild: (persona: Persona | undefined, current: ModelChoice, unresponsiveBoundMs: number) => TurnResilience } | undefined;
+  /**
+   * Part Q: the ladder for a child — its own cell (one fallback across both routes, REQ-ORCH-144) over the run's memory and
+   * waits. `child` names the execution the cell is built for — its task id and the configured key its row records
+   * (`children.model_key`) — so the run keeps the cell by the task and the record can name the key the child runs on after
+   * a ladder move (REQ-MONITOR-052/066, `Run.childModel`).
+   */
+  readonly resilience?: { readonly forChild: (persona: Persona | undefined, current: ModelChoice, unresponsiveBoundMs: number, child: { readonly taskId: string; readonly key: string }) => TurnResilience } | undefined;
   /**
    * Part AH (ADR-0060): compression for a child — the trigger resolved against the model THIS child calls, and
    * the child's OWN task plan carried across (REQ-MONITOR-078, REQ-MONITOR-084 (4)).
@@ -1112,7 +1117,7 @@ export class IterationChildren implements DelegationOps {
      */
     let corrected = resume !== null && (hadCorrectiveMessage(resume.history) || hadCorrectiveMessage(deps.record?.everRecorded(row.task_id) ?? []));
     // Part Q: the child's own cell — its model (an override of the session applied), its role's fallback, one fallback across both routes.
-    const resilience = deps.resilience?.forChild(persona, { model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, childTimeoutMs) ?? null;
+    const resilience = deps.resilience?.forChild(persona, { model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, childTimeoutMs, { taskId: row.task_id, key: row.model_key }) ?? null;
     // Part AH: this child's own capacity and its own plan — the ledger row is where a child's task plan lives. REQ-MONITOR-080:
     // the model its cell calls next (the session's overrides followed, as the ladder follows them), read at each pass, so a
     // child under an override compresses on the override's model and a ladder move takes its compression along; until
@@ -1319,6 +1324,9 @@ export class IterationChildren implements DelegationOps {
         cell.fallbackAttempted = true;
         cell.model = fb;
         cell.key = null;
+        // REQ-MONITOR-052/066: the move writes no row of the child's, so the record is republished and names the fallback the
+        // retry runs on (`Run.childModel`), as the ladder's own moves do (`TurnResilience.moved`).
+        resilience.moved?.();
         const seconds = childTimeoutMs / 1000;
         const message = `Child ${row.canonical_name} timed out after ${seconds}s on ${providerIdentity(resilience.catalogue, from.model)}/${from.model.modelId}; retried once on the fallback model ${providerIdentity(resilience.catalogue, cell.model.model)}/${cell.model.model.modelId} (REQ-ORCH-088).`;
         // REQ-ORCH-139: the vocabulary's words for REQ-ORCH-088's retry on the role's fallback — the `fallback_model` entry and

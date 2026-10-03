@@ -230,6 +230,12 @@ pnpm live-run --confirm --gui        # the same run, with the window on screen t
 `--session-log-level`, `--app-log-level`, `--no-record-traffic`, `--duress-fixture`) is in the script's own header —
 `pnpm live-run --help` prints it.
 
+**The bundled code-intelligence runtime is a precondition.** With `--skip-build` a tree without it refuses at once, naming
+`pnpm code-intel:bundle`; without `--skip-build` the run builds it before the first launch. Every launch then states
+whether its code-intelligence discovery succeeded (a failure is a FAIL; a launch that starts no run is a NOTE). Until
+2026-10-03 a `--skip-build` run on a tree without the bundle passed while code intelligence never ran
+(`docs/defects/fixed/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md`).
+
 **The default scenarios measure several mechanisms at once, so a feature is proved working beside the others and
 costs no scenario of its own.** `edit` splits REQ-103 between two children writing in parallel under declared write
 scopes (PD-TOOLS-006), and every scenario that reads a session asserts its price exactly (PD-MONITOR-001 revision 2).

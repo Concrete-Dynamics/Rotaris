@@ -3,7 +3,8 @@ import { join, resolve } from 'node:path';
 import { INITIALIZATION_TASK_ID } from './initialization-marker.mjs';
 
 /**
- * The bundled code-intelligence runtime as a precondition of a proof whose subject is project setup itself.
+ * The bundled code-intelligence runtime as a precondition of a proof whose subject is project setup itself, and of the
+ * live run, which judges code intelligence among everything else.
  *
  * `code-intelligence-setup` runs that runtime (`apps/desktop/resources/code-intelligence/`), which git ignores and only
  * `pnpm code-intel:bundle` builds. Without it the setup's `create` exits 127, the task records nothing
@@ -26,17 +27,22 @@ export function runBundleScript(args, timeoutMs) {
 
 const tail = (text) => String(text ?? '').trim().split('\n').slice(-6).join('\n');
 
+/** What `init-proof` loses without the bundle — the refusal's second sentence unless the caller names its own. */
+const PROOF_CONSEQUENCE = 'Without it code-intelligence-setup fails and records nothing (REQ-WORKSPACE-084), so every scenario that expects it recorded would fail on a cause outside this proof.';
+
 /**
  * Makes the bundle present before any launch. `check()` and `build()` answer `{ status, output }` (status 0 = success).
- * With `skipBuild` nothing is built: an absent or stale tree refuses at once, naming the command that builds it.
- * Answers what was done: `'present'` or `'built'`.
+ * With `skipBuild` nothing is built: an absent or stale tree refuses at once, naming the command that builds it, and
+ * `consequence` says what the caller would have judged without it. Answers what was done: `'present'` or `'built'`.
+ * The live run has the same precondition since 2026-10-03
+ * (`docs/defects/fixed/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md`).
  */
-export function ensureBundle({ skipBuild, check = () => runBundleScript(['--check'], 60_000), build = () => runBundleScript([], 900_000) }) {
+export function ensureBundle({ skipBuild, consequence = PROOF_CONSEQUENCE, check = () => runBundleScript(['--check'], 60_000), build = () => runBundleScript([], 900_000) }) {
   const first = check();
   if (first.status === 0) return 'present';
   if (skipBuild) {
     throw new Error(`the bundled code-intelligence runtime is absent or stale, and --skip-build builds nothing: run pnpm code-intel:bundle first. `
-      + `Without it code-intelligence-setup fails and records nothing (REQ-WORKSPACE-084), so every scenario that expects it recorded would fail on a cause outside this proof.\n${tail(first.output)}`);
+      + `${consequence}\n${tail(first.output)}`);
   }
   const built = build();
   if (built.status !== 0) throw new Error(`the code-intelligence bundle step (pnpm code-intel:bundle) exited ${built.status}:\n${tail(built.output)}`);

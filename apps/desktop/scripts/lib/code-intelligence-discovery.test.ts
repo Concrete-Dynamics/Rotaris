@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { codeIntelligenceDiscovered, codeIntelligenceDiscovery, discoveryFailed } from './code-intelligence-discovery.mjs';
+import { codeIntelligenceDiscovered, codeIntelligenceDiscovery, codeIntelligenceStatement, discoveryFailed } from './code-intelligence-discovery.mjs';
 
 const info = '[main 2026-10-03T06:16:07.855Z] info    run host: ';
 const warning = '[main 2026-10-03T06:16:07.854Z] warning run host: ';
@@ -27,6 +27,13 @@ describe('whether a launch\'s code-intelligence discovery succeeded (U5)', () =>
     const read = codeIntelligenceDiscovery(before);
     expect(read.outcome).toBe('failed');
     expect(read.detail).toMatch(/^failed: Connection closed \(code_intelligence exited with code 127/);
+    // One failure, named once: the run host's restatement of the old packs is read only where no warning is.
+    expect(read.detail.split(' | ').filter((part) => part.startsWith('failed'))).toHaveLength(1);
+  });
+
+  it('still reads an old pack\'s run-host line where its warning is absent', () => {
+    const read = codeIntelligenceDiscovery(`${info}mcp: discovery of 'code_intelligence' (project ${ws}) failed (spawn ENOENT) in 12 ms`);
+    expect(read).toEqual({ outcome: 'failed', detail: `failed (project ${ws}): spawn ENOENT) in 12 ms` });
   });
 
   it('reads the one-line warning of 2026-10-03 as failed, with its time and project', () => {
@@ -53,6 +60,38 @@ describe('whether a launch\'s code-intelligence discovery succeeded (U5)', () =>
 
   it('a discovery of another server is not code intelligence\'s', () => {
     expect(codeIntelligenceDiscovery(`${info}mcp: discovery of 'web_search' listed 1 tool(s) in 3 ms`).outcome).toBe('absent');
+  });
+});
+
+describe('the per-launch statement live-run prints (U5)', () => {
+  it('a launch whose every discovery listed tools passes', () => {
+    expect(codeIntelligenceStatement('duress', `${info}mcp: discovery of 'code_intelligence' (project ${ws}) listed 22 tool(s) in 1968 ms`))
+      .toMatchObject({ verdict: 'pass', label: 'duress: code-intelligence discovery succeeded', detail: `listed 22 tool(s) in 1968 ms (project ${ws})` });
+  });
+
+  it('a failed discovery fails it', () => {
+    expect(codeIntelligenceStatement('duress', `${warning}mcp code_intelligence (project ${ws}): tool discovery failed in 973 ms (spawn ENOENT); the persona prompt will list this server with no tool details attached (REQ-MCP-048)`))
+      .toMatchObject({ verdict: 'fail', label: 'duress: code-intelligence discovery succeeded' });
+  });
+
+  it('a discovery that listed no tool fails it: code intelligence offered nothing', () => {
+    const statement = codeIntelligenceStatement('default', `${info}mcp: discovery of 'code_intelligence' (project ${ws}) listed 0 tool(s) in 5 ms`);
+    expect(statement).toMatchObject({ verdict: 'fail', label: 'default: code-intelligence discovery succeeded', detail: `listed 0 tool(s) in 5 ms (project ${ws})` });
+    expect(statement.reading.outcome).toBe('empty');
+  });
+
+  it('a launch that started no run is a note, naming a failed setup step where one failed', () => {
+    expect(codeIntelligenceStatement('sign-in', `${info}session list: 0 sessions`))
+      .toMatchObject({ verdict: 'note', label: 'sign-in: code-intelligence discovery did not run in this launch', detail: 'no run started a discovery in this launch' });
+    const setup = codeIntelligenceStatement('sign-in', `${info}mcp setup: create failed — exited with code 127; its last output: rotaris: the bundled code-intelligence runtime is not present`);
+    expect(setup.verdict).toBe('fail');
+    expect(setup.reading.outcome).toBe('setup-failed');
+  });
+
+  it('live-run\'s launch prints the statement this module makes', () => {
+    const text = readFileSync(resolve(import.meta.dirname, '..', 'live-run.mjs'), 'utf8');
+    const body = text.slice(text.indexOf('async function launch('), text.indexOf('/** The store as the run left it'));
+    expect(body).toMatch(/codeIntelligenceStatement\(name, log\)/);
   });
 });
 

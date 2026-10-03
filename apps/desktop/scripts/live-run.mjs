@@ -125,7 +125,7 @@ import { starterMissing } from './lib/starter-config.mjs';
 import { refusalIssues } from './lib/refusal-issues.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
-import { codeIntelligenceDiscovery } from './lib/code-intelligence-discovery.mjs';
+import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
@@ -742,11 +742,12 @@ async function launch(name, extra, timeoutMs = 180_000) {
   const restated = restatedFacts(log);
   check(restated.length === 0, `${name}: none of the ${KNOWN_RESTATEMENTS} known restatements reaches the application log`, restated.map((r) => `app.log line ${r.line}, ${r.fact} restated (its owner is the ${r.owner}): ${r.text}`).join(' | ') || undefined);
   // Finding U5: whether code intelligence ran in this launch is stated, so a pass can never hide that it did not. A launch
-  // that starts no run discovers nothing — a NOTE, unless a setup step failed; a discovery that failed is a FAILURE.
-  const intelligence = codeIntelligenceDiscovery(log);
-  scenarioEvidence[name].codeIntelligence = intelligence;
-  if (intelligence.outcome === 'absent') noted(`${name}: code-intelligence discovery did not run in this launch`, intelligence.detail);
-  else check(intelligence.outcome === 'listed', `${name}: code-intelligence discovery succeeded`, intelligence.detail);
+  // that starts no run discovers nothing — a NOTE, unless a setup step failed; a discovery that failed, or that listed no
+  // tool, is a FAILURE (`codeIntelligenceStatement`).
+  const intelligence = codeIntelligenceStatement(name, log);
+  scenarioEvidence[name].codeIntelligence = intelligence.reading;
+  if (intelligence.verdict === 'note') noted(intelligence.label, intelligence.detail);
+  else check(intelligence.verdict === 'pass', intelligence.label, intelligence.detail);
   return log;
 }
 /** The store as the run left it: the newest session, its rows, its events, and the totals across every session. */

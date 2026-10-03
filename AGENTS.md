@@ -232,7 +232,7 @@ pnpm live-run --confirm --gui        # the same run, with the window on screen t
 
 **The bundled code-intelligence runtime is a precondition.** With `--skip-build` a tree without it refuses at once, naming
 `pnpm code-intel:bundle`; without `--skip-build` the run builds it before the first launch. Every launch then states
-whether its code-intelligence discovery succeeded (a failure is a FAIL; a launch that starts no run is a NOTE). Until
+whether its code-intelligence discovery succeeded (a failure, or a listing of no tool, is a FAIL; a launch that starts no run is a NOTE). Until
 2026-10-03 a `--skip-build` run on a tree without the bundle passed while code intelligence never ran
 (`docs/defects/fixed/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md`).
 

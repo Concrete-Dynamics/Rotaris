@@ -50,13 +50,21 @@ Two halves, both in the harness:
   discovery ran and a setup step failed; a launch that starts no run reads "code-intelligence discovery did not run in this
   launch" as a NOTE. `results.json` keeps each launch's reading under `evidence.<scenario>.codeIntelligence`.
 
+**The statement made testable, and an empty listing failed — 2026-10-03, the same plan's repair round** (the verifier's
+optional findings). The per-launch statement is now `codeIntelligenceStatement(scenario, log)` in the same module, which
+`launch` prints, so its verdicts are exercised directly rather than read from `live-run.mjs`'s source text. A discovery that
+listed no tool now reads `empty` and FAILs "code-intelligence discovery succeeded", since code intelligence then offered
+nothing. On a pack from before 2026-10-03, which carries each failure twice (the warning and the run host's line that U4
+removed), the run host's line is read only where no warning is, so the detail names one failure once.
+
 Pinned by:
 
 - `apps/desktop/scripts/lib/code-intelligence-bundle.test.ts` — "live-run states the same precondition, and says in every
   launch whether code intelligence ran (U5)": the call's place before the pack, the sandbox and the first launch; the
   refusal's words with `--skip-build`; the per-launch check (all three red before the repair);
 - `apps/desktop/scripts/lib/code-intelligence-discovery.test.ts` — the reader over this pack's own lines: `duress` reads
-  `failed`, `sign-in` reads `setup-failed`, a listed discovery `listed`, a failure under another root fails the launch.
+  `failed`, `sign-in` reads `setup-failed`, a listed discovery `listed`, a failure under another root fails the launch; and
+  "the per-launch statement live-run prints (U5)": pass, fail, an empty listing's fail, the note, and `launch` printing it.
 
 Shown on the branch (fin13, worktree `Rotaris-crw-wt-fin13-mcpfateandli`, which has no bundle): `node
 apps/desktop/scripts/live-run.mjs --skip-build` (no `--confirm`: it spends nothing and launches nothing) printed "Bundle:

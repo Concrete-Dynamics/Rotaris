@@ -39,24 +39,31 @@ const SETUP_FAILED = /mcp setup: (\S+) failed — (.*)$/;
 const clip = (text, max = 240) => (text.length > max ? `${text.slice(0, max)}…` : text);
 
 /**
- * `{ outcome, detail }`: `listed` when every discovery of the server listed its tools, `failed` when any failed, `setup-failed`
- * when none ran and a setup step failed, `absent` when none ran. The detail names each line read.
+ * `{ outcome, detail }`: `listed` when every discovery of the server listed its tools, `failed` when any failed, `empty` when
+ * none failed and one listed no tool (code intelligence offered nothing, so it did not run in any sense a reader needs),
+ * `setup-failed` when none ran and a setup step failed, `absent` when none ran. The detail names each line read.
  */
 export function codeIntelligenceDiscovery(log) {
   const listed = [];
   const failed = [];
+  const failedBeforeLines = [];
   const setup = [];
+  let empty = false;
   for (const line of String(log ?? '').split(/\r?\n/)) {
     const l = LISTED.exec(line);
-    if (l) { listed.push(`listed ${l[2]} tool(s) in ${l[3]} ms${l[1] ? ` (project ${l[1]})` : ''}`); continue; }
+    if (l) { listed.push(`listed ${l[2]} tool(s) in ${l[3]} ms${l[1] ? ` (project ${l[1]})` : ''}`); if (Number(l[2]) === 0) empty = true; continue; }
     const f = FAILED.exec(line);
     if (f) { failed.push(`failed${f[2] ? ` in ${f[2]} ms` : ''}${f[1] ? ` (project ${f[1]})` : ''}: ${clip(f[3])}`); continue; }
     const b = FAILED_BEFORE.exec(line);
-    if (b) { failed.push(`failed${b[1] ? ` (project ${b[1]})` : ''}: ${clip(b[2])}`); continue; }
+    if (b) { failedBeforeLines.push(`failed${b[1] ? ` (project ${b[1]})` : ''}: ${clip(b[2])}`); continue; }
     const s = SETUP_FAILED.exec(line);
     if (s) setup.push(`setup step ${s[1]} failed — ${clip(s[2])}`);
   }
+  // A pack before 2026-10-03 carries each failure twice (the warning and the run host's restatement); the run-host line
+  // is read only where no warning is, so one failure is named once.
+  if (failed.length === 0) failed.push(...failedBeforeLines);
   if (failed.length > 0) return { outcome: 'failed', detail: [...failed, ...listed, ...setup].join(' | ') };
+  if (empty) return { outcome: 'empty', detail: [...listed, ...setup].join(' | ') };
   if (listed.length > 0) return { outcome: 'listed', detail: [...listed, ...setup].join(' | ') };
   if (setup.length > 0) return { outcome: 'setup-failed', detail: `no discovery ran in this launch, and ${setup.join(' | ')}` };
   return { outcome: 'absent', detail: 'no run started a discovery in this launch' };
@@ -69,6 +76,16 @@ export function codeIntelligenceDiscovery(log) {
  * code intelligence off reads this.
  */
 export function codeIntelligenceDiscovered(log) {
-  return ['listed', 'failed'].includes(codeIntelligenceDiscovery(log).outcome);
+  return ['listed', 'empty', 'failed'].includes(codeIntelligenceDiscovery(log).outcome);
 }
 
+/**
+ * The live run's per-launch statement (finding U5): `{ verdict, label, detail, reading }`, where `verdict` is `note` for a
+ * launch that discovered nothing (no run started; its detail names a failed setup step, if one did), `pass` when every
+ * discovery listed tools, and `fail` otherwise — a failed discovery, or one that listed none.
+ */
+export function codeIntelligenceStatement(scenario, log) {
+  const reading = codeIntelligenceDiscovery(log);
+  if (reading.outcome === 'absent') return { verdict: 'note', label: `${scenario}: code-intelligence discovery did not run in this launch`, detail: reading.detail, reading };
+  return { verdict: reading.outcome === 'listed' ? 'pass' : 'fail', label: `${scenario}: code-intelligence discovery succeeded`, detail: reading.detail, reading };
+}

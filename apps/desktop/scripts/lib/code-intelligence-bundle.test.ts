@@ -131,8 +131,9 @@ describe('live-run states the same precondition, and says in every launch whethe
   });
 
   it('every launch states whether its code-intelligence discovery succeeded', () => {
+    // The statement itself is exercised in code-intelligence-discovery.test.ts; here, that launch prints it.
     const body = text.slice(text.indexOf('async function launch('), text.indexOf('/** The store as the run left it'));
-    expect(body).toMatch(/codeIntelligenceDiscovery\(log\)/);
-    expect(body).toMatch(/check\(intelligence\.outcome === 'listed', `\$\{name\}: code-intelligence discovery succeeded`/);
+    expect(body).toMatch(/codeIntelligenceStatement\(name, log\)/);
+    expect(body).toMatch(/check\(intelligence\.verdict === 'pass', intelligence\.label, intelligence\.detail\)/);
   });
 });

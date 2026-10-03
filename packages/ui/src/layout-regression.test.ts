@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { statusStripSandboxItem, stripItems, type StripFacts } from './composer.js';
 
 const css = readFileSync(new URL('./shell.css', import.meta.url), 'utf8');
 
@@ -68,5 +69,30 @@ describe('minimum-window layout regressions', () => {
     const branch = rule('.session-browser__table td[data-testid="session-row-branch"]');
     expect(branch).toContain('overflow-wrap: anywhere');
     expect(branch).not.toContain('white-space: nowrap');
+  });
+
+  it('fits the status strip to the 1000x680 minimum by REQ-SHELL-047\'s thresholds, not by scrolling (REQ-MONITOR-051)', () => {
+    // Measured by fin8 at 1000x680 before the repair: scrollWidth 1026 against clientWidth 1000 with an unconfined session
+    // focused, 1167 with a confined one. The strip held four items REQ-SHELL-038 does not list and hid nothing at any
+    // width. Now the list is REQ-SHELL-038's, the spacer between the branch and the flags gives its slack back first, and
+    // the path goes below 1180 px and the background count below 1080 px; `overflow-x: auto` stays the last resort only.
+    const facts: StripFacts = {
+      workspace: { label: '~/work/rotaris', path: '/home/u/work/rotaris', open: () => undefined },
+      branch: { text: 'main', title: 'Branch this workspace is on: main.' },
+      safety: { circuitBreakerArmed: true, unsavedSettings: false, outsideWorkspace: false, mode: 'mode: ask' },
+      sandbox: statusStripSandboxItem({ sandboxed: true, sandboxBackend: 'bubblewrap' }),
+      model: { name: 'scripted', label: 'model: scripted' },
+      tokens: 0, cost: null, backgroundSessions: 0,
+    };
+    const ids = (w: number) => stripItems(w, facts).flatMap((i) => (i.kind === 'spacer' ? ['spacer'] : [i.testId]));
+    expect(ids(1400)).toEqual(['strip-workspace', 'strip-branch', 'spacer', 'strip-circuit-breaker', 'strip-redaction', 'strip-file-access', 'strip-sandbox', 'strip-mode', 'strip-model', 'strip-tokens', 'strip-background']);
+    expect(ids(1180)).toContain('strip-workspace');
+    expect(ids(1179)).not.toContain('strip-workspace');
+    expect(ids(1080)).toContain('strip-background');
+    expect(ids(1079)).not.toContain('strip-background');
+    expect(ids(1000)).toEqual(['strip-branch', 'spacer', 'strip-circuit-breaker', 'strip-redaction', 'strip-file-access', 'strip-sandbox', 'strip-mode', 'strip-model', 'strip-tokens']);
+    expect(rule('.status-strip__spacer')).toContain('flex: 1 1 0');
+    expect(rule('.status-strip__spacer')).toContain('min-width: 0');
+    expect(rule('.status-strip')).toContain('gap: var(--rt-space-3)');
   });
 });

@@ -34,6 +34,12 @@ import { startApp, stopApp, until } from './lib/driver.mjs';
  *     "New session" is accepted while it runs (the window then shows no session, REQ-MONITOR-249/252), and its completion
  *     raises the persistent `success` notice naming the session and the state, saying the session on screen is
  *     unaffected, without moving the window; its "Open the session" action then focuses the finished session.
+ *  9. A run that ends on a provider limit while its session is not on screen (REQ-NOTIFY-093 with REQ-NOTIFY-030/031):
+ *     DRIVEN — a run parks on a quota wait with no candidate (the wait never resumes on its own), "New session" is
+ *     accepted, and the parked run is stopped from the background (the Stop control's own `session.control` cancel,
+ *     addressed to that session: no control in the window reaches a session it does not show). REQ-NOTIFY-031's `info`
+ *     notice names it; its "Open the session" action focuses it, and REQ-NOTIFY-063's notice — the provider limit and its
+ *     "Open Models settings" action — arrives with the focus, replacing the first in the one slot.
  *
  * Every assertion reads the application's own log, its store, or the rendered DOM.
  */
@@ -493,6 +499,82 @@ const s7 = scenario('background-ending', { runtime: ['  improvement_collector_en
   expect(value.stillReleased === false, 'publishing the notice moved the window onto the finished session (REQ-NOTIFY-031)');
   expect(/session \S+ is not focused; REQ-NOTIFY-031's notice is raised/.test(log), 'main did not log the unfocused ending');
   results.backgroundEnding = { sessionId: sid, notice: p, windowMovedByNotice: value.stillReleased, focusedByAction: value.focused, png: join(output, 'background-ending.png'), focusedPng: join(output, 'background-ending-focused.png'), elapsedMs: Date.now() - started };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. REQ-NOTIFY-093 with REQ-NOTIFY-030/031: a run that ends on a provider limit while its session is not on screen raises
+// REQ-NOTIFY-031's notice naming it, and REQ-NOTIFY-063's notice with its model-settings action arrives with the focus.
+// Before the repair of `docs/defects/fixed/a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md` nothing
+// was held for the focus, so the limit reached the user only as a plain ending.
+const s9 = scenario('background-quota', { runtime: ['  improvement_collector_enabled: false'] });
+{
+  const PROMPT = 'a run that parks on a provider limit';
+  const started = Date.now();
+  // `fail:quota` with no same-tier candidate: the provider is marked exhausted and the wait never resumes on its own.
+  const launched = await startApp({ root: s9.root, workspace: s9.workspace, timeoutMs: 60_000, extra: { ROTARIS_SCRIPT: 'fail:quota,answer' } });
+  const d = launched.driver;
+  const trail = [];
+  const step = async (label, pending) => { const at = Date.now() - started; const value = await pending; trail.push({ at, label }); return value; };
+  const onScreen = (text) => d.eval(`document.querySelector('.app-shell main, .app-shell')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`);
+  const readNotice = () => d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); return n ? { title: n.querySelector('[data-testid="notice-title"]')?.textContent, message: n.querySelector('[data-testid="notice-message"]')?.textContent ?? null, detail: n.querySelector('[data-testid="notice-detail"]')?.textContent ?? null, severity: n.getAttribute('data-severity'), action: n.querySelector('.notice__action')?.textContent, member: n.querySelector('.notice__action')?.getAttribute('data-action') } : null; })()`);
+  const sessionRow = () => { const db = open(s9); try { return db.prepare('SELECT session_id, execution_status FROM sessions ORDER BY created_at').all(); } finally { db.close(); } };
+  let failure = null;
+  let value = null;
+  try {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus' }));
+    await step('the prompt', d.type(PROMPT, { enter: true }));
+    await step('the wait header', d.waitFor('.wait-header', { timeoutMs: 60_000 }));
+    const rows = await step('the session recorded', until(() => sessionRow(), (r) => r.length === 1, { timeoutMs: 10_000, what: 'the parked session in the store' }));
+    const sid = rows[0].session_id;
+    await step('Ctrl+1', d.chord('Ctrl+1'));
+    // Under load the Overview and the start-session dialog can take longer than the click's default to be actionable
+    // (a verifier saw it at load 4.58); the bound is the wait for them, not a timing claim.
+    await step('New session', d.click('button', { text: 'New session', timeoutMs: 60_000 }));
+    await step('Start session', d.click('[data-testid="start-session-accept"]', { timeoutMs: 60_000 }));
+    const released = await step('the window released it', until(() => onScreen(PROMPT), (v) => v === false, { timeoutMs: 10_000, what: 'the parked run off screen' }));
+    const cancel = await step('the parked run stopped from the background', d.eval(`window.rotaris.command({ kind: 'session.control', request: { op: 'cancel', sessionId: ${JSON.stringify(sid)}, args: { force: false } } })`));
+    const ending = await step('the notice naming the session', until(() => readNotice(), (n) => n !== null && n.title?.startsWith(`Session ${sid} `) === true, { timeoutMs: 60_000, what: "REQ-NOTIFY-031's notice" }));
+    const stillReleased = await step('the window did not move', onScreen(PROMPT));
+    await step('the notice picture', d.screenshot(join(output, 'background-quota.png')));
+    await step('Open the session', d.click('.notice__action', { text: 'Open the session' }));
+    const focused = await step('the parked session on screen', until(() => onScreen(PROMPT), (v) => v === true, { timeoutMs: 20_000, what: 'the stopped session focused' }));
+    const quota = await step("REQ-NOTIFY-063's notice", until(() => readNotice(), (n) => n !== null && n.title === 'The provider limit was reached; the session is preserved', { timeoutMs: 20_000, what: "REQ-NOTIFY-063's notice with the focus" }));
+    await step('the focused picture', d.screenshot(join(output, 'background-quota-focused.png')));
+    await step('Open Models settings', d.click('.notice__action', { text: 'Open Models settings' }));
+    const settings = await step('the model settings', until(() => d.eval(`document.querySelector('main.view')?.getAttribute('aria-label') ?? null`), (v) => v === 'Settings', { timeoutMs: 10_000, what: 'the Settings view' }));
+    value = { sid, released, cancel, ending, stillReleased, focused, quota, settings };
+  } catch (cause) {
+    failure = cause;
+  }
+  const stopped = await stopApp(launched, { screenshot: join(output, 'background-quota.closing.png') });
+  const log = existsSync(launched.logFile) ? readFileSync(launched.logFile, 'utf8') : '';
+  writeFileSync(join(output, 'background-quota.log'), log);
+  writeFileSync(join(output, 'background-quota.steps.json'), `${JSON.stringify(trail, null, 2)}\n`);
+  if (failure) throw new Error(`background-quota: ${failure.message} (see background-quota.log, background-quota.steps.json)`);
+  expect(!stopped.overran, 'background-quota: the app did not stop within its bound');
+  expect(!backgroundSetupStarted(log), 'background-quota: a background setup started, so its notice may stand in the slot this proof reads');
+  const db = open(s9);
+  const sessions = db.prepare('SELECT session_id, execution_status FROM sessions ORDER BY created_at').all();
+  db.close();
+  const row = sessions.find((r) => r.session_id === value.sid);
+  expect(row !== undefined && row.execution_status !== 'failed', `the parked run: ${JSON.stringify(sessions)} (a cancelled wait is not a failure, so REQ-NOTIFY-032 does not reach it)`);
+  const e = value.ending;
+  // REQ-NOTIFY-031: `info` for every non-failure terminal state but `completed`, the state in the normalised vocabulary.
+  // The cancelled wait is not a failure: the run rests at the state the stop reached (`paused`, observed 2026-10-02).
+  const reached = new RegExp(`^Session ${value.sid} (\\w+)$`).exec(e.title ?? '')?.[1];
+  expect(e.severity === 'info' && reached !== undefined && reached !== 'failed' && reached !== 'completed', `the ending notice: ${JSON.stringify(e)}`);
+  expect(e.message === 'The session on screen is unaffected. Open the finished session to review it.' && e.action === 'Open the session' && e.member === 'focus-session', `REQ-NOTIFY-031's notice: ${JSON.stringify(e)}`);
+  expect(value.stillReleased === false, 'publishing the notice moved the window onto the stopped session (REQ-NOTIFY-031)');
+  const q = value.quota;
+  expect(q.severity === 'error' && q.action === 'Open Models settings' && q.member === 'open-settings', `REQ-NOTIFY-063's notice: ${JSON.stringify(q)}`);
+  expect(/Choose another model, or retry once the provider resets\./.test(q.detail ?? ''), `REQ-NOTIFY-063's notice carries no recovery sentence: ${JSON.stringify(q)}`);
+  expect(/session \S+ is not focused; REQ-NOTIFY-031's notice is raised in place of its own, and REQ-NOTIFY-063's waits for the focus/.test(log), 'main did not log the held quota notice');
+  expect(new RegExp(`session ${value.sid} is focused; its quota recovery is published`).test(log), 'main did not publish the held quota notice with the focus');
+  results.backgroundQuota = { sessionId: value.sid, status: row.execution_status, stateNamed: reached, cancel: value.cancel, endingNotice: e, quotaNotice: { title: q.title, severity: q.severity, action: q.action }, settingsOpened: value.settings, png: join(output, 'background-quota.png'), focusedPng: join(output, 'background-quota-focused.png'), elapsedMs: Date.now() - started };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

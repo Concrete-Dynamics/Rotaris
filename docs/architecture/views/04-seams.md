@@ -305,15 +305,29 @@ The design language's pair — consult before, match after (`docs/design/README.
 Tokens alone are not compliance, and a plausible invention is not a third option where the design material
 decides.
 
-**A status-strip item** (worked example: REQ-SANDBOX-121's sandbox indicator, 2026-10-02). The strip draws one row of
-`StatusItem`s (`packages/ui/src/AppShell.tsx`), and an item is text in the strip's own craft — the mockup's strip is
-plain tertiary text, so a new item takes no new control and no new token. The path, in order: the fact on the record
-the renderer already receives (`SessionRecord` in `packages/contracts/src/channels.ts`, filled by `toSessionRecord` in
-`packages/engine/src/sessions.ts`; a store column first if no stored fact carries it, §3 — here v31's
-`sandbox_backend`); a pure helper beside `statusStripModeItem` in `packages/ui/src/composer.ts` that returns the item or
-`null` (`statusStripSandboxItem`), pinned in `composer.test.ts` for every state that shows or hides it; then the
-renderer's `status` memo in `apps/desktop/src/renderer/main.tsx`, which reads the **focused** session's record, so the
-item re-binds with focus (REQ-MONITOR-257) and memoises on the primitives it shows (REQ-TOOLS-184's "never redraws when
-nothing it displays has changed"). Give it a name and a tooltip (`{short form} — {explanation}`, REQ-SHELL-041's form)
-and a `testId`, and read it in the built app with `pnpm app:drive` at 1400 and at 1000 px wide: REQ-SHELL-047 owns the
-widths at which an item stops being shown, and an item added without a threshold there is shown at every width.
+**A status-strip item** (worked examples: REQ-SANDBOX-121's sandbox indicator, 2026-10-02; the strip rebuilt to
+REQ-SHELL-038's list, fin10, the same day). The strip's items are **values**: `stripItems(width, facts)` in
+`packages/ui/src/composer.ts` answers them left to right in REQ-SHELL-038's order — the workspace path (the one `link`,
+REQ-SHELL-039/040), the branch, a `spacer`, REQ-SHELL-041's safety flags in their fixed order (`statusStripSafetyFlags`;
+the sandbox indicator right after the file-access flag, OQ-184's build reading), the model, the tokens, the cost when there
+is one, the background count — each with REQ-SHELL-038's accessible name (`STRIP_NAMES`), its tooltip as its accessible
+description, and REQ-SHELL-047's two thresholds (`STRIP_PATH_MIN_WIDTH` 1180, `STRIP_BACKGROUND_MIN_WIDTH` 1080) applied to
+the window's own width. `AppShell` (`packages/ui/src/AppShell.tsx`) only draws them: a link as the design system's
+`Button`, text as a `span`, the spacer taking the slack and giving it back first. An item is text in the strip's own
+craft — the mockup's strip is plain tertiary text at `--rt-text-xs`, mono only for figures — so a new item takes no new
+control and no new token. The path, in order: the fact on the record the renderer already receives (`SessionRecord` in
+`packages/contracts/src/channels.ts`, filled by `toSessionRecord` in `packages/engine/src/sessions.ts`; a store column
+first if no stored fact carries it, §3 — the sandbox item's was v31's `sandbox_backend`), or a command the run host
+answers where the fact is the workspace's rather than a session's (`workspace.usage`, §1, for the tokens and cost); a
+field on `StripFacts` and its place in `stripItems`, pinned in `composer.test.ts` for every state that shows or hides it
+and in `layout-regression.test.ts` for the order at each threshold; then the renderer's `status` memo in
+`apps/desktop/src/renderer/main.tsx`, which fills `StripFacts` from the **focused** session's record (so an item re-binds
+with focus, REQ-MONITOR-257), the configuration snapshot — every flag a setting decides reads it there, never a boot
+answer (`● CB armed` through `stripCircuitBreakerArmed` since 2026-10-03, when a breaker turned off in Settings still read
+armed), and main announces each main window and its persona and terminal windows their own workspace's snapshot
+(`announceConfig`, `configFamily`, `apps/desktop/src/main/config-broadcast.ts`) — the window's width (`useWindowWidth`,
+`apps/desktop/src/renderer/strip-facts.ts`) and the workspace's usage, and memoises on what it shows (REQ-TOOLS-184's
+"never redraws when nothing it displays has changed"). Read it in the built app with `pnpm app:drive` at 1000, 1079, 1179
+and 1400 px wide (`resize`, then `scrollWidth` against `clientWidth` on `.status-strip`): REQ-SHELL-047 owns the widths at
+which an item stops being shown, and an item added without a threshold there is shown at every width, so it must fit
+beside the others at REQ-MONITOR-051's 1000 px floor.

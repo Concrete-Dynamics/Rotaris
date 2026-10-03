@@ -145,14 +145,15 @@
 .text-secondary { color: var(--rt-text-secondary); }
 .mono { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); }
 
+/* REQ-SHELL-038: the strip in the mockup's craft — the body face at `--rt-text-xs`, tertiary text, the `--rt-space-3` gap,
+   mono only for the figures (branch, tokens, cost), the model at full text strength (REQ-SHELL-043). */
 .status-strip {
-  display: flex; gap: var(--rt-space-4, 16px);
+  display: flex; gap: var(--rt-space-3);
   height: var(--rt-status-bar-height); align-items: center;
   padding: 0 var(--rt-space-3, 12px);
   background: var(--rt-chrome);
   border-top: var(--rt-hairline-width) solid var(--rt-border);
-  color: var(--rt-text-tertiary); font-size: 11px;
-  font-family: var(--rt-font-mono, 'JetBrains Mono', monospace);
+  color: var(--rt-text-tertiary); font-size: var(--rt-text-xs);
 }
 
 /* ── Workspace view: transcript + composer (REQ-CHAT-001/-010/-011) ── */
@@ -1443,6 +1444,13 @@
    sentence gives way, and it keeps its full text in its tooltip (REQ-SHELL-038). */
 .status-strip__item { white-space: nowrap; flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; }
 .status-strip__item[data-elide='1'] { flex: 0 1 auto; min-width: var(--rt-space-12); }
+/* REQ-SHELL-038's spacer between the branch and the safety flags: it takes the slack and gives it back first. */
+.status-strip__spacer { flex: 1 1 0; min-width: 0; }
+.status-strip__item[data-figure='1'] { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); }
+/* REQ-SHELL-043: the model at full text strength rather than its neighbours' muted treatment. */
+.status-strip__item[data-strong='1'] { color: var(--rt-text); }
+/* REQ-SHELL-039: the one link — link colour, underline, pointing hand, its own focus stop (`.btn-link` gives colour and focus). */
+.status-strip__link { min-height: 0; font-size: inherit; text-decoration: underline; cursor: pointer; }
 /* REQ-GIT-122/161: the strip's branch item carries its accessible name; a detached or absent state reads distinctly. */
 .status-strip__item[data-branch-state='detached'], .status-strip__item[data-branch-state='none'] { font-style: italic; }
 /* ADR-0039's dialogs (REQ-GIT-096..099): the progress dialog with no cancel; the confirmation at least 560×400 px. */

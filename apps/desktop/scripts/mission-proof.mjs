@@ -23,7 +23,7 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *                    the rows sampled just after the confirm (REQ-MONITOR-128's optimistic cancel) and overwritten by the
  *                    engine's record at 9 s (REQ-MONITOR-296).
  *   4b. cancel run — the run row selected, "Cancel selection" confirmed: every sample after the confirm reads the subtitle and
- *                    the run row (and the status strip) `Cancelling` or the run at rest — never `Running` nor another active
+ *                    the run row `Cancelling` or the run at rest — never `Running` nor another active
  *                    status; how many land inside the `Cancelling` window is host timing, recorded and not asserted
  *                    (acceptance A35, REQ-MONITOR-127/130).
  *   4c. persona    — the inspector pops out the run-level agent; the window's Cancel on the run's own instance confirmed: every
@@ -236,7 +236,7 @@ const s3 = scenario('pause');
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:9000,answer', ROTARIS_CAPTURE_PROMPT: 'pause me',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;[data-testid="mission-pause"]@5400;;[data-testid="mission-run-row"]@6200;;[data-testid="mission-pause"]@6600',
-    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission-pause"]@5800;;[data-testid="mission-message"]@5800;;[data-testid="mission-pause-reason"]@5800;;.status-strip__item@5800;;[data-testid="mission-pause"]@6400;;[data-testid="mission-message"]@7200;;.status-strip__item@7200',
+    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission-pause"]@5800;;[data-testid="mission-message"]@5800;;[data-testid="mission-pause-reason"]@5800;;[data-testid="mission-subtitle"]@5800;;[data-testid="mission-pause"]@6400;;[data-testid="mission-message"]@7200;;[data-testid="mission-subtitle"]@7200',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1000',
     // The view stays mounted from the accepted pause until the session rests: what its Pause reads then (REQ-MONITOR-296).
     ROTARIS_CAPTURE_PROBE: '[data-testid="mission-pause"];;[data-testid="mission-pause-reason"];;[data-testid="mission-subtitle"]',
@@ -247,14 +247,16 @@ const s3 = scenario('pause');
   const reason = probesAt(r.log, 5800, '[data-testid="mission-pause-reason"]')?.[0]?.text ?? '';
   expect(refused === '0', `Pause was enabled with a child selected (data-enabled=${refused})`);
   expect(message === 'Pause applies to the whole run; select the run to pause it.' && reason === message, `the refusal text: message "${message}", reason "${reason}" (REQ-MONITOR-276)`);
-  const strip58 = (probesAt(r.log, 5800, '.status-strip__item') ?? []).map((p) => p.text);
-  expect(strip58.includes('run Running'), `the run was not still running after the refused pause: ${JSON.stringify(strip58)}`);
+  // The run's state from the Mission subtitle: REQ-SHELL-038's status strip names no run state (its repair, 2026-10-02, dropped
+  // the `run …` item this read until then).
+  const sub58 = probesAt(r.log, 5800, '[data-testid="mission-subtitle"]')?.[0]?.text ?? '';
+  expect(/· Running$/.test(sub58), `the run was not still running after the refused pause: "${sub58}"`);
   const enabled = probesAt(r.log, 6400, '[data-testid="mission-pause"]')?.[0]?.data?.['data-enabled'];
   expect(enabled === '1', `Pause was not enabled with the run selected (data-enabled=${enabled})`);
   const accepted = probesAt(r.log, 7200, '[data-testid="mission-message"]')?.[0]?.text ?? '';
-  const strip72 = (probesAt(r.log, 7200, '.status-strip__item') ?? []).map((p) => p.text);
+  const sub72 = probesAt(r.log, 7200, '[data-testid="mission-subtitle"]')?.[0]?.text ?? '';
   expect(/Pause accepted/.test(accepted), `the accepted pause's message: "${accepted}"`);
-  expect(strip72.includes('run Pausing') || strip72.includes('run Paused'), `the strip after the accepted pause: ${JSON.stringify(strip72)} (REQ-MONITOR-124)`);
+  expect(/· (Pausing|Paused)$/.test(sub72), `the subtitle after the accepted pause: "${sub72}" (REQ-MONITOR-124)`);
   expect(row.execution_status === 'paused', `the session ended ${row.execution_status} (${row.stop_reason}), not paused`);
   // REQ-MONITOR-296 / REQ-NOTIFY-050: the accepted pause's pending mark belongs to the run that accepted it, so once the
   // session rests `paused` the still-mounted view's Pause reads `Pause` beside the subtitle's Paused, never `Pausing…`
@@ -264,7 +266,7 @@ const s3 = scenario('pause');
   const restReason = endProbe(r.log, '[data-testid="mission-pause-reason"]')?.[0]?.text ?? '';
   expect(/· Paused$/.test(restSubtitle), `the subtitle at rest: "${restSubtitle}"`);
   expect(restPause?.text === 'Pause' && restPause?.data?.['data-enabled'] === '0' && restReason === 'Pause is unavailable because no active run exists.', `the Pause control at rest read "${restPause?.text}" (data-enabled=${restPause?.data?.['data-enabled']}) beside "${restReason}" (REQ-MONITOR-296)`);
-  results.pause = { pauseAtRest: restPause?.text ?? null, subtitleAtRest: restSubtitle, refusedMessage: message, stripAfterRefusal: strip58.find((t) => t.startsWith('run ')), stripAfterAccept: strip72.find((t) => t.startsWith('run ')), finalStatus: row.execution_status, timeline: names.filter((n) => /pause/.test(n)) };
+  results.pause = { pauseAtRest: restPause?.text ?? null, subtitleAtRest: restSubtitle, refusedMessage: message, subtitleAfterRefusal: sub58, subtitleAfterAccept: sub72, finalStatus: row.execution_status, timeline: names.filter((n) => /pause/.test(n)) };
 }
 
 // 4. Cancel a child with a live descendant: the confirmation names it and the cascade count; the child cancelled, the run on.
@@ -312,17 +314,17 @@ const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    mo
 // 4b. Cancel the run from the Mission view (acceptance A35, REQ-MONITOR-127/130/296): the run row selected, "Cancel selection",
 // confirmed. The session is shown `cancelling` from the confirmation — the engine writes no `cancelling` for the explicit
 // cancel, so its records read `running` until the run's end (OQ-165) — and no sample from the confirm to the run's end
-// reads `Running`, in the subtitle, the run row or the status strip. Before the repair only the Workspace set anything, and the Mission view read `Running` throughout.
+// reads `Running`, in the subtitle or the run row (the status strip names no run state since 2026-10-02, REQ-SHELL-038). Before the repair only the Workspace set anything, and the Mission view read `Running` throughout.
 const s4b = scenario('cancel-run', ['personas:', '  lead:', '    name: lead', '    model: scripted', "    purpose: 'Delegates the work, then waits for it.'", "    system_prompt: 'You are a lead. Delegate the work, then wait for it.'", '    tools: [delegate, read_file, todo]']);
 {
   const SAMPLES = [8210, 8220, 8230, 8240, 8250, 8270, 8300, 8500, 9000, 10000];
-  // One selector list, so each sample is ONE querySelectorAll — the dialog, the subtitle, the run row and the strip read in
+  // One selector list, so each sample is ONE querySelectorAll — the dialog, the subtitle and the run row read in
   // the same instant. The confirm click is an input event the renderer handles after the main process logs "clicked", and a
   // separate probe can run before it (seen 2026-10-01: the click and a probe reading `Running` logged in the same
   // millisecond, the next probe 6 ms later reading `Cancelling`). The dialog closes in the same commit that lays the
   // overlay (`confirmCancel`: `setConfirming(null)`, then `cancelRun`'s `beginRun`, in one handler), so a snapshot without
   // the dialog was read after the click was handled — on the base build as on the repair.
-  const SNAPSHOT = '[data-testid="mission-confirm"], [data-testid="mission-subtitle"], [data-testid="mission-run-row"], .status-strip__item';
+  const SNAPSHOT = '[data-testid="mission-confirm"], [data-testid="mission-subtitle"], [data-testid="mission-run-row"]';
   const r = await launch('cancel-run', s4b, {
     ROTARIS_SCRIPT: 'delegate:lead:alpha,answer', ROTARIS_CHILD_SCRIPT: 'delegate:coding-agent:sub,wait:16000,answer,wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel the run',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
@@ -345,12 +347,12 @@ const s4b = scenario('cancel-run', ['personas:', '  lead:', '    name: lead', ' 
   const byTestId = (snap, id) => snap.find((p) => p.data['data-testid'] === id)?.text ?? null;
   const snapshots = SAMPLES.map((at) => ({ at, snap: probesAt(afterConfirm, at, SNAPSHOT) })).filter((x) => x.snap !== null);
   const pending = snapshots.filter((x) => byTestId(x.snap, 'mission-confirm') !== null).map((x) => x.at);
-  const samples = snapshots.filter((x) => byTestId(x.snap, 'mission-confirm') === null).map(({ at, snap }) => ({ at, subtitle: byTestId(snap, 'mission-subtitle'), runRow: byTestId(snap, 'mission-run-row'), strip: snap.filter((p) => p.data['data-testid'] === undefined).map((p) => p.text).find((t) => t.startsWith('run ')) ?? null })).filter((x) => x.subtitle !== null);
+  const samples = snapshots.filter((x) => byTestId(x.snap, 'mission-confirm') === null).map(({ at, snap }) => ({ at, subtitle: byTestId(snap, 'mission-subtitle'), runRow: byTestId(snap, 'mission-run-row') })).filter((x) => x.subtitle !== null);
   expect(samples.length >= 3, `fewer than three samples landed after the confirm was handled: ${JSON.stringify(samples)} (still showing the dialog: ${JSON.stringify(pending)})`);
   const status = (text) => (text === null ? null : text.split('·').pop().trim());
-  // REQ-MONITOR-127/130: from the confirmation on, the Mission view and the strip never read the run `Running` again — each
+  // REQ-MONITOR-127/130: from the confirmation on, the Mission view never reads the run `Running` again — each
   // sample reads `Cancelling` until the run's record at rest arrives (REQ-ORCH-082: `user_cancelled` rests `paused`).
-  const running = samples.filter((x) => status(x.subtitle) === 'Running' || /Running$/.test(x.runRow ?? '') || x.strip === 'run Running');
+  const running = samples.filter((x) => status(x.subtitle) === 'Running' || /Running$/.test(x.runRow ?? ''));
   expect(running.length === 0, `the Mission view read the cancelled run Running after the confirm: ${JSON.stringify(running)} (REQ-MONITOR-127, acceptance A35)`);
   // A sample that is not yet at rest is inside the cancel's window, so it reads `Cancelling` and no other active status.
   const ACTIVE = ['Running', 'Waiting', 'Starting', 'Pausing', 'Background'];

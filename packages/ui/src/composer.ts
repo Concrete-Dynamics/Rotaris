@@ -1,4 +1,5 @@
-import { presentationStatus, PROJECT_SETUP_SEND_REASON, resolvePreset, STATUS_LABELS, type PresentationStatus } from '@rotaris/contracts';
+import { presentationStatus, PROJECT_SETUP_SEND_REASON, resolvePreset, type PresentationStatus } from '@rotaris/contracts';
+import { countNoun, formatAmount } from '@rotaris/kernel';
 
 /**
  * Part AB — the composer's and the run header's rules, as values rather than as markup, so each is checkable
@@ -64,19 +65,6 @@ export function runStateLabel(state: RunState): string {
 }
 
 /**
- * REQ-SHELL-038's status strip names the run's state in REQ-NOTIFY-048's presentation vocabulary (REQ-NOTIFY-049),
- * except in REQ-CHAT-008's synthetic recovery state. There it reads `Run needs recovery`, as the run header, the
- * Workspace badge and the Mission view do. It never reads "run Running" while no run exists and the run-level agent is
- * drawn `paused` (PD-ORCH-005 clause 13, OQ-100). The recovery test is `runStateOf`'s, so the strip and the header
- * cannot disagree about which statuses it covers.
- */
-export function statusStripRunItem(executionStatus: string | null, needsRecovery: boolean): string {
-  if (executionStatus === null) return 'no session';
-  if (runStateOf(executionStatus, needsRecovery) === 'recovery') return RUN_STATE_LABELS.recovery;
-  return `run ${STATUS_LABELS[presentationStatus(executionStatus)]}`;
-}
-
-/**
  * REQ-TOOLS-184's `mode: <preset>`, shown permanently: the focused session's own mode, and with no session focused the
  * configured one — the preset the next run starts from (REQ-CONFIG-288's reading, which the composer's mode chip
  * already follows). Before a configuration has been read there is none, and a missing key resolves to REQ-TOOLS-046's
@@ -104,6 +92,162 @@ export function statusStripSandboxItem(session: { readonly sandboxed: boolean; r
   const backend = session.sandboxBackend.trim();
   const text = backend === '' ? 'sandbox: confined' : `sandbox: ${backend}`;
   return { text, name: 'Confinement backend', title: `${text} — Sandbox mode active${backend === '' ? '' : ` (${backend})`}: agent commands in this session run inside OS-level confinement.`, testId: 'strip-sandbox' };
+}
+
+/**
+ * REQ-SHELL-038's status strip, as values: its items left to right — workspace path (a link), checked-out branch, a
+ * spacer, the safety flags, model, tokens, cost, cloud credit, background-session count — each with REQ-SHELL-038's
+ * accessible name, and REQ-SHELL-047's two responsive thresholds. The list is closed: until 2026-10-02 the strip also drew
+ * the run's state, the theme's name, each child service and the replica's applied/reset/refused counters, which no
+ * requirement places there, and none of REQ-SHELL-038's workspace-path, model, tokens or cost items
+ * (docs/defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md).
+ * REQ-SANDBOX-121's confinement indicator stands where OQ-184's build reading puts it, right after the file-access flag.
+ * The cloud-credit item (REQ-SHELL-046) is present only once a credit balance is available, and this build reads none, so
+ * the list never carries it.
+ */
+export type StripItem =
+  | { readonly kind: 'text'; readonly text: string; readonly name: string; readonly title: string; readonly testId: string; readonly state?: string; readonly figure?: true; readonly strong?: true }
+  | { readonly kind: 'link'; readonly text: string; readonly name: string; readonly title: string; readonly testId: string; readonly onActivate: () => void }
+  | { readonly kind: 'spacer' };
+
+/** REQ-SHELL-047: below this window width the workspace-path item is hidden (a specification value, stated as it states it). */
+export const STRIP_PATH_MIN_WIDTH = 1180;
+/** REQ-SHELL-047: below this window width the background-session item is hidden as well. */
+export const STRIP_BACKGROUND_MIN_WIDTH = 1080;
+/**
+ * The window width as the strip reads it: the lowest width of its REQ-SHELL-047 band (at least 1180, at least 1080, below).
+ * `stripItems` answers the same items for every width in a band, so a renderer memoising on the band rebuilds the strip
+ * only when a threshold is crossed — REQ-TOOLS-184's "never redraws when nothing it displays has changed".
+ */
+export function stripWidthBand(width: number): number {
+  return width >= STRIP_PATH_MIN_WIDTH ? STRIP_PATH_MIN_WIDTH : width >= STRIP_BACKGROUND_MIN_WIDTH ? STRIP_BACKGROUND_MIN_WIDTH : 0;
+}
+
+/** REQ-SHELL-038: the accessible names, word for word. */
+export const STRIP_NAMES = {
+  workspace: 'Workspace folder', branch: 'Checked-out branch', safety: 'Safety settings in force', model: 'Model runs use',
+  tokens: 'Tokens used', cost: 'Cost so far', credit: 'Rotaris Cloud credit', background: 'Background sessions',
+} as const;
+
+/**
+ * REQ-SHELL-041's safety flags, left to right in its fixed order, each with its display condition: `● CB armed` while the
+ * circuit breaker is enabled; `redaction: always on`; `unsaved settings` while the Settings view holds unsaved edits; then
+ * exactly one of `outside-workspace!` or `workspace-scoped` (REQ-TOOLS-131: the opt-out `runtime.allow_outside_workspace`
+ * decides which); and `mode: {mode}`. Each carries one explanation, and its tooltip and accessible description are the
+ * one joined string `{short form} — {explanation}`. The file-access explanations are REQ-WORKSPACE-022's fixed pair,
+ * "the pair a reader compares", in the words of REQ-WORKSPACE-148's Settings control ("read and write outside this
+ * workspace folder"). The unsaved-settings sentence is REQ-SHELL-041's two facts; REQ-WORKSPACE-022 states another second
+ * fact (OQ-191). Until 2026-10-02 the file-access flag was the literal `workspace-scoped` whatever the opt-out said, so
+ * with it on the strip still told the user agents were confined.
+ */
+export interface SafetyFacts {
+  readonly circuitBreakerArmed: boolean;
+  readonly unsavedSettings: boolean;
+  readonly outsideWorkspace: boolean;
+  /** The mode's short form, `mode: <preset>` (`statusStripModeItem`). */
+  readonly mode: string;
+}
+/**
+ * REQ-SHELL-041 / REQ-TOOLS-184: whether `● CB armed` is shown — the saved `circuit_breaker.enabled` as the configuration
+ * snapshot carries it (re-read on every `config:changed`, so the flag follows a Settings save as the file-access flag does),
+ * unless the host override `ROTARIS_CIRCUIT_BREAKER=off` disarms it, which the run host's supervisor honours too. Until the
+ * first snapshot arrives the window's boot answer (`shell.hello`) stands. Until 2026-10-03 the flag was that boot answer
+ * alone, so a breaker turned off in Settings still read armed until the window was opened again.
+ */
+export function stripCircuitBreakerArmed(configured: boolean | undefined, atBoot: boolean, hostOff: boolean): boolean {
+  if (hostOff) return false;
+  return configured ?? atBoot;
+}
+export const CIRCUIT_BREAKER_EXPLANATION = 'Circuit breaker: Rotaris stops a run that keeps repeating a failing step.';
+export const REDACTION_EXPLANATION = 'Secret redaction: anything that looks like a credential is masked before it reaches a model or the transcript.';
+export const UNSAVED_SETTINGS_EXPLANATION = 'The Settings view is holding edits that have not been saved; runs keep using the last saved values until they are saved.';
+export const OUTSIDE_WORKSPACE_EXPLANATION = 'File access: agents may read and write outside this workspace folder.';
+export const WORKSPACE_SCOPED_EXPLANATION = 'File access: agents may read and write inside this workspace folder only.';
+export function modeExplanation(mode: string): string {
+  return `Permission mode ${mode}: how much agents may do without asking. Change it under the composer or in Settings → Runtime.`;
+}
+function flag(text: string, explanation: string, testId: string): StripItem {
+  return { kind: 'text', text, name: STRIP_NAMES.safety, title: `${text} — ${explanation}`, testId };
+}
+export function statusStripSafetyFlags(f: SafetyFacts, sandbox: { readonly text: string; readonly name: string; readonly title: string; readonly testId: string } | null): StripItem[] {
+  const mode = f.mode.replace(/^mode: /, '');
+  return [
+    ...(f.circuitBreakerArmed ? [flag('● CB armed', CIRCUIT_BREAKER_EXPLANATION, 'strip-circuit-breaker')] : []),
+    flag('redaction: always on', REDACTION_EXPLANATION, 'strip-redaction'),
+    ...(f.unsavedSettings ? [flag('unsaved settings', UNSAVED_SETTINGS_EXPLANATION, 'strip-unsaved')] : []),
+    f.outsideWorkspace ? flag('outside-workspace!', OUTSIDE_WORKSPACE_EXPLANATION, 'strip-file-access') : flag('workspace-scoped', WORKSPACE_SCOPED_EXPLANATION, 'strip-file-access'),
+    // OQ-184's build reading: REQ-SANDBOX-121's indicator right after the file-access flag, at every width.
+    ...(sandbox === null ? [] : [{ kind: 'text' as const, ...sandbox }]),
+    flag(f.mode, modeExplanation(mode), 'strip-mode'),
+  ];
+}
+
+/**
+ * REQ-SHELL-043: the model item from the composer's model chip label (`modelChipLabel`), so the strip and the chip name one
+ * model: the label as the chip shows it, and the bare model for the tooltip's `{model}`.
+ */
+export function stripModelItem(chipLabel: string): { readonly name: string; readonly label: string } {
+  return { name: chipLabel.replace(/^model: /, ''), label: chipLabel };
+}
+
+/** REQ-SHELL-044: the running total, its digits grouped into thousands with commas, then ` tok` — `12,480 tok`, and `0 tok`. */
+export function stripTokensText(total: number): string {
+  return `${String(Math.max(0, Math.trunc(total))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} tok`;
+}
+
+/**
+ * REQ-SHELL-045's cost: absent until a session has reported usage and a cost figure exists for it, then `{figure} cost`, the
+ * figure by the single money rule (REQ-PROVIDER-121, `formatAmount`, its `< 0.0001` floor included) or the literal `n/a`
+ * for usage with no published pricing. The product records no currency (PD-MONITOR-001's narrowing), so the figure is bare.
+ */
+export function stripCostText(cost: string | null): string | null {
+  if (cost === null) return null;
+  if (cost === 'n/a') return 'n/a cost';
+  const figure = formatAmount(cost);
+  return figure === null ? null : `${figure} cost`;
+}
+
+export interface StripFacts {
+  /** The workspace folder's path, as the title bar's chip shows it, and the action opening it (REQ-SHELL-040). */
+  readonly workspace: { readonly label: string; readonly path: string; readonly open: () => void } | null;
+  readonly branch: { readonly text: string; readonly title: string; readonly state?: string | undefined };
+  readonly safety: SafetyFacts;
+  readonly sandbox: { readonly text: string; readonly name: string; readonly title: string; readonly testId: string } | null;
+  /** REQ-SHELL-043: the model a run started from this window uses, and the short form the composer's chip shows. */
+  readonly model: { readonly name: string; readonly label: string };
+  /** REQ-SHELL-044: the running total of tokens used by this workspace's runs (OQ-190's build reading). */
+  readonly tokens: number;
+  /** REQ-SHELL-045: the workspace's reported cost, `n/a`, or null before any session reported usage with a figure. */
+  readonly cost: string | null;
+  /** REQ-TOOLS-184 / REQ-TOOLS-107: background terminal sessions in the running state. */
+  readonly backgroundSessions: number;
+}
+
+/**
+ * The strip at a window `width` (CSS px, the window's own), REQ-SHELL-038's order, with REQ-SHELL-047's hiding: narrower
+ * than 1180 px the workspace path goes, below 1080 px the background-session count goes too, and nothing else is hidden.
+ * Hiding removes the label only: the workspace stays reachable from the title-bar chip (REQ-WORKSPACE-021).
+ */
+export function stripItems(width: number, f: StripFacts): StripItem[] {
+  const items: StripItem[] = [];
+  if (f.workspace !== null && width >= STRIP_PATH_MIN_WIDTH) {
+    items.push({ kind: 'link', text: f.workspace.label, name: STRIP_NAMES.workspace, title: `Workspace folder: ${f.workspace.path}. Opens it in your file manager.`, testId: 'strip-workspace', onActivate: f.workspace.open });
+  }
+  items.push({ kind: 'text', text: f.branch.text, name: STRIP_NAMES.branch, title: f.branch.title, testId: 'strip-branch', figure: true, ...(f.branch.state === undefined ? {} : { state: f.branch.state }) });
+  items.push({ kind: 'spacer' });
+  items.push(...statusStripSafetyFlags(f.safety, f.sandbox));
+  items.push({ kind: 'text', text: f.model.label, name: STRIP_NAMES.model, title: `Runs started from this window use ${f.model.name}. Change it in the composer or in Settings → Models.`, testId: 'strip-model', strong: true });
+  const tokens = stripTokensText(f.tokens);
+  items.push({ kind: 'text', text: tokens, name: STRIP_NAMES.tokens, title: `Tokens used by this workspace's runs so far: ${tokens}.`, testId: 'strip-tokens', figure: true });
+  const cost = stripCostText(f.cost);
+  if (cost !== null) {
+    items.push({ kind: 'text', text: cost, name: STRIP_NAMES.cost, title: `Cost of this workspace's runs so far: ${cost.slice(0, -' cost'.length)}. Reported by the model provider; an unpriced model reads n/a.`, testId: 'strip-cost', figure: true });
+  }
+  if (width >= STRIP_BACKGROUND_MIN_WIDTH) {
+    const count = countNoun(f.backgroundSessions, 'bg session');
+    items.push({ kind: 'text', text: count, name: STRIP_NAMES.background, title: `Background terminal sessions running: ${count}.`, testId: 'strip-background' });
+  }
+  return items;
 }
 
 /** What the Pause control's pending mark is scoped to: the session shown and whether its run is busy (REQ-NOTIFY-050). */

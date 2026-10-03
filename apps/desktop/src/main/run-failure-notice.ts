@@ -92,12 +92,13 @@ export interface RunEnding {
  * - `reported`: REQ-EVENTS-088 — the run host already published the one failure notice; nothing more.
  * - `failure`: a FAILED run, its REQ-NOTIFY-060 class and failure text — published through the focus gate (REQ-NOTIFY-032).
  * - `notice`: any other ending — the outcome at the severity summarisation assigned (REQ-SESSION-186), or, for a run that
- *   ended otherwise on a provider limit (a cancelled quota wait, REQ-NOTIFY-093), REQ-NOTIFY-063's notice.
+ *   ended otherwise on a provider limit (a cancelled quota wait, REQ-NOTIFY-093), REQ-NOTIFY-063's notice with `quota`, the
+ *   limit's text, so a session not on screen can hold that notice for its focus (`RunFailurePublisher.endedOtherwise`).
  */
 export type RunEndingPublication =
   | { readonly kind: 'reported' }
   | { readonly kind: 'failure'; readonly failureClass: RunFailureClass; readonly failure: string }
-  | { readonly kind: 'notice'; readonly notice: ReportInput };
+  | { readonly kind: 'notice'; readonly notice: ReportInput; readonly quota?: string };
 
 /** Whether the result is a FAILED run — the runs REQ-NOTIFY-060 classifies. */
 export function isFailedRun(result: Pick<RunEnding, 'status' | 'execution_status'>): boolean {
@@ -112,7 +113,7 @@ export function runEndingPublication(sessionId: string, result: RunEnding): RunE
     const failure = result.error ?? result.summary;
     return { kind: 'failure', failureClass: classifyRunFailure(result.error), failure };
   }
-  if (result.error !== null && isQuotaFailure(result.error)) return { kind: 'notice', notice: quotaFailureNotice(sessionId, result.error) };
+  if (result.error !== null && isQuotaFailure(result.error)) return { kind: 'notice', notice: quotaFailureNotice(sessionId, result.error), quota: result.error };
   return { kind: 'notice', notice: { severity, title: result.summary, ...(result.error === null ? {} : { detail: result.error }) } };
 }
 
@@ -188,10 +189,18 @@ export class RunFailurePublisher {
    * REQ-NOTIFY-031: a run of `sessionId` ended otherwise than failed, `notice` the one `runEndingPublication` decided. A
    * session on screen raises it; a session not on screen raises REQ-NOTIFY-031's notice naming it in its place, and nothing
    * changes the focus.
+   *
+   * REQ-NOTIFY-093: where the run ended on a provider limit (`quota`, the limit's text — a cancelled quota wait), a session
+   * not on screen also holds the `quota` class, so focusing it publishes REQ-NOTIFY-063's notice and its model-settings
+   * action (REQ-NOTIFY-030), exactly as a held failure class arrives under REQ-NOTIFY-032; a later ending supersedes it
+   * (`ended`). The notice slot holds one notice, so the two about this ending are never on screen at once. Until
+   * 2026-10-02 nothing was held, and the limit reached the user only as a plain ending
+   * (docs/defects/fixed/a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md).
    */
-  endedOtherwise(sessionId: string, notice: ReportInput, executionStatus: string): void {
+  endedOtherwise(sessionId: string, notice: ReportInput, executionStatus: string, quota?: string): void {
     if (this.deps.isFocused(sessionId)) { this.deps.report(notice); return; }
-    this.deps.log(`run ending: session ${sessionId} is not focused; REQ-NOTIFY-031's notice is raised in place of its own`);
+    this.deps.log(`run ending: session ${sessionId} is not focused; REQ-NOTIFY-031's notice is raised in place of its own${quota === undefined ? '' : ', and REQ-NOTIFY-063\'s waits for the focus'}`);
+    if (quota !== undefined) this.held.set(sessionId, { failureClass: 'quota', failure: quota });
     this.deps.report(unfocusedEndingNotice(sessionId, executionStatus));
   }
 

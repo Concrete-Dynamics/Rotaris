@@ -258,6 +258,11 @@ export async function readDisplayPrefs(): Promise<void> {
  * settles what the file says and never what is currently drawn. Null whenever no settings screen is mounted.
  */
 export const pendingDisplay = createStore<{ caps: DisplayView | null }>(() => ({ caps: null }));
+/**
+ * REQ-SHELL-041 / REQ-TOOLS-184: whether the Settings view holds unsaved edits — the status strip's `unsaved settings`
+ * flag. The settings screen publishes it as its pending state changes and takes it down when it goes.
+ */
+export const settingsUnsaved = createStore<{ dirty: boolean }>(() => ({ dirty: false }));
 /** REQ-CONFIG-403: written the moment the control moves, and the transcript re-renders from the same store. */
 export async function writeDisplayPref(key: 'display/autoCollapseTools' | 'display/groupTools', value: boolean): Promise<{ ok: true } | { ok: false; reason: string }> {
   const r = await bridge.command({ kind: 'prefs.set', key, value });

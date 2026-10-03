@@ -44,3 +44,4 @@ export * from './intent/index.js';
 export * from './playbooks/index.js';
 export * from './preflight.js';
 export { ROLE_VOCABULARY, BUILT_IN_PERSONAS, resolveRole } from './children/personas.js';
+export * from './workspace-usage.js';

@@ -219,7 +219,8 @@ wrapper that drops the originals' own properties (`fs.realpath.native`) breaks f
    `result` and the terminal status in one durable transaction **while still holding the lock** (A3, REQ-EVENTS-098),
    releases it in guaranteed cleanup after the sink is detached, then rebuilds `summary.md` off the path.
    The stop control cancels gracefully and a second press forces; the outcome is presented once as the
-   persistent notice; the status strip shows the presentation vocabulary. Every event is recorded then
+   persistent notice; the status strip shows the presentation vocabulary (its run item was dropped on 2026-10-02, fin10:
+   REQ-SHELL-038's closed list has no run state, and the run header and the Mission subtitle carry it). Every event is recorded then
    forwarded on the bus with the 5 s bound. **No tool, no child, no hook, no intent classification, no
    verification**: one task, one agent, one turn per iteration.
 
@@ -1168,7 +1169,9 @@ switch's REQ-MONITOR-142 row says (OQ-177;
 parts) is the proof's.** A failed run is classified in REQ-NOTIFY-060's order by main (`main/failure-class.ts`) and published
 through the focus gate (`main/run-failure-notice.ts`, which also holds a failed run's class publication until its session
 is followed by a main window, REQ-NOTIFY-030/032, and since 2026-10-02 raises REQ-NOTIFY-031's notice naming the session for
-a non-failure ending no main window follows — `notice-proof`'s `background-ending` drives it); an authentication failure asks the automatic fallback first
+a non-failure ending no main window follows — `notice-proof`'s `background-ending` drives it — and, since fin10, holds
+REQ-NOTIFY-063's quota notice for the focus of such a session whose run ended on a provider limit, which
+`notice-proof`'s `background-quota` drives); an authentication failure asks the automatic fallback first
 (`main/auth-fallback.ts`, parts A and B) and opens the recovery dialog (`main/auth-recovery.ts`,
 `packages/ui/src/AuthRecoveryDialog.tsx`, parts C and D) only where that answers it is the dialog's — a second failure, or
 a first with no usable fallback (REQ-NOTIFY-072). **`fatal` is driven** (`drivenLaunch`, its steps in `fatal.steps.json`):

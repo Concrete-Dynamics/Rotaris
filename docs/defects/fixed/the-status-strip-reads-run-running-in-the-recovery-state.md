@@ -30,3 +30,10 @@ and otherwise gives the presentation vocabulary as before.
 Evidence: `composer.test.ts`, "reads "Run needs recovery" for a busy session with no run here…", and
 `recovery-wiring.test.ts`, "main.tsx names the strip's run item from the recovery fact", both red against the unrepaired
 code. In the built app, relaunched onto the crash-left session, the strip's first item reads `Run needs recovery`.
+
+## Superseded — 2026-10-03
+
+Since fin10 the strip draws no run state at all: REQ-SHELL-038's item list is closed and names none
+([`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)).
+`statusStripRunItem` is gone; the Workspace view's run header and the Mission view's subtitle carry `Run needs recovery`, and
+`recovery-wiring.test.ts` now pins that the strip has no run item. The repair above is kept as the record of what was built.

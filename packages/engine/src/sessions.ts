@@ -44,7 +44,7 @@ import { mintTodoId, taskTitle, Todo, type TodoDocument } from './run/todo.js';
 import type { PersonaResolver } from './children/personas.js';
 import type { AgentActivity } from './children/activity.js';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
-import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, projectSessionTodos, type AgentTodoDocument } from './todo-view.js';
+import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, projectSessionTodos, sessionTaskTitle, type AgentTodoDocument } from './todo-view.js';
 import { randomUUID } from 'node:crypto';
 import { ModelSlots, type SlotHolder } from './children/model-slots.js';
 
@@ -1260,11 +1260,17 @@ export class Sessions {
     entry.leave();
   }
 
-  /** REQ-SESSION-042/154/182: read-only workspace listing with shared stale semantics. */
+  /**
+   * REQ-SESSION-042/154/182: read-only workspace listing with shared stale semantics. Each row's label is its listing
+   * record's task title (REQ-SESSION-030/032: the newest top-level task, derived from the row's own persisted todo), else
+   * the session id (REQ-SESSION-030's reader default). Until 2026-10-02 it was the oldest resident `user` row, read from
+   * every listed session's transcript, so the cost grew with the transcripts and a session whose first prompt was released
+   * past the resident window was listed under another name
+   * (docs/defects/fixed/the-session-list-reads-each-sessions-transcript-for-its-label.md).
+   */
   list(dal: StoreDal, workspaceRoot: string): SessionListItem[] {
     const now = Number(this.deps.clocks.wall.instant());
     return dal.listSessions().filter((row) => row.workspace_root === workspaceRoot).sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map((row) => {
-      const firstPrompt = dal.residentRows(asSessionId(row.session_id)).find((event) => event.kind === 'user' && event.body.trim() !== '');
       // Found on Part U's first execution (ADR-0005 note, defect 40): this listing carried its OWN liveness predicate —
       // `lock present && (foreign host || pid <= 0 || probe alive)` — beside `liveness()` below, and the two disagreed on
       // one case: a lock this process holds with no run behind it (a loaded, idle session). The listing called it live
@@ -1276,7 +1282,7 @@ export class Sessions {
       const binding = parseBinding(row.worktree);
       return {
         sessionId: row.session_id,
-        label: cut(firstPrompt?.body.trim() || row.session_id, 80),
+        label: cut(sessionTaskTitle(row.todo) || row.session_id, 80),
         status: row.execution_status || 'idle',
         branch: binding?.branch ?? '—',
         worktree: binding,

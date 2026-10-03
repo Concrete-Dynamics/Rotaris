@@ -214,6 +214,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * REQ-SHELL-021's three gates are not evaluated and no window is closed.
    */
   z.object({ kind: z.literal('workspace.choose'), newWindow: z.boolean().optional() }),
+  /**
+   * REQ-SHELL-040 / REQ-WORKSPACE-019: the status strip's workspace-path link opens the window's workspace folder in the
+   * OS file manager. The renderer names no path: main opens the folder of the window that asked, and a failure is answered
+   * as a refusal naming the path, which the renderer reports through the transient error surface (REQ-SHELL-112).
+   */
+  z.object({ kind: z.literal('workspace.openFolder') }),
+  /** REQ-SHELL-044/045: the status strip's tokens and cost — this workspace's runs so far (OQ-190's build reading). */
+  z.object({ kind: z.literal('workspace.usage') }),
   z.object({ kind: z.literal('shell.switchView'), view: z.string() }),
   /**
    * Part AA — REQ-CHAT-076: an `http(s)` link in transcript text opens in the SYSTEM BROWSER. The renderer is

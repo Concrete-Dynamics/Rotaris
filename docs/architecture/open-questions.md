@@ -4276,6 +4276,11 @@ no more; its last sentence settles "every other unfinished agent of a session at
   it subscribes (`followCoalesced`), because a session at rest publishes nothing more, so the root keeps its last activity
   there too. *Until the fourteenth review round the strip read "run Running", and one drive showed that window's root
   with no rows; that second defect was not reproduced (`docs/defects/fixed/`).*
+  *Amended 2026-10-03 (fin10): the strip draws no run state any more — REQ-SHELL-038's item list is closed and names none
+  ([`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)),
+  and `statusStripRunItem` is gone. The Workspace view's run header and the Mission view's subtitle carry `Run needs recovery`,
+  so the sentence above about the strip is kept as the record of what was built until then; no surface reads a run as
+  active beside a root drawn `paused` still holds through those two.
 - **What a crash left — a departure from clause 13's last sentence and from REQ-MONITOR-211/213.** The agents the
   crash record will pause present as it will leave them — `paused`, interruption `crash`, their activity kept, no chip
   — before it is recorded, although they are not in the child state `paused` and the sentence settles them: every
@@ -9264,3 +9269,71 @@ compression pass fails and is reported, the analyst's run is reported failed).
 what each calls when its configured pair is excluded and nothing replaces it; and whether a configured `compressor.model`
 yields to the exclusion of its pair.
 
+**OQ-190 — Whose tokens does the status strip's tokens item count: the workspace's runs, or the focused session's?**
+*(REQ-SHELL-044, "The tokens item reads the running total of tokens used"; REQ-SHELL-045, the cost item's figure is "the
+model provider's reported cost for this workspace's runs so far"; REQ-SHELL-038, the items' accessible names, "Tokens used"
+and "Cost so far". Raised 2026-10-02 by the repair of
+[`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)
+(fin10, bundle `fin10-strip-notices-and-listing`). Raised as OQ-188; renumbered 190 at the merge, since origin/main took 188 and 189 meanwhile. Open.)*
+
+REQ-SHELL-045 scopes the cost to this workspace's runs and its tooltip says so. REQ-SHELL-044 says "the running total of
+tokens used" and names no scope: not the workspace's runs, not the focused session's, not the current run's. The two items
+stand side by side, so a reader compares them, and a session-scoped token count beside a workspace-scoped cost would make
+that comparison wrong without saying so.
+
+**What the build proceeds under** (`workspaceUsage`, `packages/engine/src/workspace-usage.ts`; `stripItems`,
+`packages/ui/src/composer.ts`): the workspace's runs, as the cost is — the sum of every stored session's
+`tokens_input + tokens_output` for this workspace, read from the run host on the `workspace.usage` command when the strip
+mounts, when the focused session's own usage moves and every five seconds (a background session's run moves it too). Its
+tooltip says so: "Tokens used by this workspace's runs so far: {n} tok."
+
+**What a ruling decides.** The scope of REQ-SHELL-044's running total (the workspace's runs, the focused session, the
+current run), and whether the tooltip names it.
+
+**OQ-191 — The workspace domain states five things about the status strip that the shell domain, which owns it, states
+otherwise.** *(REQ-SHELL-040, "Neither failure is silent", with the resolution of `docs/spec/resolutions/12-desktop-shell-windows.md`
+item 7, "Silent failure is dropped"; REQ-WORKSPACE-019, "a failure to open SHALL be silent"; REQ-SHELL-041, the
+`unsaved settings` explanation conveys "that runs keep using the last saved values until they are saved", and the mode
+flag's explanation is given word for word; REQ-WORKSPACE-022, the same flag's explanation conveys "that runs use the values
+on screen rather than the values on disk", and the mode flag's conveys "exactly the following and no more: which permission
+mode is in force and that it decides whether a tool call is allowed outright, put to the user, or refused", the redaction
+flag's "that secrets are removed from what is recorded and displayed and that this cannot be turned off", and the
+circuit-breaker flag's "that the circuit breaker is armed and will halt a run that trips it"; REQ-SHELL-047,
+"This document owns the status strip". Raised 2026-10-02 by the repair of
+[`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)
+(fin10, bundle `fin10-strip-notices-and-listing`). Raised as OQ-189; renumbered 191 at the merge, since origin/main took 188 and 189 meanwhile. Open. *Amended 2026-10-03 (fin10's repair round): raised as "three
+things", it missed the redaction and circuit-breaker explanations, which REQ-WORKSPACE-022's "exactly the following and no
+more" bounds as well; both are added below.*)*
+
+Five statements disagree:
+
+- **The workspace-path link's failure.** REQ-SHELL-040 (amended by the shell domain's resolution 7) reports a failure to open
+  the folder on the transient error surface with the path attempted; REQ-WORKSPACE-019 still says the failure is silent.
+- **What `unsaved settings` explains.** REQ-SHELL-041: runs keep using the last saved values until the edits are saved.
+  REQ-WORKSPACE-022: runs use the values on screen rather than the values on disk. They are opposite claims about which
+  values a run uses; the product's runs read the saved configuration (ADR-0037's Tier B, applied at the next run start).
+- **The mode flag's explanation.** REQ-SHELL-041 gives the sentence ("Permission mode {mode}: how much agents may do
+  without asking. Change it under the composer or in Settings → Runtime."); REQ-WORKSPACE-022 bounds it to the mode in
+  force and that it decides allow, ask or refuse, "and no more", which the shell's second sentence exceeds.
+- **The redaction flag's explanation.** REQ-SHELL-041 gives the sentence ("Secret redaction: anything that looks like a
+  credential is masked before it reaches a model or the transcript."); REQ-WORKSPACE-022 bounds it to two facts, that
+  secrets are removed from what is recorded and displayed and that this cannot be turned off, "and no more". The shell's
+  sentence does not say it cannot be turned off, and adds "before it reaches a model", which the bound excludes.
+- **The circuit-breaker flag's explanation.** REQ-SHELL-041 gives the sentence ("Circuit breaker: Rotaris stops a run that
+  keeps repeating a failing step."); REQ-WORKSPACE-022 bounds it to that the circuit breaker is armed and will halt a run
+  that trips it, "and no more". The shell's sentence says what trips it (a repeated failing step) and does not say it is
+  armed.
+
+The file-access flag's two explanations are not among them: REQ-WORKSPACE-022 fixes that pair word for word and
+REQ-SHELL-041 asks only that they use the Settings control's words, which REQ-WORKSPACE-022's pair does (REQ-WORKSPACE-148's
+control "lets agents read and write outside this workspace folder").
+
+**What the build proceeds under** (`apps/desktop/src/main/commands/workspace.ts`'s `workspace.openFolder`,
+`apps/desktop/src/renderer/strip-facts.ts`, `statusStripSafetyFlags` in `packages/ui/src/composer.ts`): the shell domain's
+statements, since REQ-SHELL-047 says that document owns the strip and its resolution 7 is the later decision. A folder that
+cannot be opened raises the transient error naming the path (an opener that never answers counts after 5 s,
+`apps/desktop/src/main/open-folder.ts`); `unsaved settings` reads "The Settings view is holding edits that have not been
+saved; runs keep using the last saved values until they are saved."; the mode, redaction and circuit-breaker flags'
+sentences are REQ-SHELL-041's word for word; the file-access pair is REQ-WORKSPACE-022's.
+
+**What a ruling decides.** Which domain's statement stands for each of the five, and an amendment to the other.

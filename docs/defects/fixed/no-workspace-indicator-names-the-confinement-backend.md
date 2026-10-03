@@ -46,7 +46,7 @@ Repaired 2026-10-02 (fin8, bundle `fin8-focus-bound-recovery`). The backend reac
 Raised, not ruled: where the indicator stands among REQ-SHELL-038's items and its REQ-SHELL-047 threshold, and its wording
 (OQ-184). Recorded beside it: the strip applies no REQ-SHELL-047 hiding and is over-full at the 1000 px floor, which this
 item widens
-([the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md](../the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)).
+([the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md](the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)).
 
 Pinned by `packages/ui/src/composer.test.ts` (confined and unconfined records, no session focused, a focus switch, and
 the records published around a refusal at the gate), `packages/engine/src/sandbox-record.test.ts` (a confined run's record

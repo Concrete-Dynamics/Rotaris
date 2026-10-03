@@ -101,6 +101,8 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   /** ADR-0037 Tier B: the settings store's current values, handed to the run host ahead of the next run start. */
   z.object({ kind: z.literal('config.liveState'), state: z.record(z.string(), z.unknown()) }),
   z.object({ kind: z.literal('session.list'), workspaceId: z.string() }),
+  /** REQ-SHELL-044/045: the strip's tokens and cost over the workspace's stored sessions (`workspaceUsage`). */
+  z.object({ kind: z.literal('workspace.usage'), workspaceId: z.string() }),
   z.object({ kind: z.literal('session.resume'), workspaceId: z.string(), sessionId: z.string().min(1) }),
   /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause (continue, double, cancel) or continue a manually paused session or one a crash left (PD-ORCH-005 clause 18); clause 6's `withoutPaused` declines the open iteration. */
   z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(['continue', 'double', 'cancel']), withoutPaused: z.boolean().optional() }),
@@ -459,6 +461,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.attachment'), base64: z.string().min(1) }),
   z.object({ kind: z.literal('circuit_breaker.status'), enabled: z.boolean() }),
   z.object({ kind: z.literal('session.list'), sessions: z.array(SessionListItemSchema) }),
+  z.object({ kind: z.literal('workspace.usage'), tokens: z.number().int().nonnegative(), cost: z.string().nullable() }),
   z.object({ kind: z.literal('session.resumed'), sessionId: z.string() }),
   z.object({ kind: z.literal('config.snapshot'), snapshot: ConfigSnapshotSchema }),
   z.object({ kind: z.literal('session.continued'), sessionId: z.string(), resumed: z.boolean(), messageLimit: z.number().int().nullable() }),

@@ -1232,6 +1232,11 @@ releases that provider's pairs. ~~REQ-NOTIFY-031 (a background run's non-failure
 other raises REQ-NOTIFY-031's in its place (`unfocusedEndingNotice`: persistent, `success` for `completed` and `info`
 otherwise, naming the session and its normalised state, saying the session on screen is unaffected, `focus-session`).
 "New session" sends `session.release` for the session it releases, so main no longer counts that session as followed.
+*Since 2026-10-02 (fin10, `docs/defects/fixed/a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md`):* a
+run that ended otherwise on a provider limit (a cancelled quota wait) carries the limit's text with its notice
+(`runEndingPublication`'s `quota`); a session no main window follows raises REQ-NOTIFY-031's notice as above and **holds the
+`quota` class**, so the focus publishes REQ-NOTIFY-063's notice and its model-settings action (REQ-NOTIFY-093/030), and a
+later ending supersedes it. Until then nothing was held and the limit reached the user only as a plain ending.
 
 Main presents `run.result` once as the notice — **except where that result carries `persistence: {confirmed: false}`**,
 the run host having already published the one failure notice `REQ-EVENTS-088` allows, with the last durable ordinal
@@ -1406,7 +1411,10 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   acceptance criterion is a property of the four closed enumerations — this section's keys among them — carrying no
   entry that names update checking, an endpoint, a release source or a channel; none does.
 - **Tier A** — Settings Save, the diagnostics toggle, the composer's permission-mode control: the workspace
-  service writes through one of the four writers and loads again; main broadcasts `config:changed`.
+  service writes through one of the four writers and loads again; main announces `config:changed` to each main window
+  and its persona and terminal windows (`configFamily`) with its own workspace's snapshot (`announceConfig`; since
+  2026-10-03, before which every window took the written one; the same day's first form reached the main windows alone and
+  left a persona window's snapshot stale).
 - **Tier B** — at every run start the run host loads the files — layer 3, the discovery snapshot, folded first
   (REQ-CONFIG-034: an authenticated provider's models as entries keyed by qualified id with `auth_provider`, and its
   slot picks) — and overlays the screen's live state (`config.liveState`, handed over on every pending change), then

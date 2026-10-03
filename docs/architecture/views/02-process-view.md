@@ -148,7 +148,12 @@ it was not given; the request is attributed to the window that sent it, REQ-SHEL
 `PD-SHELL-001`'s add route, decided by the gesture before the chooser opens — a palette entry or the chip with the
 platform's secondary-activation modifier — on which REQ-SHELL-021's three gates are not evaluated and no window is
 closed; a folder another window already holds surfaces that window and builds none, on REQ-STARTUP-163's rule),
-`shell.switchView`, **`window.state` / `window.minimize` / `window.toggleMaximize` / `window.close`**
+**`workspace.openFolder`** (fin10, REQ-SHELL-040: the status strip's workspace-path link; no path on the wire — main
+opens the folder of the window that asked with `shell.openPath`, bounded at 5 s because an opener that cannot be launched
+may never answer (`main/open-folder.ts`), and answers a failure as a refusal naming the path, which the renderer raises on
+the transient error surface; OQ-191), **`workspace.usage`** (fin10, REQ-SHELL-044/045: the strip's tokens and cost, relayed
+as the run host's `workspace.usage {workspaceId}`, answered `{tokens, cost}` by `workspaceUsage` over the workspace's stored
+sessions; OQ-190), `shell.switchView`, **`window.state` / `window.minimize` / `window.toggleMaximize` / `window.close`**
 (PD-SHELL-003: the frameless main window's renderer asks main to operate the BrowserWindow that sent the command;
 close calls `BrowserWindow.close()` so the existing guarded close event remains the only decision point),
 `window.modality {active}` (Part W: the main window's application-modal surface — the command
@@ -160,7 +165,8 @@ delete/refresh`, `provider.payload/signIn`. Main relays a session or hook comman
 config command to the workspace service, and answers preference, theme and **provider** commands itself (the
 credential store lives in main). `provider.signIn` is the one command carrying a pasted key inward; no outcome
 carries one back — the list shows the display mask. A sign-in that succeeds asks the workspace service
-`config.bootstrap` (the starter `agents.yaml` if absent, then the load again) and broadcasts `config:changed`. **`repository.read`
+`config.bootstrap` (the starter `agents.yaml` if absent, then the load again) and broadcasts `config:changed` (to each main
+window's family with its own workspace's snapshot, `announceConfig`, since 2026-10-03). **`repository.read`
 {workspaceRoot}` → `repository.state {gitAvailable, isRepository, branch, base, ahead, behind, touched, uncommitted, failed,
 readMs}`** is the workspace service's answer for the Overview's repository card — ADR-0038's helper lives there and
 nowhere else; every read bounded at 15 s, every failure an empty value (REQ-GIT-102).
@@ -508,8 +514,14 @@ windows holding that workspace (`MainWindows.holding`) whichever view each is sh
 (REQ-NOTIFY-071) or null when it closes, to EVERY main window: each holds the prompts by session and draws only the
 followed session's, so the prompt moves with the focused session (REQ-NOTIFY-030). *Corrected 2026-10-02 (the repair
 round): it first went to the one window following the session (`ownerOf`) and was drawn there whatever that window
-focused next, so another session's prompt stood over the focused one and acted on its own session;* `theme:changed` and `config:changed`
-repaint or repopulate every live window.
+focused next, so another session's prompt stood over the focused one and acted on its own session;* `theme:changed` repaints
+every live window; `config:changed` repopulates every main window **and its family** — its persona windows and its terminal
+window (`configFamily`) — from **its own** workspace's snapshot (`announceConfig`, `main/config-broadcast.ts`): the families
+of the windows holding the written workspace take the reloaded snapshot, every other family its own workspace's, read again
+from its service. *Corrected 2026-10-03 (fin10's repair round): every window was sent the written workspace's snapshot, so a
+second main window's status strip and Settings read the first workspace's values. Corrected again the same day (the second
+repair round): that repair first read "repopulates every main window from its own workspace's snapshot" and sent nothing to
+a persona window, which kept the model, declared tools and compression threshold it mounted with until it was reopened.*
 
 **Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Since 2026-09-09 (Part AL): the seven `terminal.*` requests, the `terminal.streams` reply and the `publish.terminal` event, listed above. Requests:
 `workspace.opened/closing/refuseRuns/renewLease/closeStore/release`, `session.*` (start, list, resume,
@@ -524,7 +536,8 @@ restart that could not begin; and
 `config.liveState`, `presenter.register/revoke/pollReply` (a revoke the application's quit causes carries `quitting`,
 PD-ORCH-005 clause 9 — `06-sequences.md` §2), `approval.shown/queued`, `hooks.*`, `playbooks.catalogue`,
 `checkpoint.list/recordSafety/recordRestore` (Part P), `prompts.read/push/take` (Part X, session-less like
-`session.list` — REQ-LIBRARY-137/138), `timeline.append` (Part V, REQ-NOTIFY-268; its optional
+`session.list` — REQ-LIBRARY-137/138), `workspace.usage {workspaceId}` (fin10, session-less too: the status strip's tokens and
+cost over the workspace's stored sessions, answered `workspace.usage {tokens, cost}`), `timeline.append` (Part V, REQ-NOTIFY-268; its optional
 `severity` is REQ-SESSION-134's vocabulary and `info` where absent, while the entry's `id` is minted by the writer
 that records it and never travels on the wire), `shutdown`. Events back: `publish.increment`, `publish.snapshot`,
 `run.result` (since 2026-09-13 it may carry `persistence: {confirmed: false, last_event_ordinal}` — present only when

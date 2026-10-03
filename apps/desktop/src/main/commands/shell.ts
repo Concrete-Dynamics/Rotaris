@@ -27,6 +27,9 @@ export function shellCommands(
       return { ok: true, value: {
         version: productVersion(), workspace: w.workspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`),
         circuitBreakerArmed: cb.kind === 'circuit_breaker.status' && cb.enabled,
+        // REQ-SHELL-041: the strip follows the saved `circuit_breaker.enabled` from the configuration snapshot after this
+        // boot answer; the host override is the one input the snapshot does not carry, so it travels here.
+        circuitBreakerHostOff: process.env['ROTARIS_CIRCUIT_BREAKER'] === 'off',
         build: buildIdentifier(), standalone: app.isPackaged, thirdPartyLicenses: thirdPartyLicensesPath() !== null,
         // Stage B — REQ-WORKSPACE-149 rule 1: home collapsing is a DISPLAY rule, so the renderer needs to know
         // where home is. It cannot ask the platform itself (no `node:os` in a sandboxed renderer, ADR-0051), and

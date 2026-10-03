@@ -13,10 +13,15 @@
  */
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { extname, join, normalize, sep } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const design = new URL('../docs/design/', import.meta.url).pathname.replace(/^\//, '');
-const icons = new URL('../node_modules/@phosphor-icons/web/src/', import.meta.url).pathname.replace(/^\//, '');
+/* Platform paths, as tools/check-directive-register.mjs builds its root. Until 2026-10-02 both were
+ * `new URL(…).pathname.replace(/^\//, '')`: the strip made a Windows path usable (`/D:/…` → `D:/…`) and made a
+ * Linux or macOS one relative (`/home/…` → `home/…`), so started from the repository every request answered
+ * `not found: /` (docs/defects/fixed/pnpm-mockup-serves-not-found-on-linux-unless-started-from-the-root.md). */
+export const design = fileURLToPath(new URL('../docs/design/', import.meta.url));
+export const icons = fileURLToPath(new URL('../node_modules/@phosphor-icons/web/src/', import.meta.url));
 const port = Number(process.env.MOCKUP_PORT ?? 8791);
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.svg': 'image/svg+xml', '.json': 'application/json' };
 
@@ -120,17 +125,36 @@ window.addEventListener('DOMContentLoaded', () => {
 </script>
 `;
 
-createServer((request, response) => {
+/**
+ * The request handler: a path under the icon font's root or the design folder, never outside either. The guard compares
+ * the joined path against the root WITH its trailing separator, so `/../package.json` (or a sibling folder sharing the
+ * root's prefix) is refused rather than read.
+ */
+export function handle(request, response) {
   const requested = decodeURIComponent((request.url ?? '/').split('?')[0]);
   const iconRequest = requested.startsWith('/icons/');
   const root = iconRequest ? icons : design;
   const relative = iconRequest ? requested.slice('/icons/'.length) : requested === '/' ? 'mockup/rotaris-ui-mockup.dc.html' : requested.slice(1);
   const path = join(root, normalize(relative));
-  if (!path.startsWith(root.split('/').join(sep))) { response.writeHead(403).end(); return; }
+  const base = root.endsWith(sep) ? root : `${root}${sep}`;
+  if (!path.startsWith(base)) { response.writeHead(403).end(); return; }
   readFile(path)
     .then((body) => {
       response.writeHead(200, { 'content-type': types[extname(path)] ?? 'application/octet-stream', 'cache-control': 'no-store' });
       response.end(extname(path) === '.html' ? String(body).replace('</head>', `${shim}</head>`) : body);
     })
     .catch(() => { response.writeHead(404).end(`not found: ${requested}`); });
-}).listen(port, () => { console.log(`The design mockup is at http://localhost:${port} — read it for craft, never for structure (docs/design/README.md §2).`); });
+}
+
+/** Listens on `port` (0 for any free one) and resolves with the server once it is listening. */
+export function serve(listenOn = port) {
+  return new Promise((done) => {
+    const server = createServer(handle);
+    server.listen(listenOn, () => done(server));
+  });
+}
+
+const runDirectly = process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+if (runDirectly) {
+  void serve().then(() => { console.log(`The design mockup is at http://localhost:${port} — read it for craft, never for structure (docs/design/README.md §2).`); });
+}

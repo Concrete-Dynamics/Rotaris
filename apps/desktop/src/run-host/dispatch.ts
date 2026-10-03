@@ -1,7 +1,7 @@
 import { SKILLS_DISABLED_MESSAGE, type ImprovementArtifactRecord, type ProcessReply, type RunHostRequest } from '@rotaris/contracts';
 import { asSessionId, millis, toIsoUtc, type WorkspaceId } from '@rotaris/kernel';
 import { openStore, StoreDal, forgetSpelling } from '@rotaris/store';
-import { analyzeImprovement, captureRetrospectiveJob, CATALOGUE, relativeTime, timelineId } from '@rotaris/engine';
+import { analyzeImprovement, captureRetrospectiveJob, CATALOGUE, relativeTime, timelineId, workspaceUsage } from '@rotaris/engine';
 import { renderUnavailability } from '@rotaris/agent-tools';
 import { clearHooksDecision, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
 import { REFS_ASK_BOUND } from './checkpoints.js';
@@ -176,6 +176,12 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       const s = stores.get(req.workspaceId);
       if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
       return { kind: 'session.list', sessions: sessions.list(s.dal, s.root) };
+    }
+    case 'workspace.usage': {
+      // REQ-SHELL-044/045: the status strip's tokens and cost, from the stored sessions' own aggregates.
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      return { kind: 'workspace.usage', ...workspaceUsage(s.dal.listSessions(), s.root) };
     }
     case 'session.resume': {
       // REQ-MONITOR-249/252/258: multi-session host — loading/focusing another session stays available

@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-03**
 
+**One MCP discovery failure is one record on one line (REQ-MCP-048, PD-MONITOR-002; fin13).** `ToolDiscovery`'s
+REQ-MCP-048 warning carries the time, the project the run host launched (the new optional `DiscoverRequest.context`) and the
+detail with its lines joined by ` | `; `McpHost.prepare` logs a success only. `restated-facts.mjs` knows the run host's old
+line as a fifth restatement, and `code-intelligence-binding.mjs` reads a failure's project from the warning. The **process view**'s one-emitter passage says
+so. No package, edge, process, channel, command or store column changed.
+
 **An MCP server whose tool discovery failed is recorded dropped for that reason (REQ-MCP-114, REQ-MCP-042; fin13).**
 `grantEvidence` (`run-host/mcp.ts`) records an active server flagged `discoveryFailed` as `fate: 'dropped'`,
 `reason: 'discovery-failed'`, with no entry under `granted`; the persona surface still keeps it active, so the prompt lists it

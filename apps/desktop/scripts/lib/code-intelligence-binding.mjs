@@ -10,11 +10,17 @@
  *   mcp: discovery of 'code_intelligence' (project /ws/.rotaris/requirements/worktrees/u1) listed 22 tool(s) in 1968 ms
  *   mcp code_intelligence: connected for the session (pid 1, protocol 2025-11-25, 22 tool(s), hook code_intelligence:ok, project /ws/…/u1) in 2511 ms
  *
- * A discovery that failed carries the same words ahead of its outcome (`(project …) failed (…)`), since a failure's
- * detail can run over several lines (a child's standard error, each continuation under its own log prefix).
+ * A discovery that failed is `ToolDiscovery`'s one REQ-MCP-048 warning since 2026-10-03, which names the project the same
+ * way after the server's name, its detail on the same line:
+ *
+ *   mcp code_intelligence (project /ws/…/u1): tool discovery failed in 973 ms (Connection closed (… | …)); the persona prompt …
+ *
+ * Until then the run host said a failure again in its own line, `(project …) failed (…)`, its detail running over several
+ * log lines (`docs/defects/fixed/one-mcp-discovery-failure-is-logged-twice-its-stderr-breaking-each-record.md`); an older pack's
+ * line of that shape is still read.
  */
 const SERVER = 'code_intelligence';
-const DISCOVERY = new RegExp(`mcp: discovery of '${SERVER}'(?: \\(project (.+?)\\))? (?:listed|failed) `);
+const DISCOVERY = new RegExp(`mcp: discovery of '${SERVER}'(?: \\(project (.+?)\\))? (?:listed|failed) |mcp ${SERVER}(?: \\(project (.+?)\\))?: tool discovery failed `);
 const CONNECTED = new RegExp(`mcp ${SERVER}: connected for the session \\((.*)\\) in \\d+ ms$`);
 
 /** Every launch line of the code-intelligence server in `log`, in order: its kind and the project it names (null: none named). */
@@ -22,7 +28,7 @@ export function codeIntelligenceLaunches(log) {
   const out = [];
   for (const line of String(log).split(/\r?\n/)) {
     const d = DISCOVERY.exec(line);
-    if (d) { out.push({ kind: 'discovery', project: d[1] ?? null }); continue; }
+    if (d) { out.push({ kind: 'discovery', project: d[1] ?? d[2] ?? null }); continue; }
     const c = CONNECTED.exec(line);
     if (c) {
       const at = c[1].lastIndexOf(', project ');

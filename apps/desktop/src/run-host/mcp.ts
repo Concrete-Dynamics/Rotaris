@@ -224,10 +224,12 @@ export class McpHost {
     const started = this.deps.clocks.monotonic.now();
     const servers = this.carriedAndLaunchable(cfg);
     const p = Promise.all(servers.map(async (s) => {
-      const r = await this.discovery.discover({ name: s.name, description: this.descriptionOf(s), workspaceRoot });
       const project = projectWords(this.descriptionOf(s));
-      // The project ahead of the outcome: a failure's detail can run over several lines (a child's standard error).
-      if (!r.memoised) this.deps.log(`mcp: discovery of '${s.name}'${project === '' ? '' : ` (${project})`} ${r.failed ? `failed (${r.detail})` : `listed ${r.tools.length} tool(s)`} in ${r.elapsedMs.toFixed(0)} ms`);
+      const r = await this.discovery.discover({ name: s.name, description: this.descriptionOf(s), workspaceRoot, context: project });
+      // A success is this line's; a failure is `ToolDiscovery`'s one REQ-MCP-048 warning, which carries the project, the
+      // detail and the time. Until 2026-10-03 this line said the failure again at info 1 ms after the warning, the child's whole standard
+      // error in both (`docs/defects/fixed/one-mcp-discovery-failure-is-logged-twice-its-stderr-breaking-each-record.md`).
+      if (!r.memoised && !r.failed) this.deps.log(`mcp: discovery of '${s.name}'${project === '' ? '' : ` (${project})`} listed ${r.tools.length} tool(s) in ${r.elapsedMs.toFixed(0)} ms`);
     })).then(() => { this.deps.log(`mcp: discovery for ${servers.length} server(s) finished in ${(this.deps.clocks.monotonic.now() - started).toFixed(0)} ms`); });
     this.preparing.set(key, p);
     return p;

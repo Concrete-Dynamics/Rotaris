@@ -42,6 +42,15 @@ describe('the code-intelligence binding a run launched with, read from its log (
     expect(bindingVerdict(log, tree)).toEqual({ ok: true, detail: `every launch named ${tree} — discovery: ${tree}; connected: ${tree}` });
   });
 
+  it('a failed discovery is read from the REQ-MCP-048 warning, the failure\'s one record since 2026-10-03 (finding U4)', () => {
+    const warn = '[main 2026-10-03T06:04:46.970Z] warning run host: ';
+    const log = [
+      `${warn}mcp code_intelligence (project ${tree}): tool discovery failed in 973 ms (Connection closed (code_intelligence exited with code 127; stderr: the bus: Failed to connect | rotaris: the bundled code-intelligence runtime is not present in this installation (build it with pnpm code-intel:bundle))); the persona prompt will list this server with no tool details attached (REQ-MCP-048)`,
+      `${warn}mcp code_intelligence: tool discovery failed in 12 ms (spawn ENOENT); the persona prompt will list this server with no tool details attached (REQ-MCP-048)`,
+    ].join('\n');
+    expect(codeIntelligenceLaunches(log)).toEqual([{ kind: 'discovery', project: tree }, { kind: 'discovery', project: null }]);
+  });
+
   it('no launch line at all is red: the check cannot say what the run was bound to', () => {
     expect(bindingVerdict(`${prefix}session 76d7de01 started`, tree)).toEqual({ ok: false, detail: "no launch line of 'code_intelligence' was logged" });
   });

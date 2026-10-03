@@ -62,8 +62,9 @@ method there.
 
 Invariants:
 
-- A command is answered **for the window that raised it** — `windowFor(senderId) ?? activeWindow()` — not for
-  "the main window" (`REQ-SHELL-020`). With two main windows alive those are different answers.
+- A command is answered **for the window that raised it** — `MainWindows.forCommand(senderId)`: the sender's main
+  window, else the main window owning the persona or terminal window that sent it, else the active window — not for
+  "the main window" (`REQ-SHELL-020`, `REQ-STARTUP-163`). With two main windows alive those are different answers.
 - A request that does not parse is `command.malformed`. Nothing throws out of `runCommand`: an uncaught
   exception in main raises the platform's native error box and wedges the loop (`ADR-0019`). `runCommand`
   itself is now three moves — resolve the window, read the request, call the handler — and holds no case.
@@ -312,8 +313,19 @@ REQ-SHELL-039/040), the branch, a `spacer`, REQ-SHELL-041's safety flags in thei
 the sandbox indicator right after the file-access flag, OQ-184's build reading), the model, the tokens, the cost when there
 is one, the background count — each with REQ-SHELL-038's accessible name (`STRIP_NAMES`), its tooltip as its accessible
 description, and REQ-SHELL-047's two thresholds (`STRIP_PATH_MIN_WIDTH` 1180, `STRIP_BACKGROUND_MIN_WIDTH` 1080) applied to
-the window's own width. `AppShell` (`packages/ui/src/AppShell.tsx`) only draws them: a link as the design system's
-`Button`, text as a `span`, the spacer taking the slack and giving it back first. An item is text in the strip's own
+the window's own width. `AppShell` (`packages/ui/src/AppShell.tsx`) only draws them, each through `StatusStripItem`
+(`packages/ui/src/StatusStripItem.tsx`): a link as the design system's `Button`, text as a `span`, the spacer taking the
+slack and giving it back first. An item that is a workspace path or a branch name carries `middle` (the path link and the
+branch item, 2026-10-03): its label is shortened from the middle against the width the row gives it (REQ-WORKSPACE-149
+rule 2 — `rowLabel` in `workspace-label.ts`, the canvas measurer in `label-measure.ts`, shared with the title-bar chip), the
+box asking the row for its whole label as a flex basis and re-eliding on every ResizeObserver change (and on
+`document.fonts`' `loadingdone`), and fixed text after it (the branch's ` ↑{n}`) rides as `suffix`, never shortened; every
+other item keeps REQ-SHELL-038's end ellipsis. The path link gives up its width **first** (`flex-shrink: 1000000` on
+`.status-strip__link[data-middle='1']`; equal factors let a long path squeeze `main` to `m…` or nothing), and a link whose
+label rule 2 hid is hidden whole (`data-label-hidden`), no empty focus stop. The branch item is `middle` only while it shows
+a branch name: its detached, non-repository and unread words are never shortened (REQ-GIT-161, OQ-193). A glyph
+before the label rides as `icon` (the branch item's `ph-git-branch`, REQ-SHELL-042), coloured by a token in
+`.status-strip__icon` so a theme change redraws it. An item is text in the strip's own
 craft — the mockup's strip is plain tertiary text at `--rt-text-xs`, mono only for figures — so a new item takes no new
 control and no new token. The path, in order: the fact on the record the renderer already receives (`SessionRecord` in
 `packages/contracts/src/channels.ts`, filled by `toSessionRecord` in `packages/engine/src/sessions.ts`; a store column

@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { detectPlatform } from './commands/registry.js';
 import { collapseHome, workspaceLabel } from './workspace-label.js';
+import { measurerFor, spentBesideLabel } from './label-measure.js';
 import { Button as DesignButton } from './design-system/index.js';
 
 /**
@@ -37,26 +38,8 @@ export interface WorkspaceChipProps {
   readonly onChoose?: ((newWindow: boolean) => void) | undefined;
 }
 
-/**
- * One canvas per window measures every candidate label. Measuring on a canvas rather than in the
- * document is what keeps rule 2 free of a feedback loop: a candidate's width is read without the
- * candidate being laid out, so shortening the label cannot move the budget that decided it.
- *
- * An environment with no 2D context — a test renderer — measures everything as zero. That answer is
- * not trusted here: `elideMiddle` refuses a measurer that charges nothing for a label with characters
- * and hides the label instead, because in a window that really was drawn the alternative is a full
- * absolute path in a chip too small for it, and clipped is what rule 2 forbids. A test renderer
- * reaches the same outcome by its available width being zero as well.
- */
-let scratch: HTMLCanvasElement | null = null;
-function measurerFor(el: HTMLElement): (s: string) => number {
-  scratch ??= document.createElement('canvas');
-  const ctx = scratch.getContext('2d');
-  const font = getComputedStyle(el).font;
-  if (!ctx || font === '') return () => 0;
-  ctx.font = font;
-  return (s) => ctx.measureText(s).width;
-}
+// The canvas measurer is `label-measure.ts`'s, shared with the status strip's path link and branch item (REQ-WORKSPACE-149
+// rule 2 names all three), so the chip and the strip cannot measure a label differently.
 
 export function WorkspaceChip({ path, home, sessionName, onChoose }: WorkspaceChipProps) {
   const chip = useRef<HTMLButtonElement | null>(null);
@@ -97,12 +80,7 @@ export function WorkspaceChip({ path, home, sessionName, onChoose }: WorkspaceCh
     const px = (value: string) => parseFloat(value) || 0;
     const slotStyle = getComputedStyle(slot);
     const inner = slot.clientWidth - px(slotStyle.paddingLeft) - px(slotStyle.paddingRight);
-    const own = getComputedStyle(button);
-    const furniture = Array.from(button.children).filter((element) => element !== text.current);
-    const spent =
-      px(own.paddingLeft) + px(own.paddingRight) + px(own.borderLeftWidth) + px(own.borderRightWidth)
-      + px(own.columnGap) * furniture.length
-      + furniture.reduce((total, element) => total + (element as HTMLElement).offsetWidth, 0);
+    const spent = spentBesideLabel(button, text.current);
     // The path span inherits the button's face and size, so the button is a faithful stand-in for
     // the metrics while the label is hidden and the span is not in the document.
     setLabel(workspaceLabel(path, home, inner - spent, measurerFor(text.current ?? button)));

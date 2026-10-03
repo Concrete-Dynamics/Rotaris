@@ -12,6 +12,19 @@ while removing the list's transcript read
 ([the-session-list-reads-each-sessions-transcript-for-its-label.md](fixed/the-session-list-reads-each-sessions-transcript-for-its-label.md));
 not repaired there (outside that task).
 
+## Status (2026-10-03, fin11)
+
+- **The checkpoint half is closed, as a reading and without a code change.** ADR-0039 makes `checkpoint_count` "derived,
+  not stored twice: a count over that session's checkpoint rows". That count **is** the listing record's
+  `checkpoint_count` (REQ-SESSION-030): the field is held in the store as a count over rows in the same database, not as a
+  second copy, and reading it reads no session state, transcript or history (REQ-SESSION-042's three exclusions) and no
+  Git (REQ-GIT-018). Recorded beside ADR-0039's first execution as well.
+- **The label half is open on the owner**:
+  [OQ-192](../architecture/open-questions.md) ("The sessions card's rows carry a token label, a duration label and a detail
+  caption, which the listing record's closed field set does not hold"). REQ-MONITOR-171 requires the three labels on each
+  sessions-card row; REQ-SESSION-030's closed field set forbids them. The build proceeds under REQ-MONITOR-171, the three
+  read from the same session row as the listing record. This note stays open until that question is ruled.
+
 ## Specs
 
 - REQ-SESSION-042: "Building the list MUST read nothing but those listing records — not a session's state, not its

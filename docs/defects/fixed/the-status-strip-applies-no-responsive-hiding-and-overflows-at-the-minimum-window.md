@@ -84,7 +84,7 @@ with `allow_outside_workspace: true` the flag read `outside-workspace!`; an unsa
 the path link on this host (no `xdg-open`) raised "The workspace folder could not be opened" naming the path after 5 s.
 
 Noticed while building and recorded, not repaired:
-[the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md](../the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md),
+[the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md](the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md),
 [the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md](../the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md).
 
 **Repair round, 2026-10-03 (the verifier's two findings against this repair).** Two flags still did not follow the
@@ -130,4 +130,4 @@ windows, then `config.setField {runtime: {allow_outside_workspace: true}}` from 
 snapshot reading `true`, and the write back to `false` reached the persona window too (`[true, false]`). ADR-0037's first
 execution and views 02 and 03 are amended in place beside their earlier sentences. Noticed alongside, not repaired: a
 persona window's own commands, its mount read of the configuration among them, answer for the active main window rather
-than its owner ([a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md](../a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md)).
+than its owner ([a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md](a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md)).

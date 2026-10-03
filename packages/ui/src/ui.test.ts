@@ -181,8 +181,12 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
   });
   it('REQ-GIT-122/161: the strip item — the focused worktree branch first, ↑n when ahead, detached and not-a-repository distinct', () => {
     expect(branchStripItem(state({}), 'rotaris/session/S')).toMatchObject({ text: 'rotaris/session/S', state: 'branch' });
-    expect(branchStripItem(state({ ahead: 2 }), null)).toMatchObject({ text: 'main ↑2', title: 'Branch this workspace is on: main, 2 commits ahead', state: 'branch' });
-    expect(branchStripItem(state({ ahead: 0 }), null)).toMatchObject({ text: 'main', title: 'Branch this workspace is on: main' });
+    // REQ-WORKSPACE-149 rule 2 shortens the branch NAME (`text`); the ahead marker is drawn after it, whole (`suffix`).
+    // REQ-WORKSPACE-020's three sentences, each with its full stop; the noun agrees with the count (REQ-SHELL-044).
+    expect(branchStripItem(state({ ahead: 2 }), null)).toMatchObject({ text: 'main', suffix: ' ↑2', title: 'Branch this workspace is on: main, 2 commits ahead.', state: 'branch' });
+    expect(branchStripItem(state({ ahead: 1 }), null)).toMatchObject({ text: 'main', suffix: ' ↑1', title: 'Branch this workspace is on: main, 1 commit ahead.' });
+    expect(branchStripItem(state({ ahead: 0 }), null)).toMatchObject({ text: 'main', title: 'Branch this workspace is on: main.' });
+    expect(branchStripItem(state({ ahead: 0 }), null)).not.toHaveProperty('suffix');
     expect(branchStripItem(state({ branch: null, detached: true }), null)).toMatchObject({ text: 'detached HEAD', state: 'detached' });
     expect(branchStripItem(state({ isRepository: false }), null)).toMatchObject({ text: 'no git repository', state: 'none' });
     expect(branchStripItem(state({ isRepository: false, gitAvailable: false }), null)).toMatchObject({ text: 'no git', state: 'none' });

@@ -1631,9 +1631,14 @@ async function main(): Promise<void> {
   const runCommand = async (raw: unknown, senderId = activeWindow()?.wcId ?? -1): Promise<CommandOutcome> => {
     /**
      * A2 — REQ-SHELL-020: a command is answered for the window that RAISED it, so every workspace-scoped read
-     * below resolves against the sender rather than against "the main window". A sender that is not a main
-     * window at all (an approval dialog, a persona or terminal window asking for its own payload) falls back to
-     * the active window, which while the capacity is one is the same object either way.
+     * below resolves against the sender rather than against "the main window". `MainWindows.forCommand` holds the
+     * rule: a main window answers for itself, a persona or terminal window for the main window that OWNS it (ADR-0048
+     * B; REQ-MONITOR-069, REQ-STARTUP-163 — with two main windows on two workspaces a persona window's `config.read`,
+     * a terminal window's `session.list` and a persona window's `artifacts.body`/`artifacts.save` are its owner's
+     * workspace), and any other sender (an approval dialog, the driver) the active window. This comment once said a
+     * non-main sender fell back to the active window "which while the capacity is one is the same object either
+     * way"; that reason predates REQ-STARTUP-163's several main windows and was falsified by it (2026-10-03).
+     * Handlers that key on `senderId` itself (session.subscribe's relay and follow) are unaffected.
      *
      * A3: the default sender is the ACTIVE window's id (ADR-0055 c.5) — a verification seam and the driver speak
      * for no window, and what they mean is the window the user is looking at. It has to be a real id and not a
@@ -1641,7 +1646,7 @@ async function main(): Promise<void> {
      * `session.follow`). With no main window open at all the command is refused rather than answered for a
      * window that is gone.
      */
-    const w = windowFor(senderId) ?? activeWindow();
+    const w = mainWindows.forCommand(senderId);
     if (!w) return { ok: false, code: 'window.notMain', headline: 'No main window is open' };
     const parsed = CommandRequestSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, code: 'command.malformed', headline: 'The request could not be read' };

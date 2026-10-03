@@ -64,6 +64,16 @@ composer's chip and the strip's model item, is unchanged. A ladder move republis
 `ProjectionOwner.refreshRecord`), since it writes no row and saves nothing. The **process view**'s `SessionRecord` sentence and the **runtime
 view**'s run-level agent paragraph say so. No package, edge, process, channel, command or store column changed.
 
+**The status strip's path link and branch item are shortened from the middle against their measured width (REQ-WORKSPACE-149
+rule 2; fin11).** `StatusStripItem` draws every strip item; one marked `middle` asks the row for its whole label and re-elides
+on resize (seams §8, the status-strip item). The path link gives up its width before the branch name, and the branch item
+is shortened only while it shows a branch name, never its state words (the repair round's finding). The branch item carries the accent-coloured branch icon (`icon`, REQ-SHELL-042)
+and REQ-WORKSPACE-020's sentences with their full stop; its detached, non-repository and unread states wait on OQ-193.
+
+**A persona or terminal window's commands answer for the main window that owns it (REQ-MONITOR-069, REQ-STARTUP-163;
+fin11).** `runCommand` resolves its window through `MainWindows.forCommand` — the sender's main window, else the owner of
+the auxiliary window that sent it, else the active window (process view, main's row; seams §1).
+
 **The cell is settled before the compression check, and no pass calls the agent's own excluded pair (REQ-MONITOR-194,
 REQ-MONITOR-080; fin10's first repair round).** `settleBeforeCall` (ladder.ts) follows the overrides and reads the exclusion;
 `runTurn` calls it before the automatic compression check as well as `resilientStep` before every call, and

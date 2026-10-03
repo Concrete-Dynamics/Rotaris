@@ -199,6 +199,17 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     return undefined;
   }
 
+  /**
+   * The main window a command speaks for (REQ-SHELL-020: the window that raised it). A main window answers for itself; a
+   * persona or terminal window answers for the main window that owns it (ADR-0048 B, REQ-SHELL-072), so its configuration,
+   * session list and artifacts are its owner's workspace and not the active window's when two main windows hold two
+   * workspaces (REQ-STARTUP-163; REQ-MONITOR-069's "the same resolved set the inspector shows"); any other sender — an
+   * approval dialog, a verification seam, the driver — answers for the active window.
+   */
+  forCommand(senderId: number): MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> | undefined {
+    return this.forSender(senderId) ?? this.ownerOfAuxiliary(senderId) ?? this.active();
+  }
+
   ownerOfSession(sessionId: string, subscriberIds: readonly number[]): MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> | undefined {
     return this.followerOfSession(sessionId, subscriberIds) ?? this.active();
   }

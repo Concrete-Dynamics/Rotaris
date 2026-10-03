@@ -105,7 +105,7 @@ describe('REQ-SHELL-038/047: the status strip, item by item', () => {
   const opened: string[] = [];
   const facts = (over: Partial<StripFacts> = {}): StripFacts => ({
     workspace: { label: '~/work/rotaris', path: '/home/u/work/rotaris', open: () => { opened.push('folder'); } },
-    branch: { text: 'main ↑1', title: 'Branch this workspace is on: main, 1 commit ahead.' },
+    branch: { text: 'main', suffix: ' ↑1', title: 'Branch this workspace is on: main, 1 commit ahead.', state: 'branch' },
     safety: { circuitBreakerArmed: true, unsavedSettings: false, outsideWorkspace: false, mode: 'mode: ask' },
     sandbox: statusStripSandboxItem({ sandboxed: true, sandboxBackend: 'bubblewrap' }),
     model: { name: 'scripted', label: 'model: scripted' },
@@ -114,7 +114,7 @@ describe('REQ-SHELL-038/047: the status strip, item by item', () => {
     backgroundSessions: 3,
     ...over,
   });
-  const texts = (items: readonly StripItem[]) => items.map((i) => (i.kind === 'spacer' ? '|' : i.text));
+  const texts = (items: readonly StripItem[]) => items.map((i) => (i.kind === 'spacer' ? '|' : `${i.text}${i.kind === 'text' ? i.suffix ?? '' : ''}`));
   const named = (items: readonly StripItem[], name: string) => items.filter((i): i is Exclude<StripItem, { kind: 'spacer' }> => i.kind !== 'spacer' && i.name === name);
 
   it('draws REQ-SHELL-038\'s items left to right, with the sandbox indicator after the file-access flag (OQ-184), at full width', () => {
@@ -124,6 +124,45 @@ describe('REQ-SHELL-038/047: the status strip, item by item', () => {
     ]);
     // Nothing REQ-SHELL-038 does not list: no run state, theme, child service or replica counter.
     expect(texts(stripItems(1400, facts())).some((t) => /^run |rotaris-dim|svc:|applied \d/.test(t))).toBe(false);
+  });
+
+  it('shortens exactly the path link and the branch item from the middle (REQ-WORKSPACE-149 rule 2), the ahead marker never shortened', () => {
+    const items = stripItems(1400, facts());
+    const middle = items.flatMap((i) => (i.kind !== 'spacer' && i.middle === true ? [i.testId] : []));
+    expect(middle).toEqual(['strip-workspace', 'strip-branch']);
+    const branch = items.find((i) => i.kind === 'text' && i.testId === 'strip-branch');
+    expect(branch).toMatchObject({ text: 'main', suffix: ' ↑1' });
+    // The tooltip and the description carry the full path, however the label is shortened.
+    expect(items.find((i) => i.kind === 'link')).toMatchObject({ text: '~/work/rotaris', title: 'Workspace folder: /home/u/work/rotaris. Opens it in your file manager.' });
+  });
+
+  it('never shortens the branch item\'s state words — only a branch name is shortened from the middle (REQ-GIT-161, OQ-193)', () => {
+    // Until the 2026-10-03 repair round `middle` was set in every state, and a long path beside the item cut
+    // `no git repository` to `no …ry`, which conveys no state (REQ-GIT-161 requires each conveyed and distinguishable).
+    const words = [
+      { text: 'no git repository', title: 'This folder is not a Git repository.', state: 'none' },
+      { text: 'no git', title: 'Git is not installed or not on PATH.', state: 'none' },
+      { text: 'detached HEAD', title: 'This workspace is on no branch (detached HEAD).', state: 'detached' },
+      { text: '—', title: 'Branch this workspace is on: not read yet', state: 'unknown' },
+    ];
+    for (const branch of words) {
+      const item = stripItems(1400, facts({ branch })).find((i) => i.kind === 'text' && i.testId === 'strip-branch');
+      expect(item).toMatchObject({ text: branch.text, state: branch.state });
+      expect(item).not.toHaveProperty('middle');
+    }
+    const named = stripItems(1400, facts()).find((i) => i.kind === 'text' && i.testId === 'strip-branch');
+    expect(named).toMatchObject({ text: 'main', middle: true });
+  });
+
+  it('draws the branch icon before a branch name, and only there (REQ-SHELL-042, REQ-WORKSPACE-020)', () => {
+    const branchOf = (items: readonly StripItem[]) => items.find((i) => i.kind === 'text' && i.testId === 'strip-branch');
+    expect(branchOf(stripItems(1400, facts()))).toMatchObject({ icon: 'ph-git-branch', text: 'main', suffix: ' ↑1', title: 'Branch this workspace is on: main, 1 commit ahead.' });
+    // The detached, non-repository and unread states are words, not a branch name (REQ-GIT-161's reading, OQ-193): no icon.
+    for (const state of ['detached', 'none', 'unknown']) {
+      expect(branchOf(stripItems(1400, facts({ branch: { text: 'detached HEAD', title: 'This workspace is on no branch (detached HEAD).', state } })))).not.toHaveProperty('icon');
+    }
+    // Only the branch item carries an icon.
+    expect(stripItems(1400, facts()).filter((i) => i.kind === 'text' && i.icon !== undefined).map((i) => i.kind === 'text' && i.testId)).toEqual(['strip-branch']);
   });
 
   it('gives every item REQ-SHELL-038\'s accessible name, and exactly the workspace path is a link (REQ-SHELL-039/040)', () => {

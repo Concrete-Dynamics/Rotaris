@@ -1,8 +1,9 @@
 /**
  * REQ-WORKSPACE-149 — the three rules every workspace path and branch name in the window chrome is
- * drawn under. They live here, apart from any component, because two surfaces draw such a label —
- * the title-bar chip (REQ-WORKSPACE-017) and the status bar's path link (REQ-WORKSPACE-019) — and a
- * rule written twice is a rule that will one day disagree with itself.
+ * drawn under. They live here, apart from any component, because three surfaces draw such a label —
+ * the title-bar chip (REQ-WORKSPACE-017), the status bar's path link (REQ-WORKSPACE-019) and its
+ * branch item (REQ-WORKSPACE-020) — and a rule written twice is a rule that will one day disagree
+ * with itself. The DOM half (the canvas measurer) is `label-measure.ts`.
  *
  * Nothing here touches the DOM. `elideMiddle` is handed the measuring function, so the rule is
  * testable without a renderer and the component supplies the real font metrics — which is also the
@@ -95,3 +96,24 @@ export function workspaceLabel(
 ): string | null {
   return elideMiddle(collapseHome(path, home), available, measure);
 }
+
+/**
+ * Rule 2 for a label in a FLEX ROW — the status strip's path link and branch item (REQ-WORKSPACE-149 names both). A strip
+ * item has no slot of its own the way the title-bar chip has, so it asks the row for the width of its whole label
+ * (`basis`: the full label's measured width plus what the box spends beside it — its padding, borders, fixed children and
+ * gaps) and may be shrunk below that by the row; the label is then shortened from the middle against what the box was
+ * given (`width`, its border-box width, less the same spend). Neither figure depends on the label being drawn, so a
+ * shortened label cannot move the width that shortened it: the box's width comes from `basis` and the row, never from its
+ * text. `basis` is null where the measurer charges nothing (no canvas), and `label` null where the box cannot hold even
+ * `…` — hidden rather than clipped, on REQ-WORKSPACE-021's terms.
+ */
+export function rowLabel(
+  text: string,
+  spent: number,
+  width: number,
+  measure: (s: string) => number,
+): { readonly basis: number | null; readonly label: string | null } {
+  const full = measure(text);
+  return { basis: full > 0 ? Math.ceil(full) + spent : null, label: elideMiddle(text, width - spent, measure) };
+}
+

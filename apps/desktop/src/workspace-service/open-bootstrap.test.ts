@@ -80,6 +80,20 @@ describe('the starter agents.yaml at the open (REQ-CONFIG-025, REQ-CONFIG-028)',
     expect(bootstrapAtOpen(s.configDir, s.workspaceRoot, () => undefined)).toBe('declined-directory');
   });
 
+  it('a declined target is logged as a warning, as REQ-CONFIG-028 calls it needing attention; a written one is not', () => {
+    const s = scope();
+    const lines: Array<[string, string | undefined]> = [];
+    const log = (message: string, level?: 'info' | 'warn') => { lines.push([message, level]); };
+    expect(bootstrapAtOpen(s.configDir, s.workspaceRoot, log)).toBe('written');
+    rmSync(s.agents);
+    mkdirSync(s.agents);
+    expect(bootstrapAtOpen(s.configDir, s.workspaceRoot, log)).toBe('declined-directory');
+    rmSync(s.agents, { recursive: true });
+    writeFileSync(s.agents, Buffer.from([0xff, 0xfe, 0xfd]));
+    expect(bootstrapAtOpen(s.configDir, s.workspaceRoot, log)).toBe('declined-not-utf8');
+    expect(lines.map(([, level]) => level ?? 'info')).toEqual(['info', 'warn', 'warn']);
+  });
+
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('a file that cannot be read declines with a warning and the open goes on (REQ-CONFIG-028)', () => {
     const s = scope();
     mkdirSync(join(s.workspaceRoot, '.rotaris'));

@@ -13,7 +13,7 @@ import { bootstrapConfigFile, scopeFiles, type BootstrapOutcome } from '@rotaris
  * opened after the first sign-in (`docs/defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`).
  *
  * The open is never refused for it: an existing file is left as it is (REQ-CONFIG-026), a directory or undecodable bytes
- * decline and surface as the load's fatal error (REQ-CONFIG-028, REQ-CONFIG-462), and a target that cannot be read
+ * decline, logged as a warning, and surface as the load's fatal error (REQ-CONFIG-028, REQ-CONFIG-462), and a target that cannot be read
  * declines, logged as a warning, with nothing written over it (REQ-CONFIG-028's shared rule); a write that fails is logged
  * the same way.
  */
@@ -31,6 +31,7 @@ export function bootstrapAtOpen(configDir: string, workspaceRoot: string, log: (
     log(`configuration bootstrap at the open of ${workspaceRoot} declined: ${r.error.file}: ${r.error.fault}`, 'warn');
     return 'refused';
   }
-  log(`configuration bootstrap at the open of ${workspaceRoot}: ${r.value}`);
+  // A declined target (a directory, undecodable bytes) is one REQ-CONFIG-028 calls needing attention, as is a refusal.
+  log(`configuration bootstrap at the open of ${workspaceRoot}: ${r.value}`, r.value.startsWith('declined') ? 'warn' : 'info');
   return r.value;
 }

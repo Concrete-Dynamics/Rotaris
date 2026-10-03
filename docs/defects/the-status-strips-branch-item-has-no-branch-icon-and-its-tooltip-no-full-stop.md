@@ -10,6 +10,17 @@ empty text with no tooltip "exactly when the snapshot's branch name is empty", w
 disagree, and the build follows REQ-GIT-161 without a recorded reading. Noticed 2026-10-02 while rebuilding the strip
 around it (fin10); not repaired there.
 
+
+**Amended 2026-10-03 (the seventh triage, fin11): the worktree branch is drawn without its ahead marker.** While the active
+run executes in an isolated worktree the item shows that worktree's branch (`branchStripItem`'s first line, from the focused
+session's `worktreeBranch`), but with no ` ↑{n}` at all: REQ-WORKSPACE-020 requires the ahead count and the suffix "computed
+against that branch's upstream rather than the base checkout's", and the renderer holds no such count — the session record
+carries the branch name alone, and the Git view's snapshot is the base checkout's. The same line's tooltip and description
+are one string, "Branch this session's worktree is on: {branch}", where REQ-WORKSPACE-020 gives the worktree branch the
+base checkout's sentences ("rendered exactly as any other branch name is") and lets only the accessible description add
+that the branch is the isolated worktree's. Size M (the worktree's ahead count has to be read and carried to the renderer);
+found by reading, not driven; not repaired by fin11, which repairs the icon and the base checkout's sentences.
+
 ## Specs
 
 - REQ-SHELL-042, REQ-WORKSPACE-020: the branch icon in the accent colour, re-rendered on a theme change; the tooltip's exact

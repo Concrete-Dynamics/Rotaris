@@ -275,8 +275,9 @@ already ended `cancelled` by `finalize`, has its open calls answered as cut off,
 and one already terminal when a rest's grace gave up on it, which the user had cancelled on its own while its call
 ignored the abort (`rest` calls it last). Its execution, if it ever returns, returns through `execute`'s detached
 return, before its count; both writes are idempotent. Once the teardown is over — finalized or rested — `Run.turn` closes the
-iteration's scheduler (`IterationChildren.close` → `Scheduler.close`, 2026-10-03): the pass that follows a child's end runs in
-an unawaited `.finally`, which then returns at once, and any raise of it is warned instead of rejecting, so a child settling
+iteration's scheduler (`IterationChildren.close` → `Scheduler.close`, 2026-10-03): the pass that follows a child's end — a
+fresh child's (`startOne`) or a resumed one's (`resumePaused`) — runs in an unawaited `.finally` through `Scheduler.passAfter`,
+which then returns at once, and any raise of it is warned instead of rejecting, so a child settling
 after the run's end reads no store the run host may have closed meanwhile (`workspace.closeStore`, `workspace.closing`; the
 repair of `a-childs-closing-scheduler-pass-can-outlive-the-run-that-awaited-it.md`). A rest that finds nothing unfinished closes the iteration as before. The cause is
 read again once the rest is done: the explicit cancel that arrived meanwhile ends every agent the rest paused

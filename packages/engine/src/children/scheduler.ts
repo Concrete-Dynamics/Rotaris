@@ -195,12 +195,19 @@ export class Scheduler {
     if (!this.deps.ledger.claimStart(c.task_id)) return false;
     const row = this.deps.ledger.get(c.task_id);
     if (!row) return false;
-    // The follow-up pass runs where nothing awaits it, so it may never reject: a raise (a store closed under a scheduler the
-    // run never closed) is warned instead, and `close` keeps it from reading at all after the run's teardown.
-    void this.deps.runChild(row).catch((e) => this.deps.warn(`child ${row.task_id} raised out of its execution: ${String(e)}`)).finally(() => {
-      try { this.pass(); } catch (e) { this.deps.warn(`the scheduler's pass after child ${row.task_id} raised: ${String(e)}`); }
-    });
+    void this.deps.runChild(row).catch((e) => this.deps.warn(`child ${row.task_id} raised out of its execution: ${String(e)}`)).finally(() => this.passAfter(row.task_id));
     return true;
+  }
+
+  /**
+   * REQ-ORCH-053 / REQ-ORCH-098: the pass that follows a child's end — a fresh child's (`startOne`) or a resumed one's
+   * (`IterationChildren.resumePaused`) — which runs where nothing awaits it, so it may never reject: a raise (a store closed
+   * under a scheduler the run never closed) is warned instead, and `close` keeps it from reading at all after the run's
+   * teardown. Every unawaited pass goes through here. (Until repair round 1 of 2026-10-03 only `startOne`'s was guarded and the
+   * resumed child's `.finally(() => this.scheduler.pass())` could still reject unhandled.)
+   */
+  passAfter(taskId: string): void {
+    try { this.pass(); } catch (e) { this.deps.warn(`the scheduler's pass after child ${taskId} raised: ${String(e)}`); }
   }
 
   /** REQ-ORCH-098: `deps.teardown` for a child settled here; a raise never keeps the scheduler from being told. */

@@ -33,13 +33,21 @@ and the pass in the unawaited `.finally` guarded so a raise is warned and never 
   (`packages/engine/src/children/orchestration.ts`) closes it, and `Run.turn` (`packages/engine/src/run/run.ts`) calls that
   once the iteration's children are torn down — finalized (REQ-ORCH-052) or paused by a rest (PD-ORCH-005 clause 2) — so a
   child's execution settling after the run's end reads no store.
-- **The unawaited pass can never reject.** `startOne`'s `.finally` wraps the pass in a try/catch that warns through
-  `deps.warn` ("the scheduler's pass after child … raised: …"), so a store closed under a scheduler nobody closed is a
-  warning, not an unhandled rejection that would end the run host.
+- **No unawaited pass can reject.** Both passes that follow a child's end where nothing awaits them — `startOne`'s, for a
+  fresh child, and `IterationChildren.resumePaused`'s, for a child resumed from its record (PD-ORCH-005 clause 4) — go through
+  `Scheduler.passAfter`, which wraps the pass in a try/catch that warns through `deps.warn` ("the scheduler's pass after
+  child … raised: …"), so a store closed under a scheduler nobody closed is a warning, not an unhandled rejection that would
+  end the run host. (The first form of this repair guarded `startOne`'s alone; the resumed child's
+  `.finally(() => this.scheduler.pass())` could still reject unhandled — found by the verifier, repaired in round 1.)
 - **Pinned** by two cases in `packages/engine/src/children/children.test.ts` ("a child's closing pass and a closed store"),
   against a real store closed while the child's execution is still pending: without `close()`, the pass's raise is warned
   once and no unhandled rejection is seen (before the repair: one, `TypeError: The database connection is not open`); after
-  `close()`, the pass reads the ledger not at all and warns nothing.
+  `close()`, the pass reads the ledger not at all and warns nothing. Repair round 1 adds two: "a resumed child that settles
+  after its store is closed" drives `resumePaused` on a real `IterationChildren` and closes the store under the resumed
+  execution — one warning, no unhandled rejection (before: `TypeError: The database connection is not open`, unhandled); and
+  the end-to-end "a child step the explicit cancel gave up on, returning after the run ended and its store closed, finds the
+  scheduler closed by the run" pins `Run.turn`'s `children?.close()` — under the explicit cancel no rest holds the scheduler,
+  and without the close the pass reads the closed store and is warned, which the case refuses.
 - **The clause 6 case** passes with an extra await before the turn's compression check (`settleBeforeCall` awaited
   unconditionally, tried on this branch and reverted). That variant did not reproduce the original unhandled rejection on
   this branch without the repair either — the timing it depended on has moved since — so the new cases, which close the store
@@ -54,7 +62,8 @@ scheduler's follow-up pass may run relative to the run's end.
 
 ## Relevant files
 
-- `packages/engine/src/children/scheduler.ts` — `startOne`: the `.finally(() => this.pass())` nothing awaits.
+- `packages/engine/src/children/scheduler.ts` — `startOne`: the `.finally(() => this.pass())` nothing awaits (as found).
+- `packages/engine/src/children/orchestration.ts` — `resumePaused`: the resumed child's `.finally` of the same shape.
 - `packages/engine/src/children/children.test.ts` — the clause 6 case above, whose `afterEach` closes the store.
 - `packages/engine/src/run/turn.ts` — where an added await exposed it (`settleBeforeCall` behind `onExcludedPair`).
 - `apps/desktop/src/run-host/dispatch.ts` — `workspace.closeStore` and `workspace.closing`, which close a store while the run

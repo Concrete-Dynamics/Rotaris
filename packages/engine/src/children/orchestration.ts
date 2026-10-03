@@ -753,8 +753,9 @@ export class IterationChildren implements DelegationOps {
       catch (cause) { void this.track(this.settleRaised(row, cause, 'its record could not be loaded to resume it')).catch((e) => this.deps.warn(`child ${row.task_id} could not be settled: ${String(e)}`)); continue; }
       const resume: ChildResume = { history, assessed: summarising };
       // Started as the scheduler starts a child (`startOne`): a raise is warned, and its end is a pass, so a sibling held
-      // on the model slot it frees, or on it as a dependency, starts then (found by phase 4's review).
-      void this.track(this.executeSettling(row, resume)).catch((e) => this.deps.warn(`child ${row.task_id} raised out of its resumed execution: ${String(e)}`)).finally(() => this.scheduler.pass());
+      // on the model slot it frees, or on it as a dependency, starts then (found by phase 4's review). The pass is the
+      // guarded one (`passAfter`), which never rejects where nothing awaits it.
+      void this.track(this.executeSettling(row, resume)).catch((e) => this.deps.warn(`child ${row.task_id} raised out of its resumed execution: ${String(e)}`)).finally(() => this.scheduler.passAfter(row.task_id));
     }
     this.scheduler.pass();
     return n;

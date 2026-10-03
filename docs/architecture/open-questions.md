@@ -9337,3 +9337,58 @@ saved; runs keep using the last saved values until they are saved."; the mode, r
 sentences are REQ-SHELL-041's word for word; the file-access pair is REQ-WORKSPACE-022's.
 
 **What a ruling decides.** Which domain's statement stands for each of the five, and an amendment to the other.
+
+**OQ-192 — The sessions card's rows carry a token label, a duration label and a detail caption, which the listing
+record's closed field set does not hold.** *(REQ-MONITOR-171, each sessions-card row carries "a detail caption, … the
+branch, a token label, and a duration label"; REQ-SESSION-030, the listing record "MUST hold exactly these fields" and
+"Every attribute a listing shows about the session itself MUST be one of these — making a new attribute list-visible is a
+change to this field set, not a reader-side extension"; REQ-SESSION-042, "Building the list MUST read nothing but those
+listing records". Raised 2026-10-03 by
+[`the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md`](../defects/the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md)
+(fin11, bundle `fin11-strip-labels-and-auxiliary-windows`). Open.)*
+
+REQ-SESSION-030's twelve fields are `session_id`, `created_at`, `updated_at`, `execution_status`, `schema_version`,
+`internal`, `worktree`, `checkpoint_count`, `task_title`, `requirement_id`, `unit_id` and `awaiting_input`. None is a token
+total, a duration or a caption, and the requirement forbids showing any attribute of the session that is not one of them.
+REQ-MONITOR-171 requires each row of the Overview's sessions card to show all three. The branch is not in the
+disagreement: it is the `worktree` binding record's. Neither requirement names the other, and no directive governs either.
+
+**What the build proceeds under** (`Sessions.list`, `packages/engine/src/sessions.ts`; the sessions card,
+`packages/ui/src/OverviewView.tsx`): REQ-MONITOR-171's row, drawn from columns of the same session row the listing record
+is read from, so building the list still reads one row per session and nothing else of the session's: the token label is
+`tokens_input + tokens_output`, the duration label is `durationLabel(run_started_at, …)` and the detail caption is
+`workspace_root`. No transcript, state or history is read for them.
+
+**What a ruling decides.** Whether the three labels stay on the card (and REQ-SESSION-030's field set gains them, the
+"change to this field set" it names), or leave it (and REQ-MONITOR-171 is amended).
+
+**OQ-193 — What does the status strip's branch item show on a detached HEAD, outside a repository and before the first
+read: REQ-GIT-161's conveyed states, or REQ-WORKSPACE-020's empty item?** *(REQ-GIT-161, the item "SHALL convey that the
+checkout is on no branch when the workspace, or the focused session's worktree, is on a detached HEAD, and SHALL convey that
+there is no branch to show when the folder is not a Git repository at all — a state distinct from a repository whose branch
+could not be read", each "distinguishable from an ordinary branch name and from the other"; REQ-WORKSPACE-020, "The item
+SHALL render as empty text — no icon, no arrow, no tooltip — exactly when the snapshot's branch name is empty, which per
+REQ-WORKSPACE-029 covers git being unavailable, the folder not being a repository, a detached HEAD, and an unborn branch";
+REQ-SHELL-042, which owns the item and names neither state. Raised 2026-10-03 by the repair of
+[`the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md`](../defects/the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md)
+(fin11, bundle `fin11-strip-labels-and-auxiliary-windows`). Open.)*
+
+REQ-GIT-161 requires a detached checkout and a non-repository to be conveyed, each in words or markers distinct from a branch
+name and from each other, and a repository whose branch could not be read to take REQ-GIT-112's empty value. REQ-WORKSPACE-020
+requires the item to be empty, with no tooltip, in exactly those cases (and for git being unavailable and an unborn branch).
+One item cannot do both. Neither requirement names the other, and no directive governs either.
+
+**What the build proceeds under** (`branchStripItem`, `packages/ui/src/GitView.tsx`; `stripItems`,
+`packages/ui/src/composer.ts`): REQ-GIT-161's words, unchanged by this repair. A detached HEAD reads `detached HEAD` with the
+tooltip "This workspace is on no branch (detached HEAD)."; a folder that is not a repository reads `no git repository`
+("This folder is not a Git repository."), and with git unavailable `no git` ("Git is not installed or not on PATH."); before
+the first read the item reads `—` ("Branch this workspace is on: not read yet"). The detached and absent states are set in
+italics. None of these draws REQ-SHELL-042's branch icon, which is drawn only before a branch name.
+
+Two readings recorded beside it, which a ruling may revisit: the base checkout's tooltip ends with REQ-WORKSPACE-020's full
+stop ("Branch this workspace is on: main.", "…, 1 commit ahead.", "…, {n} commits ahead."), since REQ-SHELL-042 leaves the
+wording to the implementation; and REQ-GIT-122's backticked `Branch this workspace is on: <branch>` with `, N commit(s)
+ahead` is read as a template rather than a literal, since REQ-SHELL-044 forbids rendering `(s)` as written.
+
+**What a ruling decides.** Which requirement's treatment of the detached, non-repository, git-unavailable and unread states
+stands for the strip's branch item, and an amendment to the other.

@@ -82,7 +82,7 @@ function harness(options: {
     onFocus: (win, listener) => { win.focusListeners.push(listener); },
     onClosed: (win, listener) => { win.closedListeners.push(listener); },
     onShown: (win, listener) => { win.shownListeners.push(listener); },
-    ownsAuxiliary: (_personaWindows, terminalWindows, senderId) => terminalWindows === `terminal:${senderId - 100}`,
+    ownsAuxiliary: (personaWindows, terminalWindows, senderId) => terminalWindows === `terminal:${senderId - 100}` || personaWindows === `personas:${senderId - 200}`,
     disposeResources: (_win, _wcId, personaWindows, terminalWindows) => actions.push(`dispose:${personaWindows}:${terminalWindows}`),
   };
 
@@ -358,6 +358,25 @@ describe('MainWindows', () => {
     none.windows.get(sentinel.wcId)!.destroyed = true;
     none.windows.get(sentinel.wcId)!.closedListeners[0]!();
     expect(none.actions.filter((action) => action.startsWith('workspace-closed:'))).toEqual([]);
+  });
+
+  it('answers a command for the sender\'s main window, else the main window owning the persona or terminal window that sent it, else the active window (REQ-MONITOR-069, REQ-STARTUP-163, REQ-SHELL-020)', async () => {
+    const h = harness();
+    const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const second = await h.mainWindows.build({ workspace: 'C:/b', origin: 'open-request' });
+    // The first window is the active one; the persona (id + 200) and terminal (id + 100) windows are the second's.
+    h.windows.get(first.wcId)!.focusListeners[0]!();
+    expect(h.mainWindows.active()?.wcId).toBe(first.wcId);
+    expect(h.mainWindows.forCommand(second.wcId + 200)?.workspace).toBe('C:/b');
+    expect(h.mainWindows.forCommand(second.wcId + 100)?.workspace).toBe('C:/b');
+    expect(h.mainWindows.forCommand(second.wcId)?.wcId).toBe(second.wcId);
+    expect(h.mainWindows.forCommand(first.wcId)?.wcId).toBe(first.wcId);
+    // A sender that is neither a main window nor an auxiliary one (an approval dialog, a verification seam) answers for the active window.
+    expect(h.mainWindows.forCommand(9_999)?.wcId).toBe(first.wcId);
+    // The owner gone, its auxiliary windows' commands fall back to the active window rather than to a closed one.
+    h.windows.get(second.wcId)!.destroyed = true;
+    h.windows.get(second.wcId)!.closedListeners[0]!();
+    expect(h.mainWindows.forCommand(second.wcId + 200)?.wcId).toBe(first.wcId);
   });
 
   it('names the live windows holding a workspace, and no other, so one workspace\'s state reaches its own window only (REQ-WORKSPACE-105, PD-SHELL-001)', async () => {

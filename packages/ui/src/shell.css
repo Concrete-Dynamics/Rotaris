@@ -1444,6 +1444,29 @@
    sentence gives way, and it keeps its full text in its tooltip (REQ-SHELL-038). */
 .status-strip__item { white-space: nowrap; flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; }
 .status-strip__item[data-elide='1'] { flex: 0 1 auto; min-width: var(--rt-space-12); }
+/* REQ-WORKSPACE-149 rule 2: the path link and the branch item are shortened from the MIDDLE, not at their end. The item asks
+   the row for its whole label (`--status-strip-label-basis`, measured by StatusStripItem.tsx) and may be shrunk to nothing;
+   the label inside is re-elided against what the item was given, and hidden rather than clipped where `…` cannot fit, so
+   no end ellipsis is drawn (`text-overflow: clip`). Border-box, so the measured basis is the whole box. */
+.status-strip__item[data-middle='1'] {
+  display: inline-flex; align-items: center; gap: var(--rt-space-1);
+  flex: 0 1 var(--status-strip-label-basis, auto); min-width: 0; box-sizing: border-box; text-overflow: clip;
+}
+/* Priority, not proportion, between the two (REQ-WORKSPACE-149 rule 2 shortens a label only when it is wider than the space
+   available to it). Shrinking is weighted by flex-shrink × basis, so with equal factors a long path took a branch name's
+   share in proportion to its basis and squeezed `main` to `m…`, `…` or nothing while the row had room for `main` — found by
+   the verifier of the 2026-10-03 repair round. The path's factor dwarfs every other item's, so the path absorbs the whole
+   shortfall until it reaches nothing (REQ-SHELL-047 already makes it the first label to go); only then do the branch name
+   and the other long items shrink, in proportion as before. */
+.status-strip__link[data-middle='1'] { flex-shrink: 1000000; }
+/* A label rule 2 has hidden leaves the link a box with no text: hidden whole, so it is no empty focus stop and no empty
+   name, while it keeps its place in the row to be measured again when the width comes back (REQ-WORKSPACE-021). */
+.status-strip__link[data-label-hidden='1'] { visibility: hidden; }
+.status-strip__label { white-space: nowrap; overflow: hidden; }
+.status-strip__suffix { flex: none; white-space: nowrap; }
+/* REQ-SHELL-042 / REQ-WORKSPACE-020: the branch icon before the branch name, in the accent colour (the mockup's strip draws
+   `ph-git-branch` there in tertiary; the specification's accent governs). A token, so a theme change re-renders it. */
+.status-strip__icon { flex: none; color: var(--rt-accent); }
 /* REQ-SHELL-038's spacer between the branch and the safety flags: it takes the slack and gives it back first. */
 .status-strip__spacer { flex: 1 1 0; min-width: 0; }
 .status-strip__item[data-figure='1'] { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); }

@@ -106,9 +106,19 @@ export function statusStripSandboxItem(session: { readonly sandboxed: boolean; r
  * the list never carries it.
  */
 export type StripItem =
-  | { readonly kind: 'text'; readonly text: string; readonly name: string; readonly title: string; readonly testId: string; readonly state?: string; readonly figure?: true; readonly strong?: true }
-  | { readonly kind: 'link'; readonly text: string; readonly name: string; readonly title: string; readonly testId: string; readonly onActivate: () => void }
+  | { readonly kind: 'text'; readonly text: string; readonly name: string; readonly title: string; readonly testId: string; readonly state?: string; readonly figure?: true; readonly strong?: true; readonly middle?: true; readonly suffix?: string; readonly icon?: string }
+  | { readonly kind: 'link'; readonly text: string; readonly name: string; readonly title: string; readonly testId: string; readonly onActivate: () => void; readonly middle?: true }
   | { readonly kind: 'spacer' };
+/*
+ * `middle`: REQ-WORKSPACE-149 rule 2 — the item's `text` is a workspace path or a branch name, shortened from the MIDDLE
+ * against the width the strip gives it (`StatusStripItem.tsx`, `rowLabel`), and hidden rather than clipped where even `…`
+ * does not fit; every other item that is too long keeps REQ-SHELL-038's end ellipsis. The path link gives up its width
+ * before the branch name does (shell.css, `.status-strip__link[data-middle='1']`), so a short branch name stays whole
+ * beside a long path; the branch item carries `middle` only while it shows a branch name. `suffix`: fixed text drawn after the
+ * label and never shortened — the branch item's ` ↑{n}` ahead marker, which is not part of the branch name. `icon`: a
+ * Phosphor glyph drawn before the label in the accent colour — the branch item's `ph-git-branch` (REQ-SHELL-042,
+ * REQ-WORKSPACE-020), only where the item shows a branch name.
+ */
 
 /** REQ-SHELL-047: below this window width the workspace-path item is hidden (a specification value, stated as it states it). */
 export const STRIP_PATH_MIN_WIDTH = 1180;
@@ -210,7 +220,7 @@ export function stripCostText(cost: string | null): string | null {
 export interface StripFacts {
   /** The workspace folder's path, as the title bar's chip shows it, and the action opening it (REQ-SHELL-040). */
   readonly workspace: { readonly label: string; readonly path: string; readonly open: () => void } | null;
-  readonly branch: { readonly text: string; readonly title: string; readonly state?: string | undefined };
+  readonly branch: { readonly text: string; readonly suffix?: string | undefined; readonly title: string; readonly state?: string | undefined };
   readonly safety: SafetyFacts;
   readonly sandbox: { readonly text: string; readonly name: string; readonly title: string; readonly testId: string } | null;
   /** REQ-SHELL-043: the model a run started from this window uses, and the short form the composer's chip shows. */
@@ -231,9 +241,18 @@ export interface StripFacts {
 export function stripItems(width: number, f: StripFacts): StripItem[] {
   const items: StripItem[] = [];
   if (f.workspace !== null && width >= STRIP_PATH_MIN_WIDTH) {
-    items.push({ kind: 'link', text: f.workspace.label, name: STRIP_NAMES.workspace, title: `Workspace folder: ${f.workspace.path}. Opens it in your file manager.`, testId: 'strip-workspace', onActivate: f.workspace.open });
+    items.push({ kind: 'link', text: f.workspace.label, name: STRIP_NAMES.workspace, title: `Workspace folder: ${f.workspace.path}. Opens it in your file manager.`, testId: 'strip-workspace', onActivate: f.workspace.open, middle: true });
   }
-  items.push({ kind: 'text', text: f.branch.text, name: STRIP_NAMES.branch, title: f.branch.title, testId: 'strip-branch', figure: true, ...(f.branch.state === undefined ? {} : { state: f.branch.state }) });
+  items.push({
+    kind: 'text', text: f.branch.text, name: STRIP_NAMES.branch, title: f.branch.title, testId: 'strip-branch', figure: true,
+    // REQ-SHELL-042 / REQ-WORKSPACE-020: a branch icon before the branch name, and REQ-WORKSPACE-149 rule 2's middle
+    // shortening of that name. The detached, non-repository and unread states carry words rather than a branch name
+    // (REQ-GIT-161's reading, OQ-193): no icon, and never shortened — `no …ry` conveys no state at all. Until the 2026-10-03
+    // repair round `middle` was set in every state and a long path beside the item cut `no git repository` to `no …ry`.
+    ...(f.branch.state === 'branch' ? { icon: 'ph-git-branch', middle: true as const } : {}),
+    ...(f.branch.suffix ? { suffix: f.branch.suffix } : {}),
+    ...(f.branch.state === undefined ? {} : { state: f.branch.state }),
+  });
   items.push({ kind: 'spacer' });
   items.push(...statusStripSafetyFlags(f.safety, f.sandbox));
   items.push({ kind: 'text', text: f.model.label, name: STRIP_NAMES.model, title: `Runs started from this window use ${f.model.name}. Change it in the composer or in Settings → Models.`, testId: 'strip-model', strong: true });

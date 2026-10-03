@@ -16,6 +16,33 @@ describe('minimum-window layout regressions', () => {
     expect(rule('.composer__chips')).toContain('flex-wrap: wrap');
   });
 
+  it('shrinks the strip\'s path link and branch item from their measured basis with no end ellipsis (REQ-WORKSPACE-149 rule 2)', () => {
+    // Before the repair both were ordinary items: `text-overflow: ellipsis` cut a deep path at its END and the folder name
+    // was lost (docs/defects/fixed/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md).
+    const middle = rule(".status-strip__item[data-middle='1']");
+    expect(middle).toContain('flex: 0 1 var(--status-strip-label-basis, auto)');
+    expect(middle).toContain('min-width: 0');
+    expect(middle).toContain('box-sizing: border-box');
+    expect(middle).toContain('text-overflow: clip');
+    expect(rule('.status-strip__suffix')).toContain('flex: none');
+  });
+
+  it('lets the path link give up its width before a branch name does, and hides a link whose label rule 2 hid (REQ-WORKSPACE-149 rule 2)', () => {
+    // With equal shrink factors a long path took the branch name's share in proportion to its basis and squeezed `main` to
+    // `m…` or nothing at 1180 px while the row had room for it (the verifier of the 2026-10-03 repair round).
+    const link = rule(".status-strip__link[data-middle='1']");
+    const factor = Number(/flex-shrink:\s*([0-9.e+]+)/u.exec(link)?.[1]);
+    expect(factor).toBeGreaterThanOrEqual(1_000_000);
+    // The branch item keeps the ordinary factor, so once the path is at nothing the branch name shrinks rather than overflow.
+    expect(rule(".status-strip__item[data-middle='1']")).toMatch(/flex: 0 1 /u);
+    expect(rule(".status-strip__link[data-label-hidden='1']")).toContain('visibility: hidden');
+  });
+
+  it('colours the strip\'s branch icon with the accent token, so a theme change re-renders it (REQ-SHELL-042)', () => {
+    expect(rule('.status-strip__icon')).toContain('color: var(--rt-accent)');
+    expect(rule('.status-strip__icon')).toContain('flex: none');
+  });
+
   it('makes status items and checkpoint columns keyboard-reachable through horizontal scrolling', () => {
     expect(rule('.status-strip')).toContain('overflow-x: auto');
     expect(rule('.git__table-scroll')).toContain('overflow-x: auto');

@@ -272,5 +272,79 @@ try {
   writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);
 }
 
+/*
+ * 13c — a persona or terminal window's commands answer for the main window that OWNS it (REQ-MONITOR-069, REQ-STARTUP-163,
+ * ADR-0048 B; `docs/defects/fixed/a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md`). Two main
+ * windows on two workspaces: the first runs a delegated child and pops out its persona window, then the second is added
+ * and becomes the active window. The persona window's `config.read` (its model, declared tools and threshold come from it)
+ * and the terminal window's `session.list`, each sent through the driver from the auxiliary window itself, must answer
+ * with the OWNER's workspace; before the repair `runCommand` fell back to the active window, the second one.
+ */
+const familyA = join(output, 'family-a');
+const familyB = join(output, 'family-b');
+for (const root of [familyA, familyB]) {
+  mkdirSync(join(root, '.rotaris'), { recursive: true });
+  writeFileSync(join(root, 'README.md'), `# driver proof, ${root.endsWith('family-a') ? 'the owner' : 'the active window'}\n`);
+  writeFileSync(join(root, '.rotaris', 'agents.yaml'), [
+    'models:', '  scripted: { provider: scripted, model_id: scripted }',
+    'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+    'runtime:', '  permission_mode: autonomous', '  max_depth: 3', '  max_active_children: 4',
+    'mcp_servers:', '  code_intelligence: { enabled: false }', '',
+  ].join('\n'));
+}
+const family = await startApp({
+  root: join(output, 'family-app'), workspace: familyA, timeoutMs: 90_000,
+  extra: { ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,wait:120000,answer', ROTARIS_CHILD_SCRIPT: 'answer', ROTARIS_CAPTURE_PROJECT_FOLDER: familyB },
+});
+const f = family.driver;
+try {
+  await f.waitFor('.nav-item', { timeoutMs: 30_000 });
+  await f.click('.nav-item', { text: 'Workspace' });
+  await f.waitFor('.composer__input', { timeoutMs: 10_000 });
+  await f.chord('Ctrl+L');
+  await until(() => f.eval(COMPOSER_FOCUSED), (v) => v === true, { timeoutMs: 10_000, what: 'the composer holding focus' });
+  await f.type('delegate one child and hold the run', { enter: true });
+  await f.waitFor('[data-testid="run-header"][data-state="running"]', { timeoutMs: 30_000 });
+  await f.chord('Ctrl+3');
+  await f.click('.agent-table__row .btn', { text: 'Pop out', timeoutMs: 15_000 });
+  await until(() => f.windows(), (w) => w.auxiliary.some((a) => a.selector === 'persona:coding-agent'), { timeoutMs: 15_000, what: 'the persona window listed' });
+  await f.command({ kind: 'window.openTerminal' });
+  await until(() => f.windows(), (w) => w.auxiliary.some((a) => a.selector === 'terminal'), { timeoutMs: 15_000, what: 'the terminal window listed' });
+  // The second main window, on the other workspace, added last and so the active one.
+  await f.command({ kind: 'workspace.choose', newWindow: true });
+  const both = await until(() => f.windows(), (w) => w.windows.length === 2, { timeoutMs: 30_000, what: 'two main windows' });
+  const activeIsOther = String(both.windows[0]?.workspace ?? '').endsWith('family-b');
+  const owned = both.auxiliary.filter((a) => a.selector === 'persona:coding-agent' || a.selector === 'terminal');
+  const ownerIndex = both.windows.findIndex((w) => String(w.workspace).endsWith('family-a'));
+  check('13c precondition: the persona and terminal windows belong to the first main window while the second is the active one',
+    activeIsOther && owned.length === 2 && owned.every((a) => a.owner === ownerIndex),
+    `main windows ${JSON.stringify(both.windows.map((w) => w.workspace))}; auxiliary ${JSON.stringify(both.auxiliary.map((a) => ({ selector: a.selector, owner: a.owner })))}`);
+  await f.useWindow('persona:coding-agent');
+  const personaConfig = await f.command({ kind: 'config.read' });
+  await f.useWindow('terminal');
+  const terminalList = await f.command({ kind: 'session.list' });
+  await f.useWindow('family-b');
+  const otherList = await f.command({ kind: 'session.list' });
+  await f.useWindow();
+  const personaRoot = personaConfig?.ok ? String(personaConfig.value.workspaceRoot) : null;
+  check("REQ-MONITOR-069 / REQ-STARTUP-163: the persona window's configuration read answers for its owner's workspace, not the active window's",
+    personaRoot !== null && personaRoot.endsWith('family-a'),
+    personaConfig?.ok ? `workspaceRoot ${personaRoot}` : `refused ${JSON.stringify(personaConfig)}`);
+  const terminalSessions = terminalList?.ok ? terminalList.value.sessions.length : null;
+  const otherSessions = otherList?.ok ? otherList.value.sessions.length : null;
+  check("REQ-STARTUP-163: the terminal window's session list is its owner's workspace's (one session), not the active window's (none)",
+    terminalSessions === 1 && otherSessions === 0,
+    `terminal window lists ${terminalSessions ?? JSON.stringify(terminalList)} session(s); the second main window lists ${otherSessions ?? JSON.stringify(otherList)}`);
+  await f.quit();
+  await exitWithin(family.child, 60_000);
+} catch (cause) {
+  check('13c: the two-window family scenario ran to the end', false, `it threw instead: ${cause instanceof Error ? cause.message : String(cause)}`);
+} finally {
+  f.close();
+  try { if (family.child.exitCode === null && family.child.pid) process.kill(family.child.pid); } catch { /* already gone after the quit */ }
+  writeFileSync(join(output, 'family-app.log'), existsSync(family.logFile) ? readFileSync(family.logFile, 'utf8') : '');
+  writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);
+}
+
 console.log(`\n${results.filter((r) => r.verdict === 'PASS').length} passed, ${failures} failed, ${results.filter((r) => r.verdict === 'NOTE').length} noted — evidence in ${output}`);
 process.exit(failures === 0 ? 0 : 1);

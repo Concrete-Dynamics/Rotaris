@@ -21,9 +21,17 @@
  *   6. A TASK'S UNBROKEN TOKEN STAYS INSIDE THE PLAN COLUMN. REQ-SHELL-022's "no control requires horizontal
  *      scrolling to reach": a task added through the pane, whose text is one 200-character token, measured against
  *      the sidebar's content edge and the sidebar's scroll width.
+ *   7. THE STRIP'S PATH LINK IS SHORTENED FROM THE MIDDLE. REQ-WORKSPACE-149 rule 2: at 1180 px, the narrowest width at
+ *      which REQ-SHELL-047 still shows it, a deep workspace path keeps its head and its folder name with one `…` between,
+ *      drawn unclipped, its tooltip the full path; the branch name beside it (`main`, the workspace's own repository) is
+ *      drawn WHOLE, after the branch icon in the accent colour (REQ-SHELL-042), because the path gives up its width first;
+ *      widening the window
+ *      re-measures it. The workspace sits at a deliberately deep path for this
+ *      (`docs/defects/fixed/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md`).
  *
  * Evidence under `.proof/layout-proof/`: a PNG per size, `results.json`. `--skip-build` skips the build.
  */
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
@@ -34,7 +42,9 @@ rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 if (!process.argv.includes('--skip-build')) buildDesktop(output);
 
-const workspace = join(output, 'workspace');
+// Deep on purpose: section 7 needs a path the status strip cannot hold whole at 1180 px (REQ-WORKSPACE-149 rule 2).
+const FOLDER = 'proj-folder';
+const workspace = join(output, 'a-scratch-directory-deep-enough-that-the-status-strip-must-shorten-it', '349f6b0e-6880-59f4-942d-818d53f7b76a', FOLDER);
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# layout proof\n');
 writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
@@ -44,6 +54,12 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
   'mcp_servers:', '  code_intelligence: { enabled: false }',
   'rotaris:', '  delegation_strategy: single', '',
 ].join('\n'));
+// Its own repository on `main`, a SHORT branch name: section 7 asserts the branch name is drawn whole while the path beside
+// it is shortened. Without it the workspace sat inside this checkout and showed whatever branch the checkout was on.
+const git = (...args) => execFileSync('git', ['-c', 'user.name=layout-proof', '-c', 'user.email=layout-proof@localhost', ...args], { cwd: workspace, stdio: 'ignore' });
+git('init', '-q', '-b', 'main');
+git('add', 'README.md');
+git('commit', '-q', '-m', 'layout proof');
 
 const results = [];
 let failures = 0;
@@ -263,6 +279,65 @@ try {
   check('the sidebar needs no horizontal scroll to show it (REQ-SHELL-022)',
     !plan.missing && plan.agents.scrollWidth <= plan.agents.clientWidth,
     plan.missing ? `${plan.missing} was not found` : `.agents scrollWidth ${plan.agents.scrollWidth} against clientWidth ${plan.agents.clientWidth}`);
+
+  /**
+   * ── 7. The strip's path link and branch item under REQ-WORKSPACE-149 rule 2, at 1180 px and again at 1400 px.
+   *
+   * Before the repair the link was cut at its END by `text-overflow: ellipsis` and kept the path's head alone; the note's
+   * drive at 1180 px showed `/tmp/claude-0/-home-user-…` with the folder name gone.
+   */
+  const STRIP = `JSON.stringify((() => {
+    const strip = document.querySelector('.status-strip');
+    const read = (id) => {
+      const item = document.querySelector('[data-testid="' + id + '"]');
+      if (!item) return null;
+      const label = item.querySelector('.status-strip__label');
+      const b = item.getBoundingClientRect();
+      return { title: item.getAttribute('title'), text: (item.textContent || '').trim(), label: label ? label.textContent : null,
+        labelScroll: label ? label.scrollWidth : 0, labelClient: label ? label.clientWidth : 0, overflow: getComputedStyle(item).textOverflow,
+        left: Math.round(b.left), right: Math.round(b.right), w: Math.round(b.width) };
+    };
+    // REQ-SHELL-042: the branch icon's computed colour against the accent token's, resolved on a probe element.
+    const icon = document.querySelector('[data-testid="strip-branch"] .status-strip__icon');
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--rt-accent)';
+    document.body.appendChild(probe);
+    const accent = getComputedStyle(probe).color;
+    probe.remove();
+    return { viewport: innerWidth, stripScroll: strip ? strip.scrollWidth : 0, stripClient: strip ? strip.clientWidth : 0,
+      path: read('strip-workspace'), branch: read('strip-branch'),
+      icon: icon ? { cls: icon.className, color: getComputedStyle(icon).color, accent, before: icon.nextElementSibling ? icon.nextElementSibling.className : null } : null };
+  })())`;
+  await d.resize(1180, 800);
+  await sleep(800);
+  const narrow = JSON.parse(await d.eval(STRIP));
+  await d.screenshot(join(output, 'strip-1180.png'));
+  const head = workspace.slice(0, 5);
+  const p7 = narrow.path;
+  check('1180 px: the strip still shows the workspace path link (REQ-SHELL-047)', p7 !== null, `viewport ${narrow.viewport} px; link ${p7 ? 'present' : 'absent'}`);
+  check('1180 px: the path link is shortened from the MIDDLE, keeping its head and its folder name with exactly one … (REQ-WORKSPACE-149 rule 2)',
+    p7 !== null && p7.label !== null && [...p7.label].filter((c) => c === '…').length === 1 && p7.label.startsWith(head) && p7.label.endsWith(FOLDER),
+    p7 === null ? 'no link' : `label "${p7.label}" (${p7.label?.length ?? 0} of ${workspace.length} characters), box ${p7.w} px`);
+  check('1180 px: the shortened label is drawn whole — not clipped, no end ellipsis — and its tooltip carries the full path (REQ-WORKSPACE-149 rule 2, REQ-SHELL-022)',
+    p7 !== null && p7.labelScroll <= p7.labelClient + 1 && p7.overflow === 'clip' && p7.title === `Workspace folder: ${workspace}. Opens it in your file manager.`,
+    p7 === null ? 'no link' : `label content ${p7.labelScroll} in ${p7.labelClient} px; text-overflow ${p7.overflow}; title ${JSON.stringify(p7.title)}`);
+  const b7 = narrow.branch;
+  // The path gives up its width before the branch name does. Until the 2026-10-03 repair round both shrank in proportion to
+  // their basis, so a long path squeezed `main` to `m…`, `…` or nothing while the row had room for it; this check then
+  // accepted a hidden label (`label === null`) and passed over exactly that.
+  check('1180 px: a short branch name is drawn WHOLE beside the shortened path — the path gives up its width first (REQ-WORKSPACE-149 rule 2, REQ-WORKSPACE-020)',
+    b7 !== null && b7.label === 'main' && b7.text === 'main' && b7.labelScroll <= b7.labelClient + 1 && (p7 === null || p7.right <= b7.left + 1),
+    b7 === null ? 'no branch item' : `branch "${b7.text}" (label "${b7.label}", content ${b7.labelScroll} in ${b7.labelClient} px) at [${b7.left}..${b7.right}]; path ends at ${p7?.right}`);
+  check('1180 px: the branch item draws the branch icon before the branch name, in the accent colour (REQ-SHELL-042, REQ-WORKSPACE-020)',
+    narrow.icon !== null && /\bph-git-branch\b/.test(narrow.icon.cls) && narrow.icon.color === narrow.icon.accent && narrow.icon.before === 'status-strip__label',
+    narrow.icon === null ? 'no icon in the branch item' : `icon "${narrow.icon.cls}" coloured ${narrow.icon.color} against --rt-accent ${narrow.icon.accent}, followed by ${narrow.icon.before}`);
+  check('1180 px: the strip itself does not overflow', narrow.stripScroll <= narrow.stripClient + 1, `scrollWidth ${narrow.stripScroll} against clientWidth ${narrow.stripClient}`);
+  await d.resize(1400, 900);
+  await sleep(800);
+  const widened = JSON.parse(await d.eval(STRIP));
+  check('1400 px: the label is recomputed when the width changes — longer than at 1180 px (REQ-WORKSPACE-149 rule 2)',
+    widened.path !== null && p7 !== null && (widened.path.label ?? '').length > (p7.label ?? '').length && (widened.path.label ?? '').endsWith(FOLDER),
+    `label at 1400 px "${widened.path?.label}" (box ${widened.path?.w} px) against "${p7?.label}" (box ${p7?.w} px) at 1180 px`);
 } finally {
   await d.quit().catch(() => undefined);
   d.close();

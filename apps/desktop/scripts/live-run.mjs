@@ -120,6 +120,7 @@ import { KEY_ENV, endpointKey, endpointStore, instanceIdFor, powershell, selectE
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { restatedFacts } from './lib/restated-facts.mjs';
+import { starterMissing } from './lib/starter-config.mjs';
 import { refusalIssues } from './lib/refusal-issues.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
@@ -994,7 +995,11 @@ if (!check(added !== null, 'the endpoint was added and its catalogue discovered'
 const snapshot = existsSync(snapshotFile) ? readFileSync(snapshotFile, 'utf8') : '';
 check(snapshot.includes(`  ${PROVIDER_ID}:`) && snapshot.includes('    authenticated: true'), 'the snapshot carries the authenticated provider', PROVIDER_ID);
 check(!/access_token|sk-[a-z-]*[a-z0-9]{16,}/.test(snapshot), 'the snapshot carries no credential');
-check(existsSync(agentsFile), 'the starter agents.yaml was bootstrapped');
+// REQ-CONFIG-025 / REQ-WORKSPACE-038: the starter's CONTENT, not the file's existence. Initialization records into a missing
+// workspace file before the sign-in, so a file holding `initialization:` alone exists and is no starter (acceptance F3;
+// `docs/defects/fixed/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md`).
+const starterLacks = existsSync(agentsFile) ? starterMissing(readFileSync(agentsFile, 'utf8')) : ['the file'];
+check(starterLacks.length === 0, 'the starter agents.yaml was bootstrapped', starterLacks.length === 0 ? agentsFile : `it lacks ${starterLacks.join(', ')}`);
 const inCatalogue = snapshot.includes(`      - id: ${QUALIFIED}\n`);
 if (inCatalogue) check(true, `the catalogue carries ${endpoint.model}`);
 else noted(`the catalogue does not carry ${endpoint.model}`, 'the script writes the models: entry the run needs (REQ-CONFIG-082..097)');

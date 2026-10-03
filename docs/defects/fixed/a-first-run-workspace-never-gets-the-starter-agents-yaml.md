@@ -161,3 +161,12 @@ header, `default_persona: orchestrator`, the nulls, then `initialization:` and t
 completed `tasks_complete` with one settled tool row; the intents were `question`, `explicit_trivial` and
 `small_feature`; spike 6 passed its four tests; the sign-out removed the credential file; the refusal was "Provider
 authentication required". Log and evidence: the session scratchpad's `a13r/slice-proof.r8.log` and `a13r/slice-proof-r8/`.
+
+**Run 9, at the second repair round** (build of `35d5b4f`, whose product code is `c10e2ce`'s; 08:41:34 to 08:48:55 UTC,
+load 8.7 at start and 5.9 at end, other agents' work on the host): exit 0, all seven scenarios. The first launch logged
+the open's bootstrap `written` at 08:41:36.389, the marker writer's bootstrap `exists` at 08:41:40.635,
+`code-intelligence-setup → success` at 08:41:40.674, `Added Katalyst` at 08:41:41.379 and the sign-in's bootstrap
+`exists` at 08:41:41.382. The run completed `tasks_complete` with one tool row; the intents were `question`,
+`explicit_trivial` and `small_feature`; spike 6 passed its four tests; the sign-out removed the credential file; the
+refusal was "Provider authentication required". Log and evidence: the session scratchpad's `a13r2/slice-proof.r9.log`
+and `a13r2/slice-proof-r9/`.

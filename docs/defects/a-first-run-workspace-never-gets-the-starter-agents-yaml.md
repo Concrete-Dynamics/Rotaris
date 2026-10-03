@@ -1,0 +1,61 @@
+## A first-run workspace never gets the starter agents.yaml
+
+A workspace opened for the first time never receives the starter `<workspace>/.rotaris/agents.yaml` of REQ-CONFIG-025:
+no comment header, no `default_persona: orchestrator`, none of the twelve explicit nulls.
+
+Two writers meet the file, in this order, and neither bootstraps where the specification needs it:
+
+1. **Initialization records first.** At the open, main starts ADR-0064's background resolution
+   (`InitializationCoordinator.open`, then `resolve` 800 ms later). Code-intelligence setup now succeeds before anyone
+   signs in, and its outcome is recorded into `initialization:` through the scoped per-field writer (`config.setField`,
+   REQ-CONFIG-441). With no file present that writer starts from an empty document (REQ-CONFIG-030 forbids it to
+   bootstrap), so the file is created holding `initialization:` alone.
+2. **The only bootstrap comes after a provider change.** `afterProviderChange` in `apps/desktop/src/main/index.ts` is
+   the one place `config.bootstrap` is requested. By the time a sign-in reaches it the file is non-blank, so
+   `bootstrapConfigFile` correctly reports `exists` and writes nothing (REQ-CONFIG-026, never clobber).
+
+A workspace opened after the first sign-in is never bootstrapped at all, since nothing asks for `config.bootstrap`
+until the next provider change. Runtime defaults are unaffected (REQ-CONFIG-063 ships `orchestrator`, and ADR-0037
+reads a written null as unstated); what the user loses is the starter content itself, including the header that tells
+them the file overrides the built-in roles and that models are wired up by authenticating a provider.
+
+Observed by acceptance round 1 on merged main (`1763f7f`): `pnpm slice-proof` red twice at scenario 1 (load 0.37 and
+0.40), throwing "the starter agents.yaml was not bootstrapped after sign-in" at `slice-proof.mjs:234`. The first launch's
+log has `initialization: code-intelligence-setup → success` at 04:58:42.757, `providers: Added Katalyst; discovered 1
+model.` at 04:58:45.124, and `workspace service: configuration bootstrap for …/workspace: exists` at 04:58:45.126; the
+file on disk held only `initialization:` (`completed: [code-intelligence-setup]`, `classification: non-code`). Earlier
+passing runs hid it because setup failed (exit 127) before the sign-in, so the bootstrap still found no file and logged
+`written`. `pnpm live-run`'s sign-in scenario checks only that the file exists, which the initialization record alone
+satisfies, so it passed over the same defect.
+
+Scenarios 2 to 7 of `slice-proof` (the real run on the model, the intents, spike 6, the sign-out and the refusal) never
+executed on that head, so it had no live-model slice evidence (acceptance finding F2). The proof's assertion was right
+and the cause was this defect; F2 is recorded here rather than as a note of its own, because the proof has nothing to
+repair.
+
+## Specs
+
+- **REQ-CONFIG-025**: "When `<workspace>/.rotaris/agents.yaml` is absent, a minimal starter file is written on first
+  run." On a first run with code-intelligence setup succeeding, it never is.
+- **REQ-CONFIG-028**: a target absent or blank "needs bootstrap"; nothing asks for one at the open, where the file is
+  still absent.
+- **REQ-WORKSPACE-038**: the starter's content (the three header lines, `default_persona: orchestrator`, the twelve
+  nulls); none of it reaches the file.
+- **REQ-WORKSPACE-135**: the guided provider setup writes the bootstrap only when no `agents.yaml` exists, so it cannot
+  repair a file initialization already created. Not contradicted: it behaves as written.
+- **REQ-CONFIG-030**: names the desktop save and the per-field path as writers that do not bootstrap. The marker writer
+  is the per-field path, so having it bootstrap a missing file would contradict this requirement. The reading the
+  repair takes is REQ-CONFIG-025's own: the bootstrap happens at the open, before anything else writes the file.
+- **REQ-WORKSPACE-078 / REQ-WORKSPACE-079**: the starter carries no `initialization:` key, so a bootstrapped file still
+  reads as never initialized, and the marker write preserves every other top-level key; both hold under the repair.
+
+## Relevant files
+
+- `apps/desktop/src/main/index.ts`: `openWorkspaceInner` (the open, then `initialization.open` and the delayed
+  `resolve`); `afterProviderChange`, the only `config.bootstrap` request.
+- `apps/desktop/src/workspace-service/index.ts`: the `workspace.open` and `config.bootstrap` cases.
+- `apps/desktop/src/main/initialization.ts`: the coordinator's `writeMarker`, wired to `config.setField`.
+- `packages/config/src/writers.ts`: `bootstrapConfigFile`, `starterDocument`, `writeConfigFields`.
+- `packages/config/src/init/execute.ts`: the per-task recording that creates the file.
+- `apps/desktop/scripts/slice-proof.mjs`: scenario 1's starter assertion (line 234 on `1763f7f`).
+- `apps/desktop/scripts/live-run.mjs`: the sign-in scenario's `existsSync(agentsFile)` check.

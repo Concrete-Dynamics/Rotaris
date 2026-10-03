@@ -21,3 +21,14 @@ links, so the move left them behind.
 
 - `apps/desktop/scripts/live-run.mjs`: the frictions scenario's two `noted(…)` lines and its header comment.
 - `tools/check-record-links.mjs`: the record's link check, which reads no script.
+
+## Outcome (2026-10-03, fin12, repaired)
+
+The four citations in `apps/desktop/scripts/live-run.mjs` — the two `noted(…)` lines and the two in the frictions
+scenario's header — now name `docs/defects/fixed/…`, where the notes are. Pinned by
+`apps/desktop/scripts/lib/live-run-defect-citations.test.ts`, which reads every `docs/defects/…` path the script cites and
+requires each to exist; red before the repair, listing exactly the four. The same class of stale path in other scripts and
+in product code comments is outside this note and recorded separately
+([code-comments-cite-defect-notes-at-paths-they-no-longer-have.md](../code-comments-cite-defect-notes-at-paths-they-no-longer-have.md)).
+Not shown live (this plan runs no live scenario): `live-run --only=frictions` prints the two NOTE lines with the corrected
+paths.

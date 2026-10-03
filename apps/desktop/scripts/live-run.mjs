@@ -1492,8 +1492,8 @@ if (wanted.includes('shell')) {
 /**
  * One real run engineered to trip the inducible run-autopsy frictions, read back from the STORE rather than
  * from the model's report: a first-use `write_file` create (nine refusals across three fresh children in run
- * `7bd9c19d`; `docs/defects/a-first-use-schema-guess-failed-without-an-example.md`) and a SIGINT stop of a
- * pipe session on win32 (`docs/defects/win32-terminal-edge-cases-bounced-to-the-agent.md`).
+ * `7bd9c19d`; `docs/defects/fixed/a-first-use-schema-guess-failed-without-an-example.md`) and a SIGINT stop of a
+ * pipe session on win32 (`docs/defects/fixed/win32-terminal-edge-cases-bounced-to-the-agent.md`).
  *
  * Red by design until the fixes land: each check below fails while its friction reproduces and passes once
  * the product absorbs it, which is what makes this scenario the fixes' verification. Two recorded frictions
@@ -1548,8 +1548,8 @@ if (wanted.includes('frictions')) {
     check(existsSync(join(workspace, 'friction-probe.txt')), 'the probe file landed in the workspace', 'friction-probe.txt');
     rmSync(join(workspace, 'friction-probe.txt'), { force: true });
   }
-  noted('the stream-stall abort is not covered here', 'the `faults` scenario induces it through the recording proxy; the observed shape is recorded in docs/defects/single-retry-stream-stall-aborted-a-76-minute-run.md');
-  noted('the exit-trace gap is not covered here', 'it needs a crash; the observed shape is recorded in docs/defects/process-exit-left-no-diagnosable-trace.md');
+  noted('the stream-stall abort is not covered here', 'the `faults` scenario induces it through the recording proxy; the observed shape is recorded in docs/defects/fixed/single-retry-stream-stall-aborted-a-76-minute-run.md');
+  noted('the exit-trace gap is not covered here', 'it needs a crash; the observed shape is recorded in docs/defects/fixed/process-exit-left-no-diagnosable-trace.md');
   results.scenarios.frictions = { status: read?.session.execution_status, tools: names, writeOpRefusals: writeOp.map((call) => call.ordinal), sigintRefusals: sigint.map((call) => call.ordinal) };
   if (read) preserveRun('frictions', read.session.session_id);
   await budgetGate();

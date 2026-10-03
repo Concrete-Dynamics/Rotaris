@@ -531,8 +531,10 @@ const s9 = scenario('background-quota', { runtime: ['  improvement_collector_ena
     const rows = await step('the session recorded', until(() => sessionRow(), (r) => r.length === 1, { timeoutMs: 10_000, what: 'the parked session in the store' }));
     const sid = rows[0].session_id;
     await step('Ctrl+1', d.chord('Ctrl+1'));
-    await step('New session', d.click('button', { text: 'New session' }));
-    await step('Start session', d.click('[data-testid="start-session-accept"]'));
+    // Under load the Overview and the start-session dialog can take longer than the click's default to be actionable
+    // (a verifier saw it at load 4.58); the bound is the wait for them, not a timing claim.
+    await step('New session', d.click('button', { text: 'New session', timeoutMs: 60_000 }));
+    await step('Start session', d.click('[data-testid="start-session-accept"]', { timeoutMs: 60_000 }));
     const released = await step('the window released it', until(() => onScreen(PROMPT), (v) => v === false, { timeoutMs: 10_000, what: 'the parked run off screen' }));
     const cancel = await step('the parked run stopped from the background', d.eval(`window.rotaris.command({ kind: 'session.control', request: { op: 'cancel', sessionId: ${JSON.stringify(sid)}, args: { force: false } } })`));
     const ending = await step('the notice naming the session', until(() => readNotice(), (n) => n !== null && n.title?.startsWith(`Session ${sid} `) === true, { timeoutMs: 60_000, what: "REQ-NOTIFY-031's notice" }));

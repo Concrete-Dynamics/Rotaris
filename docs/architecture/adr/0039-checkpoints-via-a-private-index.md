@@ -508,3 +508,13 @@ repair was logged 1.48 to 1.81 s after the previous main's exit. All twelve scen
 
 **What it could not show:** the check firing on the built app. It would need the window `459e7c8` closed, and that
 was not reopened; the failing path is pinned by `lock-holder.test.ts` only. Windows and macOS were not run (IC-3).
+
+## The listing record's `checkpoint_count` is this record's derived count — 2026-10-03 (fin11)
+
+A defect note asked whether `Sessions.list`, which fills each row's count with `StoreDal.checkpointCount` (a `count(*)`
+over that session's rows), breaks REQ-SESSION-042's "read nothing but those listing records"
+([`the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md`](../../defects/the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md)).
+The reading recorded here: the count this record derives **is** REQ-SESSION-030's `checkpoint_count` field, held as a count
+over rows rather than stored twice. It reads no session state, transcript or history, and no Git. Nothing in the code
+changed. The same note's other half (the sessions card's token, duration and detail labels) waits on OQ-192.
+

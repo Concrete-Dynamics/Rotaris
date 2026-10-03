@@ -9337,3 +9337,27 @@ saved; runs keep using the last saved values until they are saved."; the mode, r
 sentences are REQ-SHELL-041's word for word; the file-access pair is REQ-WORKSPACE-022's.
 
 **What a ruling decides.** Which domain's statement stands for each of the five, and an amendment to the other.
+
+**OQ-192 — The sessions card's rows carry a token label, a duration label and a detail caption, which the listing
+record's closed field set does not hold.** *(REQ-MONITOR-171, each sessions-card row carries "a detail caption, … the
+branch, a token label, and a duration label"; REQ-SESSION-030, the listing record "MUST hold exactly these fields" and
+"Every attribute a listing shows about the session itself MUST be one of these — making a new attribute list-visible is a
+change to this field set, not a reader-side extension"; REQ-SESSION-042, "Building the list MUST read nothing but those
+listing records". Raised 2026-10-03 by
+[`the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md`](../defects/the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md)
+(fin11, bundle `fin11-strip-labels-and-auxiliary-windows`). Open.)*
+
+REQ-SESSION-030's twelve fields are `session_id`, `created_at`, `updated_at`, `execution_status`, `schema_version`,
+`internal`, `worktree`, `checkpoint_count`, `task_title`, `requirement_id`, `unit_id` and `awaiting_input`. None is a token
+total, a duration or a caption, and the requirement forbids showing any attribute of the session that is not one of them.
+REQ-MONITOR-171 requires each row of the Overview's sessions card to show all three. The branch is not in the
+disagreement: it is the `worktree` binding record's. Neither requirement names the other, and no directive governs either.
+
+**What the build proceeds under** (`Sessions.list`, `packages/engine/src/sessions.ts`; the sessions card,
+`packages/ui/src/OverviewView.tsx`): REQ-MONITOR-171's row, drawn from columns of the same session row the listing record
+is read from, so building the list still reads one row per session and nothing else of the session's: the token label is
+`tokens_input + tokens_output`, the duration label is `durationLabel(run_started_at, …)` and the detail caption is
+`workspace_root`. No transcript, state or history is read for them.
+
+**What a ruling decides.** Whether the three labels stay on the card (and REQ-SESSION-030's field set gains them, the
+"change to this field set" it names), or leave it (and REQ-MONITOR-171 is amended).

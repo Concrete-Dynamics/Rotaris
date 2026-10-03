@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 // @ts-expect-error — the proxy is plain ESM beside the scripts that run it.
 import { startRecordingProxy } from './model-traffic.mjs';
+import { usageOf } from './duress-checks.mjs';
 
 interface Proxy {
   readonly url: string;
@@ -103,6 +104,44 @@ describe('the live run\'s recording proxy', () => {
     expect(record['requestBody']).toBe(sent);
     expect(JSON.parse(String(record['responseBody']))).toEqual({ choices: [{ message: { content: 'hello' } }] });
     expect(typeof record['ms']).toBe('number');
+  });
+
+  /*
+   * Finding U6 of the duress live run at 1763f7f: two complete responses over the 1 MB body cap lost their closing usage
+   * chunk with the cut (traffic lines 77 and 234), so the duress figures read 2 calls and 20,787 output tokens short of the
+   * store. The body is still capped; the usage is read from the whole body and kept on the record.
+   */
+  it('keeps a response\'s usage when its body is over the cap and recorded truncated (U6)', async () => {
+    const delta = `data: ${JSON.stringify({ choices: [{ delta: { content: 'x'.repeat(4_000) } }] })}\n\n`;
+    const usage = `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 93_461, total_tokens: 103_652, completion_tokens: 10_191, completion_tokens_details: { reasoning_tokens: 9_870 } } })}\n\n`;
+    const target = await upstream((req, res) => {
+      req.resume();
+      req.on('end', () => {
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        for (let i = 0; i < 260; i += 1) res.write(delta);
+        res.end(`${usage}data: [DONE]\n\n`);
+      });
+    });
+    const { sink } = await proxyTo(target);
+    const answer = await fetch(`${(opened.proxies[0] as Proxy).url}/chat/completions`, { method: 'POST', body: '{}' });
+    const text = await answer.text();
+    // The product received the whole answer, its usage included: the cap is the record's, never the client's.
+    expect(text.length).toBeGreaterThan(1_000_000);
+    expect(text).toContain('"completion_tokens":10191');
+    const [record] = records(sink);
+    expect(record['outcome']).toBe('complete');
+    expect(String(record['responseBody'])).toMatch(/…\[truncated: \d+ bytes total\]$/);
+    expect(String(record['responseBody'])).not.toContain('completion_tokens');
+    expect(record['usage']).toEqual({ prompt_tokens: 93_461, completion_tokens: 10_191, reasoning_tokens: 9_870 });
+    expect(usageOf(record)).toEqual({ promptTokens: 93_461, completionTokens: 10_191, reasoningTokens: 9_870 });
+  });
+
+  it('records no usage for a body that carries none', async () => {
+    const target = await upstream((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200); res.end('{"choices":[]}'); }); });
+    const { sink } = await proxyTo(target);
+    await (await fetch(`${(opened.proxies[0] as Proxy).url}/chat/completions`, { method: 'POST', body: '{}' })).text();
+    const [record] = records(sink);
+    expect(record['usage']).toBeUndefined();
   });
 
   it('never writes a credential into the record', async () => {

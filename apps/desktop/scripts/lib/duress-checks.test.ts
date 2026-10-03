@@ -126,6 +126,13 @@ describe('a run that never compressed says how large its prompts grew against th
     expect(trafficCall(record)).toMatchObject({ start: Date.parse(record.at), end: Date.parse(record.at) + 1986, promptTokens: 9012 });
     expect(usageOf({ responseBody: '' })).toEqual({ promptTokens: null, completionTokens: null, reasoningTokens: null });
   });
+
+  it('reads the usage the recorder kept from the whole body before the body\'s own, which the cap may have cut (U6)', () => {
+    const capped = { at: '2026-10-03T06:40:01.000Z', ms: 90_000, outcome: 'complete', usage: { prompt_tokens: 93_461, completion_tokens: 10_191, reasoning_tokens: 9_870 }, responseBody: `data: {"choices":[{"delta":{"content":"x"}}]}\n…[truncated: 1009144 bytes total]` };
+    expect(usageOf(capped)).toEqual({ promptTokens: 93_461, completionTokens: 10_191, reasoningTokens: 9_870 });
+    // A record the recorder wrote before 2026-10-03 has no `usage`: its body is read as before.
+    expect(usageOf({ responseBody: '"usage":{"prompt_tokens":5,"completion_tokens":2}' })).toEqual({ promptTokens: 5, completionTokens: 2, reasoningTokens: null });
+  });
 });
 
 describe('an overrun says where the time went (H-h)', () => {

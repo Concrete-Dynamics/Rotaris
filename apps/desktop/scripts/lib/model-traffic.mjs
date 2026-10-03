@@ -43,6 +43,24 @@ const cap = (buffers) => {
 };
 
 /**
+ * The last usage figures a body carries (`prompt_tokens`, `completion_tokens`, `reasoning_tokens`, each null where absent),
+ * or null when it carries none. Read from the WHOLE body, before `cap` cuts it: a streamed completion's usage chunk comes
+ * last, so a response over the cap lost it with the cut, and the duress figures read from the record fell short of the
+ * store — two calls and 20,787 output tokens in the run at 1763f7f
+ * (`docs/defects/fixed/the-traffic-recorders-body-cap-drops-a-responses-usage-and-two-duress-figures-disagree-with-the-store.md`).
+ * An escaped name inside a model's own text (`\"prompt_tokens\"`) does not match.
+ */
+export function usageIn(text) {
+  const last = (field) => {
+    let found = null;
+    for (const m of String(text).matchAll(new RegExp(`"${field}"\\s*:\\s*(\\d+)`, 'g'))) found = Number(m[1]);
+    return found;
+  };
+  const usage = { prompt_tokens: last('prompt_tokens'), completion_tokens: last('completion_tokens'), reasoning_tokens: last('reasoning_tokens') };
+  return Object.values(usage).every((v) => v === null) ? null : usage;
+}
+
+/**
  * Start the listener. Resolves with the base URL to hand the product, a `sink` setter so each scenario's traffic
  * lands in its own file, and a `close`.
  *
@@ -140,12 +158,15 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
     const settle = (outcome, extra = {}) => {
       if (ended) return;
       if (outcome !== 'stalled') { ended = true; open.delete(atClose); if (stallTimer !== null) clearTimeout(stallTimer); }
+      // The usage is the whole body's, kept beside the capped body (finding U6; `usageIn`).
+      const usage = usageIn(Buffer.concat(backChunks).toString('utf8'));
       write(target, {
         at: new Date(started).toISOString(), ms: Date.now() - started,
         method: clientReq.method, path: clientReq.url, upstream: `${upstream.origin}${path}`,
         status: upstreamRes?.statusCode ?? null, ...note, ...(outcome === undefined ? {} : { outcome }), ...extra,
         requestHeaders: scrub(clientReq.headers), requestBody: redact(cap(sentChunks)),
         responseHeaders: upstreamRes?.headers ?? {}, responseBody: redact(cap(backChunks)),
+        ...(usage === null ? {} : { usage }),
       });
     };
     /** The endpoint is told the call is over the only way HTTP can tell it: its socket closes. */

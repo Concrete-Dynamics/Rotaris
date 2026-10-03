@@ -77,6 +77,23 @@ describe('ToolDiscovery (REQ-MCP-046/047/048/051/052/053)', () => {
     expect(lines.filter((l) => l.startsWith('W mcp ghost')).length - before).toBe(1);
     expect(d.failedFor(req)).toBe(true);
   });
+  // Live-run finding U4 (duress at 1763f7f): the failure was said twice, by this warning and by the run host, and the child's
+  // two stderr lines broke each record into three physical lines of the application log.
+  it('warns a failure once, on one line that keeps the child\'s whole standard error and the time it took (REQ-MCP-048, U4)', async () => {
+    const d = new ToolDiscovery({ clocks, log, clientVersion });
+    const exits = { transport: 'stdio' as const, command: process.execPath, args: ['-e', "process.stderr.write('first stderr line\\nsecond stderr line\\n'); process.exit(3)"], env, cwd: dir };
+    const before = lines.length;
+    const r = await d.discover({ name: 'exits', description: exits, workspaceRoot: join(dir, 'exits') });
+    expect(r.failed).toBe(true);
+    const warned = lines.slice(before).filter((l) => l.startsWith('W mcp exits'));
+    expect(warned).toHaveLength(1);
+    expect(warned[0]).not.toMatch(/[\r\n]/);
+    expect(warned[0]).toMatch(/^W mcp exits: tool discovery failed in \d+ ms \(.*first stderr line \| second stderr line.*\); the persona prompt will list this server with no tool details attached \(REQ-MCP-048\)$/);
+    // The run host names the launch's project (REQ-MCP-034) through `context`, now that its own failure line is gone.
+    const named = await d.discover({ name: 'exits', description: exits, workspaceRoot: join(dir, 'exits-2'), context: 'project /p' });
+    expect(named.failed).toBe(true);
+    expect(lines.slice(before).filter((l) => l.startsWith('W mcp exits (project /p): tool discovery failed in '))).toHaveLength(1);
+  });
   it('returns the empty list at the outer bound when the server never answers initialize (REQ-MCP-053)', async () => {
     const d = new ToolDiscovery({ clocks, log, clientVersion, timeoutMs: millis(2_000), boundMs: millis(2_500) });
     const started = clocks.monotonic.now();

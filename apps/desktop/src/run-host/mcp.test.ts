@@ -263,3 +263,79 @@ describe('the configuration and the launch lines of a run in an isolated working
     expect(lines).toContain(`mcp: discovery of 'code_intelligence' (project ${tree}) listed 0 tool(s) in 5 ms`);
   });
 });
+
+/**
+ * Live-run finding U3 (duress at 1763f7f): code_intelligence exited 127 at discovery, and every child's recorded grant
+ * gave it the fate `connected` with an empty grant, which the inspector printed as "CONNECTED / No tools granted".
+ * REQ-MCP-114 names tool discovery having failed (REQ-MCP-042) among the reasons a server reads as dropped; the persona
+ * prompt still lists it bare (REQ-MCP-048, REQ-MCP-101), so the surface keeps it active and the evidence decides the fate.
+ */
+describe('the recorded fate of a server whose tool discovery failed (REQ-MCP-114, REQ-MCP-042)', () => {
+  function host(failed: boolean) {
+    const mcp = new McpHost({ clocks: new FakeClock(), log: () => undefined, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
+    vi.spyOn(mcp.discovery, 'peek').mockImplementation(((req: { name: string }) => req.name === 'broken'
+      ? { tools: [], failed, detail: failed ? 'Connection closed (broken exited with code 127)' : '' }
+      : { tools: [{ name: 'lookup', description: 'lookup', inputSchema: { type: 'object' } }], failed: false }) as unknown as typeof mcp.discovery.peek);
+    const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'ci' };
+    const server = (name: string) => ({ name, entry, origin: 'default', availability: { available: true }, description: { name }, resolved: { command: 'ci', args: [] } });
+    const cfg = {
+      personas: { tester: { mcp_servers: ['ci', 'broken'], tools: ['read_file'] } },
+      mcp: { servers: { ci: server('ci'), broken: server('broken') }, origins: { ci: 'default', broken: 'default' }, diagnostics: [] },
+    } as unknown as LoadedConfiguration;
+    return { mcp, cfg };
+  }
+
+  it('records the server dropped for failed discovery, with no granted tools under it', () => {
+    const { mcp, cfg } = host(true);
+    const surface = mcp.surfaceFor(cfg, '/ws', 'tester', null);
+    // The prompt half is unchanged: the server stays listed, bare (REQ-MCP-048, REQ-MCP-101).
+    expect(surface.active.map((a) => `${a.name}:${a.discoveryFailed}`)).toEqual(['broken:true', 'ci:false']);
+    const evidence = grantEvidence(surface);
+    expect(evidence.servers).toEqual([
+      { name: 'broken', transport: 'stdio', origin: 'default', fate: 'dropped', reason: 'discovery-failed' },
+      { name: 'ci', transport: 'stdio', origin: 'default', fate: 'connected' },
+    ]);
+    expect(evidence.granted).toEqual({ ci: ['lookup'] });
+  });
+
+  it('records a server whose discovery succeeded with no tools as connected', () => {
+    const { mcp, cfg } = host(false);
+    const evidence = grantEvidence(mcp.surfaceFor(cfg, '/ws', 'tester', null));
+    expect(evidence.servers.find((s) => s.name === 'broken')).toEqual({ name: 'broken', transport: 'stdio', origin: 'default', fate: 'connected' });
+    expect(evidence.granted).toEqual({ broken: [], ci: ['lookup'] });
+  });
+});
+
+/**
+ * Live-run finding U4 (duress at 1763f7f): one failed discovery reached the application log twice — `ToolDiscovery`'s
+ * REQ-MCP-048 warning, then this host's "mcp: discovery of '…' failed (…) in N ms" at info 1 ms later, each with the child's
+ * whole stderr. The warning is the one record; `prepare` says a success and nothing of a failure.
+ */
+describe('McpHost.prepare\'s discovery lines (REQ-MCP-048, U4)', () => {
+  function host(failed: boolean) {
+    const lines: { message: string; level: string }[] = [];
+    const mcp = new McpHost({ clocks: new FakeClock(), log: (message, level = 'info') => { lines.push({ message, level }); }, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
+    vi.spyOn(mcp.discovery, 'discover').mockResolvedValue({ tools: failed ? [] : [{ name: 'lookup', description: '', inputSchema: {} }], failed, detail: failed ? 'Connection closed (ci exited with code 127; stderr: first\nsecond)' : '', elapsedMs: 508, memoised: false } as unknown as Awaited<ReturnType<typeof mcp.discovery.discover>>);
+    const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'ci' };
+    const cfg = {
+      personas: { tester: { mcp_servers: ['ci'], tools: [] } },
+      mcp: { servers: { ci: { name: 'ci', entry, origin: 'default', availability: { available: true }, description: {}, resolved: { command: 'ci', args: [] } } }, origins: { ci: 'default' }, diagnostics: [] },
+    } as unknown as LoadedConfiguration;
+    return { mcp, cfg, lines };
+  }
+  const discoveryLines = (lines: readonly { message: string }[]) => lines.filter((l) => l.message.startsWith('mcp: discovery of '));
+
+  it('writes no line of its own for a failed discovery: the failure is the discovery\'s one warning', async () => {
+    const { mcp, cfg, lines } = host(true);
+    await mcp.prepare(cfg, '/ws');
+    expect(discoveryLines(lines)).toEqual([]);
+    expect(lines.filter((l) => /first|second/.test(l.message))).toEqual([]);
+    expect(lines.map((l) => l.message)).toContain('mcp: discovery for 1 server(s) finished in 0 ms');
+  });
+
+  it('says a successful discovery once, with its tool count and time', async () => {
+    const { mcp, cfg, lines } = host(false);
+    await mcp.prepare(cfg, '/ws');
+    expect(discoveryLines(lines).map((l) => l.message)).toEqual(["mcp: discovery of 'ci' listed 1 tool(s) in 508 ms"]);
+  });
+});

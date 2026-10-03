@@ -304,6 +304,8 @@ describe('the MCP chips per server (REQ-MCP-065/100/114, REQ-MONITOR-060; wired 
     ]);
     expect(mcpFateText({ fate: 'connected' })).toBe('connected');
     expect(mcpFateText({ fate: 'dropped', reason: 'disabled' })).toBe('dropped — disabled');
+    // REQ-MCP-114 with REQ-MCP-042: a server whose tool discovery failed is recorded dropped for that reason (U3, 2026-10-03).
+    expect(mcpFateText({ fate: 'dropped', reason: 'discovery-failed' })).toBe('dropped — discovery-failed');
   });
 });
 

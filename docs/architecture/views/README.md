@@ -51,6 +51,19 @@ REQ-CONFIG-423; fin13).** The Settings hook holds the saved and pending values a
 `rebasePending` lets a changed permission mode displace an unsaved selection. The **runtime view**'s Tier A paragraph says
 so. No package, edge, process, channel, command or store column changed.
 
+**One MCP discovery failure is one record on one line (REQ-MCP-048, PD-MONITOR-002; fin13).** `ToolDiscovery`'s
+REQ-MCP-048 warning carries the time, the project the run host launched (the new optional `DiscoverRequest.context`) and the
+detail with its lines joined by ` | `; `McpHost.prepare` logs a success only. `restated-facts.mjs` knows the run host's old
+line as a fifth restatement, and `code-intelligence-binding.mjs` reads a failure's project from the warning. The **process view**'s one-emitter passage says
+so. No package, edge, process, channel, command or store column changed.
+
+**An MCP server whose tool discovery failed is recorded dropped for that reason (REQ-MCP-114, REQ-MCP-042; fin13).**
+`grantEvidence` (`run-host/mcp.ts`) records an active server flagged `discoveryFailed` as `fate: 'dropped'`,
+`reason: 'discovery-failed'`, with no entry under `granted`; the persona surface still keeps it active, so the prompt lists it
+bare (REQ-MCP-048, REQ-MCP-101). The inspector and the persona window print the recorded fate as they did. The **runtime
+view**'s MCP surface paragraph and its `children` row say so. No package, edge, process, channel, command or store column
+changed (`granted_mcp` is the existing JSON column).
+
 **The status strip names an isolated worktree's branch with its own ahead count (REQ-WORKSPACE-020, REQ-SHELL-042; acceptance
 repair F8).** `GitWorktreeRow` gains `upstreamAhead` (the tree's branch against its own upstream, one `for-each-ref` read in
 `readGitView`), `branchStripItem` draws the worktree branch's ` ↑{n}` from it with the base checkout's sentences, and a strip

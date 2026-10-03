@@ -53,6 +53,25 @@ export function parseWorktreeList(porcelain: string): ParsedWorktree[] {
   return out;
 }
 
+/**
+ * REQ-WORKSPACE-020 / REQ-WORKSPACE-029: `git for-each-ref --format=%(refname)%00%(upstream:track) refs/heads` — one line per
+ * local branch, its full ref name, NUL, and Git's tracking summary (`[ahead 2]`, `[ahead 2, behind 1]`, `[behind 1]`,
+ * `[gone]`, or nothing with no upstream). Answers each branch's commits ahead of its own upstream; a branch with no
+ * upstream, a gone one, or one level with it is 0, the snapshot's "zero whenever that comparison cannot be made".
+ */
+export function parseUpstreamAhead(text: string): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const line of text.split(/\r?\n/)) {
+    const nul = line.indexOf('\0');
+    if (nul < 0) continue;
+    const ref = line.slice(0, nul);
+    if (!ref.startsWith('refs/heads/')) continue;
+    const m = /\bahead (\d+)/.exec(line.slice(nul + 1));
+    out.set(ref.slice('refs/heads/'.length), m ? Number(m[1]) : 0);
+  }
+  return out;
+}
+
 export interface Numstat { readonly additions: number; readonly deletions: number; readonly paths: readonly string[] }
 
 /** `git diff --numstat --no-renames -z`: `add TAB del TAB path NUL`; a binary file counts as a path with no lines. */
@@ -193,12 +212,17 @@ export async function readGitView(workspaceRoot: string, deps: GitViewDeps): Pro
   if (baseIndex < 0 && listing.length > 0) baseIndex = 0;
   const base = baseIndex >= 0 ? listing[baseIndex]! : null;
   const baseBranch = base?.branch ?? null;
+  // REQ-WORKSPACE-020: each tree's branch against ITS upstream, for the status strip while it names an isolated worktree's
+  // branch — one read for every branch, made only when a tree carries one; a failed read leaves every count 0.
+  const upstreamAhead = listing.some((w) => !w.bare && w.branch !== null)
+    ? parseUpstreamAhead((await read('upstream-track', ['for-each-ref', '--format=%(refname)%00%(upstream:track)', 'refs/heads'])) ?? '')
+    : new Map<string, number>();
   const worktrees: GitWorktreeRow[] = [];
   for (const [index, w] of listing.entries()) {
     const isBase = index === baseIndex;
     const isActive = resolvedPath(w.path, platform) === workspaceResolved;
     const tip = w.branch ?? w.head;
-    let row: GitWorktreeRow = { path: w.path, branch: w.branch, head: w.head, isBase, isActive, ahead: null, behind: null, additions: null, deletions: null, files: null };
+    let row: GitWorktreeRow = { path: w.path, branch: w.branch, head: w.head, isBase, isActive, ahead: null, behind: null, upstreamAhead: (w.branch === null ? undefined : upstreamAhead.get(w.branch)) ?? 0, additions: null, deletions: null, files: null };
     if (w.bare) { worktrees.push(row); continue; }
     if (isBase) {
       const u = isActive ? own : await uncommittedOf('base', w.path);

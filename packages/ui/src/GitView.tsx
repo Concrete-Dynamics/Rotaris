@@ -113,22 +113,43 @@ export function effectivePicked(entries: readonly SessionListItemPayload[], pick
 }
 
 /**
+ * REQ-WORKSPACE-020's three sentences, each closed by its full stop. REQ-SHELL-042, which owns the item, leaves the wording to
+ * the implementation; REQ-GIT-122's backticked `Branch this workspace is on: <branch>` with `, N commit(s) ahead` is read as a
+ * template, since REQ-SHELL-044 forbids rendering `(s)` as written — the noun agrees with the count instead.
+ */
+function branchSentence(branch: string, ahead: number): string {
+  return `Branch this workspace is on: ${branch}${ahead > 0 ? `, ${ahead} commit${ahead === 1 ? '' : 's'} ahead` : ''}.`;
+}
+/** REQ-WORKSPACE-020: what the accessible description adds, and only it, while the item names an isolated worktree's branch. */
+export const WORKTREE_BRANCH_NOTE = 'It belongs to the isolated worktree the active run is using, not to the folder this window is open on.';
+
+/**
  * REQ-GIT-122/161: the status strip's branch item — the focused session's worktree branch when set, else the
  * workspace's checked-out branch with `↑<n>` when ahead; a detached checkout and a non-repository are each conveyed
  * in words distinct from a branch name and from each other; an unread repository takes the empty value. Those three
  * states follow REQ-GIT-161, where REQ-WORKSPACE-020 would render the item empty with no tooltip (OQ-193, open).
+ *
+ * REQ-WORKSPACE-020: a worktree branch is "rendered exactly as any other branch name is" — its ` ↑{n}` and its sentences are
+ * the base checkout's, the count read against THAT branch's upstream (the snapshot row's `upstreamAhead`, never the base
+ * checkout's `ahead` nor the row's base-branch `ahead`); only the accessible `description` adds that the branch is the
+ * isolated worktree's. Elsewhere the tooltip and the description are one and the same string. Until the acceptance repair
+ * (F8, 2026-10-03) the worktree branch had no marker and one sentence of its own for both, "Branch this session's worktree is
+ * on: {branch}".
  */
-export function branchStripItem(state: GitViewState | null, focusedWorktreeBranch: string | null): { text: string; suffix?: string; title: string; state: 'branch' | 'detached' | 'none' | 'unknown' } {
-  if (focusedWorktreeBranch !== null) return { text: focusedWorktreeBranch, title: `Branch this session's worktree is on: ${focusedWorktreeBranch}`, state: 'branch' };
-  if (state === null) return { text: '—', title: 'Branch this workspace is on: not read yet', state: 'unknown' };
-  if (!state.isRepository) return { text: state.gitAvailable ? 'no git repository' : 'no git', title: state.gitAvailable ? 'This folder is not a Git repository.' : 'Git is not installed or not on PATH.', state: 'none' };
-  if (state.detached) return { text: 'detached HEAD', title: 'This workspace is on no branch (detached HEAD).', state: 'detached' };
-  const branch = state.branch ?? '—';
+export function branchStripItem(state: GitViewState | null, focusedWorktreeBranch: string | null): { text: string; suffix?: string; title: string; description: string; state: 'branch' | 'detached' | 'none' | 'unknown' } {
   // REQ-WORKSPACE-149 rule 2 shortens the branch NAME; the ` ↑{n}` marker is drawn after it, whole (`suffix`).
-  // REQ-WORKSPACE-020's three sentences, each closed by its full stop. REQ-SHELL-042, which owns the item, leaves the wording to
-  // the implementation; REQ-GIT-122's backticked `Branch this workspace is on: <branch>` with `, N commit(s) ahead` is read as
-  // a template, since REQ-SHELL-044 forbids rendering `(s)` as written — the noun agrees with the count instead.
-  return { text: branch, ...(state.ahead > 0 ? { suffix: ` ↑${state.ahead}` } : {}), title: `Branch this workspace is on: ${branch}${state.ahead > 0 ? `, ${state.ahead} commit${state.ahead === 1 ? '' : 's'} ahead` : ''}.`, state: 'branch' };
+  const named = (branch: string, ahead: number) => ({ text: branch, ...(ahead > 0 ? { suffix: ` ↑${ahead}` } : {}), title: branchSentence(branch, ahead), state: 'branch' as const });
+  if (focusedWorktreeBranch !== null) {
+    // Before the first read, or with the tree not listed, the comparison cannot be made: 0 (REQ-WORKSPACE-029).
+    const ahead = state?.worktrees.find((w) => w.branch === focusedWorktreeBranch)?.upstreamAhead ?? 0;
+    const item = named(focusedWorktreeBranch, ahead);
+    return { ...item, description: `${item.title} ${WORKTREE_BRANCH_NOTE}` };
+  }
+  const plain = <T extends { title: string }>(item: T) => ({ ...item, description: item.title });
+  if (state === null) return plain({ text: '—', title: 'Branch this workspace is on: not read yet', state: 'unknown' as const });
+  if (!state.isRepository) return plain({ text: state.gitAvailable ? 'no git repository' : 'no git', title: state.gitAvailable ? 'This folder is not a Git repository.' : 'Git is not installed or not on PATH.', state: 'none' as const });
+  if (state.detached) return plain({ text: 'detached HEAD', title: 'This workspace is on no branch (detached HEAD).', state: 'detached' as const });
+  return plain(named(state.branch ?? '—', state.ahead));
 }
 
 const NO_ROWS: readonly GitWorktreeRow[] = [];

@@ -122,6 +122,7 @@ import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { refusalIssues } from './lib/refusal-issues.mjs';
+import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
@@ -1445,6 +1446,12 @@ if (wanted.includes('requirements')) {
   const worktrees = git('worktree', 'list', '--porcelain').split('\n').filter((l) => l.startsWith('worktree ')).map((l) => l.slice(9).trim());
   check(worktrees.length >= 2, 'the run was confined to a worktree of its own', worktrees.map((w) => w.split(/[\\/]/).pop()).join(', '));
   const unit = worktrees.slice(1).find((w) => existsSync(join(w, 'src', 'todos.js')));
+  // REQ-MCP-034: the record naming a worktree is not the run being confined to it — the code-intelligence server must have
+  // been LAUNCHED against that tree's root, every time (finding D1 at 1763f7f: the record named the worktree and the server
+  // answered from the main checkout). Read from the run host's launch lines, which name the project the launch carried.
+  const realOf = (p) => { try { return realpathSync(p); } catch { return p; } };
+  const bound = unit === undefined ? { ok: false, detail: 'no worktree holds the unit\'s src/todos.js' } : bindingVerdict(log, unit, realOf);
+  check(bound.ok, 'the code-intelligence server was launched against the worktree\'s root, never the workspace the board sits in (REQ-MCP-034)', bound.detail);
   const source = unit === undefined ? '' : readFileSync(join(unit, 'src', 'todos.js'), 'utf8');
   const suiteText = unit === undefined ? '' : readFileSync(join(unit, 'src', 'todos.test.js'), 'utf8');
   check(/export (function|const) completedCount/.test(source), 'completedCount is exported from the worktree\'s src/todos.js');

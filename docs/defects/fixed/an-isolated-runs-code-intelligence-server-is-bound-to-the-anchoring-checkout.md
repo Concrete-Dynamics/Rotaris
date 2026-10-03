@@ -41,3 +41,41 @@ confined to a worktree of its own" passed on the session's worktree record alone
 - `packages/engine/src/sessions.ts`: `baseCtx` carries the worktree as `effectiveRoot` beside `workspaceRoot`.
 - `apps/desktop/scripts/live-run.mjs`: the requirements check "the run was confined to a worktree of its own".
 - `docs/architecture/adr/0034-mcp-connections-and-configuration-resolution.md`: the Part T report that stated the gap.
+
+## Outcome (2026-10-03, fin12, repaired)
+
+The configuration stays loaded per workspace and is bound at the hand-off. `mcpConfigurationForExecutionRoot`
+(`packages/config/src/mcp/index.ts`) gives a run whose execution root is a worktree the view in which every server
+REQ-MCP-034's stage bound carries the tree's root: its configured arguments carry neither project-selection option, its
+resolved arguments carry the launch subcommand and end with the project-path option and the workspace root, and that last
+argument becomes the tree's root, in the resolved arguments and in the description launch and discovery read. A configured
+selection, every other server, `cwd` and REQ-MCP-035's fill-in are left as they were (OQ-194). The run host's
+`configurationForExecutionRoot` (`apps/desktop/src/run-host/mcp.ts`) is read by the tool port's `ready()`
+(`ctx.effectiveRoot ?? ctx.workspaceRoot`, discovery and surface memoised on that root) and by `session.start`'s discovery
+ahead of the run (`dispatch.ts`). The start-session dialog's worktree, the board's unit trees and a continuation (through
+the session row's binding) all reach the port as `effectiveRoot`, so every isolated run takes the one path. The discovery
+line and the connected line now name the project the launched description carried (`mcp: discovery of 'code_intelligence'
+(project <root>) listed …`, `… hook code_intelligence:ok, project <root>) in … ms`; `SessionDeps.launchNote` in
+`packages/mcp/src/sessions.ts`), since the transport's launch line is written at debug.
+
+Pinned by "REQ-MCP-034: the code-intelligence binding of a run in an isolated working tree" in
+`apps/desktop/src/run-host/tools.test.ts` (the command line every MCP call is handed ends with the project-path option and
+the worktree's root, the anchoring root absent; red before the repair with the workspace root in its place), by
+"REQ-MCP-034: the configuration a run in an isolated working tree launches from" in `packages/config/src/mcp/mcp.test.ts`,
+by two cases in `apps/desktop/src/run-host/mcp.test.ts` and one in `packages/mcp/src/mcp.test.ts`. Shown in the built app by
+`injection-proof`'s isolated launch, which now asserts the launch lines: red on a build of the code without the repair
+("isolated: REQ-MCP-034 — not every launch named <the worktree> — discovery: <the workspace>"), green after it, and the base
+launch naming the workspace (as root under Xvfb, Node 24, `--skip-build --skip-latency`, load 2.2 to 3.9 on 4 CPUs).
+
+The harness half: `live-run.mjs`'s requirements scenario now also checks "the code-intelligence server was launched against
+the worktree's root, never the workspace the board sits in (REQ-MCP-034)", reading every launch line of the server in the
+scenario's app log through `bindingVerdict` (`apps/desktop/scripts/lib/code-intelligence-binding.mjs`, four cases in its
+test, the first of them the run at 1763f7f's own lines, which name no project and are red). Not run live here (this plan runs
+no live scenario); the scenario that shows it is `live-run --only=requirements`.
+
+REQ-MCP-099's marker against a worktree, measured against the pinned runtime (serena-agent 1.7.0) in a scratch repository: the
+linked tree holds no marker (its directory is excluded the OQ-161 way and so never checked out); the runtime's first launch
+against the tree generates the tree's own project and registers it in the runtime's home, answers from the tree, and never
+falls back to the main checkout. It serves the tree's own memories, not the anchoring project's, and a memory written in the
+run stays in the tree: raised as OQ-195, not ruled here. The editing tools were not exercised against a language server (none
+is provisioned on this host); bound as above they act on the tree.

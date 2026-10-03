@@ -20,3 +20,23 @@ None contradicted: the relay is proof and capture harness, not product behaviour
 - `apps/desktop/src/main/capture/theme-proof.ts` — the theme proof's collection of renderer errors.
 
 Noticed 2026-10-03 by the autopsy of the live run at `1763f7f`; recorded before the repair.
+
+## Repaired 2026-10-03
+
+The three listeners now go through one relay, `onConsoleWarning` in `apps/desktop/src/main/capture/console-relay.ts`,
+which registers a single-parameter listener on the details event (Electron 44.1.1's `electron.d.ts` types the event's
+one argument as `Event<WebContentsConsoleMessageEventParams>` with `message`, `level`, `lineNumber` and `sourceId`, and
+marks the positional `level, message, line, sourceId` deprecated) and relays what `level >= 2` relayed before: the
+`warning` and `error` levels. The main window's capture log line, the persona window's and the theme proof's collected
+errors keep their wording.
+
+Evidence:
+
+- `apps/desktop/src/main/capture/console-relay.test.ts` — the relay registers one listener whose arity is 1 and relays
+  warnings and errors only; and no file under `apps/desktop/src` but the relay names `console-message`, which fails
+  against the unrepaired three files (it lists `main/capture/index.ts`, `main/capture/theme-proof.ts` and
+  `main/main-windows.ts`).
+- `pnpm transcript-proof --only=behaviour`, whose replica logs a renderer warning: against a build of the unrepaired
+  listeners `behaviour.log` carries the relayed `capture: renderer console: [replica] gap on S1200 …` line **and**
+  Electron's `'console-message' arguments are deprecated` line; repaired, the relayed line stands and the deprecation
+  line is gone. Both passed.

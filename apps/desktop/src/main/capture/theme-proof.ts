@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { millis } from '@rotaris/kernel';
 import { type CaptureHost, pause } from './host.js';
+import { onConsoleWarning } from './console-relay.js';
 
 /**
  * THE THEME PROOF's capture pass (`pnpm theme-proof`, IC-2) — verification only, and reached ONLY by a
@@ -16,9 +17,7 @@ import { type CaptureHost, pause } from './host.js';
 export function runThemeProof(host: CaptureHost, proofDir: string): void {
   mkdirSync(proofDir, { recursive: true });
   const rendererErrors: string[] = [];
-  host.win.webContents.on('console-message', (_event, level, message) => {
-    if (level >= 2) rendererErrors.push(message);
-  });
+  onConsoleWarning(host.win.webContents, ({ message }) => { rendererErrors.push(message); });
 
   host.clocks.timers.after(millis(900), async () => {
     const win = host.win;

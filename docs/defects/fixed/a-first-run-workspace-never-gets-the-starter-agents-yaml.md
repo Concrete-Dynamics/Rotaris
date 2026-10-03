@@ -82,7 +82,10 @@ moments.
 - **At the open.** The workspace service's `workspace.open` now bootstraps `<workspace>/.rotaris/agents.yaml` once the
   store is open and before it answers (`apps/desktop/src/workspace-service/open-bootstrap.ts`, `bootstrapAtOpen`). Main
   awaits that answer before `initialization.open`, so the starter is in place before initialization can record. An
-  existing file is left alone (REQ-CONFIG-026). A declined or failed write is logged as a warning and never refuses the
+  existing file is left alone (REQ-CONFIG-026). The open bootstraps whenever the file is absent, not only at a
+  workspace's very first open, so a file the user deletes comes back as the starter at the next open: this reads
+  REQ-CONFIG-025's "on first run" as every open that finds the file absent, and it is the only part of the repair that
+  rests on that reading (the marker path rests on REQ-WORKSPACE-040's "when no `agents.yaml` exists"). A declined or failed write is logged as a warning and never refuses the
   open: `replaceDocumentSync` throws rather than refusing when the parent cannot be created, so the helper catches that
   throw ([replace-document-sync-throws-when-the-parent-cannot-be-created.md](../replace-document-sync-throws-when-the-parent-cannot-be-created.md)).
 - **Before every initialization record.** `serviceMarkerWriter` (`apps/desktop/src/main/initialization.ts`) asks
@@ -127,6 +130,8 @@ recorded per run in the session scratchpad's `a13-slice-proof.r<N>.log`):
   green but had no code-intelligence bundle, so setup failed before the sign-in, as in the passing runs before
   acceptance.
 - `pnpm init-proof` passed its five scenarios on `f9365cd` (06:02 UTC, load 3.0).
+- The first execution is reported back in ADR-0064's "Seventeenth round (2026-10-03)" and has its row, of
+  2026-10-03, in [first-executions.md](../../architecture/first-executions.md).
 
 **Left as they were:** a workspace whose file already holds only `initialization:` keeps it. REQ-CONFIG-026 forbids
 the bootstrap to write over a non-blank file, so the starter does not come back for those workspaces. Recorded beside

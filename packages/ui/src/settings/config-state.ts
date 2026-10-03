@@ -205,6 +205,27 @@ export function rebasePending(previousSaved: PendingSettings, pending: PendingSe
   };
 }
 
+/**
+ * The screen's form: the last-saved values and the pending ones, held together so that one update moves both. A reload
+ * is rebased against the saved values the form holds at that moment — the result of the reload before it, however close
+ * behind that one arrives. The hook used to read the previous saved values from a ref an effect refreshed after render,
+ * so a second `config:changed` landing before that effect ran was rebased against the values from before the first and
+ * read the first's new values as edits (REQ-CONFIG-419; `docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`).
+ */
+export interface SettingsForm {
+  readonly saved: PendingSettings;
+  readonly pending: PendingSettings;
+}
+
+/**
+ * REQ-CONFIG-419/423/425: adopt a snapshot's values. A read or a save (`keepPending` false) repopulates both halves and
+ * leaves the form clean; a reload announced from elsewhere keeps the user's edits by `rebasePending`, against the saved
+ * half of the form it is handed, which is why the caller folds every adoption through one state update.
+ */
+export function adoptSnapshot(form: SettingsForm | null, fresh: PendingSettings, keepPending: boolean): SettingsForm {
+  return keepPending && form ? { saved: fresh, pending: rebasePending(form.saved, form.pending, fresh) } : { saved: fresh, pending: fresh };
+}
+
 /** REQ-CONFIG-280/335: dirty is a difference from the last saved values, never a setter call. */
 export function isDirty(saved: PendingSettings, pending: PendingSettings): boolean {
   return !sameValue(saved, pending);

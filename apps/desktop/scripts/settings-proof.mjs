@@ -45,6 +45,9 @@
  *                     announced back to this window, as a sign-in's is. With nothing edited the strip carries no
  *                     `unsaved settings` and the save bar stays saved; after a real edit, a second reload keeps the edit
  *                     and the flag (`docs/defects/fixed/a-sign-in-reload-marks-settings-unsaved-though-nothing-was-edited.md`).
+ *  11′. reload-last-write — the same workspace (REQ-CONFIG-419): two real writes of the circuit breaker (off, then on)
+ *                     whose announcements the capture hands the window in one tick leave the form clean with the breaker
+ *                     on (`docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`).
  *
  * The legal links and the licence bundle are exercised through the capture seam's scripted opener
  * (`ROTARIS_CAPTURE_OPEN_EXTERNAL`), which reports success or the platform refusal without launching a browser.
@@ -701,6 +704,37 @@ if (!r3.unsavedFlag || r3.status !== 'Unsaved changes' || r3.breaker) throw new 
 const rYaml = readFileSync(rConfig, 'utf8');
 if (!/memory_diagnostics_enabled: false/.test(rYaml) || /circuit_breaker/.test(rYaml)) throw new Error(`reload-clean: the file is not the switch's alone:\n${rYaml}`);
 results.reloadClean = { opened: r0, afterReloadNoEdit: r1, afterEdit: r2, afterReloadWithEdit: r3, fieldWrites };
+
+// ── 11′. Two reloads in one tick stay clean (REQ-CONFIG-419) ──
+// Launch 11 spaces its writes seconds apart, so the hook's saved state has always settled between them. Here the capture's
+// pair seam makes two real writes of the circuit breaker (off, then on again) and hands the window both announcements in
+// one tick: the unrepaired hook rebased the second against the saved state from before the first, kept the first's `off`
+// as an edit and read dirty (`docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`).
+const lastProbes = [STRIP_UNSAVED, '.save-bar__status', BREAKER_ON];
+const lastWrite = await launch('reload-last-write', rWorkspace, rLocal, rPreferences, {
+  ...openCategory('Runtime'),
+  ROTARIS_CAPTURE_PROBE_AT: [2000, 3400].flatMap((ms) => lastProbes.map((sel) => `${sel}@${ms}`)).join(';;'),
+  // 2400: the pair of writes, announced together.
+  ROTARIS_CAPTURE_CONFIG_PAIR_AT: '{"circuit_breaker":{"enabled":false}}>>{"circuit_breaker":{"enabled":true}}@2400',
+  ROTARIS_CAPTURE_PROBE: [...PROBES, ...lastProbes].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '4500',
+});
+const lastAt = (ms, selector) => JSON.parse(new RegExp(`probe-at ${ms} ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])`).exec(lastWrite.log)?.[1] ?? 'null');
+const lastReading = (ms) => {
+  const read = Object.fromEntries(lastProbes.map((sel) => [sel, lastAt(ms, sel)]));
+  const missing = lastProbes.filter((sel) => read[sel] === null);
+  if (missing.length > 0) throw new Error(`reload-last-write: the probes at ${ms} ms did not run: ${missing.join(', ')}`);
+  return { unsavedFlag: read[STRIP_UNSAVED].length > 0, status: read['.save-bar__status'][0]?.text ?? '', breaker: read[BREAKER_ON].length > 0 };
+};
+const pairLine = /capture: config-pair-at 2400 → (.*)$/m.exec(lastWrite.log)?.[1] ?? '';
+if (pairLine !== 'writes [true,true], 2 announcements delivered in one tick') throw new Error(`reload-last-write: the pair seam did not deliver two written announcements together: "${pairLine}" (see reload-last-write.log)`);
+const l0 = lastReading(2000);
+const l1 = lastReading(3400);
+if (l0.unsavedFlag || l0.status !== 'All changes saved' || !l0.breaker) throw new Error(`reload-last-write: the form did not open clean with the breaker on: ${JSON.stringify(l0)}`);
+if (l1.unsavedFlag || l1.status !== 'All changes saved' || !l1.breaker) throw new Error(`reload-last-write: two reloads in one tick marked the form dirty or left the first write's value on screen (REQ-CONFIG-419, REQ-SHELL-041): ${JSON.stringify(l1)}`);
+const lYaml = readFileSync(rConfig, 'utf8');
+if (!/enabled: true/.test(lYaml)) throw new Error(`reload-last-write: the file does not hold the second write's outcome:\n${lYaml}`);
+results.reloadLastWrite = { opened: l0, afterPairInOneTick: l1, pair: pairLine };
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 2));

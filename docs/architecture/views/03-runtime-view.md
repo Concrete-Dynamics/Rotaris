@@ -1447,7 +1447,11 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   service writes through one of the four writers and loads again; main announces `config:changed` to each main window
   and its persona and terminal windows (`configFamily`) with its own workspace's snapshot (`announceConfig`; since
   2026-10-03, before which every window took the written one; the same day's first form reached the main windows alone and
-  left a persona window's snapshot stale).
+  left a persona window's snapshot stale). The Settings screen adopts each announcement keeping its edits
+  (`adoptSnapshot` → `rebasePending`, `packages/ui/src/settings/config-state.ts`): a field the user has not changed takes
+  the file's new value, a changed one stays, rebased against the saved half of the one form state the hook holds, so two
+  announcements landing in one tick chain (since 2026-10-03, fin13: before, the previous saved values came from a ref an
+  effect refreshed after render, and the second was rebased against the values from before the first).
 - **Tier B** — at every run start the run host loads the files — layer 3, the discovery snapshot, folded first
   (REQ-CONFIG-034: an authenticated provider's models as entries keyed by qualified id with `auth_provider`, and its
   slot picks) — and overlays the screen's live state (`config.liveState`, handed over on every pending change), then

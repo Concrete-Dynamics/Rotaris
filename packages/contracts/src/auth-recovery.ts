@@ -35,8 +35,12 @@ export const AuthRecoveryPayloadSchema = z.object({
   /** REQ-NOTIFY-072: the model that failed, or null where the run did not record it — the dialog then names `active`. */
   failed: AuthRecoveryModelSchema.nullable(),
   active: AuthRecoveryModelSchema.nullable(),
-  /** REQ-NOTIFY-074: every configured model a restart can pin, unordered — the dialog orders and filters (`recoveryModelList`). */
-  models: z.array(AuthRecoveryModelSchema.extend({ key: z.string() })),
+  /**
+   * REQ-NOTIFY-074: every configured model a restart can pin, unordered — the dialog orders and filters (`recoveryModelList`).
+   * REQ-MONITOR-194: `excluded` marks a pair the session holds out of quota, which the dialog annotates with the reason and
+   * still offers (choosing it clears the exclusion, `Sessions.restartAfterAuthFailure`).
+   */
+  models: z.array(AuthRecoveryModelSchema.extend({ key: z.string(), excluded: z.literal(true).optional() })),
   /** REQ-NOTIFY-073: the provider's own error text, as the run reported it; the dialog collapses and truncates it. */
   error: z.string(),
   /** REQ-NOTIFY-076: the provider that failed and how it can be re-authenticated here. */

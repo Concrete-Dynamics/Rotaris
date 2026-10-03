@@ -5,6 +5,7 @@ import { markMotionStart } from './motion.js';
 import { COMPRESS_DESCRIPTION, COMPRESS_LABEL, COMPRESSING_LABEL, compressNow, useChatControls } from './slash/host.js';
 import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, Select as DesignSelect } from './design-system/index.js'; // Part AO
 import { ImprovementActivity } from './ImprovementActivity.js';
+import { annotatedModelOptions } from './model-options.js';
 import { useShellState } from './shell-state.js';
 
 /**
@@ -125,7 +126,8 @@ export function RunHeader({ runState, session, runActive, stepStartedAt, models,
               <DesignSearchableSelect className="input select chip-control__select" ariaLabel="Active run model" data-testid="run-model" value="" disabled={headerReason !== null}
                 title={headerReason ?? 'Switch the live run to another model from its next iteration.'} aria-describedby="run-controls-reason"
                 filterPlaceholder="Filter models…"
-                options={[{ value: '', label: 'Switch model…' }, ...models.map((m) => ({ value: m, label: m }))]}
+                /* REQ-MONITOR-194: a key the session holds out of quota is annotated, still choosable — the switch clears it. */
+                options={[{ value: '', label: 'Switch model…' }, ...annotatedModelOptions(models, session?.excludedModels ?? [])]}
                 onChange={(v) => { if (v !== '') void onSetModel(v).then((r) => { if (!r.ok) onError(r.reason); }); }} />
             </>
           )}

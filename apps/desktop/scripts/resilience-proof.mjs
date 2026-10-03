@@ -361,7 +361,9 @@ await scenarioRun('next-run-choice', async () => {
   await launch('next-run-choice', s3c, { ROTARIS_SCRIPT: 'fail:quota,answer', ROTARIS_CAPTURE_PROMPT: 'quota, then the next run on alpha', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
   const cleared = () => { const db = open(s3c); try { const row = session(db); return row === undefined ? [] : names(db, row.session_id).filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata)); } finally { db.close(); } };
   const iterations = () => { const db = open(s3c); try { return session(db)?.iterations_completed ?? 0; } finally { db.close(); } };
-  const r = await drivenLaunch('next-run-choice-resume', s3c, { ROTARIS_SCRIPT: 'answer,answer' }, async (d, step, signal) => {
+  // The relaunch's root continues after the steps the record says it took (the first launch's two): its third step holds
+  // the held prompt's call on beta for 8 s, while the run header's and the inspector's selectors are read.
+  const r = await drivenLaunch('next-run-choice-resume', s3c, { ROTARIS_SCRIPT: 'answer,answer,wait:8000,answer,answer' }, async (d, step, signal) => {
     await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
     // The user's route to a stored session (REQ-SHELL-126, REQ-SESSION-118): the title bar's Sessions, then the row's Open.
     await step('Sessions', d.click('.title-bar__sessions', { timeoutMs: 15_000 }));
@@ -370,27 +372,57 @@ await scenarioRun('next-run-choice', async () => {
     await step('the resumed transcript', until(() => d.eval(`[...document.querySelectorAll('.composer__input')].length > 0 && document.body.innerText.includes('quota, then the next run on alpha') && !document.querySelector('.session-browser')`), (v) => v === true, { timeoutMs: 60_000, what: 'the resumed session on screen', signal }));
     const chip = 'button[aria-label="Model for the next run"]';
     await step('the chip enabled', until(() => d.eval(`document.querySelector(${JSON.stringify(chip)})?.disabled === false`), (v) => v === true, { timeoutMs: 30_000, what: 'the model chip enabled', signal }));
+    // REQ-MONITOR-194 (the repair of the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota): each selector opened
+    // while alpha is held out of quota lists it with the reason, choosable. The rows as drawn, and a picture of each.
+    const optionRows = () => d.eval(`[...document.querySelectorAll('[role="option"]')].map((o) => ({ value: o.dataset.value ?? '', hint: o.querySelector('.chip-menu__hint')?.textContent ?? null, disabled: o.getAttribute('aria-disabled') === 'true' }))`);
+    const readOpen = async (label, trigger, picture) => {
+      await step(`${label} opened`, d.click(trigger, { timeoutMs: 15_000 }));
+      const drawn = await step(`${label}'s rows`, until(optionRows, (list) => Array.isArray(list) && list.some((o) => o.value === 'alpha'), { timeoutMs: 10_000, what: `${label}'s rows`, signal }));
+      await step(`${label} pictured`, d.screenshot(join(output, picture)));
+      await step(`${label} closed`, d.chord('Escape'));
+      return drawn;
+    };
+    const chipRows = await readOpen('the composer chip', chip, 'next-run-choice-chip.png');
+    // A run held on beta (alpha excluded, the pre-call move), so the run header's switch is live while it is read.
+    await step('Ctrl+L (held prompt)', d.chord('Ctrl+L'));
+    await step('the caret in the composer (held prompt)', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the held prompt', d.type('a prompt held on beta while the selectors are read', { enter: true }));
+    const header = 'button[aria-label="Active run model"]';
+    await step('the run header\'s switch live', until(() => d.eval(`document.querySelector(${JSON.stringify(header)})?.disabled === false`), (v) => v === true, { timeoutMs: 30_000, what: 'the run header\'s model switch enabled', signal }));
+    const headerRows = await readOpen('the run header\'s switch', header, 'next-run-choice-run-header.png');
+    // The inspector's Model field is writable for the run-level agent of a live run; read it where it is drawn writable.
+    const inspector = '[data-testid="inspector-model"]';
+    const inspectorLive = await step('the inspector\'s Model field', d.eval(`(() => { const b = document.querySelector(${JSON.stringify(inspector)}); return b === null ? 'absent' : b.disabled ? 'disabled' : 'live'; })()`));
+    const inspectorRows = inspectorLive === 'live' ? await readOpen('the inspector\'s Model field', inspector, 'next-run-choice-inspector.png') : null;
+    await step('the held run settled', until(iterations, (n) => n >= 2, { timeoutMs: 60_000, what: 'the held prompt completing', signal }));
+    await step('the chip enabled again', until(() => d.eval(`document.querySelector(${JSON.stringify(chip)})?.disabled === false`), (v) => v === true, { timeoutMs: 30_000, what: 'the model chip enabled', signal }));
     await step('the chip → beta', choose(d, chip, 'beta'));
     const choice = await step('the chip → alpha', choose(d, chip, 'alpha'));
     const entries = await step('the exclusion cleared', until(cleared, (list) => list.some((m) => m.cleared === true && m.model === 'alpha'), { timeoutMs: 30_000, what: "alpha's exclusion cleared", signal }));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
     await step('the prompt', d.type('a further prompt on alpha', { enter: true }));
-    await step('the further run settled', until(iterations, (n) => n >= 2, { timeoutMs: 90_000, what: 'the second iteration completing', signal }));
-    return { choice, entries };
+    await step('the further run settled', until(iterations, (n) => n >= 3, { timeoutMs: 90_000, what: 'the third iteration completing', signal }));
+    return { choice, entries, chipRows, headerRows, inspectorLive, inspectorRows };
   });
   const db = open(s3c);
   const row = session(db);
   const list = names(db, row.session_id);
   db.close();
-  expect(row.execution_status === 'completed' && row.iterations_completed >= 2, `the further prompt did not complete: ${JSON.stringify(row)}`);
+  expect(row.execution_status === 'completed' && row.iterations_completed >= 3, `the further prompt did not complete: ${JSON.stringify(row)}`);
+  // REQ-MONITOR-194: alpha listed in each selector read, with the reason, never greyed out; beta plain.
+  const annotated = (list) => Array.isArray(list) && list.some((o) => o.value === 'alpha' && o.hint === 'provider reported insufficient quota in this session' && !o.disabled) && list.some((o) => o.value === 'beta' && o.hint === null);
+  expect(annotated(r.value.chipRows), `the composer chip did not annotate alpha: ${JSON.stringify(r.value.chipRows)}`);
+  expect(annotated(r.value.headerRows), `the run header's switch did not annotate alpha: ${JSON.stringify(r.value.headerRows)}`);
+  expect(r.value.inspectorRows === null || annotated(r.value.inspectorRows), `the inspector's Model field did not annotate alpha: ${JSON.stringify(r.value.inspectorRows)}`);
   const exhausted = list.filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata));
   expect(exhausted.length === 2 && exhausted[0].cleared === undefined && exhausted[1].cleared === true && exhausted[1].model === 'alpha' && exhausted[1].model_key === 'alpha', `the choice did not clear alpha's exclusion: ${JSON.stringify(exhausted)}`);
+  // The held prompt ran on beta (alpha excluded, moved before calling); the further prompt, after the choice, on alpha.
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
-  expect(calls.length > 0 && calls.every((c) => c.model === 'scripted/alpha'), `the further prompt did not run on alpha: ${JSON.stringify(calls)}`);
+  expect(calls.map((c) => c.model).join(',') === 'scripted/beta,scripted/alpha', `the held prompt did not run on beta and the further one on alpha: ${JSON.stringify(calls)}`);
   const moves = list.filter((t) => t.name === 'quota_fallback_model').map((t) => JSON.parse(t.metadata));
-  expect(moves.length === 1 && moves[0].pre_call === undefined, `the further prompt moved off alpha: ${JSON.stringify(moves)}`);
-  results.nextRunChoice = { status: row.execution_status, exhausted, calls, png: r.png, elapsedMs: r.elapsedMs };
+  expect(moves.length === 2 && moves[0].pre_call === undefined && moves[1].pre_call === true, `the further prompt moved off alpha: ${JSON.stringify(moves)}`);
+  results.nextRunChoice = { status: row.execution_status, exhausted, calls, chipRows: r.value.chipRows, headerRows: r.value.headerRows, inspector: r.value.inspectorLive, inspectorRows: r.value.inspectorRows, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 // 3b. OQ-177 (REQ-MONITOR-142 over REQ-ORCH-091 b): after the same-tier move the user switches the entry model back to the

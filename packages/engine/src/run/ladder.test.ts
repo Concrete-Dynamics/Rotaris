@@ -1390,6 +1390,48 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   });
 
   /*
+   * The repair of the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota (REQ-MONITOR-194: "listed there rather than
+   * hidden, annotated with the reason", from any model selector). The record carries the session's excluded keys outside a
+   * wait (`excludedModels`): from a live run's memory, and for a session at rest from the memory its timeline rehydrates — so
+   * the run header, the inspector and the composer's chip annotate them — and the recovery dialog's facts mark them. Before,
+   * the keys reached the record only inside `wait`.
+   */
+  describe('REQ-MONITOR-194: the record names the keys the session holds out of quota, in a run, after it and after a reload', () => {
+    const catalogue = () => [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+
+    it('during and after the run, in a fresh process at rest, and not once a selector chose the key', async () => {
+      const { sessions, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer(`answer ${turn}`)), { catalogue: catalogue(), restingCatalogue: catalogue() });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // No wait was shown (the same-tier move), yet a1 is named; before, only `wait.excluded` carried it.
+      expect(pub.snapshots.some((p) => p.wait !== null)).toBe(false);
+      expect(pub.snapshots.at(-1)!.excludedModels).toEqual(['a1']);
+      // A fresh process opening the session at rest reads it from the timeline, through the catalogue port alone.
+      const fresh = sessionsWith(() => answer('fresh'), { catalogue: catalogue(), restingCatalogue: catalogue() });
+      const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      const configuresBefore = fresh.configures();
+      expect(fresh.sessions.attach(sid)).toBe(true);
+      expect(fresh.pub.snapshots.at(-1)!.excludedModels).toEqual(['a1']);
+      expect(fresh.configures()).toBe(configuresBefore);
+      // The composer's choice of a1 at rest clears it, and the record says so at its next read.
+      expect(fresh.sessions.chooseNextModel(sid, 'a1')).toEqual({ ok: true, value: { cleared: true } });
+      expect(fresh.sessions.attach(sid)).toBe(true);
+      expect(fresh.pub.snapshots.at(-1)!.excludedModels).toEqual([]);
+    });
+
+    it('the recovery dialog\'s facts mark the pair the session holds out of quota', async () => {
+      const unauthorized = () => failing(modelError({ code: 'http', status: 401, headline: 'Unauthorized', providerMessage: 'Incorrect API key provided', transient: false }));
+      const { sessions } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : unauthorized()), { catalogue: catalogue() });
+      const sid = (sessions.start(dal, 'C:/ws', 'the first prompt') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      const facts = sessions.authRecoveryFacts(sid);
+      if (!facts.ok) throw new Error(facts.error.reason);
+      expect(facts.value.models).toEqual([{ key: 'a1', provider: 'a', model: 'a1', excluded: true }, { key: 'b1', provider: 'b', model: 'b1' }]);
+    });
+  });
+
+  /*
    * The repair of a-wait-choice-persists-the-override-for-the-shown-wait-alone (REQ-ORCH-091 d: "persists the override in session
    * state for the rest of the session"; REQ-SESSION-026/196: across reloads). Two agents parked at once on different pairs —
    * the root on a1 and a child of a role configured on b1 — and one choice resolves both: every waiting pair the memory

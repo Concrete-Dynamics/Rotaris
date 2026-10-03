@@ -134,7 +134,7 @@ export function rowProofSession(): SessionRecord {
     backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
     usageHistory: [], costLabel: { text: 'cost unknown', qualifier: 'unknown' },
     toolCalls: { total: 4, agents: 1, byTool: [{ tool: 'read_file', count: 2 }, { tool: 'terminal', count: 2 }] },
-    worktreeBranch: null, wait: null, modelOverrides: [], compression: null, entryContext: { used: 12_000, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryStalledSeconds: null, entryToolCalls: null, compressions: 0,
+    worktreeBranch: null, wait: null, modelOverrides: [], excludedModels: [], compression: null, entryContext: { used: 12_000, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryStalledSeconds: null, entryToolCalls: null, compressions: 0,
   };
 }
 

@@ -722,7 +722,14 @@ export class Run {
    */
   get currentWait(): (WaitState & { readonly excluded: string[] }) | null {
     const wait = this.waits.current();
-    return wait === null ? null : { ...wait, excluded: excludedModelKeys(this.catalogue, this.memory.exhausted) };
+    return wait === null ? null : { ...wait, excluded: this.excludedModelKeys };
+  }
+  /**
+   * REQ-MONITOR-194: the configured model keys the session holds out of quota, for the record's `excludedModels` — read
+   * from the memory at every snapshot, inside a wait and outside one, so every model selector can annotate them.
+   */
+  get excludedModelKeys(): string[] {
+    return excludedModelKeys(this.catalogue, this.memory.exhausted);
   }
   /**
    * REQ-MONITOR-085 (Part AH): the compression in flight, published with the snapshot exactly as `wait` is —

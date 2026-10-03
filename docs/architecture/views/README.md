@@ -43,7 +43,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-10-02**
+## Last reconciled with the code: **2026-10-03**
+
+**Every model selector annotates a pair held out of quota, and every one's choice clears it (REQ-MONITOR-194,
+REQ-MONITOR-146, REQ-NOTIFY-074; fin10).** The record gains `excludedModels` (the live run's `excludedModelKeys`, else a
+resting read's, now taken where the timeline holds a `model_exhausted` entry too), which the run header, the inspector and the
+composer's chip annotate through `annotatedModelOptions`; the recovery dialog's facts mark such a pair `excluded`. A new
+renderer command, `session.chooseNextModel`, carries the composer's next-run choice to the engine after its configuration
+write, and `Sessions.chooseNextModel` clears the pair's exclusion; the recovery dialog's restart clears beside its pin. The
+**process view**'s command list and `SessionRecord` sentence and the **runtime view**'s ladder paragraph say so. No package,
+edge, process, channel or store column changed; one command was added.
 
 **The ladder reads the exclusion before every call, a wait choice persists every waiting pair's override, and compression
 follows the agent's cell (REQ-MONITOR-194, REQ-ORCH-091, REQ-SESSION-026, REQ-MONITOR-078/080; fin10).** `resilientStep` reads

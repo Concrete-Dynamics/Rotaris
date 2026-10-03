@@ -74,4 +74,4 @@ already were); its accessible name had been the two run together ("alphaprovider
 
 Recorded beside it: the run header's and the inspector's model selectors and the composer's next-run chip annotate no
 excluded pair either, which REQ-MONITOR-194 asks of "any model selector"
-([the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md](../the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md)).
+([the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md](the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md)).

@@ -3,7 +3,7 @@
 REQ-MONITOR-194 lets a user choose a pair recorded out of quota "explicitly, from any model selector or from the quota-wait
 decision surface", and says "it must be listed there rather than hidden, annotated with the reason that the provider
 reported insufficient quota for it in this session". Since 2026-10-02 the quota-wait header's chooser does
-([the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md](fixed/the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md)),
+([the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md](the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md)),
 reading the record's `wait.excluded`. The run header's "Switch model…" (`RunHeader.tsx`), the inspector's Model field
 (`Inspector.tsx`, which lists REQ-MONITOR-067's withheld models with their reason but not these) and the composer's
 next-run model chip (`WorkspaceView.tsx`) list every configured key with no annotation. The excluded pairs reach the record
@@ -18,6 +18,29 @@ authentication recovery dialog's model list (REQ-NOTIFY-074, `packages/ui/src/Au
 window and reads its payload, not the session record, so the excluded pairs have to reach it on the payload. The reading
 "from any model selector" is spec resolution 21's too (`docs/spec/resolutions/02-run-monitoring-steering.md`), so it binds
 all four.
+
+## Outcome — repaired 2026-10-03 (fin10, quota-exclusions-and-choices, task 2)
+
+- **The record** carries the session's excluded keys outside a wait: `SessionRecord.excludedModels`
+  (`packages/contracts/src/channels.ts`), from the live run's memory (`Run.excludedModelKeys`, which `currentWait` now reads
+  too) or, for a session no run of this process has started, from the memory its timeline rehydrates through the
+  `restingCatalogue` read (`Sessions.restingReadOf`, whose condition now takes a `model_exhausted` entry as well as a
+  `model_override`). An explicit choice that clears a pair (the first note of this task) drops it at the next read.
+- **The four selectors** annotate it, still choosable, through one helper beside the wait header's
+  (`annotatedModelOptions` and `EXCLUDED_MODEL_HINT`, moved to `packages/ui/src/model-options.ts`): the run header's Switch
+  model, the inspector's Model field (beside REQ-MONITOR-067's withheld models, which stay unavailable) and the composer's
+  next-run chip read `excludedModels`; the recovery dialog's list reads `excluded: true` on its payload's models
+  (`Sessions.authRecoveryFacts`, the protocol's `session.authRecovery` reply and `AuthRecoveryPayloadSchema`), writes the
+  reason beside the pair and names the option by its label, described by the reason.
+- Pinned in `packages/engine/src/run/ladder.test.ts` ("REQ-MONITOR-194: the record names the keys the session holds out of
+  quota, in a run, after it and after a reload", two cases, red with the reading disabled: during and after a run with no
+  wait shown, in a fresh process at rest through the catalogue port alone, gone after the composer's choice; the dialog's
+  facts) and `packages/ui/src/excluded-model-selectors.test.ts` (each selector's rows, red on the surfaces before).
+- Shown in the built app by `resilience-proof`'s driven `next-run-choice` launch, which opens each selector while alpha is
+  held out of quota and reads its rows: the composer's chip at rest, the run header's switch and the inspector's Model field
+  during a run held on beta, each listing alpha with "provider reported insufficient quota in this session", not greyed out
+  (`next-run-choice-chip.png`, `-run-header.png`, `-inspector.png`). The recovery dialog's list is pinned by the unit test
+  alone: no launch here opens that dialog with a pair held out of quota.
 
 ## Specs
 

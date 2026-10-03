@@ -9,6 +9,7 @@ import {
   type HistoryWalk, type PauseScope, type RunState,
 } from './composer.js';
 import { RunHeader } from './RunHeader.js';
+import { annotatedModelOptions } from './model-options.js';
 import { NoticeBanner } from './Notice.js';
 import { useCommandContext } from './AppShell.js';
 import { ClearTranscriptControl } from './slash/controls.js'; // Part AO
@@ -431,9 +432,6 @@ export function waitHeaderText(wait: NonNullable<SessionRecord['wait']>, nowMs: 
   return { headline, timing: `Resumes automatically in ${formatRemaining(remainingS)}.`, remainingS };
 }
 
-/** REQ-MONITOR-194: the reason an excluded pair is annotated with — "the provider reported insufficient quota for it in this session". */
-export const EXCLUDED_MODEL_HINT = 'provider reported insufficient quota in this session';
-
 /**
  * REQ-MONITOR-194 / REQ-MONITOR-303: the change-model list of the wait header. Every configured key, as the selector has
  * always listed them (which list the picker offers — REQ-MONITOR-193's same-tier candidates or REQ-NOTIFY-074's — is an
@@ -443,7 +441,7 @@ export const EXCLUDED_MODEL_HINT = 'provider reported insufficient quota in this
  * `ResilienceMemory.clearExhausted`; in a quota wait on that very pair, a retry on it).
  */
 export function waitModelOptions(models: readonly string[], excluded: readonly string[]): SearchableOption[] {
-  return [{ value: '', label: 'Choose a model…' }, ...models.map((m) => (excluded.includes(m) ? { value: m, label: m, hint: EXCLUDED_MODEL_HINT } : { value: m, label: m }))];
+  return [{ value: '', label: 'Choose a model…' }, ...annotatedModelOptions(models, excluded)];
 }
 
 /**
@@ -1540,7 +1538,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
                 disabled={!modelsLoaded || chipReason !== null}
                 title={stripNarrow ? stripIconTitle('Model for the next run', entry?.model && models.includes(entry.model) ? entry.model : modelChipLabel(modelsLoaded, models, entry?.model ?? null), !modelsLoaded ? 'Model options are still loading.' : chipReason) : modelsLoaded ? chipReason ?? 'Chosen for the next run.' : 'Model options are still loading.'} aria-describedby="chip-model-reason"
                 filterPlaceholder="Filter models…"
-                options={[{ value: '', label: '—' }, ...models.map((m) => ({ value: m, label: m }))]}                onChange={(v) => { if (v !== '' && attachments.length > 0 && !imageInputModels.includes(v)) { setError(`${v} does not declare image input support. Remove the images before selecting it.`); return; } if (v !== '') void onSetNextModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}
+                /* REQ-MONITOR-194: a key the session holds out of quota is annotated, still choosable — the choice clears it. */
+                options={[{ value: '', label: '—' }, ...annotatedModelOptions(models, session?.excludedModels ?? [])]}                onChange={(v) => { if (v !== '' && attachments.length > 0 && !imageInputModels.includes(v)) { setError(`${v} does not declare image input support. Remove the images before selecting it.`); return; } if (v !== '') void onSetNextModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}
                 strip={{ icon: 'ph-cpu', iconOnly: stripNarrow ? true : undefined }} />
             </ChipShell>
           )}

@@ -471,7 +471,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
     kind: z.literal('session.authRecovery'), sessionId: z.string(),
     failed: z.object({ key: z.string().nullable(), provider: z.string(), model: z.string() }).nullable(),
     active: z.object({ key: z.string().nullable(), provider: z.string(), model: z.string() }).nullable(),
-    models: z.array(z.object({ key: z.string(), provider: z.string(), model: z.string() })),
+    models: z.array(z.object({ key: z.string(), provider: z.string(), model: z.string(), excluded: z.literal(true).optional() })),
     lastPrompt: z.boolean(),
   }),
   /** REQ-NOTIFY-074/076: the restart has begun; `pinned` names the pair that failed and the model now pinned, null after a re-authentication. */

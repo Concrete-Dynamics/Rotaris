@@ -62,7 +62,10 @@ Pinned by "REQ-MCP-034: the code-intelligence binding of a run in an isolated wo
 `apps/desktop/src/run-host/tools.test.ts` (the command line every MCP call is handed ends with the project-path option and
 the worktree's root, the anchoring root absent; red before the repair with the workspace root in its place), by
 "REQ-MCP-034: the configuration a run in an isolated working tree launches from" in `packages/config/src/mcp/mcp.test.ts`,
-by two cases in `apps/desktop/src/run-host/mcp.test.ts` and one in `packages/mcp/src/mcp.test.ts`. Shown in the built app by
+by two cases in `apps/desktop/src/run-host/mcp.test.ts` and one in `packages/mcp/src/mcp.test.ts`, and (added at the
+bundle's first repair round) by "session.start discovers ahead of the run against the root the run executes in (REQ-MCP-034,
+REQ-MCP-050)" in `apps/desktop/src/run-host/dispatch.test.ts` (red on the dispatch hop before the repair, the workspace's root
+handed to discovery). Shown in the built app by
 `injection-proof`'s isolated launch, which now asserts the launch lines: red on a build of the code without the repair
 ("isolated: REQ-MCP-034 — not every launch named <the worktree> — discovery: <the workspace>"), green after it, and the base
 launch naming the workspace (as root under Xvfb, Node 24, `--skip-build --skip-latency`, load 2.2 to 3.9 on 4 CPUs).

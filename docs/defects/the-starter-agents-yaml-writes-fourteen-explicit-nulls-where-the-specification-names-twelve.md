@@ -13,7 +13,7 @@ it does not govern the starter's content. Since both keys are replace-if-not-nul
 null overrides nothing, so the extra lines have no effect at runtime. The gap is conformance to "exactly".
 
 Noticed 2026-10-03 on branch `finacc-accept1-3`, reading the starter the repaired open wrote in `slice-proof`'s scratch
-workspace (`a-first-run-workspace-never-gets-the-starter-agents-yaml.md`). Recorded, not repaired. Either the two lines
+workspace ([a-first-run-workspace-never-gets-the-starter-agents-yaml.md](fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md)). Recorded, not repaired. Either the two lines
 come out, or the owner extends the starter to carry the retrospective slot, which would be a directive naming
 REQ-CONFIG-025 and REQ-WORKSPACE-038. Choosing between them is the owner's.
 

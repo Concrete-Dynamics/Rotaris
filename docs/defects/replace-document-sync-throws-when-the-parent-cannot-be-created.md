@@ -11,7 +11,7 @@ the configuration writers, and `PreferenceStore`'s save (`packages/platform/src/
 service a throw inside `handle` becomes the generic `refused {code: 'request.failed', headline: <the error>}` rather than
 the configuration refusal REQ-CONFIG-028 describes (naming the path and what prevented the write).
 
-Noticed 2026-10-03 while repairing `a-first-run-workspace-never-gets-the-starter-agents-yaml.md` (branch
+Noticed 2026-10-03 while repairing [a-first-run-workspace-never-gets-the-starter-agents-yaml.md](fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md) (branch
 `finacc-accept1-3`): its test put a regular file at `<workspace>/.rotaris` and `bootstrapConfigFile` threw `EEXIST`. The
 repair's `bootstrapAtOpen` catches the throw so the open is never refused for it; the primitive itself is not changed
 here.

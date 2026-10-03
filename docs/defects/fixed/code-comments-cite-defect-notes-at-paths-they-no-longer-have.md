@@ -4,7 +4,7 @@ Comments in product code, tests and proof scripts cite defect notes by their pat
 been repaired and moved to `docs/defects/fixed/` (or were never at the cited path), so the pointers are dead.
 `tools/check-record-links.mjs` reads the record's Markdown links only, so nothing catches a path in a `.ts`, `.tsx` or `.mjs`
 file. Found on 2026-10-03 by plan fin12 while repairing the same shape in `live-run.mjs`
-([live-runs-notes-cite-defect-notes-at-paths-they-no-longer-have.md](fixed/live-runs-notes-cite-defect-notes-at-paths-they-no-longer-have.md)),
+([live-runs-notes-cite-defect-notes-at-paths-they-no-longer-have.md](live-runs-notes-cite-defect-notes-at-paths-they-no-longer-have.md)),
 by searching every `docs/defects/….md` path under `apps/`, `packages/` and `tools/` for one that does not exist; not repaired
 here (outside that task).
 
@@ -34,3 +34,30 @@ are not Markdown links, so the moves left them behind.
 - The files listed above, each at its line.
 - `tools/check-record-links.mjs`: the record's link check, which reads no code. A check over code comments (as
   `apps/desktop/scripts/lib/live-run-defect-citations.test.ts` does for `live-run.mjs` alone) would hold the rest.
+
+## Repaired 2026-10-03
+
+Every pointer the list names now names the note where it lives (plan fin13, at origin/main `8850ea2`, where the lines
+were as listed above give or take a line): the moved notes are cited under `docs/defects/fixed/`, and one more pointer
+of the same shape the list did not name, `packages/ui/src/shell.css` (`role-gutter-truncation-rule-is-inert.md`), moved
+with them. The two notes in neither directory were deleted when repaired, under the convention before
+`docs/defects/fixed/` existed; neither has a successor note. `group-header-claims-the-role-gutter.md` is recorded by the
+first-executions row of 2026-09-15 ("the repair of `group-header-claims-the-role-gutter.md` (a defect note, removed once
+repaired)"), so `Row.tsx`'s falsified-reason comment now points there; `settled-reasoning-row-counts-forever.md` is named
+nowhere else in the record, so `Row.tsx`'s reasoning-summary comment drops the path and says the note was removed once
+repaired.
+
+`tools/check-record-links.mjs` gained a second pass, run by `pnpm lint` with the first: every `docs/defects/….md` path
+in a source, style, markup or data file under `apps/`, `packages/` and `tools/` (skipping dot-directories, `node_modules`
+and build output) must name a note that exists, wherever it stands — comment, test, or a line a proof prints. Against the
+tree before the repointing it failed on nineteen paths, the list above plus `shell.css`.
+
+Evidence: `tools/check-record-links.test.ts`, three cases over a fixture, each red without the pass — a comment citing a
+note at its pre-`fixed/` path fails with its file, line and path and passes once it follows the note; a path is read in a
+printed string and a style sheet, and only a whole note name; the walk covers `apps/`, `packages/` and `tools/` and skips
+build output, installed packages and everything outside those roots. `node tools/check-record-links.mjs` on the repaired
+tree reports every path present.
+
+Not changed: prose in the record that names a note at a path it no longer has, inside inline code rather than a link (the
+first pass reads links only); recorded as its own note,
+[the-records-prose-names-defect-notes-at-paths-they-no-longer-have.md](../the-records-prose-names-defect-notes-at-paths-they-no-longer-have.md).

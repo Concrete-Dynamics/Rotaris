@@ -15,6 +15,13 @@
 // `AGENTS.md`, `CLAUDE.md`, and every `CONTEXT.md` under `packages/` (the
 // glossaries the context map names, nested ones included).
 //
+// A second pass reads the code. Comments, tests and proof scripts under `apps/`,
+// `packages/` and `tools/` cite defect notes by their repository path
+// (`docs/defects/….md`), which is not a Markdown link, so the first pass never
+// saw one; nineteen such pointers had outlived the move of their note on
+// 2026-10-03 (`docs/defects/fixed/code-comments-cite-defect-notes-at-paths-they-no-longer-have.md`).
+// Every such path must name a note that exists.
+//
 // Runs as part of `pnpm lint`. Reads the tree; costs no subprocess. The pure
 // parts are exported for the test beside this file.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -257,6 +264,83 @@ export function checkRecord(root) {
   return { problems, links, files: recordFiles(root).length };
 }
 
+// ------------------------------------------------------ the code's pointers
+
+/** The directories whose files the second pass reads, under the repository root. */
+export const CODE_ROOTS = ['apps', 'packages', 'tools'];
+/** What is built, installed or generated is not written by anyone, so it cites nothing. */
+const SKIPPED_DIRECTORIES = new Set(['node_modules', 'out', 'dist', 'coverage', 'release']);
+const CODE_FILE = /\.(?:[cm]?[jt]sx?|css|html|json|ya?ml)$/;
+
+/**
+ * Every repository path to a defect note in a text, with its 1-based line: `docs/defects/` followed by a
+ * file name ending `.md`, under `fixed/` or not. A path is read wherever it stands — comment, string or
+ * template — since a pointer printed by a proof is as much a pointer as one in a comment.
+ * @param {string} text
+ * @returns {{ line: number, target: string }[]}
+ */
+export function defectPointers(text) {
+  /** @type {{ line: number, target: string }[]} */
+  const pointers = [];
+  for (const match of text.matchAll(/docs\/defects\/[A-Za-z0-9_./-]*?\.md(?![A-Za-z0-9_-])/g)) {
+    pointers.push({ line: text.slice(0, match.index).split('\n').length, target: match[0] });
+  }
+  return pointers;
+}
+
+/**
+ * The code's files, under a repository root: every source, style, markup and data file in `CODE_ROOTS`,
+ * skipping dot-directories and what a build or an install writes.
+ * @param {string} root
+ * @returns {string[]}
+ */
+export function codeFiles(root) {
+  /** @type {string[]} */
+  const files = [];
+  /** @param {string} dir */
+  const walk = (dir) => {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir).sort()) {
+      if (entry.startsWith('.') || SKIPPED_DIRECTORIES.has(entry)) continue;
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (CODE_FILE.test(entry)) files.push(full);
+    }
+  };
+  for (const top of CODE_ROOTS) walk(join(root, top));
+  return files;
+}
+
+/**
+ * Check one code file's defect-note paths against the disk, resolved from the repository root.
+ * @param {string} root
+ * @param {string} file absolute path
+ * @param {{ read?: (path: string) => string, exists?: (path: string) => boolean }} [io]
+ * @returns {{ file: string, line: number, text: string, target: string, reason: string }[]}
+ */
+export function checkCodeFile(root, file, io = {}) {
+  const read = io.read ?? ((p) => readFileSync(p, 'utf8'));
+  const exists = io.exists ?? existsSync;
+  return defectPointers(read(file))
+    .filter((pointer) => !exists(join(root, pointer.target)))
+    .map((pointer) => ({ file, line: pointer.line, text: 'defect note', target: pointer.target, reason: 'no note at this path' }));
+}
+
+/**
+ * Run the second pass over a root; returns the problems and the number of pointers read.
+ * @param {string} root
+ */
+export function checkCode(root) {
+  const problems = [];
+  let pointers = 0;
+  const files = codeFiles(root);
+  for (const file of files) {
+    pointers += defectPointers(readFileSync(file, 'utf8')).length;
+    problems.push(...checkCodeFile(root, file));
+  }
+  return { problems, pointers, files: files.length };
+}
+
 /** @param {string} root @param {ReturnType<typeof checkFile>[number]} problem */
 export const formatProblem = (root, problem) =>
   `${relative(root, problem.file).split(sep).join('/')}:${problem.line}: [${problem.text}](${problem.target}) — ${problem.reason}`;
@@ -269,6 +353,7 @@ const invokedDirectly =
 if (invokedDirectly) {
   const root = fileURLToPath(new URL('..', import.meta.url));
   const { problems, links, files } = checkRecord(root);
+  const code = checkCode(root);
   if (problems.length > 0) {
     console.error(`check-record-links: ${problems.length} dangling link(s) in the record:`);
     for (const problem of problems) console.error(`  - ${formatProblem(root, problem)}`);
@@ -277,7 +362,15 @@ if (invokedDirectly) {
     console.error('reach an existing file or directory, and a `#fragment` must name a heading or an explicit anchor');
     console.error('in that file. A defect note moved to docs/defects/fixed/ takes every link to it along, in the');
     console.error('same commit (CLAUDE.md, "Defects noticed along the way").');
-    process.exit(1);
   }
-  console.log(`check-record-links: ${links} relative links in ${files} files, every one resolves`);
+  if (code.problems.length > 0) {
+    if (problems.length > 0) console.error('');
+    console.error(`check-record-links: ${code.problems.length} defect-note path(s) in the code name no note:`);
+    for (const problem of code.problems) console.error(`  - ${relative(root, problem.file).split(sep).join('/')}:${problem.line}: ${problem.target} — ${problem.reason}`);
+    console.error('');
+    console.error('A docs/defects/….md path in apps/, packages/ or tools/ — a comment, a test, a proof\'s printed line —');
+    console.error('must name a note that exists. A note moved to docs/defects/fixed/ takes these pointers along too.');
+  }
+  if (problems.length > 0 || code.problems.length > 0) process.exit(1);
+  console.log(`check-record-links: ${links} relative links in ${files} files, every one resolves; ${code.pointers} defect-note paths in ${code.files} code files, every one exists`);
 }

@@ -35,7 +35,9 @@ async function recordSetupSuccess(configDir: string, workspaceRoot: string): Pro
 const NULLS = ['default_summary_model', 'default_summary_model_thinking', 'large_model', 'large_model_thinking', 'medium_model', 'medium_model_thinking', 'small_model', 'small_model_thinking', 'fallback_model', 'fallback_model_thinking', 'improvement_collector_model', 'improvement_collector_model_thinking'];
 
 describe('the starter agents.yaml at the open (REQ-CONFIG-025, REQ-CONFIG-028)', () => {
-  it('the defect: initialization recording first leaves the file without the starter, and the sign-in bootstrap then reports exists', async () => {
+  // A reproduction, not a regression guard: it passes with or without the repair, since it drives the two writers in
+  // the defect's order by hand. The repair is pinned by the cases below and by the source-order cases further down.
+  it('reproduction of the defect\'s order: initialization recording first leaves the file without the starter, and the sign-in bootstrap then reports exists', async () => {
     const s = scope();
     await recordSetupSuccess(s.configDir, s.workspaceRoot);
     expect(readFileSync(s.agents, 'utf8')).not.toContain('default_persona');

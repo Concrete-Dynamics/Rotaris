@@ -2,15 +2,16 @@ import type { BrowserWindow } from 'electron';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type CommandOutcome, type CommandRequest, type ConfigSnapshot } from '@rotaris/contracts';
 import { canonicalPath, samePath } from '@rotaris/platform';
 import { millis } from '@rotaris/kernel';
-import { announceConfig } from '../config-broadcast.js';
+import { announceConfig, configFamily, type ConfigFamilyView } from '../config-broadcast.js';
 import { refusal, type CommandAt, type CommandContext, type CommandHandlers } from './context.js';
 
 /**
- * `config:changed` for one workspace's reloaded snapshot, to each main window as its own workspace reads (`announceConfig`):
- * the holders of `root` take `snapshot`, every other window its own workspace's snapshot read again from its service.
+ * `config:changed` for one workspace's reloaded snapshot, to each main window and its family (`configFamily`: its persona and
+ * terminal windows) as its own workspace reads (`announceConfig`): the holders of `root` take `snapshot`, every other family
+ * its own workspace's snapshot read again from its service.
  */
 export function configAnnouncer(
-  mainWindows: { ordered(): readonly { readonly win: BrowserWindow; readonly workspace: string }[] },
+  mainWindows: { ordered(): readonly (ConfigFamilyView<BrowserWindow> & { readonly workspace: string })[] },
   services: CommandContext['services'],
 ): (root: string, snapshot: ConfigSnapshot) => Promise<void> {
   const readOwn = async (workspace: string): Promise<ConfigSnapshot | null> => {
@@ -22,7 +23,7 @@ export function configAnnouncer(
   };
   return (root, snapshot) => announceConfig(root, snapshot, mainWindows.ordered().map((m) => ({
     workspace: m.workspace,
-    send: (s) => { if (!m.win.isDestroyed()) m.win.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: s }); },
+    send: (s) => { for (const win of configFamily(m)) if (!win.isDestroyed()) win.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: s }); },
   })), { samePath, readOwn });
 }
 

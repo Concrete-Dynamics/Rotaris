@@ -51,7 +51,8 @@ two thresholds; the run state, the theme's name, the child services and the repl
 file-access flag reads `runtime.allow_outside_workspace`. Two commands are new: `workspace.openFolder` (the path link,
 REQ-SHELL-040) and `workspace.usage` (the tokens and cost, relayed to the run host, which answers from the stored sessions).
 Since 2026-10-03 `● CB armed` follows the saved `circuit_breaker.enabled` from the snapshot (`stripCircuitBreakerArmed`), and
-`config:changed` carries each main window its own workspace's snapshot (`announceConfig`, `main/config-broadcast.ts`).
+`config:changed` carries each main window, and its persona and terminal windows (`configFamily`), its own workspace's
+snapshot (`announceConfig`, `main/config-broadcast.ts`).
 The **process view**'s command and run-host request lists, the **state ownership view**'s Settings row (the dirty flag the
 strip reads) and the **seams view** §8 (the status-strip item, rewritten) say so. No package, edge, process, channel or
 store column changed.

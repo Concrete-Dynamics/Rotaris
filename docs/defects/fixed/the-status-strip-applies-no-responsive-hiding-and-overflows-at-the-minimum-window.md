@@ -114,3 +114,20 @@ workspace-scoped`. The product's own `config.setField {circuit_breaker: {enabled
 true}}` sent from window A wrote A's `agents.yaml`; A's strip then read `redaction: always on | outside-workspace!` (no
 breaker flag) and B's was unchanged (`● CB armed | redaction: always on | workspace-scoped`). Setting `enabled: true` again
 from A brought `● CB armed` back in A; the opt-out written from B turned B's flag to `outside-workspace!`.
+
+**Second repair round, 2026-10-03 (the verifier's finding against the first).** The first form of the `config:changed`
+repair (5df1943) announced to the main windows alone (`mainWindows.ordered()`), where main had sent every window the
+snapshot before: a persona window, which reads it through `useConfigSnapshot('persona')` for its entry and run-level model
+(`entryOf`), its declared tools (REQ-MONITOR-060) and the compression threshold, was never sent it again and kept what it
+mounted with until it was reopened. The verifier drove it: a `config:changed` counter in the main window read one
+delivery, the persona window's none. Each main window's audience is now its family (`configFamily` in
+`apps/desktop/src/main/config-broadcast.ts`): the main window, its persona windows and its terminal window, each taking
+its owner's workspace's snapshot. Pinned by `config-broadcast.test.ts` ("configFamily — the windows that take one main
+window's config:changed") and `commands/config.test.ts` ("config.setField — a main window's persona and terminal windows
+repopulate with it", red on 5df1943). Shown with `pnpm app:drive` on 2026-10-03 at 01:01 UTC (load 1.62): a scripted run,
+`window.openPersona {persona: 'orchestrator', agentId: 'run'}`, a counter on `window.rotaris.onConfigChanged` in both
+windows, then `config.setField {runtime: {allow_outside_workspace: true}}` from the main window: each window received one
+snapshot reading `true`, and the write back to `false` reached the persona window too (`[true, false]`). ADR-0037's first
+execution and views 02 and 03 are amended in place beside their earlier sentences. Noticed alongside, not repaired: a
+persona window's own commands, its mount read of the configuration among them, answer for the active main window rather
+than its owner ([a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md](../a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md)).

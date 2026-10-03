@@ -216,7 +216,14 @@ the publishing path already serves without waiting.
 
 **Tier A** is the workspace service's `config.read`, `config.save` and `config.setField`, each followed by the
 load again inside the same request; the reply is the reloaded snapshot, main broadcasts it to every window, and
-the screen repopulates from it clean (REQ-CONFIG-261, REQ-CONFIG-419/425). **Tier B** is `overlayLiveState`
+the screen repopulates from it clean (REQ-CONFIG-261, REQ-CONFIG-419/425). *Amended 2026-10-03 (fin10): "broadcasts it
+to every window" no longer holds. With two main windows on two workspaces (REQ-SHELL-020) every window taking the written
+workspace's snapshot rewrote the other window's status strip and Settings to the first workspace's values, so main now
+announces the reloaded snapshot to the family of each main window holding the written workspace — the main window, its
+persona windows and its terminal window (`configFamily`) — and each other main window's family its own workspace's
+snapshot, read again from its service (`announceConfig`, `apps/desktop/src/main/config-broadcast.ts`). The first form of
+that repair (5df1943) announced to the main windows alone, and a persona window, which reads the snapshot for its model,
+declared tools and compression threshold, kept a stale one until it was reopened.* **Tier B** is `overlayLiveState`
 (`packages/config/src/tiers.ts`): the loaded configuration's merged document copied, the screen's current
 values laid on it — the five slots with their companions, the repointing of roles that followed a slot's
 previous value, the entry role, the session model and reasoning override, the eight runtime keys, the breaker

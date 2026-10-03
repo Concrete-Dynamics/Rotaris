@@ -1394,7 +1394,9 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   entry that names update checking, an endpoint, a release source or a channel; none does.
 - **Tier A** — Settings Save, the diagnostics toggle, the composer's permission-mode control: the workspace
   service writes through one of the four writers and loads again; main announces `config:changed` to each main window
-  with its own workspace's snapshot (`announceConfig`; since 2026-10-03, before which every window took the written one).
+  and its persona and terminal windows (`configFamily`) with its own workspace's snapshot (`announceConfig`; since
+  2026-10-03, before which every window took the written one; the same day's first form reached the main windows alone and
+  left a persona window's snapshot stale).
 - **Tier B** — at every run start the run host loads the files — layer 3, the discovery snapshot, folded first
   (REQ-CONFIG-034: an authenticated provider's models as entries keyed by qualified id with `auth_provider`, and its
   slot picks) — and overlays the screen's live state (`config.liveState`, handed over on every pending change), then

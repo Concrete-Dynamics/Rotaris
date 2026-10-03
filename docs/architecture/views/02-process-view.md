@@ -158,7 +158,8 @@ delete/refresh`, `provider.payload/signIn`. Main relays a session or hook comman
 config command to the workspace service, and answers preference, theme and **provider** commands itself (the
 credential store lives in main). `provider.signIn` is the one command carrying a pasted key inward; no outcome
 carries one back — the list shows the display mask. A sign-in that succeeds asks the workspace service
-`config.bootstrap` (the starter `agents.yaml` if absent, then the load again) and broadcasts `config:changed`. **`repository.read`
+`config.bootstrap` (the starter `agents.yaml` if absent, then the load again) and broadcasts `config:changed` (to each main
+window's family with its own workspace's snapshot, `announceConfig`, since 2026-10-03). **`repository.read`
 {workspaceRoot}` → `repository.state {gitAvailable, isRepository, branch, base, ahead, behind, touched, uncommitted, failed,
 readMs}`** is the workspace service's answer for the Overview's repository card — ADR-0038's helper lives there and
 nowhere else; every read bounded at 15 s, every failure an empty value (REQ-GIT-102).
@@ -503,10 +504,13 @@ windows holding that workspace (`MainWindows.holding`) whichever view each is sh
 followed session's, so the prompt moves with the focused session (REQ-NOTIFY-030). *Corrected 2026-10-02 (the repair
 round): it first went to the one window following the session (`ownerOf`) and was drawn there whatever that window
 focused next, so another session's prompt stood over the focused one and acted on its own session;* `theme:changed` repaints
-every live window; `config:changed` repopulates every main window from **its own** workspace's snapshot (`announceConfig`,
-`main/config-broadcast.ts`): the windows holding the written workspace take the reloaded snapshot, every other window its
-own workspace's, read again from its service. *Corrected 2026-10-03 (fin10's repair round): every window was sent the
-written workspace's snapshot, so a second main window's status strip and Settings read the first workspace's values.*
+every live window; `config:changed` repopulates every main window **and its family** — its persona windows and its terminal
+window (`configFamily`) — from **its own** workspace's snapshot (`announceConfig`, `main/config-broadcast.ts`): the families
+of the windows holding the written workspace take the reloaded snapshot, every other family its own workspace's, read again
+from its service. *Corrected 2026-10-03 (fin10's repair round): every window was sent the written workspace's snapshot, so a
+second main window's status strip and Settings read the first workspace's values. Corrected again the same day (the second
+repair round): that repair first read "repopulates every main window from its own workspace's snapshot" and sent nothing to
+a persona window, which kept the model, declared tools and compression threshold it mounted with until it was reopened.*
 
 **Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Since 2026-09-09 (Part AL): the seven `terminal.*` requests, the `terminal.streams` reply and the `publish.terminal` event, listed above. Requests:
 `workspace.opened/closing/refuseRuns/renewLease/closeStore/release`, `session.*` (start, list, resume,

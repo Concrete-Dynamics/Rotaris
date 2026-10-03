@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConfigSnapshot } from '@rotaris/contracts';
-import { announceConfig } from './config-broadcast.js';
+import { announceConfig, configFamily } from './config-broadcast.js';
 
 /**
  * REQ-WORKSPACE-105 / PD-SHELL-001 / REQ-TOOLS-131: a configuration write in one workspace repopulates each main window
@@ -40,5 +40,29 @@ describe('announceConfig — each window repopulates from its own workspace', ()
       readOwn: () => Promise.reject(new Error('service gone')),
     });
     expect(got).toEqual([]);
+  });
+});
+
+/**
+ * A main window's family is every window that reads its configuration: itself, its persona windows
+ * (`useConfigSnapshot('persona')`) and its terminal window. 5df1943 announced to the main window alone, so a persona window
+ * kept a stale model, declared tools and compression threshold after a Settings save until it was reopened.
+ */
+describe('configFamily — the windows that take one main window\'s config:changed', () => {
+  it('is the main window, each live persona window and the terminal window', () => {
+    const personas = new Map([['orchestrator', 'p:orchestrator'], ['reviewer', 'p:reviewer']]);
+    const view = {
+      win: 'main',
+      personaWindows: {
+        list: () => [{ persona: 'orchestrator' }, { persona: 'reviewer' }, { persona: 'closed-meanwhile' }],
+        entry: (persona: string) => (personas.has(persona) ? { win: personas.get(persona)! } : undefined),
+      },
+      terminalWindows: { current: () => ({ win: 'terminal' }) },
+    };
+    expect(configFamily(view)).toEqual(['main', 'p:orchestrator', 'p:reviewer', 'terminal']);
+  });
+
+  it('is the main window alone when it owns no auxiliary window', () => {
+    expect(configFamily({ win: 'main', personaWindows: { list: () => [], entry: () => undefined }, terminalWindows: { current: () => null } })).toEqual(['main']);
   });
 });

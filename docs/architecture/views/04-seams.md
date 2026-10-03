@@ -324,8 +324,8 @@ and in `layout-regression.test.ts` for the order at each threshold; then the ren
 `apps/desktop/src/renderer/main.tsx`, which fills `StripFacts` from the **focused** session's record (so an item re-binds
 with focus, REQ-MONITOR-257), the configuration snapshot — every flag a setting decides reads it there, never a boot
 answer (`● CB armed` through `stripCircuitBreakerArmed` since 2026-10-03, when a breaker turned off in Settings still read
-armed), and main announces each window its own workspace's snapshot (`announceConfig`,
-`apps/desktop/src/main/config-broadcast.ts`) — the window's width (`useWindowWidth`,
+armed), and main announces each main window and its persona and terminal windows their own workspace's snapshot
+(`announceConfig`, `configFamily`, `apps/desktop/src/main/config-broadcast.ts`) — the window's width (`useWindowWidth`,
 `apps/desktop/src/renderer/strip-facts.ts`) and the workspace's usage, and memoises on what it shows (REQ-TOOLS-184's
 "never redraws when nothing it displays has changed"). Read it in the built app with `pnpm app:drive` at 1000, 1079, 1179
 and 1400 px wide (`resize`, then `scrollWidth` against `clientWidth` on `.status-strip`): REQ-SHELL-047 owns the widths at

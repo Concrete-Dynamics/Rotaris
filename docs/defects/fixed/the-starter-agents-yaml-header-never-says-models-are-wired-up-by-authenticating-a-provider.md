@@ -68,3 +68,7 @@ Pinned by:
 - `apps/desktop/scripts/lib/starter-config.test.ts`, two new cases: `STARTER_HEADER` is exactly the header
   `starterDocument` writes, and the old four-line header, or the new one cut to two lines, is named as missing "the
   comment header". Both fail on the reader's old first-line check.
+
+Shown by `pnpm slice-proof` against the registered unmetered endpoint `katalyst` (run 10 of the F1 note, build of
+`34ef43a`, 09:16:26 to 09:23:35 UTC, load 5.7 to 7.3 with other agents on the host): exit 0, all seven scenarios. The
+workspace file the open wrote began with the three lines above, and scenario 1's `starterMissing` read them whole.

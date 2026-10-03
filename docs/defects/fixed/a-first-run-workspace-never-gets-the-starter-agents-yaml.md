@@ -174,3 +174,13 @@ the open's bootstrap `written` at 08:41:36.389, the marker writer's bootstrap `e
 `explicit_trivial` and `small_feature`; spike 6 passed its four tests; the sign-out removed the credential file; the
 refusal was "Provider authentication required". Log and evidence: the session scratchpad's `a13r2/slice-proof.r9.log`
 and `a13r2/slice-proof-r9/`.
+
+**Run 10, at the third repair round** (build of `34ef43a`, the branch merged with origin/main `bafd0cf`, its product code
+last changed by `64da40a`'s header; 09:16:26 to 09:23:35 UTC, load 5.7 at start and 7.3 at end, other agents' work on the host): exit 0, all
+seven scenarios. The first launch logged the open's bootstrap `written` at 09:16:28.368, the marker writer's bootstrap
+`exists` at 09:16:32.308, `code-intelligence-setup → success` at 09:16:32.343, `Added Katalyst` at 09:16:33.647 and the
+sign-in's bootstrap `exists` at 09:16:33.653. `agentsFile` began with the three-line header of REQ-WORKSPACE-038, and
+`starterMissing`, which now reads that header whole, found nothing missing. The run completed `tasks_complete` with one
+tool row; the intents were `question`, `explicit_trivial` and `small_feature`; spike 6 passed its four tests; the
+sign-out removed the credential file; the refusal was "Provider authentication required". Log and evidence: the session
+scratchpad's `a13r3/slice-proof.r10.log` and `a13r3/slice-proof-r10/`.

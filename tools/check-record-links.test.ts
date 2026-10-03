@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
-import { anchorsOf, checkCode, checkCodeFile, checkFile, checkRecord, codeFiles, defectPointers, extractLinks, githubSlug, isRelative, withoutCode } from './check-record-links.mjs';
+import { anchorsOf, checkCode, checkCodeFile, checkFile, checkRecord, codeFiles, defectPointers, extractLinks, partialDefectPaths, githubSlug, isRelative, withoutCode } from './check-record-links.mjs';
 
 let root: string;
 
@@ -178,10 +178,42 @@ describe('check-record-links — a defect-note path in the code must name a note
 
   it('walks apps/, packages/ and tools/ for code, skipping what a build or an install writes, and nothing else', () => {
     for (const dir of ['apps/desktop/src', 'apps/desktop/out/main', 'packages/ui/node_modules/x', 'packages/ui/src', 'tools', 'docs/defects']) mkdirSync(join(root, dir), { recursive: true });
-    for (const file of ['apps/desktop/src/main.ts', 'apps/desktop/out/main/index.js', 'packages/ui/node_modules/x/index.js', 'packages/ui/src/shell.css', 'packages/ui/src/notes.md', 'tools/check.mjs', 'docs/defects/d.ts']) writeFileSync(join(root, file), `// ${note('gone.md')}\n`);
+    for (const file of ['apps/desktop/src/main.ts', 'apps/desktop/out/main/index.js', 'packages/ui/node_modules/x/index.js', 'packages/ui/src/shell.css', 'packages/ui/src/notes.md', 'tools/check.mjs', note('d.ts')]) writeFileSync(join(root, file), `// ${note('gone.md')}\n`);
     const rel = (codeFiles(root) as string[]).map((f) => f.slice(root.length + 1).split('\\').join('/'));
     expect(rel).toEqual(['apps/desktop/src/main.ts', 'packages/ui/src/shell.css', 'tools/check.mjs']);
     const { problems, pointers, files } = checkCode(root);
     expect([problems.length, pointers, files]).toEqual([3, 3, 3]);
+  });
+
+  it('fails a path a comment wraps across a line or abbreviates, since no pass can check it, and passes it written whole', () => {
+    // On 2026-10-03 the pass read only a path reaching `.md` on its line: eleven pointers wrapped onto the next comment
+    // line (at a hyphen or at the slash) and two abbreviated with `…` were never read, so a move of their note would
+    // have stranded them. Every one must now be written whole, on one line.
+    mkdirSync(join(root, 'packages', 'ui', 'src'), { recursive: true });
+    const file = join(root, 'packages', 'ui', 'src', 'row.tsx');
+    const wrapped = [
+      `// at a hyphen (\`${note('fixed', 'a-note-that-is-')}`,
+      '// gone.md`), at the slash (`' + note('fixed', ''),
+      `// a-note.md\`), abbreviated (${note('fixed', 'a-no-…')}) and (${note('…-note.md')}).`,
+      '',
+    ].join('\n');
+    writeFileSync(file, wrapped);
+    expect(checkCodeFile(root, file).map((p: { line: number; target: string }) => [p.line, p.target])).toEqual([
+      [1, note('fixed', 'a-note-that-is-')],
+      [2, note('fixed', '')],
+      [3, note('fixed', 'a-no-…')],
+      [3, note('…-note.md')],
+    ]);
+    writeFileSync(file, `// at a hyphen (\`${note('fixed', 'a-note.md')}\`) and written whole.\n`);
+    expect(checkCodeFile(root, file)).toEqual([]);
+  });
+
+  it('leaves a directory named as a directory and a placeholder that names no note', () => {
+    const text = [
+      `moved to \`${note('fixed', '')}\`, recorded in ${note('')}.`,
+      `a \`${note('….md')}\` path, a \`${note('…')}\` path, ${note('*.md')}, (\`a-note\`, ${note('fixed', '')})`,
+      '',
+    ].join('\n');
+    expect(partialDefectPaths(text)).toEqual([]);
   });
 });

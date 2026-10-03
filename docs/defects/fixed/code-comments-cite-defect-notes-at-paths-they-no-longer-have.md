@@ -58,6 +58,21 @@ printed string and a style sheet, and only a whole note name; the walk covers `a
 build output, installed packages and everything outside those roots. `node tools/check-record-links.mjs` on the repaired
 tree reports every path present.
 
+**Amended 2026-10-03 (fin13's repair round).** The pass as first built read a path only when it reached `.md` on its
+own line, so the claim above that it held "the rest" was true only of pointers written whole. Its verifier found four
+that a comment wraps or abbreviates; the stricter pass found thirteen — eleven wrapped onto the next comment line, at a
+hyphen or right after `docs/defects/` or `docs/defects/fixed/` (`about.ts`, `workspace-proof.mjs`, `sandbox-proof.mjs`
+twice, `code-intel-proof.mjs`, `platform/src/dirs.ts`, `render-bwrap.ts`, `terminal.test.ts`, `tools.test.ts`,
+`files.ts` twice), and two abbreviated with `…` (`transcript-proof.mjs`, `TranscriptSurface.tsx`). All thirteen
+resolved, so none was dead, but none would have been seen had its note moved. The pass now fails a `docs/defects/` path
+that does not complete on its line or names a note only in part (`partialDefectPaths`), leaving the directory itself and
+a `….md` or `*.md` placeholder alone; the thirteen, and two pointers of the same kind the pass does not fail
+(`report.ts`, `transcript.test.ts`), are written whole on one line. Evidence: a fourth case in
+`tools/check-record-links.test.ts`, red without the change (a path wrapped at a hyphen, one wrapped at the slash, and two
+abbreviated each fail with their line; the same pointer written whole passes), and a fifth that leaves directories and
+placeholders alone; `node tools/check-record-links.mjs` reports 496 paths in 1,108 code files, every one whole and
+present.
+
 Not changed: prose in the record that names a note at a path it no longer has, inside inline code rather than a link (the
 first pass reads links only); recorded as its own note,
 [the-records-prose-names-defect-notes-at-paths-they-no-longer-have.md](../the-records-prose-names-defect-notes-at-paths-they-no-longer-have.md).

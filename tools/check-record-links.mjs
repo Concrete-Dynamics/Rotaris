@@ -20,7 +20,12 @@
 // (`docs/defects/….md`), which is not a Markdown link, so the first pass never
 // saw one; nineteen such pointers had outlived the move of their note on
 // 2026-10-03 (`docs/defects/fixed/code-comments-cite-defect-notes-at-paths-they-no-longer-have.md`).
-// Every such path must name a note that exists.
+// Every such path must name a note that exists, and must be written whole, on one
+// line: the first form of this pass read only a path reaching `.md` on its line,
+// so eleven pointers a comment wrapped onto its next line and two abbreviated
+// with `…` passed unread, and would have passed after their note moved (the
+// verifier of fin13; `partialDefectPaths`). The directory itself and a `….md` or
+// `*.md` placeholder name no note and are left alone.
 //
 // Runs as part of `pnpm lint`. Reads the tree; costs no subprocess. The pure
 // parts are exported for the test beside this file.
@@ -289,6 +294,33 @@ export function defectPointers(text) {
 }
 
 /**
+ * Every `docs/defects/` path in a text that no pass can check, with its 1-based line: one a comment wraps across a
+ * line (at a hyphen, at a dot, or right after the slash, so the line ends inside the path) or abbreviates with `…`.
+ * Such a path is read as written, which is not a note's path, so it passed the gate whether its note had moved or
+ * not; a pointer is written whole, on one line. What is left alone is what names no note: the directory itself
+ * (`docs/defects/` or `docs/defects/fixed/` followed by anything but a name or the line's end) and a placeholder
+ * of `…` or `*` alone (a `docs/defects/….md` path, a `*.md` glob). A whole path is `defectPointers`'s to read.
+ * @param {string} text
+ * @returns {{ line: number, target: string }[]}
+ */
+export function partialDefectPaths(text) {
+  /** @type {{ line: number, target: string }[]} */
+  const partial = [];
+  for (const match of text.matchAll(/docs\/defects\/(?:fixed\/)?/g)) {
+    const start = match.index;
+    const after = text.slice(start + match[0].length);
+    if (/^[A-Za-z0-9_./-]*?\.md(?![A-Za-z0-9_-])/.test(after)) continue; // whole: defectPointers reads it
+    const run = /^[A-Za-z0-9_.…*-]*/.exec(after)?.[0] ?? '';
+    const atLineEnd = /^[ \t]*(?:\r?\n|$)/.test(after.slice(run.length));
+    const named = /[A-Za-z0-9_]/.test(run.replace(/\.md$/, '')); // a `….md` placeholder names nothing
+    if (named || (run === '' && atLineEnd)) {
+      partial.push({ line: text.slice(0, start).split('\n').length, target: match[0] + run });
+    }
+  }
+  return partial;
+}
+
+/**
  * The code's files, under a repository root: every source, style, markup and data file in `CODE_ROOTS`,
  * skipping dot-directories and what a build or an install writes.
  * @param {string} root
@@ -321,9 +353,19 @@ export function codeFiles(root) {
 export function checkCodeFile(root, file, io = {}) {
   const read = io.read ?? ((p) => readFileSync(p, 'utf8'));
   const exists = io.exists ?? existsSync;
-  return defectPointers(read(file))
-    .filter((pointer) => !exists(join(root, pointer.target)))
-    .map((pointer) => ({ file, line: pointer.line, text: 'defect note', target: pointer.target, reason: 'no note at this path' }));
+  const text = read(file);
+  return [
+    ...defectPointers(text)
+      .filter((pointer) => !exists(join(root, pointer.target)))
+      .map((pointer) => ({ file, line: pointer.line, text: 'defect note', target: pointer.target, reason: 'no note at this path' })),
+    ...partialDefectPaths(text).map((pointer) => ({
+      file,
+      line: pointer.line,
+      text: 'defect note',
+      target: pointer.target,
+      reason: 'a path wrapped across a line or abbreviated, which no pass can check: write it whole, on one line',
+    })),
+  ].sort((a, b) => a.line - b.line);
 }
 
 /**
@@ -369,8 +411,9 @@ if (invokedDirectly) {
     for (const problem of code.problems) console.error(`  - ${relative(root, problem.file).split(sep).join('/')}:${problem.line}: ${problem.target} — ${problem.reason}`);
     console.error('');
     console.error('A docs/defects/….md path in apps/, packages/ or tools/ — a comment, a test, a proof\'s printed line —');
-    console.error('must name a note that exists. A note moved to docs/defects/fixed/ takes these pointers along too.');
+    console.error('must name a note that exists, written whole on one line so that this pass can read it. A note moved');
+    console.error('to docs/defects/fixed/ takes these pointers along too.');
   }
   if (problems.length > 0 || code.problems.length > 0) process.exit(1);
-  console.log(`check-record-links: ${links} relative links in ${files} files, every one resolves; ${code.pointers} defect-note paths in ${code.files} code files, every one exists`);
+  console.log(`check-record-links: ${links} relative links in ${files} files, every one resolves; ${code.pointers} defect-note paths in ${code.files} code files, every one whole and present`);
 }

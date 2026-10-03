@@ -6,7 +6,7 @@ import {
   COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, COMPOSER_PLACEHOLDERS, COMPOSER_WIDGET_MIN_HEIGHT, DEFAULT_REASONING, DRAFT_PUBLISH_MS,
   DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, MODELS_LOADING_LABEL, pausePendingAfter,
   PROJECT_SETUP_REFUSAL, reasoningChipLabel, runControlReason, runHeaderControlReason, RUN_STATE_LABELS, runStateOf, runTimingLabel,
-  runTimingSeconds, sendRefusal, statusStripModeItem, statusStripSandboxItem, STRIP_BACKGROUND_MIN_WIDTH, STRIP_NAMES, STRIP_PATH_MIN_WIDTH, stripCostText, stripItems, stripModelItem,
+  runTimingSeconds, sendRefusal, statusStripModeItem, statusStripSandboxItem, STRIP_BACKGROUND_MIN_WIDTH, STRIP_NAMES, STRIP_PATH_MIN_WIDTH, stripCircuitBreakerArmed, stripCostText, stripItems, stripModelItem,
   stripTokensText, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk, type StripFacts, type StripItem,
 } from './composer.js';
 import { STRIP_NARROW_BELOW, STRIP_TIGHT_BELOW, stripDensity, stripIconTitle } from './WorkspaceView.js';
@@ -190,6 +190,19 @@ describe('REQ-SHELL-038/047: the status strip, item by item', () => {
     expect(zero).toContain('0 tok');
     expect(zero).toContain('0 bg sessions');
     expect(texts(stripItems(1400, facts({ backgroundSessions: 1 })))).toContain('1 bg session');
+  });
+
+  it('REQ-SHELL-041 / REQ-TOOLS-184: `● CB armed` follows the saved configuration, the boot answer only until it arrives, the host override always', () => {
+    // The snapshot decides once it is here, whichever way the boot answer went: a breaker turned off in Settings disarms the flag.
+    expect(stripCircuitBreakerArmed(false, true, false)).toBe(false);
+    expect(stripCircuitBreakerArmed(true, false, false)).toBe(true);
+    // Before the first snapshot, `shell.hello`'s answer stands.
+    expect(stripCircuitBreakerArmed(undefined, true, false)).toBe(true);
+    expect(stripCircuitBreakerArmed(undefined, false, false)).toBe(false);
+    // `ROTARIS_CIRCUIT_BREAKER=off` disarms every run's supervisor, so the flag never claims the breaker then.
+    expect(stripCircuitBreakerArmed(true, true, true)).toBe(false);
+    const flags = (armed: boolean) => named(stripItems(1400, facts({ safety: { circuitBreakerArmed: armed, unsavedSettings: false, outsideWorkspace: false, mode: 'mode: ask' } })), STRIP_NAMES.safety).map((f) => f.text);
+    expect(flags(stripCircuitBreakerArmed(false, true, false))).not.toContain('● CB armed');
   });
 
   it('draws no workspace link with no workspace open, and no sandbox item for an unconfined session', () => {

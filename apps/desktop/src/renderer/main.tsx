@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripItems, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -1039,7 +1039,7 @@ function dispatchNoticeAction(action: NoticeAction): void {
   }
 }
 
-function App({ version, workspace, home, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; home: string | undefined; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean }) {
+function App({ version, workspace, home, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerAtBoot, circuitBreakerHostOff, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; home: string | undefined; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerAtBoot: boolean; circuitBreakerHostOff: boolean; initialPopOut: boolean }) {
   // REQ-SHELL-073: the "agent pop-out" preference, persisted through the preference command; default off.
   const [popOut, setPopOut] = useState(initialPopOut);
   // REQ-CHAT-067 (Part Z): the tool-grouping display preference, default ON, in the desktop preference store;
@@ -1241,6 +1241,9 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
   const stripConfig = useConfigSnapshot(workspace);
   const configuredMode = stripConfig?.runtime.permission_mode ?? null;
   const outsideWorkspace = stripConfig?.runtime.allow_outside_workspace === true;
+  // REQ-SHELL-041: `● CB armed` from the same saved snapshot, the boot answer standing until it arrives and the host override
+  // (`ROTARIS_CIRCUIT_BREAKER=off`) disarming it as it disarms every run's supervisor.
+  const circuitBreakerArmed = stripCircuitBreakerArmed(stripConfig?.circuitBreakerEnabled, circuitBreakerAtBoot, circuitBreakerHostOff);
   // REQ-SANDBOX-121 / REQ-MONITOR-257: the focused session's confinement backend, re-bound with focus; absent unless confined.
   const sandboxFlag = session ? session.sandboxed : null;
   const sandboxBackend = session?.sandboxBackend ?? '';
@@ -1539,12 +1542,12 @@ async function boot(): Promise<void> {
   // Stage B — `home` rides the hello reply because REQ-WORKSPACE-149 rule 1 is a display rule and a
   // sandboxed renderer has no `node:os` (ADR-0051). It is optional on the way in: a reply from an
   // older main, or the fallback below, simply collapses nothing and draws the absolute path.
-  const info = hello.ok ? (hello.value as { version: string; workspace: string; home: string | undefined; processes: string[]; circuitBreakerArmed: boolean }) : { version: '?', workspace: '(no workspace)', home: undefined, processes: [], circuitBreakerArmed: false };
+  const info = hello.ok ? (hello.value as { version: string; workspace: string; home: string | undefined; processes: string[]; circuitBreakerArmed: boolean; circuitBreakerHostOff: boolean }) : { version: '?', workspace: '(no workspace)', home: undefined, processes: [], circuitBreakerArmed: false, circuitBreakerHostOff: false };
   // ESC-34: the dispatcher is not a component, and one action names a workspace it must be checked against.
   openWorkspace = info.workspace;
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} home={info.home} initialTheme={bootTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />
+      <App version={info.version} workspace={info.workspace} home={info.home} initialTheme={bootTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerAtBoot={info.circuitBreakerArmed} circuitBreakerHostOff={info.circuitBreakerHostOff} initialPopOut={initialPopOut} />
     </StrictMode>,
   );
 }

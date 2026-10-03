@@ -61,13 +61,25 @@ describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the render
    * (`statusStripRunItem`, from a third `useNeedsRecovery` call the window root made, so it read `Run needs recovery` as the
    * run header does: PD-ORCH-005 clause 13, OQ-100, acceptance A35). The strip's repair
    * (docs/defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md) dropped the
-   * item, so no strip text can disagree with the run header about the recovery state; the run header, the Workspace
-   * badge and the Mission view carry it.
+   * item, so no strip text can disagree with the run header about the recovery state; the Workspace view's run header
+   * and the Mission view's subtitle carry it.
    */
   it('main.tsx draws no run state in the status strip', () => {
     const text = source('main.tsx');
     expect(text).not.toContain('statusStripRunItem');
     expect(text).not.toMatch(/`run \$\{STATUS_LABELS/);
+  });
+
+  /*
+   * REQ-SHELL-041 / REQ-TOOLS-184: `● CB armed` follows the saved `circuit_breaker.enabled` as the file-access flag follows
+   * `runtime.allow_outside_workspace` — from the one configuration snapshot the strip re-reads on every change. Until
+   * 2026-10-03 (fin10's repair round) the flag was `shell.hello`'s boot answer alone, so a breaker turned off in Settings
+   * still read armed while the next run had none. The helper is pinned in `packages/ui` (`composer.test.ts`).
+   */
+  it('main.tsx arms the strip\'s circuit-breaker flag from the configuration snapshot, the host override still disarming it', () => {
+    const text = source('main.tsx');
+    expect(text).toContain('const circuitBreakerArmed = stripCircuitBreakerArmed(stripConfig?.circuitBreakerEnabled, circuitBreakerAtBoot, circuitBreakerHostOff);');
+    expect(text).toMatch(/safety: \{ circuitBreakerArmed, /);
   });
 });
 

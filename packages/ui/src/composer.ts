@@ -139,6 +139,17 @@ export interface SafetyFacts {
   /** The mode's short form, `mode: <preset>` (`statusStripModeItem`). */
   readonly mode: string;
 }
+/**
+ * REQ-SHELL-041 / REQ-TOOLS-184: whether `● CB armed` is shown — the saved `circuit_breaker.enabled` as the configuration
+ * snapshot carries it (re-read on every `config:changed`, so the flag follows a Settings save as the file-access flag does),
+ * unless the host override `ROTARIS_CIRCUIT_BREAKER=off` disarms it, which the run host's supervisor honours too. Until the
+ * first snapshot arrives the window's boot answer (`shell.hello`) stands. Until 2026-10-03 the flag was that boot answer
+ * alone, so a breaker turned off in Settings still read armed until the window was opened again.
+ */
+export function stripCircuitBreakerArmed(configured: boolean | undefined, atBoot: boolean, hostOff: boolean): boolean {
+  if (hostOff) return false;
+  return configured ?? atBoot;
+}
 export const CIRCUIT_BREAKER_EXPLANATION = 'Circuit breaker: Rotaris stops a run that keeps repeating a failing step.';
 export const REDACTION_EXPLANATION = 'Secret redaction: anything that looks like a credential is masked before it reaches a model or the transcript.';
 export const UNSAVED_SETTINGS_EXPLANATION = 'The Settings view is holding edits that have not been saved; runs keep using the last saved values until they are saved.';

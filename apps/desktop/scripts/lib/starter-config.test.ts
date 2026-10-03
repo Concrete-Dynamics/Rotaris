@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { starterDocument } from '@rotaris/config';
 // @ts-expect-error — the reader is plain ESM beside the scripts that run it.
-import { STARTER_NULL_KEYS, STARTER_PERSONA, starterMissing } from './starter-config.mjs';
+import { STARTER_HEADER, STARTER_NULL_KEYS, STARTER_PERSONA, starterMissing } from './starter-config.mjs';
 
 const keys = STARTER_NULL_KEYS as readonly string[];
 /**
@@ -22,6 +22,23 @@ const INITIALIZATION_ONLY = ['initialization:', '  completed:', '    - code-inte
 describe('the starter agents.yaml read by its content (REQ-CONFIG-025, REQ-WORKSPACE-038)', () => {
   it('finds nothing missing in the starter the product writes', () => {
     expect(starterMissing(starterDocument())).toEqual([]);
+  });
+
+  it('holds the comment header to the product\'s own three lines (REQ-WORKSPACE-038)', () => {
+    expect(STARTER_HEADER).toHaveLength(3);
+    expect(starterDocument().startsWith(`${(STARTER_HEADER as readonly string[]).join('\n')}\ndefault_persona: `)).toBe(true);
+  });
+
+  it('names the comment header when it lacks REQ-WORKSPACE-038\'s clauses — the four-line header shipped before 2026-10-03', () => {
+    const shipped = [
+      '# Rotaris configuration for this scope.',
+      '# Anything stated here overrides the built-in roles, models and tool servers; anything left null or',
+      '# absent is inherited from the layer below (the global file, then the built-in defaults). Sections',
+      '# merge per field; lists are restated whole. See the Settings screen for the same keys with hints.',
+    ].join('\n');
+    const body = starterDocument().slice(starterDocument().indexOf('default_persona: '));
+    expect(starterMissing(`${shipped}\n${body}`)).toEqual(['the comment header']);
+    expect(starterMissing(`${(STARTER_HEADER as readonly string[]).slice(0, 2).join('\n')}\n${body}`)).toEqual(['the comment header']);
   });
 
   it('names REQ-CONFIG-025\'s twelve null keys, in its order, and the shipped persona', () => {

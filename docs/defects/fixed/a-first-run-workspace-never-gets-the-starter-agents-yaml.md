@@ -20,8 +20,8 @@ reads a written null as unstated); what the user loses is the starter content it
 them the file overrides the built-in roles and that models are wired up by authenticating a provider.~~ including the
 header that tells them the file overrides the built-in roles, models and tool servers. *(Corrected 2026-10-03, the third
 repair round's verifier: the shipped header has never said that models are wired up by authenticating a provider, the
-clause REQ-WORKSPACE-038 asks of it; that gap has its own note,
-[the-starter-agents-yaml-header-never-says-models-are-wired-up-by-authenticating-a-provider.md](../the-starter-agents-yaml-header-never-says-models-are-wired-up-by-authenticating-a-provider.md).)*
+clause REQ-WORKSPACE-038 asks of it; that gap has its own note, repaired the same day,
+[the-starter-agents-yaml-header-never-says-models-are-wired-up-by-authenticating-a-provider.md](the-starter-agents-yaml-header-never-says-models-are-wired-up-by-authenticating-a-provider.md).)*
 
 Observed by acceptance round 1 on merged main (`1763f7f`): `pnpm slice-proof` red twice at scenario 1 (load 0.37 and
 0.40), throwing "the starter agents.yaml was not bootstrapped after sign-in" at `slice-proof.mjs:234`. The first launch's

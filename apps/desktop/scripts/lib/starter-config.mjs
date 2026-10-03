@@ -1,8 +1,8 @@
 // @ts-check
 /**
- * Whether a scope's `agents.yaml` holds the starter document of REQ-CONFIG-025 / REQ-WORKSPACE-038: a comment header,
- * `default_persona` at its shipped value, and the twelve model-slot and thinking keys the requirement names as explicit
- * nulls. A key's VALUE beyond `default_persona` is not read, since a sign-in or a slot edit may already have written one;
+ * Whether a scope's `agents.yaml` holds the starter document of REQ-CONFIG-025 / REQ-WORKSPACE-038: its three-line
+ * comment header, `default_persona` at its shipped value, and the twelve model-slot and thinking keys the requirement
+ * names as explicit nulls. A key's VALUE beyond `default_persona` is not read, since a sign-in or a slot edit may already have written one;
  * what is read is that the starter's keys are there at the top level, as the starter put them.
  *
  * `live-run`'s sign-in scenario used to check only that the file existed. Initialization recorded into a missing
@@ -18,6 +18,18 @@
  * Nothing here is product code. It runs only from the live run, the slice proof and its test; the test holds it to the
  * product's own `starterDocument`, so the two cannot drift apart unseen.
  */
+
+/**
+ * The starter's comment header, REQ-WORKSPACE-038's three lines as the product words them (`starterDocument` in
+ * `packages/config/src/writers.ts`; the test holds the two equal). Read whole, since a header that merely starts with
+ * `#` passed over one lacking the requirement's clauses (2026-10-03,
+ * `docs/defects/fixed/the-starter-agents-yaml-header-never-says-models-are-wired-up-by-authenticating-a-provider.md`).
+ */
+export const STARTER_HEADER = Object.freeze([
+  '# A minimal starting configuration for this scope; anything left null or absent is inherited from the layer below.',
+  '# Editing it overrides the built-in personas, models and tool servers; sections merge per field, lists whole.',
+  '# Real models are wired up by authenticating a provider in the Models category of Settings.',
+]);
 
 /** The shipped `default_persona` (REQ-CONFIG-025, REQ-CONFIG-063). */
 export const STARTER_PERSONA = 'orchestrator';
@@ -43,9 +55,10 @@ export const STARTER_NULL_KEYS = Object.freeze([
  */
 export function starterMissing(text) {
   const lines = text.replace(/\r\n/g, '\n').split('\n');
-  const first = lines.find((l) => l.trim() !== '');
+  const start = lines.findIndex((l) => l.trim() !== '');
+  const header = start === -1 ? [] : lines.slice(start, start + STARTER_HEADER.length);
   const missing = [];
-  if (first === undefined || !first.startsWith('#')) missing.push('the comment header');
+  if (header.length !== STARTER_HEADER.length || header.some((l, i) => l.trimEnd() !== STARTER_HEADER[i])) missing.push('the comment header');
   if (!lines.some((l) => new RegExp(`^default_persona:\\s*${STARTER_PERSONA}\\s*(#.*)?$`).test(l))) missing.push(`default_persona: ${STARTER_PERSONA}`);
   for (const key of STARTER_NULL_KEYS) if (!lines.some((l) => l.startsWith(`${key}:`))) missing.push(key);
   return missing;

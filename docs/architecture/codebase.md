@@ -466,7 +466,8 @@ in `configuration.ts`'s header.)
    disjoint, never-grant names checked against the runtime's whole vocabulary because the host-integration context
    withholds `open_dashboard` from the server's listing; `pnpm package` regenerates and refuses on a diff); the client's
    owed halves alive — `code_intelligence` **`enabled: true`** with the deviation's record kept, the persona grants
-   (12 / 19 names), REQ-MCP-034's binding on the launch subcommand, REQ-MCP-071's probe, REQ-MCP-102's memories block;
+   (12 / 19 names), REQ-MCP-034's binding on the launch subcommand (an isolated run's bound to its worktree's root only
+   from 2026-10-03, `configurationForExecutionRoot`; ADR-0034's "isolated-run binding, executed"), REQ-MCP-071's probe, REQ-MCP-102's memories block;
    REQ-MCP-099's three-step project setup in the run host (Serena's `project create` is interactive by construction —
    the runner answers each prompt with the runtime's default) behind REQ-MCP-112's action in the MCP category. `pnpm
    code-intel-proof` drives seven launches (a real symbol overview on a scratch TypeScript file; the packaged binary

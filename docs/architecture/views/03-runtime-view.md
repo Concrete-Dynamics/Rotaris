@@ -700,9 +700,14 @@ writes no row and saves nothing, so the ladder tells the run when a cell's model
 `RECORD_TICK`) — which keeps `entryContext`'s limit current through the call too. `entryRole`
 keeps the configured key or the override in force, so the composer's chip and the strip's model item go on naming what the
 next run starts with (REQ-MONITOR-146, REQ-SHELL-043). Until then the inspector named the configured key while the root ran on
-the candidate (`fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md`); a child moved by
-a fallback is still drawn on its configured `model_key` (`a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md`,
-open). **`SessionRecord.entryStalledSeconds`**
+the candidate (`fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md`). A **child**
+follows the same rule (2026-10-03, finacc F7): the run's `resilience.forChild` builds each execution's cell carrying the
+row's `children.model_key` (or the override it follows) and keeps it by task id (`Run.childCells`). Once the cell has
+left that pair or key, `Run.childModel` returns the key it runs on (`Run.keyOfCell`, `entryModelKey`'s rule) and that model's
+advertised maximum input, and `toAgentRecord` reads both (`AgentFacts.liveModelFor`) for the agent's `model` and
+`contextLimit`. With no live run, or for a child this run did not execute, the row's key stands. REQ-ORCH-088's timeout fallback
+calls `TurnResilience.moved` too, so the record names the fallback while the retry runs. Until then a moved child was drawn
+on its configured key against its limit (`fixed/a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md`). **`SessionRecord.entryStalledSeconds`**
 (2026-09-30, OQ-153) is the same route for the root's stall watch's figure. **`SessionRecord.entryToolCalls`** (2026-10-01,
 acceptance A20) is the run-level agent's tool-call count (REQ-MONITOR-044/052): the roots' share of the persisted total — the
 total less every child's persisted `children.tool_calls` — plus the calls the live root has started in its running execution
@@ -768,8 +773,13 @@ the application manifest (`McpHost`'s `productVersion`, required as `clientVersi
 2026-09-05 deviation reverted, its record kept in `config/src/mcp/defaults.ts`), so every run whose persona carries it —
 twelve of the thirteen built-in roles — starts one runtime per session through the token. Its arguments come from the
 generated manifest (`start-mcp-server`, the transport and the host-integration context); REQ-MCP-034 appends
-`--project <root>` at command resolution for the root the run was configured with (an isolated tree's root when the
-run is configured with it — not exercised by the proof); the grant is the persona's tier union from the manifest (12 or
+`--project <root>` at command resolution for the workspace the configuration was loaded for, and a run whose execution
+root is a worktree is handed the view bound to that tree's root instead (`configurationForExecutionRoot` in
+`run-host/mcp.ts`, read by the tool port's `ready()` and by `session.start`'s discovery ahead of the run, both memoised on
+the execution root; `cwd`, REQ-MCP-035's fill-in and REQ-MCP-070's `lsp_init` root stay the workspace's, OQ-194). Until
+2026-10-03 the isolated run's server was bound to the anchoring checkout (ADR-0034, "The isolated-run binding, executed").
+The discovery and connected lines name the project the launch carried (`… (project <root>) listed …`, `…, project <root>)`);
+the grant is the persona's tier union from the manifest (12 or
 19 names; REQ-MCP-014/015). On connection the binding probe calls the memory-listing tool once under 15 s
 (REQ-MCP-071; a failure warns through REQ-MCP-044 and withholds nothing); the prompt's `## MCP servers` entry for the
 server carries the fixed project-memories block iff both gating names are granted (REQ-MCP-102). Measured cold: the

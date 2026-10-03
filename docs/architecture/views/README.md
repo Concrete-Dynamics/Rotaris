@@ -51,6 +51,19 @@ repair F8).** `GitWorktreeRow` gains `upstreamAhead` (the tree's branch against 
 item gains an optional `description` for the accessible description alone. The **process view**'s Git-view paragraph and the
 **seams view**'s status-strip item say so. No package, edge, process, channel, command or store column changed.
 
+**A child moved by a fallback is drawn on the model it runs on (REQ-MONITOR-052, REQ-MONITOR-066, REQ-MONITOR-069,
+REQ-MONITOR-049; finacc F7).** `resilience.forChild` takes the execution (`{ taskId, key }`), and the run keeps each child's
+cell by task id (`Run.childCells`). `Run.childModel` names a moved cell's key by the run-level agent's rule (`Run.keyOfCell`)
+and gives its model's maximum input, which `toAgentRecord` reads through `AgentFacts.liveModelFor`. REQ-ORCH-088's timeout
+fallback republishes the record (`TurnResilience.moved`). The **process view**'s `SessionRecord` sentence and the **runtime
+view**'s run-level agent paragraph say so. No package, edge, process, channel, command or store column changed.
+
+**A run in an isolated working tree launches its MCP servers bound to that tree's root (REQ-MCP-034, REQ-MCP-050; fin12).**
+`configurationForExecutionRoot` (`run-host/mcp.ts`, over `mcpConfigurationForExecutionRoot` in `config/src/mcp/index.ts`) is
+what the tool port's `ready()` and `session.start`'s discovery ahead of the run hand the MCP host, memoised on the execution
+root; the discovery and connected lines name the project the launch carried. The **runtime view**'s code-intelligence
+paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **A child's closing scheduler pass cannot outlive its store (REQ-ORCH-053, REQ-ORCH-098; fin11).** `Scheduler.close`, called
 through `IterationChildren.close` by `Run.turn` once the iteration's children are torn down, stops every later pass; every
 unawaited pass after a child's end — `startOne`'s and a resumed child's in `resumePaused` — goes through `Scheduler.passAfter`,

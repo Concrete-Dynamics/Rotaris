@@ -492,6 +492,13 @@ export class Run {
   private readonly catalogue: readonly CatalogueEntry[];
   /** The root agent's ladder state for this run (one same-tier fallback, one role fallback — REQ-ORCH-091 b / REQ-ORCH-144). */
   private rootCell: AgentResilienceCell | null = null;
+  /**
+   * REQ-MONITOR-052/066 with REQ-MONITOR-049: each child's ladder cell of this run, by task id — the latest execution's, with
+   * the configured pair and key its row records — so `childModel` names the model a moved child runs on. Until 2026-10-03
+   * a child's cell was built unnamed and the record read `children.model_key` alone
+   * (docs/defects/fixed/a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md).
+   */
+  private readonly childCells = new Map<string, { readonly cell: AgentResilienceCell; readonly configured: ModelRef; readonly key: string }>();
   /** REQ-NOTIFY-078: the session's memory changed under the root (a pin taken back), so its cell is rebuilt at its next turn. */
   private entryRebuild = false;
   /**
@@ -845,7 +852,14 @@ export class Run {
    */
   get entryModelKey(): string | null {
     const cell = this.rootCell;
-    if (cell === null) return null;
+    return cell === null ? null : this.keyOfCell(cell);
+  }
+  /**
+   * The configured key that names the model a ladder cell runs on — `entryModelKey`'s rule, which `childModel` shares: the
+   * carried key when it is a configured, non-copy key, else the configured key for the cell's pair, else the carried key or
+   * the catalogue entry the move took it to; null when nothing names the pair.
+   */
+  private keyOfCell(cell: AgentResilienceCell): string | null {
     const model = cell.model.model;
     // The key the cell carries — set at every assignment of its model — when it is a configured key: two keys may name one
     // provider's model, each with its own thinking, and only the carried key tells them apart.
@@ -858,6 +872,26 @@ export class Run {
     // one provider's model can carry different dispatch references.
     const pair = pairKey(providerIdentity(this.catalogue, model), model.modelId);
     return (this.catalogue.find((e) => listed(e) && pairKey(e.provider, e.model.modelId) === pair) ?? carried ?? entryOf(this.catalogue, model))?.key ?? cell.key;
+  }
+  /**
+   * REQ-MONITOR-052 / REQ-MONITOR-066 / REQ-MONITOR-069 with REQ-MONITOR-049: the key a child's ladder cell of this run runs
+   * on, and that model's maximum input, once the cell has left the pair and key its row records — a same-tier move after a
+   * quota or rate-limit answer or before the call off a pair held out of quota (REQ-ORCH-091 b, REQ-NOTIFY-082,
+   * REQ-MONITOR-194), the unresponsive-model fallback (REQ-ORCH-090), REQ-ORCH-088's timeout fallback, a model chosen during
+   * its wait, or an override it follows (REQ-ORCH-091 a/d) — so `toAgentRecord` names it in the inspector's Model and the
+   * persona window and measures the context ring against it, as the run-level agent's are (`entryModelKey`, `entryContext`).
+   * Null for a child this run has not executed, or one still on its recorded pair and key: the row's `model_key` stands.
+   * The limit is null where the model advertises none, and the caller looks the key up instead.
+   */
+  childModel(taskId: string): { readonly key: string; readonly limit: number | null } | null {
+    const held = this.childCells.get(taskId);
+    if (held === undefined) return null;
+    const { cell, configured, key } = held;
+    if (sameRef(cell.model.model, configured) && cell.key === key) return null;
+    const named = this.keyOfCell(cell);
+    if (named === null) return null;
+    const advertised = this.deps.compression?.triggerFor(cell.model.model).advertisedInputLimit ?? null;
+    return { key: named, limit: advertised !== null && advertised > 0 ? advertised : null };
   }
   /** REQ-MONITOR-048 (Part R): the persona's configured thinking level as this run resolved it; null when the persona is unknown or states none. */
   reasoningFor(persona: string): string | null {
@@ -1518,7 +1552,15 @@ export class Run {
         sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, ...(config.modelKey === undefined ? {} : { modelKey: config.modelKey }), thinking: config.thinking,
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
         // Part Q: each child gets its own cell over the shared memory, catalogue and wait registry.
-        resilience: { forChild: (persona, current, bound) => { const effective = this.memory.effective(withSettings(this.catalogue, current), this.catalogue); return this.resilienceFor(agentCell(effective, this.fallbackFor(persona, effective)), bound); } },
+        // REQ-MONITOR-052/066: the cell carries the key its model was taken from — the override followed, else the configured
+        // key the child's row records — and is kept by the child's task id, so `childModel` can name a later move.
+        resilience: { forChild: (persona, current, bound, child) => {
+          const base = withSettings(this.catalogue, current);
+          const effective = this.memory.effective(base, this.catalogue);
+          const cell = agentCell(effective, this.fallbackFor(persona, effective), this.memory.overrideReaching(base, this.catalogue)?.key ?? child.key);
+          this.childCells.set(child.taskId, { cell, configured: current.model, key: child.key });
+          return this.resilienceFor(cell, bound);
+        } },
         // Part AH (ADR-0060): each child compresses against its own model's capacity, with its own task plan — the model its
         // cell calls next, read at each pass (REQ-MONITOR-080).
         compressionFor: this.compressionFor,

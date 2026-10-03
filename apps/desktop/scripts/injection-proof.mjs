@@ -62,6 +62,7 @@ import { dirname, join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { app, buildDesktop, configDirFor, electron, evidenceDirectory, hostSwitches, launchOptions, readProbes, repo } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 
 const output = evidenceDirectory('injection-proof');
 rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
@@ -289,7 +290,14 @@ if (isoSystem.includes('(base working copy)')) fail('isolated: the base workspac
 if (!/enabled for .+ \(the worktree of .+, REQ-WORKSPACE-050\)/.test(isolated.log)) fail('isolated: the run host did not name the worktree it read from');
 // The catalog stays the base workspace's (the other half of REQ-WORKSPACE-050's sentence).
 if (!isoSystem.includes(`(SKILL.md: ${join(workspace, '.agents', 'skills', 'proof-skill', 'SKILL.md')})`)) fail('isolated: the skill catalog was not discovered from the base workspace');
-results.push({ launch: 'isolated', sessionId: bound[1], executionRoot: worktree, received: sourcesOf(isoSystem) });
+// REQ-MCP-034's isolated-run clause: the code-intelligence server the run carries is launched against the worktree's root,
+// in discovery and in the session alike, never the base workspace (finding D1 of the default live run at 1763f7f). The
+// base launches above name the workspace itself — the same reader, the other root.
+const ciBinding = bindingVerdict(isolated.log, worktree);
+if (!ciBinding.ok) fail(`isolated: REQ-MCP-034 — ${ciBinding.detail}`);
+const ciBase = bindingVerdict(allOn.log, workspace);
+if (!ciBase.ok) fail(`all-on: REQ-MCP-034 — ${ciBase.detail}`);
+results.push({ launch: 'isolated', sessionId: bound[1], executionRoot: worktree, received: sourcesOf(isoSystem), codeIntelligence: ciBinding.detail, baseCodeIntelligence: ciBase.detail });
 
 // ═══ The latency half (§3.2, REQ-WORKSPACE-049) ════════════════════════════════════════════════════════════════════
 

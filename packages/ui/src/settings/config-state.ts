@@ -149,8 +149,26 @@ export function scopeCellOf(
   return { model: field('model', row.modelOrigin, at(row.modelOrigin)?.unsetModel), reasoning: field('reasoning', row.thinkingOrigin, at(row.thinkingOrigin)?.unsetThinking) };
 }
 
+/**
+ * Structural equality over the pending state's plain data: equal values are equal whatever order an object holds its
+ * keys in, an array's order is part of its value, and a key whose value is `undefined` counts as absent. The live run
+ * at `1763f7f` found the earlier `JSON.stringify` comparison reading a rebased state as dirty because `rebasePending`
+ * builds its keys in another order than `pendingFrom` (REQ-CONFIG-419; defect note
+ * `a-sign-in-reload-marks-settings-unsaved-though-nothing-was-edited.md`).
+ */
 function sameValue(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+  if (Object.is(a, b)) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((item, index) => sameValue(item, b[index]));
+  }
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const leftKeys = Object.keys(left).filter((key) => left[key] !== undefined);
+  const rightKeys = Object.keys(right).filter((key) => right[key] !== undefined);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => Object.prototype.hasOwnProperty.call(right, key) && sameValue(left[key], right[key]));
 }
 
 /**
@@ -166,7 +184,8 @@ export function rebasePending(previousSaved: PendingSettings, pending: PendingSe
     thinking[slot] = pending.slotThinking[slot] !== previousSaved.slotThinking[slot] ? pending.slotThinking[slot] : fresh.slotThinking[slot];
   }
   const runtime = { ...fresh.runtime };
-  for (const key of Object.keys(runtime) as (keyof PendingSettings['runtime'])[]) if (pending.runtime[key] !== previousSaved.runtime[key]) (runtime as Record<string, unknown>)[key] = pending.runtime[key];
+  // By value, not by reference: a list the user edited and put back is untouched, so it takes the file's new value.
+  for (const key of Object.keys(runtime) as (keyof PendingSettings['runtime'])[]) if (!sameValue(pending.runtime[key], previousSaved.runtime[key])) (runtime as Record<string, unknown>)[key] = pending.runtime[key];
   const display = { ...fresh.display };
   for (const key of Object.keys(display) as (keyof DisplayView)[]) if (pending.display[key] !== previousSaved.display[key]) (display as Record<string, unknown>)[key] = pending.display[key];
   // ADR-0063: the skills block rebases as a whole rather than per key. A per-key rebase would need a third

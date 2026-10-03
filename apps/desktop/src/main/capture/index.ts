@@ -1,4 +1,5 @@
 import type { CaptureHost } from './host.js';
+import { onConsoleWarning } from './console-relay.js';
 import { installFinish, installPromptSeam } from './probe.js';
 
 export type { CaptureHost, CaptureStep } from './host.js';
@@ -26,9 +27,7 @@ export async function runCapture(host: CaptureHost): Promise<boolean> {
   if (!capture) return false;
 
   // Every proof: a renderer error is logged here, so a blank window is explained by its log and not by its PNG (Part O).
-  host.win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-    if (level >= 2) host.log(`capture: renderer console: ${message} (${sourceId}:${line})`);
-  });
+  onConsoleWarning(host.win.webContents, ({ message, sourceId, lineNumber }) => host.log(`capture: renderer console: ${message} (${sourceId}:${lineNumber})`));
 
   // The READ is behind the flag, not just the branch. `__ROTARIS_SEAMS__` is false in a packaged build, so this
   // is a constant `undefined` there and rollup removes the whole pass — seven views, every Settings category, a

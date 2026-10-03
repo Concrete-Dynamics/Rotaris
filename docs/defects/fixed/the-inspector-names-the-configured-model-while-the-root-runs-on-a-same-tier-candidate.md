@@ -21,7 +21,7 @@ after a failure in the run. Not repaired (outside the task that saw it).
 - **Children moved by a fallback are drawn on their configured model too.** A child moved by a same-tier, unresponsive-model
   or REQ-ORCH-088 timeout fallback is projected with its configured `children.model_key`, its context limit included
   (`toAgentRecord` in `packages/engine/src/sessions.ts`). Recorded as a note of its own,
-  [`a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md`](../a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md),
+  [`a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md`](a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md),
   since its repair reaches the per-child ladder cells, outside this repair's files.
 
 The repair publishes the live root cell's key on the record and names it in the run-level agent's Model while the run is live;
@@ -63,8 +63,8 @@ the composer's chip and the strip's model item keep naming what the next run sta
   for the pair was preferred).
 - **Not repaired here:** the inspector's reselect of the shown excluded key is the chip note's repair
   ([`the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows.md`](the-composers-next-run-chip-cannot-choose-the-excluded-key-it-already-shows.md));
-  children moved by a fallback stay open in
-  [`a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md`](../a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md).
+  children moved by a fallback were repaired 2026-10-03 (finacc) in
+  [`a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md`](a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md).
 
 ## Specs
 

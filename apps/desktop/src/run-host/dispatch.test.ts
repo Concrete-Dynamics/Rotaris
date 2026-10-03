@@ -1,7 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { RunHostRequest } from '@rotaris/contracts';
+import type { LoadedConfiguration } from '@rotaris/config';
 import { dispatch } from './dispatch.js';
 import type { RunHost } from './host.js';
+
+/*
+ * `launchSession` is replaced by one that hands its `start` a configured setup at once, so a case can read what
+ * `session.start`'s own hop does with it; every other case here never reaches it.
+ */
+vi.mock('./launch.js', () => ({
+  launchSession: async (_req: unknown, deps: { start: (setup: unknown, bearers: unknown) => unknown }) => {
+    const r = deps.start(launchedSetup, {}) as { ok: boolean; value?: string };
+    return r.ok ? { kind: 'session.started', sessionId: r.value } : { kind: 'refused', code: 'test', headline: 'refused' };
+  },
+}));
+let launchedSetup: unknown = null;
 
 /**
  * PD-ORCH-005 clause 6: the run host's hop of "continue without them". The renderer's command and main's forwarding are
@@ -125,5 +138,54 @@ describe('shutdown ends the code-intelligence setup before the run host exits (R
     endSetup();
     expect(await reply).toEqual({ kind: 'ack' });
     expect(order.slice(-3)).toEqual(['setup ended', 'store closed', 'exit scheduled']);
+  });
+});
+
+/**
+ * REQ-MCP-034/050 (live-run finding D1 at 1763f7f, repaired in
+ * `docs/defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`): the discovery
+ * `session.start` runs ahead of the run launches what the run will, against the tree it executes in. Before the repair it
+ * was handed the workspace's configuration and the workspace's root; `injection-proof`'s isolated launch read the result
+ * in the built app, and this case pins the hop without a build.
+ */
+describe('session.start discovers ahead of the run against the root the run executes in (REQ-MCP-034, REQ-MCP-050)', () => {
+  const ws = '/work/ws';
+  const tree = '/work/ws/.rotaris/worktrees/s1';
+  const cfg = () => {
+    const args = ['builtin:code-intelligence', '--', 'start-mcp-server', '--transport', 'stdio', '--project', ws];
+    const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'builtin:code-intelligence', args: ['start-mcp-server', '--transport', 'stdio'] };
+    return {
+      workspaceRoot: ws,
+      mcp: { servers: { code_intelligence: { name: 'code_intelligence', entry, origin: 'default', availability: { available: true }, resolved: { command: '/opt/rotaris', args, builtin: true }, description: { transport: 'stdio', command: '/opt/rotaris', args, env: {}, cwd: ws } } }, origins: { code_intelligence: 'default' }, secrets: [], diagnostics: [] },
+    } as unknown as LoadedConfiguration;
+  };
+  const hostFor = (prepared: [LoadedConfiguration, string][]) => ({
+    lease: { isRefusing: () => false },
+    stores: new Map([['W1', { root: ws, dal: {} }]]),
+    log: () => undefined,
+    presenters: { attended: () => true },
+    sessionRoots: new Map(), configuredRuns: new Map(), runBearers: new Map(), configured: new Map(), leased: new Map(),
+    skills: { onSessionCreated: () => undefined, contextUnits: () => [] },
+    mcp: { newConfiguration: () => undefined, prepare: async (c: LoadedConfiguration, root: string) => { prepared.push([c, root]); } },
+    sessions: { start: (_dal: unknown, _root: unknown, _prompt: unknown, o: { sessionId: string }) => ({ ok: true, value: o.sessionId }) },
+  }) as unknown as RunHost;
+  const projectOf = (c: LoadedConfiguration): readonly string[] | null => {
+    const d = c.mcp.servers['code_intelligence']!.description;
+    return d.transport === 'stdio' ? d.args.slice(-2) : null;
+  };
+
+  it('a session in a worktree discovers with the tree\'s root after the project-path option; a base session keeps the workspace\'s', async () => {
+    const prepared: [LoadedConfiguration, string][] = [];
+    launchedSetup = { cfg: cfg() };
+    const isolated: RunHostRequest = { kind: 'session.start', workspaceId: 'W1', sessionId: 'S1', prompt: 'p', effectiveRoot: tree, worktree: { worktree_path: tree, branch: 'rotaris/s1' } } as unknown as RunHostRequest;
+    const base: RunHostRequest = { kind: 'session.start', workspaceId: 'W1', sessionId: 'S2', prompt: 'p' } as unknown as RunHostRequest;
+    await dispatch(isolated, hostFor(prepared));
+    await dispatch(base, hostFor(prepared));
+    expect(prepared.map(([, root]) => root)).toEqual([tree, ws]);
+    expect(projectOf(prepared[0]![0])).toEqual(['--project', tree]);
+    // The anchoring root is absent from the command line; the working directory is OQ-194's question, not this case's.
+    const d = prepared[0]![0].mcp.servers['code_intelligence']!.description;
+    expect(d.transport === 'stdio' ? d.args : []).not.toContain(ws);
+    expect(projectOf(prepared[1]![0])).toEqual(['--project', ws]);
   });
 });

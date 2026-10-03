@@ -40,6 +40,11 @@
  *  10. personas-one-field-two-scopes — one field's edits at both scopes (REQ-CONFIG-341, REQ-MONITOR-149): the tester's
  *                     model Unset clicked at Workspace, then a model picked for it at Global, then Save; the workspace
  *                     file loses its override and the global file holds the pick, which the row then reads.
+ *  11. reload-clean — a configuration change arriving while Settings is open (REQ-CONFIG-419, REQ-SHELL-041): the
+ *                     Runtime category's memory-diagnostics switch writes its key at once and the reloaded snapshot is
+ *                     announced back to this window, as a sign-in's is. With nothing edited the strip carries no
+ *                     `unsaved settings` and the save bar stays saved; after a real edit, a second reload keeps the edit
+ *                     and the flag (`docs/defects/fixed/a-sign-in-reload-marks-settings-unsaved-though-nothing-was-edited.md`).
  *
  * The legal links and the licence bundle are exercised through the capture seam's scripted opener
  * (`ROTARIS_CAPTURE_OPEN_EXTERNAL`), which reports success or the platform refusal without launching a browser.
@@ -641,6 +646,61 @@ results.personasOneFieldTwoScopes = {
   workspaceFile: sWsAfter.includes('personas') ? 'personas left' : 'personas removed',
   globalFile: sGlobalAfter.trim().split('\n').slice(1).join(' / '),
 };
+
+// ── 11. A reload from elsewhere leaves a clean form clean, and keeps a real edit (REQ-CONFIG-419, REQ-SHELL-041) ──
+// The memory-diagnostics switch (REQ-CONFIG-471) is the one Settings control that writes the file at once; main then
+// announces the reloaded snapshot to this window exactly as it does after a sign-in (`config.setField` → `announce`),
+// and the screen adopts it keeping its pending state. The live run at 1763f7f found that adoption reading as dirty
+// with nothing edited (sign-in.png: "unsaved settings"), because the rebased state held its keys in another order.
+const reloadRoot = join(output, 'reload-clean');
+const rWorkspace = join(reloadRoot, 'workspace');
+const rLocal = join(reloadRoot, 'local');
+const rPreferences = join(reloadRoot, 'preferences');
+mkdirSync(join(rWorkspace, '.rotaris'), { recursive: true });
+mkdirSync(rLocal, { recursive: true });
+const rConfig = join(rWorkspace, '.rotaris', 'agents.yaml');
+writeFileSync(rConfig, [
+  '# scratch configuration written by the proof script',
+  'models:', '  scripted: { provider: scripted, model_id: scripted }',
+  'small_model: scripted', 'medium_model: scripted', 'large_model: scripted', '',
+].join('\n'));
+const DIAGNOSTICS = '[aria-labelledby="diagnostics-label"]';
+const DIAGNOSTICS_ON = `.toggle.is-on${DIAGNOSTICS}`;
+const BREAKER_ON = '.toggle.is-on[aria-labelledby="cb-label"]';
+const STRIP_UNSAVED = '[data-testid="strip-unsaved"]';
+const reloadProbes = [STRIP_UNSAVED, '.save-bar__status', DIAGNOSTICS_ON, BREAKER_ON];
+const reload = await launch('reload-clean', rWorkspace, rLocal, rPreferences, {
+  ...openCategory('Runtime'),
+  ROTARIS_CAPTURE_PROBE_AT: [2000, 4000, 6000, 8000].flatMap((ms) => reloadProbes.map((sel) => `${sel}@${ms}`)).join(';;'),
+  // 2400: the switch on, nothing edited. 4400: a real edit (the breaker off). 6400: the switch off again, with the edit pending.
+  ROTARIS_CAPTURE_CLICKS: `${DIAGNOSTICS}@2400;;[aria-labelledby="cb-label"]@4400;;${DIAGNOSTICS}@6400`,
+  ROTARIS_CAPTURE_PROBE: [...PROBES, ...reloadProbes].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '9000',
+});
+const reloadAt = (ms, selector) => JSON.parse(new RegExp(`probe-at ${ms} ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])`).exec(reload.log)?.[1] ?? 'null');
+const reading = (ms) => {
+  const read = Object.fromEntries(reloadProbes.map((sel) => [sel, reloadAt(ms, sel)]));
+  const missing = reloadProbes.filter((sel) => read[sel] === null);
+  if (missing.length > 0) throw new Error(`reload-clean: the probes at ${ms} ms did not run: ${missing.join(', ')}`);
+  return { unsavedFlag: read[STRIP_UNSAVED].length > 0, status: read['.save-bar__status'][0]?.text ?? '', diagnostics: read[DIAGNOSTICS_ON].length > 0, breaker: read[BREAKER_ON].length > 0 };
+};
+const fieldWrites = reload.log.split('\n').filter((l) => l.includes('configuration field written for')).length;
+if (fieldWrites !== 2) throw new Error(`reload-clean: the switch wrote the file ${fieldWrites} times, not twice, so the reload path was not driven (see reload-clean.log)`);
+const r0 = reading(2000);
+const r1 = reading(4000);
+const r2 = reading(6000);
+const r3 = reading(8000);
+if (r0.unsavedFlag || r0.status !== 'All changes saved' || r0.diagnostics) throw new Error(`reload-clean: the form did not open clean with the switch off: ${JSON.stringify(r0)}`);
+// The change arrived (the switch reads on from the reloaded snapshot), and nothing was edited: clean, no flag.
+if (!r1.diagnostics) throw new Error(`reload-clean: the reloaded snapshot never reached the screen: ${JSON.stringify(r1)}`);
+if (r1.unsavedFlag || r1.status !== 'All changes saved') throw new Error(`reload-clean: a reload with no edit marked the form dirty (REQ-CONFIG-419, REQ-SHELL-041): ${JSON.stringify(r1)}`);
+// A real edit is dirty, and stays dirty and kept across a second reload.
+if (!r2.unsavedFlag || r2.status !== 'Unsaved changes' || r2.breaker) throw new Error(`reload-clean: the breaker edit did not dirty the form: ${JSON.stringify(r2)}`);
+if (r3.diagnostics) throw new Error(`reload-clean: the second reload never reached the screen: ${JSON.stringify(r3)}`);
+if (!r3.unsavedFlag || r3.status !== 'Unsaved changes' || r3.breaker) throw new Error(`reload-clean: the second reload dropped the pending edit or its flag: ${JSON.stringify(r3)}`);
+const rYaml = readFileSync(rConfig, 'utf8');
+if (!/memory_diagnostics_enabled: false/.test(rYaml) || /circuit_breaker/.test(rYaml)) throw new Error(`reload-clean: the file is not the switch's alone:\n${rYaml}`);
+results.reloadClean = { opened: r0, afterReloadNoEdit: r1, afterEdit: r2, afterReloadWithEdit: r3, fieldWrites };
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 2));

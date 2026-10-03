@@ -201,7 +201,9 @@ the snapshot fold, never the per-run `configure` with its MCP configuration load
 (`Sessions.modelOverridesOf`) — so the composer's model chip names what the next run starts with, as the inspector does at
 rest; while a run is live the run-level agent's Model names **`entryModelKey`** instead (since 2026-10-03, REQ-MONITOR-052/066):
 the key the live root's ladder cell runs on (`Run.entryModelKey`, the key the cell carries, `AgentResilienceCell.key`), null with
-no live run. The record's `wait` carries `excluded`
+no live run. A child's `AgentRecord.model` and `contextLimit` likewise name the key its live ladder cell runs on, and measure
+against that model, once a fallback or an override has moved it (`Run.childModel`, since 2026-10-03). At rest they come from
+its row's `model_key`. The record's `wait` carries `excluded`
 (REQ-MONITOR-194/303, since 2026-10-02): the configured keys the session holds out of quota, which the quota-wait chooser
 annotates and leaves choosable. Since fin10 the same list rides outside a wait as **`excludedModels`** (REQ-MONITOR-194): from
 the live run's memory (`Run.excludedModelKeys`), else — a session at rest — the memory its timeline rehydrates through the

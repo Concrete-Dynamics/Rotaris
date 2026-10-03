@@ -258,6 +258,15 @@ reading needs is REQ-CONFIG-419's: repopulate every field the user has NOT chang
 — field by field against the previous saved values (`rebasePending`, `ui/src/settings/config-state.ts`, tested).
 The composer's case is the special case of that rule, not the rule. Kept beside the reading, not repaired quietly.
 
+*Reported back 2026-10-03, the live run at `1763f7f`:* the rebase kept and repopulated the right fields, but the form it
+produced read as dirty with nothing edited — sign-in.png's strip read `unsaved settings`. `rebasePending` builds its
+result with its keys in another order than `pendingFrom`, and `isDirty` compared the two `JSON.stringify` strings; the
+"tested" above held only because the test compared with `toEqual`, which ignores key order. The comparison is now
+structural (equal values are equal whatever their key order; an array's order is a value), and the rebase compares
+runtime keys by value rather than by reference
+([defect note](../../defects/fixed/a-sign-in-reload-marks-settings-unsaved-though-nothing-was-edited.md);
+`config-state.test.ts`, settings-proof launch 11).
+
 **A second reading, on REQ-CONFIG-041 and the starter file:** REQ-CONFIG-025's starter `agents.yaml` states the
 twelve slot keys as explicit nulls, and the editor read a written null as "the workspace states this slot" with no
 value. A written null overrides nothing, so the editor now reads it as unstated and shows the value the lower layer

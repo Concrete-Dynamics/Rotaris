@@ -30,3 +30,27 @@ key order, so it never saw it.
 - `apps/desktop/src/main/index.ts` — the reload announced after a provider change.
 
 Noticed 2026-10-03 by the autopsy of the live run at `1763f7f`; recorded before the repair.
+
+## Repaired 2026-10-03
+
+`isDirty` and the rebase's whole-block checks now use a structural comparison (`sameValue` in
+`packages/ui/src/settings/config-state.ts`): equal values are equal whatever order an object holds its keys in, an
+array's order is part of its value, and a key holding `undefined` counts as absent, as it did under `JSON.stringify`.
+`rebasePending` also compares each runtime key by value, so a list the user edited and put back counts as untouched
+and takes the file's new value. Nothing in the renderer changed: the strip's flag and both guards read the same
+`dirty`, which is now false after a reload with no edit and stays true across a reload with one.
+
+Evidence:
+
+- `packages/ui/src/settings/config-state.test.ts` — three cases, each red on the unrepaired file: a reload with no
+  edit is clean (and an edit stays dirty across it, and is clean again once undone); equal values in another key order
+  are clean at every depth while a different value or a reordered list is dirty; a list edited and put back takes the
+  file's new value.
+- `pnpm settings-proof`, launch 11 (`reload-clean`), no provider: Settings open on Runtime, the memory-diagnostics
+  switch written twice (each write announced back to the window as a sign-in's reload is), the strip and the save bar
+  read after each. Against a build of the unrepaired file the launch failed at the first reload with
+  `{"unsavedFlag":true,"status":"Unsaved changes","diagnostics":true,…}`; repaired, the form stays clean after the
+  reload with no edit, and a circuit-breaker edit stays dirty and kept across the second reload.
+
+Not measured here: the sign-in itself. The live check that shows it is the live run's `sign-in` scenario, its
+`sign-in.png` strip read with no `unsaved settings`; the orchestrator runs it after the merge.

@@ -61,6 +61,12 @@ as a file now passes through the primitive's own refusal, and is red without thi
   the fault when `.rotaris` is a regular file.
 - `apps/desktop/src/workspace-service/open-bootstrap.test.ts`: the open logs that refusal as a warning and goes on.
 
+**In the built app** (build of `b14f80d`, the branch's head with this repair, `pnpm slice-proof` against the registered
+`katalyst` endpoint, 10:49:03 to 10:55:52 UTC, load 2.8 at start and 7.4 at end, other agents' work on the host): exit
+0, all seven scenarios; the first launch logged the open's bootstrap `written` (10:49:04.994) with the catch gone, then
+the marker writer's and the sign-in's `exists`. The failing path itself (a file at `.rotaris`) is not one the proof
+drives; the unit cases above pin it.
+
 **Reported back** in ADR-0004's write-side decision, beside its 2026-09-13 correction, and in its row of 2026-10-04 in
 [first-executions.md](../../architecture/first-executions.md).
 

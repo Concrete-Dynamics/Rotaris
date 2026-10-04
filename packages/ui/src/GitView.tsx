@@ -120,6 +120,28 @@ export function stateColumnFit(phraseWidths: readonly number[], cellPadding: num
   const widest = Math.max(0, ...phraseWidths.filter((w) => Number.isFinite(w)));
   return widest > 0 ? Math.ceil(widest + Math.max(0, cellPadding)) : null;
 }
+/**
+ * REQ-GIT-077, UIR-002: the least one Branch cell's line can be drawn in, in CSS px — the name at its floor (`min-width`,
+ * its first character and the elision marker), every tag whole, and the gaps between them. The tags hold and the name
+ * elides (the design material draws a name whole beside its tag, never a tag shortened or dropped), so this is what the
+ * Branch column must keep at the minimum window. Until 2026-10-04 nothing kept it: at 1000x680 the base row's `base` and
+ * `active` took the column's 9ch, `main` was given no pixel and `active` lay past the cell's edge
+ * (docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
+ */
+export function branchLineFloor(nameFloor: number, tagWidths: readonly number[], gap: number): number {
+  const finite = (w: number): number => (Number.isFinite(w) ? Math.max(0, w) : 0);
+  return [nameFloor, ...tagWidths].reduce((sum, w) => sum + finite(w), 0) + finite(gap) * tagWidths.length;
+}
+/**
+ * The Branch column's floor — the widest line `branchLineFloor` measured plus the cell's padding, in CSS px; `null` when
+ * nothing was measured, which leaves the column at its CSS floor (the heading's 9ch). Same rule as `stateColumnFit`.
+ */
+export const branchColumnFit = (lineFloors: readonly number[], cellPadding: number): number | null => stateColumnFit(lineFloors, cellPadding);
+/** The worktree table's measured column floors, as the custom properties shell.css reads; none when nothing was measured. */
+export function tableFit(stateFit: number | null, branchFit: number | null): CSSProperties | undefined {
+  if (stateFit === null && branchFit === null) return undefined;
+  return { ...(stateFit === null ? {} : { '--git-state-fit': `${stateFit}px` }), ...(branchFit === null ? {} : { '--git-branch-fit': `${branchFit}px` }) } as CSSProperties;
+}
 /** REQ-GIT-083: eligible = a selected row whose session is `completed` and whose binding is `ready` or `merge_failed`. */
 export function mergeEligible(rows: readonly GitWorktreeRow[], selected: ReadonlySet<string>, join: Map<string, RowBinding>): GitWorktreeRow[] {
   return rows.filter((r) => selected.has(r.path)).filter((r) => { const b = join.get(pathKey(r.path)); return b !== undefined && b.status === 'completed' && (b.mergeStatus === 'ready' || b.mergeStatus === 'merge_failed'); });
@@ -279,6 +301,34 @@ export function GitView(props: GitViewProps) {
     return () => { observer.disconnect(); };
   }, [phraseKey]);
 
+  // REQ-GIT-077, UIR-002: the Branch column keeps, at the minimum window, the widest line a row needs with its name at
+  // its floor and its tags whole (`branchLineFloor`); a column with more room gives the name the rest. Re-measured when a
+  // tag changes size without the rows changing (a face finishing loading, the type scale).
+  const [branchFit, setBranchFit] = useState<number | null>(null);
+  const branchKey = rows.map((r) => `${r.branch ?? ''}\u0000${r.isBase ? 1 : 0}${r.isActive ? 1 : 0}`).join('\u0001');
+  useLayoutEffect(() => {
+    const table = worktreeTable.current;
+    if (!table) return;
+    const lines = Array.from(table.querySelectorAll<HTMLElement>('.git__branch-line'));
+    const measure = () => {
+      const floors = lines.map((line) => {
+        const name = line.querySelector<HTMLElement>('.git__branch-name');
+        const tags = Array.from(line.querySelectorAll<HTMLElement>('.tag'));
+        const style = getComputedStyle(line);
+        return branchLineFloor(name ? parseFloat(getComputedStyle(name).minWidth) : 0, tags.map((t) => t.getBoundingClientRect().width), parseFloat(style.columnGap));
+      });
+      const cell = lines[0]?.closest('td');
+      const style = cell ? getComputedStyle(cell) : null;
+      const padding = style ? (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0) : 0;
+      setBranchFit(branchColumnFit(floors, padding));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    for (const tag of table.querySelectorAll<HTMLElement>('.git__branch-line .tag')) observer.observe(tag);
+    return () => { observer.disconnect(); };
+  }, [branchKey]);
+
   const eligible = mergeEligible(rows, selected, join);
   const hasBranch = state?.isRepository === true && state.branch !== null;
   const existingBranches = rows.flatMap((r) => (r.branch === null ? [] : [r.branch]));
@@ -394,7 +444,7 @@ export function GitView(props: GitViewProps) {
             {rows.length === 0 ? (
               <DesignEmptyState className="empty-state git__empty" data-testid="git-worktrees-empty"><span className="empty-state-title">No Git worktrees found for this workspace.</span></DesignEmptyState>
             ) : (
-              <DesignTable ref={worktreeTable} style={stateFit === null ? undefined : ({ '--git-state-fit': `${stateFit}px` } as CSSProperties)} className="table git__table git__worktree-table" aria-multiselectable="true" aria-label="Worktrees" aria-description="Scroll horizontally when the worktree columns exceed the card width.">
+              <DesignTable ref={worktreeTable} style={tableFit(stateFit, branchFit)} className="table git__table git__worktree-table" aria-multiselectable="true" aria-label="Worktrees" aria-description="Scroll horizontally when the worktree columns exceed the card width.">
                 {/* Seven columns whose content floor is wider than this pane at the minimum window. The five
                     that cannot give way take the width they need; Branch and Session elide (UIR-002) and share
                     whatever is left. See `.git__worktree-table` in shell.css for the measured figures. */}
@@ -411,10 +461,15 @@ export function GitView(props: GitViewProps) {
                     return (
                       <tr key={row.path} className={isSelected ? 'git__row is-selected' : 'git__row'} data-path={row.path} data-base={row.isBase ? '1' : '0'} data-active={row.isActive ? '1' : '0'} data-session={b?.sessionId ?? ''} aria-selected={isSelected} title={row.path} onClick={(e) => selectRow(e, row.path)}>
                         <td className="mono git__cell-branch">
-                          {/* UIR-002: elided, never fragmented — the full branch is the tooltip. */}
-                          <span className="git__branch-name" title={row.branch ?? 'detached'}>{row.branch ?? 'detached'}</span>
-                          {row.isBase && <DesignTag kind="outline" data-testid="git-tag-base">base</DesignTag>}
-                          {row.isActive && <DesignTag kind="accent" data-testid="git-tag-active">active</DesignTag>}
+                          {/* The line is a flex box INSIDE the cell, so the cell stays a table cell and spans its row
+                              (until 2026-10-04 the cell itself was the flex box, wrapped in an anonymous cell and only as
+                              tall as its content). UIR-002: the name elides, never fragmented — the full branch is the
+                              tooltip — and the tags hold. */}
+                          <div className="git__branch-line">
+                            <span className="git__branch-name" title={row.branch ?? 'detached'}>{row.branch ?? 'detached'}</span>
+                            {row.isBase && <DesignTag kind="outline" data-testid="git-tag-base">base</DesignTag>}
+                            {row.isActive && <DesignTag kind="accent" data-testid="git-tag-active">active</DesignTag>}
+                          </div>
                         </td>
                         <td className="mono git__cell-session" title={b?.sessionId ?? '-'}>{b?.sessionId ?? '-'}</td>
                         <td className="git__cell-state"><span className="git__state-phrase">{phrase.status}<span className="git__merge-status text-secondary"> · {phrase.merge}</span></span></td>

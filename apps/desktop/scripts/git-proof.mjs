@@ -22,7 +22,10 @@
  *                  In 3 and 3b no worktree cell, heading or body, paints into its neighbour and the State cell's
  *                  `completed · ready` is cut nowhere, at 1440x900 and at the 1000x680 minimum (REQ-GIT-109, REQ-SHELL-022;
  *                  `lib/cell-paint.mjs`), and at 1440x900 the base row's `main` is drawn whole beside its tags. In 3b the
- *                  bound row (keyed by the session id) is among the rows measured at both sizes.
+ *                  bound row (keyed by the session id) is among the rows measured at both sizes. In 3 and 3b every row's
+ *                  Branch cell draws at least its name's first character with the elision marker, no tag lies past the
+ *                  cell's edge (the base row's `main`, `base` and `active` at 1000x680), and every cell spans its row's
+ *                  height.
  *   3c. presented — the session persisted as `paused_message_limit` while the app is closed; the Git view opened: the
  *                  bound row's State cell reads `paused · ready`, the presented status and never the persisted word
  *                  (REQ-NOTIFY-048/049, REQ-GIT-109); the status put back to `completed` after.
@@ -44,7 +47,7 @@ import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { restatedFacts } from './lib/restated-facts.mjs';
 import { parseEvals, readEval } from './lib/capture-evals.mjs';
-import { cellPaintFindings, cellPaintProbe, runShownWhole } from './lib/cell-paint.mjs';
+import { cellPaintFindings, cellPaintProbe, cellsShortOfRow, controlsOutsideCell, runShownWhole, runShowsLeadingChars } from './lib/cell-paint.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -75,6 +78,19 @@ const ELIDING_COLUMNS = ['Branch', 'Session'];
 const cellVerdict = (measured, where) => {
   const findings = cellPaintFindings(measured, { elide: ELIDING_COLUMNS });
   if (findings.length > 0) throw new Error(`${where}: a worktree cell paints outside its column or is cut (REQ-GIT-109): ${findings.map((f) => `${f.row} ${f.column} ${f.kind} "${f.text}" — ${f.detail}`).join(' | ')}`);
+  // Branch elides, so a cut name is no finding above; but every row still draws its name's first character and the marker
+  // (UIR-002: the name elides, it does not vanish), and no tag is laid out past the cell's edge, where the cell's clip
+  // hides it. Until 2026-10-04 the base row at 1000x680 drew neither `main` nor its `active` tag
+  // (docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
+  const body = measured.rows.filter((r) => r.key !== 'header');
+  const nameless = body.filter((r) => { const name = r.cells[0]?.runs.find((x) => !x.text.startsWith('[')); return !name || !runShowsLeadingChars(measured, r.key, 'Branch', name.text); });
+  if (nameless.length > 0) throw new Error(`${where}: a worktree row's Branch cell draws no character of its name with the marker: ${nameless.map((r) => `${r.key} ${JSON.stringify(r.cells[0])}`).join(' | ')}`);
+  const hidden = body.flatMap((r) => controlsOutsideCell(measured, r.key, 'Branch').map((x) => `${r.key} ${x}`));
+  if (hidden.length > 0) throw new Error(`${where}: a Branch cell's tag lies past the cell's edge: ${hidden.join(' | ')}`);
+  // Every cell spans its row: the Branch cell was itself the flex box until 2026-10-04, so its border and selected
+  // background stopped short of the row's (same note).
+  const short = cellsShortOfRow(measured);
+  if (short.length > 0) throw new Error(`${where}: a worktree cell does not span its row's height: ${short.join(' | ')}`);
   return { viewport: measured.viewport, rows: measured.rows.length, findings: 0 };
 };
 const STRIP_BRANCH_ICON = '[data-testid="strip-branch"] i.ph-git-branch.status-strip__icon';
@@ -328,6 +344,9 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   // for a column that has run out of room, not for a cell capped narrower than its own column.
   const baseRow = opening.rows.find((x) => x.cells[0]?.runs.some((r) => r.text === 'main'));
   if (!baseRow || !runShownWhole(opening, baseRow.key, 'Branch', 'main')) throw new Error(`at 1440x900 the base row's branch is not drawn whole: ${JSON.stringify(baseRow?.cells[0])}`);
+  // At the minimum the base row is among the rows measured, so the verdict above read its `main` (at least `m` and the
+  // marker) and its two tags (inside the cell) there too.
+  if (!minimum.rows.some((x) => x.key === baseRow.key)) throw new Error(`the base row (${baseRow.key}) was not among the worktree cells measured at 1000x680`);
   if (!existsSync(minimumPng)) throw new Error('no PNG was kept of the Git view at the minimum size');
   results.worktreeAhead = { strip, title, description: `${title} ${WORKTREE_NOTE}`, cells: { opening: cellsAtOpening, minimum: cellsAtMinimum, baseBranchWhole: true }, png: ahead.png, minimumPng };
 }

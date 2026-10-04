@@ -1139,7 +1139,11 @@ column is measured to its widest phrase over a `10ch` floor (`stateColumnFit`, R
 the worktree-ahead launch also requires the bound row among the rows measured at both sizes, and a launch `presented`
 (3c) persists the session as `paused_message_limit` while the app is closed and reads `paused · ready` in the bound row's
 State cell — the presented status, never the persisted word (`statePhrase` through `presentationStatus`,
-REQ-NOTIFY-048/049). Evidence under `.proof/git-proof/`.
+REQ-NOTIFY-048/049). The same day (fin16) every row's Branch cell, at each size those launches measure, must draw at least
+its name's first character with the marker, lay out no tag past the cell's edge, and span its row's height (the line is
+a flex box inside the cell, and the Branch column keeps the widest line with the name at its `2ch` floor and its tags
+whole — `branchLineFloor`, `--git-branch-fit`); the base row drew neither `main` nor `active` at 1000×680 before.
+Evidence under `.proof/git-proof/`.
 
 **What `pnpm checkpoint-proof` does.** It builds Electron and launches the app thirteen times against a scratch repository:
 two scripted iterations capture checkpoints 1 and 2 (the refs, the fixed identity, the message, HEAD and the index bytes

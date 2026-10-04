@@ -54,10 +54,10 @@ describe('minimum-window layout regressions', () => {
     // and Branch elides (UIR-002) into whatever is left. `width: 100%` alone guaranteed the card never
     // scrolled, so the last column's overflow — 12 px — was simply outside the box. The figures are spelled
     // in `ch` because each floor is a word, and the adopted language takes no literal pixel.
-    // The table's minimum is the four fixed columns' 46ch, the 9ch the Branch heading needs, and whatever the State column
-    // takes (63ch until 2026-10-04: State a fixed 10ch, the next case says why it is not, and Branch 7ch, which cut its
-    // heading under Session at 1000x680).
-    expect(rule('.git__worktree-table')).toContain('min-width: calc(55ch + max(10ch, var(--git-state-fit, 10ch)))');
+    // The table's minimum is the four fixed columns' 46ch, the State column's floor and the Branch column's (63ch until
+    // 2026-10-04: State a fixed 10ch, the next case says why it is not, and Branch 7ch, which cut its heading under Session
+    // at 1000x680; then `55ch + State`, Branch a fixed 9ch, which its base row's two tags took whole — the Branch case below).
+    expect(rule('.git__worktree-table')).toContain('min-width: calc(46ch + max(10ch, var(--git-state-fit, 10ch)) + max(9ch, var(--git-branch-fit, 9ch)))');
     expect(rule('.git__col-files')).toContain('width: 12ch');
     expect(rule('.git__col-actions')).toContain('width: 9ch');
     expect(rule('.git-card--table')).toContain('overflow-x: auto');
@@ -82,6 +82,20 @@ describe('minimum-window layout regressions', () => {
     expect(bodies('.git__cell-branch').length).toBeGreaterThan(0);
     expect(bodies('.git__cell-branch').join(' ')).not.toContain('max-width');
     expect(bodies('.git__cell-session').join(' ')).toContain('max-width: 22ch');
+  });
+
+  it('keeps the Branch cell a table cell with its line inside it, the tags whole and the name eliding to a floor (UIR-002, REQ-GIT-077)', () => {
+    // Until 2026-10-04 the cell was itself the flex box: wrapped in an anonymous cell, it stopped short of its row's height
+    // and background, and at 1000x680 the base row's tags took its 9ch whole, leaving `main` no pixel
+    // (docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
+    const bodies = (selector: string) => [...css.replace(/\/\*[\s\S]*?\*\//gu, '').matchAll(/([^{}]+)\{([^}]*)\}/gu)]
+      .filter((m) => (m[1] ?? '').split(',').some((s) => s.trim() === selector)).map((m) => m[2] ?? '');
+    expect(bodies('.git__cell-branch').join(' ')).not.toMatch(/display\s*:/u);
+    expect(rule('.git__branch-line')).toContain('display: flex');
+    expect(rule('.git__branch-line')).toContain('flex-wrap: nowrap');
+    expect(rule('.git__branch-line .tag')).toContain('flex: 0 0 auto');
+    expect(rule('.git__cell-branch .git__branch-name')).toContain('min-width: 2ch');
+    expect(rule('.git__cell-branch .git__branch-name')).toContain('text-overflow: ellipsis');
   });
 
   it('keeps the start-session dialog inside the 1000x680 minimum with its actions reachable (REQ-SHELL-022/125)', () => {

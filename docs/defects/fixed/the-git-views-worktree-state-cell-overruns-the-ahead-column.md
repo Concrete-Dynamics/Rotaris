@@ -56,7 +56,7 @@ unrepaired build and are green on the repair. The verdict is a pure function wit
 `packages/ui/src/layout-regression.test.ts` the three CSS rules (each red on the unrepaired stylesheet).
 
 At the minimum the base row's Branch cell draws its `base` tag and no character of `main` (nor the `active` tag, past the
-cell's edge): the 9ch the column has there is spent on the tags before the name. That is recorded on its own
-([the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md](../the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md)).
+cell's edge): the 9ch the column has there is spent on the tags before the name. That is recorded on its own and was repaired the same day by fin16
+([the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md](the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md)).
 The State cell still rendered the persisted execution status rather than its presentation, also recorded on its own and repaired the same day by fin16
 ([the-git-views-state-cell-renders-the-raw-persisted-execution-status.md](the-git-views-state-cell-renders-the-raw-persisted-execution-status.md)).

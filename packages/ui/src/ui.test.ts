@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRecord, CheckpointListPayload, SessionListItemPayload } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
-import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, statePhrase, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
+import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, statePhrase, branchLineFloor, branchColumnFit, tableFit, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
 import type { GitViewState, GitWorktreeRow } from '@rotaris/contracts';
 import { resolveTheme, isBusy, presentationStatus, EXECUTION_STATUSES, PRESENTATION_STATUSES } from '@rotaris/contracts';
 
@@ -189,6 +189,23 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
     const rows = [wt({ path: 'D:/ws/.rotaris/worktrees/A', isBase: false, isActive: false })];
     expect(mergeEligible(rows, new Set(['D:/ws/.rotaris/worktrees/A']), joinBindings([row({ sessionId: 'A', status: 'completed', worktree: binding('D:/ws/.rotaris/worktrees/A') })]))).toHaveLength(1);
     expect(mergeEligible(rows, new Set(['D:/ws/.rotaris/worktrees/A']), joinBindings([row({ sessionId: 'A', status: 'interrupted', worktree: binding('D:/ws/.rotaris/worktrees/A') })]))).toEqual([]);
+  });
+  it('REQ-GIT-077, UIR-002: the Branch column keeps the widest line with its name at its floor and its tags whole', () => {
+    // The base row at 1000x680 as measured 2026-10-04: `base` 40.6 px and `active` 52.9 px wide, an 8 px gap before each, the
+    // name's `2ch` floor 14.4 px — 123.9 px of line, where the column's 9ch (68.7 px) gave `main` nothing
+    // (docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
+    expect(branchLineFloor(14.4, [40.6, 52.9], 8)).toBeCloseTo(123.9, 5);
+    expect(branchLineFloor(14.4, [], 8)).toBeCloseTo(14.4, 5);
+    expect(branchLineFloor(Number.NaN, [40, Number.NaN], Number.NaN)).toBe(40);
+    // The widest line plus the cell's padding, rounded up; nothing measured leaves the column at its CSS floor.
+    expect(branchColumnFit([14.4, 123.9, 14.4], 28)).toBe(152);
+    expect(branchColumnFit([], 28)).toBeNull();
+    expect(branchColumnFit([0, 0], 28)).toBeNull();
+    // Both floors reach the table as the custom properties shell.css reads, and neither is set when unmeasured.
+    expect(tableFit(null, null)).toBeUndefined();
+    expect(tableFit(110, 152)).toEqual({ '--git-state-fit': '110px', '--git-branch-fit': '152px' });
+    expect(tableFit(null, 152)).toEqual({ '--git-branch-fit': '152px' });
+    expect(tableFit(110, null)).toEqual({ '--git-state-fit': '110px' });
   });
   it('REQ-GIT-083: eligibility is completed + ready|merge_failed among the selected rows, in table order', () => {
     const rows = [wt({ path: 'D:/ws' }), wt({ path: 'D:/ws/.rotaris/worktrees/A', isBase: false, isActive: false }), wt({ path: 'D:/ws/.rotaris/worktrees/B', isBase: false, isActive: false })];

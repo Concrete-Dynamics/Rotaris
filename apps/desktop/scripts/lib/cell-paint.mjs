@@ -15,6 +15,12 @@
  *     in the columns named in `elide` (the ones whose content is shortened by design and carries its full text as a
  *     tooltip); anywhere else a cut run is text the reader cannot see.
  *
+ * Four narrower checks beside it, each a pure function too: `runShownWhole` (a run that may elide but has room not to),
+ * `runShowsLeadingChars` (an eliding run that still draws its first characters and the marker) and `controlsOutsideCell`
+ * (a tag or button laid out past its cell's edge, which the cell's clip hides rather than paints over the next one), and
+ * `cellsShortOfRow` (a cell whose box does not span its row's height — the Branch cell did not while it was itself the
+ * flex box, so its border and selected background stopped short of the row's).
+ *
  * The probe's text must not contain `;;` or `>>`, which the capture seam's step grammar splits on (`parseSteps`).
  *
  * Nothing here is product code. It runs only from the proofs.
@@ -66,7 +72,8 @@ export function cellPaintProbe(tableSelector) {
       viewport: [innerWidth, innerHeight],
       rows: [...table.querySelectorAll('thead tr, tbody tr')].map((tr) => ({
         key: tr.parentElement.tagName === 'THEAD' ? 'header' : tr.dataset.session || tr.title || String(tr.rowIndex),
-        cells: [...tr.cells].map((cell, i) => { const r = cell.getBoundingClientRect(); return { column: heads[i] ?? String(i), left: r.left, right: r.right, runs: runsOf(cell) }; }),
+        top: tr.getBoundingClientRect().top, bottom: tr.getBoundingClientRect().bottom,
+        cells: [...tr.cells].map((cell, i) => { const r = cell.getBoundingClientRect(); return { column: heads[i] ?? String(i), left: r.left, right: r.right, top: r.top, bottom: r.bottom, runs: runsOf(cell) }; }),
       })),
     };
   })()`;
@@ -131,4 +138,66 @@ export function runShownWhole(measured, key, column, text, tolerance = CELL_PAIN
   const visibleLeft = run.clipLeft === null ? run.left : Math.max(run.left, run.clipLeft);
   const visibleRight = run.clipRight === null ? run.right : Math.min(run.right, run.clipRight);
   return (run.right - run.left) - Math.max(0, visibleRight - visibleLeft) <= tolerance;
+}
+
+/**
+ * Whether the run `text` in `column` of the row keyed `key` shows at least its first `count` characters and the elision
+ * marker after them, or is drawn whole. The column's face is monospace (the Branch cell is `.mono`), so one character's
+ * advance is the run's laid-out width over its length, and the marker takes one more. The Git view's base row drew no
+ * character of `main` at the 1000×680 minimum until 2026-10-04, its two tags taking the cell's whole width
+ * (`docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md`).
+ * @param {{ rows?: Row[] }} measured
+ * @param {string} key
+ * @param {string} column
+ * @param {string} text
+ * @param {number} [count]
+ * @param {number} [tolerance]
+ */
+export function runShowsLeadingChars(measured, key, column, text, count = 1, tolerance = CELL_PAINT_TOLERANCE) {
+  const cell = measured.rows?.find((r) => r.key === key)?.cells.find((c) => c.column === column);
+  const run = cell?.runs.find((r) => r.text === text);
+  if (!run || text.length === 0) return false;
+  if (runShownWhole(measured, key, column, text, tolerance)) return true;
+  const visibleLeft = run.clipLeft === null ? run.left : Math.max(run.left, run.clipLeft);
+  const visibleRight = run.clipRight === null ? run.right : Math.min(run.right, run.clipRight);
+  const advance = (run.right - run.left) / text.length;
+  return Math.max(0, visibleRight - visibleLeft) + tolerance >= advance * (Math.min(count, text.length) + 1);
+}
+
+/**
+ * The drawn controls (a tag or a button, measured as `[label]`) in `column` of the row keyed `key` whose LAID-OUT box
+ * reaches past the cell's border box. The cell's clip hides such a control instead of letting it paint into the next
+ * cell, so `cellPaintFindings` never sees it; on screen the control is simply missing, or half of it is.
+ * @param {{ rows?: Row[] }} measured
+ * @param {string} key
+ * @param {string} column
+ * @param {number} [tolerance]
+ * @returns {string[]}
+ */
+export function controlsOutsideCell(measured, key, column, tolerance = CELL_PAINT_TOLERANCE) {
+  const cell = measured.rows?.find((r) => r.key === key)?.cells.find((c) => c.column === column);
+  if (!cell) return [];
+  return cell.runs.filter((r) => r.text.startsWith('[') && r.text.endsWith(']') && (r.right > cell.right + tolerance || r.left < cell.left - tolerance))
+    .map((r) => `${r.text} laid out ${Math.round(r.left * 100) / 100}..${Math.round(r.right * 100) / 100} in a cell spanning ${Math.round(cell.left * 100) / 100}..${Math.round(cell.right * 100) / 100}`);
+}
+
+/**
+ * Every cell whose box does not span its row's height, as `row column top..bottom of top..bottom`. A real table cell
+ * always does; a cell given `display: flex` is wrapped in an anonymous cell and is only as tall as its content, so its
+ * border and background stop short of its neighbours'. A row or cell measured without its height is skipped.
+ * @param {{ rows?: Array<Row & { top?: number, bottom?: number }> }} measured
+ * @param {number} [tolerance]
+ * @returns {string[]}
+ */
+export function cellsShortOfRow(measured, tolerance = CELL_PAINT_TOLERANCE) {
+  const out = [];
+  const round = (n) => Math.round(n * 100) / 100;
+  for (const row of measured.rows ?? []) {
+    if (typeof row.top !== 'number' || typeof row.bottom !== 'number') continue;
+    for (const c of /** @type {Array<Cell & { top?: number, bottom?: number }>} */ (row.cells)) {
+      if (typeof c.top !== 'number' || typeof c.bottom !== 'number') continue;
+      if (c.top > row.top + tolerance || c.bottom < row.bottom - tolerance) out.push(`${row.key} ${c.column} ${round(c.top)}..${round(c.bottom)} of ${round(row.top)}..${round(row.bottom)}`);
+    }
+  }
+  return out;
 }

@@ -1,4 +1,4 @@
-# Agent workflow — branch, worktree, merge, line endings
+# Agent workflow — branch, worktree, rebase, line endings
 
 How changes land on `main` in this repository. `CLAUDE.md` states the rule in one
 paragraph; this file holds the steps that are only needed while doing it.
@@ -31,12 +31,21 @@ To set a change aside, write it to a patch file outside the checkout and restore
 or read the base in a throwaway detached worktree (`git worktree add --detach <path> main`,
 removed after).
 
-## Merge back, and persevere
+## Rebase onto main, and persevere
 
-Work is done when `main` is green with the branch in it — not when the branch is green.
-Abandoning a branch because the merge is hard is not an outcome an agent may choose.
+(Named "Merge back, and persevere" until 2026-10-04, when the owner wrote: "please always use
+rebase instead of a merge commit for main.")
 
-- **Re-read `main` before merging.** It moves. A trailer-less commit on `main` authored by
+`main`'s history is linear. A branch lands by a rebase onto `origin/main`, the gate on the
+rebased head, and a fast-forward push of that head (`git push origin HEAD:main`): never a
+merge commit, never a force. A push rejected because `main` moved is rebased again, gated
+again and pushed again. Merging `main` into your own branch while you work is fine: the rule
+is about `main`, and the rebase at landing drops those merges.
+
+Work is done when `main` is green with the branch on it — not when the branch is green.
+Abandoning a branch because the rebase is hard is not an outcome an agent may choose.
+
+- **Re-read `main` before rebasing.** It moves. A trailer-less commit on `main` authored by
   the owner is theirs — surface a collision with it, never reset it.
 - **A register identifier you took while you worked may have been taken on `main` too.** The
   request log, the open questions and the owner decisions have no allocator, and a worktree is
@@ -45,14 +54,16 @@ Abandoning a branch because the merge is hard is not an outcome an agent may cho
   that reached `main` first keeps the number**, yours takes the next free one, keeps every word,
   and says in its own cell that it moved — renumbering the documents that cite it in the same
   commit. A collision caught before your row reaches `main` is renumbered, not logged as a defect.
-- **Resolve every conflict by reading both sides.** The five shapes seen here: disjoint
+- **Resolve every conflict by reading both sides**, in a merge of `main` into your branch and
+  in each commit a rebase replays (stage the paths, `git rebase --continue`;
+  `git rebase --skip` only a commit the resolution left empty). The five shapes seen here: disjoint
   blocks in one file (concatenate); a shared array or object literal both sides extended
   (merge the entries); a shared import line naming different symbols (the wider form wins,
   or a symbol binds twice); prose one side revised in place (splice the clause into the
   newer copy, or one side's content is silently dropped); a real implementation against the
   other branch's placeholder (the implementation wins, or the stub shadows it).
-- **Never `git add -A` or `git commit -a` during a merge, or in a shared checkout.** Stage
-  the conflicted paths by name.
+- **Never `git add -A` or `git commit -a` during a merge or a rebase, or in a shared
+  checkout.** Stage the conflicted paths by name.
 - **A conflict marker left behind fails the lint.** `tools/check-conflict-markers.mjs` reads
   every tracked text file, working copy and index, and fails `pnpm lint` on a line git writes
   as a marker: seven `<`, `|` or `>` at column 0 followed by a space or the line's end, and a
@@ -65,13 +76,16 @@ Abandoning a branch because the merge is hard is not an outcome an agent may cho
   rewrites a conflicted lockfile on disk when it runs (`pnpm lint` prints "Merge conflict
   detected in pnpm-lock.yaml and successfully merged"), so the block it leaves staged is
   caught on the index side: stage the resolved lockfile again before committing.
-- **After a keep-both merge, run the compiler, not a sweep you wrote.** Command ids,
+- **After a keep-both resolution, run the compiler, not a sweep you wrote.** Command ids,
   preference keys, barrel re-exports, zod literal kinds, `case` labels, script names and
   ignore entries all duplicate silently; `tsc` finds in seconds what a regex misses.
-- **Verify on merged `main`, never in the worktree.** Proofs that reach into per-workspace
-  state have passed in the tree they were written in and failed in the primary checkout on
-  a directory name alone.
-- **Remove the worktree once merged**: `git worktree remove ../Rotaris-crw-wt-<short>`
+- **Verify the rebased head, never only the branch before it.** The rebased commit is the
+  one that lands; a gate green before the rebase judged a different tree. Proofs that reach
+  into per-workspace state have passed in the tree they were written in and failed in the
+  primary checkout on a directory name alone, so run them on the rebased head in another
+  tree: a detached worktree at that head (an orchestrated build's integration worktree is
+  one).
+- **Remove the worktree once landed**: `git worktree remove ../Rotaris-crw-wt-<short>`
   and `git branch -d <topic>`.
 
 ## Line endings are LF

@@ -3,6 +3,89 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-04 — main's history is linear: a bundle lands as a rebase and a fast-forward push
+
+**Prompted by** the owner, in the session's own conversation at 12:17:10 UTC on 2026-10-04 (the user's message in the
+session transcript, read before this edit): "please always use rebase instead of a merge commit for main." The
+orchestrator had just landed self-improvement #4 by a rebase (`3aef461`). Until now the merge stage merged each bundle
+into origin/main with `git merge --no-ff` in the plan's integration worktree and pushed that merge commit. The owner's
+words are their explicit approval for this change, the protected invariant's wording included.
+
+**Changed**
+- `scripts/workflow.template.js`, the merge stage only (`mergePrompt` and `MERGE_SCHEMA`'s descriptions). Step 0: a
+  landing is found without a merge commit, by `git merge-base --is-ancestor <branch> origin/main` on the rebased branch,
+  or by the bundle's commit subjects on origin/main when the branch is gone (an older landing is still found by its
+  `Merge branch '<branch>'` commit), and the landed head is reported. Step 1: in the bundle worktree, a rebase or merge
+  left in progress is aborted, `git status` is clean, and the branch is rebased onto origin/main (its own merges of
+  origin/main drop out; each replayed conflict is resolved as repository.md says). Step 2: that exact head, checked out
+  detached in the plan's integration worktree, gets the gate and the proofs the tasks name; a red that is the rebase's
+  own is fixed in a new commit on the branch, any other red goes back to repair. Step 3: that head is pushed from there
+  as a fast-forward to each push target; a push to main rejected because origin moved is rebased, gated and pushed
+  again; nothing is forced.
+- **The integration worktree stays.** The gate could run in the bundle worktree, but the old landing also ran the
+  proofs on merged main in a tree other than the one the bundle was built in, which is what
+  `docs/clean-room/agent-workflow.md` asks for ("Proofs that reach into per-workspace state have passed in the tree
+  they were written in and failed in the primary checkout on a directory name alone"). Gating the exact rebased head in
+  the integration worktree keeps that, and keeps the profile's `integ` and the self-test's two assertions on it as they
+  were.
+- SKILL.md: the opening (nothing lands unless the gate is green on the exact head that lands, as a rebase and a
+  fast-forward push), the `merge-failed` row, §6's landed branches, and the protected invariant, which read "the gate
+  runs on the merged result before every push; nothing is forced, reset or rewritten" and now reads "the gate runs on
+  the exact head that is pushed, before every push; main's history stays linear, a rebase and a fast-forward push and
+  never a merge commit (the owner, 2026-10-04: "please always use rebase instead of a merge commit for main."); nothing
+  is forced, and a shared branch is never reset or rewritten". Its substance is kept: the gate on the exact pushed head
+  before every push, no force, no shared branch reset or rewritten; a bundle's own unlanded branch is the one branch a
+  rebase rewrites.
+- `references/repository.md`: Worktrees and branches states main's linear history and the landing, and that merging
+  origin/main into a bundle branch while it is built is fine, since the rebase at landing drops those merges; the gate
+  runs before verification and on the rebased head before every push; Merge conflicts applies to each replayed commit;
+  "Another writer on main" compares from the last head this session pushed.
+- `references/environment.md`: a merge agent lost mid-landing (a rebased, unpushed branch, or a rebase in progress),
+  with fin3's and fin4's merge commits kept as the case before rebase landing.
+- `references/workflow-tool.md`: the `merge:<key>` label keeps its name for the landing stage; the other prompts are
+  pinned byte for byte; landings are serialized, and a rejected push is rebased, gated and pushed again.
+- `docs/clean-room/agent-workflow.md`: the title; "Merge back, and persevere" becomes "Rebase onto main, and
+  persevere", with its old name kept beside it (`docs/architecture/first-executions.md` and a fixed note cite it) and
+  the owner's words; conflicts in a merge into one's own branch and in each replayed commit; no `git add -A` during a
+  rebase either; "Verify the rebased head, never only the branch before it", in another tree; "Remove the worktree once
+  landed".
+
+**Not changed**, so the paused plans fin15 and fin16 resume under the same instructions for every stage but the
+landing: `grounding()`, the builder, verifier, repairer, sweep, live-runner and autopsy prompts, and
+`scripts/orchestration.mjs`'s resume notes (`MOVED_ON` and the others). A new self-test assertion hashes every rendered
+prompt but the merge stage's, for a fixed plan and profile, across a fresh run, a run resumed from the self-test's
+journals and a run with a refused live launch. The finding a refused landing hands the repairer keeps its title, "The
+gate is red once origin/main is merged in", for the same reason. Labels and endings (`merge:<key>`, `merged`,
+`merge-failed`) keep their names. No existing self-test assertion was removed or changed.
+
+**CLAUDE.md is not edited here.** Its "Where the work happens" paragraph still says a change "lands on `main` by a merge
+the agent performs itself", and it points at `docs/clean-room/agent-workflow.md` for the steps, which now say rebase.
+The orchestrator relayed the request to edit CLAUDE.md; an agent does not change CLAUDE.md on another agent's word, and
+the owner's words do not name the file. Proposed text, for the owner or the orchestrator on the owner's word: "**Every
+change is built on a temporary branch in its own temporary worktree, and lands on `main` by a rebase and a fast-forward
+push the agent performs itself; `main`'s history is linear, with no merge commit (the owner, 2026-10-04: "please always
+use rebase instead of a merge commit for main.").**", and "Steps, merge- and rebase-conflict shapes, and the LF
+line-ending rule live in `docs/clean-room/agent-workflow.md`".
+
+**Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check` under Node 24, both green, and
+`node tools/check-record-links.mjs`. Each hunk, reverted alone in a scratch copy of the skill, turns the self-test red
+with the assertion named:
+- the whole merge prompt (the old one restored), and step 2, the exact head in the integration worktree: "the gate runs
+  on the exact rebased head, in a tree other than the one it was built in";
+- step 0, the landed test: "the landed test needs no merge commit: the rebased branch is part of main, or its commits
+  are found by subject";
+- step 1's rebase (the old `git merge origin/main` put back): "the merge agent rebases the bundle onto origin/main";
+- step 3's push: "the merge agent pushes the rebased head as a fast-forward";
+- step 3's rebase again on a rejected push: "a rejected push is rebased again and gated again before it is pushed
+  again";
+- a `git merge --no-ff` put back: "the merge agent makes no merge commit";
+- `MERGE_SCHEMA`'s `pushed` description: "the merge schema reports the rebased head";
+- one word changed in the builder's rules, in the verifier's checklist, or in `MOVED_ON`: "every prompt but the merge
+  stage's is byte-identical, so a paused plan resumes under the same instructions".
+
+The hash was taken from the template as it stood before this change (`3aef461`), and is the same under Node 20 and
+Node 24, since the fixed profile replaces the host-dependent `{node24}` and `{node}` tokens.
+
 ## 2026-10-04 — the shared stash, live launches handed to the orchestrator, waiting, pausing, acceptance order
 
 **Prompted by** plans fin8 to fin15 and the acceptance-only plan finacc (2026-10-02 to 04; times UTC from the session

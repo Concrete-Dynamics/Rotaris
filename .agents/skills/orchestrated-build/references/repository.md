@@ -31,13 +31,13 @@ R-001 to R-067, but the highest row is R-068", 2026-10-02).
 
 ## Another writer on main
 
-The owner or another session may merge onto `main` while a plan runs (2026-10-02: the owner's Codex-built branch,
+The owner or another session may land on `main` while a plan runs (2026-10-02: the owner's Codex-built branch,
 head `d367280`, landed request R-069 with code, test and record edits while fin4 and fin5 ran). At each check-in, list
-what landed since the last merge this session pushed, with the session trailer, since every Claude session authors
+what landed since the last head this session pushed, with the session trailer, since every Claude session authors
 as "Claude" and a trailer-less commit by the owner is theirs:
 
 ```bash
-git log --format='%h %an %(trailers:key=Claude-Session,valueonly,separator=%x2C) %s' <that merge>..origin/main
+git log --format='%h %an %(trailers:key=Claude-Session,valueonly,separator=%x2C) %s' <that head>..origin/main
 ```
 
 When another author or session appears, run `node tools/check-request-log.mjs` and `node tools/check-record-links.mjs`
@@ -56,9 +56,14 @@ bundle's merge gate meets it; a red that needs code goes to the owner or into a 
 ## Worktrees and branches — `docs/clean-room/agent-workflow.md`
 
 One temporary branch in one temporary worktree per bundle (`<repo>-wt-<short>`), cut from `origin/main`. The
-primary checkout is not a place to write; merges land through the plan's integration worktree
-(`<repo>-wt-integ-<id>`, detached), and verification runs on the merged result. After the merge the worktree is
-removed and the branch deleted (`git branch -d`). Stage paths by name, never `git add -A`; LF line endings.
+primary checkout is not a place to write. **Main's history is linear**: a verified bundle lands by a rebase onto
+`origin/main` in its own worktree, the gate on that exact head checked out detached in the plan's integration worktree
+(`<repo>-wt-integ-<id>`, a tree other than the one it was built in), and a fast-forward push of it from there; never a
+merge commit, never a force (the owner, 2026-10-04: "please always use rebase instead of a merge commit for main."). A
+push rejected because main moved is rebased, gated and pushed again. Merging `origin/main` into a bundle branch while it
+is built and repaired is fine: the rule is about main, and the rebase at landing drops those merges. After the landing
+the worktree is removed and the branch deleted (`git branch -d`). Stage paths by name, never `git add -A`; LF line
+endings.
 
 **Never `git stash`**: `refs/stash` lives in the common git directory, one stash for every worktree, so a `pop` takes
 whatever entry is on top, another agent's included. On 2026-10-03 at about 07:04 UTC the builders of finacc's
@@ -78,8 +83,8 @@ owns, or when an entry point it names moves.
 ## The gate
 
 `pnpm check` (symbols, typecheck, lint, tests, and this skill's self-test) fully green under Node 24, in the worktree
-before a merge and on the merged result before a push. `pnpm build` before any proof or live run. The proof index is
-in `AGENTS.md`.
+before it is verified and on the rebased head before every push. `pnpm build` before any proof or live run. The proof
+index is in `AGENTS.md`.
 
 ## Records
 
@@ -108,6 +113,8 @@ No import across a package edge the component view forbids; `electron` imported 
 a store migration appended, never edited.
 
 ## Merge conflicts
+
+The same shapes hold for a merge of `origin/main` into a bundle branch and for each commit a rebase replays.
 
 - Numbering collisions (open questions, escalations, requests): `origin/main` keeps its number; the branch takes the
   next free one, says so in its own entry, and renumbers its citations. Defect notes are named: two notes with one

@@ -6,9 +6,10 @@ argument-hint: '[scope, e.g. "every open defect and unimplemented feature except
 
 # Orchestrated build
 
-You are the orchestrator. You plan, launch, watch, recover and report; agents build, verify, repair, merge and
+You are the orchestrator. You plan, launch, watch, recover and report; agents build, verify, repair, land and
 accept. Quality rests on two things you never trade away: **every bundle is checked by an agent that did not build
-it**, and **nothing lands unless the repository's gate is green on the merged result**.
+it**, and **nothing lands unless the repository's gate is green on the exact head that lands**. A bundle lands on main
+as a rebase and a fast-forward push, never a merge commit (`references/repository.md`, Worktrees and branches).
 
 | File (relative to this skill) | What it holds |
 | --- | --- |
@@ -107,7 +108,7 @@ silently. Re-arm at every check-in. It survives restarts; background tasks do no
 | `blocked` | No task could proceed | Report it; or `reopen` it (below) |
 | `needs-owner` | Two repair budgets spent, findings survive | Report the last findings to the owner |
 | `unverified` | One budget spent | Re-render: it gets a fresh budget at `max` with a root-cause note |
-| `merge-failed` | The merged result was green but the push failed | Re-render: the merge is retried (its step 0 finds a landing that did happen) |
+| `merge-failed` | The rebased head was green but the push failed | Re-render: the landing is retried (its step 0 finds one that did happen) |
 | `*-lost`, `halted`, `error` | An agent came back empty, or three in a row did | Recover (below) |
 
 The run's own `status`: `complete`; `incomplete` (a plan bundle did not settle, so acceptance was skipped: re-render);
@@ -176,7 +177,7 @@ nothing but its own repairs merged after it; `"acceptance": { "fresh": true }` f
 
 Report what merged (counts, notable repairs), what remains open and why (owner rulings, platform-bound, excluded),
 each decision waiting on the owner in one line, collisions the owner must know about, and where the evidence is.
-Then remove the integration, acceptance, live and reference worktrees and the merged branches (`git branch -d`), stop
+Then remove the integration, acceptance, live and reference worktrees and the landed branches (`git branch -d`), stop
 leftover `Xvfb`, and delete the check-in.
 
 ## Improving this skill
@@ -202,7 +203,9 @@ answered; a statement in it proved false; a measured alternative proved better.
   with zero blocking findings and lands only after it passes;
 - the record obligations and boundaries `references/repository.md` states may be added to, or corrected toward
   their authorities, never dropped;
-- the gate runs on the merged result before every push; nothing is forced, reset or rewritten;
+- the gate runs on the exact head that is pushed, before every push; main's history stays linear, a rebase and a
+  fast-forward push and never a merge commit (the owner, 2026-10-04: "please always use rebase instead of a merge
+  commit for main."); nothing is forced, and a shared branch is never reset or rewritten;
 - the verify and merge stages' model and effort, the repair budget and the needs-owner cap are never lowered;
 - the acceptance sweep, the autopsy, the record-every-finding step and the Done criteria are never reduced; the
   profile's `gate` is never narrowed;

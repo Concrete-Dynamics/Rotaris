@@ -5454,7 +5454,9 @@ there would be a directive of its own.)*
 The third intent prompt's classification ran into the 12 s bound and took REQ-ORCH-007's fallback ("the classification
 call timed out after 12 s"). The load on this host was 0.7, and another live run (the acceptance run, started
 05:56:26 UTC) shared the endpoint from before the classification until after it. The same prompt classified in time on
-the five other runs whose evidence reached it. So the bound also meets an endpoint whose latency depends on who else is using
+the seven other runs of 2026-10-03 that reached it (runs 1, 3 and 6 to 10; runs 2 and 4 went red before it), and on every
+run since. *(Corrected 2026-10-04 at the repair round: this sentence first said "the five other runs whose evidence reached
+it", missing runs 8, 9 and 10.)* So the bound also meets an endpoint whose latency depends on who else is using
 it, not only on the model's reasoning. What the build proceeds under is unchanged: the 12 s default, and the fallback
 when the call reaches it. `slice-proof` still treats a fallback as a red. It now names this question in the red, and records
 the host's load at each launch (`apps/desktop/scripts/lib/live-answers.mjs`, `lib/proof-reds.mjs`). This case adds one thing
@@ -9555,9 +9557,13 @@ answer group alone. Raised 2026-10-04 by the repair of
 (fin15, bundle `fin15-slice-proof-live-answers`). Open, the owner's.)*
 
 Against the registered self-hosted endpoint (`katalyst`, a model that reasons before it answers), the product's classifier
-answered "What is the first heading of README.md?" with `question` in five of the six runs of 2026-10-03 that reached
-it (runs 1, 3, 5, 6 and 7; run 2 went red before it), and with `explicit_trivial` (0.99, by the strict schema, no fallback)
-in one, run 4. The product's own classification instruction calls
+answered "What is the first heading of README.md?" with `question` in eight of the nine runs of 2026-10-03 that reached
+it (runs 1, 3 and 5 to 10; run 2 went red before it), and with `explicit_trivial` (0.99, by the strict schema, no fallback)
+in one, run 4. Every run of 2026-10-04 that reached it answered `question`. *(Corrected 2026-10-04 at the repair round:
+this paragraph first said "five of the six runs … (runs 1, 3, 5, 6 and 7)", counting only the first seven runs' evidence
+and missing runs 8, 9 and 10, which the record of
+[`fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`](../defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md)
+keeps.)* The product's own classification instruction calls
 `explicit_trivial` and `single_file_change` "the two smallest edits" (`packages/engine/src/intent/classifier.ts`), but no
 requirement does. The name says an explicit, trivial request, and a one-line question about one file is that. The group says
 an edit. The two readings route the run differently. Under REQ-ORCH-021 the question takes the micro group's playbook

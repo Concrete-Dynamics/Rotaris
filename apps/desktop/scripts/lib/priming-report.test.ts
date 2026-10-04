@@ -61,8 +61,12 @@ describe('the run host\'s opening credential report, as slice-proof reads it (RE
 
   it('slice-proof\'s step 3 asserts the priming through this reader, and no longer the line nothing writes', () => {
     const text = readFileSync(resolve(import.meta.dirname, '..', 'slice-proof.mjs'), 'utf8');
-    const step = text.slice(text.indexOf('// 3. One real run'), text.indexOf('const requests ='));
-    expect(step).toMatch(/primingProblem\(log3, PROVIDER_ID\)/);
+    // Since 2026-10-04 step 3 reads each attempt's log through `runLogRequests(log)`, so a re-run after an answerless
+    // completion is held to the same priming check (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`).
+    const step = text.slice(text.indexOf('// 3. One real run'), text.indexOf('let requests ='));
+    expect(step).toMatch(/function runLogRequests\(log\) \{[\s\S]*primingProblem\(log, PROVIDER_ID\)/);
+    expect(text).toMatch(/let requests = runLogRequests\(log3\);/);
+    expect(text).toMatch(/requests = runLogRequests\(log3\);\n\s+stored = storedRun\(log3\);/);
     expect(step).not.toMatch(/provider\\\(s\\\) authenticated/);
     // Nor a lease check that assumes the provider sorts first among the authenticated: the reader finds it anywhere.
     expect(step).not.toMatch(/leased for openai-compatible--openrouter\//);

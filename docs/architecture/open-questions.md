@@ -5449,6 +5449,18 @@ self-contained brief; and if it is to be given its predecessor's brief, record o
 an agent's terminal may read the product's own data directory is not asked here: REQ-SANDBOX-060 answers it, and a change
 there would be a directive of its own.)*
 
+*(Added 2026-10-04, a further case of the intent bound (F2), from run 5 of `slice-proof` on 2026-10-03 (`katalyst`), recorded in
+[`fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`](../defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md).
+The third intent prompt's classification ran into the 12 s bound and took REQ-ORCH-007's fallback ("the classification
+call timed out after 12 s"). The load on this host was 0.7, and another live run (the acceptance run, started
+05:56:26 UTC) shared the endpoint from before the classification until after it. The same prompt classified in time on
+the five other runs whose evidence reached it. So the bound also meets an endpoint whose latency depends on who else is using
+it, not only on the model's reasoning. What the build proceeds under is unchanged: the 12 s default, and the fallback
+when the call reaches it. `slice-proof` still treats a fallback as a red. It now names this question in the red, and records
+the host's load at each launch (`apps/desktop/scripts/lib/live-answers.mjs`, `lib/proof-reds.mjs`). This case adds one thing
+to what a ruling of this question decides: whether the bound should allow for a self-hosted endpoint shared by concurrent
+runs.)*
+
 **OQ-115 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open. Raised as OQ-114 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `packages/config/src/mcp/prompt.ts:29` renders each server tool's description as REQ-MCP-101 requires, and the bundled
@@ -9532,3 +9544,68 @@ case and Settings the unsaved selection until it is saved or discarded.
 **What a ruling decides.** Whether a write of the unchanged value must also displace the selection — which would need the
 announcement to name the key a `config.setField` wrote (a contract change on `config:changed`) — or whether the change
 reading stands.
+
+**OQ-198 — Does `explicit_trivial` reach a request that changes nothing, and may the tie-break choose `moderate_feature`
+where no build is plausible?** *(REQ-ORCH-006, which names `explicit_trivial` without a meaning and fixes only
+`problem_resolution` ("diagnose AND fix"), `exploration` ("investigate only") and the tie-break ("when several categories
+are plausible the tie-break prefers `moderate_feature`"); REQ-ORCH-021, which groups `explicit_trivial` with
+`single_file_change` (micro) and apart from `question` and `exploration` (answer); REQ-ORCH-153, whose plan gate exempts the
+answer group alone. Raised 2026-10-04 by the repair of
+[`fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`](../defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)
+(fin15, bundle `fin15-slice-proof-live-answers`). Open, the owner's.)*
+
+Against the registered self-hosted endpoint (`katalyst`, a model that reasons before it answers), the product's classifier
+answered "What is the first heading of README.md?" with `question` in five of the six runs of 2026-10-03 that reached
+it (runs 1, 3, 5, 6 and 7; run 2 went red before it), and with `explicit_trivial` (0.99, by the strict schema, no fallback)
+in one, run 4. The product's own classification instruction calls
+`explicit_trivial` and `single_file_change` "the two smallest edits" (`packages/engine/src/intent/classifier.ts`), but no
+requirement does. The name says an explicit, trivial request, and a one-line question about one file is that. The group says
+an edit. The two readings route the run differently. Under REQ-ORCH-021 the question takes the micro group's playbook
+cells instead of the answer group's. In `plan` mode REQ-ORCH-153 holds it at the plan gate, which exempts the answer group
+alone.
+
+The tie-break leaves a second question. Read as a tie-break, it chooses among the categories that are plausible, so it never
+brings `moderate_feature` into reach of a prompt no build is plausible for. Read literally, any prompt for which several
+categories are plausible (the README question is one, on the first question's broader reading) should be classified
+`moderate_feature`. The classification instruction passes the sentence on to the model in those words.
+
+**What the build proceeds under.** The product classifies as it does; nothing here is a defect of the code. `slice-proof`
+(`INTENTS` in `apps/desktop/scripts/lib/live-answers.mjs`, each prompt with its reason) accepts `explicit_trivial` for the
+README question, because no requirement keeps it out. It reads the tie-break as a choice among the plausible categories, so a
+`moderate_feature` that is not a fallback is still a red for the question and for the one-line append.
+
+**What a ruling decides.** Whether `explicit_trivial` is meant for edits alone. If it is, a requirement says so, the
+proof accepts the answer group alone for the question, and the classifier's instruction stays as it is. If it is not, the
+instruction stops calling it an edit. A ruling also decides whether the tie-break may reach outside the plausible set.
+
+**OQ-199 — May a run complete when its entry role ended without writing an answer?** *(REQ-ORCH-069, the run stops with
+`tasks_complete` once every non-abandoned task is completed; REQ-ORCH-113, the completion classifier; REQ-ORCH-115, which
+skips that classifier for reports attributed to the coordinator role; REQ-ORCH-079, relentless mode (default off), the only
+check that compares the outcome with the request; REQ-TOOLS-180, a run terminates when the agent produces a message
+addressed to the user and requests no tool call in that turn; REQ-ORCH-095, a child's ending assessed into six categories,
+tool calls made counting as `work_performed`. Raised 2026-10-04 by the repair of
+[`fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`](../defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)
+(fin15, bundle `fin15-slice-proof-live-answers`). Open, the owner's.)*
+
+Run 2 of `slice-proof` on 2026-10-03 (`katalyst`, load 2.5) asked "Read README.md in this workspace and tell me its first
+heading, in one sentence." The intent was `question`. The orchestrator read `README.md` and globbed the workspace, both calls
+settled, and then ended its turn with reasoning and no text. Its reasoning addressed requests the run never made: a list of
+the installed skills, and a test suite under `src/core/parser.ts`. Neither string occurs in the product's prompts. The run
+ended `completed` (`tasks_complete`) after 22 s. The transcript holds the person's message, three reasoning groups, two reads
+and "The run completed." It holds no answer. The product did what the requirements say: the iteration ended, its task was
+done, REQ-ORCH-115 skipped the completion classifier for the coordinator's report, and REQ-ORCH-069 stopped the run. No
+requirement says a run that was asked a question must answer it before it completes. REQ-TOOLS-180 names the turn that
+terminates a run (a message to the user and no tool call) and is silent on a turn with neither; the build reads it as the
+condition that hands a message on, not as the only turn that may end a run. REQ-ORCH-095 assesses a delegated child's
+ending, and the root execution record is not one (REQ-ORCH-072); even read across, two settled reads are
+`work_performed`, which it accepts without a re-prompt
+(`packages/engine/src/children/orchestration.ts`, where a re-prompt follows only an ending with no call and no text).
+
+**What the build proceeds under.** The run completes as it did. `slice-proof` reports such a run as the model's, keeps its
+evidence (`run.attempt-1.log`, `.png` and `.json`: the session, the row kinds, the reasoning) and runs scenario 3 once more.
+The second run is held to every check, and a second answerless run is a red that names both
+(`answerlessCompletion` in `apps/desktop/scripts/lib/live-answers.mjs`).
+
+**What a ruling decides.** Whether an entry-role turn that ends with neither text nor a tool call should be told so and
+continued, re-queued as `partial`, or reported to the person as a run that ended without an answer, rather than completing.
+Each would add to REQ-ORCH-069, REQ-ORCH-113 or REQ-ORCH-115, so each is a revision or a directive, not a repair.

@@ -130,7 +130,7 @@ recorded per run in the session scratchpad's `a13-slice-proof.r<N>.log`):
   all passed. The marker writer's own bootstrap logged `exists` at 06:16:04.598, just before
   `code-intelligence-setup → success`.
 - Runs 2, 4 and 5 went red after scenario 1, on the live model's answers and the shared endpoint's latency
-  ([slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md](../slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)). Run 1 was
+  ([slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md](slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)). Run 1 was
   green but had no code-intelligence bundle, so setup failed before the sign-in, as in the passing runs before
   acceptance.
 - `pnpm init-proof` passed its five scenarios on `f9365cd` (06:02 UTC, load 3.0).

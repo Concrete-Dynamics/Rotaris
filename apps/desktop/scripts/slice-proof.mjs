@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -8,6 +8,8 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { primingProblem } from './lib/priming-report.mjs';
 import { proofEndpoint } from './lib/endpoint-registry.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
+import { answerlessCompletion, answerRows, INTENTS, intentVerdict } from './lib/live-answers.mjs';
+import { hostLoad, keepRed } from './lib/proof-reds.mjs';
 
 /**
  * The vertical slice's proof (Part K.4): sign in to a real OpenAI-compatible endpoint through the product and complete
@@ -39,9 +41,13 @@ import { starterMissing } from './lib/starter-config.mjs';
  *   2. slots         — the three tier slots set to the registered model and saved, or, on a one-model endpoint whose
  *                      discovery picks already name it, asserted through the discovered picks.
  *   3. run           — one real run: the leased bearer, a request to the endpoint, an agent row, a tool call
- *                      settled through the gate, usage figures, the terminal result.
+ *                      settled through the gate, usage figures, the terminal result. A run the product completed in
+ *                      which the model wrote no answer is the model's call, not a requirement's (`lib/live-answers.mjs`):
+ *                      it is reported, kept as `run.attempt-1.*` and run once more; a second such run is a red.
  *   3b. intents      — three more real runs, one prompt per intent family: the classifier's answer is a category
- *                      from the small slot, never the fallback (Part L; the first real run fell to it).
+ *                      from the small slot, never the fallback (Part L; the first real run fell to it), and one of the
+ *                      categories REQ-ORCH-006 and REQ-ORCH-021 leave in reach of the prompt (`INTENTS`, with the
+ *                      reason for each, in `lib/live-answers.mjs`).
  *   4. spike6        — spike 6's live half against the same endpoint and model, with the same key (the figures go
  *                      into spikes/responses-dialect.md).
  *   5. sign-out      — Sign out from the providers card; the file gone, the snapshot kept.
@@ -52,6 +58,11 @@ import { starterMissing } from './lib/starter-config.mjs';
  * logs and the store instead of launching them, so one scenario can be re-run without signing in again.
  * `--skip-build` trusts `apps/desktop/out`. On a host without a display, run it under
  * `xvfb-run -a -s "-screen 0 1600x1000x24" node apps/desktop/scripts/slice-proof.mjs --skip-build`.
+ *
+ * EVERY RED IS KEPT. A red copies the output directory into `.proof/slice-proof-reds/<stamp>-<scenario>/` beside a
+ * `red.json` (the scenario, the error, the commit, the host's load and the results so far, `lib/proof-reds.mjs`), where
+ * the next run, which clears `.proof/slice-proof/`, does not remove it. Each launch's load is recorded in
+ * `results.json`'s `loads`: a timing red, such as a classification at its 12 s bound (OQ-114), is judged beside it.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -63,11 +74,6 @@ if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === 
 // --resume keeps the profile (and the credential the owner already pasted) and skips the first launch.
 const resume = process.argv.includes('--resume');
 const ORDER = ['first-launch', 'slots', 'run', 'intents', 'spike6', 'sign-out', 'refused'];
-const INTENTS = [
-  { prompt: 'What is the first heading of README.md?', expect: ['question'] },
-  { prompt: "Append the line 'hello' to the end of README.md.", expect: ['explicit_trivial', 'single_file_change'] },
-  { prompt: 'Add a --json flag to the CLI that prints the effective configuration as JSON, with a unit test for it.', expect: ['small_feature', 'moderate_feature', 'large_feature'] },
-];
 const from = process.argv.find((a) => a.startsWith('--from='))?.slice(7) ?? (resume ? 'slots' : 'first-launch');
 if (!ORDER.includes(from)) throw new Error(`--from must be one of ${ORDER.join(', ')}`);
 /** A scenario before `from` is replayed from its evidence rather than launched. */
@@ -78,7 +84,7 @@ const endpoint = proofEndpoint();
 // The scratch profile holds the product's credential store, which holds the key: it lives outside the repository and
 // outside the output directory, in the system temp directory, one per checkout so two worktrees never share one.
 const root = join(tmpdir(), 'rotaris-slice-proof', basename(repo), 'profile');
-if (resume) { for (const name of ORDER) if (!replay(name)) for (const file of name === 'intents' ? INTENTS.map((_, i) => `intents-${i + 1}`) : [name]) for (const ext of ['.log', '.png']) rmSync(join(output, `${file}${ext}`), { force: true }); rmSync(join(output, 'results.json'), { force: true }); }
+if (resume) { for (const name of ORDER) if (!replay(name)) for (const file of name === 'intents' ? INTENTS.map((_, i) => `intents-${i + 1}`) : name === 'run' ? ['run', 'run.attempt-1'] : [name]) for (const ext of ['.log', '.png', '.json']) rmSync(join(output, `${file}${ext}`), { force: true }); rmSync(join(output, 'results.json'), { force: true }); }
 else { rmSync(output, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); }
 mkdirSync(output, { recursive: true });
 
@@ -121,6 +127,8 @@ const agentsFile = join(workspace, '.rotaris', 'agents.yaml');
 
 async function launch(name, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
+  // The host's load as each launch starts (another live run may share the endpoint and this host).
+  results.loads.push({ launch: name, at: new Date().toISOString(), load: hostLoad() });
   const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, timeoutMs, windowsHide: true,
     env: {
@@ -165,8 +173,27 @@ function windowsDacl(path) {
   }
 }
 
-const results = { endpoint: { name: endpoint.name, label: LABEL, baseUrl: BASE_URL, model: MODEL, providerId: PROVIDER_ID, key: PASTE ? 'pasted by the owner (--paste-key)' : 'stored', unmetered: endpoint.unmetered === true }, keyPasted: false };
-console.error(`slice-proof: ${LABEL} (${endpoint.name}) at ${BASE_URL}, model ${MODEL}; key ${PASTE ? 'pasted by the owner (--paste-key)' : `from ${endpoint.keySource}`}`);
+const results = { endpoint: { name: endpoint.name, label: LABEL, baseUrl: BASE_URL, model: MODEL, providerId: PROVIDER_ID, key: PASTE ? 'pasted by the owner (--paste-key)' : 'stored', unmetered: endpoint.unmetered === true }, keyPasted: false, loads: [] };
+console.error(`slice-proof: ${LABEL} (${endpoint.name}) at ${BASE_URL}, model ${MODEL}; key ${PASTE ? 'pasted by the owner (--paste-key)' : `from ${endpoint.keySource}`}; load ${hostLoad().join(' ')}`);
+
+// Every red from here on keeps its evidence where the next run does not remove it (`lib/proof-reds.mjs`): the run after
+// a red clears `.proof/slice-proof/`, and until 2026-10-04 took the red's logs and screenshots with it
+// (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`).
+const reds = resolve(repo, '.proof', 'slice-proof-reds');
+/** The scenario under way, named in a red's directory and its `red.json`. */
+let scenario = 'first-launch';
+process.on('uncaughtException', (error) => {
+  let kept = null;
+  try {
+    const head = spawnSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: repo, encoding: 'utf8' });
+    kept = keepRed({ output, reds, scenario, error, results, commit: head.status === 0 ? head.stdout.trim() : null, redact });
+  } catch (failure) {
+    console.error(`slice-proof: the red's evidence could not be kept: ${failure instanceof Error ? failure.message : String(failure)}`);
+  }
+  console.error(redact(error instanceof Error ? (error.stack ?? error.message) : String(error)));
+  if (kept !== null) console.error(`slice-proof: red at scenario ${scenario} (load ${hostLoad().join(' ')}); its evidence is kept in ${relative(repo, kept)}`);
+  process.exit(1);
+});
 
 // 1. First launch: the notice; the add-endpoint dialog; the stored key filled and the dialog's own button pressed, or
 //    (--paste-key) the owner pastes the key.
@@ -245,6 +272,7 @@ if (starterLacks.length > 0) throw new Error(`the starter agents.yaml was not bo
 if (!readFileSync(agentsFile, 'utf8').includes('permission_mode:')) writeFileSync(agentsFile, `${readFileSync(agentsFile, 'utf8')}runtime:\n  permission_mode: autonomous\n  allow_unsandboxed_autonomous: true\n`);
 results.firstLaunch = { notice: 'raised', outcome: added[1], discovered, credential: { keys: credentialKeys, expiresAt: credential.expires_at, extra: credential.extra }, protection: dacl ? { protected: dacl.protected, aces: dacl.aces.map((a) => `${a.type};${a.rights};${a.sid.startsWith('S-1-5-21') ? 'owner' : a.sid}`) } : 'posix', picks, bootstrap: 'written' };
 
+scenario = 'slots';
 // 2. The three tier slots pinned to the proof model and saved (or, on a one-model endpoint, already its discovered picks).
 const log2 = replay('slots') ? readFileSync(join(output, 'slots.log'), 'utf8') : await launch('slots', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
@@ -281,41 +309,79 @@ if (pickedAlready) {
   results.slots = { source: 'saved from the Models page', agentsFile: agents };
 }
 
+scenario = 'run';
 // 3. One real run on the leased bearer.
-const log3 = replay('run') ? readFileSync(join(output, 'run.log'), 'utf8') : await launch('run', {
+const runLaunch = () => launch('run', {
   ROTARIS_CAPTURE_PROMPT: 'Read README.md in this workspace and tell me its first heading, in one sentence.',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
 }, RUN_WAIT_MS + 60_000);
-assertNoCredential(log3, 'run');
-// The lease's report is the run host's (REQ-PROVIDER-068, `LeaseReportLog`); main no longer restates it (a71-9).
-// REQ-PROVIDER-067/068: the priming report is its opening line — the provider among the authenticated, in whatever
-// place the sorted list puts it, and nothing unresolved. That one check is the lease check too: the bearer was leased
-// exactly when the provider is named authenticated. No product code writes "credentials: 1 provider(s) authenticated",
-// which this step asserted before (`docs/defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md`).
-const priming = primingProblem(log3, PROVIDER_ID);
-if (priming !== null) throw new Error(`the run host did not report the priming: ${priming}`);
-const requests = (log3.match(/model request POST (\S+)/g) ?? []).map((l) => l.replace('model request POST ', ''));
-if (!requests.some((u) => u.startsWith(`${BASE_URL}/chat/completions`))) throw new Error(`no request reached ${LABEL} at ${BASE_URL}:\n${requests.join('\n')}`);
-if (/capture: wait for result timed out/.test(log3)) throw new Error('the run did not end within the wait');
-const db = new Database(oneDatabase(local), { readonly: true });
-// The run's own session, named by its log: the newest session is the run's only while the intents have not run, so a
-// replay of this step after them (`--from=spike6` and later) read the third intent's session in its place.
-const runSessionId = /session ([0-9a-f-]{36}) started/.exec(log3)?.[1] ?? null;
-const session = runSessionId !== null
-  ? db.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed, tokens_input, tokens_output FROM sessions WHERE session_id = ?').get(runSessionId)
-  : db.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed, tokens_input, tokens_output FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
-if (!session) throw new Error(`the run's session ${runSessionId ?? '(none named in run.log)'} is not in the store`);
-const rows = db.prepare('SELECT kind, settled, body FROM transcript_rows WHERE session_id = ? ORDER BY row_index').all(session.session_id);
-const events = db.prepare('SELECT kind, payload FROM events WHERE session_id = ? ORDER BY ordinal').all(session.session_id);
-const audit = db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(session.session_id);
-db.close();
+/** What scenario 3 reads from a run's log before the store: no credential, the priming, the request, the wait. */
+function runLogRequests(log) {
+  assertNoCredential(log, 'run');
+  // The lease's report is the run host's (REQ-PROVIDER-068, `LeaseReportLog`); main no longer restates it (a71-9).
+  // REQ-PROVIDER-067/068: the priming report is its opening line — the provider among the authenticated, in whatever
+  // place the sorted list puts it, and nothing unresolved. That one check is the lease check too: the bearer was leased
+  // exactly when the provider is named authenticated. No product code writes "credentials: 1 provider(s) authenticated",
+  // which this step asserted before (`docs/defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md`).
+  const priming = primingProblem(log, PROVIDER_ID);
+  if (priming !== null) throw new Error(`the run host did not report the priming: ${priming}`);
+  const sent = (log.match(/model request POST (\S+)/g) ?? []).map((l) => l.replace('model request POST ', ''));
+  if (!sent.some((u) => u.startsWith(`${BASE_URL}/chat/completions`))) throw new Error(`no request reached ${LABEL} at ${BASE_URL}:\n${sent.join('\n')}`);
+  if (/capture: wait for result timed out/.test(log)) throw new Error('the run did not end within the wait');
+  return sent;
+}
+/** The run a scenario-3 log names, read from the store. */
+function storedRun(log) {
+  const db = new Database(oneDatabase(local), { readonly: true });
+  try {
+    // The run's own session, named by its log: the newest session is the run's only while the intents have not run, so a
+    // replay of this step after them (`--from=spike6` and later) read the third intent's session in its place.
+    const runSessionId = /session ([0-9a-f-]{36}) started/.exec(log)?.[1] ?? null;
+    const session = runSessionId !== null
+      ? db.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed, tokens_input, tokens_output FROM sessions WHERE session_id = ?').get(runSessionId)
+      : db.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed, tokens_input, tokens_output FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+    if (!session) throw new Error(`the run's session ${runSessionId ?? '(none named in run.log)'} is not in the store`);
+    return {
+      session,
+      rows: db.prepare('SELECT kind, settled, body FROM transcript_rows WHERE session_id = ? ORDER BY row_index').all(session.session_id),
+      events: db.prepare('SELECT kind, payload FROM events WHERE session_id = ? ORDER BY ordinal').all(session.session_id),
+      audit: db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(session.session_id),
+    };
+  } finally {
+    db.close();
+  }
+}
+let log3 = replay('run') ? readFileSync(join(output, 'run.log'), 'utf8') : await runLaunch();
+let requests = runLogRequests(log3);
+let stored = storedRun(log3);
+// A run the product completed in which the model wrote no answer (run 2 of 2026-10-03: two settled reads, then reasoning
+// about requests the run never made, then the end) is the model's call: no requirement makes the product answer for it
+// (`lib/live-answers.mjs`; OQ-199). It is reported, its evidence kept as `run.attempt-1.*`, and the run made once more;
+// the second run is held to every check below, and a second answerless run is a red that names both.
+const firstAttempt = join(output, 'run.attempt-1.json');
+if (!replay('run') && answerlessCompletion(stored.session, stored.rows, stored.events)) {
+  const attempt = {
+    session: stored.session.session_id, status: stored.session.execution_status, stopReason: stored.session.stop_reason,
+    rowKinds: stored.rows.map((r) => r.kind), toolRows: stored.rows.filter((r) => r.kind === 'tool').length,
+    reasoning: stored.rows.filter((r) => r.kind === 'thinking').map((r) => r.body.slice(0, 600)),
+    load: results.loads.at(-1)?.load ?? null,
+  };
+  writeFileSync(firstAttempt, `${JSON.stringify(attempt, null, 2)}\n`);
+  for (const ext of ['.log', '.png']) renameSync(join(output, `run${ext}`), join(output, `run.attempt-1${ext}`));
+  console.error(`slice-proof: scenario 3's run ${attempt.session} completed (${attempt.stopReason}) without the model writing an answer (rows ${attempt.rowKinds.join(',')}); that is the model's call, not a requirement's. Running it once more; the first attempt is kept as run.attempt-1.log, .png and .json.`);
+  log3 = await runLaunch();
+  requests = runLogRequests(log3);
+  stored = storedRun(log3);
+  if (answerlessCompletion(stored.session, stored.rows, stored.events)) throw new Error(`the run completed without the model writing an answer twice: ${attempt.session} (rows ${attempt.rowKinds.join(',')}; run.attempt-1.*) and ${stored.session.session_id} (rows ${stored.rows.map((r) => r.kind).join(',')}; run.*). REQ-ORCH-069 and REQ-ORCH-115 let both complete; OQ-199 asks whether they should`);
+}
+const { session, rows, events, audit } = stored;
 const kinds = rows.map((r) => r.kind);
-const agentRows = rows.filter((r) => r.kind === 'agent');
+const agentRows = answerRows(rows);
 const toolRows = rows.filter((r) => r.kind === 'tool');
 const usage = events.filter((e) => e.kind === 'usage.update').map((e) => JSON.parse(e.payload));
 const lastUsage = usage[usage.length - 1] ?? null;
 if (session.execution_status !== 'completed') throw new Error(`the run ended ${session.execution_status} (${session.stop_reason})`);
-if (agentRows.length === 0 || !agentRows.some((r) => r.body.length > 20)) throw new Error(`no agent row with text: kinds ${kinds.join(',')}`);
+if (agentRows.length === 0) throw new Error(`no agent row with text: kinds ${kinds.join(',')}`);
 if (toolRows.length === 0 || !toolRows.every((r) => r.settled === 1)) throw new Error(`no settled tool row: kinds ${kinds.join(',')}`);
 if (!events.some((e) => e.kind === 'result') || !events.some((e) => e.kind === 'session.end')) throw new Error('the terminal pair is missing');
 if (!lastUsage || !(JSON.stringify(lastUsage).includes('input'))) throw new Error('no usage figures were recorded');
@@ -325,10 +391,16 @@ results.run = {
   status: session.execution_status, stopReason: session.stop_reason, iterations: session.iterations_completed,
   tokens: { input: session.tokens_input, output: session.tokens_output }, rowKinds: kinds, toolRows: toolRows.length,
   requests: [...new Set(requests)], lastUsage, intent, answer: agentRows.map((r) => r.body).join(' ').slice(0, 400),
+  // A first attempt that completed without an answer, kept beside the run that counted (null when there was none).
+  answerlessAttempt: existsSync(firstAttempt) ? JSON.parse(readFileSync(firstAttempt, 'utf8')) : null,
 };
 
+scenario = 'intents';
 // 3b. The intent classifier on the real small slot (REQ-ORCH-005..010; Part L). The slice's first real run fell to
-// the fallback because the model answered the request instead of labelling it; each of these runs must classify.
+// the fallback because the model answered the request instead of labelling it; each of these runs must classify, never
+// fall back, into a category REQ-ORCH-006 and REQ-ORCH-021 leave in reach of its prompt (`INTENTS`, each with its reason,
+// `lib/live-answers.mjs`). Until 2026-10-04 the README question accepted `question` alone and went red on the model's
+// `explicit_trivial (0.99)` (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`).
 results.intents = [];
 for (const [i, c] of INTENTS.entries()) {
   const name = `intents-${i + 1}`;
@@ -336,18 +408,12 @@ for (const [i, c] of INTENTS.entries()) {
     ROTARIS_CAPTURE_PROMPT: c.prompt, ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '1500',
   }, RUN_WAIT_MS + 60_000);
   assertNoCredential(log, name);
-  // PD-MONITOR-002 moved the level out of the message (`… info    run host: intent: …`); a log replayed from before it
-  // still reads `run host info: intent: …`, so both are the run host's `info` intent line.
-  const line = log.split('\n').find((l) => /\] info +run host: intent: |run host info: intent: /.test(l)) ?? '';
-  const m = /intent: ([a-z_]+)(?: \(([^)]*)\))?(?: via (json_schema|json_object|text))?/.exec(line);
-  if (!m) throw new Error(`${name}: no intent line in the log`);
-  const [, category, detail, rung] = m;
-  if (/fallback/.test(line)) throw new Error(`${name}: the classifier fell back: ${line.trim()}`);
-  if (!c.expect.includes(category)) throw new Error(`${name}: "${c.prompt}" classified as ${category}, expected one of ${c.expect.join(', ')}`);
-  const warned = log.split('\n').filter((l) => /intent classifier: .* (rejected|answered) the/.test(l)).map((l) => l.replace(/^.*intent classifier: /, '').trim());
-  results.intents.push({ prompt: c.prompt, category, confidence: detail ?? null, rung: rung ?? null, rungNotes: warned });
+  const verdict = intentVerdict(log, c);
+  if (verdict.problem !== null) throw new Error(`${name}: ${verdict.problem}`);
+  results.intents.push({ prompt: c.prompt, category: verdict.category, accepted: c.accept, confidence: verdict.confidence, rung: verdict.rung, rungNotes: verdict.rungNotes });
 }
 
+scenario = 'spike6';
 // 4. Spike 6's live half against the same endpoint and model, with the same key: the stored one, or the token the
 //    product stored from the owner's paste. The key reaches the harness through a variable named for it and is never
 //    printed; only the harness's figures are kept. With no key in hand (a paste replayed after its sign-out) it is skipped.
@@ -366,6 +432,7 @@ const spikeLines = spikeOut.split('\n').filter((l) => l.includes('[spike6]')).ma
 const spikeSummary = stripAnsi(/Tests\s+(.*)$/m.exec(spikeOut)?.[1] ?? 'no summary').trim();
 results.spike6 = { exit: spike ? spike.status : spikeSkipped ? 'skipped' : 'replayed', tests: spikeSummary, lines: spikeLines };
 
+scenario = 'sign-out';
 // 5. Sign out from the providers card; the file gone, the snapshot kept.
 const log5 = replay('sign-out') ? readFileSync(join(output, 'sign-out.log'), 'utf8') : await launch('sign-out', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
@@ -382,6 +449,7 @@ if (existsSync(tokensFile)) throw new Error('the credential file survived the si
 if (!readFileSync(snapshotFile, 'utf8').includes(`  ${PROVIDER_ID}:`)) throw new Error('the sign-out removed the snapshot entry');
 results.signOut = { credentialFile: 'removed', snapshot: 'kept' };
 
+scenario = 'refused';
 // 6. A prompt with the provider signed out: refused before any session exists (REQ-WORKSPACE-137).
 const log6 = replay('refused') ? readFileSync(join(output, 'refused.log'), 'utf8') : await launch('refused', { ROTARIS_CAPTURE_PROMPT: 'Read README.md again.', ROTARIS_CAPTURE_AFTER_MS: '4000' });
 assertNoCredential(log6, 'refused');

@@ -770,6 +770,16 @@ session, and spike 6's figures lost on a green run (notes under `docs/defects/fi
 endpoint the sign-in's discovery picks already name the model for every tier, so scenario 2 asserts the tiers through
 the discovered layer (the Models page shows them `discovered`; re-selecting the shown value is no edit) rather than a
 saved file. Recorded in [`first-executions.md`](first-executions.md).
+**Since 2026-10-04 it asserts only what a requirement fixes about a live model's answers** (`lib/live-answers.mjs`), after
+three of five runs on 2026-10-03 went red on what the model answered or how long the shared endpoint took
+([note](../defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)). Each intent prompt accepts the
+categories REQ-ORCH-006 and REQ-ORCH-021 leave in reach of it, the reason written beside each (`INTENTS`). The README
+question now admits `explicit_trivial`, which is [OQ-198](open-questions.md)'s to narrow. A fallback stays a red, and one
+at the 12 s bound names OQ-114. A run the product completed in which the model wrote no answer is reported as the model's
+call: it is kept as `run.attempt-1.*` and scenario 3 runs once more. A second answerless run is a red ([OQ-199](open-questions.md)
+asks whether the product should complete such a run). Every red copies the output directory into
+`.proof/slice-proof-reds/<stamp>-<scenario>/` beside a `red.json` (the scenario, the error, the commit, the load, the results
+so far; `lib/proof-reds.mjs`), where the next run does not remove it. `results.json` records the host's load at each launch.
 
 **What `pnpm live-run` does.** It is the only check here that answers to a real model rather than a scripted one,
 and the only one that spends money, so it never runs on its own: `pnpm check` does not reach it and without

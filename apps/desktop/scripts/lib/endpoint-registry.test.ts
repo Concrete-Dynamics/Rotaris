@@ -132,8 +132,11 @@ describe('slice-proof drives the controls the product draws', () => {
   });
   it('reads the run\'s session by the id its log names, so a replay after the intents never takes the newest', () => {
     const text = readFileSync(join(resolve(import.meta.dirname, '..'), 'slice-proof.mjs'), 'utf8');
-    expect(text).toContain('/session ([0-9a-f-]{36}) started/.exec(log3)');
+    // `storedRun(log)` reads every attempt's session by the id that attempt's log names (since 2026-10-04 scenario 3 may
+    // run twice), and is given scenario 3's own log.
+    expect(text).toContain('/session ([0-9a-f-]{36}) started/.exec(log)');
     expect(text).toMatch(/FROM sessions WHERE session_id = \?/);
+    expect(text).toMatch(/let stored = storedRun\(log3\);/);
   });
   it('runs spike 6 under the verbose reporter, so its figures reach the pack on a green run', () => {
     const text = readFileSync(join(resolve(import.meta.dirname, '..'), 'slice-proof.mjs'), 'utf8');

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import type { CheckpointListPayload, CheckpointPreviewPayload, CheckpointRestoreOutcomePayload, GitViewState, GitWorktreeRow, PaneLayout, SessionListItemPayload } from '@rotaris/contracts';
+import { presentationStatus, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type GitWorktreeRow, type PaneLayout, type PresentationStatus, type SessionListItemPayload } from '@rotaris/contracts';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { WorktreeDialog } from './WorktreeDialog.js';
 import { CheckpointProgressDialog, checkpointsEmptyText, RESTORE_CANCELLED, RestoreConfirmDialog, restoreDisabledReason, TREE_UNCHANGED, type ListingState } from './CheckpointDialogs.js';
@@ -83,8 +83,12 @@ export function headerBranch(state: GitViewState | null): string {
 /** The renderer's path key: separators to `/`, no trailing one, case folded (the join must survive Windows spellings). */
 export const pathKey = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
+/**
+ * `status` is the session's PERSISTED execution status, as the session listing carries it (REQ-SESSION-073): what
+ * eligibility reads (REQ-GIT-083). It is never drawn as is — `statePhrase` presents it (REQ-NOTIFY-048/049).
+ */
 export interface RowBinding { readonly sessionId: string; readonly status: string; readonly mergeStatus: string }
-/** REQ-GIT-109: bindings joined by resolved path; the latest-updated session wins a tree two sessions name. */
+/** REQ-GIT-109: bindings joined by resolved path; the latest-updated session wins a tree two sessions name. The status is copied persisted; drawing presents it. */
 export function joinBindings(sessions: readonly SessionListItemPayload[]): Map<string, RowBinding> {
   const out = new Map<string, RowBinding>();
   for (const s of sessions) {
@@ -97,8 +101,12 @@ export function joinBindings(sessions: readonly SessionListItemPayload[]): Map<s
 /**
  * REQ-GIT-109: a worktree row's State cell — the session's execution status, then the binding's merge status (`idle` and
  * `ready` where nothing is bound). One phrase, drawn on one line and never shortened, so both statuses stay legible.
+ *
+ * The status is the member of REQ-NOTIFY-048 the persisted value presents as (REQ-NOTIFY-049), never the persisted word:
+ * until 2026-10-04 a bound row drew it raw, `awaiting_plan_decision · ready` where every other surface reads `paused`
+ * (docs/defects/fixed/the-git-views-state-cell-renders-the-raw-persisted-execution-status.md).
  */
-export const statePhrase = (b: RowBinding | undefined): { readonly status: string; readonly merge: string } => ({ status: b?.status ?? 'idle', merge: b?.mergeStatus ?? 'ready' });
+export const statePhrase = (b: RowBinding | undefined): { readonly status: PresentationStatus; readonly merge: string } => ({ status: b === undefined ? 'idle' : presentationStatus(b.status), merge: b?.mergeStatus ?? 'ready' });
 /**
  * REQ-GIT-109: the State column's width — the widest phrase the table draws plus the cell's own padding, in CSS px; `null`
  * when nothing was measured (a renderer that lays nothing out reports zero), which leaves the column at its CSS floor.

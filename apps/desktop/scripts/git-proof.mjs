@@ -21,7 +21,11 @@
  *                  the count against THAT branch's upstream, while the base checkout is 1 ahead of its own as well.
  *                  In 3 and 3b no worktree cell, heading or body, paints into its neighbour and the State cell's
  *                  `completed · ready` is cut nowhere, at 1440x900 and at the 1000x680 minimum (REQ-GIT-109, REQ-SHELL-022;
- *                  `lib/cell-paint.mjs`), and at 1440x900 the base row's `main` is drawn whole beside its tags.
+ *                  `lib/cell-paint.mjs`), and at 1440x900 the base row's `main` is drawn whole beside its tags. In 3b the
+ *                  bound row (keyed by the session id) is among the rows measured at both sizes.
+ *   3c. presented — the session persisted as `paused_message_limit` while the app is closed; the Git view opened: the
+ *                  bound row's State cell reads `paused · ready`, the presented status and never the persisted word
+ *                  (REQ-NOTIFY-048/049, REQ-GIT-109); the status put back to `completed` after.
  *   4. delete    — a file dropped into `feature/proof`; Delete → Yes → Git refuses → the second confirmation → force:
  *                  the row is gone, the directory is gone, `Worktree deleted.` (REQ-GIT-111/117).
  *   5. relaunch  — the split dragged in (1) is restored (REQ-SHELL-069, `panels/git`).
@@ -312,6 +316,12 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   const minimum = readEval(evals, 7800, WORKTREE_CELLS);
   if (opening?.viewport?.join('x') !== '1440x900') throw new Error(`the opening-size cell measurement was taken at ${opening?.viewport?.join('x') ?? 'no size'}: ${JSON.stringify(opening)?.slice(0, 300)}`);
   if (minimum?.viewport?.join('x') !== '1000x680') throw new Error(`the minimum-size cell measurement was taken at ${minimum?.viewport?.join('x') ?? 'no size'}: ${JSON.stringify(minimum)?.slice(0, 300)}`);
+  // The opening wait goes ahead on its timeout and the minimum read is pinned to the clock, so neither proves by itself
+  // that the bound row had painted: on a slow host both could measure the base row alone and pass. The row keyed by the
+  // session id must be among the rows each measured.
+  for (const [where, measured] of [['1440x900', opening], ['1000x680', minimum]]) {
+    if (!measured.rows?.some((x) => x.key === sid)) throw new Error(`the bound row (${sid}) was not among the worktree cells measured at ${where}: ${JSON.stringify(measured.rows?.map((x) => x.key))}`);
+  }
   const cellsAtOpening = cellVerdict(opening, 'worktree-ahead at 1440x900');
   const cellsAtMinimum = cellVerdict(minimum, 'worktree-ahead at 1000x680');
   // The Branch column has room at the opening size, so the base row's `main` is drawn whole beside its two tags: elision is
@@ -320,6 +330,29 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   if (!baseRow || !runShownWhole(opening, baseRow.key, 'Branch', 'main')) throw new Error(`at 1440x900 the base row's branch is not drawn whole: ${JSON.stringify(baseRow?.cells[0])}`);
   if (!existsSync(minimumPng)) throw new Error('no PNG was kept of the Git view at the minimum size');
   results.worktreeAhead = { strip, title, description: `${title} ${WORKTREE_NOTE}`, cells: { opening: cellsAtOpening, minimum: cellsAtMinimum, baseBranchWhole: true }, png: ahead.png, minimumPng };
+}
+
+// 3c. The bound row's State cell draws the PRESENTED status (REQ-NOTIFY-048/049, REQ-GIT-109): the session's persisted
+// `execution_status` set to `paused_message_limit` while the app is closed, the Git view opened without reopening the
+// session. The session listing carries the persisted word; the row must read `paused · ready`. Until 2026-10-04 it read
+// `paused_message_limit · ready` (docs/defects/fixed/the-git-views-state-cell-renders-the-raw-persisted-execution-status.md).
+// The status is put back afterwards, so the launches after this one see the session as the run left it.
+{
+  const sid = results.isolated.sessionId;
+  const databases = findDatabases(local);
+  const setStatus = (status) => { const db = new Database(databases[0]); db.prepare('UPDATE sessions SET execution_status = ? WHERE session_id = ?').run(status, sid); db.close(); };
+  const stateCell = `[data-testid="git-worktrees"] tr.git__row[data-session="${sid}"] td.git__cell-state`;
+  setStatus('paused_message_limit');
+  let presented;
+  try {
+    presented = await launch('presented', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' }, 120_000, [stateCell]);
+  } finally {
+    setStatus('completed');
+  }
+  const state = text(presented.probes, stateCell);
+  if (state.length !== 1) throw new Error(`the bound row's State cell was not found once: ${JSON.stringify(state)}`);
+  if (state[0] !== 'paused · ready') throw new Error(`the bound row's State cell reads "${state[0]}" for a session persisted as paused_message_limit, expected "paused · ready" (REQ-NOTIFY-048/049: never the persisted word)`);
+  results.presented = { persisted: 'paused_message_limit', state: state[0], png: presented.png };
 }
 
 // 4. Delete the manual worktree through the two-step confirmation: a file dropped in first so Git refuses without --force.

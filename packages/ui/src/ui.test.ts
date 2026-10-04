@@ -3,7 +3,7 @@ import type { AgentRecord, CheckpointListPayload, SessionListItemPayload } from 
 import { useShellState } from './shell-state.js';
 import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, statePhrase, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
 import type { GitViewState, GitWorktreeRow } from '@rotaris/contracts';
-import { resolveTheme, isBusy, presentationStatus } from '@rotaris/contracts';
+import { resolveTheme, isBusy, presentationStatus, EXECUTION_STATUSES, PRESENTATION_STATUSES } from '@rotaris/contracts';
 
 describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
   const wait = { provider: 'openrouter', model: 'gpt-x', exhausted: false, resumeAt: '2026-09-05T10:00:42.000Z', attempt: 1, reason: 'Provider openrouter is rate limiting model gpt-x. Wait 42 s before retrying.', agent: 'orchestrator', rejection: null, excluded: [] };
@@ -165,6 +165,30 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
     expect(stateColumnFit([0, 0], 16)).toBeNull();
     expect(stateColumnFit([], 16)).toBeNull();
     expect(stateColumnFit([Number.NaN, 40], 16)).toBe(56);
+  });
+  it('REQ-NOTIFY-048/049, REQ-GIT-109: the State cell draws the presented status, never the persisted word, for every persisted value', () => {
+    // REQ-NOTIFY-049's fourteen arms, each persisted value beside the member it presents as. The session listing carries the
+    // persisted `execution_status` as is; until 2026-10-04 the row drew it raw (`awaiting_plan_decision · ready`)
+    // (docs/defects/fixed/the-git-views-state-cell-renders-the-raw-persisted-execution-status.md).
+    const arms: ReadonlyArray<readonly [string, string]> = [
+      ['idle', 'idle'], ['running', 'running'], ['paused', 'paused'], ['completed', 'completed'], ['failed', 'failed'],
+      ['stopped', 'stopped'], ['starting', 'starting'], ['pausing', 'pausing'], ['cancelling', 'cancelling'],
+      ['background', 'running'], ['waiting', 'running'], ['paused_message_limit', 'paused'], ['awaiting_plan_decision', 'paused'],
+      ['interrupted', 'idle'],
+    ];
+    expect(arms.map(([persisted]) => persisted).sort()).toEqual([...EXECUTION_STATUSES].sort());
+    for (const [persisted, presented] of arms) {
+      const join = joinBindings([row({ sessionId: 'A', status: persisted, worktree: binding('D:/ws/.rotaris/worktrees/A') })]);
+      const phrase = statePhrase(join.get('d:/ws/.rotaris/worktrees/a'));
+      expect(phrase, persisted).toEqual({ status: presented, merge: 'ready' });
+      expect(PRESENTATION_STATUSES, persisted).toContain(phrase.status);
+    }
+    // A value no arm names (a record written by another version) presents through the catch-all.
+    expect(statePhrase(joinBindings([row({ status: 'future_state', worktree: binding('D:/x') })]).get('d:/x')).status).toBe('idle');
+    // Eligibility still reads the persisted value: `completed` presents as itself, and nothing else becomes eligible by presenting as it.
+    const rows = [wt({ path: 'D:/ws/.rotaris/worktrees/A', isBase: false, isActive: false })];
+    expect(mergeEligible(rows, new Set(['D:/ws/.rotaris/worktrees/A']), joinBindings([row({ sessionId: 'A', status: 'completed', worktree: binding('D:/ws/.rotaris/worktrees/A') })]))).toHaveLength(1);
+    expect(mergeEligible(rows, new Set(['D:/ws/.rotaris/worktrees/A']), joinBindings([row({ sessionId: 'A', status: 'interrupted', worktree: binding('D:/ws/.rotaris/worktrees/A') })]))).toEqual([]);
   });
   it('REQ-GIT-083: eligibility is completed + ready|merge_failed among the selected rows, in table order', () => {
     const rows = [wt({ path: 'D:/ws' }), wt({ path: 'D:/ws/.rotaris/worktrees/A', isBase: false, isActive: false }), wt({ path: 'D:/ws/.rotaris/worktrees/B', isBase: false, isActive: false })];

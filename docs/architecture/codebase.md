@@ -1135,8 +1135,11 @@ dialog); a plain folder in the OS temp directory (no notice). Since 2026-10-04 (
 worktree-ahead launch also measure every heading and body cell of the worktree table (`scripts/lib/cell-paint.mjs`) at
 1440×900, and the worktree-ahead launch again resized to the 1000×680 minimum (`worktree-ahead-minimum.png`): no run may
 paint past its cell or be cut outside Branch and Session, and the base row's `main` is drawn whole at 1440×900 — the State
-column is measured to its widest phrase over a `10ch` floor (`stateColumnFit`, REQ-GIT-109). Evidence under
-`.proof/git-proof/`.
+column is measured to its widest phrase over a `10ch` floor (`stateColumnFit`, REQ-GIT-109). Since 2026-10-04 (fin16)
+the worktree-ahead launch also requires the bound row among the rows measured at both sizes, and a launch `presented`
+(3c) persists the session as `paused_message_limit` while the app is closed and reads `paused · ready` in the bound row's
+State cell — the presented status, never the persisted word (`statePhrase` through `presentationStatus`,
+REQ-NOTIFY-048/049). Evidence under `.proof/git-proof/`.
 
 **What `pnpm checkpoint-proof` does.** It builds Electron and launches the app thirteen times against a scratch repository:
 two scripted iterations capture checkpoints 1 and 2 (the refs, the fixed identity, the message, HEAD and the index bytes

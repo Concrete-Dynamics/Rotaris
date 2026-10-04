@@ -3017,7 +3017,7 @@ round 1 of the same change; each was stated only in a code comment or the plan's
   *(`clipSkillDescription`, `packages/contracts/src/skills.ts`.)*
 - **(f) Which badge the two fixed commands carry.** `skill`, as ADR-0063 chose for `/skill`; REQ-CHAT-025 names the
   set and does not say. `slash-proof` asserts the other reading, and has been red on it since ADR-0063
-  (`../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
+  (`../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
 - **(g) Who else reads the row.** The row is a system row, and the improvement analyst takes every recent row's
   text as evidence (`packages/engine/src/improvements/capture.ts`), so a listing carries the names, descriptions
   and paths of skills set to "hidden" to that model. The agent path does not (it keeps user and agent rows only).

@@ -34,7 +34,11 @@
 // Every `docs/defects/….md` path in an inline code span of a record file must name
 // a note that exists, unless it is history kept on purpose and marked so on its
 // own line (`prosePointers`, `checkProseFile`); `docs/product/requests.md` is not
-// read (`PROSE_EXEMPT`, which says why).
+// read (`PROSE_EXEMPT`, which says why). So must one written relative to its own
+// file, `../defects/….md` (`relativeDefectPointers`): the first form of this pass
+// read only the root form, and two such pointers had outlived their note's move
+// (the verifier of fin15). A bare note name is not read here: it does not say it
+// is a defect note's path.
 //
 // Runs as part of `pnpm lint`. Reads the tree; costs no subprocess. The pure
 // parts are exported for the test beside this file.
@@ -434,7 +438,7 @@ export function prosePointers(text) {
   const pointers = [];
   for (const span of unfenced.replace(/<!--[\s\S]*?-->/g, blank).matchAll(SPAN)) {
     const at = span.index + span[1].length;
-    for (const pointer of defectPointers(span[2])) pointers.push({ line: lineOf(at) + pointer.line - 1, target: pointer.target });
+    for (const pointer of [...defectPointers(span[2]), ...relativeDefectPointers(span[2])]) pointers.push({ line: lineOf(at) + pointer.line - 1, target: pointer.target });
   }
   /** @type {{ line: number, target: string }[]} */
   const marks = [];
@@ -445,7 +449,28 @@ export function prosePointers(text) {
 }
 
 /**
- * Check one record file's prose pointers against the disk, resolved from the repository root: a path that names no note
+ * Every path to a defect note in a text written RELATIVE to the file it stands in, with its 1-based line: one or more
+ * `../` followed by `defects/` and a file name ending `.md`, under `fixed/` or not (`../defects/fixed/….md` from
+ * `docs/architecture/`, `../../defects/….md` from an ADR). The record writes a pointer in this form as often as from the
+ * root, and two had outlived their note's move after the root form was checked (fin15's verification,
+ * `docs/architecture/first-executions.md` and `docs/architecture/open-questions.md`). Left out on purpose: a bare name
+ * or a `./`, `fixed/…` or `../<name>.md` path between two notes, which does not say it is a defect note's; such a
+ * pointer is checked where it is a Markdown link (the first pass).
+ * @param {string} text
+ * @returns {{ line: number, target: string }[]}
+ */
+export function relativeDefectPointers(text) {
+  /** @type {{ line: number, target: string }[]} */
+  const pointers = [];
+  for (const match of text.matchAll(/(?<![A-Za-z0-9_./-])(?:\.\.\/)+defects\/[A-Za-z0-9_./-]*?\.md(?![A-Za-z0-9_-])/g)) {
+    pointers.push({ line: text.slice(0, match.index).split('\n').length, target: match[0] });
+  }
+  return pointers;
+}
+
+/**
+ * Check one record file's prose pointers against the disk: a root path (`docs/defects/…`) resolved from the repository
+ * root, a relative one (`../defects/…`) from the file's own directory. A path that names no note
  * fails unless a historical-path mark on its line names it, and a mark fails when it keeps nothing or keeps a live path.
  * @param {string} root
  * @param {string} file absolute path
@@ -454,18 +479,19 @@ export function prosePointers(text) {
  */
 export function checkProseFile(root, file, io = {}) {
   const read = io.read ?? ((p) => readFileSync(p, 'utf8'));
-  const exists = io.exists ?? existsSync;
+  const present = io.exists ?? existsSync;
   const { pointers, marks } = prosePointers(read(file));
+  const exists = (/** @type {string} */ target) => present(target.startsWith('.') ? resolve(dirname(file), target) : join(root, target));
   const same = (/** @type {{ line: number, target: string }} */ a, /** @type {{ line: number, target: string }} */ b) => a.line === b.line && a.target === b.target;
   return [
     ...pointers
-      .filter((p) => !exists(join(root, p.target)) && !marks.some((m) => same(m, p)))
+      .filter((p) => !exists(p.target) && !marks.some((m) => same(m, p)))
       .map((p) => ({ file, line: p.line, text: 'defect note', target: p.target, reason: 'no note at this path' })),
     ...marks
       .filter((m) => !pointers.some((p) => same(p, m)))
       .map((m) => ({ file, line: m.line, text: 'historical-path', target: m.target, reason: 'the mark names no path written as inline code on its line' })),
     ...marks
-      .filter((m) => pointers.some((p) => same(p, m)) && exists(join(root, m.target)))
+      .filter((m) => pointers.some((p) => same(p, m)) && exists(m.target))
       .map((m) => ({ file, line: m.line, text: 'historical-path', target: m.target, reason: 'marked historical, but a note is at this path: a live pointer is checked, not kept' })),
   ].sort((a, b) => a.line - b.line);
 }
@@ -526,9 +552,10 @@ if (invokedDirectly) {
     console.error(`check-record-links: ${prose.problems.length} defect-note path(s) in the record's prose name no note:`);
     for (const problem of prose.problems) console.error(`  - ${relative(root, problem.file).split(sep).join('/')}:${problem.line}: ${problem.target} — ${problem.reason}`);
     console.error('');
-    console.error('A docs/defects/….md path written as inline code in the record is a pointer like a link: a note moved');
-    console.error('to docs/defects/fixed/ takes it along. A path kept on purpose as history (a repaired note quoting where');
-    console.error('a note stood, a struck-through passage) is marked on its own line: <!-- historical-path: <the path> -->.');
+    console.error('A docs/defects/….md path, or one relative to its own file (../defects/….md), written as inline code');
+    console.error('in the record is a pointer like a link: a note moved to docs/defects/fixed/ takes it along. A path kept');
+    console.error('on purpose as history (a repaired note quoting where a note stood, a struck-through passage) is marked');
+    console.error('on its own line: <!-- historical-path: <the path> -->. A bare note name is not read by this pass.');
     console.error(`Not read by this pass: ${[...PROSE_EXEMPT].map(([f, why]) => `${f}, since ${why}`).join('; ')}.`);
   }
   if (problems.length > 0 || code.problems.length > 0 || prose.problems.length > 0) process.exit(1);

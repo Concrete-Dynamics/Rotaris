@@ -1154,7 +1154,7 @@ when it normalises the package metadata (loose SemVer, measured). So a prereleas
 be named `Rotaris-0.1.0-rc1-…`, which is not `REQ-STARTUP-031`'s name, and `build-hooks.cjs`'s naming check compares
 against the normalised value and cannot see the difference. The repair belongs to §4.2/§4.5, where the name must be
 rendered from the tag's version through `tools/release-naming`:
-`../../defects/a-prerelease-version-reaches-the-installer-hyphenated.md` — *repaired 2026-09-28, the note now under
+`../../defects/a-prerelease-version-reaches-the-installer-hyphenated.md` — *repaired 2026-09-28, the note now under <!-- historical-path: ../../defects/a-prerelease-version-reaches-the-installer-hyphenated.md -->
 `../../defects/fixed/`; the report is "The prerelease naming repair" below.*
 
 **What the pin half found: the manifest it checks does not exist.** No setup manifest of `REQ-STARTUP-058` is in the

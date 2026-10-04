@@ -16,13 +16,13 @@ and `docs/defects/README.md` implies the note stays findable from what cites it;
 
 ## Relevant files
 
-- `docs/architecture/first-executions.md` line 121: `../defects/platform-parameterised-helpers-read-the-host-separator.md`
-  and `../defects/staging-failure-escapes-the-replacement-ladder.md` (both now under `fixed/`).
-- `docs/architecture/first-executions.md` line 130: `../defects/a-chip-option-announces-its-label-and-hint-as-one-word.md` (under `fixed/`).
+- `docs/architecture/first-executions.md` line 121: `../defects/platform-parameterised-helpers-read-the-host-separator.md` <!-- historical-path: ../defects/platform-parameterised-helpers-read-the-host-separator.md -->
+  and `../defects/staging-failure-escapes-the-replacement-ladder.md` (both now under `fixed/`). <!-- historical-path: ../defects/staging-failure-escapes-the-replacement-ladder.md -->
+- `docs/architecture/first-executions.md` line 130: `../defects/a-chip-option-announces-its-label-and-hint-as-one-word.md` (under `fixed/`). <!-- historical-path: ../defects/a-chip-option-announces-its-label-and-hint-as-one-word.md -->
 - `docs/architecture/first-executions.md` line 136: `adr/0027-model-client.md` (the file is `adr/0027-the-model-client-implementation.md`).
-- `docs/architecture/first-executions.md` line 137: `../defects/a-childs-payload-puts-the-artifact-blocks-before-the-workspace-root.md` (under `fixed/`).
-- `docs/product/directives.md` line 867: `../defects/a-chip-option-announces-its-label-and-hint-as-one-word.md` (under `fixed/`).
-- `docs/product/directives.md` line 982: `../defects/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md` (under `fixed/`).
+- `docs/architecture/first-executions.md` line 137: `../defects/a-childs-payload-puts-the-artifact-blocks-before-the-workspace-root.md` (under `fixed/`). <!-- historical-path: ../defects/a-childs-payload-puts-the-artifact-blocks-before-the-workspace-root.md -->
+- `docs/product/directives.md` line 867: `../defects/a-chip-option-announces-its-label-and-hint-as-one-word.md` (under `fixed/`). <!-- historical-path: ../defects/a-chip-option-announces-its-label-and-hint-as-one-word.md -->
+- `docs/product/directives.md` line 982: `../defects/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md` (under `fixed/`). <!-- historical-path: ../defects/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md -->
 
 ## Repaired 2026-09-28 under R-062
 

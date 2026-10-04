@@ -274,6 +274,29 @@ describe("check-record-links — a defect-note path in the record's prose must n
     expect(prosePointers(text)).toEqual({ pointers: [{ line: 7, target: note('wrapped.md') }], marks: [] });
   });
 
+  it('reads a path written relative to its own file (`../defects/…`, `../../defects/…`), resolved from that file\'s directory, and keeps a marked one', () => {
+    // fin15's verification: `../defects/a-prerelease-version-reaches-the-installer-hyphenated.md` in first-executions.md
+    // and `../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md` in open-questions.md outlived their
+    // notes' moves, unread by a pass that knew only the root form.
+    mkdirSync(join(root, 'docs', 'architecture', 'adr'), { recursive: true });
+    const file = join(root, 'docs', 'architecture', 'register.md');
+    writeFileSync(file, ['# Register', '', 'Misnamed (`../defects/a-note.md`).', 'Repaired (`../defects/fixed/a-note.md`).', ''].join('\n'));
+    expect(brief(checkProseFile(root, file))).toEqual([[3, '../defects/a-note.md', 'no note at this path']]);
+    const adr = join(root, 'docs', 'architecture', 'adr', 'adr.md');
+    writeFileSync(adr, [
+      `Recorded: \`../../defects/a-note.md\` (now under \`fixed/\`). ${mark('../../defects/a-note.md')}`,
+      'Now `../../defects/fixed/a-note.md`, and from the wrong depth `../defects/fixed/a-note.md`.',
+      `Marked although live: \`../../defects/fixed/a-note.md\`. ${mark('../../defects/fixed/a-note.md')}`,
+      '',
+    ].join('\n'));
+    expect(brief(checkProseFile(root, adr))).toEqual([
+      [2, '../defects/fixed/a-note.md', 'no note at this path'],
+      [3, '../../defects/fixed/a-note.md', 'marked historical, but a note is at this path: a live pointer is checked, not kept'],
+    ]);
+    // Not a relative pointer: the root form inside a longer path is the root form's, and a name with no `../defects/`.
+    expect(prosePointers('`x/../defects/a.md` and `fixed/a-note.md`').pointers).toEqual([]);
+  });
+
   it('reads every record file but the request log, which it names with the reason', () => {
     mkdirSync(join(root, 'docs', 'product'), { recursive: true });
     writeFileSync(join(root, 'docs', 'product', 'requests.md'), `| R-001 | \`${note('a-note.md')}\` |\n`);

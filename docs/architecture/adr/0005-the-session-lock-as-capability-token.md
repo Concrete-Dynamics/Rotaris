@@ -670,7 +670,7 @@ the repair the same launch restored the file under it.
 **Found: the claim this record made on 2026-09-06 held only for a session not loaded here** — corrected in place
 above, with its reading kept. Two further writes through a loaded writer outside a run (the REQ-CHAT-090 todo edit at
 rest and the quit's terminal record) are the same shape and are recorded, not repaired:
-`../../defects/a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md` (now under `fixed/`; repaired on
+`../../defects/a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md` (now under `fixed/`; repaired on <!-- historical-path: ../../defects/a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md -->
 2026-10-01, the section below). Nothing in the decision moves.
 
 ## First execution — 2026-10-01, a todo edit at rest and the quit's terminal record

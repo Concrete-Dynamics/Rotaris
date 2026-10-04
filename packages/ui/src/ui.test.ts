@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRecord, CheckpointListPayload, SessionListItemPayload } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
-import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, statePhrase, branchLineFloor, branchColumnFit, tableFit, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
+import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, statePhrase, branchLineFloor, branchColumnFit, tableFit, branchFitKey, stateFitKey, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
 import type { GitViewState, GitWorktreeRow } from '@rotaris/contracts';
 import { resolveTheme, isBusy, presentationStatus, EXECUTION_STATUSES, PRESENTATION_STATUSES } from '@rotaris/contracts';
 
@@ -206,6 +206,27 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
     expect(tableFit(110, 152)).toEqual({ '--git-state-fit': '110px', '--git-branch-fit': '152px' });
     expect(tableFit(null, 152)).toEqual({ '--git-branch-fit': '152px' });
     expect(tableFit(110, null)).toEqual({ '--git-state-fit': '110px' });
+  });
+  it('REQ-GIT-077, REQ-GIT-109: a row whose path changes is measured again, though its branch, tags and phrase stay the same', () => {
+    // Each worktree row's `tr` is keyed by its path, so a moved worktree remounts its row. Until 2026-10-04 the Branch and
+    // State fits re-ran only on branch, tags and phrase, and went on measuring the detached cells (widths 0, the name's
+    // floor NaN), the row dropping out of the fit
+    // (docs/defects/fixed/the-git-views-column-fits-measure-detached-cells-when-a-rows-path-changes.md).
+    const before = [wt({}), wt({ path: 'D:/wt/feature', branch: 'feature/proof', isBase: false, isActive: false })];
+    const moved = [before[0]!, { ...before[1]!, path: 'D:/elsewhere/feature' }];
+    const join = joinBindings([row({ sessionId: 'B', status: 'completed', worktree: binding('D:/wt/feature') }), row({ sessionId: 'B2', status: 'completed', worktree: binding('D:/elsewhere/feature') })]);
+    expect(statePhrase(join.get('d:/wt/feature'))).toEqual(statePhrase(join.get('d:/elsewhere/feature')));
+    expect(branchFitKey(moved)).not.toBe(branchFitKey(before));
+    expect(stateFitKey(moved, join)).not.toBe(stateFitKey(before, join));
+    // The base row's path changing (a main checkout renamed and repaired) as well.
+    const baseMoved = [{ ...before[0]!, path: 'D:/ws2' }, before[1]!];
+    expect(branchFitKey(baseMoved)).not.toBe(branchFitKey(before));
+    expect(stateFitKey(baseMoved, join)).not.toBe(stateFitKey(before, join));
+    // Nothing changed, nothing re-measured; a tag or a phrase changing still re-measures.
+    expect(branchFitKey([...before])).toBe(branchFitKey(before));
+    expect(stateFitKey([...before], join)).toBe(stateFitKey(before, join));
+    expect(branchFitKey([{ ...before[0]!, isActive: false }, before[1]!])).not.toBe(branchFitKey(before));
+    expect(stateFitKey(before, joinBindings([]))).not.toBe(stateFitKey(before, join));
   });
   it('REQ-GIT-083: eligibility is completed + ready|merge_failed among the selected rows, in table order', () => {
     const rows = [wt({ path: 'D:/ws' }), wt({ path: 'D:/ws/.rotaris/worktrees/A', isBase: false, isActive: false }), wt({ path: 'D:/ws/.rotaris/worktrees/B', isBase: false, isActive: false })];

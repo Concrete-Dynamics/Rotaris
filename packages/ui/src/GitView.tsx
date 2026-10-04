@@ -142,6 +142,17 @@ export function tableFit(stateFit: number | null, branchFit: number | null): CSS
   if (stateFit === null && branchFit === null) return undefined;
   return { ...(stateFit === null ? {} : { '--git-state-fit': `${stateFit}px` }), ...(branchFit === null ? {} : { '--git-branch-fit': `${branchFit}px` }) } as CSSProperties;
 }
+/**
+ * What the State and Branch fits are measured again on. Each carries the row's path beside what the column draws, because
+ * the row's `tr` is keyed by its path: a moved worktree remounts its row, and an effect that did not run again would go on
+ * measuring and observing the detached cells. Until 2026-10-04 neither key carried it, so a row whose path changed with
+ * its branch, tags and phrase unchanged measured 0 (its name's floor `NaN`) and dropped out of the fit
+ * (docs/defects/fixed/the-git-views-column-fits-measure-detached-cells-when-a-rows-path-changes.md).
+ */
+export const stateFitKey = (rows: readonly GitWorktreeRow[], join: Map<string, RowBinding>): string =>
+  rows.map((r) => { const p = statePhrase(join.get(pathKey(r.path))); return `${r.path}\u0000${p.status}\u0000${p.merge}`; }).join('\u0001');
+export const branchFitKey = (rows: readonly GitWorktreeRow[]): string =>
+  rows.map((r) => `${r.path}\u0000${r.branch ?? ''}\u0000${r.isBase ? 1 : 0}${r.isActive ? 1 : 0}`).join('\u0001');
 /** REQ-GIT-083: eligible = a selected row whose session is `completed` and whose binding is `ready` or `merge_failed`. */
 export function mergeEligible(rows: readonly GitWorktreeRow[], selected: ReadonlySet<string>, join: Map<string, RowBinding>): GitWorktreeRow[] {
   return rows.filter((r) => selected.has(r.path)).filter((r) => { const b = join.get(pathKey(r.path)); return b !== undefined && b.status === 'completed' && (b.mergeStatus === 'ready' || b.mergeStatus === 'merge_failed'); });
@@ -283,7 +294,7 @@ export function GitView(props: GitViewProps) {
   // observer re-measures when a phrase changes size without the rows changing — a face finishing loading, the type scale.
   const worktreeTable = useRef<HTMLTableElement | null>(null);
   const [stateFit, setStateFit] = useState<number | null>(null);
-  const phraseKey = rows.map((r) => { const p = statePhrase(join.get(pathKey(r.path))); return `${p.status}\u0000${p.merge}`; }).join('\u0001');
+  const phraseKey = stateFitKey(rows, join);
   useLayoutEffect(() => {
     const table = worktreeTable.current;
     if (!table) return;
@@ -305,7 +316,7 @@ export function GitView(props: GitViewProps) {
   // its floor and its tags whole (`branchLineFloor`); a column with more room gives the name the rest. Re-measured when a
   // tag changes size without the rows changing (a face finishing loading, the type scale).
   const [branchFit, setBranchFit] = useState<number | null>(null);
-  const branchKey = rows.map((r) => `${r.branch ?? ''}\u0000${r.isBase ? 1 : 0}${r.isActive ? 1 : 0}`).join('\u0001');
+  const branchKey = branchFitKey(rows);
   useLayoutEffect(() => {
     const table = worktreeTable.current;
     if (!table) return;

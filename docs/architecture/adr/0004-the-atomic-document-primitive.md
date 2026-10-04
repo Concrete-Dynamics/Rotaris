@@ -290,6 +290,19 @@ the *user* chose in a save dialog, so the parent is not the product's own direct
 ordinary outcome rather than a programming error. The failure is now reported as `document.parent`,
 alongside `document.stage`, `document.replace` and `document.mode`.
 
+*Corrected again 2026-10-04, the synchronous form's first execution of this path (fin15).* ~~"The implementation
+created it before the `try`… The failure is now reported as `document.parent`"~~ held of `replaceDocument` alone:
+`replaceDocumentSync`, the form ADR-0042's theme save and the configuration bootstrap use, kept its `mkdirSync` outside
+any `try` and threw `EEXIST` for a file standing where the parent would go. Reached when the first-run starter repair
+put a regular file at `<workspace>/.rotaris` (`bootstrapConfigFile` threw, and the workspace service would have answered
+`request.failed` rather than the configuration refusal REQ-CONFIG-028 describes). Both forms now answer
+`document.parent` for it (`../../defects/fixed/replace-document-sync-throws-when-the-parent-cannot-be-created.md`).
+**Measured** by `platform.test.ts` (both forms, one and two levels below the file, no staging file left), by
+`writers.test.ts` and `open-bootstrap.test.ts`, all red on the unrepaired form; the refused-permission case is written
+and skipped as root on this host. Found beside it and **not** repaired: the staged file's cleanup itself throws
+`ENOTDIR` under a file parent when no parent creation was asked for, and `exclusiveCreate` still creates its parent
+before its `try` (`../../defects/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`).
+
 **Write side — exclusive create.** Create the target with exclusive-create semantics; on success the caller
 minted it; on an already-exists failure **read what is there and use it**, which is not an error. This shape
 never replaces, so no reader can block it, and deletion of such a file succeeds even while a reader holds it

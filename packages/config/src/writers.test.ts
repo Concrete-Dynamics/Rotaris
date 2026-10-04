@@ -112,6 +112,26 @@ describe('REQ-CONFIG-025..030 the bootstrap', () => {
     expect((starterDocument().match(/: null$/gm) ?? []).length).toBe(14);
   });
 
+  // docs/defects/fixed/replace-document-sync-throws-when-the-parent-cannot-be-created.md: a parent that cannot be created
+  // threw out of the synchronous replace, so the bootstrap and the synchronous write threw rather than declining.
+  it('declines with the path and the fault, never a throw, when a regular file stands where `.rotaris` would go (REQ-CONFIG-026, REQ-CONFIG-028)', async () => {
+    const workspaceRoot = join(tmp(), 'ws');
+    mkdirSync(workspaceRoot);
+    writeFileSync(join(workspaceRoot, '.rotaris'), 'not a directory\n');
+    const file = join(workspaceRoot, '.rotaris', 'agents.yaml');
+    const boot = bootstrapConfigFile(file);
+    expect(boot.ok).toBe(false);
+    if (!boot.ok) {
+      expect(boot.error.code).toBe('write-failed');
+      expect(boot.error.file).toBe(file);
+      expect(boot.error.fault).toMatch(/EEXIST.*\.rotaris/);
+    }
+    // The per-field writer with no timers takes the synchronous replace (ADR-0006): the same refusal, not a rejection.
+    const written = await writeConfigFields(file, { default_persona: 'coder' });
+    expect(written.ok === false && written.error.code).toBe('write-failed');
+    expect(readFileSync(join(workspaceRoot, '.rotaris'), 'utf8')).toBe('not a directory\n');
+  });
+
   it('opens with REQ-WORKSPACE-038\'s three-line header: a minimal start, an override of the built-ins, and a provider authenticated in Settings → Models', () => {
     const lines = starterDocument().split('\n');
     const header = lines.slice(0, lines.findIndex((l) => !l.startsWith('#')));

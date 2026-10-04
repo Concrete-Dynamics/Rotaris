@@ -114,7 +114,16 @@ export async function replaceDocument(target: string, content: string | Uint8Arr
 
 /** Synchronous replace for the one gesture whose durability is part of its completion: theme selection (ADR-0042). */
 export function replaceDocumentSync(target: string, content: string | Uint8Array, opts: Omit<ReplaceOptions, 'ladder' | 'timers'> = {}): Result<{ attempts: 1 }, Failure> {
-  if (opts.createParent) mkdirSync(dirname(target), { recursive: true });
+  /**
+   * The parent that cannot be created answers the asynchronous form's refusal, for the same reason. Until 2026-10-04 this
+   * `mkdirSync` stood outside any `try` and threw EEXIST/ENOTDIR/EACCES out of the `Result`, reaching the configuration
+   * bootstrap and its synchronous writes and the preference store's theme save
+   * (`docs/defects/fixed/replace-document-sync-throws-when-the-parent-cannot-be-created.md`).
+   */
+  if (opts.createParent) {
+    try { mkdirSync(dirname(target), { recursive: true }); }
+    catch (e) { return err(failure('document.parent', 'The destination folder could not be created', String(e), e)); }
+  }
   const staged = stagePath(target);
   try {
     const fd = openSync(staged, 'w');

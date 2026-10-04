@@ -114,7 +114,9 @@ describe('the starter agents.yaml at the open (REQ-CONFIG-025, REQ-CONFIG-028)',
     const lines: Array<[string, string | undefined]> = [];
     expect(bootstrapAtOpen(s.configDir, s.workspaceRoot, (m, level) => lines.push([m, level]))).toBe('refused');
     expect(lines).toHaveLength(1);
-    expect(lines[0]?.[0]).toMatch(/^configuration bootstrap at the open of .* declined: /);
+    // The refusal comes from the primitive itself, naming the file and the fault, with no catch around the bootstrap
+    // (`docs/defects/fixed/replace-document-sync-throws-when-the-parent-cannot-be-created.md`).
+    expect(lines[0]?.[0]).toMatch(/^configuration bootstrap at the open of .* declined: .*agents\.yaml: .*EEXIST/);
     expect(lines[0]?.[1]).toBe('warn');
     expect(readFileSync(join(s.workspaceRoot, '.rotaris'), 'utf8')).toBe('not a directory\n');
   });

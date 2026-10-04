@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSync, mkdirSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
 import { millis, mintMachineId, FakeClock, type MachineId } from '@rotaris/kernel';
-import { replaceDocument, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, dataLayout, claimInstance, endpointFor, nodeClocks, findExecutable, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout, composerDraftKey } from './index.js';
+import { replaceDocument, replaceDocumentSync, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, dataLayout, claimInstance, endpointFor, nodeClocks, findExecutable, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout, composerDraftKey } from './index.js';
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rotaris-platform-')); });
@@ -71,6 +71,35 @@ describe('platform — the atomic document primitive (ADR-0004)', () => {
     expect((await replaceDocument(f, 'x')).ok).toBe(false);
     expect((await replaceDocument(f, 'x', { createParent: true })).ok).toBe(true);
     expect(readFileSync(f, 'utf8')).toBe('x');
+  });
+  // docs/defects/fixed/replace-document-sync-throws-when-the-parent-cannot-be-created.md: the synchronous form called
+  // `mkdirSync` outside its `try`, so a parent that could not be created threw out of a function whose contract is a
+  // `Result`. Both forms answer the same refusal; the file standing in the parent's place is left as it was.
+  it.each([
+    ['replaceDocument', (t: string) => replaceDocument(t, 'x', { createParent: true })],
+    ['replaceDocumentSync', (t: string) => replaceDocumentSync(t, 'x', { createParent: true })],
+  ] as const)('%s answers err, never throws, when a regular file stands where the parent directory would go (ADR-0004)', async (_name, write) => {
+    writeFileSync(join(dir, 'parent'), 'a file\n');
+    for (const target of [join(dir, 'parent', 'doc.txt'), join(dir, 'parent', 'deeper', 'doc.txt')]) {
+      const r = await write(target);
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.error.code).toBe('document.parent');
+        expect(r.error.detail).toMatch(/EEXIST|ENOTDIR/);
+      }
+    }
+    expect(readFileSync(join(dir, 'parent'), 'utf8')).toBe('a file\n');
+    expect(readdirSync(dir)).toEqual(['parent']);
+  });
+  // A refused permission is the other way a parent cannot be created; root is never refused, so the case is skipped there.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('replaceDocumentSync answers err when the parent may not be created (EACCES)', () => {
+    mkdirSync(join(dir, 'locked'), { mode: 0o500 });
+    try {
+      const r = replaceDocumentSync(join(dir, 'locked', 'sub', 'doc.txt'), 'x', { createParent: true });
+      expect(r.ok === false && r.error.code).toBe('document.parent');
+    } finally {
+      chmodSync(join(dir, 'locked'), 0o700);
+    }
   });
   it('exclusive create mints once, and a second create reads what is there — not an error (D-29)', () => {
     const f = join(dir, 'id');
@@ -258,6 +287,16 @@ describe('platform — desktop preferences (ADR-0042)', () => {
     expect(readFileSync(store.file, 'utf8')).toContain('future-theme');
     store.writeThemeSync('nocturne');
     expect(JSON.parse(readFileSync(store.file, 'utf8'))['appearance/theme']).toBe('nocturne');
+  });
+
+  it('reports a preference root it cannot create in the primitive\'s own words, on the synchronous theme save as on the ordinary write', async () => {
+    const root = join(dir, 'preferences');
+    writeFileSync(root, 'a file\n');
+    const store = new PreferenceStore(root);
+    // Before 2026-10-04 the theme save threw the raw `mkdirSync` error (EEXIST), not the refusal the write path reports.
+    expect(() => store.writeThemeSync('nocturne')).toThrow(/^The destination folder could not be created: .*EEXIST/);
+    await expect(store.write('ui/reduced_motion', true)).rejects.toThrow(/^The destination folder could not be created: .*EEXIST/);
+    expect(readFileSync(root, 'utf8')).toBe('a file\n');
   });
 
   it('coerces the registered values and round-trips ordinary writes atomically', async () => {

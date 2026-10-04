@@ -19,14 +19,10 @@ import { bootstrapConfigFile, scopeFiles, type BootstrapOutcome } from '@rotaris
  */
 export function bootstrapAtOpen(configDir: string, workspaceRoot: string, log: (message: string, level?: 'info' | 'warn') => void): BootstrapOutcome | 'refused' {
   const file = scopeFiles(configDir, workspaceRoot).workspace.agents;
-  let r: ReturnType<typeof bootstrapConfigFile>;
-  try {
-    r = bootstrapConfigFile(file);
-  } catch (cause) {
-    // `replaceDocumentSync` throws, rather than refusing, when the parent cannot be created
-    // (`docs/defects/replace-document-sync-throws-when-the-parent-cannot-be-created.md`); a throw here would refuse the open.
-    r = { ok: false, error: { code: 'write-failed', file, fault: String(cause) } };
-  }
+  // No `try` here: since 2026-10-04 `replaceDocumentSync` answers a parent it cannot create as a refusal rather than a
+  // throw, so `bootstrapConfigFile` answers every failure as a `Result` and the catch that stood here guarded nothing
+  // (`docs/defects/fixed/replace-document-sync-throws-when-the-parent-cannot-be-created.md`).
+  const r = bootstrapConfigFile(file);
   if (!r.ok) {
     log(`configuration bootstrap at the open of ${workspaceRoot} declined: ${r.error.file}: ${r.error.fault}`, 'warn');
     return 'refused';

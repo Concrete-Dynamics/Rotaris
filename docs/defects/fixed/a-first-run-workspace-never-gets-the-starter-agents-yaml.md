@@ -91,7 +91,7 @@ moments.
   REQ-CONFIG-025's "on first run" as every open that finds the file absent, and it is the only part of the repair that
   rests on that reading (the marker path rests on REQ-WORKSPACE-040's "when no `agents.yaml` exists"). A declined or failed write is logged as a warning and never refuses the
   open: `replaceDocumentSync` throws rather than refusing when the parent cannot be created, so the helper catches that
-  throw ([replace-document-sync-throws-when-the-parent-cannot-be-created.md](../replace-document-sync-throws-when-the-parent-cannot-be-created.md)).
+  throw ([replace-document-sync-throws-when-the-parent-cannot-be-created.md](replace-document-sync-throws-when-the-parent-cannot-be-created.md); *since 2026-10-04 the primitive answers that case as a refusal and the catch is gone*).
 - **Before every initialization record.** `serviceMarkerWriter` (`apps/desktop/src/main/initialization.ts`) asks
   `config.bootstrap` before each `config.setField`, so a file removed while the workspace is open gets the starter
   before the record (REQ-WORKSPACE-040). A bootstrap that fails does not stop the record.

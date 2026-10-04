@@ -301,7 +301,28 @@ put a regular file at `<workspace>/.rotaris` (`bootstrapConfigFile` threw, and t
 `writers.test.ts` and `open-bootstrap.test.ts`, all red on the unrepaired form; the refused-permission case is written
 and skipped as root on this host. Found beside it and **not** repaired: the staged file's cleanup itself throws
 `ENOTDIR` under a file parent when no parent creation was asked for, and `exclusiveCreate` still creates its parent
-before its `try` (`../../defects/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`).
+before its `try` (`../../defects/fixed/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`;
+repaired since, next paragraph).
+
+*Corrected a third time 2026-10-04, the first execution of the remaining failure paths (fin17).* ~~"remove the staged
+file on every failure path"~~ was written as a bare `rmSync(staged, { force: true })` in every `catch`, and `force`
+forgives a missing path only: under a regular file `f`, the target `f/doc` with no parent creation asked for, staging
+failed with `ENOTDIR` and the cleanup then threw `ENOTDIR` over it, out of both replace forms. The removal is now
+**best-effort as `REQ-TRACE-061` says it is**: a refused cleanup is swallowed, and the failure it follows is the one
+reported (`document.stage`, `document.replace`, `document.replace.sync`). Exclusive create kept its parent's `mkdirSync`
+before any `try` and threw `EEXIST` (`ENOTDIR` deeper down); it now answers `document.parent` like the replace forms.
+A write that fails after the exclusive create (a full disk) threw out of its `try`/`finally` too; it now answers
+`document.exclusive.write` and removes the partial file this call minted, best-effort, so the next create mints rather
+than reading a truncated identity as the one already established (D-29). **Measured** by `platform.test.ts` (each of
+the three functions, `f/doc` and `f/deeper/doc`, no staging file left, `f` untouched; the refused-permission case for
+exclusive create written and skipped as root on this host) and `document-write-failure.test.ts` (ENOSPC injected into
+`writeSync`), every case red on the unrepaired form. **Reached by no product caller with a file parent** that the trace
+found: `REQ-SESSION-197`'s identifier (`establishWorkspaceId`, and the restore's `establish` decision) reads first, and a
+file at `<workspace>/.rotaris` makes that read `unreadable` (ENOTDIR is not ENOENT), which answers before any create;
+`REQ-GIT-128`'s integration lock has no implementation calling this primitive yet. The other callers (the machine
+identifier, the instance record, the credential and project-settings locks) put their file in a per-user directory, and
+a file at that directory's place now reaches each as its own refusal rather than an exception
+(`../../defects/fixed/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`).
 
 **Write side — exclusive create.** Create the target with exclusive-create semantics; on success the caller
 minted it; on an already-exists failure **read what is there and use it**, which is not an error. This shape

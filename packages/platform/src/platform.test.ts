@@ -101,6 +101,41 @@ describe('platform — the atomic document primitive (ADR-0004)', () => {
       chmodSync(join(dir, 'locked'), 0o700);
     }
   });
+  // docs/defects/fixed/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md:
+  // with a regular file `f` and the target `f/doc`, the replace forms' staging cleanup threw ENOTDIR over the failure it
+  // followed (no parent creation asked for), and exclusive create's `mkdirSync` stood before its `try` and threw EEXIST.
+  // All three answer a `Result`, and the file standing in the parent's place is left as it was (ADR-0004, REQ-TRACE-061).
+  it.each([
+    ['replaceDocument', 'document.stage', (t: string) => replaceDocument(t, 'x')],
+    ['replaceDocumentSync', 'document.replace.sync', (t: string) => replaceDocumentSync(t, 'x')],
+    ['exclusiveCreate', 'document.parent', (t: string) => exclusiveCreate(t, 'x')],
+  ] as const)('%s answers %s, never throws, for the target f/doc under a regular file f without parent creation (ADR-0004)', async (_name, code, write) => {
+    const f = join(dir, 'f');
+    writeFileSync(f, 'a file\n');
+    for (const target of [join(f, 'doc'), join(f, 'deeper', 'doc')]) {
+      let r: Awaited<ReturnType<typeof write>> | undefined;
+      let thrown: unknown;
+      try { r = await write(target); } catch (e) { thrown = e; }
+      expect(thrown).toBeUndefined();
+      expect(r?.ok).toBe(false);
+      if (r && !r.ok) {
+        expect(r.error.code).toBe(code);
+        expect(r.error.detail).toMatch(/EEXIST|ENOTDIR/);
+      }
+    }
+    expect(readFileSync(f, 'utf8')).toBe('a file\n');
+    expect(readdirSync(dir)).toEqual(['f']);
+  });
+  // The refused permission is exclusive create's other unmakeable parent; root is never refused, so it is skipped there.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('exclusiveCreate answers document.parent when the parent may not be created (EACCES)', () => {
+    mkdirSync(join(dir, 'locked'), { mode: 0o500 });
+    try {
+      const r = exclusiveCreate(join(dir, 'locked', 'sub', 'doc'), 'x');
+      expect(r.ok === false && r.error.code).toBe('document.parent');
+    } finally {
+      chmodSync(join(dir, 'locked'), 0o700);
+    }
+  });
   it('exclusive create mints once, and a second create reads what is there — not an error (D-29)', () => {
     const f = join(dir, 'id');
     const a = exclusiveCreate(f, 'first\n');

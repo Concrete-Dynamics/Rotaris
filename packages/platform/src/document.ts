@@ -47,6 +47,16 @@ function stagePath(target: string): string {
   return join(dirname(target), `.${basename(target)}.staging-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
 }
 
+/**
+ * Best-effort removal of a file this primitive made (REQ-TRACE-061: "removed on a best-effort basis"). `force` forgives a
+ * missing path only, so under a regular-file parent `rmSync` itself threw `ENOTDIR` over the failure it was cleaning up
+ * after, until 2026-10-04 (`docs/defects/fixed/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`).
+ * The failure being reported is the one the caller sees; the cleanup's own refusal never replaces it.
+ */
+function discard(path: string): void {
+  try { rmSync(path, { force: true }); } catch { /* best-effort: the failure it follows is the one reported */ }
+}
+
 function transient(code: string | undefined): boolean {
   return code === 'EPERM' || code === 'EACCES' || code === 'EBUSY';
 }
@@ -74,7 +84,7 @@ export async function replaceDocument(target: string, content: string | Uint8Arr
       closeSync(fd);
     }
   } catch (e) {
-    rmSync(staged, { force: true });
+    discard(staged);
     return err(failure('document.stage', 'Could not write the staged file', String(e), e));
   }
 
@@ -92,7 +102,7 @@ export async function replaceDocument(target: string, content: string | Uint8Arr
         await new Promise<void>((resolve) => opts.timers!.after(delay, resolve));
         continue;
       }
-      rmSync(staged, { force: true });
+      discard(staged);
       return err(failure('document.replace', 'Could not replace the document', `${code ?? 'unknown'} after ${countNoun(attempt, 'attempt')}: ${target}`, e));
     }
   }
@@ -135,7 +145,7 @@ export function replaceDocumentSync(target: string, content: string | Uint8Array
     if (opts.mode !== undefined) chmodSync(target, opts.mode);
     return ok({ attempts: 1 });
   } catch (e) {
-    rmSync(staged, { force: true });
+    discard(staged);
     return err(failure('document.replace.sync', 'Could not replace the document synchronously', String(e), e));
   }
 }
@@ -144,7 +154,12 @@ export type ExclusiveCreate = { readonly minted: true } | { readonly minted: fal
 
 /** Create `target` exclusively with `content`; if it already exists, return its contents instead (D-29). */
 export function exclusiveCreate(target: string, content: string): Result<ExclusiveCreate, Failure> {
-  mkdirSync(dirname(target), { recursive: true });
+  /**
+   * The parent is created inside the `Result`, as the replace forms create theirs. Until 2026-10-04 this `mkdirSync` stood
+   * before any `try`, so a regular file at the parent's place threw EEXIST (ENOTDIR deeper down) out of the primitive.
+   */
+  try { mkdirSync(dirname(target), { recursive: true }); }
+  catch (e) { return err(failure('document.parent', 'The destination folder could not be created', String(e), e)); }
   let fd: number;
   try {
     fd = openSync(target, 'wx');
@@ -158,11 +173,20 @@ export function exclusiveCreate(target: string, content: string): Result<Exclusi
     }
     return err(failure('document.exclusive', 'Could not create the document', String(e), e));
   }
+  /**
+   * A write that fails after the create (a full disk) answers a `Result` too, and the partial file this call minted is removed
+   * best-effort: left behind, every later create would read it as the established document and use a truncated identity.
+   */
   try {
-    writeSync(fd, content);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
+    try {
+      writeSync(fd, content);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+  } catch (e) {
+    discard(target);
+    return err(failure('document.exclusive.write', 'Could not write the created document', String(e), e));
   }
   return ok({ minted: true });
 }

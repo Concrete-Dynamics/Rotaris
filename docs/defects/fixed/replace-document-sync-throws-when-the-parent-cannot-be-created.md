@@ -73,4 +73,4 @@ drives; the unit cases above pin it.
 **Not repaired here, recorded beside it:** the primitive keeps two other ways out of its `Result`: the staged file's
 cleanup throws `ENOTDIR` when the parent is a regular file and no parent creation was asked for (both forms), and
 `exclusiveCreate` creates its parent outside any `try`
-([the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md](../the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md)).
+([the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md](the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md); repaired since, by fin17).

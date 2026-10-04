@@ -19,6 +19,9 @@
  *                  through the browser: the strip reads `rotaris/session/<sid> ↑1`, tooltip "Branch this workspace is on:
  *                  rotaris/session/<sid>, 1 commit ahead." and the same sentence plus the worktree in its description —
  *                  the count against THAT branch's upstream, while the base checkout is 1 ahead of its own as well.
+ *                  In 3 and 3b no worktree cell, heading or body, paints into its neighbour and the State cell's
+ *                  `completed · ready` is cut nowhere, at 1440x900 and at the 1000x680 minimum (REQ-GIT-109, REQ-SHELL-022;
+ *                  `lib/cell-paint.mjs`), and at 1440x900 the base row's `main` is drawn whole beside its tags.
  *   4. delete    — a file dropped into `feature/proof`; Delete → Yes → Git refuses → the second confirmation → force:
  *                  the row is gone, the directory is gone, `Worktree deleted.` (REQ-GIT-111/117).
  *   5. relaunch  — the split dragged in (1) is restored (REQ-SHELL-069, `panels/git`).
@@ -36,6 +39,8 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { restatedFacts } from './lib/restated-facts.mjs';
+import { parseEvals, readEval } from './lib/capture-evals.mjs';
+import { cellPaintFindings, cellPaintProbe, runShownWhole } from './lib/cell-paint.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -58,6 +63,16 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 
 
 
+// REQ-GIT-109 / REQ-SHELL-022: no worktree cell paints into its neighbour, and the State cell's two statuses are cut
+// nowhere. Branch and Session elide by design (UIR-002), so a cut run there is no finding; an overrun is, in any column.
+const WORKTREE_CELLS = cellPaintProbe('[data-testid="git-worktrees"] table.git__worktree-table');
+const BOUND_ROW = '[data-testid="git-worktrees"] tr.git__row:not([data-session=""])';
+const ELIDING_COLUMNS = ['Branch', 'Session'];
+const cellVerdict = (measured, where) => {
+  const findings = cellPaintFindings(measured, { elide: ELIDING_COLUMNS });
+  if (findings.length > 0) throw new Error(`${where}: a worktree cell paints outside its column or is cut (REQ-GIT-109): ${findings.map((f) => `${f.row} ${f.column} ${f.kind} "${f.text}" — ${f.detail}`).join(' | ')}`);
+  return { viewport: measured.viewport, rows: measured.rows.length, findings: 0 };
+};
 const STRIP_BRANCH_ICON = '[data-testid="strip-branch"] i.ph-git-branch.status-strip__icon';
 // REQ-WORKSPACE-149 rule 2 shortens a branch NAME from the middle; the state words are never shortened (REQ-GIT-161, OQ-193).
 const STRIP_BRANCH_MIDDLE = '[data-testid="strip-branch"][data-middle="1"]';
@@ -218,6 +233,8 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   ROTARIS_CAPTURE_TYPE: 'Write the notes.>>composer@4400',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
   ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
+  // The bound row's cells, measured once the Git view paints it at the opening size (1440x900).
+  ROTARIS_CAPTURE_EVAL_AT: `${WORKTREE_CELLS}>>${BOUND_ROW}@~170000`,
 }, 180_000);
 {
   const databases = findDatabases(local);
@@ -243,6 +260,10 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   const bound = r.find((x) => x.data['data-session'] === session.session_id);
   if (!bound) throw new Error(`no worktree row carries the session id ${session.session_id}: ${JSON.stringify(r.map((x) => [x.data['data-session'], x.text]))}`);
   if (!/completed/.test(bound.text) || !new RegExp(`rotaris/session/${session.session_id}`).test(bound.text)) throw new Error(`the bound row reads "${bound.text}"`);
+  // REQ-GIT-109: both statuses legible — `completed · ready` inside the State column, not under the Ahead figure.
+  const cells = readEval(parseEvals(isolated.log), 170000, WORKTREE_CELLS);
+  if (!cells?.rows?.some((x) => x.key === session.session_id)) throw new Error(`the bound row's cells were not measured: ${JSON.stringify(cells)?.slice(0, 400)}`);
+  const cellsOpening = cellVerdict(cells, `isolated at ${cells.viewport?.join('x')}`);
   if (!new RegExp(`session ${session.session_id} bound to .* on rotaris/session/${session.session_id} \\(created by the session\\)`).test(isolated.log)) throw new Error('main did not log the binding');
   if (!/is isolated: the run works in/.test(isolated.log)) throw new Error('the run host did not log the effective root');
   const picker = first(p, '[data-testid="git-checkpoint-session"]');
@@ -257,7 +278,7 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   if (strip !== `rotaris/session/${session.session_id}`) throw new Error(`the strip's branch item reads "${strip}" for the isolated session, expected rotaris/session/${session.session_id} with no ahead marker`);
   if ((p[STRIP_BRANCH_WORKTREE_TITLE] ?? []).length !== 1 || (p[STRIP_BRANCH_WORKTREE_NOTE] ?? []).length !== 1) throw new Error('the strip\'s worktree branch does not carry the base sentence as its tooltip and the worktree in its description (REQ-WORKSPACE-020)');
   if ((p[STRIP_BRANCH_OLD_WORKTREE_SENTENCE] ?? []).length !== 0) throw new Error('the strip\'s worktree branch still carries "Branch this session\'s worktree is on: …"');
-  results.isolated = { sessionId: session.session_id, status: session.execution_status, binding, checkpointRows: ckptRows.length, notesInWorktree: true, notesInBase: false, baseClean: true, rowText: bound.text, strip, png: isolated.png };
+  results.isolated = { sessionId: session.session_id, status: session.execution_status, binding, checkpointRows: ckptRows.length, notesInWorktree: true, notesInBase: false, baseClean: true, rowText: bound.text, cells: cellsOpening, strip, png: isolated.png };
 }
 
 // 3b. The session branch given an upstream and one commit beyond it; the session reopened: the strip's ` ↑1` is THAT
@@ -271,8 +292,14 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   git(tree, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'notes (worktree, local only)');
   const title = `Branch this workspace is on: ${branch}, 1 commit ahead.`;
   const exact = `[data-testid="strip-branch"][title="${title}"][aria-description="${title} ${WORKTREE_NOTE}"]`;
+  // The worktree cells measured at the opening size once the bound row paints, then at REQ-SHELL-022's 1000x680 minimum
+  // (a PNG kept of it), and the window put back before the end probes read the strip at the opening size.
+  const minimumPng = join(output, 'worktree-ahead-minimum.png');
   const ahead = await launch('worktree-ahead', workspace, local, preferences, {
-    ROTARIS_CAPTURE_RESUME: sid, ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '2500', ROTARIS_CAPTURE_AFTER_MS: '3000',
+    ROTARIS_CAPTURE_RESUME: sid, ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '7000', ROTARIS_CAPTURE_AFTER_MS: '3000',
+    ROTARIS_CAPTURE_EVAL_AT: `${WORKTREE_CELLS}>>${BOUND_ROW}@~6000;;${WORKTREE_CELLS}@7800`,
+    ROTARIS_CAPTURE_RESIZE: '1000x680@6500;;1440x900@8800',
+    ROTARIS_CAPTURE_SHOT: `${minimumPng}@8200`,
   }, 120_000, [exact]);
   const p = ahead.probes;
   if (!ahead.log.includes(`capture: opened session "${sid}" from the browser`)) throw new Error(`the session ${sid} was not reopened through the browser (see worktree-ahead.log)`);
@@ -280,7 +307,19 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   if (strip !== `${branch} ↑1`) throw new Error(`the strip's branch item reads "${strip}", expected "${branch} ↑1" (REQ-WORKSPACE-020: the ahead count against the worktree branch's upstream)`);
   if ((p[exact] ?? []).length !== 1) throw new Error(`the strip's worktree branch tooltip is not "${title}" with the worktree named in its description alone`);
   if ((p[STRIP_BRANCH_ICON] ?? []).length !== 1) throw new Error('the strip\'s worktree branch draws no branch icon');
-  results.worktreeAhead = { strip, title, description: `${title} ${WORKTREE_NOTE}`, png: ahead.png };
+  const evals = parseEvals(ahead.log);
+  const opening = readEval(evals, 6000, WORKTREE_CELLS);
+  const minimum = readEval(evals, 7800, WORKTREE_CELLS);
+  if (opening?.viewport?.join('x') !== '1440x900') throw new Error(`the opening-size cell measurement was taken at ${opening?.viewport?.join('x') ?? 'no size'}: ${JSON.stringify(opening)?.slice(0, 300)}`);
+  if (minimum?.viewport?.join('x') !== '1000x680') throw new Error(`the minimum-size cell measurement was taken at ${minimum?.viewport?.join('x') ?? 'no size'}: ${JSON.stringify(minimum)?.slice(0, 300)}`);
+  const cellsAtOpening = cellVerdict(opening, 'worktree-ahead at 1440x900');
+  const cellsAtMinimum = cellVerdict(minimum, 'worktree-ahead at 1000x680');
+  // The Branch column has room at the opening size, so the base row's `main` is drawn whole beside its two tags: elision is
+  // for a column that has run out of room, not for a cell capped narrower than its own column.
+  const baseRow = opening.rows.find((x) => x.cells[0]?.runs.some((r) => r.text === 'main'));
+  if (!baseRow || !runShownWhole(opening, baseRow.key, 'Branch', 'main')) throw new Error(`at 1440x900 the base row's branch is not drawn whole: ${JSON.stringify(baseRow?.cells[0])}`);
+  if (!existsSync(minimumPng)) throw new Error('no PNG was kept of the Git view at the minimum size');
+  results.worktreeAhead = { strip, title, description: `${title} ${WORKTREE_NOTE}`, cells: { opening: cellsAtOpening, minimum: cellsAtMinimum, baseBranchWhole: true }, png: ahead.png, minimumPng };
 }
 
 // 4. Delete the manual worktree through the two-step confirmation: a file dropped in first so Git refuses without --force.

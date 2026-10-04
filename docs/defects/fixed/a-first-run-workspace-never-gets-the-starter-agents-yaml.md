@@ -184,3 +184,14 @@ sign-in's bootstrap `exists` at 09:16:33.653. `agentsFile` began with the three-
 tool row; the intents were `question`, `explicit_trivial` and `small_feature`; spike 6 passed its four tests; the
 sign-out removed the credential file; the refusal was "Provider authentication required". Log and evidence: the session
 scratchpad's `a13r3/slice-proof.r10.log` and `a13r3/slice-proof-r10/`.
+
+**Run 11, landing the repair (fin15, 2026-10-04)** (build of `5586a96`: `finacc-accept1-3` merged onto origin/main
+`781fd2d`, the product code the branch's; the code-intelligence bundle present; 10:36:49 to 10:43:22 UTC, load 1.7 at
+start and 3.6 at end): exit 0, all seven scenarios. The first launch logged the open's bootstrap `written` at
+10:36:51.648, the marker writer's bootstrap `exists` at 10:36:55.787, `code-intelligence-setup → success` at
+10:36:55.805, `Added Katalyst` at 10:36:57.072 and the sign-in's bootstrap `exists` at 10:36:57.073. `agentsFile` began
+with the three-line header, then `default_persona: orchestrator` and the nulls, then `initialization:` and the proof's
+`runtime:` section, and `starterMissing` found nothing missing. The run completed `tasks_complete` with two tool rows and
+the answer "Slice proof workspace"; the intents were `question`, `explicit_trivial` and `small_feature`; spike 6 passed
+its four tests; the sign-out removed the credential file; the refusal was "Provider authentication required". Log and
+evidence: the session scratchpad's `fin15/slice1.log` and `fin15/slice-proof-r1/`.

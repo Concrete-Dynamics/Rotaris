@@ -3,6 +3,109 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-04 — the shared stash, live launches handed to the orchestrator, waiting, pausing, acceptance order
+
+**Prompted by** plans fin8 to fin15 and the acceptance-only plan finacc (2026-10-02 to 04; times UTC from the session
+ledger `TASKS.txt`, lessons (k) to (o) and the review section of `skill-lessons.md`, both in the session scratchpad):
+- **(k) The shared stash.** About 07:04 on 2026-10-03, finacc's builders `implement:accept1-5` and `implement:accept1-6`
+  (run `wf_6c39b5ac-be8`) each ran `git stash push`/`pop` minutes apart to check a red against the base, and each `pop`
+  took the other's entry: a1-5's engine edits landed uncommitted in `wt-finacc-a1-6`, a1-6's UI edits in a1-5's tree.
+  a1-5 noticed and reported; the orchestrator checked the three foreign files out of a1-6 at 07:09 (ledger). a1-5's
+  branch recorded the note, merged as `8850ea2`.
+- **(l) Agent live-run launches are refused.** finacc round 1's `accept:live#1` sent
+  `cd /home/user/Rotaris-crw-wt-accept && export PATH=/opt/node24/bin:$PATH && timeout 5400 xvfb-run … node apps/desktop/scripts/live-run.mjs --confirm --skip-build …`
+  at 05:14:14; the classifier refused it at 05:14:22 ("[Real-World Transactions]", verbatim in the
+  journal's result). An agent's shell starts every command in the primary checkout, so the relative allow rules match
+  only a launch of the primary checkout's script, and the `cd` form matches none. Duress was not launched, the autopsy
+  had no pack, and its finding F6 (`live-check-failed`) became repair bundle `accept1-4`, whose builder's own launch was
+  refused at about 06:39 and which ended blocked. The orchestrator ran both runs itself with absolute paths from its own
+  working directory (05:56:26 default in `wt-accept`, passed 05:56 to 06:15; 06:15:51 duress in a dedicated `wt-live`,
+  passed 06:15 to 07:32); the duress autopsy's U5 found `wt-live` without the code-intelligence bundle, which a
+  `--skip-build` launch refuses since `5cc297d`.
+- **(m) A session limit.** "You've hit your session limit · resets 7:40am (UTC)" (HTTP 429) took five agents of finacc
+  (halted) and fin12 (`wf_c3ee62dd-7c1`) before 07:45 on 2026-10-03; both resumed by `render --runs` (`wf_22ada3fe-083`,
+  `wf_36545f6f-6eb`) with nothing lost (ledger, 07:45).
+- **Restarts.** A container restart at 19:35 on 2026-10-02 killed fin8 run 1 (`wf_4a76fbfa-32b`) and left orphaned
+  `Xvfb :111` and `:112`; a host reboot (uptime 0) at 23:28 killed fin10 run 1 (`wf_7cfc7b76-139`) and left none; the
+  disk, the scratchpad and the check-in survived both, and one `render --runs` recovered each (ledger, 19:40 and 23:30).
+- **(n) Pause and backup.** At the owner's "Please Pause all tasks. I will continue another time." the orchestrator
+  stopped finacc run 2, fin14 run 1 and an agent with `TaskStop` at 11:35:58 on 2026-10-03, disabled the check-in with
+  `update_trigger`, killed an orphaned `Xvfb`, and wrote `RESUME.md`; at the owner's request it pushed two bundle
+  branches, a builder's uncommitted edits as `backup/fin14-git-view-state-cell-wip` (`e4f60ec`, built through a temporary
+  index) and the scratchpad state as the orphan branch `backup/orchestration-state-2026-10-03` (ledger, 11:38 and 11:47).
+  The host rebooted during the pause; worktrees, journals and scratchpad survived (ledger, 10:33 on 2026-10-04).
+- **(o) Acceptance order.** finacc was paused mid-round 2 while fin14 and the notes its own repairs recorded still had to
+  land; re-rendered, it would have run round 2 on a head the later plans change. It was superseded instead: fin15
+  (`wf_3052e4b2-a59`) finishes `accept1-3` from its pushed branch, and one acceptance-only plan runs last (ledger, 10:33
+  on 2026-10-04).
+- **Waiting on long jobs.** fin10's `verify:strip-notices-and-listing#3` (`wf_add7be78-430`) waited in the foreground
+  with `until grep -q … ; do sleep 20; done; …` at 01:20:10 and 01:27:02 on 2026-10-03, and the owner was shown a
+  permission prompt. The owner approved six allow rules for that shape; the orchestrator's first edit of
+  `.claude/settings.local.json` was refused as "[Self-Modification]" at 01:38:06 and went through at 01:39:51 on the
+  owner's explicit instruction (session transcript; ledger, 01:40).
+- **The reviewer's three optional findings on `dec5de3`** (`skill-lessons.md`, "Left for self-improvement #4"): a
+  mid-run refresh of a plan's reference worktree changes the references its running agents read; who repairs a red base
+  another author left; and the 2026-10-02 entry's wording (below).
+
+**Changed**
+- `scripts/workflow.template.js`: every agent's grounding says never `git stash`, with the patch-file and throwaway
+  worktree forms; waiting is the completion notice or the Monitor tool, a polling loop only in environment.md's shape;
+  a refused live launch is reported with the exact command. The live-runner sends each profile command exactly as
+  written, with nothing before it, and after a refusal launches nothing more and returns every run with `refused: true`
+  and its `command`. Once a launch is refused, no later round of that run starts a live-runner (the refusal covers the
+  outcome, and another agent is not to pursue it): each round hands the profile's commands to the orchestrator. The
+  autopsy reads refused runs apart from the judged ones and is told they are no finding; a `live-check-failed` finding
+  of a round in which no live run was judged becomes no repair bundle, and stays among the round's findings; the run
+  ends `live-handoff`, never `complete`, and each round's result carries its `handoff`.
+- `scripts/orchestration.mjs`: the profile token `{node}` (the Node 24 binary for a command that takes no shell
+  prefix), resolved in nested values too; `status` lists a journal's refused live runs as hand-offs; the dry run's
+  `liveRefused` stub.
+- `profiles/rotaris-crw.json`: both live commands are one absolute command each, the form the orchestrator ran:
+  `{node} {repo}-wt-accept/apps/desktop/scripts/live-run.mjs …`.
+- `references/live-runs.md`: the permission system and running sections: the reset working directory, the refused
+  launch with its evidence, the absolute commands, the absolute allow rule the owner may approve (none exists), what
+  the four relative rules match, the trailing `*` admitting later flags (the old text said the rules admit no endpoint
+  or budget change, which their trailing wildcard never ensured), the bundle in every judged tree, duress in a dedicated
+  tree when run beside a workflow. "An agent holding the rule can run it as well (not yet observed)" is deleted: no
+  agent's launch matches.
+- `references/environment.md`: Long jobs (how an agent waits; the approved polling shape; a permission rule for agents
+  is the owner's to add, asked once with its text; the detached fallback's poll in that shape); Restarts (a host reboot
+  as well as a container restart, and the orphaned `Xvfb` only the latter leaves); Limits (the session limit ends every
+  workflow at once); a new section, Pause and backup.
+- `references/repository.md`: never `git stash`, with this incident and the two ways to set a change aside; "Another
+  writer on main" runs the record tools in a short-lived detached worktree, never in a running plan's reference
+  worktree, and lets the orchestrator repair a red base forward when a docs-only change repairs it, never reverting.
+- SKILL.md: §4 the `live-handoff` status and pausing; §5 accept a head nothing else is about to change, and a refused
+  live launch handed to the orchestrator (replacing the bullet that said only "run it"); §6 removes the live tree too.
+- `docs/clean-room/agent-workflow.md`: the stash rule. The note
+  `docs/defects/parallel-worktree-agents-swap-uncommitted-edits-through-the-shared-git-stash.md` moved to
+  `docs/defects/fixed/` with its outcome; no link pointed at its old path.
+
+**Corrects** the 2026-10-02 entry's "the fourth triage counted thirteen recorded or changed since the third, across fin4's
+second run and fin5": the notes recorded or changed between the third triage's head `2e8f9c0` and the fourth's `dc796f5`
+also came from fin6's `mission-metrics` (merged as `de5387e`) and the owner's Codex merges (`5f022de` adds a fixed note).
+
+**Not changed**: no protected invariant, "Improving this skill", `references/skill-review.md` or existing self-test
+assertion. Live runs still need the owner's quoted authorization, and the orchestrator runs refused ones under it; every
+round still has its sweep and its autopsy; a refusal's live check stays among the findings to record; Done still needs
+the authorized live runs passing, so a run that handed them off does not read `complete`. No permission rule was added.
+
+**Proposal to the owner**: approve the two absolute allow rules `references/live-runs.md` gives (The permission system),
+in `.claude/settings.local.json`, so the acceptance live-runner can launch the profile's commands itself instead of
+handing them off. Until then every agent launch is handed off and the orchestrator runs it under the standing R-068
+words.
+
+**Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check` under Node 24, both green, and
+`node tools/check-record-links.mjs`. New self-test assertions pin each mechanism; each of nine hunks, reverted alone in
+a scratch copy of the skill, turns the self-test red with the assertion named: the stash line ("implement:a1 is told
+that every worktree shares one stash"), the wait line ("agents wait on a long job without a sleep loop of their own"),
+the absolute profile commands and the nested token resolution (both "a live command names its tree absolutely, every
+token resolved"), no later live-runner ("after a refusal no later round starts a live-runner, and every round still has
+its autopsy"), the autopsy's hand-off section ("the autopsy is told a refused live run is no finding"), the repair
+filter ("a failed live check no run made becomes no repair bundle"), the `live-handoff` status ("a run whose live
+launches went to the orchestrator never reads complete") and `status`'s hand-off list ("status shows a check-in the
+live runs handed to it"). The rendered live-runner and autopsy prompts were read once as an agent sees them.
+
 ## 2026-10-02 — recovery and planning lessons of plans fin1 to fin9
 
 **Prompted by** the plans `fin1` to `fin9` of one session (2026-10-01 and 02), each lesson with its evidence:

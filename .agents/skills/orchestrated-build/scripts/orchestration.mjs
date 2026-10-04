@@ -210,9 +210,13 @@ export function node24Prefix() {
   return fs.existsSync('/opt/node24/bin/node') ? 'export PATH=/opt/node24/bin:$PATH' : ':'
 }
 
-/** Resolves the profile's tokens ({repo}, {id}, {node24}) and lays the plan's session values over it. */
+/** The Node >= 24 binary for a command that names its own (a live-run launch, which takes no shell prefix). */
+export function node24Bin() { return node24Prefix() === ':' ? 'node' : '/opt/node24/bin/node' }
+
+/** Resolves the profile's tokens ({repo}, {id}, {node24}, {node}), nested values included, and lays the plan's session values over it. */
 export function resolveProfile(profile, plan, repo) {
-  const sub = (v) => (typeof v === 'string' ? v.replaceAll('{repo}', repo).replaceAll('{id}', plan.id || 'noid').replaceAll('{node24}', node24Prefix()) : v)
+  const sub = (v) => (typeof v === 'string' ? v.replaceAll('{repo}', repo).replaceAll('{id}', plan.id || 'noid').replaceAll('{node24}', node24Prefix()).replaceAll('{node}', node24Bin())
+    : Array.isArray(v) ? v.map(sub) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, sub(x)])) : v)
   const run = Object.fromEntries(Object.entries(profile.run).map(([k, v]) => [k, sub(v)]))
   if (!plan.trailers) throw new UsageError('the plan names no commit trailers (copy them from this session\'s attribution instructions)')
   run.trailers = plan.trailers
@@ -316,9 +320,10 @@ function compile(script) {
 // ------------------------------------------------------------------------------------------------ dry run
 /**
  * Runs a rendered script against stub agents. `failVerify[key]` verifications of a bundle fail; `mergeRefuse[key]`
- * merges are refused; `block` keys report blocked; `lose` labels (or every label, with `loseAll`) come back empty.
+ * merges are refused; `block` keys report blocked; `lose` labels (or every label, with `loseAll`) come back empty;
+ * `liveRefused` has the permission system refuse the live-runner's first launch.
  */
-export async function dryRun(script, { failVerify = {}, mergeRefuse = {}, mergeUnpushed = [], findings = [], block = [], lose = [], loseAll = false, quiet = true } = {}) {
+export async function dryRun(script, { failVerify = {}, mergeRefuse = {}, mergeUnpushed = [], findings = [], block = [], lose = [], loseAll = false, liveRefused = false, quiet = true } = {}) {
   const calls = [], prompts = {}, logs = []
   let active = 0, peak = 0, activeMerges = 0, peakMerges = 0
   const counts = {}
@@ -340,7 +345,11 @@ export async function dryRun(script, { failVerify = {}, mergeRefuse = {}, mergeU
       return { merged: true, pushed: true, mainCommit: 'm-' + key, checkOnMain: 'green' }
     }
     if (rest.startsWith('sweep')) return { head: 'h', gate: 'green', results: [{ proof: 'p', status: 'pass', summary: '', evidence: '' }] }
-    if (rest.startsWith('live')) return { head: 'h', runs: [] }
+    if (rest.startsWith('live')) {
+      if (!liveRefused) return { head: 'h', runs: [] }
+      const sent = [...prompt.matchAll(/^\d+\. [^:\n]*: `(.*)`$/gm)].map((m) => m[1])
+      return { head: 'h', runs: sent.map((command, i) => ({ what: 'run ' + (i + 1), command, passed: false, refused: true, pack: '', checks: 'none', fails: ['Permission for this action was denied'] })) }
+    }
     if (rest.startsWith('autopsy')) return { report: 'r', findings: findings.map((f, i) => ({ id: 'F' + i, kind: 'product-defect', severity: 'degrades', title: 't' + i, detail: 'd', evidence: 'e', files: 'f', ...f })) }
     throw new Error('unexpected agent label ' + o.label)
   }
@@ -353,11 +362,14 @@ export async function dryRun(script, { failVerify = {}, mergeRefuse = {}, mergeU
 
 // ------------------------------------------------------------------------------------------------ status
 export function status(runIds, root) {
-  const { seed, resume, cache } = deriveState(readEvents(runIds, root))
+  const events = readEvents(runIds, root)
+  const { seed, resume, cache } = deriveState(events)
   const rows = []
   for (const [k, s] of Object.entries(seed)) rows.push([k, s.status, s.mainCommit || s.blockedReason || s.reason || ''])
   for (const [k, r] of Object.entries(resume)) rows.push([k, 'next: ' + r.stage, r.verdict && !r.verdict.pass ? r.verdict.blocking.length + ' blocking' : ''])
-  return { rows: rows.sort((a, b) => a[0].localeCompare(b[0])), acceptance: Object.keys(cache) }
+  // A live launch the permission system refused is the orchestrator's to run (SKILL.md §5): a check-in sees it here.
+  const handoff = events.filter((e) => e.label.startsWith('accept:live#') && e.result).flatMap((e) => (e.result.runs || []).filter((x) => x.refused).map((x) => e.label + ' (head ' + e.result.head + '): ' + (x.command || x.what)))
+  return { rows: rows.sort((a, b) => a[0].localeCompare(b[0])), acceptance: Object.keys(cache), handoff }
 }
 
 // ------------------------------------------------------------------------------------------------ self-test
@@ -440,6 +452,8 @@ export async function selfTest({ quiet = false } = {}) {
     assert.ok(!unpushed.calls.includes('fix:b3#1 [high]'))
     assert.match(run.prompts['implement:a1'], /Live runs are NOT authorised/, 'without authorization agents are told not to launch live runs')
     assert.match(run.prompts['implement:a1'], /Bash tool's own `timeout` parameter/, 'agents give a long background job an explicit timeout')
+    assert.match(run.prompts['verify:a1#1'], /completion notice or the Monitor tool/, 'agents wait on a long job without a sleep loop of their own')
+    for (const label of ['implement:a1', 'verify:a1#1', 'fix:a1#1', 'merge:a1']) assert.match(run.prompts[label], /Never `git stash`/, label + ' is told that every worktree shares one stash')
     assert.ok(!run.calls.some((c) => c.startsWith('accept:live')), 'no live-runner without authorization')
     assert.equal(run.result.acceptance.length, 2)
     assert.ok(run.calls.includes('implement:accept1-1 [high]') && run.calls.includes('implement:accept1-2 [high]') && !run.calls.includes('implement:accept1-3 [high]'), 'findings that share a directory pair; the rest stand alone')
@@ -447,6 +461,19 @@ export async function selfTest({ quiet = false } = {}) {
     const liveRun = await dryRun(render(buildArgs(plan, liveProfile)), {})
     assert.ok(liveRun.calls.some((c) => c.startsWith('accept:live#1')), 'with authorization the live-runner runs')
     assert.match(liveRun.prompts['implement:a1'], /AUTHORISED[\s\S]*as much as you want/)
+    // An agent's shell starts in the primary checkout: a live command is one absolute command, sent exactly as written.
+    for (const x of liveProfile.run.live.runs) {
+      assert.ok(x.command.includes(liveProfile.run.acceptTree + '/') && !/[{}]|&&|^cd /.test(x.command), 'a live command names its tree absolutely, every token resolved: ' + x.command)
+      assert.ok(liveRun.prompts['accept:live#1'].includes('`' + x.command + '`'), 'the live-runner is given each command exactly')
+    }
+    // A refused launch is handed to the orchestrator: no later live-runner, no repair bundle of it, never `complete`.
+    const refused = await dryRun(render(buildArgs(plan, liveProfile)), { liveRefused: true, findings: [{ kind: 'live-check-failed', area: 'live/run' }, { area: 'pkg/a/x.ts' }] })
+    assert.equal(refused.result.status, 'live-handoff', 'a run whose live launches went to the orchestrator never reads complete')
+    assert.ok(!refused.calls.some((c) => c.startsWith('accept:live#2')) && refused.calls.some((c) => c.startsWith('accept:autopsy#2')), 'after a refusal no later round starts a live-runner, and every round still has its autopsy')
+    assert.match(refused.prompts['accept:autopsy#1'], /none judged this round[\s\S]*handed to the orchestrator[\s\S]*NO finding of yours/, 'the autopsy is told a refused live run is no finding')
+    assert.deepEqual(refused.calls.filter((c) => c.startsWith('implement:accept1-')), ['implement:accept1-1 [high]'], 'a failed live check no run made becomes no repair bundle')
+    assert.match(refused.prompts['implement:accept1-1'], /Acceptance finding F1/)
+    for (const a of refused.result.acceptance) assert.deepEqual(a.handoff.map((x) => x.command), liveProfile.run.live.runs.map((x) => x.command), 'round ' + a.round + ' hands the exact commands to the orchestrator')
     run = await dryRun(render(buildArgs({ id: 'st', bundles: [], acceptance: { rounds: 2 } }, profile)), { findings: Array.from({ length: 12 }, (_, i) => ({ area: 'd' + i + '/f.ts' })) })
     assert.ok(run.peak <= profile.run.repairPool, 'the repair pool bounds concurrency (peak ' + run.peak + ')')
 
@@ -557,6 +584,8 @@ export async function selfTest({ quiet = false } = {}) {
     assert.ok(run.calls.includes('implement:accept1-2 (resumed) [high]'), 'an interrupted repair bundle resumes')
     assert.ok(!run.calls.some((c) => c.startsWith('accept:autopsy#1')), 'its round\'s autopsy is replayed')
     assert.throws(() => buildArgs({ id: 'st', bundles: [], acceptance: { rounds: 1 } }, profile, acc), /no longer repairs/, 'lowering acceptance.rounds under a resuming repair is refused')
+    journal('wf_six', [['accept:live#1', { head: 'h6', runs: [{ what: 'default', command: 'timeout 1 node /t/live-run.mjs', passed: false, refused: true, pack: '', checks: '' }] }]])
+    assert.deepEqual(status(['wf_six'], jroot).handoff, ['accept:live#1 (head h6): timeout 1 node /t/live-run.mjs'], 'status shows a check-in the live runs handed to it')
 
     // Agents never read a missing or stale skill; a fresh orchestration never reuses an id.
     const stale = path.join(tmp, 'stale-skill')
@@ -649,6 +678,7 @@ async function main() {
     const s = status(readRuns(one(o, 'runs')), root)
     for (const r of s.rows) console.log(r.join('  '))
     console.log('acceptance agents replayable: ' + (s.acceptance.join(', ') || 'none'))
+    for (const h of s.handoff) console.log('live hand-off, yours to run: ' + h)
   } else if (cmd === 'dry-run') {
     const failVerify = Object.fromEntries((o['fail-verify'] || []).map((x) => { const [k, n] = x.split('='); return [k, Number(n)] }))
     const findings = Array.from({ length: Number(one(o, 'findings') || 0) }, (_, i) => ({ area: 'area' + i + '/f.ts' }))

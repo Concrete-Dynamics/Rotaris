@@ -21,6 +21,16 @@ node node_modules/electron/install.js         # electron's dist/ is NOT installe
 Branch names say what the work is (`part-<letter>-<topic>`, `fix-<topic>`). The worktree
 directory sits beside the checkout, never inside it.
 
+**Never `git stash` while another worktree is live.** Every worktree of the repository
+shares one stash (`refs/stash` sits in the common git directory), so a `pop` takes whatever
+entry is on top, and that can be another agent's: on 2026-10-03 two builders in sibling
+worktrees each received the other's uncommitted edits that way
+([the note](../defects/fixed/parallel-worktree-agents-swap-uncommitted-edits-through-the-shared-git-stash.md)).
+To set a change aside, write it to a patch file outside the checkout and restore the files
+(`git diff -- <files> > <patch>`, `git checkout -- <files>`, and `git apply <patch>` after),
+or read the base in a throwaway detached worktree (`git worktree add --detach <path> main`,
+removed after).
+
 ## Merge back, and persevere
 
 Work is done when `main` is green with the branch in it — not when the branch is green.

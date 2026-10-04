@@ -21,10 +21,20 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   condition. Give every long background job an explicit `timeout` (milliseconds; the tool accepts up to 7,200,000)
   that covers the longest it may run: its own `timeout` wrapper, where it has one. A Monitor is capped at thirty
   minutes.
+- **Waiting on a job**: the Bash tool's own `timeout` on the job itself (in the foreground up to ten minutes; past that
+  in the background, and the completion notice says when it ends), or the Monitor tool. The harness gates a `sleep`
+  loop: on this host a polling loop runs without a prompt only in the shapes the owner approved on 2026-10-03, as one
+  command with nothing before it: `until grep -q <pattern> <log>; do sleep <n>; done; grep|tail|cat …`, or the same
+  with `while ! grep -q`. Any other `sleep` loop stops on a permission prompt the owner has to answer: fin10's
+  `verify:strip-notices-and-listing#3` (`wf_add7be78-430`) waited on its gate and proof logs with that very shape at
+  01:20 and 01:27 UTC on 2026-10-03, before any rule existed, and the owner was prompted.
+- **A permission rule for agents is the owner's to add.** Ask once, with the exact text. The orchestrator's first edit of
+  `.claude/settings.local.json` for those shapes was refused by the classifier as "[Self-Modification]" at 01:38 UTC,
+  and went through at 01:39 on the owner's explicit instruction.
 - **Only if a long `timeout` is refused**, run the job detached and poll it (a detached launch never matches the
   live-run allow rules, so for a live run it is the orchestrator's):
   `setsid nohup bash -c '<command> > <log> 2>&1; echo "exit=$?" >> <log>' > /dev/null 2>&1 < /dev/null & disown`,
-  then a background `until grep -q "^exit=" <log>; do sleep 30; done`, re-armed when it is stopped.
+  then a background `until grep -q "^exit=" <log>; do sleep 30; done; tail -5 <log>`, re-armed when it is stopped.
 
 ## Load
 
@@ -40,7 +50,10 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
 
 - **The container restarts without warning**, from every few hours to twice in twenty minutes. A restart kills every
   background task, every running workflow, every launched app and every detached job. It keeps the disk: worktrees,
-  branches, journals, the scratchpad, `~/.rotaris`.
+  branches, journals, the scratchpad (under `/tmp/claude-0`), `~/.rotaris`. The host itself reboots too (uptime 0, at
+  23:28 UTC on 2026-10-02 and again during the owner's pause of 2026-10-03 to 04); the disk survived every time, and
+  after a reboot no orphaned `Xvfb` is left (one after a container restart at 19:35 UTC on 2026-10-02 left `:111` and
+  `:112`).
 - **What survives:** scheduled check-ins (`send_later`), workflow journals
   (`~/.claude/projects/<project>/<session>/subagents/workflows/<run>/journal.jsonl`), and the branches agents
   committed to. An agent stopped mid-step leaves commits and sometimes an uncommitted edit.
@@ -50,7 +63,11 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
 
 ## Limits
 
-- **A usage limit** makes agents come back empty with a message naming the reset time; three in a row halt the run.
+- **A usage limit** makes agents come back empty with a message naming the reset time; three in a row halt the run. It
+  ends every running workflow at once, and a session limit does it as well as the weekly one: "You've hit your
+  session limit · resets 7:40am (UTC)" (HTTP 429) took five agents of finacc (`wf_6c39b5ac-be8`, halted) and fin12
+  (`wf_c3ee62dd-7c1`, incomplete) within minutes before 07:45 UTC on 2026-10-03; both resumed from the journals after the
+  reset with nothing lost.
   While it holds, the orchestrator's own turns are refused with the same message, so the first turn of yours that
   can act is the signal: probe with one trivial agent then, and recover from the journals once it succeeds. That
   can be long before the stated reset: fin3 (`wf_27c648a2-1f5`) and fin4 (`wf_27b2ef63-c36`) halted about 20:10 UTC
@@ -61,9 +78,25 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   HEAD of `<repo>-wt-integ-<id>`. Nothing is lost: the re-rendered merge stage checks out origin/main there and
   merges again (fin3's `c6e5d96` and fin4's `bfc3f33`, both lost to that limit).
 
+## Pause and backup
+
+- **The owner's pause** ("Please Pause all tasks. I will continue another time.", 2026-10-03): `TaskStop` every workflow task and
+  background agent, disable the check-in (`update_trigger` with `enabled: false`), stop leftover proof processes and
+  orphaned `Xvfb`, and write the resume steps to `<scratchpad>/RESUME.md`: what stopped, each plan's render command with
+  its reference worktree, what is unpushed. Resuming is SKILL.md §4's recovery, with the check-in re-armed.
+- **What lives only in the container**: unmerged branches, a builder's uncommitted edits, the journals and the
+  scratchpad. A reboot kept them; a reclaimed host would not. Offer to push them: pushing anything but `main` and the
+  session's designated branch needs the owner's word. Branches go under their own names; an uncommitted edit as a
+  commit built through a temporary index, which leaves the builder's worktree and index untouched
+  (`GIT_INDEX_FILE=<scratchpad>/x.index git read-tree HEAD`, then with the same variable `git add -A` and
+  `git write-tree`, `git commit-tree <tree> -p HEAD -m …`, `git push origin <sha>:refs/heads/backup/<name>`); the
+  scratchpad's plans, ledger, notes and unfinished journals on an orphan branch
+  (`git worktree add --orphan -b backup/orchestration-state-<date> <path>`), scanned first for the endpoint's host, the
+  key file's content and token shapes. Restore steps go in `RESUME.md`, and the backup branches are deleted once everything lands.
+
 ## Shell forms the harness blocks
 
-- `sleep N; cmd` chains are refused: wait with a background until-loop or the completion notice.
+- `sleep N; cmd` chains are refused: wait as Long jobs says.
 - `git branch -f main …` is refused as destructive: `git checkout main && git merge --ff-only origin/main`.
 - Never disable TLS verification or unset the proxy; outbound HTTPS goes through it.
 

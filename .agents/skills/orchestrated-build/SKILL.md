@@ -15,7 +15,7 @@ it**, and **nothing lands unless the repository's gate is green on the merged re
 | `scripts/workflow.template.js` | The one workflow every run uses: lanes → build → verify → repair → merge, then acceptance |
 | `scripts/orchestration.mjs` | `render` a plan (fresh, or resumed from journals), `status`, `dry-run`, `self-test` |
 | `profiles/<repo>.json` | One repository's commands and places (gate, setup, proofs, live runs, worktrees) |
-| `references/environment.md` | The host: toolchain, long jobs, load, restarts, limits, blocked shell forms |
+| `references/environment.md` | The host: toolchain, long jobs, load, restarts, limits, pause and backup, blocked shell forms |
 | `references/workflow-tool.md` | The Workflow tool as it behaves: journals, labels, resume, concurrency |
 | `references/live-runs.md` | Live runs: authorization, permission rules, refusals, running them |
 | `references/repository.md` | This repository's process in one page, pointing at its authorities |
@@ -111,7 +111,8 @@ silently. Re-arm at every check-in. It survives restarts; background tasks do no
 | `*-lost`, `halted`, `error` | An agent came back empty, or three in a row did | Recover (below) |
 
 The run's own `status`: `complete`; `incomplete` (a plan bundle did not settle, so acceptance was skipped: re-render);
-`halted` (lost agents: a usage limit or an outage); `acceptance-incomplete` (an acceptance agent was lost).
+`halted` (lost agents: a usage limit or an outage); `acceptance-incomplete` (an acceptance agent was lost);
+`live-handoff` (acceptance ran, but the permission system refused the live launches: they are yours, §5).
 
 **Recovering** from a restart, a usage limit or a halt:
 1. Make sure the previous run has stopped (a restart notice says so; otherwise stop it). Never run two runs of one
@@ -126,6 +127,10 @@ The run's own `status`: `complete`; `incomplete` (a plan bundle did not settle, 
    ```
    `render` reads every journal and starts each bundle where it stopped, with a note telling the agent what an
    interrupted predecessor may have left. Never resume a lane script with `resumeFromRunId`.
+
+**Pausing** at the owner's request: stop every task, disable the check-in and write `RESUME.md`; offer to push what
+lives only in the container, which needs the owner's word (`references/environment.md`, Pause and backup). Resuming is
+Recovering, above.
 
 **Reopening a blocked bundle** that holds good work: add `"reopen": "<the accepted outcome of the blocked task>"`
 to it in the plan and render; every later stage of it sees that scope, and it is verified again and merged.
@@ -149,8 +154,15 @@ nothing but its own repairs merged after it; `"acceptance": { "fresh": true }` f
   acceptance-only plan (`references/workflow-tool.md`, Concurrency) and plan the repairable notes it finds ahead of
   it; a single plan runs acceptance inside its own workflow, so triage when it ends and plan what remains. While
   another plan still builds, a short triage of only the notes the last plan recorded can fill the free plan slot.
-- A live run refused by the permission system is yours: run it (a long one as a background task with an explicit
-  `timeout`, `references/live-runs.md`), have an agent autopsy the packs, and feed the findings in as a new plan.
+- **Accept a head nothing else is about to change.** When repair work remains outside the acceptance plan (another
+  plan still building, notes the last repairs recorded), finish it first: a round on a head later plans change owes
+  another round anyway. An acceptance plan overtaken so is superseded, not re-rendered: a new plan finishes its open
+  repair bundle from its pushed branch, and one acceptance-only plan runs last on the final head (finacc, 2026-10-04).
+- **A refused live launch is handed to you.** After a refusal the live-runner launches nothing more and returns every
+  run's exact command; no later round of that run starts a live-runner, no repair bundle is made of the refusal,
+  `status` lists the commands at a check-in, and the run ends `live-handoff`. Run them yourself at the head you judge
+  (`references/live-runs.md`, Running: the tree built and bundled, duress in a dedicated tree), have an agent autopsy
+  the packs beside the round's autopsy report, and feed its findings in as a new plan. The Done criteria count them.
 - **Record every finding left unrepaired** when the rounds end: a defect note, or an open question for one that needs
   a ruling. While actionable findings remain, plan another round.
 - **Done** means: an acceptance round with the gate green, every proof passing or stated not-applicable with its
@@ -160,8 +172,8 @@ nothing but its own repairs merged after it; `"acceptance": { "fresh": true }` f
 
 Report what merged (counts, notable repairs), what remains open and why (owner rulings, platform-bound, excluded),
 each decision waiting on the owner in one line, collisions the owner must know about, and where the evidence is.
-Then remove the integration, acceptance and reference worktrees and the merged branches (`git branch -d`), stop leftover
-`Xvfb`, and delete the check-in.
+Then remove the integration, acceptance, live and reference worktrees and the merged branches (`git branch -d`), stop
+leftover `Xvfb`, and delete the check-in.
 
 ## Improving this skill
 

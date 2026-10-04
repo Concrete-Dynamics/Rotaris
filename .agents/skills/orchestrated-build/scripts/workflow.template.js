@@ -66,7 +66,11 @@ const SWEEP_SCHEMA = {
 }
 const LIVE_SCHEMA = {
   type: 'object',
-  properties: { head: { type: 'string' }, runs: { type: 'array', items: { type: 'object', properties: { what: { type: 'string' }, passed: { type: 'boolean' }, pack: { type: 'string' }, checks: { type: 'string' }, fails: { type: 'array', items: { type: 'string' } } }, required: ['what', 'passed', 'pack', 'checks'] } } },
+  properties: { head: { type: 'string' }, runs: { type: 'array', items: { type: 'object', properties: {
+    what: { type: 'string' }, command: { type: 'string', description: 'the command exactly as the prompt gives it' }, passed: { type: 'boolean' },
+    refused: { type: 'boolean', description: 'true when the permission system refused this launch, or a refusal of an earlier one kept you from launching it: the orchestrator runs it' },
+    pack: { type: 'string' }, checks: { type: 'string' }, fails: { type: 'array', items: { type: 'string' } },
+  }, required: ['what', 'command', 'passed', 'refused', 'pack', 'checks'] } } },
   required: ['head', 'runs'],
 }
 const FINDING_KINDS = ['product-defect', 'harness-defect', 'proof-red', 'live-check-failed', 'spec-faithful', 'needs-ruling', 'platform-bound']
@@ -104,9 +108,10 @@ function grounding() {
     '- `' + ref('repository.md') + '`: this repository\'s process (worktrees, the gate, records, commits, numbering collisions, what an agent never edits or decides). It points at the authorities; read the ones your work touches.',
     '- `' + ref('environment.md') + '`: the host (toolchain, headless launches, load, what a restart or a refusal looks like).',
     'CLAUDE.md is in your context; its hard boundaries bind every step, every command and every file you open.',
-    'In EVERY shell, first: `' + R.shellPrefix + '`. A command that can run longer than ten minutes runs in the background with the Bash tool\'s own `timeout` parameter (milliseconds, up to 7,200,000) set to cover the longest it may run, its own `timeout` wrapper included (a background task given none is stopped after thirty minutes); wait with an until-loop or the completion notice, as environment.md (Long jobs) shows.',
+    'In EVERY shell, first: `' + R.shellPrefix + '`. A command that can run longer than ten minutes runs in the background with the Bash tool\'s own `timeout` parameter (milliseconds, up to 7,200,000) set to cover the longest it may run, its own `timeout` wrapper included (a background task given none is stopped after thirty minutes). Wait for it with the completion notice or the Monitor tool; a polling loop in the shell runs only in the shape environment.md (Long jobs) gives, because any other `sleep` loop stops on a permission prompt only the owner can answer.',
+    'Never `git stash`: every worktree of the repository shares one stash, so a `pop` can take another agent\'s entry and give yours away. To set a change aside, `git diff -- <files> > <scratchpad>/<name>.patch && git checkout -- <files>`, then `git apply` that patch; or read the base in a throwaway detached worktree.',
     R.live
-      ? 'Live runs are AUTHORISED for this round (the owner: "' + R.live.ownerWords + '"); `' + ref('live-runs.md') + '` says how. A refused launch is never retried or routed around: report it.'
+      ? 'Live runs are AUTHORISED for this round (the owner: "' + R.live.ownerWords + '"); `' + ref('live-runs.md') + '` says how. A refused launch is never retried or routed around: report it with the exact command you sent, for the orchestrator to run.'
       : 'Live runs are NOT authorised for this round: never launch one; report every live scenario your work names as not verified, with that reason.',
     R.brief ? '\n## Brief for this round (from the orchestrator)\n' + R.brief : '',
   ].join('\n')
@@ -324,22 +329,27 @@ function livePrompt(round) {
   return [
     'You are the ACCEPTANCE LIVE-RUNNER (acceptance round ' + round + '): every bundle has merged and the proof sweep has finished; you run the product against a real model. You change NO code. ' + OUTPUT_RULE,
     '', grounding(), '',
-    '`cd ' + R.acceptTree + '`: built at the head the sweep ran on; if origin/' + R.mainBranch + ' has moved since, check it out detached and rebuild first, and say so.',
-    'Run, in order, each in the background:', ...R.live.runs.map((x, i) => (i + 1) + '. ' + x.what + ': `' + x.command + '`'),
-    'If a launch is refused by the permission system, do NOT retry it or reach it another way: return that run with `passed: false` and the refusal verbatim in `fails`; the orchestrator runs it.',
-    'Return `head` and one entry per run: what, passed, pack (absolute path), every PASS/FAIL/NOTE line verbatim in `checks`, each FAIL in `fails`.',
+    '`' + R.acceptTree + '` is built at the head the sweep ran on; if origin/' + R.mainBranch + ' has moved since, check it out detached there and rebuild first, and say so.',
+    'Run, in order, each in the background and EXACTLY as written: one command with nothing before it (no `cd`, no `export`, no `&&` chain; the shell prefix above does not apply, since each names its own Node binary), from whatever directory your shell is in. The script judges the tree it sits in, and any other form misses the allow rules the owner may have set (`' + ref('live-runs.md') + '`).', ...R.live.runs.map((x, i) => (i + 1) + '. ' + x.what + ': `' + x.command + '`'),
+    'If the permission system refuses a launch, launch nothing more: the refusal covers the outcome, so never retry it, split it or reach it another way. Return every run: the refused one and each one not yet launched with `refused: true`, `passed: false`, its `command` exactly as written above and the refusal verbatim in `fails`. The orchestrator runs them.',
+    'Return `head` and one entry per run: what, command, passed, refused, pack (absolute path), every PASS/FAIL/NOTE line verbatim in `checks`, each FAIL in `fails`.',
   ].join('\n')
 }
-function autopsyPrompt(sweeps, live, round) {
+function autopsyPrompt(sweeps, live, handed, round) {
+  const judged = live && live.runs.length > 0
   return [
     'You are the ACCEPTANCE AUTOPSY (acceptance round ' + round + '): decide what still does not work as specified on merged ' + R.mainBranch + '. READ-ONLY: no edits, no commits, no launches. ' + OUTPUT_RULE,
     '', grounding(), '',
-    '## The proof sweep', JSON.stringify(sweeps, null, 2), '', '## The live runs', live ? JSON.stringify(live, null, 2) : 'none this round (' + (R.live ? 'the live-runner was lost' : 'not authorised') + ')', '',
-    'Work in ' + R.acceptTree + '. ' + (live ? R.autopsy.method + ' ' : '') + 'For every red, timeout and flaky proof, read its output and evidence and decide product or harness. Check every finding against ' + R.defectsDir + ' (open and fixed): a finding a fixed note claims repaired that recurs is a finding, and says so.',
+    '## The proof sweep', JSON.stringify(sweeps, null, 2), '', '## The live runs', judged ? JSON.stringify(live, null, 2) : 'none judged this round (' + (!R.live ? 'not authorised' : handed.length ? 'every launch was handed to the orchestrator, below' : 'the live-runner was lost') + ')', '',
+    handed.length ? '## Live runs handed to the orchestrator\nThe permission system refused these launches (or a refusal covered them), so this round holds no live evidence of them yet: the orchestrator runs them and has their packs autopsied. A refused or unlaunched live run is NO finding of yours: list none for it, and say in the report that the live verdict waits on these runs.\n' + JSON.stringify(handed.map((x) => ({ what: x.what, command: x.command })), null, 2) + '\n' : '',
+    'Work in ' + R.acceptTree + '. ' + (judged ? R.autopsy.method + ' ' : '') + 'For every red, timeout and flaky proof, read its output and evidence and decide product or harness. Check every finding against ' + R.defectsDir + ' (open and fixed): a finding a fixed note claims repaired that recurs is a finding, and says so.',
     'Return `report` (per-session report, the sweep table, and a verdict: is it ready to ship on this evidence?) and `findings`: every product defect, harness defect, proof red and failed live check that remains, each with kind, severity, title, detail, evidence, spec (ids or "none found"), files (current file:line) and `area` (the package or file a repair touches; findings are paired by it). A spec-faithful friction is `spec-faithful`, one that needs the owner is `needs-ruling`, one only another platform shows is `platform-bound`. An already-open note is listed with its name in `evidence`.',
   ].join('\n')
 }
 
+// Once the permission system refused a live launch, the refusal covers the outcome: no later round of this run starts
+// a live-runner (that would hand the refused action to another agent); every round hands its live runs to the orchestrator.
+let liveRefused = false
 async function accept(round) {
   const sweeps = []
   const missing = []
@@ -351,15 +361,23 @@ async function accept(round) {
     }
   }
   let live = null
-  if (R.live) { live = await acceptAgent(livePrompt(round), { label: 'accept:live#' + round, phase: 'Accept', schema: LIVE_SCHEMA, effort: 'high', model: MODEL }); if (!live) missing.push('accept:live#' + round) }
-  const verdict = await acceptAgent(autopsyPrompt(sweeps, live, round), { label: 'accept:autopsy#' + round, phase: 'Accept', schema: FINDINGS_SCHEMA, effort: 'high', model: MODEL })
+  if (R.live && liveRefused) live = { head: sweeps.length ? sweeps[0].head : '', runs: R.live.runs.map((x) => ({ what: x.what, command: x.command, passed: false, refused: true, pack: '', checks: 'not launched: a live launch was refused earlier in this run, and that refusal covers this one' })) }
+  else if (R.live) { live = await acceptAgent(livePrompt(round), { label: 'accept:live#' + round, phase: 'Accept', schema: LIVE_SCHEMA, effort: 'high', model: MODEL }); if (!live) missing.push('accept:live#' + round) }
+  const handed = live ? live.runs.filter((x) => x.refused) : []
+  if (handed.length) { liveRefused = true; log('Acceptance round ' + round + ': live runs handed to the orchestrator: ' + handed.map((x) => x.command || x.what).join(' | ')) }
+  const judged = live ? { ...live, runs: live.runs.filter((x) => !x.refused) } : null
+  const verdict = await acceptAgent(autopsyPrompt(sweeps, judged, handed, round), { label: 'accept:autopsy#' + round, phase: 'Accept', schema: FINDINGS_SCHEMA, effort: 'high', model: MODEL })
   if (!verdict) missing.push('accept:autopsy#' + round)
-  return { sweeps, live, verdict, missing }
+  return { sweeps, live, handoff: handed.map((x) => ({ what: x.what, command: x.command })), liveJudged: !!(judged && judged.runs.length), verdict, missing }
 }
 
-/** Pairs actionable findings that share an area (or, failing that, a directory) into bundles of at most two. */
-function repairBundles(findings, round) {
-  const actionable = findings.filter((f) => ['product-defect', 'harness-defect', 'proof-red', 'live-check-failed'].includes(f.kind))
+/**
+ * Pairs actionable findings that share an area (or, failing that, a directory) into bundles of at most two. When no live
+ * run of the round was judged because its launches went to the orchestrator, a failed live check is no builder's to
+ * repair: it stays among the round's findings, and the orchestrator's own runs answer it.
+ */
+function repairBundles(findings, round, liveHandedOff) {
+  const actionable = findings.filter((f) => ['product-defect', 'harness-defect', 'proof-red', 'live-check-failed'].includes(f.kind) && !(liveHandedOff && f.kind === 'live-check-failed'))
   actionable.sort((x, y) => (x.area || '').localeCompare(y.area || ''))
   const dir = (a) => (a || '').split('/').slice(0, -1).join('/')
   const groups = []
@@ -397,19 +415,21 @@ else {
   for (let round = 1; round <= (ACC.rounds || 0); round++) {
     const acc = await accept(round)
     const findings = acc.verdict ? acc.verdict.findings : []
-    acceptance.push({ round, sweeps: acc.sweeps, live: acc.live, report: acc.verdict ? acc.verdict.report : null, findings, missing: acc.missing })
+    acceptance.push({ round, sweeps: acc.sweeps, live: acc.live, handoff: acc.handoff, report: acc.verdict ? acc.verdict.report : null, findings, missing: acc.missing })
     if (acc.missing.length) { status = HALTED ? 'halted' : 'acceptance-incomplete'; log('Acceptance round ' + round + ' lost ' + acc.missing.join(', ') + '; stopping'); break }
-    const bundles = repairBundles(findings, round)
+    const bundles = repairBundles(findings, round, acc.handoff.length > 0 && !acc.liveJudged)
     log('Acceptance round ' + round + ': ' + findings.length + ' finding(s), ' + bundles.length + ' repair bundle(s)')
     if (bundles.length === 0 || round === ACC.rounds) break
     const repaired = await pool(R.repairPool || 3, bundles.filter((b) => !SEED[b.key]).map((b) => () => drive(b, RESUME[b.key]).catch((e) => ({ key: b.key, status: 'error', error: String(e) }))))
     for (const x of repaired) if (x) done[x.key] = x
     if (HALTED) { status = 'halted'; break }
   }
+  // Done needs the authorized live runs passing: a run whose live launches went to the orchestrator never reads complete.
+  if (status === 'complete' && liveRefused) status = 'live-handoff'
 }
 
 return {
   status,
   bundles: Object.values(done).map((x) => ({ key: x.key, status: x.status, rounds: x.rounds, mainCommit: x.mainCommit || null, ownerBlocked: x.impl ? x.impl.ownerBlocked : null, notesMoved: x.impl ? x.impl.notesMoved : x.notesMoved, notesRecorded: x.impl ? x.impl.notesRecorded : x.notesRecorded, questionsRaised: x.impl ? x.impl.questionsRaised : x.questionsRaised, notVerified: x.impl ? x.impl.notVerified : null, optional: x.optional || null, lastBlocking: x.verdict && !x.verdict.pass ? x.verdict.blocking : x.lastBlocking || null, blockedReason: x.impl ? x.impl.blockedReason : x.blockedReason, error: x.error || null })),
-  acceptance: acceptance.map((a) => ({ round: a.round, gate: a.sweeps.map((s) => s.gate), sweep: a.sweeps.map((s) => s.results.map((y) => y.proof + ':' + y.status).join(', ')), live: a.live, findings: a.findings, missing: a.missing, report: a.report })),
+  acceptance: acceptance.map((a) => ({ round: a.round, gate: a.sweeps.map((s) => s.gate), sweep: a.sweeps.map((s) => s.results.map((y) => y.proof + ':' + y.status).join(', ')), live: a.live, handoff: a.handoff, findings: a.findings, missing: a.missing, report: a.report })),
 }

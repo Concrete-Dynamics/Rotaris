@@ -30,33 +30,58 @@ works for a user, and it can spend money. Proofs pass on a product a live run st
 - The auto-mode classifier refuses a live-run launch as a "Real-World Transactions" action: for agents, which cannot
   see the owner's words, and for the orchestrator until the owner authorized it in the conversation.
 - **A refusal is final for that action.** Do not retry it, split it, re-quote it, or hand it to another agent. Stop,
-  say what you were doing and why it needs the permission, and let the owner decide.
+  say what you were doing and why it needs the permission, and let the owner decide. An agent's refused launch goes to
+  the orchestrator, which holds the owner's words in the conversation: the classifier judges the orchestrator's own
+  launch on them (finacc's passed), and a refusal of that one goes to the owner.
+- **An agent's shell starts every command in the primary checkout**: its working directory is reset between commands.
+  A launch by relative path (`node apps/desktop/scripts/live-run.mjs …`) therefore runs the primary checkout's script
+  on the primary checkout's build, never the tree being judged: an agent never launches one so. Reaching another tree
+  takes `cd <tree> && …` or an absolute path. finacc's live-runner (`wf_6c39b5ac-be8`, `accept:live#1`, 05:14:14 UTC
+  on 2026-10-03) sent
+  `cd /home/user/Rotaris-crw-wt-accept && export PATH=… && timeout 5400 xvfb-run … node apps/desktop/scripts/live-run.mjs …`;
+  no allow rule matched that form, and the classifier refused it. Duress was then not launched, the autopsy had no pack, and the refusal came back as a repair bundle no
+  builder could close (`accept1-4`, blocked once its builder's own launch was refused too, at about 06:39).
+- **So the profile's live commands are absolute**: one command each, naming the Node 24 binary and the script by
+  absolute path, with nothing before it. `live-run.mjs` resolves its tree from its own path
+  (`resolve(import.meta.dirname, '..', '..', '..')`), so it judges and writes its evidence in the tree that holds it,
+  from any working directory. The live-runner sends each exactly as written; on a refusal it launches nothing more and
+  hands every run, with that same text, to the orchestrator (SKILL.md §5).
 - **What clears it for agents** is an allow rule the owner approves, in the git-ignored local settings
-  (`.claude/settings.local.json`; a tracked settings file would dirty every checkout). Keep it to the launch forms
-  agents use, with `--confirm --skip-build`, so it admits no endpoint or budget change:
+  (`.claude/settings.local.json`; a tracked settings file would dirty every checkout), matching the absolute commands,
+  with `<repo>` the primary checkout's path (here `/home/user/Rotaris-crw`). No such rule exists yet:
 
   ```json
   { "permissions": { "allow": [
-    "Bash(timeout * xvfb-run * node apps/desktop/scripts/live-run.mjs --confirm --skip-build*)",
-    "Bash(xvfb-run * node apps/desktop/scripts/live-run.mjs --confirm --skip-build*)",
-    "Bash(LIVE_RUN_DURESS_MS=* timeout * xvfb-run * node apps/desktop/scripts/live-run.mjs --confirm --skip-build*)",
-    "Bash(LIVE_RUN_DURESS_MS=* xvfb-run * node apps/desktop/scripts/live-run.mjs --confirm --skip-build*)"
+    "Bash(timeout * xvfb-run * /opt/node24/bin/node <repo>-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build*)",
+    "Bash(LIVE_RUN_DURESS_MS=* timeout * xvfb-run * /opt/node24/bin/node <repo>-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build*)"
   ] } }
   ```
 
-  Adding it is the owner's decision: ask at planning time (SKILL.md §1). A settings file created mid-session may take
-  effect only after the session reloads. A detached launch (`references/environment.md`, Long jobs) is not one of
-  these forms; the classifier judges it.
-- Until a rule holds, the orchestrator runs the live runs itself and gives the packs to an autopsy agent.
+  The four relative rules the file holds (`… node apps/desktop/scripts/live-run.mjs --confirm --skip-build*`, with and
+  without `timeout` and `LIVE_RUN_DURESS_MS=`) match only a launch of the primary checkout's script, which no agent
+  judges. A rule's trailing `*` admits later flags too (`--only`, and also `--endpoint` or `--budget`): it bounds the
+  script and the tree; the endpoint registry and the prompts bound the rest. Adding a rule is the owner's decision: ask
+  at planning time (SKILL.md §1) with the exact text, and edit the file only on the owner's explicit instruction
+  (`references/environment.md`, Long jobs). A settings file created mid-session may take effect only after the session
+  reloads. A detached launch (`references/environment.md`, Long jobs) is not one of these forms; the classifier judges
+  it.
+- Until a rule holds, the orchestrator runs the live runs from the hand-off and gives the packs to an autopsy agent.
 
 ## Running
 
-- Build the head you mean to judge first; a live run of a stale build judges nothing. A `--skip-build` launch also needs
-  the code-intelligence bundle (`pnpm code-intel:bundle`) in that tree, and refuses at once without it (2026-10-03).
-- The default run takes about sixteen minutes. Duress needs a window the endpoint can fill
-  (`LIVE_RUN_DURESS_MS=5400000` under `timeout 7200` here; one took 85 minutes): run it as a background task with
-  the Bash tool's largest `timeout`, 7,200,000 ms (`references/environment.md`, Long jobs). That launch is one of
-  the allow-rule forms above, so an agent holding the rule can run it as well (not yet observed).
+- Build the head you mean to judge first; a live run of a stale build judges nothing. The tree must also hold the
+  code-intelligence bundle (`pnpm code-intel:bundle`, seconds when it is already there): since `5cc297d` a
+  `--skip-build` launch refuses at once without it, and before that the duress run at `1763f7f` ran in a tree without it
+  and never exercised code intelligence (its autopsy's U5, 2026-10-03).
+- The orchestrator sends the profile's commands as they are, from any directory, as a background task with the Bash
+  tool's `timeout` (`references/environment.md`, Long jobs). The default run takes about sixteen minutes: at `1763f7f`,
+  `timeout 5400 xvfb-run -a -s "-screen 0 1600x1000x24" /opt/node24/bin/node /home/user/Rotaris-crw-wt-accept/apps/desktop/scripts/live-run.mjs --confirm --skip-build`
+  ran from 05:56 to 06:15 UTC on 2026-10-03 and passed.
+- Duress needs a window the endpoint can fill (`LIVE_RUN_DURESS_MS=5400000` under `timeout 7200` here; one took 85
+  minutes, the one at `1763f7f` 77): give it the Bash tool's largest `timeout`, 7,200,000 ms. When you run it while a
+  workflow goes on, run it in a dedicated tree (`<repo>-wt-live`: set up, built and bundled at the head you judge, its
+  path in place of the acceptance tree's), because the next round's sweep checks the acceptance tree out at a new head
+  and rebuilds it under a running launch.
 - One acceptance live run at a time on this host: they compete for CPU and the endpoint. Two concurrent ones leave
   each other's sandboxes alone.
 - Evidence lands in `.live-run/runs/<stamp>/` of the tree that ran it, the newest named in `.live-run/latest.txt`.

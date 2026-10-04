@@ -98,7 +98,9 @@ also came from fin6's `mission-metrics` (merged as `de5387e`) and the owner's Co
 assertion. Live runs still need the owner's quoted authorization, and the orchestrator runs refused ones under it; every
 round still has its sweep and its autopsy; the autopsy records the handed-off runs as one `live-check-failed` finding,
 which stays among the round's findings to record; Done still needs the authorized live runs passing, so a run that
-handed them off does not read `complete`. No permission rule was added.
+handed them off does not read `complete`. No permission rule was added. The backup push (environment.md, Pause and
+backup) sits beside the invariant that the gate runs on the merged result before every push: a `backup/*` branch is no
+landing and is never merged, so its content reaches main only through a bundle whose merged result passed the gate.
 
 **Proposal to the owner**: approve the two absolute allow rules `references/live-runs.md` gives (The permission system),
 in `.claude/settings.local.json`, so the acceptance live-runner can launch the profile's commands itself instead of
@@ -115,22 +117,33 @@ what the autopsy and the record-every-finding step receive while this entry said
 `fails` carry "Permission for this action was denied" as refused even without `refused: true`. That would reinterpret
 journals written before this change (finacc's `accept:live#1` carries the text and no `refused`): a re-render would drop
 its F6 from the repair bundles and renumber round 1's `accept1-<n>`, whose journaled states are keyed by number. The
-schema now requires `refused`, so a new journal always carries it.
+schema now requires `refused`, so a new journal always carries it. A second review, on `57201fe`, confirmed both
+fixed and found two new hunks of that answer unpinned: the live-runner prompt's rendering of the profile's `live.note`,
+and the grounding's clause that a polling loop is sent alone, without the shell prefix. Both are pinned now.
 
 **Verified** by `node scripts/orchestration.mjs self-test` and `pnpm check` under Node 24, both green, and
-`node tools/check-record-links.mjs`. New self-test assertions pin each mechanism; each of fourteen hunks, reverted alone
-in a scratch copy of the skill, turns the self-test red with the assertion named: the stash line ("implement:a1 is told
-that every worktree shares one stash"), the wait line ("agents wait on a long job without a sleep loop of their own"),
-the absolute profile commands and the nested token resolution (both "a live command names its tree absolutely, every
-token resolved"), the live-runner's prompt ("the live-runner sends each command as written and hands a refusal back"),
-its schema's `required` ("the live-runner must return each run's command and whether it was refused"), the grounding's
-report sentence ("an authorised agent reports a refused launch with its command"), no later live-runner ("after a
-refusal no later round starts a live-runner, and every round still has its autopsy"), the autopsy's hand-off section
-and its one finding (both "the autopsy records the handed-off runs as one finding, in the hand-off area"), the
-no-judged-run filter ("a failed live check no run made becomes no repair bundle"), the hand-off area filter ("a judged
-live run's failed check is repaired; the hand-off finding is not"), the `live-handoff` status ("a run whose live
-launches went to the orchestrator never reads complete") and `status`'s hand-off list ("status shows a check-in the
-live runs handed to it"). The rendered live-runner and autopsy prompts were read as an agent sees them.
+`node tools/check-record-links.mjs`. Fourteen new self-test assertions pin seventeen hunks; each hunk, reverted alone in
+a scratch copy of the skill, turns the self-test red with the assertion named:
+- the stash line: "implement:a1 is told that every worktree shares one stash";
+- the wait line: "agents wait on a long job without a sleep loop of their own";
+- the polling loop's clause, alone and without the shell prefix: "a polling loop is sent alone, without the shell
+  prefix";
+- the absolute profile commands, and the nested token resolution: "a live command names its tree absolutely, every
+  token resolved";
+- the live-runner's prompt: "the live-runner sends each command as written and hands a refusal back";
+- its schema's `required`: "the live-runner must return each run's command and whether it was refused";
+- the rendering of the profile's `live.note`, and the note itself (deleted from the profile): "the live-runner is told
+  the profile's live note, the code-intelligence bundle included";
+- the grounding's report sentence: "an authorised agent reports a refused launch with its command";
+- no later live-runner: "after a refusal no later round starts a live-runner, and every round still has its autopsy";
+- the autopsy's hand-off section, and its one finding: "the autopsy records the handed-off runs as one finding, in the
+  hand-off area";
+- the no-judged-run filter: "a failed live check no run made becomes no repair bundle";
+- the hand-off area filter: "a judged live run's failed check is repaired; the hand-off finding is not";
+- the `live-handoff` status: "a run whose live launches went to the orchestrator never reads complete";
+- `status`'s hand-off list: "status shows a check-in the live runs handed to it".
+
+The rendered live-runner and autopsy prompts were read as an agent sees them.
 
 ## 2026-10-02 — recovery and planning lessons of plans fin1 to fin9
 

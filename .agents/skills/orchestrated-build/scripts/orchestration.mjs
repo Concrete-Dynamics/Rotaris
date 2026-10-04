@@ -457,6 +457,7 @@ export async function selfTest({ quiet = false } = {}) {
     assert.match(run.prompts['implement:a1'], /Live runs are NOT authorised/, 'without authorization agents are told not to launch live runs')
     assert.match(run.prompts['implement:a1'], /Bash tool's own `timeout` parameter/, 'agents give a long background job an explicit timeout')
     assert.match(run.prompts['verify:a1#1'], /completion notice or the Monitor tool/, 'agents wait on a long job without a sleep loop of their own')
+    assert.match(run.prompts['verify:a1#1'], /alone with nothing before it \(the shell prefix does not apply to it\)/, 'a polling loop is sent alone, without the shell prefix')
     for (const label of ['implement:a1', 'verify:a1#1', 'fix:a1#1', 'merge:a1']) assert.match(run.prompts[label], /Never `git stash`/, label + ' is told that every worktree shares one stash')
     assert.ok(!run.calls.some((c) => c.startsWith('accept:live')), 'no live-runner without authorization')
     assert.equal(run.result.acceptance.length, 2)
@@ -471,6 +472,8 @@ export async function selfTest({ quiet = false } = {}) {
       assert.ok(liveRun.prompts['accept:live#1'].includes('`' + x.command + '`'), 'the live-runner is given each command exactly')
     }
     assert.match(liveRun.prompts['accept:live#1'], /EXACTLY as written[\s\S]*no `cd`[\s\S]*launch nothing more[\s\S]*`refused: true`/, 'the live-runner sends each command as written and hands a refusal back')
+    const liveNote = liveProfile.run.live.note
+    assert.ok(typeof liveNote === 'string' && /code-intelligence bundle/.test(liveNote) && liveRun.prompts['accept:live#1'].includes(liveNote), 'the live-runner is told the profile\'s live note, the code-intelligence bundle included')
     assert.ok(['command', 'refused'].every((k) => liveRun.schemas['accept:live#1'].properties.runs.items.required.includes(k)), 'the live-runner must return each run\'s command and whether it was refused')
     assert.match(liveRun.prompts['implement:a1'], /report it as not verified with the exact command you sent/, 'an authorised agent reports a refused launch with its command')
     // A refused launch is handed to the orchestrator: no later live-runner, no repair bundle of it, never `complete`.

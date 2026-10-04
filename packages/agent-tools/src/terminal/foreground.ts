@@ -567,8 +567,48 @@ function withoutEchoedWrappers(rows: readonly string[]): string[] {
   for (const m of joined.matchAll(ECHOED_POSIX_WRAPPER)) {
     for (let r = rowAt(m.index); r <= rowAt(m.index + m[0].length - 1); r += 1) drop.add(r);
   }
+  rows.forEach((row, i) => { if (ECHOED_POSIX_END.test(row)) drop.add(i); });
   return drop.size === 0 ? [...rows] : rows.filter((_, i) => !drop.has(i));
 }
+
+/**
+ * The echo of a POSIX wrapper as a shell's own line editor draws a line wider than the screen when the editor cannot wrap
+ * it: one row, scrolled sideways, its head replaced by `<` and its tail ending in the end statement
+ * (`printf '__rot_…_e:%s\n' "$?"`), which the joined match above never meets because the row's head is gone. The printed
+ * end frame is `__rot_…_e:<status>`, never quoted, so no row the command printed carries this; such a row is dropped whole.
+ */
+const ECHOED_POSIX_END = /'__rot_[0-9a-f]{24}_e:%s\\n' ?"\$\?"/;
+
+/**
+ * REQ-TOOLS-097/098/179, REQ-TOOLS-127 (`two-terminal-pty-tests-fail-on-main-in-this-environment`, 2026-10-04): the
+ * arguments the session's POSIX shell is started with: interactive, and with its own line editor off where the shell
+ * accepts `+o emacs +o vi`, so what the PTY echoes of a wrapper is the line discipline's echo, which wraps at the screen's
+ * width like any output and which `withoutEchoedWrappers` reads joined across its rows.
+ *
+ * Where `/bin/sh` is `bash` (Fedora, RHEL, Arch), `bash -i` reads its input through readline, and readline on a `dumb`
+ * terminal does not wrap a line wider than the screen: it scrolls it sideways on one row (`<…; printf '__rot_…_e:%s\n'
+ * "$?"`), redrawn in place. The joined-rows match never met that row, and the next call's wrapper reached a soft-paused
+ * call's poll (A10's case; measured with a `sh` link to `/usr/bin/bash` 5.2 at 240 and 80 columns, while at 1,000 columns,
+ * where the wrapper fits on one row, nothing leaked). `dash` has no line editor and takes the two options as a no-op.
+ * Whether a shell accepts them is asked once per shell file, with the same arguments; one that refuses them is started
+ * with `-i` alone, as before, and a row its editor draws is still dropped (`ECHOED_POSIX_END`). A startup file that turns
+ * an editor back on (`$ENV`) meets the same drop.
+ */
+export function posixShellArgs(file: string): readonly string[] {
+  let off = EDITOR_OFF.get(file);
+  if (off === undefined) {
+    try {
+      execFileSync(file, [...LINE_EDITOR_OFF, '-c', ':'], { stdio: 'ignore', timeout: 5_000, env: {}, windowsHide: true });
+      off = true;
+    } catch {
+      off = false;
+    }
+    EDITOR_OFF.set(file, off);
+  }
+  return off ? [...LINE_EDITOR_OFF, '-i'] : ['-i'];
+}
+const LINE_EDITOR_OFF: readonly string[] = ['+o', 'emacs', '+o', 'vi'];
+const EDITOR_OFF = new Map<string, boolean>();
 
 /** Windows: terminate the whole tree; POSIX: signal the group. Never throws. */
 export function killTree(pid: number, force: boolean): boolean {
@@ -918,7 +958,7 @@ export class ForegroundSession {
     const { backend } = this.deps;
     const args = backend.kind === 'powershell'
       ? ['-NoLogo', '-NoProfile', '-NoExit', '-Command', "Remove-Module PSReadLine -ErrorAction SilentlyContinue; function prompt { '' }; $ProgressPreference = 'SilentlyContinue'"]
-      : ['-i'];
+      : posixShellArgs(backend.file);
     const p = this.deps.factory.spawn(backend.file, args, { cwd: this.deps.cwd, env: { ...this.deps.env, ...NO_PAGER, TERM: 'dumb', PSModuleAnalysisCachePath: '' }, cols: this.size.cols, rows: this.size.rows, name: 'dumb' });
     // A fresh shell's input holds nothing: whatever was typed into the last one went with it.
     this.typeahead = false;

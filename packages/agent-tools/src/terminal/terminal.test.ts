@@ -1,12 +1,12 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
-import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, printsMarker, processIdentity, snapshotCommand, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
+import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, posixShellArgs, printsMarker, processIdentity, snapshotCommand, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
 import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
 import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
@@ -56,6 +56,19 @@ const SH = {
 };
 const clocks: Clocks = nodeClocks();
 const root = mkdtempSync(join(tmpdir(), 'rotaris-term-'));
+/**
+ * `two-terminal-pty-tests-fail-on-main-in-this-environment`: where `/bin/sh` is `bash` (Fedora, RHEL, Arch) the session's
+ * shell is `bash` in POSIX mode, and two cases failed there that passed where it is `dash`. Where bash is installed, a `sh`
+ * link to it reproduces that host on any Linux one, as OQ-135's measurement did; null where there is no bash.
+ */
+const bashAsSh: string | null = (() => {
+  if (process.platform === 'win32') return null;
+  const bash = ['/usr/bin/bash', '/bin/bash'].find((f) => existsSync(f));
+  if (!bash) return null;
+  const link = join(mkdtempSync(join(tmpdir(), 'rotaris-bash-sh-')), 'sh');
+  symlinkSync(bash, link);
+  return link;
+})();
 const ctx = (signal = new AbortController().signal): ToolContext => ({ workspaceRoot: root, sessionId: 's1', agentName: 'orchestrator', persona: 'orchestrator', monotonic: clocks.monotonic, wall: clocks.wall, signal, warn: () => undefined });
 let manager: TerminalManager | null = null;
 async function tool(over: Partial<typeof TERMINAL_DEFAULTS> = {}) {
@@ -70,8 +83,13 @@ const output = (text: string) => { const m = /\[(?:partial_)?terminal_output\]\n
  */
 const earlierOutput = (text: string) => { const m = /since it was last observed(?: \(truncated\))?:\n([\s\S]*?)\n\[(?:partial_)?terminal_output\]/.exec(text); return m ? m[1]! : ''; };
 const args = (a: Record<string, unknown>) => ({ command: '', is_input: false, reset: false, background: false, ...a }) as Parameters<Awaited<ReturnType<typeof tool>>['execute']>[0];
+/** A session of its own on the POSIX shell `file`, with a 1.5 s no-output window. */
+async function posixSession(file: string) {
+  const m = new TerminalManager({ factory: await nodePtyFactory(), backend: { kind: 'posix', file }, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+  return { m, t: terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }) };
+}
 
-afterAll(async () => { await manager?.dispose(); rmSync(root, { recursive: true, force: true }); });
+afterAll(async () => { await manager?.dispose(); rmSync(root, { recursive: true, force: true }); if (bashAsSh) rmSync(join(bashAsSh, '..'), { recursive: true, force: true }); });
 
 it.each([
   { reset: true, is_input: true },
@@ -331,6 +349,29 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
       expect(ForegroundSession.clean(screen, S, E)).toBe('own-line\ndone-later');
     }
   });
+  it('REQ-TOOLS-127 (A10): the echo a shell\'s own line editor draws of a wrapper wider than the screen — one row, scrolled sideways — is dropped from the capture', () => {
+    // `two-terminal-pty-tests-fail-on-main-in-this-environment`: bash's readline on a `dumb` terminal does not wrap a wide
+    // line, it scrolls it on one row whose head is `<`, so the joined match never met it. The row, verbatim in shape from
+    // a `sh` link to bash 5.2 at 240 columns, carries the next call's end statement and neither of its start statements.
+    const S = '__rot_0123456789abcdef01234567_s';
+    const E = '__rot_0123456789abcdef01234567_e';
+    const N = '__rot_bbbbbbbbbbbbbbbbbbbbbbbb';
+    for (const cols of [80, 240]) {
+      const tail = `${'Q'.repeat(300)}'\\'''; printf '${N}_e:%s\\n' "$?"`;
+      const scrolled = `<${tail.slice(tail.length - (cols - 2))}`;
+      const screen = [`${S}`, 'done-later', '^C', scrolled].join('\n');
+      expect(ForegroundSession.clean(screen, S, E, `${N}_s`)).toBe('done-later\n^C');
+    }
+    // The printed end frame is never quoted, so a row the command printed is never mistaken for that echo.
+    expect(ForegroundSession.clean([S, `${N}_e:%s ran`, `${E}:0`].join('\n'), S, E)).toBe(`${N}_e:%s ran`);
+  });
+  it.runIf(process.platform !== 'win32')('REQ-TOOLS-097/127: the POSIX shell is started interactive with its own line editor off where it takes the options, and with -i alone where it does not', () => {
+    if (bashAsSh) expect(posixShellArgs(bashAsSh)).toEqual(['+o', 'emacs', '+o', 'vi', '-i']);
+    if (existsSync('/bin/sh')) expect(posixShellArgs('/bin/sh')).toEqual(['+o', 'emacs', '+o', 'vi', '-i']);
+    expect(posixShellArgs(join(root, 'no-such-shell'))).toEqual(['-i']);
+    // A shell that refuses the options: `false` exits nonzero whatever it is given.
+    for (const f of ['/bin/false', '/usr/bin/false']) if (existsSync(f)) expect(posixShellArgs(f)).toEqual(['-i']);
+  });
   it('REQ-TOOLS-098 (live-run L2): a measured span is stated in tenths of a second, truncated, so it never states more than was measured', () => {
     expect(seconds(0.6)).toBe('under 0.1 seconds');
     expect(seconds(99.9)).toBe('under 0.1 seconds');
@@ -504,11 +545,13 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   });
   // Live-run finding L1: `sh` abandons the rest of a line it cannot expand or parse, so the unguarded wrapper's end frame
   // never ran and a command that finished at once read as a soft pause, exit −1. The call names no timeout, so it is the
-  // soft-pause path (a 1.5 s window here) the unguarded wrapper fell into. dash, `/bin/sh` on this host, is the shell a
-  // model writes bash for; bash in POSIX mode abandons the line the same way.
-  it.skipIf(PS)('REQ-TOOLS-097/098/179 (live-run L1): a command sh cannot expand or parse ends with its own exit status, never a soft pause', async () => {
-    const t = await tool();
-    const expand = await t.execute(args({ command: 'export ROTARIS_L1=kept; printf \'%s\\n\' ran; echo "EXIT=${PIPESTATUS[0]}"' }), ctx());
+  // soft-pause path (a 1.5 s window here) the unguarded wrapper fell into. dash, `/bin/sh` on Debian and Ubuntu, is the
+  // shell a model writes bash for; bash in POSIX mode, `/bin/sh` on Fedora, RHEL and Arch, abandons the line the same way,
+  // and the case runs under both where bash is installed.
+  const l1Case = async (t: Awaited<ReturnType<typeof tool>>): Promise<void> => {
+    // `${PIPESTATUS[0]}` is what dash cannot expand; bash can, so the line ends on `${a b}`, which no POSIX shell expands
+    // (`two-terminal-pty-tests-fail-on-main-in-this-environment`: the case read dash's error as every shell's).
+    const expand = await t.execute(args({ command: 'export ROTARIS_L1=kept; printf \'%s\\n\' ran; echo "EXIT=${PIPESTATUS[0]}"; echo "${a b}"' }), ctx());
     expect(diag(expand.text)['outcome_kind']).not.toBe('soft_pause');
     expect(diag(expand.text)['exit_code']).toBeGreaterThan(0);
     expect(output(expand.text)).toContain('ran');
@@ -529,6 +572,13 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const comment = await t.execute(args({ command: 'printf \'%s\\n\' commented # a note' }), ctx());
     expect(diag(comment.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
     expect(output(comment.text)).toBe('commented');
+  };
+  it.skipIf(PS)('REQ-TOOLS-097/098/179 (live-run L1): a command sh cannot expand or parse ends with its own exit status, never a soft pause', async () => {
+    await l1Case(await tool());
+  }, 30_000);
+  it.runIf(bashAsSh !== null)('REQ-TOOLS-097/098/179 (live-run L1): under bash as `/bin/sh`, a command sh cannot expand or parse ends with its own exit status, never a soft pause', async () => {
+    const { m, t } = await posixSession(bashAsSh!);
+    try { await l1Case(t); } finally { await m.dispose(); }
   }, 30_000);
   it.runIf(process.platform === 'linux' && shell?.kind === 'posix')('REQ-TOOLS-097/098/103/104 (OQ-144, acceptance A9): a command that replaces the session\'s shell ends at once as an execution_error, never a soft pause, and the next call runs in the shell the description names', async () => {
     // A session of its own: this case restarts its shell. The window is long enough that a soft pause cannot be
@@ -1032,30 +1082,43 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   // wrapper wider than the screen (240 columns) wraps. Only the echo's FIRST row was dropped; its continuation rows — the
   // command's text and `printf '__rot_…_e:%s\n' "$?"` — reached the paused call's poll, on both roads: the paused
   // command ending on its own behind the next call (present on origin/main too), and the paused command interrupted.
-  it.skipIf(PS)('REQ-TOOLS-127 (A10): the echo of a next call wider than the screen reaches neither road\'s poll of the paused call', async () => {
-    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
-    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+  // Where `/bin/sh` is `bash` the same case failed on both roads' wide echo (`two-terminal-pty-tests-fail-on-main-in-this-environment`):
+  // bash reads its input through readline, which on a `dumb` terminal scrolls a line wider than the screen sideways on one
+  // row instead of wrapping it. The shell now starts with its line editor off (`posixShellArgs`), so the echo is the line
+  // discipline's again, and a row an editor still draws is dropped (`ECHOED_POSIX_END`).
+  const wideEchoCase = async (t: Awaited<ReturnType<typeof tool>>): Promise<void> => {
     const wide = 'Q'.repeat(300);
+    await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+    // Road one: the paused command ends on its own, behind the wide call.
+    expect(diag((await t.execute(args({ command: `${SH.sleep(3)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+    // The call's own output wraps at the screen's width like any other line the screen keeps.
+    const next = await t.execute(args({ command: SH.echo(wide), timeout: 15 }), ctx());
+    expect((output(next.text) ?? '').replace(/\n/g, '')).toBe(wide);
+    // OQ-164: the wide call reports the paused command's end; what it carries of it holds no row of the wide call's echo.
+    expect(String(diag(next.text)['detail'])).toMatch(/that command ended .* with exit code 0\./);
+    expect(earlierOutput(next.text)).toBe('done-later');
+    for (const leaked of ['__rot_', 'QQQ', '"$?"']) expect(earlierOutput(next.text)).not.toContain(leaked);
+    expect(next.text).not.toContain('__rot_');
+    // Road two: the paused command is interrupted, and the wide call closes it.
+    expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+    expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+    const closing = await t.execute(args({ command: SH.echo(wide), timeout: 15 }), ctx());
+    expect((output(closing.text) ?? '').replace(/\n/g, '')).toBe(wide);
+    expect(String(diag(closing.text)['detail'])).toContain('with no exit status of its own');
+    for (const leaked of ['__rot_', 'QQQ', '"$?"', 'done-later']) expect(earlierOutput(closing.text)).not.toContain(leaked);
+    expect(closing.text).not.toContain('__rot_');
+  };
+  it.skipIf(PS)('REQ-TOOLS-127 (A10): the echo of a next call wider than the screen reaches neither road\'s poll of the paused call', async () => {
+    const { m, t } = await posixSession(shell!.file);
+    try { await wideEchoCase(t); } finally { await m.dispose(); }
+  }, 90_000);
+  it.runIf(bashAsSh !== null)('REQ-TOOLS-127 (A10): under bash as `/bin/sh`, the echo of a next call wider than the screen reaches neither road\'s poll of the paused call, and the shell\'s line editor is off', async () => {
+    const { m, t } = await posixSession(bashAsSh!);
     try {
-      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
-      // Road one: the paused command ends on its own, behind the wide call.
-      expect(diag((await t.execute(args({ command: `${SH.sleep(3)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
-      // The call's own output wraps at the screen's width like any other line the screen keeps.
-      const next = await t.execute(args({ command: SH.echo(wide), timeout: 15 }), ctx());
-      expect((output(next.text) ?? '').replace(/\n/g, '')).toBe(wide);
-      // OQ-164: the wide call reports the paused command's end; what it carries of it holds no row of the wide call's echo.
-      expect(String(diag(next.text)['detail'])).toMatch(/that command ended .* with exit code 0\./);
-      expect(earlierOutput(next.text)).toBe('done-later');
-      for (const leaked of ['__rot_', 'QQQ', '"$?"']) expect(earlierOutput(next.text)).not.toContain(leaked);
-      expect(next.text).not.toContain('__rot_');
-      // Road two: the paused command is interrupted, and the wide call closes it.
-      expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
-      expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
-      const closing = await t.execute(args({ command: SH.echo(wide), timeout: 15 }), ctx());
-      expect((output(closing.text) ?? '').replace(/\n/g, '')).toBe(wide);
-      expect(String(diag(closing.text)['detail'])).toContain('with no exit status of its own');
-      for (const leaked of ['__rot_', 'QQQ', '"$?"', 'done-later']) expect(earlierOutput(closing.text)).not.toContain(leaked);
-      expect(closing.text).not.toContain('__rot_');
+      const options = output((await t.execute(args({ command: 'set -o', timeout: 15 }), ctx())).text);
+      expect(options).toMatch(/^emacs\s+off$/m);
+      expect(options).toMatch(/^vi\s+off$/m);
+      await wideEchoCase(t);
     } finally { await m.dispose(); }
   }, 90_000);
 

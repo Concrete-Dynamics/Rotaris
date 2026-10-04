@@ -645,3 +645,38 @@ on either side of that correction. OQ-135 records the reading,
 its residue (an `exec` inside the reading's step; a script that traps SIGINT overridden; a shell other than `dash` not
 read), and stays open
 ([the note](../../defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md)).
+
+## Fifth first execution — 2026-10-04, the session's shell is `bash` (`/bin/sh` on Fedora, RHEL, Arch)
+
+Every real-PTY case above was measured where `/bin/sh` is `dash`. Another author's Linux machine ran the file on an
+unmodified `main` and two cases failed there, alone and in the full suite
+([the note](../../defects/fixed/two-terminal-pty-tests-fail-on-main-in-this-environment.md)). Varied one at a time on
+this host, through a real PTY, at load averages 0.6 to 3.6 on four CPUs: `dash` at 240, 80 and 1,000 columns, with
+`LANG=C.UTF-8`, with an `$ENV` startup file that sets `PS1` and `set -o emacs`, and under six CPU burners, passed both;
+a `sh` link to `/usr/bin/bash` 5.2 (POSIX mode) failed both, at 240 and 80 columns and with `LANG=C.UTF-8`, as did
+`/usr/bin/bash` itself; at 1,000 columns, where the wrapper fits on one row, only the first failed. **Found two defects,
+one the product's and one the test's.**
+
+**The product's: A10's echo removal held only where the echo is the line discipline's.** "A wrapper wider than the
+screen wraps" (`withoutEchoedWrappers`) is how the kernel echoes. `bash -i` reads its input through readline, which on
+the session's `dumb` terminal does not wrap a line wider than the screen: it scrolls it sideways on ONE row, its head
+replaced by `<`, redrawn in place. The joined-rows match never met that row, and the next call's wrapper
+(`<QQQ…'; printf '__rot_…_e:%s\n' "$?"`) reached the interrupted call's poll. The POSIX shell now starts with its
+line editor off, `+o emacs +o vi -i`, where it takes those options (asked once per shell file with the same arguments,
+`posixShellArgs`; `dash` has no editor and takes them as a no-op; a shell that refuses them starts with `-i` as before),
+so the echo is the line discipline's again. A row an editor still draws — a startup file that turns one back on, or a
+shell that refused the options — is dropped by the end statement it carries (`ECHOED_POSIX_END`), which the printed end
+frame, never quoted, cannot spell. Each half alone made the case green under bash; the `$ENV` variant needs the
+second.
+
+**The test's: the L1 case read dash's error as every shell's.** `${PIPESTATUS[0]}` is a bash-ism `dash` cannot expand;
+`bash` expands it, so the call ended with exit 0, which is right. The line now ends on `${a b}`, which no POSIX shell
+expands. No product change: `command eval` guards the line under `bash` as under `dash` (measured: `bash -i` printed
+the end frame with status 1 after `bad substitution`).
+
+Pinned by the two cases' twins "… under bash as `/bin/sh` …" in `terminal.test.ts`, which run wherever bash is
+installed through a `sh` link to it (red without the repair: the line editor read `on`), by "the echo a shell's own
+line editor draws of a wrapper wider than the screen …" (red without `ECHOED_POSIX_END`) and by "the POSIX shell is
+started interactive with its own line editor off …". The whole file passed with the host's `dash` and, run once more
+with the session's shell overridden to the `bash` link, 82 passed and 1 skipped. **Could not show:** macOS, whose `/bin/sh` is a
+`bash` 3.2 (or a `zsh` or `dash` it is pointed at) and where no host has run it; Windows is untouched (PowerShell).

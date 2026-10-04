@@ -63,3 +63,19 @@ name's first character with the marker, lays out no tag past the cell's edge, an
 and that the base row is among the rows measured at 1000×680. Green on the repair (load average 1.06 at the start), with
 `worktree-ahead-minimum.png` showing `m…`, `base` and `active`; `pnpm ui-audit --views=5` at 1440×900 and 1000×680 reports
 the Git view clean.
+
+**The proof's marker check, corrected (2026-10-04, fin17, on fin16's verifier's finding).** ~~"every row … draws at
+least its name's first character with the marker"~~ held of the room only: `runShowsLeadingChars` passed when the visible
+width reached two character advances and never looked at the marker, so a name sliced off with no ellipsis would have
+passed it, and only `layout-regression.test.ts`'s stylesheet pin (`text-overflow: ellipsis`) held the marker. The probe
+(`cellPaintProbe` in `apps/desktop/scripts/lib/cell-paint.mjs`) now records, for every run, its nearest clipping box's
+`text-overflow`, `white-space`, `overflow-x`, `display`, `scrollWidth` and `clientWidth`, and a new pure verdict,
+`runMarksElision`, requires of a cut run that its own box clips it, says `ellipsis`, does not wrap, is not inline and
+overflows; git-proof's launches 3 and 3b require it of every row's name at each size beside the room check, whose message
+now says "room" (`runShowsLeadingChars` keeps its name and documents that it measures width only). Pinned by
+`apps/desktop/scripts/lib/cell-paint.test.ts` (both directions: `clip`, a wrapping box, an inline box, an ancestor's clip,
+a box that does not overflow and no state measured each fail; a whole run needs no marker). Shown by `pnpm git-proof` on the
+repaired build: green, the base row's `main` cut at 1000×680 with its box `ellipsis`/`nowrap`/`hidden`/`block`,
+`scrollWidth` 29 over `clientWidth` 15 (`results.json`, `worktreeAhead.cells.baseBranchMarker`); and red on a build with
+`.git__branch-name`'s `text-overflow` set to `clip` for one run ("isolated at 1440x900: a worktree row's Branch name is cut
+with no elision marker"), the stylesheet put back after (load average 0.5 to 0.7 on 4 CPUs).

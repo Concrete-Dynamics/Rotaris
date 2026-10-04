@@ -1147,6 +1147,9 @@ REQ-NOTIFY-048/049). The same day (fin16) every row's Branch cell, at each size 
 its name's first character with the marker, lay out no tag past the cell's edge, and span its row's height (the line is
 a flex box inside the cell, and the Branch column keeps the widest line with the name at its `2ch` floor and its tags
 whole — `branchLineFloor`, `--git-branch-fit`); the base row drew neither `main` nor `active` at 1000×680 before.
+Since 2026-10-04 (fin17) a name the cell cuts must be cut by its own box's `text-overflow: ellipsis` over a cut it can
+mark (`runMarksElision`; the room check alone, `runShowsLeadingChars`, passed a name sliced off with no marker), and both
+fits are measured again when a row's path changes (`branchFitKey`, `stateFitKey`), since the row is keyed by it.
 Evidence under `.proof/git-proof/`.
 
 **What `pnpm checkpoint-proof` does.** It builds Electron and launches the app thirteen times against a scratch repository:

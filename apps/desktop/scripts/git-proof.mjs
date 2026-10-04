@@ -23,7 +23,8 @@
  *                  `completed · ready` is cut nowhere, at 1440x900 and at the 1000x680 minimum (REQ-GIT-109, REQ-SHELL-022;
  *                  `lib/cell-paint.mjs`), and at 1440x900 the base row's `main` is drawn whole beside its tags. In 3b the
  *                  bound row (keyed by the session id) is among the rows measured at both sizes. In 3 and 3b every row's
- *                  Branch cell draws at least its name's first character with the elision marker, no tag lies past the
+ *                  Branch cell leaves room for at least its name's first character and the elision marker, and a name it
+ *                  cuts is cut by its own box's `text-overflow: ellipsis` (`runMarksElision`), no tag lies past the
  *                  cell's edge (the base row's `main`, `base` and `active` at 1000x680), and every cell spans its row's
  *                  height.
  *   3c. presented — the session persisted as `paused_message_limit` while the app is closed; the Git view opened: the
@@ -47,7 +48,7 @@ import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { restatedFacts } from './lib/restated-facts.mjs';
 import { parseEvals, readEval } from './lib/capture-evals.mjs';
-import { cellPaintFindings, cellPaintProbe, cellsShortOfRow, controlsOutsideCell, runShownWhole, runShowsLeadingChars } from './lib/cell-paint.mjs';
+import { cellPaintFindings, cellPaintProbe, cellsShortOfRow, controlsOutsideCell, runMarksElision, runShownWhole, runShowsLeadingChars } from './lib/cell-paint.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -84,7 +85,11 @@ const cellVerdict = (measured, where) => {
   // (docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
   const body = measured.rows.filter((r) => r.key !== 'header');
   const nameless = body.filter((r) => { const name = r.cells[0]?.runs.find((x) => !x.text.startsWith('[')); return !name || !runShowsLeadingChars(measured, r.key, 'Branch', name.text); });
-  if (nameless.length > 0) throw new Error(`${where}: a worktree row's Branch cell draws no character of its name with the marker: ${nameless.map((r) => `${r.key} ${JSON.stringify(r.cells[0])}`).join(' | ')}`);
+  if (nameless.length > 0) throw new Error(`${where}: a worktree row's Branch cell leaves no room for its name's first character and the marker: ${nameless.map((r) => `${r.key} ${JSON.stringify(r.cells[0])}`).join(' | ')}`);
+  // The room alone passes a name sliced off with no marker; the marker is the name box's own `text-overflow: ellipsis` over
+  // a cut it can mark (fin16's verifier: until then only layout-regression.test.ts's stylesheet pin held it).
+  const unmarked = body.filter((r) => { const name = r.cells[0]?.runs.find((x) => !x.text.startsWith('[')); return !name || !runMarksElision(measured, r.key, 'Branch', name.text); });
+  if (unmarked.length > 0) throw new Error(`${where}: a worktree row's Branch name is cut with no elision marker: ${unmarked.map((r) => `${r.key} ${JSON.stringify(r.cells[0])}`).join(' | ')}`);
   const hidden = body.flatMap((r) => controlsOutsideCell(measured, r.key, 'Branch').map((x) => `${r.key} ${x}`));
   if (hidden.length > 0) throw new Error(`${where}: a Branch cell's tag lies past the cell's edge: ${hidden.join(' | ')}`);
   // Every cell spans its row: the Branch cell was itself the flex box until 2026-10-04, so its border and selected
@@ -347,8 +352,12 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   // At the minimum the base row is among the rows measured, so the verdict above read its `main` (at least `m` and the
   // marker) and its two tags (inside the cell) there too.
   if (!minimum.rows.some((x) => x.key === baseRow.key)) throw new Error(`the base row (${baseRow.key}) was not among the worktree cells measured at 1000x680`);
+  // Whether the base row's `main` was cut there (fin16's `m…`), so the results say whether the marker check above read a cut
+  // or only names drawn whole; and, when cut, what its name box measured.
+  const baseAtMinimum = minimum.rows.find((x) => x.key === baseRow.key)?.cells[0]?.runs.find((r) => r.text === 'main');
+  const baseBranchCutAtMinimum = !runShownWhole(minimum, baseRow.key, 'Branch', 'main');
   if (!existsSync(minimumPng)) throw new Error('no PNG was kept of the Git view at the minimum size');
-  results.worktreeAhead = { strip, title, description: `${title} ${WORKTREE_NOTE}`, cells: { opening: cellsAtOpening, minimum: cellsAtMinimum, baseBranchWhole: true }, png: ahead.png, minimumPng };
+  results.worktreeAhead = { strip, title, description: `${title} ${WORKTREE_NOTE}`, cells: { opening: cellsAtOpening, minimum: cellsAtMinimum, baseBranchWhole: true, baseBranchCutAtMinimum, baseBranchMarker: baseAtMinimum?.marker ?? null }, png: ahead.png, minimumPng };
 }
 
 // 3c. The bound row's State cell draws the PRESENTED status (REQ-NOTIFY-048/049, REQ-GIT-109): the session's persisted

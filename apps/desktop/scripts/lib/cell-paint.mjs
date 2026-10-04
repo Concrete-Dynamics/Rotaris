@@ -15,8 +15,9 @@
  *     in the columns named in `elide` (the ones whose content is shortened by design and carries its full text as a
  *     tooltip); anywhere else a cut run is text the reader cannot see.
  *
- * Four narrower checks beside it, each a pure function too: `runShownWhole` (a run that may elide but has room not to),
- * `runShowsLeadingChars` (an eliding run that still draws its first characters and the marker) and `controlsOutsideCell`
+ * Five narrower checks beside it, each a pure function too: `runShownWhole` (a run that may elide but has room not to),
+ * `runShowsLeadingChars` (an eliding run that leaves room for its first characters and the marker), `runMarksElision` (a
+ * cut run whose own box draws the marker: `text-overflow: ellipsis` on a box that overflows) and `controlsOutsideCell`
  * (a tag or button laid out past its cell's edge, which the cell's clip hides rather than paints over the next one), and
  * `cellsShortOfRow` (a cell whose box does not span its row's height — the Branch cell did not while it was itself the
  * flex box, so its border and selected background stopped short of the row's).
@@ -44,12 +45,16 @@ export function cellPaintProbe(tableSelector) {
     const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent.trim());
     const paddingBox = (el) => { const r = el.getBoundingClientRect(), cs = getComputedStyle(el); return { left: r.left + parseFloat(cs.borderLeftWidth), right: r.right - parseFloat(cs.borderRightWidth) }; };
     const clipOf = (node, cell) => {
-      let left = null, right = null;
+      let left = null, right = null, marker = null;
       for (let el = node.parentElement; el; el = el.parentElement) {
-        if (getComputedStyle(el).overflowX !== 'visible') { const b = paddingBox(el); left = left === null ? b.left : Math.max(left, b.left); right = right === null ? b.right : Math.min(right, b.right); }
+        const cs = getComputedStyle(el);
+        if (cs.overflowX !== 'visible') {
+          const b = paddingBox(el); left = left === null ? b.left : Math.max(left, b.left); right = right === null ? b.right : Math.min(right, b.right);
+          if (marker === null) marker = { textOverflow: cs.textOverflow, whiteSpace: cs.whiteSpace, overflowX: cs.overflowX, display: cs.display, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, own: el === node.parentElement };
+        }
         if (el === cell) break;
       }
-      return { clipLeft: left, clipRight: right };
+      return { clipLeft: left, clipRight: right, marker };
     };
     const runsOf = (cell) => {
       const runs = [];
@@ -82,7 +87,10 @@ export function cellPaintProbe(tableSelector) {
 }
 
 /**
- * @typedef {{ text: string, left: number, right: number, clipLeft: number | null, clipRight: number | null }} Run
+ * @typedef {{ textOverflow: string, whiteSpace: string, overflowX: string, display: string, scrollWidth: number, clientWidth: number, own: boolean }} Marker
+ *   the run's nearest clipping ancestor: what it would draw at the cut (`text-overflow`), whether it can (a block-level
+ *   box that does not wrap, its own parent so the run is the content that overflows it), and whether it overflows at all
+ * @typedef {{ text: string, left: number, right: number, clipLeft: number | null, clipRight: number | null, marker?: Marker | null }} Run
  * @typedef {{ column: string, left: number, right: number, runs: Run[] }} Cell
  * @typedef {{ key: string, cells: Cell[] }} Row
  * @typedef {{ row: string, column: string, kind: 'overrun' | 'cut', text: string, detail: string }} Finding
@@ -141,9 +149,11 @@ export function runShownWhole(measured, key, column, text, tolerance = CELL_PAIN
 }
 
 /**
- * Whether the run `text` in `column` of the row keyed `key` shows at least its first `count` characters and the elision
- * marker after them, or is drawn whole. The column's face is monospace (the Branch cell is `.mono`), so one character's
- * advance is the run's laid-out width over its length, and the marker takes one more. The Git view's base row drew no
+ * Whether the run `text` in `column` of the row keyed `key` leaves room for at least its first `count` characters and the
+ * elision marker after them, or is drawn whole. The column's face is monospace (the Branch cell is `.mono`), so one
+ * character's advance is the run's laid-out width over its length, and the marker takes one more. **It measures width
+ * only**: a run clipped with no marker at all passes it, so whether the marker is drawn is `runMarksElision`'s
+ * (fin16's verifier; until then only `layout-regression.test.ts`'s `text-overflow: ellipsis` pin held the marker). The Git view's base row drew no
  * character of `main` at the 1000×680 minimum until 2026-10-04, its two tags taking the cell's whole width
  * (`docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md`).
  * @param {{ rows?: Row[] }} measured
@@ -162,6 +172,29 @@ export function runShowsLeadingChars(measured, key, column, text, count = 1, tol
   const visibleRight = run.clipRight === null ? run.right : Math.min(run.right, run.clipRight);
   const advance = (run.right - run.left) / text.length;
   return Math.max(0, visibleRight - visibleLeft) + tolerance >= advance * (Math.min(count, text.length) + 1);
+}
+
+/**
+ * Whether the run `text` in `column` of the row keyed `key` is drawn whole, or, where it is cut, cut by a box that draws
+ * the elision marker there: its own parent clips it (`overflow-x` not `visible`), says `text-overflow: ellipsis`, does not
+ * wrap, is not an inline box (which `text-overflow` ignores), and overflows (`scrollWidth` past `clientWidth`, so the
+ * engine has a cut to mark). A run whose measurement carries no clipping box's state answers false when cut: the probe
+ * did not see a marker. UIR-002: a name elides with its marker, never by being sliced off.
+ * @param {{ rows?: Row[] }} measured
+ * @param {string} key
+ * @param {string} column
+ * @param {string} text
+ * @param {number} [tolerance]
+ */
+export function runMarksElision(measured, key, column, text, tolerance = CELL_PAINT_TOLERANCE) {
+  const cell = measured.rows?.find((r) => r.key === key)?.cells.find((c) => c.column === column);
+  const run = cell?.runs.find((r) => r.text === text);
+  if (!run) return false;
+  if (runShownWhole(measured, key, column, text, tolerance)) return true;
+  const m = run.marker;
+  if (!m) return false;
+  return m.own && m.textOverflow === 'ellipsis' && m.overflowX !== 'visible' && (m.whiteSpace === 'nowrap' || m.whiteSpace === 'pre')
+    && !m.display.startsWith('inline') && m.scrollWidth > m.clientWidth;
 }
 
 /**

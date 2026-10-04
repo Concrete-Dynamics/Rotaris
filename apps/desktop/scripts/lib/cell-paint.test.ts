@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the proof library is plain ESM beside the scripts that run it.
-import { CELL_PAINT_TOLERANCE, cellPaintFindings, cellPaintProbe, cellsShortOfRow, controlsOutsideCell, runShownWhole, runShowsLeadingChars } from './cell-paint.mjs';
+import { CELL_PAINT_TOLERANCE, cellPaintFindings, cellPaintProbe, cellsShortOfRow, controlsOutsideCell, runMarksElision, runShownWhole, runShowsLeadingChars } from './cell-paint.mjs';
 
 const run = (text: string, left: number, right: number, clipLeft: number | null = null, clipRight: number | null = null) => ({ text, left, right, clipLeft, clipRight });
 const cell = (column: string, left: number, right: number, runs: ReturnType<typeof run>[]) => ({ column, left, right, runs });
@@ -83,6 +83,26 @@ describe('cell paint — overrun and cut (REQ-GIT-109)', () => {
     expect(runShowsLeadingChars(elided(146.9 + 20), 'k', 'Branch', 'main', 2)).toBe(false);
   });
 
+  it('says whether a cut run is cut by a box that draws the marker, which the width check alone never sees (fin16\'s verifier)', () => {
+    // `m` and the marker's room, 14.4 px of `main`, in a name box that overflows: the width check passes with or without a marker.
+    const marker = { textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflowX: 'hidden', display: 'block', scrollWidth: 29, clientWidth: 15, own: true };
+    const cut = (m: Partial<typeof marker> | null) => ({ rows: [{ key: 'k', cells: [cell('Branch', 132.9, 260, [{ ...run('main', 146.9, 175.7, 146.9, 146.9 + 14.4), marker: m === null ? null : { ...marker, ...m } }])] }] });
+    expect(runShowsLeadingChars(cut({ textOverflow: 'clip' }), 'k', 'Branch', 'main')).toBe(true);
+    expect(runMarksElision(cut({}), 'k', 'Branch', 'main')).toBe(true);
+    // Sliced off with no marker: `text-overflow: clip`, a box that wraps, an inline box, a box an ancestor clips rather than
+    // the run's own, a box that does not overflow (nothing for the engine to mark), or no clipping box's state measured.
+    expect(runMarksElision(cut({ textOverflow: 'clip' }), 'k', 'Branch', 'main')).toBe(false);
+    expect(runMarksElision(cut({ whiteSpace: 'normal' }), 'k', 'Branch', 'main')).toBe(false);
+    expect(runMarksElision(cut({ display: 'inline' }), 'k', 'Branch', 'main')).toBe(false);
+    expect(runMarksElision(cut({ own: false }), 'k', 'Branch', 'main')).toBe(false);
+    expect(runMarksElision(cut({ scrollWidth: 15 }), 'k', 'Branch', 'main')).toBe(false);
+    expect(runMarksElision(cut(null), 'k', 'Branch', 'main')).toBe(false);
+    expect(runMarksElision(cut({}), 'k', 'Branch', 'absent')).toBe(false);
+    // A run drawn whole needs no marker, whatever its box says.
+    const whole = { rows: [{ key: 'k', cells: [cell('Branch', 132.9, 260, [{ ...run('main', 146.9, 175.7, 132.9, 260), marker: { ...marker, textOverflow: 'clip' } }])] }] };
+    expect(runMarksElision(whole, 'k', 'Branch', 'main')).toBe(true);
+  });
+
   it('names a control laid out past its cell\'s edge, which the clip hides rather than paints over the next cell', () => {
     expect(cellPaintFindings(baseAtMinimum, { elide: ['Branch'] })).toEqual([]);
     expect(controlsOutsideCell(baseAtMinimum, 'D:/ws', 'Branch')).toEqual(['[active] laid out 203.5..256.4 in a cell spanning 132.9..201.6']);
@@ -108,5 +128,8 @@ describe('cell paint — overrun and cut (REQ-GIT-109)', () => {
     expect(probe).not.toContain(';;');
     expect(probe).not.toContain('>>');
     expect(() => new Function(`return ${probe}`)).not.toThrow();
+    // The clipping box's elision state rides on each run, for `runMarksElision`.
+    expect(probe).toContain('marker = { textOverflow: cs.textOverflow');
+    expect(probe).toContain('scrollWidth: el.scrollWidth, clientWidth: el.clientWidth');
   });
 });

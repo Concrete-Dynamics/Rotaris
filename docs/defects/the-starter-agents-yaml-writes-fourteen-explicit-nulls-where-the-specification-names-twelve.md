@@ -26,6 +26,10 @@ REQ-CONFIG-025 and REQ-WORKSPACE-038. Choosing between them is the owner's.
 ## Relevant files
 
 - `packages/config/src/writers.ts`: `starterDocument`, the two `retrospective_model*` lines.
-- `packages/config/src/writers.test.ts`: the starter's tests, none of which counts the nulls.
+- `packages/config/src/writers.test.ts`: the bootstrap case "writes the starter for an absent or blank file…", which
+  counts the nulls and holds them at fourteen (`expect((starterDocument().match(/: null$/gm) ?? []).length).toBe(14)`,
+  its comment crediting PD-LIBRARY-002 with the two extra): either outcome changes that count. ~~the starter's tests,
+  none of which counts the nulls.~~ *(Corrected 2026-10-04, fin15: the verifier of finacc's fourth round found the
+  count; the note had said there was none.)*
 - `apps/desktop/scripts/lib/starter-config.mjs`: the proofs' starter reader, which checks for the twelve and accepts
   lines beyond them.

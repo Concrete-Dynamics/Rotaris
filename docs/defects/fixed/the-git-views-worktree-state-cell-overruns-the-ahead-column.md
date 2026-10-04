@@ -40,7 +40,7 @@ Confirmed first on the unrepaired build by a geometry assertion `pnpm git-proof`
   name whole: `main` beside its `primary` tag in the Git screen's worktree card, and whole with no tag in the Overview's
   worktree card (the mockup's `Home` screen). The Branch column had room: 302 px. (Corrected 2026-10-04 by fin16, read
   from `pnpm mockup`; this paragraph first said "`main` beside `primary` in the Git screen and the Overview's worktree
-  card", but the Overview's card draws no tag.) The cell is `display: flex`, so it is not a table cell, and the `22ch` cap it shared with
+  card", but the Overview's card draws no tag.) The cell is `display: flex`, so it is not a table cell (true until fin16 moved the flex box into `.git__branch-line`, a wrapper inside the cell: [the base-row note](the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md)), and the `22ch` cap it shared with
   Session held the flex box to 158 px inside that column. The cap is gone from Branch (Session, a real table cell, keeps
   it); `main` is drawn whole beside `base` and `active`.
 - **The Branch heading at the minimum.** The table's `63ch` left Branch 7ch (53.5 px) at 1000×680, and the heading

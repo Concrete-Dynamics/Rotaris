@@ -2,8 +2,8 @@
 
 Two `NOTE` lines every live run prints from its frictions scenario point at defect notes that have been repaired and moved
 to `docs/defects/fixed/`: "the stream-stall abort is not covered here" cites
-`docs/defects/single-retry-stream-stall-aborted-a-76-minute-run.md`, and "the exit-trace gap is not covered here" cites
-`docs/defects/process-exit-left-no-diagnosable-trace.md`. Both now live in `docs/defects/fixed/`, so every console log of a
+`docs/defects/single-retry-stream-stall-aborted-a-76-minute-run.md`, and "the exit-trace gap is not covered here" cites <!-- historical-path: docs/defects/single-retry-stream-stall-aborted-a-76-minute-run.md -->
+`docs/defects/process-exit-left-no-diagnosable-trace.md`. Both now live in `docs/defects/fixed/`, so every console log of a <!-- historical-path: docs/defects/process-exit-left-no-diagnosable-trace.md -->
 live run carries two dead pointers. The frictions scenario's header comment cites two more the same way
 (`a-first-use-schema-guess-failed-without-an-example.md`, `win32-terminal-edge-cases-bounced-to-the-agent.md`, both in
 `fixed/` too). Nothing catches it: `tools/check-record-links.mjs` reads the record's Markdown links, never a script.

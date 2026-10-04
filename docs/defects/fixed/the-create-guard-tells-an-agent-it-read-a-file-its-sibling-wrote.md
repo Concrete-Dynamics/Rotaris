@@ -22,7 +22,7 @@ The message also no longer carries the exact text `REQ-TOOLS-135` fixes.
 
 - `packages/agent-tools/src/tools/files.ts`: the `create` branch and `FileToolState`.
 - `packages/agent-tools/src/tools/tools.test.ts`: covers only the not-read branch of the message.
-- `docs/defects/two-writing-children-in-one-checkout-collided.md`: the note whose improvement introduced this.
+- `docs/defects/two-writing-children-in-one-checkout-collided.md`: the note whose improvement introduced this. <!-- historical-path: docs/defects/two-writing-children-in-one-checkout-collided.md -->
 
 Noticed 2026-09-23 while designing sibling write scopes (R-048, item 5).
 

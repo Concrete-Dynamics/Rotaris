@@ -102,7 +102,11 @@ plain process with no React and the restore run against a fake run host with a c
   which one stayed behind (since 2026-09-28, R-062). A second pass reads the code: a `docs/defects/….md` path in a
   file under `apps/`, `packages/` or `tools/` — comment, test or a line a proof prints — must name a note that exists,
   and be written whole on one line, since a path wrapped across a comment's lines or abbreviated with `…` is one no
-  pass can read (since 2026-10-03, fin13).
+  pass can read (since 2026-10-03, fin13). A third pass reads the record's prose: a `docs/defects/….md` path written as
+  inline code in a record file must name a note that exists, unless an HTML comment on its own line,
+  `<!-- historical-path: <the path> -->`, keeps it as history on purpose; a mark that keeps nothing, or keeps a live
+  path, fails. `docs/product/requests.md`, the orchestrator's alone to edit, is not read by it, and the check says why
+  (since 2026-10-04, fin15).
 - **No merge leaves a conflict marker behind** — `tools/check-conflict-markers.mjs` (in `pnpm lint`, after
   `check-line-endings.mjs`) reads every tracked text file in the working copy and the index, through `git grep`, and
   fails on a line git writes as a marker: seven `<`, `|` or `>` at column 0 followed by a space or the line's end, and

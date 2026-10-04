@@ -120,7 +120,7 @@ So the question this decision is blocked on is no longer only about a persisted 
 **a user who configures both per-token prices gets the same zero as a user who configures neither**, and the
 product cannot say the rates were ignored, because no surface has a way to say it.
 
-The gap is recorded as an open defect note (`docs/defects/configured-per-token-prices-take-no-effect.md`) and
+The gap is recorded as an open defect note (`docs/defects/fixed/configured-per-token-prices-take-no-effect.md`) and
 not built around, which is what consequence 1 above rules for exactly this case. The two routes that are not
 covered at all — a price read from any provider's discovery payload, and a provider-reported per-request cost
 with no qualifier in `REQ-MONITOR-166`'s closed set — are **OQ-62**, raised the same day.

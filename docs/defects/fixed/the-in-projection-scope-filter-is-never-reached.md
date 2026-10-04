@@ -57,6 +57,6 @@ end-to-end, `expected 124 to be 1`, the subject of `the-real-git-diff-terminal-t
 
 Built-app evidence is weaker than it should be, and honestly so: `pnpm rows-proof` and `pnpm transcript-proof`
 are **red on `main` at `1caf6a6`** before this change, on driven-input assertions, which is now recorded as
-`docs/defects/the-two-driven-transcript-proofs-are-red-on-main.md`. The branch reproduces `main`'s reds at
+`docs/defects/the-two-driven-transcript-proofs-are-red-on-main.md`. The branch reproduces `main`'s reds at <!-- historical-path: docs/defects/the-two-driven-transcript-proofs-are-red-on-main.md -->
 the same lines and adds none. What the built app does say: `pnpm build` exit 0, and a driven launch
 (`pnpm app:drive start|shot|stop`) draws the shell and the Overview view with no renderer error.

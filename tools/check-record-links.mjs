@@ -27,6 +27,15 @@
 // verifier of fin13; `partialDefectPaths`). The directory itself and a `….md` or
 // `*.md` placeholder name no note and are left alone.
 //
+// A third pass reads the record's prose. The record cites notes by their
+// repository path written as inline code as well as by link, and moves had left
+// eighteen such paths behind by 2026-10-03, which neither pass read
+// (`docs/defects/fixed/the-records-prose-names-defect-notes-at-paths-they-no-longer-have.md`).
+// Every `docs/defects/….md` path in an inline code span of a record file must name
+// a note that exists, unless it is history kept on purpose and marked so on its
+// own line (`prosePointers`, `checkProseFile`); `docs/product/requests.md` is not
+// read (`PROSE_EXEMPT`, which says why).
+//
 // Runs as part of `pnpm lint`. Reads the tree; costs no subprocess. The pure
 // parts are exported for the test beside this file.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -383,6 +392,103 @@ export function checkCode(root) {
   return { problems, pointers, files: files.length };
 }
 
+// ------------------------------------------------- the record's prose pointers
+
+/**
+ * Files of the record the third pass does not read, each with the reason. The pass fails a line, so a file only the
+ * orchestrator may edit would turn every workflow agent's gate red on a line that agent is forbidden to touch; its
+ * pointers are kept by its owner, and its Markdown links are still read by the first pass.
+ * @type {ReadonlyMap<string, string>}
+ */
+export const PROSE_EXEMPT = new Map([
+  [
+    'docs/product/requests.md',
+    "the request log is the orchestrator's alone to edit (.agents/skills/orchestrated-build/references/repository.md), " +
+      'so a workflow agent that moves a note cannot take its pointers there along',
+  ],
+]);
+
+/**
+ * The explicit mark of a deliberate historical path: an HTML comment, which does not render, on the same line as the
+ * path and naming it exactly, `<!-- historical-path: docs/defects/….md -->` (several paths separated by spaces). It
+ * keeps that path on that line and nothing else, and it is checked itself: a mark naming no path written as inline code
+ * on its line, or a path a note is at, fails, so a mark can neither outlive its line nor hide a live pointer.
+ */
+const HISTORICAL_MARK = /<!--\s*historical-path:([^>]*?)-->/g;
+
+/**
+ * The record's prose pointers: every repository path to a defect note (`defectPointers`) written as inline code in a
+ * Markdown file, in a sentence or in a link's text, with its 1-based line; and every historical-path mark, with the line
+ * it stands on and each path it names. Fenced code is an example, not a pointer, and is skipped; so is a path inside an
+ * HTML comment, other than the mark's own, and a mark written inside inline code (an example of one).
+ * @param {string} text the raw Markdown file
+ * @returns {{ pointers: { line: number, target: string }[], marks: { line: number, target: string }[] }}
+ */
+export function prosePointers(text) {
+  const blank = (/** @type {string} */ s) => s.replace(/[^\n]/g, ' ');
+  const lineOf = (/** @type {number} */ index) => text.slice(0, index).split('\n').length;
+  const FENCE = /^( {0,3})(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\2[ \t]*$|(?![\s\S]))/gm;
+  const SPAN = /(`+)(?!`)((?:(?!\n[ \t]*\n)[\s\S])*?[^`])\1(?!`)/g;
+  const unfenced = text.replace(FENCE, blank);
+  /** @type {{ line: number, target: string }[]} */
+  const pointers = [];
+  for (const span of unfenced.replace(/<!--[\s\S]*?-->/g, blank).matchAll(SPAN)) {
+    const at = span.index + span[1].length;
+    for (const pointer of defectPointers(span[2])) pointers.push({ line: lineOf(at) + pointer.line - 1, target: pointer.target });
+  }
+  /** @type {{ line: number, target: string }[]} */
+  const marks = [];
+  for (const mark of unfenced.replace(SPAN, blank).matchAll(HISTORICAL_MARK)) {
+    for (const target of mark[1].trim().split(/\s+/).filter((t) => t !== '')) marks.push({ line: lineOf(mark.index), target });
+  }
+  return { pointers, marks };
+}
+
+/**
+ * Check one record file's prose pointers against the disk, resolved from the repository root: a path that names no note
+ * fails unless a historical-path mark on its line names it, and a mark fails when it keeps nothing or keeps a live path.
+ * @param {string} root
+ * @param {string} file absolute path
+ * @param {{ read?: (path: string) => string, exists?: (path: string) => boolean }} [io]
+ * @returns {{ file: string, line: number, text: string, target: string, reason: string }[]}
+ */
+export function checkProseFile(root, file, io = {}) {
+  const read = io.read ?? ((p) => readFileSync(p, 'utf8'));
+  const exists = io.exists ?? existsSync;
+  const { pointers, marks } = prosePointers(read(file));
+  const same = (/** @type {{ line: number, target: string }} */ a, /** @type {{ line: number, target: string }} */ b) => a.line === b.line && a.target === b.target;
+  return [
+    ...pointers
+      .filter((p) => !exists(join(root, p.target)) && !marks.some((m) => same(m, p)))
+      .map((p) => ({ file, line: p.line, text: 'defect note', target: p.target, reason: 'no note at this path' })),
+    ...marks
+      .filter((m) => !pointers.some((p) => same(p, m)))
+      .map((m) => ({ file, line: m.line, text: 'historical-path', target: m.target, reason: 'the mark names no path written as inline code on its line' })),
+    ...marks
+      .filter((m) => pointers.some((p) => same(p, m)) && exists(join(root, m.target)))
+      .map((m) => ({ file, line: m.line, text: 'historical-path', target: m.target, reason: 'marked historical, but a note is at this path: a live pointer is checked, not kept' })),
+  ].sort((a, b) => a.line - b.line);
+}
+
+/**
+ * Run the third pass over a root: every record file (`recordFiles`) but those `PROSE_EXEMPT` names. Returns the problems,
+ * the number of paths read and the number kept by a mark.
+ * @param {string} root
+ */
+export function checkProse(root) {
+  const problems = [];
+  let pointers = 0;
+  let kept = 0;
+  const files = recordFiles(root).filter((f) => !PROSE_EXEMPT.has(relative(root, f).split(sep).join('/')));
+  for (const file of files) {
+    const found = prosePointers(readFileSync(file, 'utf8'));
+    pointers += found.pointers.length;
+    kept += found.marks.length;
+    problems.push(...checkProseFile(root, file));
+  }
+  return { problems, pointers, kept, files: files.length };
+}
+
 /** @param {string} root @param {ReturnType<typeof checkFile>[number]} problem */
 export const formatProblem = (root, problem) =>
   `${relative(root, problem.file).split(sep).join('/')}:${problem.line}: [${problem.text}](${problem.target}) — ${problem.reason}`;
@@ -414,6 +520,17 @@ if (invokedDirectly) {
     console.error('must name a note that exists, written whole on one line so that this pass can read it. A note moved');
     console.error('to docs/defects/fixed/ takes these pointers along too.');
   }
-  if (problems.length > 0 || code.problems.length > 0) process.exit(1);
-  console.log(`check-record-links: ${links} relative links in ${files} files, every one resolves; ${code.pointers} defect-note paths in ${code.files} code files, every one whole and present`);
+  const prose = checkProse(root);
+  if (prose.problems.length > 0) {
+    if (problems.length > 0 || code.problems.length > 0) console.error('');
+    console.error(`check-record-links: ${prose.problems.length} defect-note path(s) in the record's prose name no note:`);
+    for (const problem of prose.problems) console.error(`  - ${relative(root, problem.file).split(sep).join('/')}:${problem.line}: ${problem.target} — ${problem.reason}`);
+    console.error('');
+    console.error('A docs/defects/….md path written as inline code in the record is a pointer like a link: a note moved');
+    console.error('to docs/defects/fixed/ takes it along. A path kept on purpose as history (a repaired note quoting where');
+    console.error('a note stood, a struck-through passage) is marked on its own line: <!-- historical-path: <the path> -->.');
+    console.error(`Not read by this pass: ${[...PROSE_EXEMPT].map(([f, why]) => `${f}, since ${why}`).join('; ')}.`);
+  }
+  if (problems.length > 0 || code.problems.length > 0 || prose.problems.length > 0) process.exit(1);
+  console.log(`check-record-links: ${links} relative links in ${files} files, every one resolves; ${code.pointers} defect-note paths in ${code.files} code files, every one whole and present; ${prose.pointers} in the record's prose, every one present or marked historical (${prose.kept} marked)`);
 }

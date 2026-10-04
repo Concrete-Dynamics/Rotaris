@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
-import { anchorsOf, checkCode, checkCodeFile, checkFile, checkRecord, codeFiles, defectPointers, extractLinks, partialDefectPaths, githubSlug, isRelative, withoutCode } from './check-record-links.mjs';
+import { anchorsOf, checkCode, checkCodeFile, checkFile, checkProse, checkProseFile, checkRecord, codeFiles, defectPointers, extractLinks, partialDefectPaths, PROSE_EXEMPT, prosePointers, githubSlug, isRelative, withoutCode } from './check-record-links.mjs';
 
 let root: string;
 
@@ -215,5 +215,73 @@ describe('check-record-links — a defect-note path in the code must name a note
       '',
     ].join('\n');
     expect(partialDefectPaths(text)).toEqual([]);
+  });
+});
+
+/*
+ * The third pass: a defect-note path written as inline code in the record's prose. Fourteen such paths outside the request
+ * log named notes at paths they no longer had on 2026-10-03, and neither earlier pass read one; six of them are history
+ * kept on purpose, which a mark on their own line now keeps explicitly.
+ */
+describe("check-record-links — a defect-note path in the record's prose must name a note, or be marked as history", () => {
+  type Problem = { line: number; target: string; reason: string };
+  const brief = (problems: Problem[]) => problems.map((p) => [p.line, p.target, p.reason]);
+  const mark = (...paths: string[]) => `<!-- historical-path: ${paths.join(' ')} -->`;
+
+  it('fails a path in a sentence or a link\'s text at its pre-fixed/ path, naming file, line and path, and passes it once it follows the note', () => {
+    const file = join(root, 'docs', 'architecture', 'adr.md');
+    writeFileSync(file, ['# ADR', '', `Recorded as \`${note('a-note.md')}\`, which carries the repair.`, `See [\`${note('a-note.md')}\`](../defects/fixed/a-note.md).`, ''].join('\n'));
+    expect(checkProseFile(root, file)).toEqual([
+      { file, line: 3, text: 'defect note', target: note('a-note.md'), reason: 'no note at this path' },
+      { file, line: 4, text: 'defect note', target: note('a-note.md'), reason: 'no note at this path' },
+    ]);
+    writeFileSync(file, ['# ADR', '', `Recorded as \`${note('fixed', 'a-note.md')}\`, which carries the repair.`, `See [\`${note('fixed', 'a-note.md')}\`](../defects/fixed/a-note.md).`, ''].join('\n'));
+    expect(checkProseFile(root, file)).toEqual([]);
+  });
+
+  it('keeps a path a mark on its own line names, and only that one: not the same path on another line, nor another path beside it', () => {
+    const file = join(root, 'docs', 'defects', 'fixed', 'b-note.md');
+    writeFileSync(file, [
+      `When written, it cited \`${note('a-note.md')}\` and \`${note('gone.md')}\`. ${mark(note('a-note.md'))}`,
+      `~~Not built: \`${note('gone.md')}\`.~~ ${mark(note('gone.md'), note('other.md'))}`,
+      `And again \`${note('a-note.md')}\`.`,
+      '',
+    ].join('\n'));
+    expect(brief(checkProseFile(root, file))).toEqual([
+      [1, note('gone.md'), 'no note at this path'],
+      [2, note('other.md'), 'the mark names no path written as inline code on its line'],
+      [3, note('a-note.md'), 'no note at this path'],
+    ]);
+  });
+
+  it('fails a mark on a live path, which would hide the pointer from the pass when its note next moved', () => {
+    const file = join(root, 'docs', 'architecture', 'adr.md');
+    writeFileSync(file, `Now at \`${note('fixed', 'a-note.md')}\`. ${mark(note('fixed', 'a-note.md'))}\n`);
+    expect(brief(checkProseFile(root, file))).toEqual([[1, note('fixed', 'a-note.md'), 'marked historical, but a note is at this path: a live pointer is checked, not kept']]);
+  });
+
+  it('skips fenced code, an HTML comment and a mark shown as inline code, and reads a code span that wraps a line at the line of the path', () => {
+    const text = [
+      '```',
+      note('in-a-fence.md'),
+      '```',
+      `<!-- ${note('in-a-comment.md')} -->`,
+      `The mark is written \`${mark(note('shown.md'))}\`.`,
+      `A span that wraps \`the note`,
+      `${note('wrapped.md')}\` here.`,
+      '',
+    ].join('\n');
+    expect(prosePointers(text)).toEqual({ pointers: [{ line: 7, target: note('wrapped.md') }], marks: [] });
+  });
+
+  it('reads every record file but the request log, which it names with the reason', () => {
+    mkdirSync(join(root, 'docs', 'product'), { recursive: true });
+    writeFileSync(join(root, 'docs', 'product', 'requests.md'), `| R-001 | \`${note('a-note.md')}\` |\n`);
+    writeFileSync(join(root, 'docs', 'architecture', 'adr.md'), `\`${note('a-note.md')}\` ${mark(note('a-note.md'))} and \`${note('fixed', 'a-note.md')}\`\n`);
+    writeFileSync(join(root, 'AGENTS.md'), `\`${note('gone.md')}\`\n`);
+    const { problems, pointers, kept } = checkProse(root);
+    expect([brief(problems), pointers, kept]).toEqual([[[1, note('gone.md'), 'no note at this path']], 3, 1]);
+    expect(problems[0].file).toBe(join(root, 'AGENTS.md'));
+    expect(PROSE_EXEMPT.get('docs/product/requests.md')).toMatch(/orchestrator's alone to edit/);
   });
 });

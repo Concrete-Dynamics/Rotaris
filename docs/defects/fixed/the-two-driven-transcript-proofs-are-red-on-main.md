@@ -106,7 +106,7 @@ A tail-following transcript pins itself to the bottom on the render after any sc
 nudge does not release the follow either — `onScroll` ignores one scroll after the pane's own — so the seam
 now nudges until the pane publishes `data-following="0"`, and only when the target is unreachable. That
 swallowing is recorded on its own terms in
-`docs/defects/one-readers-scroll-can-be-taken-for-the-panes-own.md`.
+`docs/defects/one-readers-scroll-can-be-taken-for-the-panes-own.md`. <!-- historical-path: docs/defects/one-readers-scroll-can-be-taken-for-the-panes-own.md -->
 
 Evidence: `pnpm rows-proof` green **five times** — three in the branch worktree where five consecutive runs
 had failed, and twice on merged `main` at `1f3bad9` — each releasing the follow exactly once and carrying no

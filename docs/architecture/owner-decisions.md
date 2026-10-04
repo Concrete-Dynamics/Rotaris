@@ -1523,7 +1523,7 @@ and has its row in `first-executions.md`.
 ### OQ-21 — per-token prices are decimal strings, ruled; OQ-62's configured-rate branch with it
 
 **Ruled 2026-09-23 (R-049).** The owner approved the design recorded on
-`docs/defects/configured-per-token-prices-take-no-effect.md`. Three records carry it:
+`docs/defects/fixed/configured-per-token-prices-take-no-effect.md`. Three records carry it:
 
 - **OQ-21, answered as it recommended, by amendment.** `REQ-PROVIDER-072` and the snapshot formats typed
   prices as floats while `REQ-PROVIDER-121` forbids float money, so the corpus disagreed with itself and is
@@ -1539,7 +1539,7 @@ and has its row in `first-executions.md`.
   directive, because one requirement carries one narrowing directive.
 
 **Deferred:** OQ-62's discovery-pricing branch. **Prerequisite for building:** the repair of
-`docs/defects/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md`.
+`docs/defects/fixed/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md`.
 
 **What this ruling does not do.** It builds nothing. Every configured run still reads `"0"` under `unknown`
 until the revision is built, and its first execution reports into `first-executions.md`, ADR-0031 and the

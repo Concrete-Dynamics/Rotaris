@@ -75,4 +75,4 @@ present.
 
 Not changed: prose in the record that names a note at a path it no longer has, inside inline code rather than a link (the
 first pass reads links only); recorded as its own note,
-[the-records-prose-names-defect-notes-at-paths-they-no-longer-have.md](../the-records-prose-names-defect-notes-at-paths-they-no-longer-have.md).
+[the-records-prose-names-defect-notes-at-paths-they-no-longer-have.md](the-records-prose-names-defect-notes-at-paths-they-no-longer-have.md).

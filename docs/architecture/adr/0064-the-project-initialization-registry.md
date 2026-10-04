@@ -116,7 +116,7 @@ decided"; `REQ-WORKSPACE-091` then binds the two skipped stages to "a workspace 
 (REQ-WORKSPACE-098)". The two sets disagree in both directions on real trees — a workspace of `main.tf`
 and `deploy.sh` is `code` under the manifest and `non-code` under the specification. **The falsified
 reason is kept beside its replacement** in `run-host/mcp.ts`. Found while building, not by the proof;
-recorded as `docs/defects/classification-decided-by-the-runtimes-extension-list.md`, which also carries
+recorded as `docs/defects/fixed/classification-decided-by-the-runtimes-extension-list.md`, which also carries
 the narrower half — the subset gitignore reader honoured `!` and `**` and last-match-wins, the three
 things `REQ-WORKSPACE-100` names, and not character classes or escapes.
 

@@ -14,3 +14,9 @@ runs in `pnpm lint` and fails on a link left behind, naming the file, the line a
 `docs/defects/….md` path in the code (`apps/`, `packages/`, `tools/`) that names no note, so a comment or a proof that
 cites a note moves with it too. Such a path is written whole, on one line: the pass fails one a comment wraps across
 lines or abbreviates with `…`, since it cannot tell where that one points.
+
+A `docs/defects/….md` path written as inline code in the record's prose is a pointer too, and the same check fails one
+that names no note. A path kept on purpose as history (a repaired note saying where a note stood when it was written, a
+struck-through passage) stays as written and is marked on its own line by an HTML comment naming it exactly,
+`<!-- historical-path: <the path> -->`, which does not render; the check fails a mark that keeps no path on its line, or
+keeps one a note is at. `docs/product/requests.md` is the orchestrator's to edit and is not read by this pass.

@@ -186,14 +186,14 @@ script, so everything after the failing line had been unmeasured for as long as 
 the fourth stayed hidden: past the corrected name, `sessions-proof` reports that `plan_cycles` (v17) is the
 only session-scoped table in the store with no `REFERENCES sessions(session_id) ON DELETE CASCADE`, so
 deleting a session leaves its plan text — stored VERBATIM by `REQ-ORCH-154` — behind for good (**125**,
-`docs/defects/a-session-delete-leaves-its-plan-cycles-behind.md`). That one is NOT repaired here: it needs an
+`docs/defects/fixed/a-session-delete-leaves-its-plan-cycles-behind.md`). That one is NOT repaired here: it needs an
 appended migration rebuilding a table this part does not own, and the note carries the repair's shape. Past the same
 corrected name, `checkpoint-proof` reaches a scenario nothing had run in weeks and finds the Start session dialog
 accepting a gesture and producing NOTHING — no session row, no refusal, no notice, reproduced twice (**126**,
-`docs/defects/the-start-session-dialog-accepts-and-creates-nothing.md`). `pnpm ui-audit`, run for this part's own
+`docs/defects/fixed/the-start-session-dialog-accepts-and-creates-nothing.md`). `pnpm ui-audit`, run for this part's own
 surfaces, then measured the likely reason and a defect of its own beside it: that dialog stands 560 × **904** and
 fits NO supported window — at the minimum 1000 × 680 its run-start selector, its `Cancel` and its `Start session`
-are all off screen (**127**, `docs/defects/the-start-session-dialog-does-not-fit-the-minimum-window.md`), and a
+are all off screen (**127**, `docs/defects/fixed/the-start-session-dialog-does-not-fit-the-minimum-window.md`), and a
 click at a control's computed centre lands nowhere when that centre is outside the window. Two
 defects, both hidden behind one stale string, which is the argument for running the whole suite rather than the
 script named after the part.

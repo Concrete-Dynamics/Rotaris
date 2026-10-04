@@ -25,9 +25,11 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   in the background, and the completion notice says when it ends), or the Monitor tool. The harness gates a `sleep`
   loop: on this host a polling loop runs without a prompt only in the shapes the owner approved on 2026-10-03, as one
   command with nothing before it: `until grep -q <pattern> <log>; do sleep <n>; done; grep|tail|cat …`, or the same
-  with `while ! grep -q`. Any other `sleep` loop stops on a permission prompt the owner has to answer: fin10's
+  with `while ! grep -q`. Any other `sleep` loop may stop on a permission prompt the owner has to answer: fin10's
   `verify:strip-notices-and-listing#3` (`wf_add7be78-430`) waited on its gate and proof logs with that very shape at
-  01:20 and 01:27 UTC on 2026-10-03, before any rule existed, and the owner was prompted.
+  01:20 and 01:27 UTC on 2026-10-03, before any rule existed, and the owner was prompted. Others have run unprompted
+  (a `cd …; until curl …; do sleep 1; done` at 01:44:46 in the same run; an `L=…; until grep …` at 03:19:09 in
+  `wf_d1cca861-c77`), so the harness's judgement is not to be relied on either way.
 - **A permission rule for agents is the owner's to add.** Ask once, with the exact text. The orchestrator's first edit of
   `.claude/settings.local.json` for those shapes was refused by the classifier as "[Self-Modification]" at 01:38 UTC,
   and went through at 01:39 on the owner's explicit instruction.
@@ -92,7 +94,9 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   `git write-tree`, `git commit-tree <tree> -p HEAD -m …`, `git push origin <sha>:refs/heads/backup/<name>`); the
   scratchpad's plans, ledger, notes and unfinished journals on an orphan branch
   (`git worktree add --orphan -b backup/orchestration-state-<date> <path>`), scanned first for the endpoint's host, the
-  key file's content and token shapes. Restore steps go in `RESUME.md`, and the backup branches are deleted once everything lands.
+  key file's content and token shapes. Restore steps go in `RESUME.md`, and the backup branches are deleted once
+  everything lands. A `backup/*` branch is no landing: what it holds reaches main only through a bundle, verified and
+  merged with the gate green.
 
 ## Shell forms the harness blocks
 

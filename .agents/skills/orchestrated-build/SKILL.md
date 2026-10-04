@@ -136,6 +136,9 @@ Recovering, above.
 to it in the plan and render; every later stage of it sees that scope, and it is verified again and merged.
 Acceptance results are not replayed while a plan bundle still has to land.
 
+**A refused live scenario** in a bundle comes back as not verified, with the exact command its builder or verifier
+sent: run that scenario yourself on merged main once the bundle has landed (`references/live-runs.md`, Running).
+
 **Verifiers' optional findings** come back per bundle (`optional`). One that is a real defect elsewhere is recorded
 (repository.md says how) on a docs-only branch merged with the gate green.
 
@@ -159,10 +162,11 @@ nothing but its own repairs merged after it; `"acceptance": { "fresh": true }` f
   another round anyway. An acceptance plan overtaken so is superseded, not re-rendered: a new plan finishes its open
   repair bundle from its pushed branch, and one acceptance-only plan runs last on the final head (finacc, 2026-10-04).
 - **A refused live launch is handed to you.** After a refusal the live-runner launches nothing more and returns every
-  run's exact command; no later round of that run starts a live-runner, no repair bundle is made of the refusal,
-  `status` lists the commands at a check-in, and the run ends `live-handoff`. Run them yourself at the head you judge
-  (`references/live-runs.md`, Running: the tree built and bundled, duress in a dedicated tree), have an agent autopsy
-  the packs beside the round's autopsy report, and feed its findings in as a new plan. The Done criteria count them.
+  run's exact command; no later round of that run starts a live-runner, the autopsy records the hand-off as one
+  `live-check-failed` finding that goes to no builder, `status` lists the commands at a check-in, and the run ends
+  `live-handoff`. Run them yourself at the head you judge (`references/live-runs.md`, Running: the tree built and
+  bundled, duress in a dedicated tree), have an agent autopsy the packs beside the round's autopsy report, and feed its
+  findings in as a new plan. The Done criteria count them.
 - **Record every finding left unrepaired** when the rounds end: a defect note, or an open question for one that needs
   a ruling. While actionable findings remain, plan another round.
 - **Done** means: an acceptance round with the gate green, every proof passing or stated not-applicable with its

@@ -29,10 +29,10 @@ works for a user, and it can spend money. Proofs pass on a product a live run st
 
 - The auto-mode classifier refuses a live-run launch as a "Real-World Transactions" action: for agents, which cannot
   see the owner's words, and for the orchestrator until the owner authorized it in the conversation.
-- **A refusal is final for that action.** Do not retry it, split it, re-quote it, or hand it to another agent. Stop,
-  say what you were doing and why it needs the permission, and let the owner decide. An agent's refused launch goes to
-  the orchestrator, which holds the owner's words in the conversation: the classifier judges the orchestrator's own
-  launch on them (finacc's passed), and a refusal of that one goes to the owner.
+- **A refusal is final for that action**: never retried, split, re-quoted, or handed to another agent. In order: the
+  agent stops and reports what it was doing and the exact command it sent; the orchestrator, which holds the owner's
+  quoted words in the conversation, runs the launch itself, and the classifier judges that launch on them (finacc's
+  passed); a refusal of the orchestrator's own launch goes to the owner, who decides.
 - **An agent's shell starts every command in the primary checkout**: its working directory is reset between commands.
   A launch by relative path (`node apps/desktop/scripts/live-run.mjs …`) therefore runs the primary checkout's script
   on the primary checkout's build, never the tree being judged: an agent never launches one so. Reaching another tree

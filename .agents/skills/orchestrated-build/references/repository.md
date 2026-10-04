@@ -41,16 +41,16 @@ git log --format='%h %an %(trailers:key=Claude-Session,valueonly,separator=%x2C)
 ```
 
 When another author or session appears, run `node tools/check-request-log.mjs` and `node tools/check-record-links.mjs`
-(no install needed; seconds) in a short-lived detached worktree at origin/main, removed straight after
-(`git -C <repo> worktree add --detach <scratchpad>/main-check origin/main`, then
-`git -C <repo> worktree remove <scratchpad>/main-check`), so a red base is known before a bundle's gate blames the
+(no install needed; seconds) in a short-lived detached worktree at origin/main beside the checkout, removed straight
+after (`git -C <repo> worktree add --detach <repo>-wt-maincheck-<id> origin/main`, then
+`git -C <repo> worktree remove <repo>-wt-maincheck-<id>`), so a red base is known before a bundle's gate blames the
 bundle. Never refresh a running plan's reference worktree for it: that plan's agents read `references/*` there under
 prompts rendered from the older copy (SKILL.md §4 refreshes it between runs only). Judge their head commit, never an
 intermediate merge of theirs (`a46180d`, before they merged this session's work, read like a lost row). A red base is
 reported to the owner and recorded as a defect note (`docs/defects/README.md`). When a docs-only change repairs it (a
-count line, a link a moved note left behind), the orchestrator repairs it forward on its own branch from origin/main,
-the note moved to `fixed/` in the same commit, landed with the gate green before the next bundle's merge gate meets
-it; a red that needs code goes to the owner or into a plan. Their commit is never reverted
+count line, a link a moved note left behind), the orchestrator repairs it forward on its own branch in its own
+worktree from origin/main, the note moved to `fixed/` in the same commit, landed with the gate green before the next
+bundle's merge gate meets it; a red that needs code goes to the owner or into a plan. Their commit is never reverted
 (`docs/clean-room/agent-workflow.md`: surface a collision with the owner's commit, never reset it).
 
 ## Worktrees and branches — `docs/clean-room/agent-workflow.md`

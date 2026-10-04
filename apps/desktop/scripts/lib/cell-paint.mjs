@@ -9,8 +9,8 @@
  * measures. `cellPaintFindings` is the verdict, a pure function with its test beside it:
  *
  *   - `overrun` — a visible run reaches past its own cell's border box: it is painted under the neighbouring cell. The
- *     Git view's bound worktree row does this, `completed · ready` running on under the Ahead figure
- *     (`docs/defects/the-git-views-worktree-state-cell-overruns-the-ahead-column.md`).
+ *     Git view's bound worktree row did this until 2026-10-04, `completed · ready` running on under the Ahead figure
+ *     (`docs/defects/fixed/the-git-views-worktree-state-cell-overruns-the-ahead-column.md`).
  *   - `cut` — a run is narrower on screen than it is laid out, because an ancestor inside the cell clips it. Allowed only
  *     in the columns named in `elide` (the ones whose content is shortened by design and carries its full text as a
  *     tooltip); anywhere else a cut run is text the reader cannot see.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import type { CheckpointListPayload, CheckpointPreviewPayload, CheckpointRestoreOutcomePayload, GitViewState, GitWorktreeRow, PaneLayout, SessionListItemPayload } from '@rotaris/contracts';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { WorktreeDialog } from './WorktreeDialog.js';
@@ -93,6 +93,24 @@ export function joinBindings(sessions: readonly SessionListItemPayload[]): Map<s
     if (!out.has(key)) out.set(key, { sessionId: s.sessionId, status: s.status, mergeStatus: s.worktree.merge_status });
   }
   return out;
+}
+/**
+ * REQ-GIT-109: a worktree row's State cell — the session's execution status, then the binding's merge status (`idle` and
+ * `ready` where nothing is bound). One phrase, drawn on one line and never shortened, so both statuses stay legible.
+ */
+export const statePhrase = (b: RowBinding | undefined): { readonly status: string; readonly merge: string } => ({ status: b?.status ?? 'idle', merge: b?.mergeStatus ?? 'ready' });
+/**
+ * REQ-GIT-109: the State column's width — the widest phrase the table draws plus the cell's own padding, in CSS px; `null`
+ * when nothing was measured (a renderer that lays nothing out reports zero), which leaves the column at its CSS floor.
+ *
+ * Until 2026-10-04 the column was a fixed `10ch`, sized for `idle · ready`; a bound row's `completed · ready` is wider and
+ * ran on under the Ahead figure (`docs/defects/fixed/the-git-views-worktree-state-cell-overruns-the-ahead-column.md`). Both
+ * vocabularies are closed but their longest pairing (`awaiting_plan_decision · merge_failed`) would take a third of the
+ * pane from every table, so the column is as wide as the phrases actually shown and no wider.
+ */
+export function stateColumnFit(phraseWidths: readonly number[], cellPadding: number): number | null {
+  const widest = Math.max(0, ...phraseWidths.filter((w) => Number.isFinite(w)));
+  return widest > 0 ? Math.ceil(widest + Math.max(0, cellPadding)) : null;
 }
 /** REQ-GIT-083: eligible = a selected row whose session is `completed` and whose binding is `ready` or `merge_failed`. */
 export function mergeEligible(rows: readonly GitWorktreeRow[], selected: ReadonlySet<string>, join: Map<string, RowBinding>): GitWorktreeRow[] {
@@ -230,6 +248,29 @@ export function GitView(props: GitViewProps) {
     anchor.current = path;
   };
 
+  // REQ-GIT-109: the State column measured to its widest phrase. Each phrase is an inline-block that never wraps, so its
+  // width is its own text's and not the column's: widening the column cannot move the figure that widened it. The
+  // observer re-measures when a phrase changes size without the rows changing — a face finishing loading, the type scale.
+  const worktreeTable = useRef<HTMLTableElement | null>(null);
+  const [stateFit, setStateFit] = useState<number | null>(null);
+  const phraseKey = rows.map((r) => { const p = statePhrase(join.get(pathKey(r.path))); return `${p.status}\u0000${p.merge}`; }).join('\u0001');
+  useLayoutEffect(() => {
+    const table = worktreeTable.current;
+    if (!table) return;
+    const phrases = Array.from(table.querySelectorAll<HTMLElement>('.git__state-phrase'));
+    const measure = () => {
+      const cell = phrases[0]?.closest('td');
+      const style = cell ? getComputedStyle(cell) : null;
+      const padding = style ? (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0) : 0;
+      setStateFit(stateColumnFit(phrases.map((p) => p.getBoundingClientRect().width), padding));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    for (const p of phrases) observer.observe(p);
+    return () => { observer.disconnect(); };
+  }, [phraseKey]);
+
   const eligible = mergeEligible(rows, selected, join);
   const hasBranch = state?.isRepository === true && state.branch !== null;
   const existingBranches = rows.flatMap((r) => (r.branch === null ? [] : [r.branch]));
@@ -345,7 +386,7 @@ export function GitView(props: GitViewProps) {
             {rows.length === 0 ? (
               <DesignEmptyState className="empty-state git__empty" data-testid="git-worktrees-empty"><span className="empty-state-title">No Git worktrees found for this workspace.</span></DesignEmptyState>
             ) : (
-              <DesignTable className="table git__table git__worktree-table" aria-multiselectable="true" aria-label="Worktrees" aria-description="Scroll horizontally when the worktree columns exceed the card width.">
+              <DesignTable ref={worktreeTable} style={stateFit === null ? undefined : ({ '--git-state-fit': `${stateFit}px` } as CSSProperties)} className="table git__table git__worktree-table" aria-multiselectable="true" aria-label="Worktrees" aria-description="Scroll horizontally when the worktree columns exceed the card width.">
                 {/* Seven columns whose content floor is wider than this pane at the minimum window. The five
                     that cannot give way take the width they need; Branch and Session elide (UIR-002) and share
                     whatever is left. See `.git__worktree-table` in shell.css for the measured figures. */}
@@ -357,6 +398,7 @@ export function GitView(props: GitViewProps) {
                 <tbody>
                   {rows.map((row) => {
                     const b = join.get(pathKey(row.path));
+                    const phrase = statePhrase(b);
                     const isSelected = selected.has(row.path);
                     return (
                       <tr key={row.path} className={isSelected ? 'git__row is-selected' : 'git__row'} data-path={row.path} data-base={row.isBase ? '1' : '0'} data-active={row.isActive ? '1' : '0'} data-session={b?.sessionId ?? ''} aria-selected={isSelected} title={row.path} onClick={(e) => selectRow(e, row.path)}>
@@ -367,7 +409,7 @@ export function GitView(props: GitViewProps) {
                           {row.isActive && <DesignTag kind="accent" data-testid="git-tag-active">active</DesignTag>}
                         </td>
                         <td className="mono git__cell-session" title={b?.sessionId ?? '-'}>{b?.sessionId ?? '-'}</td>
-                        <td className="git__cell-state">{b?.status ?? 'idle'}<span className="git__merge-status text-secondary"> · {b?.mergeStatus ?? 'ready'}</span></td>
+                        <td className="git__cell-state"><span className="git__state-phrase">{phrase.status}<span className="git__merge-status text-secondary"> · {phrase.merge}</span></span></td>
                         <td className="mono">{emptyOr(row.ahead)}</td>
                         <td className="mono">{emptyOr(row.behind)}</td>
                         <td className="mono">{filesCell(row)}</td>

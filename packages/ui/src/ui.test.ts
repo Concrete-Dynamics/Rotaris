@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRecord, CheckpointListPayload, SessionListItemPayload } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
-import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
+import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, statePhrase, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
 import type { GitViewState, GitWorktreeRow } from '@rotaris/contracts';
 import { resolveTheme, isBusy, presentationStatus } from '@rotaris/contracts';
 
@@ -152,6 +152,19 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
     const join = joinBindings([row({ sessionId: 'A', status: 'completed', worktree: binding('D:\\ws\\.rotaris\\worktrees\\A\\') }), row({ sessionId: 'B', status: 'running', worktree: binding('d:/other') })]);
     expect(join.get('d:/ws/.rotaris/worktrees/a')).toMatchObject({ sessionId: 'A', status: 'completed', mergeStatus: 'ready' });
     expect(join.get('d:/ws')).toBeUndefined();
+  });
+  it('REQ-GIT-109: the State cell\'s phrase, and the State column sized to the widest phrase drawn plus the cell padding', () => {
+    const join = joinBindings([row({ sessionId: 'A', status: 'completed', worktree: binding('D:/ws/.rotaris/worktrees/A', { merge_status: 'merge_failed' }) })]);
+    expect(statePhrase(join.get('d:/ws/.rotaris/worktrees/a'))).toEqual({ status: 'completed', merge: 'merge_failed' });
+    expect(statePhrase(undefined)).toEqual({ status: 'idle', merge: 'ready' });
+    // The figures the unrepaired build painted at 1440x900: `idle · ready` 59.6 px, `completed · ready` 101.6 px, 8 px of
+    // padding each side. The column must hold the wider one whole — 76.3 px (10ch) did not
+    // (docs/defects/fixed/the-git-views-worktree-state-cell-overruns-the-ahead-column.md).
+    expect(stateColumnFit([59.6, 101.6, 59.6], 16)).toBe(118);
+    // Nothing measured — a renderer that lays nothing out — leaves the column at its CSS floor rather than at zero.
+    expect(stateColumnFit([0, 0], 16)).toBeNull();
+    expect(stateColumnFit([], 16)).toBeNull();
+    expect(stateColumnFit([Number.NaN, 40], 16)).toBe(56);
   });
   it('REQ-GIT-083: eligibility is completed + ready|merge_failed among the selected rows, in table order', () => {
     const rows = [wt({ path: 'D:/ws' }), wt({ path: 'D:/ws/.rotaris/worktrees/A', isBase: false, isActive: false }), wt({ path: 'D:/ws/.rotaris/worktrees/B', isBase: false, isActive: false })];

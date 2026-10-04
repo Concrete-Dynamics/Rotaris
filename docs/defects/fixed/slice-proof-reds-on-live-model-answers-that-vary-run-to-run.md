@@ -86,7 +86,10 @@ another host on the shared endpoint cannot be seen from here:
 | 2 | 13:08:42 | 0.43 to 2.60 | green, all seven; the run answered; intents `question` 1, `explicit_trivial` 1, `small_feature` 0.78 |
 | red | 13:15:51 | 2.10 to 2.33 | `--resume --from=sign-out` after run 2 (the provider already signed out): red at `sign-out`, its 16 files and `red.json` kept in `.proof/slice-proof-reds/2026-10-04T13-15-58-333Z-sign-out/`, still there after run 3 cleared `.proof/slice-proof/` |
 | 3 | 13:16:09 | 2.07 to 2.86 | green, all seven; the run answered; intents `question` 0.99, `explicit_trivial` 1, `small_feature` 0.88 |
+| 4 | 14:10:32 | 4.12 at the start, 2.16 at `intents-3` | repair round 1, build `0de4a7c`: red at `intents` (`intents-3`: "the classifier fell back … timed out after 12 s", naming OQ-114), the run having answered and `intents-1`/`-2` classified `question` 1 and `explicit_trivial` 0.99. Its 13 files and `red.json` kept in `.proof/slice-proof-reds/2026-10-04T14-17-02-811Z-intents/`. No other live run or slice-proof on this host (a `git-proof`, which calls no endpoint, started at 14:16) |
+| 5 | 14:17:32 | 0.52 to 1.71 | green, all seven; the run answered; intents `question` 0.99, `explicit_trivial` 1, `moderate_feature` 0.68 (a feature size, accepted; not a fallback) |
 
-No run met an answerless completion or a classification at the bound, so the re-run and the bound's red were exercised
-by the unit tests alone. The live-run scenario that would show the same classifier and run on the full product is
+Run 4 met the bound live: the fallback stayed a red, named OQ-114, and its evidence outlived run 5's clearing of
+`.proof/slice-proof/`. The 12 s figure itself is the owner's (OQ-114, whose 2026-10-04 addendum records run 4). No run met
+an answerless completion, so the re-run was exercised by the unit tests alone. The live-run scenario that would show the same classifier and run on the full product is
 `pnpm live-run`'s default set (the orchestrator's to launch).

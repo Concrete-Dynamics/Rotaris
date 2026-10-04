@@ -205,7 +205,8 @@ answered; a statement in it proved false; a measured alternative proved better.
   their authorities, never dropped;
 - the gate runs on the exact head that is pushed, before every push; main's history stays linear, a rebase and a
   fast-forward push and never a merge commit (the owner, 2026-10-04: "please always use rebase instead of a merge
-  commit for main."); nothing is forced, and a shared branch is never reset or rewritten;
+  commit for main."); nothing is forced or reset, and no branch is rewritten but a bundle's own unlanded one, by its
+  rebase onto main;
 - the verify and merge stages' model and effort, the repair budget and the needs-owner cap are never lowered;
 - the acceptance sweep, the autopsy, the record-every-finding step and the Done criteria are never reduced; the
   profile's `gate` is never narrowed;

@@ -25,8 +25,6 @@ template.
 `accept:sweep-1#<round>`, `accept:sweep-2#<round>`, `accept:live#<round>`, `accept:autopsy#<round>`. `deriveState`
 in `scripts/orchestration.mjs` reads them; change a label's shape only together with it and its self-test. The
 `merge:<key>` stage lands its bundle as a rebase and a fast-forward push since 2026-10-04; its label keeps the name.
-A plan's prompts other than the merge stage's are pinned byte for byte (the self-test hashes a fixed render), so a
-plan paused before that change resumes under the same instructions for every stage but its landing.
 
 ## Journals
 

@@ -321,17 +321,18 @@ function compile(script) {
 /**
  * Runs a rendered script against stub agents. `failVerify[key]` verifications of a bundle fail; `mergeRefuse[key]`
  * merges are refused; `block` keys report blocked; `lose` labels (or every label, with `loseAll`) come back empty;
- * `liveRefused` has the permission system refuse the live-runner's first launch.
+ * `liveRefused` has the permission system refuse the live-runner's first launch (`'second'`: its second, the first
+ * judged). Each agent's schema is kept beside its prompt.
  */
 export async function dryRun(script, { failVerify = {}, mergeRefuse = {}, mergeUnpushed = [], findings = [], block = [], lose = [], loseAll = false, liveRefused = false, quiet = true } = {}) {
-  const calls = [], prompts = {}, logs = []
+  const calls = [], prompts = {}, schemas = {}, logs = []
   let active = 0, peak = 0, activeMerges = 0, peakMerges = 0
   const counts = {}
   const agent = async (prompt, o) => {
     active++; peak = Math.max(peak, active)
     const [stage, rest] = [o.label.slice(0, o.label.indexOf(':')), o.label.slice(o.label.indexOf(':') + 1)]
     if (stage === 'merge') { activeMerges++; peakMerges = Math.max(peakMerges, activeMerges) }
-    calls.push(o.label + ' [' + o.effort + ']'); prompts[o.label] = prompt
+    calls.push(o.label + ' [' + o.effort + ']'); prompts[o.label] = prompt; schemas[o.label] = o.schema
     await new Promise((r) => setTimeout(r, 2))
     active--; if (stage === 'merge') activeMerges--
     if (loseAll || lose.includes(o.label)) return null
@@ -348,7 +349,10 @@ export async function dryRun(script, { failVerify = {}, mergeRefuse = {}, mergeU
     if (rest.startsWith('live')) {
       if (!liveRefused) return { head: 'h', runs: [] }
       const sent = [...prompt.matchAll(/^\d+\. [^:\n]*: `(.*)`$/gm)].map((m) => m[1])
-      return { head: 'h', runs: sent.map((command, i) => ({ what: 'run ' + (i + 1), command, passed: false, refused: true, pack: '', checks: 'none', fails: ['Permission for this action was denied'] })) }
+      return { head: 'h', runs: sent.map((command, i) => {
+        const judged = liveRefused === 'second' && i === 0
+        return { what: 'run ' + (i + 1), command, passed: judged, refused: !judged, pack: judged ? '/pack' : '', checks: judged ? 'PASS' : 'none', fails: judged ? [] : ['Permission for this action was denied'] }
+      }) }
     }
     if (rest.startsWith('autopsy')) return { report: 'r', findings: findings.map((f, i) => ({ id: 'F' + i, kind: 'product-defect', severity: 'degrades', title: 't' + i, detail: 'd', evidence: 'e', files: 'f', ...f })) }
     throw new Error('unexpected agent label ' + o.label)
@@ -357,7 +361,7 @@ export async function dryRun(script, { failVerify = {}, mergeRefuse = {}, mergeU
   const log = (m) => { logs.push(m); if (!quiet) console.log('LOG', m) }
   let timer
   const stalled = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('the dry run never finished: a bundle waits on one that never settles (last calls: ' + calls.slice(-3).join(', ') + ')')), 15000) })
-  try { return { result: await Promise.race([compile(script)(agent, parallel, log, () => {}, undefined), stalled]), calls, prompts, logs, peak, peakMerges } } finally { clearTimeout(timer) }
+  try { return { result: await Promise.race([compile(script)(agent, parallel, log, () => {}, undefined), stalled]), calls, prompts, schemas, logs, peak, peakMerges } } finally { clearTimeout(timer) }
 }
 
 // ------------------------------------------------------------------------------------------------ status
@@ -466,14 +470,21 @@ export async function selfTest({ quiet = false } = {}) {
       assert.ok(x.command.includes(liveProfile.run.acceptTree + '/') && !/[{}]|&&|^cd /.test(x.command), 'a live command names its tree absolutely, every token resolved: ' + x.command)
       assert.ok(liveRun.prompts['accept:live#1'].includes('`' + x.command + '`'), 'the live-runner is given each command exactly')
     }
+    assert.match(liveRun.prompts['accept:live#1'], /EXACTLY as written[\s\S]*no `cd`[\s\S]*launch nothing more[\s\S]*`refused: true`/, 'the live-runner sends each command as written and hands a refusal back')
+    assert.ok(['command', 'refused'].every((k) => liveRun.schemas['accept:live#1'].properties.runs.items.required.includes(k)), 'the live-runner must return each run\'s command and whether it was refused')
+    assert.match(liveRun.prompts['implement:a1'], /report it as not verified with the exact command you sent/, 'an authorised agent reports a refused launch with its command')
     // A refused launch is handed to the orchestrator: no later live-runner, no repair bundle of it, never `complete`.
     const refused = await dryRun(render(buildArgs(plan, liveProfile)), { liveRefused: true, findings: [{ kind: 'live-check-failed', area: 'live/run' }, { area: 'pkg/a/x.ts' }] })
     assert.equal(refused.result.status, 'live-handoff', 'a run whose live launches went to the orchestrator never reads complete')
     assert.ok(!refused.calls.some((c) => c.startsWith('accept:live#2')) && refused.calls.some((c) => c.startsWith('accept:autopsy#2')), 'after a refusal no later round starts a live-runner, and every round still has its autopsy')
-    assert.match(refused.prompts['accept:autopsy#1'], /none judged this round[\s\S]*handed to the orchestrator[\s\S]*NO finding of yours/, 'the autopsy is told a refused live run is no finding')
+    assert.match(refused.prompts['accept:autopsy#1'], /none judged this round[\s\S]*handed to the orchestrator[\s\S]*exactly ONE `live-check-failed` finding[\s\S]*`live runs handed to the orchestrator`/, 'the autopsy records the handed-off runs as one finding, in the hand-off area')
     assert.deepEqual(refused.calls.filter((c) => c.startsWith('implement:accept1-')), ['implement:accept1-1 [high]'], 'a failed live check no run made becomes no repair bundle')
     assert.match(refused.prompts['implement:accept1-1'], /Acceptance finding F1/)
     for (const a of refused.result.acceptance) assert.deepEqual(a.handoff.map((x) => x.command), liveProfile.run.live.runs.map((x) => x.command), 'round ' + a.round + ' hands the exact commands to the orchestrator')
+    const mixed = await dryRun(render(buildArgs(plan, liveProfile)), { liveRefused: 'second', findings: [{ kind: 'live-check-failed', area: 'live runs handed to the orchestrator' }, { kind: 'live-check-failed', area: 'live/x' }] })
+    assert.deepEqual(mixed.calls.filter((c) => c.startsWith('implement:accept1-')), ['implement:accept1-1 [high]'], 'a judged live run\'s failed check is repaired; the hand-off finding is not')
+    assert.match(mixed.prompts['implement:accept1-1'], /Acceptance finding F1/)
+    assert.equal(mixed.result.status, 'live-handoff')
     run = await dryRun(render(buildArgs({ id: 'st', bundles: [], acceptance: { rounds: 2 } }, profile)), { findings: Array.from({ length: 12 }, (_, i) => ({ area: 'd' + i + '/f.ts' })) })
     assert.ok(run.peak <= profile.run.repairPool, 'the repair pool bounds concurrency (peak ' + run.peak + ')')
 

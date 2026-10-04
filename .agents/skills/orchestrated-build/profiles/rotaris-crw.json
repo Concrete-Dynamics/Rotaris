@@ -22,6 +22,7 @@
       "run": "timeout 1500 xvfb-run -a -s \"-screen 0 1600x1000x24\" node apps/desktop/scripts/<name>.mjs --skip-build (drop --skip-build only where the script's header says it takes none; AGENTS.md's proof index says what each needs)"
     },
     "live": {
+      "note": "Each command names its own Node 24 binary, and the script judges the tree it sits in, whatever your directory. That tree needs the code-intelligence bundle, which the build does not make and without which a `--skip-build` launch refuses at once: run `pnpm code-intel:bundle` in it first (seconds when it is already there).",
       "runs": [
         {
           "what": "the default live run, every scenario",

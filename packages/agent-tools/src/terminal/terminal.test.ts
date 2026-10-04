@@ -83,9 +83,14 @@ const output = (text: string) => { const m = /\[(?:partial_)?terminal_output\]\n
  */
 const earlierOutput = (text: string) => { const m = /since it was last observed(?: \(truncated\))?:\n([\s\S]*?)\n\[(?:partial_)?terminal_output\]/.exec(text); return m ? m[1]! : ''; };
 const args = (a: Record<string, unknown>) => ({ command: '', is_input: false, reset: false, background: false, ...a }) as Parameters<Awaited<ReturnType<typeof tool>>['execute']>[0];
-/** A session of its own on the POSIX shell `file`, with a 1.5 s no-output window. */
-async function posixSession(file: string) {
-  const m = new TerminalManager({ factory: await nodePtyFactory(), backend: { kind: 'posix', file }, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+/**
+ * A session of its own on the POSIX shell `file`, with a 1.5 s no-output window; `env` is added to the host's environment,
+ * and `cols` is the width the display resized its PTY to before its first call (REQ-TOOLS-128).
+ */
+async function posixSession(file: string, opts: { env?: Record<string, string>; cols?: number } = {}) {
+  const env = { ...Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), ...opts.env };
+  const m = new TerminalManager({ factory: await nodePtyFactory(), backend: { kind: 'posix', file }, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env, warn: () => undefined });
+  if (opts.cols !== undefined) m.session(`${ctx().sessionId}:${ctx().agentName}`, root).resize(opts.cols, 50);
   return { m, t: terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }) };
 }
 
@@ -365,9 +370,53 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     // The printed end frame is never quoted, so a row the command printed is never mistaken for that echo.
     expect(ForegroundSession.clean([S, `${N}_e:%s ran`, `${E}:0`].join('\n'), S, E)).toBe(`${N}_e:%s ran`);
   });
+  it('REQ-TOOLS-127/128 (A10): the sideways-scrolled row is dropped at any width, also where it is too narrow to carry the whole end statement', () => {
+    // fin15's verification: at 40 and 50 columns, bash's readline (turned back on by an `$ENV` file) drew
+    // `<74a244a85f47_e:%s\n' "$?"` — a TAIL of the end statement, its nonce cut — and the interrupted call's poll read it.
+    // The rows below are the shapes measured at 20, 30, 40 and 50 columns, and every narrower tail down to one character.
+    const S = '__rot_0123456789abcdef01234567_s';
+    const E = '__rot_0123456789abcdef01234567_e';
+    const N = '__rot_bbbbbbbbbbbbbbbbbbbbbbbb';
+    const statement = `printf '${N}_e:%s\\n' "$?"`;
+    const measured = [`<:%s\\n' "$?"`, `<9e4b_e:%s\\n' "$?"`, `<6e1d01fbe65d_e:%s\\n' "$?"`, `<029724bbbeb5de911f_e:%s\\n' "$?"`];
+    const tails = Array.from({ length: statement.length }, (_, i) => `<${statement.slice(i)}`);
+    for (const scrolled of [...measured, ...tails]) {
+      expect(ForegroundSession.clean([S, 'done-later', '^C', scrolled].join('\n'), S, E, `${N}_s`)).toBe('done-later\n^C');
+    }
+    // What a command prints is kept: a row that only begins with `<`, a tail that is not the statement's, a nonce digit
+    // that is not hex.
+    for (const own of ['<', '<html>', `<${statement.slice(4, -2)}`, `<Z_e:%s\\n' "$?"`]) {
+      expect(ForegroundSession.clean([S, own, `${E}:0`].join('\n'), S, E)).toBe(own);
+    }
+  });
+  it('REQ-TOOLS-097/127/128: a frame the screen wraps — the display narrows it to 20 columns — is found across its rows, never handed over', () => {
+    // fin15's verification, measured under dash at 20 and 30 columns: every call's capture began with its own start frame
+    // and ended with its end frame and the prompt, broken across rows; a paused call's poll carried its own end frame or
+    // the next call's start frame. A frame is 32 or more columns wide, so below that width every frame wraps.
+    const nonce = '0123456789abcdef01234567';
+    const S = `__rot_${nonce}_s`;
+    const E = `__rot_${nonce}_e`;
+    const N = '__rot_bbbbbbbbbbbbbbbbbbbbbbbb';
+    const rowsOf = (line: string, cols: number): string[] => {
+      const out: string[] = [];
+      for (let i = 0; i < Math.max(1, line.length); i += cols) out.push(line.slice(i, i + cols).trimEnd());
+      return out;
+    };
+    for (const cols of [10, 20, 30, 33]) {
+      const screen = (lines: string[]) => lines.flatMap((l) => rowsOf(l, cols)).join('\n');
+      // A call's own capture: the start frame behind the prompt, the output, the end frame, the next prompt.
+      expect(ForegroundSession.clean(screen([`# ${S}`, 'ready', 'ready2', `${E}:0`, '# ']), S, E)).toBe('ready\nready2');
+      // Its last write had no newline: the end frame begins mid-row and wraps.
+      expect(ForegroundSession.clean(screen([S, `Property : ${E}:0`, '# ']), S, E)).toBe('Property :');
+      // A paused call closed by the next call's printed start frame, behind the prompt.
+      expect(ForegroundSession.clean(screen([S, 'done-later', '^C', `# ${N}_s`, 'next', `${N}_e:0`]), S, E, `${N}_s`)).toBe('done-later\n^C');
+    }
+  });
   it.runIf(process.platform !== 'win32')('REQ-TOOLS-097/127: the POSIX shell is started interactive with its own line editor off where it takes the options, and with -i alone where it does not', () => {
     if (bashAsSh) expect(posixShellArgs(bashAsSh)).toEqual(['+o', 'emacs', '+o', 'vi', '-i']);
-    if (existsSync('/bin/sh')) expect(posixShellArgs('/bin/sh')).toEqual(['+o', 'emacs', '+o', 'vi', '-i']);
+    // `/bin/sh` only where it is one of the two shells known to take them: a busybox `sh` may not, and is then started
+    // with `-i` alone, which is the product's fallback rather than a failure.
+    if (existsSync('/bin/sh') && /\/(?:dash|bash)$/.test(realpathSync('/bin/sh'))) expect(posixShellArgs('/bin/sh')).toEqual(['+o', 'emacs', '+o', 'vi', '-i']);
     expect(posixShellArgs(join(root, 'no-such-shell'))).toEqual(['-i']);
     // A shell that refuses the options: `false` exits nonzero whatever it is given.
     for (const f of ['/bin/false', '/usr/bin/false']) if (existsSync(f)) expect(posixShellArgs(f)).toEqual(['-i']);
@@ -1121,6 +1170,33 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       await wideEchoCase(t);
     } finally { await m.dispose(); }
   }, 90_000);
+
+  // fin15's verification, 2026-10-04: the display narrows the PTY (REQ-TOOLS-128, down to REQ-SHELL-100's 20 columns),
+  // and below 34 columns every frame wraps. Under dash at 20 columns each call's capture carried its own frames broken
+  // across rows, and a paused call's poll carried its own end frame or the next call's start frame.
+  it.skipIf(PS)('REQ-TOOLS-097/127/128: at the display\'s 20-column floor a call\'s capture and a paused call\'s poll carry no frame and no echo', async () => {
+    const { m, t } = await posixSession(shell!.file, { cols: 20 });
+    try {
+      const own = await t.execute(args({ command: `${SH.echo('ready')}; ${SH.echo('ready2')}`, timeout: 15 }), ctx());
+      expect(diag(own.text)['exit_code']).toBe(0);
+      expect(output(own.text)).toBe('ready\nready2');
+      await wideEchoCase(t);
+    } finally { await m.dispose(); }
+  }, 90_000);
+  // fin15's verification: where a startup file turns bash's readline back on, the sideways row it draws of the next call's
+  // wrapper is too narrow below about 50 columns to carry the whole end statement, and it reached the interrupted call's
+  // poll at 40 columns (`scrolledEcho` reads its tail).
+  it.runIf(bashAsSh !== null)('REQ-TOOLS-127/128 (A10): under bash as `/bin/sh` with its line editor turned back on by `$ENV`, no width lets the echo of a next call reach the paused call\'s poll', async () => {
+    const envFile = join(root, 'editor-on.sh');
+    writeFileSync(envFile, 'set -o emacs\n');
+    for (const cols of [20, 40, 240]) {
+      const { m, t } = await posixSession(bashAsSh!, { env: { ENV: envFile }, cols });
+      try {
+        expect(output((await t.execute(args({ command: 'set -o', timeout: 15 }), ctx())).text)).toMatch(/^emacs\s+on$/m);
+        await wideEchoCase(t);
+      } finally { await m.dispose(); }
+    }
+  }, 240_000);
 
   /**
    * ADR-0020's second first execution, 2026-09-12: four defects a real 22-minute run found. Each proof

@@ -680,3 +680,26 @@ line editor draws of a wrapper wider than the screen …" (red without `ECHOED_P
 started interactive with its own line editor off …". The whole file passed with the host's `dash` and, run once more
 with the session's shell overridden to the `bash` link, 82 passed and 1 skipped. **Could not show:** macOS, whose `/bin/sh` is a
 `bash` 3.2 (or a `zsh` or `dash` it is pointed at) and where no host has run it; Windows is untouched (PowerShell).
+
+**Corrected at its verification, the same day: no width was safe below the frames' own, nor the editor's row below
+about 50 columns.** FALSIFIED, kept above beside its replacement: "a row an editor still draws … is dropped by the end
+statement it carries (`ECHOED_POSIX_END`)". The display resizes the foreground PTY (REQ-TOOLS-128), down to
+REQ-SHELL-100's 20 columns, and readline's sideways window then shows only a TAIL of that statement, its nonce cut
+(`<74a244a85f47_e:%s\n' "$?"` at 40 columns, `<:%s\n' "$?"` at 20). Measured through a real PTY with a `sh` link to bash
+5.2 and an `$ENV` file that turns emacs editing back on: the row reached the interrupted call's poll at 40 and 50 columns,
+not at 80 or 240. Varying the width under `dash` found a second, older leak that no shell choice avoids: every capture
+read its frames row by row (a row that ends with the start marker, a row that carries a later marker, the end frame
+within one line), and a frame is 32 columns or more, so at 20 and 30 columns each call's capture began with its own
+wrapped start frame and ended with its wrapped end frame and the prompt, and a paused call's poll carried its own end
+frame or the next call's start frame; at 34 columns and wider nothing leaked. The capture now reads every marker across
+row breaks (`joinedRows`, `firstRowEnd`, the end frame matched with a break allowed between any two characters), and a
+row that is `<` followed by any tail of the end statement, matched against its template with a hex digit where the nonce
+stands, is dropped like the wider row (`scrolledEcho`). Re-measured after the repair: `dash` at 10, 20, 30, 33 and 40
+columns and the bash link with the editor on at 10, 20, 30, 40, 50 and 80 columns, both roads, nothing leaked. Pinned by
+"the sideways-scrolled row is dropped at any width …" and "a frame the screen wraps … is found across its rows …" (pure,
+red without the repair), "at the display's 20-column floor a call's capture and a paused call's poll carry no frame and
+no echo" (real PTY, the host's shell) and "under bash as `/bin/sh` with its line editor turned back on by `$ENV`, no width
+lets the echo of a next call reach the paused call's poll" (real PTY at 20, 40 and 240 columns), both red without it.
+Found on the way and recorded, not repaired here: PD-TOOLS-001's snapshot reads its `__rot_b64__:` rows one screen row
+at a time, so below 76 columns it decodes a corrupted environment
+([the note](../../defects/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md)).

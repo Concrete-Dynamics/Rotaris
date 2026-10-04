@@ -550,34 +550,87 @@ export function printsMarker(text: string, marker: string): boolean {
 const ECHOED_POSIX_WRAPPER = /printf ?'%s\\n' ?'__rot_[0-9a-f]{24}_s'; ?command ?eval ?(?:(?!printf ?'%s\\n' ?'__rot_)[\s\S])*?; ?printf ?'__rot_[0-9a-f]{24}_e:%s\\n' ?"\$\?"/g;
 
 /**
+ * Rows read as one text: joined with no separator, so a frame or an echo the screen broke across rows is met whole, with
+ * the row each offset falls on. The emulator gives the screen's rows (`ScreenEmulator.text`), and a row wraps wherever the
+ * screen's width falls (REQ-TOOLS-128: the display resizes the foreground PTY, down to its 20-column floor); the markers
+ * are per-call nonces, so no join of two rows a command printed spells one.
+ */
+function joinedRows(rows: readonly string[]): { readonly text: string; readonly rowAt: (offset: number) => number; readonly rowEnd: (row: number) => number } {
+  const ends: number[] = [];
+  let seen = 0;
+  for (const row of rows) { seen += row.length; ends.push(seen); }
+  const rowAt = (offset: number): number => {
+    let row = 0;
+    while (row < rows.length - 1 && ends[row]! <= offset) row += 1;
+    return row;
+  };
+  return { text: rows.join(''), rowAt, rowEnd: (row) => ends[row] ?? 0 };
+}
+
+/**
+ * The row on which the first occurrence of `marker` that ENDS a row ends, or -1: a printed frame is its own line (`printf
+ * '%s\n'`), whatever the shell's prompt put in front of it, while the echo of a wrapper carries it followed by `'`.
+ */
+function firstRowEnd(rows: ReturnType<typeof joinedRows>, marker: string): number {
+  for (let at = rows.text.indexOf(marker); at >= 0; at = rows.text.indexOf(marker, at + 1)) {
+    const row = rows.rowAt(at + marker.length - 1);
+    if (rows.text.slice(at + marker.length, rows.rowEnd(row)).trim() === '') return row;
+  }
+  return -1;
+}
+
+/**
  * A10: every row the echo of a POSIX wrapper occupies, dropped whole. The line discipline echoes what the product writes
  * as it arrives, onto whatever screen is collecting — the next call's wrapper lands on a soft-paused call's screen — and a
  * wrapper wider than the screen wraps. Dropping only the row that begins it (`printf '%s`) left its continuation rows,
  * the command's text and `printf '__rot_…_e:%s\n' "$?"`, in what the agent read. The rows are matched joined, with no
  * separator, so a break anywhere in the wrapper is no obstacle; the markers are per-call nonces, so no command spells one.
+ * A row a shell's own line editor drew of a wrapper, scrolled sideways (`scrolledEcho`), is dropped too.
  */
 function withoutEchoedWrappers(rows: readonly string[]): string[] {
-  const joined = rows.join('');
+  const { text, rowAt } = joinedRows(rows);
   const drop = new Set<number>();
-  const rowAt = (offset: number): number => {
-    let row = 0;
-    for (let seen = 0; row < rows.length - 1 && seen + rows[row]!.length <= offset; row += 1) seen += rows[row]!.length;
-    return row;
-  };
-  for (const m of joined.matchAll(ECHOED_POSIX_WRAPPER)) {
+  for (const m of text.matchAll(ECHOED_POSIX_WRAPPER)) {
     for (let r = rowAt(m.index); r <= rowAt(m.index + m[0].length - 1); r += 1) drop.add(r);
   }
-  rows.forEach((row, i) => { if (ECHOED_POSIX_END.test(row)) drop.add(i); });
+  rows.forEach((row, i) => { if (scrolledEcho(row)) drop.add(i); });
   return drop.size === 0 ? [...rows] : rows.filter((_, i) => !drop.has(i));
 }
 
 /**
  * The echo of a POSIX wrapper as a shell's own line editor draws a line wider than the screen when the editor cannot wrap
- * it: one row, scrolled sideways, its head replaced by `<` and its tail ending in the end statement
- * (`printf '__rot_…_e:%s\n' "$?"`), which the joined match above never meets because the row's head is gone. The printed
- * end frame is `__rot_…_e:<status>`, never quoted, so no row the command printed carries this; such a row is dropped whole.
+ * it (readline on a `dumb` terminal): one row, scrolled sideways, its head replaced by `<` and the rest the line's tail up
+ * to the cursor, which stands at the line's end — so the rest ends where the wrapper ends, in its end statement
+ * (`printf '__rot_…_e:%s\n' "$?"`). Where the screen is wide enough the rest carries that whole statement
+ * (`ECHOED_POSIX_END`); where it is not — below about 50 columns at bash's window — the rest is a TAIL of the statement
+ * (`<74a244a85f47_e:%s\n' "$?"` at 40 columns, `<:%s\n' "$?"` at 20), which is matched against the statement's template
+ * character by character, a hex digit where the nonce stands. Either way the row is dropped whole, at any width.
+ *
+ * FALSIFIED, kept beside its replacement (fin15's verification, 2026-10-04): "a row an editor still draws is dropped by
+ * the end statement it carries" — true only while the row is wide enough to carry the whole statement. Measured with a
+ * `sh` link to bash 5.2 and an `$ENV` file that turns emacs editing back on: at 40 and 50 columns the scrolled row reached
+ * the interrupted call's poll; at 80 and 240 it did not.
+ *
+ * The printed end frame is `__rot_…_e:<status>`, never quoted, and the printed start frame carries no `%s`, so a row the
+ * command printed matches neither form unless it prints this session's own wrappers: a `history` (bash) or `fc -l` listing
+ * loses each row that carries a quoted end statement, and a printed row that is `<` followed by the exact tail of one is
+ * taken for the echo. Both are the price of reading the echo by its shape; neither is a row any other command prints.
  */
+function scrolledEcho(row: string): boolean {
+  if (ECHOED_POSIX_END.test(row)) return true;
+  const r = row.trimEnd();
+  if (r.length < 2 || r[0] !== '<' || r.length - 1 > ECHOED_POSIX_END_TEMPLATE.length) return false;
+  const tail = ECHOED_POSIX_END_TEMPLATE.slice(ECHOED_POSIX_END_TEMPLATE.length - (r.length - 1));
+  for (let i = 0; i < tail.length; i += 1) {
+    const c = r[i + 1]!;
+    if (tail[i] === NONCE_DIGIT ? !/[0-9a-f]/.test(c) : tail[i] !== c) return false;
+  }
+  return true;
+}
 const ECHOED_POSIX_END = /'__rot_[0-9a-f]{24}_e:%s\\n' ?"\$\?"/;
+const NONCE_DIGIT = '#';
+/** `wrapCommand`'s POSIX end statement, its 24 nonce digits stood in for by `NONCE_DIGIT`. */
+const ECHOED_POSIX_END_TEMPLATE = `printf '__rot_${NONCE_DIGIT.repeat(24)}_e:%s\\n' "$?"`;
 
 /**
  * REQ-TOOLS-097/098/179, REQ-TOOLS-127 (`two-terminal-pty-tests-fail-on-main-in-this-environment`, 2026-10-04): the
@@ -591,8 +644,8 @@ const ECHOED_POSIX_END = /'__rot_[0-9a-f]{24}_e:%s\\n' ?"\$\?"/;
  * call's poll (A10's case; measured with a `sh` link to `/usr/bin/bash` 5.2 at 240 and 80 columns, while at 1,000 columns,
  * where the wrapper fits on one row, nothing leaked). `dash` has no line editor and takes the two options as a no-op.
  * Whether a shell accepts them is asked once per shell file, with the same arguments; one that refuses them is started
- * with `-i` alone, as before, and a row its editor draws is still dropped (`ECHOED_POSIX_END`). A startup file that turns
- * an editor back on (`$ENV`) meets the same drop.
+ * with `-i` alone, as before, and a row its editor draws is still dropped (`scrolledEcho`, at any width). A startup file
+ * that turns an editor back on (`$ENV`) meets the same drop.
  */
 export function posixShellArgs(file: string): readonly string[] {
   let off = EDITOR_OFF.get(file);
@@ -1147,22 +1200,33 @@ export class ForegroundSession {
     // 2026-09-16. A row that ENDS with the marker is the marker's row whatever stands in front of it, and the
     // marker is a per-call nonce, so no command can spell one to cut its own capture short (consequence 1).
     const lines = withoutEchoedWrappers(screenText.split('\n')).filter((l) => !l.includes('Write-Output (') && !l.includes("printf '%s"));
-    const startAt = lines.findIndex((l) => l.trimEnd().endsWith(start));
+    // Every marker below is looked for across row breaks (`joinedRows`), never within one row: a frame is as wide as its
+    // nonce (`__rot_` + 24 digits + `_s` is 32 columns, the end frame 34 or more), and the display may narrow the screen
+    // to 20 columns (REQ-SHELL-100), where every frame wraps.
+    // FALSIFIED, kept beside its replacement (fin15's verification, 2026-10-04): "a frame is one row: a row that ends with
+    // the start marker, a row that carries a later marker, the end frame within one line". Measured under dash at 20 and
+    // 30 columns: every call's capture began with its own wrapped start frame and ended with its wrapped end frame and the
+    // prompt, and a paused call's poll carried its own end frame or the next call's start frame; at 34 columns and wider
+    // nothing leaked.
+    const rows = joinedRows(lines);
+    const startAt = firstRowEnd(rows, start);
     let kept = startAt >= 0 ? lines.slice(startAt + 1) : lines;
     // A paused call closed with no frame of its own (A10) stops at the first row that carries the next call's start
     // marker in any form — printed, or in an echo of its wrapper that escaped the removal above: what follows is the
     // next call's, and after that the product's snapshot.
     if (until !== null) {
       const markers = typeof until === 'string' ? [until] : until;
-      const next = kept.findIndex((l) => markers.some((m) => l.includes(m)));
-      if (next >= 0) kept = kept.slice(0, next);
+      const keptRows = joinedRows(kept);
+      const found = markers.map((m) => keptRows.text.indexOf(m)).filter((at) => at >= 0);
+      if (found.length > 0) kept = kept.slice(0, keptRows.rowAt(Math.min(...found)));
     }
     let body = kept.join('\n');
     // The end frame is cut at its FIRST occurrence, wherever it sits. Removing whole LINES that began with it
     // left the marker in what the agent read whenever the command's last write had no trailing newline and the
     // frame landed mid-line — `Property          : __rot_…_e:0`, verbatim from the run of 2026-09-12. Detection
-    // in `onData` has always been unanchored; this is its sibling on the removal side (ADR-0020's note).
-    const at = body.search(new RegExp(`${end}:-?\\d+`));
+    // in `onData` has always been unanchored; this is its sibling on the removal side (ADR-0020's note). A row break
+    // may fall anywhere in it.
+    const at = body.search(new RegExp(`${[...`${end}:`].join('\\n?')}\\n?-?\\n?\\d`));
     if (at >= 0) body = body.slice(0, at);
     return body.split('\n');
   }

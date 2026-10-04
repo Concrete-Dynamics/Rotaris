@@ -47,7 +47,8 @@ first case's output (`__rot_…`, a run of `Q`, `"$?"`) is the second case's; th
   `+o emacs +o vi -i` where it accepts those options (`posixShellArgs` in
   `packages/agent-tools/src/terminal/foreground.ts`), so the echo is the line discipline's, and a row an editor still
   draws is dropped by the end statement it carries (`ECHOED_POSIX_END`). Each half alone made the case green under
-  bash; an `$ENV` file that turns the editor back on needs the second.
+  bash; an `$ENV` file that turns the editor back on needs the second. *Corrected at its verification (below): that
+  drop held only where the row is wide enough to carry the whole statement.*
 - **The first case was a test defect.** It used `${PIPESTATUS[0]}` as "a command sh cannot expand", which holds of
   `dash` only; `bash` expands it and exit 0 is right. The command now also carries `${a b}`, which no POSIX shell
   expands, so the case holds under both. `command eval` guards the line under `bash` too (`bash -i` printed the end
@@ -61,3 +62,32 @@ with its own line editor off …" (red without `posixShellArgs`). The terminal d
 with `dash`, and the whole file passed with its session shell overridden to the `bash` link (82 passed, 1 skipped).
 Reported back in [ADR-0020](../../architecture/adr/0020-terminal-execution.md), "Fifth first execution". Not shown:
 macOS, whose `/bin/sh` is `bash` 3.2 by default, has no host here.
+
+### Corrected at its verification — 2026-10-04 (fin15, repair round)
+
+The claim above that "a row an editor still draws is dropped by the end statement it carries" was false below about 50
+columns, a width the display reaches (REQ-TOOLS-128 resizes the PTY; REQ-SHELL-100's floor is 20 columns). Varying the
+**screen width** as well, through a real PTY, the interrupted road (road two) and the self-ended road (road one):
+
+| Variant | 10 | 20 | 30 | 33 | 40 | 50 | 80 |
+|---|---|---|---|---|---|---|---|
+| bash link, `$ENV` turns emacs back on, before | — | **leak** (tail row, next start frame) | **leak** (tail row, next start frame; road one: own end frame) | — | **leak** (tail row) | **leak** (tail row) | pass |
+| `dash`, before | **leak** (own end frame; next start frame) | **leak** (same; every capture carried its own frames and the prompt) | **leak** (same) | **leak** (own end frame) | pass | — | — |
+| bash link with `$ENV`, after | pass | pass | pass | — | pass | pass | pass |
+| `dash`, after | pass | pass | pass | pass | pass | — | — |
+
+Two causes, both in `ForegroundSession.cleanLines` (`packages/agent-tools/src/terminal/foreground.ts`):
+
+- readline's sideways row shows only a tail of the end statement at narrow widths (`<74a244a85f47_e:%s\n' "$?"` at 40
+  columns), which `ECHOED_POSIX_END` cannot match. `scrolledEcho` now also drops a row that is `<` followed by any tail of
+  the statement, checked against its template with a hex digit where the nonce stands.
+- every frame was looked for within one screen row, and a frame is 32 columns or more, so below 34 columns it wraps on
+  any shell. The start marker, the later markers and the end frame are now read across row breaks (`joinedRows`,
+  `firstRowEnd`).
+
+Pinned in `packages/agent-tools/src/terminal/terminal.test.ts`, each red without the repair: "the sideways-scrolled row is
+dropped at any width …" and "a frame the screen wraps … is found across its rows …" (pure), "at the display's 20-column
+floor a call's capture and a paused call's poll carry no frame and no echo" (real PTY, the host's shell) and "under bash as
+`/bin/sh` with its line editor turned back on by `$ENV`, no width lets the echo …" (real PTY at 20, 40 and 240 columns).
+CPU load was again varied under `dash` only. Found on the way and recorded open:
+[the shell-state snapshot is corrupted on a screen narrower than its rows](../the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md).

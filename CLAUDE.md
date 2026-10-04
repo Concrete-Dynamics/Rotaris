@@ -141,11 +141,12 @@ outlives its convention is deleted, not annotated.
 
 ## Where the work happens — a temporary branch in a temporary worktree
 
-**Every change is built on a temporary branch in its own temporary worktree, and lands on `main` by a merge
-the agent performs itself.** The primary checkout is not a place to write. Only trivially reversible,
+**Every change is built on a temporary branch in its own temporary worktree, and lands on `main` by a rebase
+and a fast-forward push the agent performs itself; `main`'s history is linear, with no merge commit** (the owner,
+2026-10-04: "please always use rebase instead of a merge commit for main."). The primary checkout is not a place to write. Only trivially reversible,
 single-file documentation edits may be made in place, and only when `git status` is clean.
 
-Steps, merge-conflict shapes, and the LF line-ending rule live in
+Steps, the conflict shapes a rebase replays, and the LF line-ending rule live in
 `docs/clean-room/agent-workflow.md` — read it before the first edit, not here.
 
 ## The architecture views — consult before, maintain after

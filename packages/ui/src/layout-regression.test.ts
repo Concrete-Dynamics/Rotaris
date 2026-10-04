@@ -54,10 +54,34 @@ describe('minimum-window layout regressions', () => {
     // and Branch elides (UIR-002) into whatever is left. `width: 100%` alone guaranteed the card never
     // scrolled, so the last column's overflow — 12 px — was simply outside the box. The figures are spelled
     // in `ch` because each floor is a word, and the adopted language takes no literal pixel.
-    expect(rule('.git__worktree-table')).toContain('min-width: 63ch');
+    // The table's minimum is the four fixed columns' 46ch, the 9ch the Branch heading needs, and whatever the State column
+    // takes (63ch until 2026-10-04: State a fixed 10ch, the next case says why it is not, and Branch 7ch, which cut its
+    // heading under Session at 1000x680).
+    expect(rule('.git__worktree-table')).toContain('min-width: calc(55ch + max(10ch, var(--git-state-fit, 10ch)))');
     expect(rule('.git__col-files')).toContain('width: 12ch');
     expect(rule('.git__col-actions')).toContain('width: 9ch');
     expect(rule('.git-card--table')).toContain('overflow-x: auto');
+  });
+
+  it('sizes the State column to its widest phrase over a 10ch floor, drawn whole on one line (REQ-GIT-109)', () => {
+    // A fixed 10ch held `idle · ready` and not a bound row's `completed · ready`, which ran on under the Ahead figure at
+    // 1440x900 (docs/defects/fixed/the-git-views-worktree-state-cell-overruns-the-ahead-column.md). The measured width
+    // arrives as `--git-state-fit` (GitView's `stateColumnFit`); the phrase never wraps, so it measures its own text.
+    expect(rule('.git__col-state')).toContain('width: max(10ch, var(--git-state-fit, 10ch))');
+    expect(rule('.git__col-state')).not.toMatch(/width:\s*10ch\s*(;|$)/u);
+    expect(rule('.git__state-phrase')).toContain('display: inline-block');
+    expect(rule('.git__state-phrase')).toContain('white-space: nowrap');
+  });
+
+  it('lets the Branch cell fill its column rather than a 22ch cap inside it (REQ-GIT-109, UIR-002)', () => {
+    // The cell is a flex box, not a table cell, so the cap held it to 158px of a 302px column at 1440x900 and cut the base
+    // row's `main` to `ma…` beside its tags. Session is a real table cell and keeps its cap.
+    // Read through grouped selectors too: the cap sat on `.git__cell-branch, .git__cell-session`, which `rule` does not see.
+    const bodies = (selector: string) => [...css.replace(/\/\*[\s\S]*?\*\//gu, '').matchAll(/([^{}]+)\{([^}]*)\}/gu)]
+      .filter((m) => (m[1] ?? '').split(',').some((s) => s.trim() === selector)).map((m) => m[2] ?? '');
+    expect(bodies('.git__cell-branch').length).toBeGreaterThan(0);
+    expect(bodies('.git__cell-branch').join(' ')).not.toContain('max-width');
+    expect(bodies('.git__cell-session').join(' ')).toContain('max-width: 22ch');
   });
 
   it('keeps the start-session dialog inside the 1000x680 minimum with its actions reachable (REQ-SHELL-022/125)', () => {

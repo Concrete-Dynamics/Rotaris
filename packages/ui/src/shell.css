@@ -1341,13 +1341,32 @@
    card carries the shell's type and the table does not. Each floor is the whole `ch` at or above it:
    Session 53→9, State 59→10, Ahead/Behind 49→8, Files 73→12, the Delete button 58→9, and 63ch of table so
    Branch keeps the ~45px remainder it elides into. */
-.git__worktree-table { min-width: 63ch; }
 .git__col-session { width: 9ch; }
-.git__col-state { width: 10ch; }
 .git__col-count { width: 8ch; }
 .git__col-files { width: 12ch; }
 .git__col-actions { width: 9ch; }
-.git__cell-branch, .git__cell-session { min-width: 0; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* FALSIFIED IN PART, 2026-10-04, kept above its replacement: "State 59→10" held for `idle · ready` only. A row bound to a
+   session draws its execution status there (REQ-GIT-109), and `completed · ready` measured 101.6px of text in a 76.3px
+   column at 1440x900 — it ran on under the Ahead figure, which painted over it (`completed · r0ady`;
+   `docs/defects/fixed/the-git-views-worktree-state-cell-overruns-the-ahead-column.md`). A phrase is not a word: both
+   vocabularies are closed, but their longest pairing would take a third of the pane from every table. So `10ch` stays the
+   FLOOR, and the column is as wide as the widest phrase the table shows — measured by GitView (`stateColumnFit`) into
+   `--git-state-fit`, the text plus the cell's padding — and the table's own minimum grows by what the column took beyond
+   its floor, so Branch keeps the remainder it elides into and the card scrolls as it already does. (`1ch` inside the
+   table measured 7.63px that day, not the 6.45 above; the floors are in `ch`, so they held.)
+   The table's minimum was `63ch`: 46ch for the four fixed columns, the State floor, and 7ch left to Branch. The same
+   measurement found that remainder short of the Branch HEADING it was meant to keep ("Branch 59 (heading; the cell
+   elides)" above): at 1000x680 the heading's text ran to 193.6px in a cell ending at 186.4, under Session. The cells
+   elide; a heading does not, so Branch keeps 9ch — the heading's 6.1ch of text and its 1.8ch of leading padding. */
+.git__worktree-table { min-width: calc(55ch + max(10ch, var(--git-state-fit, 10ch))); }
+.git__col-state { width: max(10ch, var(--git-state-fit, 10ch)); }
+.git__state-phrase { display: inline-block; white-space: nowrap; }
+/* The Branch cell is `display: flex` (below), so it is NOT a table cell: the browser wraps it in an anonymous one, and
+   until 2026-10-04 the `22ch` cap this rule gave both cells held the flex box to 158px inside a 302px column at 1440x900
+   — the base row's `main` cut to `ma…` beside its tags with 144px of its own column empty. The column (fixed layout)
+   already bounds the cell; the cap only stopped it filling its column. Session is a real table cell and keeps it. */
+.git__cell-branch, .git__cell-session { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git__cell-session { max-width: 22ch; }
 .git__cell-branch .git__branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* UIR-012: the history ran 2229.56 px inside a 754.75 px view, so its last row was cut by the status
    strip rather than by a row boundary. It scrolls inside its own card and ends on the card's edge. */

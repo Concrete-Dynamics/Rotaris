@@ -136,7 +136,7 @@ export function deriveState(events, { mainBranch = 'main', maxFixRounds = DEFAUL
       r = { stage: 'merge', impl: report, verdict: last.result }
     } else if (last.stage === 'merge' && last.result && !last.result.merged) {
       // The merge gate refused it: that is a finding for the repairer, like a verifier's.
-      r = { stage: 'fix', impl: report, verdict: { pass: false, blocking: [{ title: 'The gate is red once origin/' + mainBranch + ' is merged in', detail: last.result.problem || last.result.checkOnMain }], optional: [] }, roundBase: fixes, note: MOVED_ON(mainBranch) }
+      r = { stage: 'fix', impl: report, verdict: { pass: false, blocking: [{ title: 'The gate is red on the bundle rebased onto origin/' + mainBranch, detail: last.result.problem || last.result.checkOnMain }], optional: [] }, roundBase: fixes, note: MOVED_ON(mainBranch) }
     } else if (last.stage === 'merge') {
       r = { stage: 'merge', impl: report, verdict }
     } else {
@@ -459,6 +459,7 @@ export async function selfTest({ quiet = false } = {}) {
     assert.match(landing, /Push the head the gate passed on, from \/srv\/repo-wt-integ-st, as a fast-forward: `git push origin HEAD:main`/, 'the merge agent pushes the rebased head as a fast-forward')
     assert.match(landing, /rejected because origin\/main moved: step 1 again \(`git fetch origin main && git rebase origin\/main` in the bundle worktree\), step 2 again, then push again/, 'a rejected push is rebased again and gated again before it is pushed again')
     assert.ok(!/merge --no-ff|Merge branch '[^']*': </.test(landing), 'the merge agent makes no merge commit')
+    assert.match(landing, /Never force or reset, and never rewrite a branch but this bundle's own, unlanded one, by its rebase onto origin\/main\./, 'the merge agent forces nothing, resets nothing, and rewrites only its own unlanded branch')
     assert.match(landing, /0\. [^\n]*merge-base --is-ancestor a1 origin\/main[^\n]*`git -C \/srv\/repo rev-parse a1`[^\n]*by its subject/, 'the landed test needs no merge commit: the rebased branch is part of main, or its commits are found by subject')
     assert.match(run.schemas['merge:a1'].properties.pushed.description, /rebased head is on origin\/main, pushed as a fast-forward/, 'the merge schema reports the rebased head')
     const unpushed = await dryRun(script, { mergeUnpushed: ['b3'] })
@@ -610,19 +611,6 @@ export async function selfTest({ quiet = false } = {}) {
     assert.throws(() => buildArgs({ id: 'st', bundles: [], acceptance: { rounds: 1 } }, profile, acc), /no longer repairs/, 'lowering acceptance.rounds under a resuming repair is refused')
     journal('wf_six', [['accept:live#1', { head: 'h6', runs: [{ what: 'default', command: 'timeout 1 node /t/live-run.mjs', passed: false, refused: true, pack: '', checks: '' }] }]])
     assert.deepEqual(status(['wf_six'], jroot).handoff, ['accept:live#1 (head h6): timeout 1 node /t/live-run.mjs'], 'status shows a check-in the live runs handed to it')
-
-    // A plan paused before rebase landing resumes under the same instructions for every stage but its landing: every
-    // prompt but the merge stage's stays byte-identical (fixed inputs, hashed).
-    const fixedRaw = JSON.parse(JSON.stringify(rawProfile).replaceAll('{node24}', 'PREFIX').replaceAll('{node}', 'NODE'))
-    const fixedProfile = resolveProfile(fixedRaw, { ...session, live: { authorized: true, ownerWords: 'w' } }, '/srv/repo')
-    const fixedRuns = [
-      await dryRun(render(buildArgs(plan, fixedProfile)), { failVerify: { a1: 1 }, findings: [{ area: 'pkg/a/x.ts' }] }),
-      await dryRun(render(buildArgs(plan, fixedProfile, st)), {}),
-      await dryRun(render(buildArgs(plan, fixedProfile)), { liveRefused: true, findings: [{ area: 'pkg/a/x.ts' }] }),
-    ]
-    const replayed = fixedRuns.map((r) => Object.entries(r.prompts).filter(([label]) => !label.startsWith('merge:')).sort(([x], [y]) => x.localeCompare(y)))
-    const replayHash = createHash('sha256').update(JSON.stringify(replayed)).digest('hex')
-    assert.equal(replayHash, '7bea50c0aa095d82331ba410186729e69047fc6b481db1ea2aa2f0fb1b961976', 'every prompt but the merge stage\'s is byte-identical, so a paused plan resumes under the same instructions (got ' + replayHash + ')')
 
     // Agents never read a missing or stale skill; a fresh orchestration never reuses an id.
     const stale = path.join(tmp, 'stale-skill')

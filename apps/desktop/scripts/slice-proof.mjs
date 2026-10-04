@@ -9,7 +9,7 @@ import { primingProblem } from './lib/priming-report.mjs';
 import { proofEndpoint } from './lib/endpoint-registry.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { answerlessCompletion, answerRows, INTENTS, intentVerdict } from './lib/live-answers.mjs';
-import { hostLoad, keepRed } from './lib/proof-reds.mjs';
+import { hostLoad, keepEvidence, keepRed } from './lib/proof-reds.mjs';
 
 /**
  * The vertical slice's proof (Part K.4): sign in to a real OpenAI-compatible endpoint through the product and complete
@@ -43,7 +43,8 @@ import { hostLoad, keepRed } from './lib/proof-reds.mjs';
  *   3. run           — one real run: the leased bearer, a request to the endpoint, an agent row, a tool call
  *                      settled through the gate, usage figures, the terminal result. A run the product completed in
  *                      which the model wrote no answer is the model's call, not a requirement's (`lib/live-answers.mjs`):
- *                      it is reported, kept as `run.attempt-1.*` and run once more; a second such run is a red.
+ *                      it is reported, kept as `run.attempt-1.*` (and copied into `.proof/slice-proof-answerless/`)
+ *                      and run once more; a second such run is a red.
  *   3b. intents      — three more real runs, one prompt per intent family: the classifier's answer is a category
  *                      from the small slot, never the fallback (Part L; the first real run fell to it), and one of the
  *                      categories REQ-ORCH-006 and REQ-ORCH-021 leave in reach of the prompt (`INTENTS`, with the
@@ -368,7 +369,11 @@ if (!replay('run') && answerlessCompletion(stored.session, stored.rows, stored.e
   };
   writeFileSync(firstAttempt, `${JSON.stringify(attempt, null, 2)}\n`);
   for (const ext of ['.log', '.png']) renameSync(join(output, `run${ext}`), join(output, `run.attempt-1${ext}`));
-  console.error(`slice-proof: scenario 3's run ${attempt.session} completed (${attempt.stopReason}) without the model writing an answer (rows ${attempt.rowKinds.join(',')}); that is the model's call, not a requirement's. Running it once more; the first attempt is kept as run.attempt-1.log, .png and .json.`);
+  // The attempt is the evidence OQ-199 asks about, so it is also copied where the next run's clearing of the output does
+  // not reach, whether the run made once more goes green or red.
+  const head = spawnSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: repo, encoding: 'utf8' });
+  const keptAttempt = keepEvidence({ output, into: resolve(repo, '.proof', 'slice-proof-answerless'), label: 'run', record: 'answerless.json', only: (name) => name.startsWith('run.attempt-1.'), fields: { scenario: 'run', question: 'OQ-199', commit: head.status === 0 ? head.stdout.trim() : null, attempt } });
+  console.error(`slice-proof: scenario 3's run ${attempt.session} completed (${attempt.stopReason}) without the model writing an answer (rows ${attempt.rowKinds.join(',')}); that is the model's call, not a requirement's. Running it once more; the first attempt is kept as run.attempt-1.log, .png and .json, and in ${relative(repo, keptAttempt)}.`);
   log3 = await runLaunch();
   requests = runLogRequests(log3);
   stored = storedRun(log3);

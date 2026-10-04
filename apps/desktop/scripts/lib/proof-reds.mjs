@@ -13,23 +13,32 @@ import { join } from 'node:path';
 export const hostLoad = () => loadavg().map((v) => Math.round(v * 100) / 100);
 
 /**
- * Copies every file of `output` into `<reds>/<stamp>-<scenario>/`, beside a `red.json` that names the scenario, the error
- * (passed through `redact`, so no secret reaches it), the commit, the load and the results gathered so far. Returns the
- * directory. Never throws for an `output` that does not exist yet: the red is still recorded.
+ * Copies the files of `output` that `only` admits into `<into>/<stamp>-<label>/`, beside `record` (a JSON file holding
+ * `at`, `kept` and the given `fields`). Returns the directory. Never throws for an `output` that does not exist yet: the
+ * record is still written.
  */
-export function keepRed({ output, reds, scenario, error, results = null, commit = null, redact = (t) => t, at = new Date(), load = hostLoad() }) {
-  const dir = join(reds, `${at.toISOString().replace(/[:.]/g, '-')}-${scenario}`);
+export function keepEvidence({ output, into, label, record, fields = {}, only = () => true, at = new Date() }) {
+  const dir = join(into, `${at.toISOString().replace(/[:.]/g, '-')}-${label}`);
   mkdirSync(dir, { recursive: true });
   const kept = [];
   if (existsSync(output)) {
     for (const name of readdirSync(output)) {
       const from = join(output, name);
-      if (!statSync(from).isFile()) continue;
+      if (!statSync(from).isFile() || !only(name)) continue;
       copyFileSync(from, join(dir, name));
       kept.push(name);
     }
   }
-  const message = redact(error instanceof Error ? (error.stack ?? error.message) : String(error));
-  writeFileSync(join(dir, 'red.json'), `${JSON.stringify({ scenario, error: message, at: at.toISOString(), commit, load, kept, results }, null, 2)}\n`);
+  writeFileSync(join(dir, record), `${JSON.stringify({ ...fields, at: at.toISOString(), kept }, null, 2)}\n`);
   return dir;
+}
+
+/**
+ * Copies every file of `output` into `<reds>/<stamp>-<scenario>/`, beside a `red.json` that names the scenario, the error
+ * (passed through `redact`, so no secret reaches it), the commit, the load and the results gathered so far. Returns the
+ * directory. Never throws for an `output` that does not exist yet: the red is still recorded.
+ */
+export function keepRed({ output, reds, scenario, error, results = null, commit = null, redact = (t) => t, at = new Date(), load = hostLoad() }) {
+  const message = redact(error instanceof Error ? (error.stack ?? error.message) : String(error));
+  return keepEvidence({ output, into: reds, label: scenario, record: 'red.json', at, fields: { scenario, error: message, commit, load, results } });
 }

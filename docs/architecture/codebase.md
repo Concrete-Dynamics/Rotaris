@@ -776,7 +776,8 @@ three of five runs on 2026-10-03 went red on what the model answered or how long
 categories REQ-ORCH-006 and REQ-ORCH-021 leave in reach of it, the reason written beside each (`INTENTS`). The README
 question now admits `explicit_trivial`, which is [OQ-198](open-questions.md)'s to narrow. A fallback stays a red, and one
 at the 12 s bound names OQ-114. A run the product completed in which the model wrote no answer is reported as the model's
-call: it is kept as `run.attempt-1.*` and scenario 3 runs once more. A second answerless run is a red ([OQ-199](open-questions.md)
+call: it is kept as `run.attempt-1.*` (and in `.proof/slice-proof-answerless/`, which the next run does not clear) and
+scenario 3 runs once more. A second answerless run is a red ([OQ-199](open-questions.md)
 asks whether the product should complete such a run). Every red copies the output directory into
 `.proof/slice-proof-reds/<stamp>-<scenario>/` beside a `red.json` (the scenario, the error, the commit, the load, the results
 so far; `lib/proof-reds.mjs`), where the next run does not remove it. `results.json` records the host's load at each launch.

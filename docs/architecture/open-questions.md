@@ -9608,7 +9608,8 @@ ending, and the root execution record is not one (REQ-ORCH-072); even read acros
 (`packages/engine/src/children/orchestration.ts`, where a re-prompt follows only an ending with no call and no text).
 
 **What the build proceeds under.** The run completes as it did. `slice-proof` reports such a run as the model's, keeps its
-evidence (`run.attempt-1.log`, `.png` and `.json`: the session, the row kinds, the reasoning) and runs scenario 3 once more.
+evidence (`run.attempt-1.log`, `.png` and `.json`: the session, the row kinds, the reasoning; copied into
+`.proof/slice-proof-answerless/`, where the next run does not remove it) and runs scenario 3 once more.
 The second run is held to every check, and a second answerless run is a red that names both
 (`answerlessCompletion` in `apps/desktop/scripts/lib/live-answers.mjs`).
 

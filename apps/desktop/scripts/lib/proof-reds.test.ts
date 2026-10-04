@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { hostLoad, keepRed } from './proof-reds.mjs';
+import { hostLoad, keepEvidence, keepRed } from './proof-reds.mjs';
 
 const scratch: string[] = [];
 function dir(): string {
@@ -48,6 +48,21 @@ describe('keepRed', () => {
     expect(first).not.toBe(second);
     expect(readdirSync(first)).toEqual(['red.json']);
     expect(JSON.parse(readFileSync(join(second, 'red.json'), 'utf8')).kept).toEqual([]);
+  });
+});
+
+describe('keepEvidence', () => {
+  it('keeps only the files `only` admits, beside the named record, so an answerless attempt outlives the next run', () => {
+    const root = dir();
+    const output = join(root, 'slice-proof');
+    mkdirSync(output, { recursive: true });
+    for (const name of ['run.attempt-1.log', 'run.attempt-1.png', 'run.attempt-1.json', 'run.log', 'intents-1.log']) writeFileSync(join(output, name), name);
+    const at = new Date('2026-10-03T05:47:00.000Z');
+    const kept = keepEvidence({ output, into: join(root, 'slice-proof-answerless'), label: 'run', record: 'answerless.json', only: (name: string) => name.startsWith('run.attempt-1.'), fields: { scenario: 'run', question: 'OQ-199', commit: 'abc1234' }, at });
+    expect(kept).toBe(join(root, 'slice-proof-answerless', '2026-10-03T05-47-00-000Z-run'));
+    expect(readdirSync(kept).sort()).toEqual(['answerless.json', 'run.attempt-1.json', 'run.attempt-1.log', 'run.attempt-1.png']);
+    rmSync(output, { recursive: true, force: true });
+    expect(JSON.parse(readFileSync(join(kept, 'answerless.json'), 'utf8'))).toEqual({ scenario: 'run', question: 'OQ-199', commit: 'abc1234', at: '2026-10-03T05:47:00.000Z', kept: ['run.attempt-1.json', 'run.attempt-1.log', 'run.attempt-1.png'] });
   });
 });
 

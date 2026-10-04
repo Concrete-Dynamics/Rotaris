@@ -100,4 +100,7 @@ describe('slice-proof reads its answers through this module and keeps its reds',
     expect(proof).toMatch(/keepRed\(/);
     expect(proof).toMatch(/slice-proof-reds/);
   });
+  it('copies an answerless first attempt out of the output directory the next run clears', () => {
+    expect(proof).toMatch(/keepEvidence\(\{[^}]*'slice-proof-answerless'[^}]*only: \(name\) => name\.startsWith\('run\.attempt-1\.'\)/);
+  });
 });

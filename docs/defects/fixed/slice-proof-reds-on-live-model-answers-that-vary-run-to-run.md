@@ -66,7 +66,8 @@ past it:
   `tasks_complete`, REQ-ORCH-115 skips the completion classifier for the coordinator's report, REQ-TOOLS-180 is silent on
   a turn with neither text nor a tool call, and REQ-ORCH-095 (a delegated child's assessment) would count the two reads
   as `work_performed`. Scenario 3 reports such a run as the model's, keeps it as `run.attempt-1.log`, `.png` and `.json`
-  and runs once more; a second answerless run is a red naming both. Whether such a run should complete is the owner's:
+  (also copied, with an `answerless.json`, into `.proof/slice-proof-answerless/<stamp>-run/`, which the next run's clearing
+  does not reach, whichever way the second run goes) and runs once more; a second answerless run is a red naming both. Whether such a run should complete is the owner's:
   **OQ-199 — May a run complete when its entry role ended without writing an answer?**
 - **Every red's evidence is kept.** A red copies the output directory into `.proof/slice-proof-reds/<stamp>-<scenario>/`
   beside a `red.json` (scenario, redacted error, commit, load, results so far; `apps/desktop/scripts/lib/proof-reds.mjs`),

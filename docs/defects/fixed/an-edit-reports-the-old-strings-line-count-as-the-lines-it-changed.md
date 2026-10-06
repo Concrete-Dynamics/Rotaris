@@ -77,3 +77,11 @@ Pinned beside the earlier cases in `packages/agent-tools/src/tools/tools.test.ts
 in a newline the new one lacks, the reverse, and the verifier's mid-line case (`= 1;\n` -> `= 10; `), each message's counts
 equal to its row's header; and 300 seeded random single replacements over short lines, blank lines and newlines, each
 message's counts equal to its header. The first, the third and the random cases were red on the round-0 region.
+
+## Amended — 2026-10-06 (fin18, repair round 2)
+
+"A replacement that leaves no line reads "<k> lines removed at line <start> (+0 -<k>)"" used a word REQ-TOOLS-135 does not
+have: its success messages "report lines changed/created/inserted/replaced". Such a replacement now reads "<k> lines
+replaced by 0 at line <start> (+0 -<k>)", the requirement's own word, with the counts unchanged. Pinned in
+`packages/agent-tools/src/tools/tools.test.ts`, "a block removed outright is reported in REQ-TOOLS-135's word: replaced by
+0" (red on the round-1 wording).

@@ -335,8 +335,8 @@ function replacementMessage(rel: string, before: string, after: string, oldText:
   const by = a.slice(start, a.length - common);
   const { added, removed } = lineChanges(replaced, by);
   const k = replaced.length;
-  const what = by.length === 0 ? `${countNoun(k, 'line')} removed` : `${countNoun(k, 'line')} replaced by ${by.length}`;
-  return `Edited ${rel}: ${what} at line ${start + 1} (+${added} -${removed}).`;
+  // REQ-TOOLS-135's own word, "replaced", also when nothing is left: "3 lines replaced by 0" (until round 2, "3 lines removed").
+  return `Edited ${rel}: ${countNoun(k, 'line')} replaced by ${by.length} at line ${start + 1} (+${added} -${removed}).`;
 }
 
 /** Apply the single match: a level-1 match replaces the exact span; a window match replaces whole lines. */

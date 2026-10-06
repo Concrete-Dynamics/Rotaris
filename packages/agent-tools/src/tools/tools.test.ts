@@ -567,11 +567,11 @@ describe('REQ-TOOLS-135: an edit reports the lines it replaced and the lines it 
     expect(checked).toBe(300);
   });
 
-  it('a block removed outright is reported removed', async () => {
+  it('a block removed outright is reported in REQ-TOOLS-135\'s word: replaced by 0', async () => {
     writeFileSync(join(root, 'src/todos.js'), BEFORE);
     await readFileTool(state, fence).execute({ path: 'src/todos.js', offset: 1, limit: 2000, grep_context: 3 }, ctx());
     const r = await writeFileTool(state, fence).execute({ operation: 'edit', path: 'src/todos.js', old_string: OLD, new_string: '', replace_all: false }, ctx());
-    expect(r.text.replace(/ \(sha256 [0-9a-f]{64}\)$/, '')).toBe('Edited src/todos.js: 3 lines removed at line 3 (+0 -3).');
+    expect(r.text.replace(/ \(sha256 [0-9a-f]{64}\)$/, '')).toBe('Edited src/todos.js: 3 lines replaced by 0 at line 3 (+0 -3).');
     expect(readFileSync(join(root, 'src/todos.js'), 'utf8')).toBe('// head\n\n\n// tail\n');
   });
 });

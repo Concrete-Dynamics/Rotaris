@@ -555,7 +555,13 @@ What the model is handed for each of them is `toolSpec` (`run-host/tools.ts`): a
 ADR-0034 supplies one, otherwise the zod schema converted **as an input** (`io: 'input'`) — the shape of a call about to
 be made, in which a field carrying a `.default()` is optional as the parser treats it. Converted as an output, which was
 the default until 2026-09-16, such a field is advertised as required and the product states a contract it does not
-enforce.
+enforce. The gate checks a call against the schema the model was handed, so an MCP executor's `schema` is
+`advertisedSchemaCheck(inputSchema)` (`agent-tools/advertised-schema.ts`): the object record refined by zod's
+`z.fromJSONSchema` reading of the server's schema, with `format` read as an annotation. A call that fails it is refused at
+the gate exactly as a built-in tool's schema failure is (REQ-TOOLS-032; `invalid_request`, a `tool_error` issue) and never
+sent; a valid call is sent as written, nothing filled in or stripped. A schema the reader cannot compile leaves the tool
+callable under the object check alone, said once per process at info (REQ-MCP-052/055/059 drop no tool for its schema).
+Until 2026-10-06 the MCP `schema` was `z.record(z.string(), z.unknown())` and every object passed (live-run finding G3).
 
 The executors a port registers (`run-host/tools.ts`): `read_file`, `write_file`, `haet_read`, `haet_edit`/`haet`, `grep`,
 `glob`, `todo`, `terminal` (by shell presence, REQ-TOOLS-104), the three delegation tools when delegation is available,

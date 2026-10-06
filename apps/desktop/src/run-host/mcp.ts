@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { z } from 'zod';
 import { compareCodePoints, millis, REDACTION_MARK, redact, toIsoUtc, type Clocks, type Millis } from '@rotaris/kernel';
 import type { McpHealth, McpListing, McpProvisioning, McpSecretRow, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
 import { resolveUserDirs, WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
@@ -10,7 +9,7 @@ import {
   deriveSetupInvocation, DiagnosticSink, launchedProjectOf, mcpConfigurationForExecutionRoot, narrowAfterUpdate, renderMcpSection, resolvePersonaMcp,
   type Diagnostic, type DropReason, type LoadedConfiguration, type McpResolvedServer, type PersonaMcpSurface,
 } from '@rotaris/config';
-import { errorObservation, observation, type ToolExecutor } from '@rotaris/agent-tools';
+import { advertisedSchemaCheck, errorObservation, observation, type AdvertisedSchemaCheck, type ToolExecutor } from '@rotaris/agent-tools';
 import type { McpGrantEvidence, SessionWriter } from '@rotaris/engine';
 import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SETUP_SHUTDOWN_GRACE_MS, SessionConnections, ToolDiscovery, type Connected, type McpLog, type ServerDescription } from '@rotaris/mcp';
 
@@ -135,6 +134,10 @@ export class McpHost {
    * offered under its prefix — renders a different surface line, which is written. Cleared with the memo it shadows.
    */
   private readonly announced = new Map<string, Set<string>>();
+  /** The input schemas already said to be uncompilable, by server and reported tool name: said once per process. */
+  private readonly uncompiledSaid = new Set<string>();
+  /** Each discovered input schema compiled once: discovery is memoised, so every port of the process shares the object. */
+  private readonly schemaChecks = new WeakMap<object, AdvertisedSchemaCheck>();
   private readonly preparing = new Map<string, Promise<void>>();
   private readonly mcpLog: McpLog;
 
@@ -325,10 +328,24 @@ export class McpHost {
         });
       };
       for (const tool of server.tools) {
+        /*
+         * REQ-TOOLS-032: the gate checks a call against `schema`, and the model was handed `parameters` — the server's own
+         * input schema — so `schema` checks exactly that, and passes a valid call on unchanged (`advertisedSchemaCheck`).
+         * Until 2026-10-06 it was `z.record(z.string(), z.unknown())`, and a call missing required properties reached the
+         * server (live-run finding G3). A schema the validator cannot compile leaves the tool callable under the object
+         * check alone (REQ-MCP-052, REQ-MCP-055, REQ-MCP-059 drop no tool for its schema), said once at info.
+         */
+        let check = this.schemaChecks.get(tool.inputSchema);
+        if (!check) { check = advertisedSchemaCheck(tool.inputSchema); this.schemaChecks.set(tool.inputSchema, check); }
+        const uncompiledKey = `${server.name}\u0000${tool.reported}`;
+        if (!check.compiled && !this.uncompiledSaid.has(uncompiledKey)) {
+          this.uncompiledSaid.add(uncompiledKey);
+          this.deps.log(`mcp: the input schema of '${tool.callable}' on MCP server '${server.name}' could not be compiled (${check.reason ?? 'unknown reason'}); its calls are checked as an arguments object only and the server validates the rest (REQ-TOOLS-032)`);
+        }
         out.push({
           name: tool.callable,
           description: tool.description === '' ? `Tool ${tool.reported} of MCP server ${server.name}.` : tool.description,
-          schema: z.record(z.string(), z.unknown()),
+          schema: check.schema,
           parameters: { ...tool.inputSchema },
           label: (a) => `${tool.callable} ${Object.keys(a as Record<string, unknown>).sort(compareCodePoints).join(' ')}`.trim(),
           execute: async (a, tctx) => {

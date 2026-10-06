@@ -514,7 +514,10 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
           // ROTARIS_SCRIPT_MCP_ARGS: a JSON map from callable name to the arguments the scripted agent sends (Part T's proof; verification only).
           let scripted: Record<string, unknown> = {};
           try { scripted = JSON.parse(process.env['ROTARIS_SCRIPT_MCP_ARGS'] ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
-          const args = toolName in scripted ? scripted[toolName] : toolName === 'echo' ? { text: 'hello from the scripted agent' } : toolName === 'slow' ? { ms: 4_000 } : {};
+          // A renamed or prefixed fixture tool (`beta_echo`, `gamma_slow`) takes its original's arguments: since the gate checks
+          // an MCP call against the advertised input schema (REQ-TOOLS-032, live-run finding G3), `{}` for an `echo` is refused.
+          const original = toolName.replace(/^.*_(?=(echo|slow)$)/, '');
+          const args = toolName in scripted ? scripted[toolName] : original === 'echo' ? { text: 'hello from the scripted agent' } : original === 'slow' ? { ms: 4_000 } : {};
           yield ok<StreamPart>({ kind: 'text', delta: `Calling ${toolName} on ${mcpStep[1]}. ` });
           yield ok<StreamPart>({ kind: 'tool-call', callId, name: toolName, argsDelta: JSON.stringify(args) });
           yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });

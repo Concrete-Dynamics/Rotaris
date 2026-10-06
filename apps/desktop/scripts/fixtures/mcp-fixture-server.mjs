@@ -14,6 +14,8 @@
  *                          probe exists for): what `'auto'` does to it over our in-place transport is measured.
  *   --pid-file <path>      append this process's pid and a line per launch (the proof counts processes).
  *   --request-file <path>  append the method of every request received, one per line (a test counts probes).
+ *   --call-file <path>     append every `tools/call` as one JSON line, `{name, arguments}` exactly as received (the MCP
+ *                          proof's launch 2b: what reached the server, REQ-TOOLS-032).
  *   --client-file <path>   append the `clientInfo` of every `initialize` as one JSON line (who the client said it was,
  *                          REQ-STARTUP-158: the product version, never a literal).
  *   --rename-after <ms>    after the first tools/list, wait then publish `notifications/tools/list_changed`
@@ -36,6 +38,7 @@ const era = opt('--era', '2025');
 const pidFile = opt('--pid-file');
 const requestFile = opt('--request-file');
 const clientFile = opt('--client-file');
+const callFile = opt('--call-file');
 const renameAfter = Number(opt('--rename-after', '0'));
 const crashAfter = Number(opt('--crash-after', '0'));
 const initDelay = Number(opt('--init-delay', '0'));
@@ -77,6 +80,7 @@ function callTool(id, params) {
   const name = params?.name;
   const a = params?.arguments ?? {};
   calls += 1;
+  if (callFile) appendFileSync(callFile, `${JSON.stringify({ name, arguments: params?.arguments ?? null })}\n`);
   if (crashAfter > 0 && calls === 1) setTimeout(() => process.exit(3), crashAfter);
   if (name === 'echo') return reply(id, { content: [{ type: 'text', text: String(a.text ?? '') }] });
   if (name === 'slow') { setTimeout(() => reply(id, { content: [{ type: 'text', text: `slept ${a.ms ?? 0}` }] }), Number(a.ms ?? 0)); return; }

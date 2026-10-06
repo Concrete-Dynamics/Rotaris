@@ -2,7 +2,7 @@
  * The MCP proof (Part S): ADR-0033 and ADR-0034's first execution behind the real run host — the hand-written
  * fixture server (`fixtures/mcp-fixture-server.mjs`) declared three ways (global YAML, a workspace `.mcp.json`
  * with an envFile and an unknown key, a workspace YAML overlay), a persona carrying the three with a grant, a
- * denial and a rename, one stored secret, and ten launches against one scratch profile:
+ * denial and a rename, one stored secret, and eleven launches against one scratch profile:
  *
  *   1. discovery   — the prompt's MCP section character-exact and equal to the callable set; the inert grant reported
  *                    once; gamma's unknown key warned once per load; the discovery file byte-identical after the run;
@@ -13,6 +13,9 @@
  *                    (REQ-STARTUP-158 — the client carried a literal `0.1.0` until 2026-09-27).
  *   2. call        — `echo` end to end (tool.start before tool.finish, the result text, the row succeeded); `slow` beyond
  *                    `request_timeout: 2` fails naming the server and the connection serves the following `echo` (003/069).
+ *  2b. schema      — `echo` without its required `text` is refused at the gate (`invalid_request`, REQ-TOOLS-032's text, a
+ *                    `tool_error` issue referencing it) and never reaches the fixture; `beta_echo` with an extra property
+ *                    reaches it exactly as written (live-run finding G3).
  *   3. one process — two children calling alpha concurrently share one connection and one fixture process; a third
  *                    child after they end uses the same pid (067/068). The children's persona carries a `tool_restrictions`
  *                    list naming `read_file` and `echo`, and each child's row records that grant — `read_file` alone of its
@@ -381,6 +384,43 @@ const ROUND_OVER = `(() => {
   if (connected.length !== 1) throw new Error(`alpha connected ${connected.length} times; the connection should have served both calls`);
   const firstCall = /in (\d+) ms/.exec(connected[0])?.[1];
   results.call = { slow: slow[0].status, slowText: String(slow[0].entry.result ?? '').slice(0, 160), echo: echo[0].status, startBeforeFinish: true, connectMs: Number(firstCall), sessionLaunches: pidLines('alpha').length };
+}
+
+// ---- 2b. A call that fails the advertised input schema is refused at the gate -----------------------------------
+/*
+ * REQ-TOOLS-032 for an MCP tool (live-run finding G3, default run at 27a5127): the model is handed the server's own
+ * `inputSchema`, and a call that fails it is refused at the gate as `invalid_request` with a `tool_error` issue and never
+ * sent; a valid call reaches the server exactly as written. Until 2026-10-06 the gate checked an MCP call against a
+ * permissive record and `{}` for `echo` (whose schema requires `text`) was sent
+ * (docs/defects/fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md). The fixture's
+ * `--call-file` writes every `tools/call` it receives, so "never sent" and "unchanged" are read at the server.
+ */
+{
+  const calls = { alpha: join(output, 'schema.alpha.calls'), beta: join(output, 'schema.beta.calls') };
+  for (const f of Object.values(calls)) writeFileSync(f, '');
+  const asWritten = { text: 'sent as written', note: { kept: true } };
+  const r = await launch('schema', {
+    ROTARIS_CAPTURE_PROMPT: 'an invalid echo, then a valid one', ROTARIS_SCRIPT: 'mcp:alpha.echo,mcp:beta.beta_echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000',
+    ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ echo: {}, beta_echo: asWritten }),
+  }, { files: { global: globalYaml({ alphaFlags: ['--call-file', calls.alpha], betaFlags: ['--call-file', calls.beta] }) } });
+  const db = new Database(oneDatabase(), { readonly: true });
+  const s = latestSession(db);
+  const echo = toolRows(db, s.session_id, 'echo');
+  const betaEcho = toolRows(db, s.session_id, 'beta_echo');
+  const issues = db.prepare('SELECT kind, evidence_ref FROM issues WHERE session_id = ? ORDER BY ordinal').all(s.session_id);
+  db.close();
+  const received = (f) => readFileSync(f, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
+  const alphaCalls = received(calls.alpha);
+  const betaCalls = received(calls.beta);
+  const refusal = String(echo[0]?.entry.result ?? '');
+  if (echo.length !== 1 || echo[0].status !== 'failed' || echo[0].entry.failure_kind !== 'invalid_request') throw new Error(`echo without its required text was not refused as invalid_request: ${JSON.stringify(echo)}`);
+  if (!refusal.startsWith("The arguments for 'echo' do not match its schema (text: ") || !refusal.endsWith('Re-issue the call with corrected arguments.')) throw new Error(`the refusal is not REQ-TOOLS-032's text: ${refusal}`);
+  if (!issues.some((i) => i.kind === 'tool_error' && i.evidence_ref === `tool_call_evidence#${echo[0].entry.call_id}`)) throw new Error(`the refusal filed no tool_error issue referencing it: ${JSON.stringify(issues)}`);
+  if (alphaCalls.length !== 0) throw new Error(`the refused call reached the server: ${JSON.stringify(alphaCalls)}`);
+  if (betaEcho.length !== 1 || betaEcho[0].status !== 'ok') throw new Error(`the valid call did not succeed: ${JSON.stringify(betaEcho)}`);
+  if (JSON.stringify(betaCalls) !== JSON.stringify([{ name: 'echo', arguments: asWritten }])) throw new Error(`the valid call did not reach the server as written: ${JSON.stringify(betaCalls)}`);
+  if (lines(r.log, /could not be compiled/).length !== 0) throw new Error('a fixture schema was reported uncompilable');
+  results.schema = { refused: { status: echo[0].status, failureKind: echo[0].entry.failure_kind, text: refusal.slice(0, 200), reachedServer: alphaCalls.length }, valid: { status: betaEcho[0].status, receivedAsWritten: true } };
 }
 
 // ---- 3. One connection per server per session ---------------------------------------------------------------

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
 import type { LoadedConfiguration } from '@rotaris/config';
 import { nodeClocks } from '@rotaris/platform';
+import { buildPolicy, Gate, PendingApprovals, PolicyContext } from '@rotaris/agent-tools';
 import { configurationForExecutionRoot, grantEvidence, McpHost } from './mcp.js';
 
 /**
@@ -337,5 +338,106 @@ describe('McpHost.prepare\'s discovery lines (REQ-MCP-048, U4)', () => {
     const { mcp, cfg, lines } = host(false);
     await mcp.prepare(cfg, '/ws');
     expect(discoveryLines(lines).map((l) => l.message)).toEqual(["mcp: discovery of 'ci' listed 1 tool(s) in 508 ms"]);
+  });
+});
+
+/**
+ * Live-run finding G3 (default run at 27a5127): an MCP executor's `schema` was `z.record(z.string(), z.unknown())`
+ * while the model was handed the server's `inputSchema`, so the gate's REQ-TOOLS-032 check passed every object and a
+ * call missing three required properties was sent to the server
+ * (docs/defects/fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md). The executor now checks
+ * a call against the schema the model was given; a valid call is sent exactly as the model wrote it.
+ */
+describe('an MCP call checked against the input schema the model was given (REQ-TOOLS-032, REQ-SESSION-136, REQ-MCP-005)', () => {
+  // The schema serena advertised for `edit_memory` in that run (model-traffic line 28 of its requirements scenario).
+  const EDIT_MEMORY = {
+    type: 'object', title: 'applyArguments', required: ['memory_name', 'needle', 'repl', 'mode'],
+    properties: {
+      memory_name: { title: 'Memory Name', type: 'string' }, needle: { title: 'Needle', type: 'string' }, repl: { title: 'Repl', type: 'string' },
+      mode: { title: 'Mode', type: 'string', enum: ['literal', 'regex'] }, allow_multiple_occurrences: { title: 'Allow Multiple Occurrences', type: 'boolean', default: false },
+    },
+  };
+
+  function rig(inputSchema: Record<string, unknown>) {
+    const lines: { message: string; level: string }[] = [];
+    const mcp = new McpHost({ clocks: new FakeClock(), log: (message, level = 'info') => { lines.push({ message, level }); }, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
+    vi.spyOn(mcp.discovery, 'peek').mockReturnValue({ tools: [{ name: 'edit_memory', description: 'Replace content in a memory.', inputSchema }], failed: false } as unknown as ReturnType<typeof mcp.discovery.peek>);
+    const sent: { tool: string; args: Record<string, unknown> }[] = [];
+    vi.spyOn(mcp, 'connectionsFor').mockReturnValue({
+      connect: async () => ({ onToolsChanged: () => undefined }),
+      call: async (_server: string, _d: unknown, tool: string, args: Record<string, unknown>) => { sent.push({ tool, args }); return { isError: false, text: 'edited' }; },
+    } as unknown as ReturnType<typeof mcp.connectionsFor>);
+    const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'ci' };
+    const cfg = {
+      personas: { verifier: { mcp_servers: ['serena'], tools: [] } },
+      mcp: { servers: { serena: { name: 'serena', entry, origin: 'workspace', availability: { available: true }, description: {}, resolved: { command: 'ci', args: [] } } }, origins: { serena: 'workspace' }, diagnostics: [] },
+    } as unknown as LoadedConfiguration;
+    const surface = mcp.surfaceFor(cfg, '/ws', 'verifier', null);
+    const executors = mcp.executorsFor({ cfg, workspaceRoot: '/ws', role: 'verifier', surface, ctx: { sessionId: 'S1', writer: null }, remove: () => undefined, log: () => undefined });
+    const clock = new FakeClock();
+    const issues: Record<string, unknown>[] = [];
+    const settles: Record<string, unknown>[] = [];
+    let seq = 0;
+    const gate = new Gate({
+      sessionId: 'S1', workspaceRoot: '/ws', policy: new PolicyContext(buildPolicy({ preset: 'autonomous', workspaceRoot: '/ws' })), approvals: new PendingApprovals(clock),
+      attended: () => true, presenter: null, headlessPolicy: 'deny', abortHook: null, approvalTimeoutMs: 300_000,
+      executors: new Map(executors.map((e) => [e.name, e])), resolvePath: (p) => p, publicTool: () => false,
+      monotonic: clock, wall: clock, timers: clock, nextSequence: () => ++seq,
+      sink: {
+        decision: () => null, approvalRequested: () => undefined, pendingChanged: () => undefined, issue: (i) => { issues.push(i as Record<string, unknown>); },
+        timeline: () => undefined, toolOpen: () => ++seq, toolSettle: (_o, _open, s) => { settles.push(s as Record<string, unknown>); }, warn: () => undefined,
+      },
+    });
+    const dispatch = (args: Record<string, unknown>) => gate.dispatch({ callId: 'c1', name: 'edit_memory', rawArgs: args, persona: 'verifier', agentId: 'verifier', agentName: 'verifier' }, new AbortController().signal);
+    return { executors, dispatch, sent, issues, settles, lines };
+  }
+
+  it('G3: the run\'s call, missing three required properties, is refused at the gate as invalid_request and never sent', async () => {
+    const r = rig(EDIT_MEMORY);
+    const result = await r.dispatch({ content: 'notes', memory_name: 'req-104' });
+    expect(r.sent).toEqual([]);
+    expect(result).toMatchObject({ status: 'failed', isError: true });
+    expect(result.text).toContain("The arguments for 'edit_memory' do not match its schema");
+    expect(result.text).toMatch(/needle: .*; repl: .*; mode: /);
+    expect(result.text).toContain('Re-issue the call with corrected arguments.');
+    expect(r.settles[0]).toMatchObject({ failure_kind: 'invalid_request' });
+    expect(r.issues).toEqual([expect.objectContaining({ kind: 'tool_error' })]);
+  });
+
+  it('a value outside the advertised enum, or of the wrong type, is refused the same way', async () => {
+    const r = rig(EDIT_MEMORY);
+    const wrongMode = await r.dispatch({ memory_name: 'm', needle: 'a', repl: 'b', mode: 'glob' });
+    const wrongType = await r.dispatch({ memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal', allow_multiple_occurrences: 'yes' });
+    expect(r.sent).toEqual([]);
+    expect(wrongMode.text).toContain('mode: ');
+    expect(wrongType.text).toContain('allow_multiple_occurrences: ');
+  });
+
+  it('a valid call is sent unchanged: no default filled in, no property the schema does not name dropped', async () => {
+    const r = rig(EDIT_MEMORY);
+    const args = { memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal', extra: { kept: true } };
+    const result = await r.dispatch(args);
+    expect(result).toMatchObject({ status: 'ok', isError: false, text: 'edited' });
+    expect(r.sent).toEqual([{ tool: 'edit_memory', args }]);
+  });
+
+  it('the model is still handed the server\'s own input schema', () => {
+    const r = rig(EDIT_MEMORY);
+    expect(r.executors[0]!.parameters).toEqual(EDIT_MEMORY);
+  });
+
+  it('a schema the product cannot compile leaves the tool callable with the object check alone, said once at info (REQ-MCP-052, REQ-MCP-055, REQ-MCP-059)', async () => {
+    const conditional = { type: 'object', properties: { path: { type: 'string' } }, if: { required: ['path'] }, then: { required: ['mode'] } };
+    const r = rig(conditional);
+    const result = await r.dispatch({ path: 'a' });
+    expect(result).toMatchObject({ status: 'ok', text: 'edited' });
+    expect(r.sent).toEqual([{ tool: 'edit_memory', args: { path: 'a' } }]);
+    const notArgs = await r.dispatch('[1, 2]' as unknown as Record<string, unknown>);
+    expect(notArgs).toMatchObject({ status: 'failed' });
+    expect(r.sent).toHaveLength(1);
+    const said = r.lines.filter((l) => l.message.includes('could not be compiled'));
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatchObject({ level: 'info' });
+    expect(said[0]!.message).toContain("'edit_memory' on MCP server 'serena'");
   });
 });

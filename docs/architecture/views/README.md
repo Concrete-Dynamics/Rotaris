@@ -81,6 +81,12 @@ indices up to the new `highestHeld`), so an append or the last row's settle is s
 what follows. The **runtime view**'s §9 opening says so. No package, edge, process, channel, command or store column
 changed.
 
+**An MCP call is checked against the input schema the model was handed (REQ-TOOLS-032, REQ-SESSION-136; fin18, live-run
+finding G3).** `advertisedSchemaCheck` (`agent-tools/advertised-schema.ts`) gives the gate a zod schema that checks a JSON
+Schema without rewriting the call, and `McpHost.executorsFor` uses it for every MCP executor's `schema` in place of
+`z.record(z.string(), z.unknown())`; a schema it cannot compile keeps the object check and is said once at info. The
+**runtime view**'s `toolSpec` paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **Settings adopts a reload in one update of the whole form, and a permission mode written elsewhere wins (REQ-CONFIG-419,
 REQ-CONFIG-423; fin13).** The Settings hook holds the saved and pending values as one form (`SettingsForm`) and folds each
 `config:changed` through `adoptSnapshot`, so a second announcement in the same tick is rebased against what the first left;

@@ -16,6 +16,7 @@ export * from './confinement/index.js';
 export * from './policy.js';
 export * from './approvals.js';
 export * from './gate.js';
+export * from './advertised-schema.js';
 export * from './tools/types.js';
 export * from './tools/fence.js';
 export * from './tools/diff.js';

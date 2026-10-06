@@ -7,6 +7,7 @@ import { FakeClock } from '@rotaris/kernel';
 import type { ApprovalPayload } from '@rotaris/contracts';
 import { PendingApprovals, PresenterRegistry, type PresenterPort } from './approvals.js';
 import type { ToolHooks } from './gate.js';
+import { advertisedSchemaCheck } from './advertised-schema.js';
 import { anySchema, completeTruncatedJson, Gate, repairPayload, simpleExecutor, type GateDeps, type GateSink, type ToolCall } from './gate.js';
 import { buildPolicy, PolicyContext } from './policy.js';
 import { terminalTool, TERMINAL_DEFAULTS, type TerminalManager } from './terminal/index.js';
@@ -923,5 +924,72 @@ describe('PD-TOOLS-005: after one unanswered approval, a run treats the user as 
     const h = harness({ attended: false, presence: p });
     const r = await write(h, 'a.txt');
     expect(r.blockedReason).toBe(`${ASKED} No approval UI is available in this host, so the request was denied.`);
+  });
+});
+
+/**
+ * Live-run finding G3 (default run at 27a5127): a tool whose parameters are a JSON Schema — an MCP tool, handed to the
+ * model as its server's `inputSchema` — reached the gate with `anySchema`, so REQ-TOOLS-032's refusal never fired for it
+ * (docs/defects/fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md). `advertisedSchemaCheck`
+ * gives the gate a schema that checks the advertised one; the refusal takes the built-in tool's shape and record.
+ */
+describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCheck)', () => {
+  const ADVERTISED = { type: 'object', required: ['memory_name', 'needle'], properties: { memory_name: { type: 'string' }, needle: { type: 'string' }, site: { type: 'string', format: 'uri' }, limit: { type: 'integer', default: 10 } } };
+  function advertisedHarness(inputSchema: Record<string, unknown>) {
+    const sent: unknown[] = [];
+    const check = advertisedSchemaCheck(inputSchema);
+    const executor = simpleExecutor('edit_memory', 'e', check.schema, async (a) => { sent.push(a); return { text: 'edited', isError: false, outcomeKind: 'mcp' }; });
+    const h = harness({ preset: 'autonomous', extraExecutors: [['edit_memory', executor]], publicTool: (n) => n !== 'edit_memory' });
+    return { ...h, sent, check };
+  }
+
+  it('a call missing a required property is refused as invalid_request with a tool_error issue, and never executed', async () => {
+    const h = advertisedHarness(ADVERTISED);
+    const r = await h.gate.dispatch(h.call('edit_memory', { content: 'x', memory_name: 'm' }), new AbortController().signal);
+    expect(h.sent).toEqual([]);
+    expect(r).toMatchObject({ status: 'failed', isError: true });
+    expect(r.text).toBe("The arguments for 'edit_memory' do not match its schema (needle: Invalid input: expected string, received undefined). Re-issue the call with corrected arguments.");
+    expect(h.rec.settles[0]).toMatchObject({ status: 'failed', is_error: true, failure_kind: 'invalid_request' });
+    expect(h.rec.issues).toEqual([expect.objectContaining({ kind: 'tool_error', severity: 'warning' })]);
+    expect(h.rec.decisions).toHaveLength(0);
+  });
+
+  it('a valid call is executed with exactly the arguments the model wrote: no default filled, no unnamed property dropped', async () => {
+    const h = advertisedHarness(ADVERTISED);
+    const args = { memory_name: 'm', needle: 'n', extra: [1] };
+    const r = await h.gate.dispatch(h.call('edit_memory', args), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'ok', text: 'edited' });
+    expect(h.sent).toEqual([args]);
+  });
+
+  it('`format` is an annotation, as JSON Schema 2020-12 has it: a value the format would reject is not refused for it', async () => {
+    const h = advertisedHarness(ADVERTISED);
+    const r = await h.gate.dispatch(h.call('edit_memory', { memory_name: 'm', needle: 'n', site: 'not a uri' }), new AbortController().signal);
+    expect(r.status).toBe('ok');
+    expect(h.sent).toHaveLength(1);
+    // A property NAMED format is a property, not the keyword: its schema still binds.
+    const named = advertisedHarness({ type: 'object', required: ['format'], properties: { format: { type: 'string', enum: ['json', 'text'] } } });
+    const refused = await named.gate.dispatch(named.call('edit_memory', { format: 'xml' }), new AbortController().signal);
+    expect(refused.status).toBe('failed');
+    expect(named.sent).toEqual([]);
+  });
+
+  it('a schema the validator cannot compile keeps the object check alone, and says why', async () => {
+    const h = advertisedHarness({ type: 'object', if: { required: ['a'] }, then: { required: ['b'] } });
+    expect(h.check).toMatchObject({ compiled: false });
+    expect(h.check.reason).toMatch(/if\/then\/else/);
+    expect((await h.gate.dispatch(h.call('edit_memory', { a: 1 }), new AbortController().signal)).status).toBe('ok');
+    expect((await h.gate.dispatch(h.call('edit_memory', '"just a string"'), new AbortController().signal)).status).toBe('failed');
+    expect(h.sent).toEqual([{ a: 1 }]);
+    expect(advertisedSchemaCheck({ type: 'object', properties: { a: { $ref: 'https://example.invalid/s.json' } } }).compiled).toBe(false);
+    expect(advertisedSchemaCheck({ type: 'object', properties: { a: { type: 'string', pattern: '[unclosed' } } }).compiled).toBe(false);
+  });
+
+  it('local references and the usual composition keywords compile and bind', async () => {
+    const check = advertisedSchemaCheck({ type: 'object', properties: { a: { $ref: '#/$defs/Name' }, b: { anyOf: [{ type: 'string' }, { type: 'null' }] } }, $defs: { Name: { type: 'string', minLength: 2 } }, additionalProperties: false });
+    expect(check.compiled).toBe(true);
+    expect(check.schema.safeParse({ a: 'ok', b: null }).success).toBe(true);
+    expect(check.schema.safeParse({ a: 'x' }).success).toBe(false);
+    expect(check.schema.safeParse({ a: 'ok', c: 1 }).success).toBe(false);
   });
 });

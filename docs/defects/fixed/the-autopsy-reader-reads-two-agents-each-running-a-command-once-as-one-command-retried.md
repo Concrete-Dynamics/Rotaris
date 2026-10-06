@@ -32,3 +32,24 @@ tool-call record fields, `agent_name` among them, and REQ-SESSION-139's metrics 
   reaches the key.
 
 Noticed 2026-10-06 by the autopsy of the final duress live run at `27a5127` (H8); recorded by plan fin19 before any repair.
+
+## Outcome (2026-10-06, fin19, repaired)
+
+A retry is now keyed on what one agent ran again: the whole command (whitespace collapsed), the call's `session_action` and
+its `agent_name`. D6's repair stands: the whole command and the session action are still in the key. The script reader's
+`retriedCommands` (`apps/desktop/scripts/lib/autopsy-retries.mjs`) takes each call as `{ agent, args }`; `autopsy.mjs`
+passes the row's `agent_name` and prints `retried N× by <agent>: <command>`. The engine's `readAutopsy` keys
+`coherence.retried_commands` the same way, and each entry now carries `agent`.
+
+Pinned by "H8 (27a5127): the same command run once by each of two agents is no retry; the same agent running it twice still
+is" in `apps/desktop/scripts/lib/autopsy-retries.test.ts`, and "H8 (27a5127): a command is retried only by the agent that ran
+it again …" in `packages/engine/src/autopsy.test.ts`. Both use the pack's two calls: the suite by `wave2d-reconcile-docs` and
+by `wave3-verification-report`, then the latter's second run. Both were red before the repair, which printed or returned
+`times: 2` for the two agents' single runs. D6's cases still pass, now written as calls by one agent; the engine's literal
+gained `agent: 'a'`.
+
+Shown on the evidence pack's own store, a private copy of the pack's `workspace.db`:
+`node apps/desktop/scripts/autopsy.mjs <copy> 5a8e7446-12f6-4645-8d4c-882a1e1431a9`. Its output now equals the pack's
+`duress/autopsy.txt` except for the store path line, the trailing blank line, and the missing
+"retried 2×: cd …/workspace && node --test 2>&1 | tail -40". No other retried line appears, since no agent of that run ran a
+command twice.

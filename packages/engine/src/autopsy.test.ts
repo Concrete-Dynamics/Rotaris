@@ -371,7 +371,7 @@ describe('R-043 — the run-autopsy snapshot', () => {
     });
     const s = readAutopsy(dal, sid, clock.wall)!;
     expect(s.coherence.null_summary_on_stopped).toBe(true);
-    expect(s.coherence.retried_commands).toEqual([{ command: 'git status', times: 2 }]);
+    expect(s.coherence.retried_commands).toEqual([{ agent: 'a', command: 'git status', times: 2 }]);
     expect(s.failures).toEqual([]);
   });
 
@@ -391,9 +391,26 @@ describe('R-043 — the run-autopsy snapshot', () => {
       });
     });
     expect(readAutopsy(dal, sid, clock.wall)!.coherence.retried_commands).toEqual([
-      { command: `${cd}git diff`, times: 2 },
-      { command: 'true', session_action: 'query', times: 2 },
+      { agent: 'a', command: `${cd}git diff`, times: 2 },
+      { agent: 'a', command: 'true', session_action: 'query', times: 2 },
     ]);
+  });
+
+  it('H8 (27a5127): a command is retried only by the agent that ran it again — one run by each of two agents is no retry', () => {
+    const sid = plant('S-retry-agents', 'completed');
+    const suite = 'cd /tmp/rotaris-live-run/2026-10-06T01-47-53-900Z/workspace && node --test 2>&1 | tail -40';
+    // The pack's #137 (wave2d) and #300 (the continuation), then the continuation's own second run.
+    const calls: [string, Record<string, unknown>][] = [['wave2d-reconcile-docs', { command: suite }], ['wave3-verification-report', { command: suite }]];
+    const insert = (list: readonly [string, Record<string, unknown>][], from: number) => dal.transaction(() => {
+      list.forEach(([agent, args], i) => {
+        const entry = JSON.stringify({ timestamp: 't', agent_name: agent, tool_name: 'terminal', status: 'ok', elapsed_ms: 1, is_error: false, args, result: 'ok' });
+        dal.ringInsert('tool_calls', sid, (o) => dal.insertToolCall({ session_id: sid, ordinal: o, call_id: `h${from + i}`, agent_name: agent, tool_name: 'terminal', status: 'ok', started_at: 't', elapsed_ms: 1, is_error: 0, entry }));
+      });
+    });
+    insert(calls, 0);
+    expect(readAutopsy(dal, sid, clock.wall)!.coherence.retried_commands).toEqual([]);
+    insert([['wave3-verification-report', { command: suite }]], 2);
+    expect(readAutopsy(dal, sid, clock.wall)!.coherence.retried_commands).toEqual([{ agent: 'wave3-verification-report', command: suite, times: 2 }]);
   });
 
   it('reads nothing but the session record: the snapshot writes no row, no event, no timeline entry', () => {

@@ -157,8 +157,8 @@ for (const t of toolCalls) {
   const path = args !== null && typeof args === 'object' && !Array.isArray(args) ? str(args.path) : '';
   if (path !== '') reads.set(path, (reads.get(path) ?? 0) + 1);
 }
-// Keyed on the whole command and its session action (`lib/autopsy-retries.mjs`; finding D6 at 1763f7f).
-const retried = retriedCommands(toolCalls.filter((t) => t.tool_name === 'terminal').map((t) => parseJson(t.entry)?.args ?? null));
+// Keyed on the whole command, its session action and the agent that ran it (`lib/autopsy-retries.mjs`; D6 at 1763f7f, H8 at 27a5127).
+const retried = retriedCommands(toolCalls.filter((t) => t.tool_name === 'terminal').map((t) => ({ agent: t.agent_name, args: parseJson(t.entry)?.args ?? null })));
 // Per-model-key attribution: the store records no provider or model on the
 // usage.update payload (tokens and cost alone), so a child's tool calls go to
 // the model_key the children record carries, and the entry agent's to the
@@ -207,7 +207,7 @@ console.log(nullSummaryLine(row));
 // Asked only where a figure existed: `cost_qualifier` `unknown` makes 0 the correct total (live-run finding K2(b)).
 console.log(zeroCostLine(row));
 for (const [path, n] of [...reads.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(cut(`  read ${n}×: ${path}`));
-for (const r of retried) console.log(cut(`  retried ${r.times}×: ${r.label}`));
+for (const r of retried) console.log(cut(`  retried ${r.times}× by ${r.agent || '(no agent)'}: ${r.label}`));
 console.log('');
 console.log('### tool calls per model key (children from the children record by canonical name and lifetime, the entry agent from its launch audit, continuations, switches, overrides and fallbacks)');
 if (endpoints.size === 0) console.log('  none recorded');

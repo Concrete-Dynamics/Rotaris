@@ -38,8 +38,10 @@ record already decides, and every ruling it needs is named as the owner's rather
   this workflow repair the open notes and the live runs' findings. Each note stays open until its repair lands; OQ-114 to
   OQ-116 ~~are open~~ stood against the live runs' figures and blocked nothing in this plan; all three were ruled
   2026-10-06 ([R-071](../product/requests.md#r-071)).*
-- The ~~four~~ red proofs: ~~`transcript-proof`,~~ `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section
-  (OQ-56). *`transcript-proof` was recorded as passing on 2026-09-28 (REQ-CHAT-055's measurement round under R-062) and
+- The ~~four~~ red proofs: ~~`transcript-proof`,~~ `library-proof`, `part-h-proof`, ~~and `theme-proof`'s contrast section
+  (OQ-56)~~ *(`theme-proof` ran green whole, its contrast section included, at all three themes and five scales on
+  2026-10-06 on bundle `finacc3-accept1-3`'s head, load average 1.8 at its start: OQ-56 was ruled 2026-09-18 and its
+  token raised)*. *`transcript-proof` was recorded as passing on 2026-09-28 (REQ-CHAT-055's measurement round under R-062) and
   reopened the same day: its fix round passed four runs of six, never three in a row, on Linux, and fix round 2 two of six (nine passes in fifteen); ~~the per-increment cost
   no longer grows with depth, the pooled comparison stands about two thirds of a frame over at the median~~ *(fix round 1's
   reading: the per-increment cost at parity in its six traced pairs, the pooled comparison about two thirds of a frame over

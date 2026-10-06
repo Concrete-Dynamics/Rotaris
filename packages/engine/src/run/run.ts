@@ -452,9 +452,11 @@ export class Run {
   private readonly ports = new Set<ToolPort>();
   private portsClosed = false;
   /**
-   * REQ-MONITOR-105 with ADR-0024: whether this run closed its tool ports (`closePorts`, its teardown). A run that parked —
-   * at the message-limit pause or the plan gate — closed none, so a call of its that ignored its abort may still be under
-   * way, and its `tool_calls` ring row `running` is that call's, not a dead run's (the crash record's ring settle).
+   * REQ-MONITOR-105 with ADR-0024: whether this run closed its tool ports (`closePorts`, its teardown — and, since OQ-170's
+   * ruling on 2026-10-06, its park at the message-limit pause or the plan gate). Until the ruling a parked run closed none,
+   * so a call of its that ignored its abort might still be under way, its `tool_calls` ring row `running` that call's and
+   * not a dead run's, and the crash record's ring settle was skipped for it; a call that never returned kept its row
+   * `running` for good.
    */
   get closedItsPorts(): boolean { return this.portsClosed; }
   /** Live-run finding K1: the port the current iteration's root dispatches through — the one resolution `entryTools` reports. */
@@ -2565,6 +2567,9 @@ export class Run {
     // REQ-MONITOR-133/134 with OQ-128: no agent of this run steps again, so steering closes before anything is awaited and
     // a prompt still pending — for the entry role, whose iteration has closed — is recorded as not delivered.
     this.closeSteering('the run paused at the message limit');
+    // OQ-170, ruled 2026-10-06 (R-071): no agent of this run steps again, so its tool ports close here as they do at a
+    // teardown — every call still open settles `failed` (REQ-MONITOR-228), and one that returns later writes nothing.
+    this.closePorts();
     writer.appendRow('system', `Paused: ${count} message${count === 1 ? '' : 's'} reached the limit of ${limit}. Continue, double the limit, or cancel the run.`, true);
     this.sampler?.cancel();
     this.sampleTokens(false);
@@ -2665,6 +2670,9 @@ export class Run {
      * failed one (found by the fourth review of the repair of a-steering-prompt-pending-at-a-rest-is-lost).
      */
     this.closeSteering('the run was held at the plan gate');
+    // OQ-170, ruled 2026-10-06 (R-071): the gate's release starts the next run, so this run's tool ports close at the park
+    // as they do at a teardown — every call still open settles `failed` (REQ-MONITOR-228), and one that returns later writes nothing.
+    this.closePorts();
     writer.appendRow('system', `A plan is ready for your decision (cycle ${cycle}). Approve to release execution, revise to ask for another plan, or cancel the run.`, true);
     this.sampler?.cancel();
     this.sampleTokens(false);

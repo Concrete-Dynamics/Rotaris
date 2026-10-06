@@ -417,7 +417,9 @@ interface Live {
    * tool ports. A call of any of them that ignored its abort may still hold its `tool_calls` ring row `running`, so the
    * crash record's ring settle is skipped while one is here (`ownCallsMayRunOf`), not only while the LAST run is parked:
    * a later run that tore down does not re-arm the settle over an earlier one's rows. A run leaves the set once it has
-   * closed its ports. Which of a parked run's ports a park or a continue should close is OQ-170's.
+   * closed its ports. ~~Which of a parked run's ports a park or a continue should close is OQ-170's.~~ Since OQ-170's ruling
+   * (2026-10-06, R-071) a park closes its run's ports (`Run.closePorts` at the pause and at the gate), so a parked run
+   * leaves the set at the next continue like a torn-down one; the set is kept as the guard should a run ever end otherwise.
    */
   readonly portsOpen: Set<Run>;
   /**

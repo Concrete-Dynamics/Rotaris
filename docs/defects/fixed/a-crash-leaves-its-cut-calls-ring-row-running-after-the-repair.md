@@ -61,7 +61,7 @@ What that exception leaves is recorded apart, not repaired here: a parked run ne
 never returns keeps its ring row `running` for good (the pinning case's `stray` row reads `running` after the continuation
 run completes); a later run of this process that tears down re-arms the settle over the parked run's rows; and two processes
 over one workspace can leave a dead process's rows to a live one's skip —
-[`a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`](../a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md).
+[`a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`](a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md).
 No process observed the call's end, so its duration is NULL (`ToolCallSettle.elapsed_ms` admits null for this case alone),
 never invented. Neither clause that gives a settled call a duration governs this row: REQ-EVENTS-057's `tool.finish` duration is
 a **completed** call's, and this call did not complete; REQ-MONITOR-228's interval runs from a transcript row's start to the

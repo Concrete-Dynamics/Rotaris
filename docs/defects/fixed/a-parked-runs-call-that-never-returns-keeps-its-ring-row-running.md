@@ -4,7 +4,7 @@ A run that parks without tearing down — at the plan gate (REQ-ORCH-153) or at 
 never closes the tool ports it built (`Run.closePorts` runs only at the run's teardown), so the gate sink's `close`, which
 settles every open `tool_calls` ring row `failed` at an orderly end, never runs for it. The crash record's ring settle
 (`run/crash.ts` `settleDeadToolCalls`, the repair of
-[`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`](fixed/a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md))
+[`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`](a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md))
 deliberately skips a continue whose session still holds such a run (`ownCallsMayRun`, from `Run.closedItsPorts`), because a
 call of that run that ignored its abort may still be under way and its own settle still to come. Three residuals follow;
 each is reasoned from the code, none is measured in the built app:
@@ -24,7 +24,7 @@ each is reasoned from the code, none is measured in the built app:
 
 The transcript rows are not affected: the crash record answers those under REQ-SESSION-129 whatever the ring holds.
 
-**Residual 2 repaired 2026-10-01; residuals 1 and 3 wait on [OQ-170](../architecture/open-questions.md).** `Sessions` now
+**Residual 2 repaired 2026-10-01; residuals 1 and 3 wait on [OQ-170](../../architecture/open-questions.md).** `Sessions` now
 keeps, per live session, every run of this process that parked without closing its tool ports (`Live.portsOpen`,
 `packages/engine/src/sessions.ts`), and a continue passes `ownCallsMayRun` while any of them still has its ports open
 (`ownCallsMayRunOf`); a run leaves the set once it has closed them. A later run's teardown no longer re-arms the settle over
@@ -38,6 +38,20 @@ session stays live in it. That widens residual 3 — another process's dead rows
 settle over, are no longer settled by this process after a park — and it waits on the same question. Whether
 a park closes its run's ports, a continue abandons them, or ring rows carry a process identity is OQ-170's, raised with the
 reading the build proceeds under; the note stays open for residuals 1 and 3 until it is ruled.
+
+**Residuals 1 and 3 repaired 2026-10-06, as [OQ-170](../../architecture/open-questions.md) was ruled by the owner
+([R-071](../../product/requests.md#r-071)): a park closes its run's tool ports (plan fin21).** `Run.pauseAtLimit` and the
+plan gate's park now call `Run.closePorts`, as the teardown does, before anything of the park is written: every call still
+open is settled `failed` through the gate sink's `close` with the run's cut-off statement, and a call that returns later
+writes nothing (REQ-MONITOR-228, REQ-SESSION-129). A parked run therefore reports `closedItsPorts`, leaves `Live.portsOpen`
+at the next continue like a torn-down one, and no longer holds back the crash record's ring settle: residual 1's row is
+settled at the park, and residual 3's — a row no live call of this process holds — is settled as a crash's at the next
+continue. Pinned by `packages/engine/src/run/crash.test.ts`, "a park at the plan gate closes its run's ports: the call still
+open settles `failed` at the park, never left `running`", "a park at the message-limit pause closes its run's ports the
+same way" and "a continue after a park settles, as a crash's, a ring row no live call of this process holds", each red on
+`37f7a98`; the two cases that pinned the unrepaired behaviour (the `stray` row left `running`, and residual 2's skip over an
+earlier parked run) were replaced by them. A ring row still carries no process identity: with no park holding the skip,
+the one case left is a run still live in another process, whose session lock (ADR-0005) refuses the continue that would settle its rows.
 
 ## Specs
 

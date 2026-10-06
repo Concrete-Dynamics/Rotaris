@@ -8975,8 +8975,18 @@ park?** *(REQ-MONITOR-105, "a running tool renders as a pulsing in-progress row"
 no row may still render as in progress"; REQ-SESSION-129, a call that was under way and produced no result is a failure;
 REQ-ORCH-153 and REQ-ORCH-087, the plan gate and the message-limit pause, neither a termination; ADR-0024, the ring.
 Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the repair of residual 2 of
-[`a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`](../defects/a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md).
-Open.)*
+[`a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`](../defects/fixed/a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md).
+Open until 2026-10-06; ruled that day by the owner, and built.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** when a run parks at the plan gate or the
+message-limit pause, every tool call still open is marked failed — the run's tool ports are closed at the park, the same
+cleanup the app already runs when a run ends (`Run.closePorts` through the gate sink's `close`), so a call that returns
+later writes nothing. Read, where the ruling leaves it open, as: the park closes the ports before anything of the park is
+written; a parked run then holds no skip of the crash record's ring settle, so a ring row no live call of this process
+holds is settled at the next continue as a crash's; and ring rows gain no process identity. REQ-MONITOR-228 reads so; no
+requirement's text is departed from, so the ruling alone settles it. Built the same day (`Run.pauseAtLimit` and the plan
+gate's park, `packages/engine/src/run/run.ts`; plan fin21), and the note above is closed. The reading below is kept as the
+build proceeded under it until then.
 
 A run that parks — at the plan gate or at the message-limit pause — does not tear down, so it never closes the tool ports
 it built (`Run.closePorts` runs only at the teardown), and the run host's gate sink never settles the ring rows its calls

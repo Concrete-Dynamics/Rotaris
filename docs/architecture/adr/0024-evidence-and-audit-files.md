@@ -841,7 +841,10 @@ row is given (the call was interrupted by a crash before it completed and was no
   2026-10-01 the continue reads every such run of this process on the session (`Live.portsOpen`,
   `packages/engine/src/sessions.ts`), not only the last, so a later run's teardown does not re-arm the settle over an
   earlier parked run's rows (residual 2 of `a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`; what a
-  park or a continue does with the ports is OQ-170's). (This
+  park or a continue does with the ports is OQ-170's). *Ruled 2026-10-06 by the owner (OQ-170, R-071), and built (plan
+  fin21): a park closes its run's ports as the teardown does (`Run.closePorts` in `pauseAtLimit` and at the plan gate), so
+  every call still open settles `failed` at the park through the gate sink's `close`, a parked run reports
+  `closedItsPorts`, and the skip above no longer arises from a park; the note is closed.* (This
   reading first said "a run of this process closed its ports when it ended", which holds only for a teardown; the review
   of 2026-10-01 found the two parks that close none, and it was corrected here.)
 - **No duration is invented.** No process observed the call's end, so `elapsed_ms` is NULL on the row, its entry and its

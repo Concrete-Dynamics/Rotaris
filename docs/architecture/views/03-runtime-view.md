@@ -364,8 +364,11 @@ row still `running` settled `failed` with the crash's statement and a NULL durat
 (`settleDeadToolCalls`, REQ-SESSION-129 with ADR-0024: an orderly end settles them when the run's ports close, and a crash
 closes none — except at a continue while any run of this process on the session parked without closing its ports, the
 message-limit pause or the plan gate, `!Run.closedItsPorts` over every run in `Live.portsOpen` and not only the last, when
-a row still `running` may be its call still under way and is left to that call's own settle; which of a parked run's ports
-a park or a continue should close is OQ-170's), the stored approvals withdrawn, and the background
+a row still `running` may be its call still under way and is left to that call's own settle; ~~which of a parked run's ports
+a park or a continue should close is OQ-170's~~ *since OQ-170's ruling (2026-10-06, R-071) both parks close their run's
+ports as the teardown does — `Run.closePorts` in `pauseAtLimit` and at the plan gate, every open call settled `failed`
+through the gate sink's `close` — so a parked run holds no such skip and the exception is left with no park to arise
+from*), the stored approvals withdrawn, and the background
 sessions still recorded running and not held by this process ended by the crash. Loading a session records and
 settles nothing (clause 8), and neither does the user's cancel of one crash-left child while the session rests: it
 cancels that child and its descendants from where they stood, answers their own calls the crash cut off (no later crash

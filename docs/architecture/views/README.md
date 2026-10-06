@@ -128,6 +128,12 @@ force-killed 2 s after any stop — Cancel, a switch's cancellation, an exhauste
 and a budget had REQ-MCP-099's 5 s (`SETUP_TERMINATE_GRACE_MS`). The **process view**'s `mcp.setup` paragraph and the
 **runtime view**'s application end say so. No package, edge, process, channel, command or store column changed.
 
+**A parked run closes its tool ports (REQ-MONITOR-228, REQ-MONITOR-105, REQ-SESSION-129, REQ-ORCH-153, REQ-ORCH-087;
+OQ-170 ruled by R-071, fin21).** `Run.pauseAtLimit` and the plan gate's park call `Run.closePorts`, as the teardown does, so
+every tool call still open settles `failed` at the park and a parked run no longer holds back the crash record's ring
+settle; `docs/defects/fixed/a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md` is closed. The **runtime
+view**'s §2 crash paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A board run that stops at its iteration limit rests in Blocked (REQ-TRACE-477/482/463; OQ-180 ruled by R-071,
 fin21).** Main's coordinator classifies `stopped` as `failed` (`outcomeOf`), so the card is held with a `run-failure`
 blocker and automatic scheduling no longer restarts it; only `cancelling` ends `cancelled`. The **sequences view**'s board

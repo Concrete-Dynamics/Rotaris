@@ -91,8 +91,11 @@ PASS, 0 FAIL, 5 NOTE), finding H6 of its autopsy. Six agents made a first `write
 refused**, each sending `path` and `content` with no `operation`:
 
 - **#81** `wave1a api reference`, **#82** `wave1b branch tests`, **#176** `wave2e design decisions` and **#278**
-  `wave3 verify result` (`workspace.db`, `tool_calls`); the same child's second attempt, #283, was refused too. Each
-  refusal filed a `tool_error` issue, as the schema gate's repair made it do.
+  `wave3 verify result` (`workspace.db`, `tool_calls`); the same child's second attempt, #283, was refused too. Its third,
+  #284, did name `operation: "create"` and was refused for another reason: its path, `/tmp/rotaris-check-cites.py`, lies
+  outside the workspace ("Path '…' is outside workspace root '…'"), not for `operation` (read from the pack's
+  `tool_calls` on 2026-10-06, fin21). Each `operation` refusal filed a `tool_error` issue, as the schema gate's repair made
+  it do.
 - The two first uses that succeeded were #83 (`wave1c repo overview`) and #324 (the continuation).
 - **Regenerating cost 179.4 s and 16,966 output tokens** (`duress/model-traffic.jsonl`, 0-based): #39 33.2 s and 3,039
   tokens; #41 33.4 s and 2,852; #100 97.0 s and 9,777; #185 6.4 s and 416; #190 9.4 s and 882. Only the failed child's

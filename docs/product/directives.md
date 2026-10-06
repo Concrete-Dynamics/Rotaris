@@ -3455,6 +3455,13 @@ wrong, rather than telling it so first. The result says what was read, so the mo
 > write in any session, whose arguments the record stores cut to a string. Since fin23 the check reads every session the
 > run keeps, reads cut arguments, and reports a fenced refusal without failing it:
 > [`the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`](../defects/fixed/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md).
+>
+> **The fence it judges by, 2026-10-06 (fin25).** fin23 judged every session's fence by the sandbox's workspace, while a
+> requirements run is fenced to its worktree under `<workspace>/.rotaris/requirements/worktrees/…` (the requirements
+> session's ordinal 66 at `c2a9444` was refused "outside workspace root '<that worktree>'"), so a create-shaped call naming
+> a workspace path outside the worktree would have read as the old shape. Since fin25 each session is judged by the fence
+> its own record names (`fenceRootOf`, the session's `worktree` before its `workspace_root`):
+> [`the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md`](../defects/fixed/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md).
 
 ---
 

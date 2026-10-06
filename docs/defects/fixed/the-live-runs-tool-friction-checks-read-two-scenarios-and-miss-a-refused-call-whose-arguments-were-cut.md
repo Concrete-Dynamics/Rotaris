@@ -61,6 +61,10 @@ Repaired 2026-10-06 by fin23 (bundle `fin23-summary-and-live-checks`).
 - **A fenced path.** PD-TOOLS-007's first execution reads "a path the fence refuses is not read as anything, and is refused
   as before". A refused create-shaped call whose path lies outside the run's workspace (`outsideWorkspace`) is reported
   as `refusedFenced` beside the passing check, not failed: the c2a9444 requirements session's ordinal 62 is one.
+  *fin25, 2026-10-06:* "outside the run's workspace" was the wrong fence for a requirements session, which is fenced to its
+  worktree; `outsideWorkspace` is gone, and each session is judged by the root its own record names (`fenceRootOf` and
+  `outsideFence` in `apps/desktop/scripts/lib/tool-frictions.mjs`;
+  `docs/defects/fixed/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md`).
 
 Pinned by `apps/desktop/scripts/lib/tool-frictions.test.ts`: a refused whole-file write cut to a string, with and without
 the marker, is the old shape; cut arguments naming an operation, carrying `old_string`, or cut before their path, are not;

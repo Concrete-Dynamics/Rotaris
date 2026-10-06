@@ -17,6 +17,8 @@
  *
  * Nothing here is product code. It runs only from the live run.
  */
+import { realpathSync } from 'node:fs';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { refusalIssues } from './refusal-issues.mjs';
 
 const CREATE_FIELDS = new Set(['path', 'file_path', 'content']);
@@ -147,16 +149,51 @@ export function todoActiveReadings(calls) {
 }
 
 /**
- * The readings above, and REQ-SESSION-136's for the gate's refusals (`refusalIssues`), over every session the run
- * preserved: `sessions` is `[{ scenario, calls, issues }]`, each call tagged with its scenario in what comes back. `read`
- * names the scenarios read, so a NOTE that nothing arose can say where it looked.
+ * The root a session's write fence stands on (REQ-TOOLS-130), from its `sessions` row: the requirements worktree its record
+ * holds (`worktree`'s `worktree_path`), else its `workspace_root`; null where the row names neither. A requirements run is
+ * fenced to its worktree under `<workspace>/.rotaris/requirements/worktrees/…`, not to the workspace: the c2a9444 pack's
+ * requirements session refused its ordinal 66 "Path '…' is outside workspace root '<that worktree>'". Until fin25 the live run
+ * judged every session by the sandbox's workspace
+ * (docs/defects/fixed/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md).
  */
-export function runWideReadings(sessions, { outside = () => false } = {}) {
+export function fenceRootOf({ workspace_root: workspaceRoot, worktree }) {
+  if (typeof worktree === 'string' && worktree !== '') {
+    try {
+      const path = JSON.parse(worktree)?.worktree_path;
+      if (typeof path === 'string' && path !== '') return path;
+    } catch { /* an unreadable binding: the workspace root */ }
+  }
+  return typeof workspaceRoot === 'string' && workspaceRoot !== '' ? workspaceRoot : null;
+}
+
+/**
+ * Whether the write fence rooted at `root` refuses `path`, as `checkFence` (`packages/agent-tools/src/tools/fence.ts`) reads
+ * it with `allow_outside_workspace` off: a relative path resolved against the root, outside both the root as given and its
+ * real path.
+ */
+export function outsideFence(root, path) {
+  const roots = [root];
+  try { roots.push(realpathSync(root)); } catch { /* the sandbox is gone: the root as given */ }
+  return roots.every((r) => {
+    const rel = relative(r, isAbsolute(path) ? path : resolve(r, path));
+    return rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel);
+  });
+}
+
+/**
+ * The readings above, and REQ-SESSION-136's for the gate's refusals (`refusalIssues`), over every session the run
+ * preserved: `sessions` is `[{ scenario, calls, issues, fenceRoot? }]`, each call tagged with its scenario in what comes
+ * back. `read` names the scenarios read, so a NOTE that nothing arose can say where it looked. A path is judged against the
+ * session's own fence (`fenceRoot`, from `fenceRootOf`) by `outside(path, session)`, which defaults to `outsideFence` on it
+ * and to nothing being outside where a session names no root.
+ */
+export function runWideReadings(sessions, { outside = (path, session) => (typeof session.fenceRoot === 'string' ? outsideFence(session.fenceRoot, path) : false) } = {}) {
   const tag = (scenario, list) => list.map((call) => ({ ...call, scenario }));
   const out = { read: sessions.map((s) => s.scenario), refused: [], unfiled: [], inferred: [], refusedInferable: [], refusedFenced: [], severalActive: [], phantoms: [] };
-  for (const { scenario, calls, issues } of sessions) {
+  for (const session of sessions) {
+    const { scenario, calls, issues } = session;
     const { refused, unfiled } = refusalIssues(calls, issues);
-    const writes = writeSelectorReadings(calls, { outside });
+    const writes = writeSelectorReadings(calls, { outside: (path) => outside(path, session) });
     const todo = todoActiveReadings(calls);
     out.refused.push(...tag(scenario, refused));
     out.unfiled.push(...tag(scenario, unfiled));

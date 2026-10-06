@@ -28,3 +28,19 @@ refuses is not read as anything, and is refused as before") and REQ-TOOLS-130 (t
 - `apps/desktop/scripts/lib/tool-frictions.mjs` — `writeSelectorReadings`, `runWideReadings` and their `outside` option.
 - `packages/agent-tools/src/tools/fence.ts` — `checkFence`, the product's fence, rooted at the run's workspace root (a
   requirements run's worktree).
+
+## Outcome
+
+Repaired 2026-10-06 by fin25 (bundle `fin25-harness-and-record`). `outsideWorkspace` is gone. Each kept session carries
+the root its own record names (`readFenceRoot` in `apps/desktop/scripts/live-run.mjs`, over `fenceRootOf` in
+`apps/desktop/scripts/lib/tool-frictions.mjs`: the `worktree` column's `worktree_path`, else `workspace_root`, else the
+sandbox's workspace), and `runWideReadings` judges each session's create-shaped refusals against it with `outsideFence`
+(a relative path resolved against that root, outside both it and its real path, as `checkFence` reads it with
+`allow_outside_workspace` off). The record was chosen over the refusal's own text because a refusal for want of an
+operation never reaches the fence and so names no root.
+
+Pinned by `apps/desktop/scripts/lib/tool-frictions.test.ts` ("the fence root a session is judged by"): the root is the
+worktree where the record holds one, else the workspace root; a workspace path outside the worktree, absolute or relative,
+is outside the fence; and a requirements session's create-shaped refusal naming one is `refusedFenced`, while the same
+call in a session fenced to the workspace stays `refusedInferable`. All three were red on the old reader. PD-TOOLS-007's
+record says so in `docs/product/directives.md`.

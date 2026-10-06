@@ -114,7 +114,7 @@
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
@@ -125,7 +125,7 @@ import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { summaryReading } from './lib/summary-sections.mjs';
-import { runWideReadings } from './lib/tool-frictions.mjs';
+import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
@@ -845,17 +845,17 @@ function readIssues(sessionId) {
   finally { db.close(); }
 }
 /**
- * The write fence's reading of a path a call named, as PD-TOOLS-007 needs it: outside the run's workspace (where every
- * scenario's agents write, a requirements worktree included) is a path the fence refuses, and the directive does not read
- * such a call as a create. A relative path is resolved against the workspace.
+ * The root a session's write fence stands on, from its own record (`fenceRootOf` in `lib/tool-frictions.mjs`): a
+ * requirements run's worktree, any other session's workspace root, the sandbox's workspace where the row names neither.
+ * Until fin25 every session was judged by the workspace, and a requirements session's create-shaped call naming a
+ * workspace path outside its worktree read as the old shape
+ * (`docs/defects/fixed/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md`).
  */
-function outsideWorkspace(path) {
-  const roots = [workspace];
-  try { roots.push(realpathSync(workspace)); } catch { /* the sandbox is gone: the path as given */ }
-  return roots.every((root) => {
-    const rel = relative(root, isAbsolute(path) ? path : resolve(root, path));
-    return rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel);
-  });
+function readFenceRoot(sessionId) {
+  const Database = require('better-sqlite3');
+  const db = new Database(oneDatabase(), { readonly: true });
+  try { return fenceRootOf(db.prepare('SELECT workspace_root, worktree FROM sessions WHERE session_id = ?').get(sessionId) ?? {}) ?? workspace; }
+  finally { db.close(); }
 }
 
 /**
@@ -880,7 +880,7 @@ function checkToolRecord() {
   if (preservedSessions.length === 0) return;
   let r;
   try {
-    r = runWideReadings(preservedSessions.map(({ scenario, sessionId }) => ({ scenario, calls: readToolCalls(sessionId), issues: readIssues(sessionId) })), { outside: outsideWorkspace });
+    r = runWideReadings(preservedSessions.map(({ scenario, sessionId }) => ({ scenario, calls: readToolCalls(sessionId), issues: readIssues(sessionId), fenceRoot: readFenceRoot(sessionId) })));
   } catch (cause) {
     check(false, 'the tool-call record of every session the run kept was read', cause instanceof Error ? cause.message : String(cause));
     return;
@@ -890,7 +890,7 @@ function checkToolRecord() {
   if (r.refused.length === 0) noted('no call was refused at the tool gate as invalid_request', `REQ-SESSION-136's issue for such a refusal was not observed in ${where}`);
   else check(r.unfiled.length === 0, 'every call refused at the tool gate as invalid_request filed a tool_error issue referencing it', r.unfiled.length === 0 ? `${r.refused.length} refusal(s): ${r.refused.map((c) => `${at(c)} (${c.tool_name})`).join(', ')}` : `${r.unfiled.length} of ${r.refused.length} filed none: ${r.unfiled.map((c) => `${at(c)} (${c.tool_name})`).join(', ')}`);
   const fenced = r.refusedFenced.length === 0 ? '' : `; ${r.refusedFenced.length} refused because the fence refuses the path, as the directive reads it (${r.refusedFenced.map(at).join(', ')})`;
-  if (r.inferred.length === 0 && r.refusedInferable.length === 0) noted('no write_file call left out its operation for a path inside the workspace', `PD-TOOLS-007's inferred create was not asked in ${where}${fenced}`);
+  if (r.inferred.length === 0 && r.refusedInferable.length === 0) noted('no write_file call left out its operation for a path inside its session\'s fence', `PD-TOOLS-007's inferred create was not asked in ${where}${fenced}`);
   else check(r.refusedInferable.length === 0, 'every write_file call with a path and content and no operation was read as a create, or refused because its file exists or its path is fenced (PD-TOOLS-007)', r.refusedInferable.length === 0 ? `${r.inferred.length} read as a create: ${r.inferred.map((c) => `${at(c)} (${c.agent_name ?? '?'})`).join(', ')}${fenced}` : `${r.refusedInferable.length} refused for want of an operation: ${r.refusedInferable.map((c) => `${at(c)} (${c.agent_name ?? '?'})`).join(', ')}`);
   check(r.phantoms.length === 0, 'no todo call was sent to a task id a refusal named but never stored (PD-TOOLS-008)', r.phantoms.length === 0 ? `${r.severalActive.length} replace(s) refused for marking more than one task in progress, in ${where}` : `${at(r.phantoms[0])}: ${JSON.stringify(String(r.phantoms[0].result).slice(0, 100))}`);
 }

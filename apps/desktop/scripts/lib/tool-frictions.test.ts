@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { argumentFields, runWideReadings, todoActiveReadings, writeSelectorReadings } from './tool-frictions.mjs';
+import { argumentFields, fenceRootOf, outsideFence, runWideReadings, todoActiveReadings, writeSelectorReadings } from './tool-frictions.mjs';
 
 const ords = (calls: { ordinal: number }[]) => calls.map((c) => c.ordinal);
 
@@ -87,6 +87,47 @@ describe('runWideReadings (PD-TOOLS-007, PD-TOOLS-008, REQ-SESSION-136)', () => 
     expect(r.refusedFenced.map((c: { scenario: string; ordinal: number }) => [c.scenario, c.ordinal])).toEqual([['requirements', 62]]);
     // An issue that names another call leaves the refusal unfiled, in its own scenario.
     expect(runWideReadings([{ ...sessions[1]!, issues: [{ kind: 'tool_error', evidence_ref: 'tool_call_evidence#other' }] }]).unfiled.map((c: { scenario: string }) => c.scenario)).toEqual(['requirements']);
+  });
+});
+
+/*
+ * A requirements run is fenced to its worktree, not to the workspace: the c2a9444 pack's requirements session refused its
+ * ordinal 66 "Path '/tmp/rotaris-verify-req104.mjs' is outside workspace root '<workspace>/.rotaris/requirements/worktrees/
+ * rotaris-req-req-104-u1'", and its `sessions.worktree` names that path. Until fin25 the reader judged every session by the
+ * workspace, so a create-shaped call naming a workspace path outside the worktree read as the old shape, a false FAIL
+ * (docs/defects/fixed/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md).
+ */
+describe('the fence root a session is judged by (PD-TOOLS-007)', () => {
+  const workspace = '/tmp/rotaris-live-run/x/workspace';
+  const worktree = `${workspace}/.rotaris/requirements/worktrees/rotaris-req-req-104-u1`;
+  const refusal = 'write_file requires an operation: one of create, edit, overwrite, insert, undo. (operation: Invalid option)';
+  const row = { workspace_root: workspace, worktree: JSON.stringify({ worktree_path: worktree, branch: 'rotaris/req/req-104/u1', merge_status: 'ready' }) };
+
+  it('is the session\'s worktree where its record holds one, else its workspace root', () => {
+    expect(fenceRootOf(row)).toBe(worktree);
+    expect(fenceRootOf({ workspace_root: workspace, worktree: null })).toBe(workspace);
+    expect(fenceRootOf({ workspace_root: workspace, worktree: 'not json' })).toBe(workspace);
+    expect(fenceRootOf({ workspace_root: null, worktree: null })).toBeNull();
+  });
+
+  it('a path is outside the fence when it resolves outside the root, a relative one against the root', () => {
+    expect(outsideFence(worktree, 'src/a.ts')).toBe(false);
+    expect(outsideFence(worktree, `${worktree}/src/a.ts`)).toBe(false);
+    expect(outsideFence(worktree, `${workspace}/verify.mjs`)).toBe(true);
+    expect(outsideFence(worktree, '../../../../verify.mjs')).toBe(true);
+    expect(outsideFence(worktree, '/tmp/rotaris-verify-req104.mjs')).toBe(true);
+    expect(outsideFence(workspace, `${workspace}/verify.mjs`)).toBe(false);
+  });
+
+  it('a requirements session\'s create-shaped refusal naming a workspace path outside its worktree is the fence\'s own, not the old shape', () => {
+    const call = { ordinal: 66, tool_name: 'write_file', status: 'failed', callId: 'q66', failureKind: 'invalid_request', args: { path: `${workspace}/verify.mjs`, content: 'x' }, result: refusal };
+    const inside = { ...call, ordinal: 67, callId: 'q67', args: { path: 'verify.mjs', content: 'x' } };
+    const issues = [{ kind: 'tool_error', evidence_ref: 'tool_call_evidence#q66' }, { kind: 'tool_error', evidence_ref: 'tool_call_evidence#q67' }];
+    const r = runWideReadings([{ scenario: 'requirements', calls: [call, inside], issues, fenceRoot: worktree }]);
+    expect(r.refusedFenced.map((c: { ordinal: number }) => c.ordinal)).toEqual([66]);
+    expect(r.refusedInferable.map((c: { ordinal: number }) => c.ordinal)).toEqual([67]);
+    // The same call in a session fenced to the workspace is the old shape.
+    expect(runWideReadings([{ scenario: 'frictions', calls: [call], issues, fenceRoot: workspace }]).refusedInferable.map((c: { ordinal: number }) => c.ordinal)).toEqual([66]);
   });
 });
 

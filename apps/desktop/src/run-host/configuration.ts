@@ -3,7 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { countNoun, err, ok } from '@rotaris/kernel';
 import { declaredToolsOf, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
-import { compressionTrigger, effectivePricing, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
+import { compressionTrigger, effectivePricing, isPlainMap, modelCapInForce, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type HelperModel, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
@@ -64,7 +64,7 @@ export interface RuntimeFromConfiguration extends RuntimePosture {
   };
 }
 
-export function runtimeFromConfiguration(cfg: LoadedConfiguration, verdict: AvailabilityVerdict | null = null): RuntimeFromConfiguration {
+export function runtimeFromConfiguration(cfg: LoadedConfiguration, verdict: AvailabilityVerdict | null = null, sharedQuotaCaps: Readonly<Record<string, number>> = {}): RuntimeFromConfiguration {
   const r = cfg.runtime;
   return {
     permissionMode: resolvePreset(r.permission_mode).preset,
@@ -81,7 +81,8 @@ export function runtimeFromConfiguration(cfg: LoadedConfiguration, verdict: Avai
     confinement: { mode: r.sandbox_mode, writableRoots: r.sandbox_writable_roots, allowNetwork: r.sandbox_allow_network, verdict },
     sessionLogLevel: parseLogLevel(r.session_log_level).level,
     modelConcurrencyCap: null,
-    modelCapFor: (modelKey) => cfg.models[modelKey]?.max_parallel ?? null,
+    // REQ-CONFIG-094 under PD-PROVIDER-001: the entry's stated cap, else its provider's declared one (`modelCapInForce`).
+    modelCapFor: (modelKey) => modelCapInForce(cfg.models[modelKey], sharedQuotaCaps),
     childBudget: { maxDepth: r.max_depth, maxTotal: r.max_children, maxActive: r.max_active_children },
     drainTimeoutMs: Math.round(r.shutdown_drain_timeout * 1000),
     approvalTimeoutMs: Math.round(r.approval_timeout_seconds * 1000),
@@ -464,6 +465,8 @@ export interface ConfigureDeps {
    * probe has completed — is read as unavailable, the fail-closed side of REQ-SANDBOX-068.
    */
   readonly confinement?: (() => AvailabilityVerdict | null) | undefined;
+  /** PD-PROVIDER-001: the shared-quota caps the provider catalogue declares, by provider id, as main handed them. */
+  readonly sharedQuotaCaps?: (() => Readonly<Record<string, number>>) | undefined;
 }
 
 /** REQ-SANDBOX-122: the mode has exactly two sources — the layered key, and the launch dialog's override. */
@@ -601,7 +604,7 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   const isScripted = scripted || model.providerId === SCRIPTED_PROVIDER;
   const entryAuthProvider = isScripted ? null : entry?.auth_provider ?? null;
   return ok({ authProviders, entryAuthProvider, complete: (bearers) => {
-    const runtime = runtimeFromConfiguration(cfg, verdict);
+    const runtime = runtimeFromConfiguration(cfg, verdict, deps.sharedQuotaCaps?.() ?? {});
     // The adapter's idle bound (REQ-CONFIG-115) is re-armed from the run host's own timer port, never a global.
     const client: ModelClient = isScripted ? deps.scriptedClient() : new AiSdkModelClient({ baseUrl: model.baseUrl ?? PROVIDER_BASE_URLS['openai']!, onRequest: (i) => deps.onRequest(i), timers: deps.clocks.timers, monotonic: deps.clocks.monotonic });
     const backend: AgentBackend = new DefaultAgentBackend(client);

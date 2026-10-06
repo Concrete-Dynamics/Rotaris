@@ -81,6 +81,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
   } = h;
   switch (req.kind) {
     case 'hello':
+      // PD-PROVIDER-001: main reads the provider catalogue, which this process cannot; the caps arrive with the handshake.
+      if (req.sharedQuotaCaps !== undefined) h.sharedQuotaCaps = req.sharedQuotaCaps;
       return { kind: 'hello', process: 'run-host', pid: process.pid };
     case 'ping':
       return { kind: 'pong' };

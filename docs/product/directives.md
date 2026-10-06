@@ -3584,11 +3584,12 @@ the declared one entirely, and the cap in force stays inspectable. The numbers t
 `deepseek` 3 and `claude-code` 2.
 
 **As built.** The catalogue spells the mode `hosted-cloud` (`packages/providers/src/catalogue.ts`), and the values in force
-are the two numbers above. They are held by configuration's provider-conditional default (`defaultMaxParallel`,
-`packages/config/src/sections/models.ts`), which is a list of two provider names, and not by the catalogue entry, so the
-place this directive names is not yet the place the number lives. That is recorded in
-[`the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md`](../defects/the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md)
-and is not built by the ruling.
+are the two numbers above, declared since 2026-10-06 (fin22) on the catalogue entries as `sharedQuotaCap` (`deepseek` 3,
+`claude-code` 2, every other entry none). Main hands them to the run host at its handshake, and `modelCapInForce`
+(`packages/config/src/sections/models.ts`) applies a model's stated `max_parallel`, else its provider's declared cap.
+Until then they were held by configuration's provider-conditional default (`defaultMaxParallel`), a list of two provider
+names, as recorded in
+[`the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md`](../defects/fixed/the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md).
 
 **Why, and what it costs.** OQ-6: REQ-PROVIDER-002 spells the mode `hosted-cloud` where REQ-CONFIG-370 spells it
 `rotaris-cloud`, and REQ-CONFIG-095 gives one provider a cap of 3 where REQ-MONITOR-021 gives every declaring provider 2

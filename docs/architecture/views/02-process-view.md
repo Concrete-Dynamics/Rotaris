@@ -548,7 +548,11 @@ second main window's status strip and Settings read the first workspace's values
 repair round): that repair first read "repopulates every main window from its own workspace's snapshot" and sent nothing to
 a persona window, which kept the model, declared tools and compression threshold it mounted with until it was reopened.*
 
-**Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Since 2026-09-09 (Part AL): the seven `terminal.*` requests, the `terminal.streams` reply and the `publish.terminal` event, listed above. Requests:
+**Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Since 2026-09-09 (Part AL): the seven `terminal.*` requests, the `terminal.streams` reply and the `publish.terminal` event, listed above. Since 2026-10-06 (fin22, PD-PROVIDER-001)
+main's handshake `hello` carries `sharedQuotaCaps` — the shared-quota cap each provider's catalogue entry declares, by
+provider id (`sharedQuotaCaps()`, `packages/providers/src/catalogue.ts`) — because the run host cannot read the catalogue;
+the run host keeps them (`RunHost.sharedQuotaCaps`) and every run's `modelCapFor` applies them to a model whose entry
+states no `max_parallel` (`modelCapInForce`, `packages/config/src/sections/models.ts`). Requests:
 `workspace.opened/closing/refuseRuns/renewLease/closeStore/release`, `session.*` (start, list, resume,
 continue, prompt, retry (since 2026-10-02, REQ-NOTIFY-045; answered `ack`), attach, detach, reconcile, pageOlder, control, and since 2026-10-02 `restartOnFallback {sessionId}` —
 REQ-NOTIFY-070's pin of `fallback_model` and the restart with the same prompt, answered

@@ -39,8 +39,12 @@ export interface ModelEntry {
   readonly thinking: ReasoningLevel | null;
   readonly reasoning_effort: string | null;
   readonly reasoning_effort_map: Readonly<Record<string, string>>;
-  /** REQ-CONFIG-094/095/057: the effective cap, the provider default applied when the key is absent. */
-  readonly max_parallel: number | null;
+  /**
+   * REQ-CONFIG-094/057: the cap the entry STATES — a number, or `null` written explicitly (unbounded) — and absent when the
+   * key is not written. The provider's declared cap is not filled in here: configuration holds no list of provider names
+   * (PD-PROVIDER-001, REQ-MONITOR-021); the cap in force is `modelCapInForce`'s.
+   */
+  readonly max_parallel?: number | null;
   /** REQ-PROVIDER-149: explicit provider declaration consumed by the composer gate. */
   readonly accepts_image_input: boolean;
 }
@@ -52,9 +56,18 @@ export const MODEL_ENTRY_KEYS = [
   'input_cost_per_token', 'output_cost_per_token', 'thinking', 'reasoning_effort', 'reasoning_effort_map', 'max_parallel', 'accepts_image_input',
 ] as const;
 
-/** REQ-CONFIG-095: the provider-conditional default; explicit null defeats it (REQ-CONFIG-057). */
-export function defaultMaxParallel(provider: string): number | null {
-  return provider === 'deepseek' ? 3 : provider === 'claude-code' ? 2 : null;
+/**
+ * REQ-CONFIG-095 under PD-PROVIDER-001 (REQ-MONITOR-021, REQ-PROVIDER-049): the cap in force for a model. A `max_parallel`
+ * the entry states replaces the provider's declared cap entirely — raising it, lowering it, or removing it with an
+ * explicit `null` (REQ-CONFIG-057); unstated, the cap is the number the provider's catalogue entry declares (`declared`,
+ * the catalogue's `sharedQuotaCaps`, handed in by whoever can read the catalogue), and a provider declaring none leaves
+ * the model unbounded. Until fin22 the two numbers were a list of provider names here (`defaultMaxParallel`,
+ * `docs/defects/fixed/the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md`).
+ */
+export function modelCapInForce(entry: ModelEntry | undefined, declared: Readonly<Record<string, number>>): number | null {
+  if (entry === undefined) return null;
+  if (entry.max_parallel !== undefined) return entry.max_parallel;
+  return Object.hasOwn(declared, entry.provider) ? declared[entry.provider]! : null;
 }
 
 /** REQ-CONFIG-090: `thinking` accepts the legacy boolean spellings — `true` is `high`, `false` is unset. */
@@ -106,7 +119,7 @@ export function readModelEntry(name: string, value: unknown, sink: ProblemSink):
     thinking: thinkingOf(r, 'thinking'),
     reasoning_effort: r.stringOrNull('reasoning_effort'),
     reasoning_effort_map: r.stringMapOrNull('reasoning_effort_map') ?? {},
-    max_parallel: r.has('max_parallel') ? r.intOrNull('max_parallel', { min: 1 }) : defaultMaxParallel(provider ?? ''),
+    ...(r.has('max_parallel') ? { max_parallel: r.intOrNull('max_parallel', { min: 1 }) } : {}),
     accepts_image_input: r.bool('accepts_image_input', false),
   };
   return provider === null || modelId === null ? null : entry;

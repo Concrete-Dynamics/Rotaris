@@ -360,6 +360,43 @@ personas:
     expect(runtime.modelCapFor!(coder)).toBe(4);
     expect(contextLimitsOf(r.value.cfg)[coder]).toBe(131_072);
   });
+
+  it('PD-PROVIDER-001: a model stating no max_parallel carries its provider\'s declared cap, handed in from the catalogue; a stated one replaces it', () => {
+    // Until fin22 configuration filled in `deepseek` 3 and `claude-code` 2 by name (`defaultMaxParallel`).
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), `default_persona: orchestrator
+models:
+  ds:
+    provider: deepseek
+    model_id: deepseek-chat
+    base_url: https://api.deepseek.com/v1
+    api_key: k
+  ds-wide:
+    provider: deepseek
+    model_id: deepseek-chat
+    base_url: https://api.deepseek.com/v1
+    api_key: k
+    max_parallel: 6
+  ds-free:
+    provider: deepseek
+    model_id: deepseek-chat
+    base_url: https://api.deepseek.com/v1
+    api_key: k
+    max_parallel: null
+large_model: ds
+medium_model: ds
+small_model: ds
+`);
+    const r = configureRun(join(dir, 'ws'), true, deps({}));
+    if (!r.ok) throw new Error(r.error.reason);
+    const declared = runtimeFromConfiguration(r.value.cfg, null, { deepseek: 3, 'claude-code': 2 });
+    expect(declared.modelCapFor!('ds')).toBe(3);
+    expect(declared.modelCapFor!('ds-wide')).toBe(6);
+    expect(declared.modelCapFor!('ds-free')).toBeNull();
+    expect(declared.modelCapFor!('not-configured')).toBeNull();
+    // Nothing declared, nothing capped: the number is the catalogue's, not configuration's.
+    expect(runtimeFromConfiguration(r.value.cfg).modelCapFor!('ds')).toBeNull();
+  });
 });
 
 /*

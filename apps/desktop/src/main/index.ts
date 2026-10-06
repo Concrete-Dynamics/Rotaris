@@ -33,7 +33,7 @@ import { classifyThisInstallation, createUpdaterPorts, successorArguments, succe
 import { updateCommands } from './commands/update.js';
 import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
-import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, unavailableMethodMessage, validateCatalog } from '@rotaris/providers';
+import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, unavailableMethodMessage, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
 import { deliverSetupCancel, InitializationCoordinator, serviceMarkerWriter } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
@@ -401,7 +401,8 @@ async function main(): Promise<void> {
     return { workspaceId: opened.workspaceId, storeFile: opened.storeFile };
   };
 
-  const rhHello = await runHost.request({ kind: 'hello' }, millis(5_000));
+  // PD-PROVIDER-001: the handshake hands the run host the shared-quota caps the provider catalogue declares.
+  const rhHello = await runHost.request({ kind: 'hello', sharedQuotaCaps: sharedQuotaCaps() }, millis(5_000));
   // Main's own line about the handshake: named `run host hello:` so it cannot be read as a line the run host forwarded,
   // which the log writes as `run host: …` (PD-MONITOR-002's source column).
   log(`run host hello: ${JSON.stringify(rhHello)}`);

@@ -62,6 +62,13 @@ log at `INFO`). The **runtime view**'s stall-watch paragraph and its `timeline` 
 REQ-MONITOR-120's "logged" is met when the session log keeps its default `WARNING` level. No package, edge, process,
 channel, command or store column changed.
 
+**A provider's shared-quota cap is a number its catalogue entry declares (PD-PROVIDER-001, REQ-MONITOR-021,
+REQ-PROVIDER-049, REQ-CONFIG-057/095; fin22).** `CatalogueEntry.sharedQuotaCap` (`deepseek` 3, `claude-code` 2, the rest
+none) replaces configuration's list of two names (`defaultMaxParallel`, removed): a `models:` entry's `max_parallel` is now
+absent when unstated, main's `hello` hands the run host the declared caps, and `modelCapInForce` applies the entry's stated
+cap or else its provider's. The **process view**'s main ↔ run host paragraph says so. The `hello` request gains one
+optional field; no package, edge, process, channel, command or store column changed.
+
 **The preference root reads the configuration home on Linux alone (REQ-UIBENCH-039; OQ-33 ruled by R-071, fin22).**
 `resolvePreferenceRoot` reads `XDG_CONFIG_HOME` in its Linux branch, as `resolveUserDirs` does, rather than before the
 platform branch. The **process view**'s files diagram and the **state-ownership view**'s `preferences.json` row say so. No

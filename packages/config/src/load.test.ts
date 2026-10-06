@@ -9,7 +9,7 @@ import { parseConfig } from './document.js';
 import { referentialMessages, renderFatal, renderProblems } from './validate.js';
 import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, syntheticOriginOf } from './slots.js';
 import { readRuntimeSection, validateRuntimeField, RUNTIME_DEFAULTS } from './sections/runtime.js';
-import { effectivePricing, readModelEntry, providerEffort } from './sections/models.js';
+import { effectivePricing, modelCapInForce, readModelEntry, providerEffort } from './sections/models.js';
 import { readCircuitBreakerSection, CIRCUIT_BREAKER_DEFAULTS } from './circuit-breaker-section.js';
 import { checkpointsEnabledFor } from './sections/checkpoints.js';
 import { CODE_INTELLIGENCE_MARKER_SEGMENTS } from './mcp/code-intelligence.js';
@@ -226,13 +226,36 @@ describe('REQ-CONFIG-063..081 tier aliases and reasoning synthesis', () => {
   });
 });
 
-describe('REQ-CONFIG-082..110 model and persona entries', () => {
-  it('reads the fields, the legacy thinking booleans, the provider-conditional max_parallel and the explicit null (REQ-CONFIG-057/090/095)', () => {
+describe('the cap in force for a model (PD-PROVIDER-001, REQ-MONITOR-021, REQ-CONFIG-057/095)', () => {
+  const caps = { deepseek: 3, 'claude-code': 2 };
+  it('is the provider\'s declared cap when the entry states none, and unbounded for a provider that declares none', () => {
     const s = sink();
+    expect(modelCapInForce(readModelEntry('d', { provider: 'deepseek', model_id: 'x' }, s)!, caps)).toBe(3);
+    expect(modelCapInForce(readModelEntry('c', { provider: 'claude-code', model_id: 'x' }, s)!, caps)).toBe(2);
+    expect(modelCapInForce(readModelEntry('o', { provider: 'openai-compatible', model_id: 'x', base_url: 'https://x.example/v1' }, s)!, caps)).toBeNull();
+    // A provider added later caps its models by declaring a number, with no name written here.
+    expect(modelCapInForce(readModelEntry('n', { provider: 'newcomer', model_id: 'x' }, s)!, { newcomer: 7 })).toBe(7);
+    expect(modelCapInForce(undefined, caps)).toBeNull();
+  });
+  it('is the entry\'s own when stated, raising, lowering or removing the declared one entirely', () => {
+    const s = sink();
+    expect(modelCapInForce(readModelEntry('d', { provider: 'deepseek', model_id: 'x', max_parallel: 8 }, s)!, caps)).toBe(8);
+    expect(modelCapInForce(readModelEntry('d', { provider: 'deepseek', model_id: 'x', max_parallel: 1 }, s)!, caps)).toBe(1);
+    expect(modelCapInForce(readModelEntry('d', { provider: 'deepseek', model_id: 'x', max_parallel: null }, s)!, caps)).toBeNull();
+  });
+});
+
+describe('REQ-CONFIG-082..110 model and persona entries', () => {
+  it('reads the fields, the legacy thinking booleans, a stated max_parallel and the explicit null (REQ-CONFIG-057/090/095)', () => {
+    const s = sink();
+    // PD-PROVIDER-001: configuration holds no provider's cap; an unstated `max_parallel` stays unstated, and the cap in
+    // force is the provider's catalogue entry's (`modelCapInForce`). Until fin22 this read `max_parallel: 3` here.
     const deepseek = readModelEntry('d', { provider: 'deepseek', model_id: 'x', thinking: true }, s)!;
-    expect(deepseek).toMatchObject({ max_parallel: 3, thinking: 'high' });
+    expect(deepseek).toMatchObject({ thinking: 'high' });
+    expect(deepseek).not.toHaveProperty('max_parallel');
     const capped = readModelEntry('e', { provider: 'deepseek', model_id: 'x', max_parallel: null, thinking: false }, s)!;
     expect(capped).toMatchObject({ max_parallel: null, thinking: null });
+    expect(readModelEntry('f', { provider: 'deepseek', model_id: 'x', max_parallel: 5 }, s)).toMatchObject({ max_parallel: 5 });
     const copilot = readModelEntry('c', { provider: 'openai', model_id: 'x', auth_provider: 'copilot', mystery: 1 }, s)!;
     expect(copilot.disable_responses_api).toBe(true);
     expect(s.errors).toEqual([]);
@@ -605,7 +628,9 @@ ${extra}`;
     expect(r.value.slots.small_model).toBe('deepseek/deepseek-chat');
     expect(r.value.slots.large_model).toBe('deepseek/deepseek-chat');
     expect(r.value.slots.medium_model).toBe('openai-compatible--openrouter/openai/gpt-4o-mini');
-    expect(r.value.models['deepseek/deepseek-chat']).toMatchObject({ provider: 'deepseek', model_id: 'deepseek-chat', auth_provider: 'deepseek', max_parallel: 3 });
+    expect(r.value.models['deepseek/deepseek-chat']).toMatchObject({ provider: 'deepseek', model_id: 'deepseek-chat', auth_provider: 'deepseek' });
+    // PD-PROVIDER-001: the snapshot's model states no cap; the catalogue's 3 applies where the cap is read (`modelCapInForce`).
+    expect(modelCapInForce(r.value.models['deepseek/deepseek-chat'], { deepseek: 3 })).toBe(3);
   });
   it('an invalid snapshot is ignored with a warning; an auth_provider naming no authenticated provider is a referential message with the hint; no snapshot → the hint on every unset slot', () => {
     const s = scopes(null, 'models:\n  mine:\n    provider: openai-compatible\n    model_id: x\n    auth_provider: openai-compatible--gone\n');

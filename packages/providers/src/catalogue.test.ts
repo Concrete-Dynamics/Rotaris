@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CATALOGUE, PROVIDER_IDS, destinationHint, destinationHost, instanceId, instanceSlug, LABEL_EMPTY, lookupProvider, modelsEndpoint, normalizeBaseUrl, signInMethodFor, validateCatalog, type CatalogueEntry } from './catalogue.js';
+import { CATALOGUE, PROVIDER_IDS, sharedQuotaCaps, destinationHint, destinationHost, instanceId, instanceSlug, LABEL_EMPTY, lookupProvider, modelsEndpoint, normalizeBaseUrl, signInMethodFor, validateCatalog, type CatalogueEntry } from './catalogue.js';
 import { validateKnownLimits, lookupKnownLimits, KNOWN_LIMITS } from './limits.data.js';
 import { validateTierPreferences } from './tiers.data.js';
 
@@ -8,6 +8,18 @@ describe('the provider catalogue (ADR-0028; REQ-PROVIDER-001..007)', () => {
     expect(CATALOGUE.map((c) => c.id)).toEqual([...PROVIDER_IDS]);
     expect(CATALOGUE.map((c) => c.displayName)).toEqual(['Rotaris Cloud (recommended)', 'GitHub Copilot', 'OpenAI Codex', 'OpenAI-compatible', 'Claude Code (subscription)', 'DeepSeek']);
     expect(Object.isFrozen(CATALOGUE)).toBe(true);
+  });
+  it('each entry declares its shared-quota cap as a number, or none (PD-PROVIDER-001, REQ-PROVIDER-049)', () => {
+    // Until fin22 the two caps lived in configuration as a list of provider names (`defaultMaxParallel`), which
+    // REQ-MONITOR-021 refuses to hold; the catalogue declared nothing.
+    expect(Object.fromEntries(CATALOGUE.map((c) => [c.id, c.sharedQuotaCap]))).toEqual({
+      'concrete-cloud': null, copilot: null, codex: null, 'openai-compatible': null, 'claude-code': 2, deepseek: 3,
+    });
+    expect(sharedQuotaCaps()).toEqual({ 'claude-code': 2, deepseek: 3 });
+    const wrong = CATALOGUE.map((c): CatalogueEntry => (c.id === 'copilot' ? { ...c, sharedQuotaCap: 0 } : c.id === 'codex' ? { ...c, sharedQuotaCap: 1.5 } : c));
+    const r = validateCatalog(wrong);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.filter((p) => /shared-quota cap/.test(p)).map((p) => p.split(':')[0])).toEqual(['copilot', 'codex']);
   });
   it('validates as shipped (REQ-PROVIDER-003)', () => {
     expect(validateCatalog()).toEqual({ ok: true, value: undefined });

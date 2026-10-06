@@ -189,3 +189,17 @@ describe('session.start discovers ahead of the run against the root the run exec
     expect(projectOf(prepared[1]![0])).toEqual(['--project', ws]);
   });
 });
+
+/**
+ * PD-PROVIDER-001: the run host cannot read the provider catalogue, so main's handshake hands it the caps each provider
+ * declares, and every later run reads them (`configurationDeps.sharedQuotaCaps`, `modelCapInForce`).
+ */
+describe('the handshake carries the shared-quota caps the catalogue declares (PD-PROVIDER-001)', () => {
+  it('keeps the caps main sent, and a hello that sends none leaves them as they were', async () => {
+    const host = { sharedQuotaCaps: {} } as unknown as RunHost;
+    expect(await dispatch({ kind: 'hello', sharedQuotaCaps: { deepseek: 3, 'claude-code': 2 } }, host)).toMatchObject({ kind: 'hello', process: 'run-host' });
+    expect(host.sharedQuotaCaps).toEqual({ deepseek: 3, 'claude-code': 2 });
+    await dispatch({ kind: 'hello' }, host);
+    expect(host.sharedQuotaCaps).toEqual({ deepseek: 3, 'claude-code': 2 });
+  });
+});

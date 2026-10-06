@@ -125,6 +125,8 @@ export function createRunHost() {
   const rungMemory = new RungMemory();
   // ADR-0037 Tier B: the settings store's current values, as main last told this process; empty until it does.
   let liveState: LiveState = {};
+  /** PD-PROVIDER-001: the shared-quota cap each provider's catalogue entry declares, by id; set by main's `hello`. */
+  let sharedQuotaCaps: Readonly<Record<string, number>> = {};
   // Latest workspace configuration for workspace-scoped controls and continuation loads.
   const configured = new Map<string, ConfiguredRun>();
   // ADR-0030: latest workspace lease for continuation loads. Active launches capture their own lease.
@@ -205,6 +207,8 @@ export function createRunHost() {
     onRequest: (i: { method: string; url: string; headers: Record<string, string> }) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`),
     log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {},
     confinement: () => confinement.peek(),
+    // PD-PROVIDER-001: the caps the provider catalogue declares, as main handed them at the handshake (`hello`).
+    sharedQuotaCaps: () => sharedQuotaCaps,
   };
   /**
    * ADR-0063 — the portable-skill catalog. The run host owns it because REQ-WORKSPACE-058 clears it at
@@ -537,6 +541,8 @@ export function createRunHost() {
     get terminal() { return terminal; },
     get liveState() { return liveState; },
     set liveState(next: LiveState) { liveState = next; },
+    get sharedQuotaCaps() { return sharedQuotaCaps; },
+    set sharedQuotaCaps(next: Readonly<Record<string, number>>) { sharedQuotaCaps = next; },
   };
 }
 

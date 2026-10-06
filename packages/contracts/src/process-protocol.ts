@@ -79,7 +79,11 @@ export const InitialTodoSchema = z.object({
 export type InitialTodo = z.infer<typeof InitialTodoSchema>;
 
 export const RunHostRequestSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('hello') }),
+  /**
+   * PD-PROVIDER-001: main's handshake carries the shared-quota cap each provider's catalogue entry declares, by provider id
+   * (only those that declare one), since the run host cannot read the catalogue; `modelCapInForce` applies them.
+   */
+  z.object({ kind: z.literal('hello'), sharedQuotaCaps: z.record(z.string(), z.number().int().min(1)).optional() }),
   z.object({ kind: z.literal('ping') }),
   /** ADR-0058 / W-18: the run host is HANDED a resolved store path; it never reads the identifier file. */
   z.object({ kind: z.literal('workspace.opened'), workspaceId: z.string(), storeFile: z.string(), workspaceRoot: z.string() }),

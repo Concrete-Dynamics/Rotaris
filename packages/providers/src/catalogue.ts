@@ -42,6 +42,12 @@ export interface CatalogueEntry {
   readonly privacyUrl: string | null;
   readonly available: boolean;
   readonly unavailabilityReason: string | null;
+  /**
+   * PD-PROVIDER-001 (narrowing REQ-MONITOR-021; REQ-PROVIDER-049): whether the provider's quota is consumed by concurrent
+   * calls against one account, declared as the cap of concurrent calls every model of the provider carries when the user
+   * states none; `null` declares none, and the provider's models are unbounded. The numbers are REQ-CONFIG-095's.
+   */
+  readonly sharedQuotaCap: number | null;
 }
 
 export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
@@ -49,32 +55,32 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     id: 'concrete-cloud', displayName: 'Rotaris Cloud (recommended)', signInMethod: 'browser-pkce',
     discoveryUrl: 'https://rotaris.ai/v1/models', discoveryAuthScheme: 'Bearer', baseUrl: 'https://rotaris.ai/v1',
     connectionMode: 'hosted-cloud', operator: 'Concrete Dynamics UG (haftungsbeschränkt)', privacyUrl: 'https://rotaris.ai/privacy',
-    available: false, unavailabilityReason: 'Rotaris Cloud is coming soon.',
+    available: false, unavailabilityReason: 'Rotaris Cloud is coming soon.', sharedQuotaCap: null,
   }),
   Object.freeze<CatalogueEntry>({
     id: 'copilot', displayName: 'GitHub Copilot', signInMethod: 'device-code',
     discoveryUrl: 'https://api.githubcopilot.com/models', discoveryAuthScheme: 'Bearer', baseUrl: 'https://api.githubcopilot.com',
-    connectionMode: 'direct', operator: 'GitHub', privacyUrl: null, available: true, unavailabilityReason: null,
+    connectionMode: 'direct', operator: 'GitHub', privacyUrl: null, available: true, unavailabilityReason: null, sharedQuotaCap: null,
   }),
   Object.freeze<CatalogueEntry>({
     id: 'codex', displayName: 'OpenAI Codex', signInMethod: 'browser-pkce',
     discoveryUrl: 'https://chatgpt.com/backend-api/codex/models', discoveryAuthScheme: 'Bearer', baseUrl: 'https://chatgpt.com/backend-api/codex',
-    connectionMode: 'direct', operator: 'OpenAI', privacyUrl: null, available: true, unavailabilityReason: null,
+    connectionMode: 'direct', operator: 'OpenAI', privacyUrl: null, available: true, unavailabilityReason: null, sharedQuotaCap: null,
   }),
   Object.freeze<CatalogueEntry>({
     id: 'openai-compatible', displayName: 'OpenAI-compatible', signInMethod: 'api-key',
     discoveryUrl: 'https://api.openai.com/v1/models', discoveryAuthScheme: 'Bearer', baseUrl: 'https://api.openai.com/v1',
-    connectionMode: 'custom', operator: null, privacyUrl: null, available: true, unavailabilityReason: null,
+    connectionMode: 'custom', operator: null, privacyUrl: null, available: true, unavailabilityReason: null, sharedQuotaCap: null,
   }),
   Object.freeze<CatalogueEntry>({
     id: 'claude-code', displayName: 'Claude Code (subscription)', signInMethod: 'api-key',
     discoveryUrl: null, discoveryAuthScheme: null, baseUrl: null,
-    connectionMode: 'local-sdk', operator: null, privacyUrl: null, available: true, unavailabilityReason: null,
+    connectionMode: 'local-sdk', operator: null, privacyUrl: null, available: true, unavailabilityReason: null, sharedQuotaCap: 2,
   }),
   Object.freeze<CatalogueEntry>({
     id: 'deepseek', displayName: 'DeepSeek', signInMethod: 'api-key',
     discoveryUrl: 'https://api.deepseek.com/models', discoveryAuthScheme: 'Bearer', baseUrl: 'https://api.deepseek.com/v1',
-    connectionMode: 'direct', operator: 'DeepSeek', privacyUrl: null, available: true, unavailabilityReason: null,
+    connectionMode: 'direct', operator: 'DeepSeek', privacyUrl: null, available: true, unavailabilityReason: null, sharedQuotaCap: 3,
   }),
 ]);
 
@@ -112,8 +118,18 @@ export function validateCatalog(entries: readonly CatalogueEntry[] = CATALOGUE):
     if (e.connectionMode === 'custom' && e.operator !== null) problems.push(`${e.id}: a custom-mode entry must not declare a fixed operator`);
     if (!e.available && (e.unavailabilityReason === null || e.unavailabilityReason.length === 0)) problems.push(`${e.id}: an unavailable entry must supply a reason`);
     if (e.discoveryUrl !== null && e.discoveryAuthScheme === null) problems.push(`${e.id}: a declared discovery endpoint declares its authorization scheme`);
+    if (e.sharedQuotaCap !== null && !(Number.isInteger(e.sharedQuotaCap) && e.sharedQuotaCap >= 1)) problems.push(`${e.id}: a declared shared-quota cap is a whole number of concurrent calls, at least 1 (PD-PROVIDER-001)`);
   });
   return problems.length === 0 ? ok(undefined) : err(problems);
+}
+
+/**
+ * PD-PROVIDER-001: the shared-quota cap each provider declares, by id, for the providers that declare one. Main hands it to
+ * the run host at its handshake (`hello`), where `modelCapInForce` (`@rotaris/config`) applies it to every model whose entry
+ * states no `max_parallel`; the run host cannot read this package (the component view).
+ */
+export function sharedQuotaCaps(entries: readonly CatalogueEntry[] = CATALOGUE): Record<string, number> {
+  return Object.fromEntries(entries.flatMap((e) => (e.sharedQuotaCap === null ? [] : [[e.id, e.sharedQuotaCap] as const])));
 }
 
 /** REQ-PROVIDER-007: an unknown id is an error; no aliases (REQ-PROVIDER-009). */

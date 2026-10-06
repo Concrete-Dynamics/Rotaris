@@ -5497,7 +5497,7 @@ product rewrite a server's own description, and REQ-MCP-015 grants the tool.
 product-owned override the manifest carries), whether usage-instruction retrieval should leave the READ tier or the
 built-in grants, or whether the cost stands. Each departs from REQ-MCP-101 or REQ-MCP-015, which state the target.
 
-**OQ-116 — Is a run's displayed tool-call total the persisted one while a long pass is still running?** *(REQ-ORCH-097, which accumulates per-child tool-call counters "after each successful execution pass"; REQ-MONITOR-102, which persists a session-wide total and has a displayed total be the persisted value. Raised 2026-09-29 from the duress live run's finding D4 under [R-067](../product/requests.md#r-067). Open. Raised as OQ-115 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
+**OQ-116 — Is a run's displayed tool-call total the persisted one while a long pass is still running?** *(REQ-ORCH-097, which accumulates per-child tool-call counters "after each successful execution pass"; REQ-MONITOR-102, which persists a session-wide total and has a displayed total be the persisted value. Raised 2026-09-29 from the duress live run's finding D4 under [R-067](../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06. Raised as OQ-115 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 The root's calls are added to the persisted total after its turn returns, and a child's when it settles
 (`packages/engine/src/run/run.ts`, `packages/engine/src/children/orchestration.ts`). In the duress run of 2026-09-29 (pack
@@ -5522,6 +5522,18 @@ wait for it: a child's count already read the tracker's live count beside its pe
 reads the roots' persisted share plus the live root's calls not yet counted (`SessionRecord.entryToolCalls`). So during a
 pass the per-agent figures may sum to more than the displayed total; a ruling that accumulates per call would close that
 gap as well. Whether the run-level agent's figure is its own at all, or REQ-MONITOR-101's aggregate run count, is OQ-159.
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** each call is added to the saved totals as it
+completes, so the displayed total always matches the record. Carried by [`PD-ORCH-008`](../product/directives.md#pd-orch-008),
+which narrows REQ-ORCH-097's timing. The reading taken where the ruling leaves a detail open: "as it completes" is when the
+call's result returns, so a call still in flight is not in the total yet and the live per-agent figures (which read the
+tracker) may lead it by those calls; the agent's own count moves with the total in the same write, for every agent, a plan
+cycle's root included (store v32, `sessions.plan_root_tool_calls`); what a pass's end adds is only what was not counted as it
+completed; and a call an attempt REQ-ORCH-088's fallback retry replaced made stays counted. OQ-159's reading of the run-level
+agent's figure is kept as it is. **Built 2026-10-06 (fin20):** `countRootCall` (`packages/engine/src/run/run.ts`), `countCall`
+(`packages/engine/src/children/orchestration.ts`), `SessionWriter.countToolCalls`'s `planRootCall`, the plan cycle root's
+crash record (`packages/engine/src/run/crash.ts`); cases in `agent-links.test.ts`, `run/crash.test.ts`, `run/ladder.test.ts`
+and `store.test.ts`.
 
 **OQ-117 — What is an iteration told of a task it takes up that is not the run's own, and with what?** *(REQ-CHAT-040, whose queued prompt becomes a task "carrying the prompt text as its content"; REQ-ORCH-004 and REQ-ORCH-135, whose task a resumed session carries on and "stays anchored"; REQ-ORCH-072, which gives the root execution record "the task's execution payload"; REQ-CHAT-090 and REQ-CHAT-091, which let the user rename a task; and `PD-ORCH-005` clause 17 with OQ-102, whose message is told in words of its own. Raised 2026-09-29 by the repair of [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md) under [R-067](../product/requests.md#r-067). Open.)*
 

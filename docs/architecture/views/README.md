@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**A tool call joins the saved totals as it completes (OQ-116; `PD-ORCH-008`, R-071; fin20).** The root's and each child's
+`onToolCompleted` add the call to the run's aggregate and persist it with the agent's own count (`countRootCall`, `countCall`,
+`SessionWriter.countToolCalls`); store **v32** appends `sessions.plan_root_tool_calls`, the plan cycle root's counted share,
+which its release and its crash record subtract. The **runtime view**'s `entryToolCalls` paragraph and its `sessions` row and
+the **state-ownership** row for the tool-call total say so. No package, edge, process, channel or command changed.
+
 **The report summariser reads the child's whole task (OQ-119; `PD-ORCH-007`, R-071; fin20).** `reportTranscript` keeps the
 task as given whole within REQ-ORCH-110's 12,000 total, exempt from the 2,000 per event; a task that alone fills the total keeps
 its head. The **runtime view**'s children paragraph says so. No package, edge, process, channel, command or store column changed.

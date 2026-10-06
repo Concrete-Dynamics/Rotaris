@@ -155,9 +155,12 @@ describe('engine — the run-level agent\'s tool-call count while its turn runs 
     expect(called).toBe(true);
     sessions.owner(sid)!.reconcile();
     const running = snapshots.at(-1)!;
-    // The cause: the total does not hold the running root's calls yet, so the total less the children's read 0.
-    expect(running.toolCalls.total).toBe(0);
+    // OQ-116 as ruled (PD-ORCH-008): the total holds each of the running root's calls as it completed — before the ruling it
+    // read 0 here until the turn returned, and the run-level agent's figure came from the live tracker alone.
+    expect(running.toolCalls.total).toBe(2);
     expect(running.entryToolCalls).toBe(2);
+    expect(dal.getSession(sid)!.tool_calls).toBe(2);
+    expect(dal.iterationsOf(sid)[0]!.root_tool_calls).toBe(2);
     release();
     expect((await sessions.running(sid)!).status).toBe('completed');
     sessions.owner(sid)!.reconcile();

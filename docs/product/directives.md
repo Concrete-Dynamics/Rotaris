@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Thirty.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Thirty-one.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -2906,6 +2906,46 @@ recent part of the transcript, which the report's deterministic facts (OQ-111) p
 > closing section, and a task past 12,000 characters held within the total. **What was not measured.** No built-app proof
 > delegates a task that long; the orchestrator's duress live run's summarising requests should each begin with the whole task.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-orch-008"></a>
+
+### PD-ORCH-008 — a tool call joins the saved totals as it completes
+
+Every tool call an agent of a run completes — the root of an iteration, the root of a plan cycle, and every delegated child
+— SHALL join the session's persisted tool-call total, and the persisted count of the agent that made it, as it completes,
+in one write, not after the agent's execution pass ends. What the pass's end adds is only what was not counted as it
+completed: a call started and never completed, or one answered from a replay. A call is never counted twice, and a process
+death between two calls leaves the total and the agent's count agreeing on every call that completed. The displayed total
+(REQ-MONITOR-102) is therefore the record's during a pass, less the calls still in flight.
+
+REQ-ORCH-097's accumulation is narrowed in its timing only; its replacement of cumulative token and cost snapshots, and
+what the counters feed, are unchanged.
+
+**Why, and what it costs.** In the duress live run of 2026-09-29 the root's one pass lasted the whole 40-minute run, and at
+its deadline the displayed total read 240 against 309 calls made ([OQ-116](../architecture/open-questions.md)); the
+per-agent figures, which read the live tracker, added up to more than the total. For as long as a pass lasts the user saw a
+number that was wrong and contradicted the figures beside it. The cost is a write per completed call, where there was one
+per pass, and one more counter on the session's row for a plan cycle's root, which has no iteration row to hold its count
+(store v32, `sessions.plan_root_tool_calls`).
+
+> **Narrows:** REQ-ORCH-097
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), which ruled OQ-116 as recommended.*
+
+> **First execution, 2026-10-06 (fin20).** The root's `onToolCompleted` (`countRootCall` in `packages/engine/src/run/run.ts`)
+> and a child's (`countCall` in `packages/engine/src/children/orchestration.ts`) each add the call to the run's aggregate and
+> persist it with the agent's count through `SessionWriter.countToolCalls` — an iteration root's `iterations.root_tool_calls`,
+> a plan cycle root's new `sessions.plan_root_tool_calls` (store v32, `planRootCall`, which does not release it), a child's
+> `children.tool_calls` — and the pass's end, give-up or raise adds only the remainder. The crash record of a plan cycle's root
+> adds its record's calls beyond `plan_root_tool_calls`. **What was measured.** `agent-links.test.ts` (the root's total while
+> its turn runs), three cases in `run/crash.test.ts` (the plan cycle's root and child while they run, through a crash and a
+> release apart), one in `run/ladder.test.ts` (a call the attempt REQ-ORCH-088's fallback replaced made) and one in
+> `store.test.ts` (v32); the engine's four were red on the code before. **What was not measured.** No built-app proof holds
+> a pass open long enough to read the total mid-pass; the orchestrator's duress live run should show `sessions.tool_calls`
+> equal to the completed `tool_calls` rows at its deadline. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

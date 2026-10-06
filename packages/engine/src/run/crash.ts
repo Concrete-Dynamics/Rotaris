@@ -197,8 +197,8 @@ function recordAcceptedCancel(dal: StoreDal, writer: SessionWriter, sessionId: S
 
 /**
  * REQ-MONITOR-102 (the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): the calls a dead run's
- * agents made that no count held — the root's are counted when its turn returns and a child's when its execution rests or
- * settles, and a crash ends both without either — join the session's total, read from each agent's record once its open
+ * agents made that no count held — each agent's calls are counted as they complete (OQ-116 as ruled, `PD-ORCH-008`) and the
+ * rest when its turn returns or its execution rests or settles, and a crash ends both without the rest — join the session's total, read from each agent's record once its open
  * calls are answered (so a call the crash cut before it started is not one): the root's beyond its iteration's
  * `root_tool_calls`, and each unfinished child's beyond its `tool_calls`. Both counts move with the total in one
  * transaction, so a second recording, and a resumed child's own credit from its record (`IterationChildren.execute`), find
@@ -218,7 +218,8 @@ function countCrashedCalls(dal: StoreDal, writer: SessionWriter, sessionId: Sess
  * ended: its turn never returned, so none of its calls is counted. A plan cycle is not an iteration and is never at rest
  * (OQ-96), so nothing is paused and it is never resumed; its open calls are answered as a crash's, under the plan cycle's
  * 0, so the call the crash cut settles its row (REQ-SESSION-129) and a call it asked for and never started is not one; then
- * every call its record holds joins the total, in the transaction that releases it — so a second recording finds nothing.
+ * every call its record holds beyond those the total already holds (`plan_root_tool_calls`, each counted as it completed
+ * since OQ-116's ruling) joins the total, in the transaction that releases it — so a second recording finds nothing.
  * A record a compression replaced holds fewer calls than were made, so what this adds may fall short; it never exceeds.
  */
 function recordPlanRootCrash(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void): void {
@@ -232,7 +233,8 @@ function recordPlanRootCrash(dal: StoreDal, writer: SessionWriter, sessionId: Se
     if (!isTerminalChildState(c.state) && c.state !== 'paused') recordCutChild(dal, writer, sessionId, c, 'crash', warn);
   }
   answerOpenCalls(dal, writer, sessionId, { taskId, name: row?.plan_root_persona ?? '' }, 0, 'crash');
-  const r = writer.countToolCalls({ planRoot: { taskId, add: callsRun(conversationOf(dal.agentConversation(sessionId, taskId))) } });
+  // OQ-116 as ruled (store v32): the calls that completed while it ran are in the total already; only the rest are added.
+  const r = writer.countToolCalls({ planRoot: { taskId, add: Math.max(0, callsRun(conversationOf(dal.agentConversation(sessionId, taskId))) - (row?.plan_root_tool_calls ?? 0)) } });
   if (!r.ok) warn(`the calls of the plan cycle's root ${taskId} a crash left uncounted in ${sessionId} were not counted: ${r.error.code}`);
 }
 

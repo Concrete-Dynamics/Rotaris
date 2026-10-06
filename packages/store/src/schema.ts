@@ -1084,6 +1084,22 @@ export const MIGRATIONS: readonly Migration[] = [
       WHERE sandboxed = 1;
     `,
   },
+  {
+    to: 32,
+    /*
+     * REQ-MONITOR-102 with REQ-ORCH-097 as OQ-116 rules it (R-071, `PD-ORCH-008`): each tool call joins the session's total
+     * as it completes, the agent's own count with it, so the displayed total follows the record during a long pass. An
+     * execution iteration's root counts on its row (`iterations.root_tool_calls`, v26) and a child on its own
+     * (`children.tool_calls`); a plan cycle's root has no row, and until this version none of its calls was counted before
+     * its turn returned, so v29's pair said only that it was under way. `plan_root_tool_calls` is how many of the calls of
+     * the plan cycle's root under way the total already holds: 0 when it starts, raised as each call completes, and 0 again
+     * when it is released. A crash during the plan cycle adds what its record holds beyond it. 0 on every row written
+     * before this version, and true of them: no plan cycle's root counted a call before it was released.
+     */
+    sql: `
+      ALTER TABLE sessions ADD COLUMN plan_root_tool_calls INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

@@ -73,6 +73,8 @@ export interface SessionRow {
    */
   readonly plan_root_task_id: string | null;
   readonly plan_root_persona: string | null;
+  /** v32 — REQ-MONITOR-102 (OQ-116, `PD-ORCH-008`): how many of the under-way plan cycle root's calls the total holds; 0 with none. */
+  readonly plan_root_tool_calls: number;
 }
 /** v17 — REQ-ORCH-154's durable record: one row per plan cycle, the decision taken and the text that was approved. */
 export interface PlanCycleRow {
@@ -480,8 +482,9 @@ export class StoreDal {
           token_samples = coalesce(@token_samples, token_samples)
         WHERE session_id = @session_id`),
       // v29 — REQ-MONITOR-102 with REQ-ORCH-153: the plan cycle's root under way, and its release once its calls are counted.
-      setPlanRoot: db.prepare('UPDATE sessions SET plan_root_task_id = ?, plan_root_persona = ? WHERE session_id = ?'),
-      clearPlanRoot: db.prepare('UPDATE sessions SET plan_root_task_id = NULL, plan_root_persona = NULL WHERE session_id = ? AND plan_root_task_id = ?'),
+      setPlanRoot: db.prepare('UPDATE sessions SET plan_root_task_id = ?, plan_root_persona = ?, plan_root_tool_calls = 0 WHERE session_id = ?'),
+      clearPlanRoot: db.prepare('UPDATE sessions SET plan_root_task_id = NULL, plan_root_persona = NULL, plan_root_tool_calls = 0 WHERE session_id = ? AND plan_root_task_id = ?'),
+      addPlanRootCalls: db.prepare('UPDATE sessions SET plan_root_tool_calls = plan_root_tool_calls + ? WHERE session_id = ? AND plan_root_task_id = ?'),
       // v30: a plan cycle's root is recorded once and never changed; a second write of the same root changes nothing.
       insertPlanRoot: db.prepare(`INSERT OR IGNORE INTO plan_roots (session_id, root_task_id, root_canonical_name, root_persona, opened_at)
         VALUES (@session_id, @root_task_id, @root_canonical_name, @root_persona, @opened_at)`),
@@ -993,6 +996,10 @@ export class StoreDal {
   /** v29: releases the plan cycle's root `taskId`; false when the session does not name it (never, or released already). */
   clearPlanRoot(id: SessionId, taskId: string): boolean {
     return this.stmts['clearPlanRoot']!.run(id, taskId).changes === 1;
+  }
+  /** v32 — OQ-116 as ruled: `n` more of the under-way plan cycle root `taskId`'s calls are in the total; false when it is not under way. */
+  addPlanRootCalls(id: SessionId, taskId: string, n: number): boolean {
+    return this.stmts['addPlanRootCalls']!.run(n, id, taskId).changes === 1;
   }
   /** REQ-ORCH-087 / REQ-SESSION-110: status, the count reached (null clears the pause) and the limit in force, one statement. */
   setPause(id: SessionId, status: string, pausedAtCount: number | null, messageLimit: number | null, updatedAt: string): void {

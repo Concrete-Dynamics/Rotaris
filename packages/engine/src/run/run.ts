@@ -392,7 +392,8 @@ export class Run {
   private rootRecord: RootExecutionRecord | null = null;
   /**
    * REQ-MONITOR-044/052 (acceptance A20): the tracker's call count under the current root's name when its execution began,
-   * while none of that execution's calls has joined the session total; null once they have, or with no root running.
+   * plus each of that execution's calls counted as it completed (OQ-116 as ruled); null once its turn's end has counted the
+   * rest, or with no root running.
    */
   private rootUncountedFrom: number | null = null;
   /**
@@ -797,11 +798,11 @@ export class Run {
   }
   /**
    * REQ-MONITOR-044/052 (the repair of `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`, acceptance
-   * A20, R-067): the calls the current root has started in this execution that the session's total does not hold yet. A
-   * root's calls join the total only when its turn returns, or from its record when it never does (REQ-ORCH-097's cadence,
-   * OQ-116); until then they are the tracker's count under the name it dispatches as (`rootName`) less that count when the
-   * execution began. Zero once they are counted, so the run-level agent's figure (`entryToolCallsOf`) never holds a call
-   * twice.
+   * A20, R-067): the calls the current root has started in this execution that the session's total does not hold yet. Since
+   * OQ-116's ruling (R-071, `PD-ORCH-008`) each call joins the total as it completes, and the rest when its turn returns, or
+   * from its record when it never does; until then they are the tracker's count under the name it dispatches as (`rootName`)
+   * less that count when the execution began, moved on by each call counted (`countRootCall`) — so, during a pass, its calls
+   * in flight. Zero once they are counted, so the run-level agent's figure (`entryToolCallsOf`) never holds a call twice.
    */
   get entryUncountedToolCalls(): number {
     return this.rootUncountedFrom === null ? 0 : Math.max(0, this.deps.writer.activity.callCount(this.rootName) - this.rootUncountedFrom);
@@ -1684,6 +1685,8 @@ export class Run {
       recovered: () => { if (!rootDetached) this.deps.warn(stallRecoveredLine(rootName, rootTaskId, 'agent')); },
       evaluated: (stalled) => { if (!rootDetached) this.rootStallEvaluated(rootName, stalled ? rootWatch.silentSeconds : null); },
     });
+    /** OQ-116 as ruled: counts one call the root completed; set below, once the root's counts are known. */
+    let countRootCall: () => void = () => undefined;
     const turnFn = (text: string | null, history: readonly ChatMessage[]) => {
       const content = launching ? this.firstMessage(text ?? task, contentOverride ?? this.deps.taskContent, iterationOverride === undefined) : undefined;
       const initialCall = initial;
@@ -1725,7 +1728,7 @@ export class Run {
       // REQ-MONITOR-117: the root's stall watch is fed as a child's is — every streamed part, every call's start and end.
       onModelEvent: (kind) => rootWatch.modelEvent(kind),
       onToolStarted: (call) => rootWatch.toolStarted(call.callId, call.name),
-      onToolCompleted: (call) => rootWatch.toolCompleted(call.callId),
+      onToolCompleted: (call) => { rootWatch.toolCompleted(call.callId); countRootCall(); },
       // OQ-173: and told of each wait the run holds it in between its steps, which is not its silence.
       onImposedWait: (wait) => rootWatch.imposedWait(wait),
       }, text, history, this.abort.signal, content).finally(() => rootWatch.betweenTurns());
@@ -1743,6 +1746,22 @@ export class Run {
      */
     const rootCount = iterationOverride === undefined ? iteration : null;
     const rootCounts = (add: number): Parameters<SessionWriter['countToolCalls']>[0] => (rootCount !== null ? { root: { iteration: rootCount, add } } : planRoot !== null ? { planRoot: { taskId: planRoot, add } } : {});
+    /*
+     * OQ-116 as ruled (R-071, `PD-ORCH-008`, narrowing REQ-ORCH-097's cadence): each call the root completes joins the
+     * session's total as it completes, with the root's own count — its iteration's, or the plan cycle root's under way
+     * (store v32), which it does not release — so the displayed total (REQ-MONITOR-102) follows the record during a long
+     * pass. What its turn's end, its give-up or its raise adds is only what these did not: a call it started and never
+     * completed, or one REQ-ORCH-141 answered from a replay. `rootLive` is how many it counted this execution.
+     */
+    let rootLive = 0;
+    countRootCall = () => {
+      if (rootDetached) return;
+      rootLive += 1;
+      this.aggregates.addToolCalls(1);
+      this.persistToolCalls(rootCount !== null ? { root: { iteration: rootCount, add: 1 } } : planRoot !== null ? { planRootCall: { taskId: planRoot, add: 1 } } : {});
+      // The run-level agent's live share (`entryUncountedToolCalls`) is what the total does not hold yet.
+      if (this.rootUncountedFrom !== null) this.rootUncountedFrom += 1;
+    };
     // REQ-MONITOR-044/052 (acceptance A20): from here until they join the total, the root's calls are counted live.
     this.rootUncountedFrom = writer.activity.callCount(rootName);
     rootWatch.start();
@@ -1792,10 +1811,11 @@ export class Run {
         this.deps.warn(`iteration ${iteration}: the root ${rootName} did not return within the stop's 30 s grace and was given up on (REQ-SESSION-092)`);
       } else {
         outcome = settled;
-        this.aggregates.addToolCalls(outcome.toolCallCount);
-        // REQ-MONITOR-102: the root's count on its iteration moves with the total, in one transaction (REQ-ORCH-097's
-        // cadence: when its turn returns).
-        this.persistToolCalls(rootCounts(outcome.toolCallCount));
+        // REQ-MONITOR-102: the root's count on its iteration moves with the total, in one transaction. Its completed calls
+        // were counted as they completed (OQ-116 as ruled); its turn's end adds the rest, and releases a plan cycle's root.
+        const rest = Math.max(0, outcome.toolCallCount - rootLive);
+        this.aggregates.addToolCalls(rest);
+        this.persistToolCalls(rootCounts(rest));
         this.rootUncountedFrom = null;
       }
       /*
@@ -1888,7 +1908,8 @@ export class Run {
        * children — and that root's calls were counted with its outcome above.
        */
       if (outcome === null && this.deps.dal) {
-        const gained = Math.max(0, callsRun(this.record.load(rootTaskId)) - recordedAtStart);
+        // Less the calls it counted as they completed (OQ-116 as ruled), which its record holds too.
+        const gained = Math.max(0, callsRun(this.record.load(rootTaskId)) - recordedAtStart - rootLive);
         this.aggregates.addToolCalls(gained);
         this.persistToolCalls(rootCounts(gained));
       }

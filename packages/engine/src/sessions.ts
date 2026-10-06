@@ -937,8 +937,9 @@ export function entryRootsOf(dal: StoreDal, sessionId: SessionId, run: { readonl
  * REQ-MONITOR-044/052 (the repair of `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`, acceptance A20,
  * R-067): the run-level agent's tool-call count. The session's total holds every root's calls and every child's, each
  * child's share persisted on its row with it (`SessionWriter.countToolCalls`), so the roots' share is the total less the
- * children's persisted counts. A root's calls join the total only when its turn returns (REQ-ORCH-097's cadence, OQ-116),
- * so the live run adds the calls its current root has made and the total does not hold yet (`Run.entryUncountedToolCalls`).
+ * children's persisted counts. A root's calls join the total as each completes (OQ-116 as ruled, R-071, `PD-ORCH-008`; until
+ * then only when its turn returned), so the live run adds the calls its current root has started and the total does not hold
+ * yet — those in flight (`Run.entryUncountedToolCalls`).
  * Before this the surfaces read the total less the children's displayed counts, and while the root's turn ran its meta
  * line read `0 tool calls` beside the tools it had used.
  */

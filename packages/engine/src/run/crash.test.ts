@@ -1479,11 +1479,12 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       const { sessions, sid } = planSession();
       await settle(() => cutRow(sid)?.tool_status === 'running');
       expect(sessions.run(sid)!.isPlanGateHeld).toBe(true);
-      // Nothing counted them: the root's turn never returned, and a plan cycle has no iteration row. The session names it.
-      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 0, plan_root_task_id: planRootOf(sid), plan_root_persona: 'orchestrator' });
+      // The call that completed is counted (OQ-116 as ruled, PD-ORCH-008; store v32), and the session holds that it is: the
+      // cut one is not. Before the ruling nothing was counted until the root's turn returned. The session names the root.
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 1, plan_root_tool_calls: 1, plan_root_task_id: planRootOf(sid), plan_root_persona: 'orchestrator' });
       expect(dal.iterationsOf(sid)).toEqual([]);
       expect(next().repair(dal, 'C:/ws', { sessionId: sid }).repaired).toHaveLength(1);
-      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 2, plan_root_task_id: null, plan_root_persona: null });
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 2, plan_root_tool_calls: 0, plan_root_task_id: null, plan_root_persona: null });
       // REQ-SESSION-129: the call the crash cut is answered as a crash's, and its row settles `failed`.
       expect(conversationOf(dal.agentConversation(sid, planRootOf(sid))).at(-1)).toEqual({ role: 'tool', content: [{ kind: 'tool-result', callId: 'g2', name: 'grep', isError: true, result: interruptedResult('crash', true, '') }] });
       expect(cutRow(sid)).toMatchObject({ tool_status: 'failed', output: interruptedResult('crash', true, '') });
@@ -1520,8 +1521,10 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
      */
     it('a plan cycle\'s root the stop\'s grace gave up on is released in the transaction that adds its calls, not by a write apart from it', async () => {
       const { sessions, sid } = planSession();
+      // Since OQ-116's ruling the total holds the calls the root completed (`plan_root_tool_calls`) before its release, so a
+      // release apart is one written once the total holds more than those.
       dal.db.exec(`CREATE TEMP TRIGGER drop_release_apart BEFORE UPDATE OF plan_root_task_id ON sessions
-        WHEN OLD.plan_root_task_id IS NOT NULL AND NEW.plan_root_task_id IS NULL AND OLD.tool_calls > 0 BEGIN SELECT RAISE(IGNORE); END`);
+        WHEN OLD.plan_root_task_id IS NOT NULL AND NEW.plan_root_task_id IS NULL AND OLD.tool_calls > OLD.plan_root_tool_calls BEGIN SELECT RAISE(IGNORE); END`);
       await settle(() => cutRow(sid)?.tool_status === 'running');
       expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
       await new Promise((r) => setTimeout(r, 20));
@@ -1586,7 +1589,9 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         const { sessions, sid } = planWithChild();
         await settle(() => childCut(sid)?.tool_status === 'running');
         expect(sessions.run(sid)!.isPlanGateHeld).toBe(true);
-        expect(look(sid)).toMatchObject({ iteration: 0, state: 'running', tool_calls: 0 });
+        // OQ-116 as ruled: its completed call is counted already, and so is the root's delegate, in the session's total.
+        expect(look(sid)).toMatchObject({ iteration: 0, state: 'running', tool_calls: 1 });
+        expect(dal.getSession(sid)).toMatchObject({ tool_calls: 2, plan_root_tool_calls: 1 });
         expect(next().repair(dal, 'C:/ws', { sessionId: sid }).repaired).toHaveLength(1);
         // REQ-SESSION-129: a repair alone leaves no transcript row `running`; the cut call is answered as a crash's.
         expect(toolRows(sid).filter((r) => r.tool_status === 'running')).toEqual([]);

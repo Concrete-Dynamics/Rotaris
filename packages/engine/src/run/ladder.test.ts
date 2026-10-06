@@ -1988,6 +1988,29 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(timeline(sid2)).not.toContain('fallback_model');
   });
 
+  it('OQ-116 as ruled (PD-ORCH-008): a call the attempt the fallback retry replaced completed stays counted — in the child\'s count and the session\'s total', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer('finished');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      return turn === 1 ? toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Looking.') : turn === 2 ? hanging(NEVER) : answer('I did it on the fallback.');
+    };
+    const withFallback = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true });
+    const sid = (withFallback.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    // The first attempt's call completed: it is in the child's count and the total while the attempt still runs.
+    expect(dal.childrenOf(sid)[0]).toMatchObject({ state: 'running', tool_calls: 1 });
+    expect(dal.getSession(sid)!.tool_calls).toBe(2);
+    clock.advance(10_000);
+    await tick();
+    clock.advance(30_000);
+    expect((await withFallback.sessions.running(sid)!).status).toBe('completed');
+    // The retry replaced the attempt and made no call; the call the replaced attempt made stays counted, once.
+    expect(timeline(sid)).toContain('fallback_model');
+    expect(dal.childrenOf(sid)[0]).toMatchObject({ state: 'succeeded', tool_calls: 1 });
+    expect(dal.getSession(sid)!.tool_calls).toBe(2);
+  });
+
   /*
    * PD-ORCH-004 on REQ-ORCH-088's own path: the parts of the progress rule that only the timeout's machinery can
    * exercise — the fallback retry, the landing grace and the role's window. Each child here runs under a 10 s limit.

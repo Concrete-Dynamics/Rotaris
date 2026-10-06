@@ -295,6 +295,9 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
     // All activity drew a failed child's 21-minute run as its first row alone. The rows had left the replica — the
     // publisher sent a row settled below the last without the rows after it — and this pins the projector's half of the
     // chain against the run's exact order: given what REQ-MONITOR-214's increments carry, every row is drawn, bounded or whole.
+    // It passes with and without that repair, since the projector was never the fault: the pin that fails without it is the
+    // engine's, `packages/engine/src/projection-owner.test.ts`, "the duress run's order — the child's row settled under the
+    // coordinator's wait, the wait settled under the child's rows — leaves the view holding every recorded row".
     it('PD-CHAT-004 rev 2 / REQ-MONITOR-214: a child\'s row settled under the coordinator\'s running wait, then the child\'s further rows, then the wait settled — every row drawn', () => {
       const at = (s: number) => new Date(Date.UTC(2026, 9, 6, 2, 15, 0) + s * 1000).toISOString();
       const O = { persona: 'orchestrator', name: 'orchestrator' };

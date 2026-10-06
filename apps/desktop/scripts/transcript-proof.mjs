@@ -669,7 +669,9 @@ if (wanted('interleave')) {
   // one's command runs, so the first one's settle lands below the second one's rows, and the reverse.
   const CHILD = 'terminal:hold,read,glob,terminal:hold,read,answer';
   const HELD_ROWS = `(() => { const out = []; for (let i = 0; i < 400; i += 1) { const r = window.__rotarisRow(i); if (r) out.push({ index: r.index, kind: r.kind, settled: r.settled === true, toolStatus: r.toolStatus ?? null, name: r.name ?? null }); } return out; })()`;
-  const LINES = `(() => [...document.querySelectorAll('[data-testid="row-group"]')].map((n) => ({ agent: n.getAttribute('data-agent'), text: (n.querySelector('.activity__segments') ?? n).textContent.replace(/\s+/g, ' ').trim() })))()`;
+  // No drawn-line reading: the one this stage took (`LINES`, until 2026-10-06) was built in a template literal, so its
+  // `\s+` reached the renderer as `s+`, and the run groups it read were virtualized off screen at the reading, so it
+  // returned [] every time and nothing asserted it. What is drawn from the replica is `projector.test.ts`'s to hold.
   // Read at an appointment well after the run's end (about ten seconds of scripted work), and checked against it below.
   const READ_AT = 30_000;
   const r = await launch('interleave', {
@@ -677,7 +679,7 @@ if (wanted('interleave')) {
     ROTARIS_CHILD_SCRIPT: CHILD,
     ROTARIS_SCRIPT_TERMINAL_ARGS: JSON.stringify({ hold: { command: 'sleep 2.5' } }),
     ROTARIS_CAPTURE_PROMPT: 'delegate to two agents',
-    ROTARIS_CAPTURE_EVAL_AT: `${HELD_ROWS}@${READ_AT};;${LINES}@${READ_AT + 200};;window.__rotarisReplica()@${READ_AT + 400}`,
+    ROTARIS_CAPTURE_EVAL_AT: `${HELD_ROWS}@${READ_AT};;window.__rotarisReplica()@${READ_AT + 400}`,
     ROTARIS_CAPTURE_AFTER_MS: String(READ_AT + 1_000),
   }, 240_000, [], where);
   const ended = /^\[main (\S+)\] .*run \S+ ended /m.exec(r.log);
@@ -704,7 +706,6 @@ if (wanted('interleave')) {
     }
   } finally { db.close(); }
   const held = evalAt(r, READ_AT);
-  const lines = evalAt(r, READ_AT + 200) ?? [];
   // The guards: both children ran and ended, and a terminal call really did settle below a row another agent wrote —
   // or the assertion below is true of a run that never had the shape.
   expect(children.length === 2 && children.every((c) => c.state === 'succeeded'), `interleave: the children were ${JSON.stringify(children)}`);
@@ -714,7 +715,7 @@ if (wanted('interleave')) {
   expect(held !== null, 'interleave: the replica was never read (see interleave.log)');
   const missing = recorded.filter((x) => !held.some((h) => h.index === x.index));
   const differ = recorded.filter((x) => { const h = held.find((y) => y.index === x.index); return h !== undefined && (h.kind !== x.kind || h.settled !== x.settled || h.toolStatus !== x.toolStatus); });
-  results.interleave = { recorded: recorded.length, held: held.length, missing: missing.map((x) => x.index), differ: differ.map((x) => x.index), children, settledBelow, activityLines: lines, replica: evalAt(r, READ_AT + 400), png: r.png };
+  results.interleave = { recorded: recorded.length, held: held.length, missing: missing.map((x) => x.index), differ: differ.map((x) => x.index), children, settledBelow, replica: evalAt(r, READ_AT + 400), png: r.png };
   writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
   expect(missing.length === 0, `interleave: the replica holds ${held.length} of the ${recorded.length} recorded rows; missing ${JSON.stringify(missing.map((x) => x.index))} (REQ-MONITOR-214)`);
   expect(differ.length === 0, `interleave: the replica holds rows ${JSON.stringify(differ.map((x) => x.index))} in a form the store does not`);

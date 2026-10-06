@@ -74,3 +74,35 @@ it. Pinned by:
   appends, so ten rows settle below a later one. On the build without the repair the replica held **16 of 31** recorded
   rows (missing 6 to 8, 10 to 14, 16 to 20, 22 and 23); with it, all 31 in their recorded form (load 4.2 to 5.3 on 4
   CPUs, two other plans on the host).
+
+## The declined increment at run start (fin21, 2026-10-06, a verifier's question)
+
+fin19's verifier saw the renderer's replica warn "declined increment … earliest-changed 2 precedes oldest held 3" at the
+start of every interleave launch, and recover through REQ-SESSION-161's reconcile. Why the replica can hold from row 3
+without rows 0 to 2, read from the code (`packages/ui-core/src/replica.ts`, `apps/desktop/src/main/commands/session.ts`,
+`packages/engine/src/projection-owner.ts`):
+
+- A window that starts a session follows it (`follow`, rows emptied, no expectation), and `session.subscribe` subscribes
+  the window to the relay **before** it asks the run host to attach. Between the two, the run's own publications already
+  reach the window: a whole-session update (a status save, or a record tick) sets the replica's expectation, and the next
+  live increment is applied to an empty replica. In the verifier's launches that was row 3, appended behind row 2 while
+  row 2 was still unsettled (which rows those were is not in the warning; the stage's run starts with the coordinator's
+  delegation calls), published as `earliestChanged 3, [3]`. The replica then holds `[3]` alone; rows 0 to 2 were published
+  before it followed, or before an update gave it an expectation (an increment with none is dropped).
+- When row 2 settles inside that window (`earliestChanged 2`, carrying 2 and 3 since the repair above), 2 is below the
+  oldest row held and not 0, so the replica declines it and asks for a reconcile, which is the warning seen.
+
+Would a run with **no** settle below its first held row leave the replica so? **No.** The attach that follows every
+relay subscription publishes the whole-session update and then the resident transcript from the lowest index held
+(`ProjectionOwner.attach`: 0 for a session whose rows are all resident), stamped after the live publications on the same
+sequence and delivered in order, so the replica replaces everything from 0 within the subscribe's round trip whether or
+not anything declined. The decline only surfaces the window when a settle below lands inside it; the attach closes it
+regardless. A window that never paged its top in would in any case fetch the older span when the pane reaches its top
+(`session.pageOlder`, REQ-CHAT-165), which a short transcript does at once. No defect note is owed.
+
+Measured on this branch (base `9e2b9b3`, which includes `29c3047`, where `session.start` began marking the starting window's
+follow before the run host is asked): three interleave launches (`pnpm transcript-proof --only=interleave --skip-build`, as
+root under Xvfb, load 6.9 to 12.2 on 4 CPUs with another plan's agents on the host) each ended with the replica's counters
+at `declined 0`, `dropped 0`, `refused 0`, holding all 31 recorded rows with `oldestIndex 0` and `reachedOldest true`. The
+warning was not reproduced here, so whether `29c3047` narrowed the window or the verifier's launches met it by timing is not
+known; the reasoning above holds either way.

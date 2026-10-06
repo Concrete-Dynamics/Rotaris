@@ -126,7 +126,7 @@ small slot's rung ladder; the grant; the playbooks; the BUDGET cell) → **the p
 launch audit (once per session, REQ-SESSION-138; a continuation's run records its payload as a
 `run_continuation_intent` timeline entry instead, and the record's intent status, REQ-ORCH-014, reads the newest of
 those, else the launch audit — `intentPayloadOf`, since 2026-10-01; OQ-162) → `run_start` timeline entry → hook trust announced → the
-effective permission posture (PD-TOOLS-002: the requested mode, never a downgrade row) → save `running` → `session_start` hooks → **the plan cycle
+effective permission posture (PD-TOOLS-002: the requested mode, never a downgrade row) → save `running`, which writes `run_started_at` as the instant of the `starting` save, so the run's duration (REQ-CHAT-158's frozen header value, the inspector's run-level row, the session list's duration label) counts the pre-flight for a continuation as for a launch (since 2026-10-06; live-run finding G8) → `session_start` hooks → **the plan cycle
 if the gate holds**, otherwise the loop — for a run that resumes an open iteration, the loop, holding before its
 first new iteration if the gate would hold (PD-ORCH-003 revision 2).
 

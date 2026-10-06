@@ -147,6 +147,36 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     expect(snapshots.at(-1)!.intent).toMatchObject({ phase: 'classified', category: 'explicit_trivial' });
   });
 
+  it('REQ-CHAT-158 / REQ-SESSION-154 (live-run finding G8): a continuation\'s run starts at its `starting` save, its pre-flight counted as a launch\'s is', async () => {
+    // Each classification takes wall time on the run's clock: 3 s for the launch, 8.6 s for the Continue (the live run's).
+    const took = [3_000, 8_600];
+    let releaseTurn!: () => void;
+    const turnHeld = new Promise<void>((r) => { releaseTurn = r; });
+    const startingAt: string[] = [];
+    const { sessions } = sessionsWith([{ parts: [{ hold: turnHeld }, ...toolCalls([{ callId: 'c1', name: 'read_file', args: { path: 'README.md' } }], 'looking').parts] }, answer('done')],
+      () => preflightOf('none', 'single_file_change'), undefined,
+      (ctx) => { startingAt.push(dal.getSession(ctx.sessionId as SessionId)!.updated_at); clock.advance(took.shift() ?? 0); });
+    const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && dal.getSession(sid)!.execution_status !== 'running'; i++) await new Promise((r) => setTimeout(r, 5));
+    // The launch: the column is the `starting` save the pre-flight began under.
+    expect(dal.getSession(sid)!.run_started_at).toBe(startingAt[0]);
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    releaseTurn();
+    await sessions.running(sid)!;
+    clock.advance(500);
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    for (let i = 0; i < 40 && startingAt.length < 2; i++) await new Promise((r) => setTimeout(r, 5));
+    expect(startingAt).toHaveLength(2);
+    clock.advance(1_000);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const row = dal.getSession(sid)!;
+    // The continuation: the `starting` save it classified under, not the instant its classification returned (8.6 s on).
+    expect(row.run_started_at).toBe(startingAt[1]);
+    expect(Date.parse(row.updated_at) - Date.parse(row.run_started_at!)).toBeGreaterThanOrEqual(9_600);
+    // The session list's duration label reads the same column: the continued run's whole duration, 0:09, not 0:01.
+    expect(sessions.list(dal, 'C:/ws').find((r) => r.sessionId === sid)!.durationLabel).toBe('0:09');
+  });
+
   it('REQ-ORCH-014: the status reads the newest continuation intent over the launch audit, and the launch audit where no continuation recorded one', async () => {
     const { sessions } = sessionsWith([answer('done')], preflightOf('direct-work', 'single_file_change'));
     const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;

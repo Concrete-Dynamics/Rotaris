@@ -937,6 +937,12 @@ export class Run {
       this.classifying = this.deps.preflight !== undefined;
       writer.save('starting', { todo: this.todoJson() });
       this.startedAt = clocks.monotonic.now();
+      /*
+       * REQ-CHAT-158 / REQ-SESSION-154: the run's wall-clock start is this `starting` save, the pre-flight inside it, for a
+       * continuation as for a launch. Read back here, before the pre-flight, since a continuation's "Intent classified" row
+       * moves the row's `updated_at` past the classification (live-run finding G8: 8.6 s dropped from a 64.9 s run).
+       */
+      const runStartedAt = this.deps.readSession()?.updated_at ?? null;
       // REQ-ORCH-005: the intent is in effect before the first iteration; while it is being decided the session reads `classifying`.
       if (this.deps.preflight) {
         try { this.preflight = await this.deps.preflight(this.abort.signal); } catch (cause) { this.deps.warn(`the pre-flight raised and the run continues on the fallback intent: ${String(cause)}`); }
@@ -991,7 +997,7 @@ export class Run {
       }
       // PD-TOOLS-002: the requested mode always applies — no downgrade row, timeline event or log warning. The announcement records the requested (= effective) mode.
       const perm = this.deps.permission;
-      this.saveRunning({ run_started_at: this.deps.readSession()?.updated_at ?? null, permission_mode: perm.effective, sandboxed: perm.sandboxed ? 1 : 0, sandbox_backend: perm.sandboxed ? perm.sandboxBackend : '' });
+      this.saveRunning({ run_started_at: runStartedAt, permission_mode: perm.effective, sandboxed: perm.sandboxed ? 1 : 0, sandbox_backend: perm.sandboxed ? perm.sandboxBackend : '' });
       // REQ-MONITOR-166: sampled by the run, not by a view — the cadence from the clock port, never a bare timer.
       this.sampler = clocks.timers.every(TOKEN_SAMPLE_PERIOD, () => this.sampleTokens(true));
       await this.drain();

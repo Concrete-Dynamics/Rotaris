@@ -9410,6 +9410,14 @@ is read from, so building the list still reads one row per session and nothing e
 **What a ruling decides.** Whether the three labels stay on the card (and REQ-SESSION-030's field set gains them, the
 "change to this field set" it names), or leave it (and REQ-MONITOR-171 is amended).
 
+*(Added 2026-10-06, a case of the duration label, from finding G8 of the orchestrator's final default live run at `27a5127`
+([`fixed/a-continuations-run-timing-starts-after-its-pre-flight-where-a-launchs-counts-it.md`](../defects/fixed/a-continuations-run-timing-starts-after-its-pre-flight-where-a-launchs-counts-it.md)).
+The label is the latest run's duration: for a session paused and continued it leaves the first run out (the live run's
+`resume` session ran 87.7 s over two runs; its label counts the continuation alone, 64.9 s once that repair counts the
+continuation's pre-flight). Neither REQ-SESSION-154 ("a relative-time duration label") nor REQ-MONITOR-171 ("a duration
+label") says whether it is the latest run's or the session's. What the build proceeds under is unchanged: the latest run's,
+`durationLabel(run_started_at, …)`. What a ruling adds, if the label stays: which of the two it is.)*
+
 **OQ-193 — What does the status strip's branch item show on a detached HEAD, outside a repository and before the first
 read: REQ-GIT-161's conveyed states, or REQ-WORKSPACE-020's empty item?** *(REQ-GIT-161, the item "SHALL convey that the
 checkout is on no branch when the workspace, or the focused session's worktree, is on a detached HEAD, and SHALL convey that

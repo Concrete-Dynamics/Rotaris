@@ -39,3 +39,26 @@ endpoint):
 - `packages/engine/src/sessions.ts` — `list()`: the session list's `durationLabel(row.run_started_at, …)`.
 - `packages/ui/src/composer.ts` — `runTimingSeconds`, the header's frozen value (`updatedAt − runStartedAt`).
 - `packages/ui/src/agents.ts` — the inspector's run-level row (`spawnedAt: session.runStartedAt`).
+
+## Repaired (2026-10-06, fin18)
+
+`Run.start()` reads the row's `updated_at` back right after the `starting` save, before the pre-flight, and the `running`
+save writes that as `run_started_at` (`packages/engine/src/run/run.ts`). A continuation's run now starts where a launch's
+does, its classification counted, so the header's frozen value, the inspector's run-level row and the session list's
+duration label read the run's whole wall-clock duration (64.9 s for the live run's continuation, where they read 56 s).
+The column is still written after the pre-flight, so the cancel overlay's order (`packages/ui/src/cancel-overlay.ts`)
+holds as it was.
+
+Pinned by `packages/engine/src/run/preflight.test.ts`, "REQ-CHAT-158 / REQ-SESSION-154 (live-run finding G8): a
+continuation's run starts at its `starting` save, its pre-flight counted as a launch's is": the launch's classification
+takes 3 s and the Continue's 8.6 s on the run's clock; the launch's `run_started_at` is its `starting` save, the
+continuation's is its own `starting` save (it was the instant after its classification returned, 9.6 s later, before the
+repair), and the session list's duration label reads `0:09` for the continued run. It fails without the repair.
+The built app shows the repair in the next default live run's `resume` scenario (the orchestrator's; an agent's live-run
+launch is refused): `run_started_at` precedes that run's `run_continuation_intent` timeline entry.
+
+Not decided here: whether the session list's duration label is the latest run's (as built, OQ-192's reading:
+`durationLabel(run_started_at, …)`) or the session's whole (the autopsy reads 87.7 s for this session, its first run's
+22.6 s outside the label). REQ-SESSION-154 says "a relative-time duration label" and REQ-MONITOR-171 "a duration label";
+neither says which. The case is added to [OQ-192](../../architecture/open-questions.md), whose ruling decides whether the
+label stays on the row at all.

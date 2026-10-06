@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**A continuation's run starts at its `starting` save (REQ-CHAT-158, REQ-SESSION-154; fin18).** `Run.start()` reads the
+row's `updated_at` back right after the `starting` save and writes that as `run_started_at` with the `running` save, where it
+took the row's last `updated_at` at that save, which a continuation's "Intent classified" row had moved past its pre-flight.
+The **runtime view**'s `Run.start()` sequence says so. No package, edge, process, channel, command or store column changed.
+
 **The window that starts a session shows it from the start, and the fallback restart clears the session's notice
 (REQ-NOTIFY-032, REQ-NOTIFY-058; finacc2's A1).** `session.start` mints every start's id and marks it as the asking window's
 start (`MainWindows.beginStart`, cleared by its subscription, unsubscribe, release or a refused start), and the focus test of

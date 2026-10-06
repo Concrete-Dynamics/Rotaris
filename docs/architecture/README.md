@@ -529,11 +529,12 @@ undo.
 
 **The exception does not reach the copied-folder case and must not be widened to it.** A user who copies a
 workspace folder and wants the copy to have an identity of its own still has no product action, and that
-half of **OQ-47** stays open. The requirement states why the exception is drawn this narrowly: the rule
-protects against a folder moved, renamed, copied or merely spelled differently, which is constant, while
-the recovery arises once in a workspace's life if it arises at all — so relaxing it generally would trade a
-constant protection for a rare recovery. **An implementation that finds this exception useful anywhere
-else has drawn the wrong lesson from it.**
+half of **OQ-47** stays open *(ruled 2026-10-06, [R-071](../product/requests.md#r-071): ADR-0058's behaviour
+ratified, the hand edit accepted for the first release)*. The requirement states why the exception is drawn
+this narrowly: the rule protects against a folder moved, renamed, copied or merely spelled differently,
+which is constant, while the recovery arises once in a workspace's life if it arises at all — so relaxing it
+generally would trade a constant protection for a rare recovery. **An implementation that finds this
+exception useful anywhere else has drawn the wrong lesson from it.**
 
 Two further decisions ADR-0058 takes here are **architecture-invented behaviour on specification
 silence**, and both are flagged for ratification rather than presented as settled. Two concurrently open
@@ -973,11 +974,12 @@ own events are emitted by main; the operating-system signals detect the wrong ca
 fired at +5.18/+5.41/+5.44 s for a busy loop and **never** for a native modal, with the modal's own window
 reporting itself healthy on all 23 samples. Recorded so it is not re-proposed.
 
-**The window is still not sized, and OQ-39 is explicitly not closed by any of that.** The spike's main
-process paints one heading; it has no framework, no transcript pipeline, no session writer and no version
-control, and it does **not** reproduce the 22,777 ms of event-loop lag the IPC spike measured under frame
-load — which is the state the window must survive. What exists is a floor (a false-lapse floor on an idle
-main and a detection latency for a set of thresholds), not a size.
+**The window is still not sized, and OQ-39 is explicitly not closed by any of that.** *(ruled 2026-10-06,
+[R-071](../product/requests.md#r-071): the poll and the window accepted as built)* The spike's main process
+paints one heading; it has no framework, no transcript pipeline, no session writer and no version control,
+and it does **not** reproduce the 22,777 ms of event-loop lag the IPC spike measured under frame load —
+which is the state the window must survive. What exists is a floor (a false-lapse floor on an idle main and
+a detection latency for a set of thresholds), not a size.
 
 On `allow`, pre-execution hooks run — in declaration order, one after another, **even after one has
 decided to stop the call**. Then the tool executes; if it is a command, it goes into the terminal
@@ -1369,7 +1371,9 @@ conditions, available only inside `REQ-SESSION-201`'s restore and nowhere else; 
 the whole of it and `REQ-SESSION-201` carries a pointer, because a contract has exactly one home. The
 recovery journey ESC-19 minted the backup for — machine dies, clone the repository, open it once, restore
 the backup — now completes without a hand-edited file. What it does **not** do is give a user with a copied
-folder any product action, and that half of OQ-47 stays open on purpose.
+folder any product action, and that half of OQ-47 stays open on purpose *(ruled 2026-10-06,
+[R-071](../product/requests.md#r-071): ADR-0058's behaviour ratified, the hand edit accepted for the first
+release)*.
 
 **No escalation is open.** The seven bullets that stood here, each stating an open question for the owner,
 are removed rather than kept as tombstones, because every one is answered by a requirement and
@@ -1693,7 +1697,8 @@ measured on one binding on one machine.
 has still not been priced on the startup path, and it now belongs to spike 8 rather than floating — on spike
 21's figures a single commit is sub-millisecond on local storage, so it is very likely free, **but "very
 likely free" is exactly the phrase this record has been wrong with before**. And OQ-39's presenter lapse
-window is still **not sized**, because spike 14's harness main process had no product in it; that is a
+window is still **not sized** *(ruled 2026-10-06, [R-071](../product/requests.md#r-071): the poll and the
+window accepted as built)*, because spike 14's harness main process had no product in it; that is a
 question, not a pending spike.
 
 ***What the five landed measurements left behind, kept because it is the evidence the gate rests on.***
@@ -1732,10 +1737,11 @@ rather than by the ones that were written down.
   described it** — both fixed there, both invisible in any build that never meets a damaged preparation.
   See the four-for-four finding below.
 - **Spikes 14 and 16 — `presenter-liveness-and-instance-claim.md`. Spike 16 discharged and its ADR's rule
-  fired; spike 14 measured but OQ-39 not closed.** The instance-claim consequence is in section 1 above.
-  The liveness consequence is in section 4. **What spike 14 did not settle is the thing it was raised
-  for**: the window is still not sized, because the harness's main process has no product in it and does
-  not reproduce the loaded state the window must survive.
+  fired; spike 14 measured but OQ-39 not closed.** *(ruled 2026-10-06,
+  [R-071](../product/requests.md#r-071): the poll and the window accepted as built)* The instance-claim
+  consequence is in section 1 above. The liveness consequence is in section 4. **What spike 14 did not
+  settle is the thing it was raised for**: the window is still not sized, because the harness's main process
+  has no product in it and does not reproduce the loaded state the window must survive.
 - **Spike 22 — `backup-restore-mechanism.md`. Discharged, and the mechanism it measured did not work.**
   It found eleven defects; the three it corrected and the eight it did not are in list A. **What it settled and what a later pass
   must not disturb:** ESC-26's three identifier cases, including the confirmed establishment, where the
@@ -2087,20 +2093,22 @@ citation. OQ-11's closure text was wrong and was rewritten rather than deleted: 
 `REQ-LIBRARY-043`'s ladder went with its document layout, not because neither ladder has a file left to
 govern.
 
-**Four questions changed character on measurement and none of them closed, which is worth saying because
-"a spike ran" reads as "a question closed".** **OQ-39** (sizing the presenter lapse window) has a floor
-and a detection latency and is **explicitly not sized**, because the harness's main process had no product
-in it. ***OQ-44 has since CLOSED and the sentence that stood here — that it "stops being sufficient and unspecified
+**Four questions changed character on measurement and none of them closed, which is worth saying because "a
+spike ran" reads as "a question closed".** **OQ-39** (sizing the presenter lapse window) has a floor and a
+detection latency and is **explicitly not sized**, because the harness's main process had no product in it
+*(ruled 2026-10-06, [R-071](../product/requests.md#r-071): the poll and the window accepted as built)*.
+***OQ-44 has since CLOSED and the sentence that stood here — that it "stops being sufficient and unspecified
 and becomes necessary on ordinary corporate storage and unspecified" — described it for one day.*** The
 measurement fixed the *shape* of the answer without supplying its numbers, since two extra attempts sufficed
 in every one of 30 retried renames; the platform-defect round then supplied the numbers. **OQ-12** gains a
-second measurement pulling the same way: the
-naive directory-flush call returns an error on every spelling including local, so "add the missing flush"
-produces a failure rather than a guarantee, and the available call needs a deliberately write-opened handle
-whose guarantee is still unestablished. **OQ-43** (does the single-instance gate admit a benchmark
-iteration?) is unchanged in substance and now concerns **our** gate rather than the platform's, which makes
-the sentinel branch entirely ours to define and the composition easier to state — the requirement-level
-ambiguity it records is untouched.
+second measurement pulling the same way: the naive directory-flush call returns an error on every spelling
+including local, so "add the missing flush" produces a failure rather than a guarantee, and the available
+call needs a deliberately write-opened handle whose guarantee is still unestablished. **OQ-43** (does the
+single-instance gate admit a benchmark iteration?) *(ruled 2026-10-06,
+[R-071](../product/requests.md#r-071): the exception stated as built in `PD-STARTUP-002`)* is unchanged in
+substance and now concerns **our** gate rather than the platform's, which makes the sentinel branch entirely
+ours to define and the composition easier to state — the requirement-level ambiguity it records is
+untouched.
 
 **Two are more owed than they were, and one of them grew twice in one day.** **OQ-48** — reclaiming a
 machine-local store whose workspace no longer exists — had three producers this morning and has **five**
@@ -2137,18 +2145,19 @@ boundary in every run — is the fact the requirement was amended against.
 
 **Three questions changed shape rather than closing, and one is new.** **OQ-47**'s third paragraph is
 discharged and preserved as the mistake it was: the two records do not disagree about what identifies a
-workspace, they key two different objects, and both collapses are actively wrong. Its first two
-paragraphs stay open, and the dead end they record — "go and edit this file" — is now reached by a second
-route, from the restore. **OQ-45** is narrowed (ADR-0041 takes the improvement store's export and only
-the export) and simultaneously **more** owed; the interaction it named between `REQ-LIBRARY-047`'s
-best-effort version write and `REQ-LIBRARY-176`'s "how many were dropped" clause is what ESC-30 ruled on,
-and both requirements are now amended, so what stays open here is the storage half alone. **OQ-48** is
-more owed again, at five leftover kinds rather than three: the restore and the corruption ladder each
-displace a store and keep it, a confirmed establishment orphans one, and the restore now also leaves a
-full staging copy and an obstruction aside-name — so **the operations a user in trouble reaches for first
-are the ones that leave the most behind**, and the surface that would clear any of it exists nowhere.
-**OQ-49** was new and is now closed by amendment: what makes two directory strings the same directory,
-which ADR-0002 decided because it needed a key and `REQ-STARTUP-163` now owns.
+workspace, they key two different objects, and both collapses are actively wrong. Its first two paragraphs
+stay open *(ruled 2026-10-06, [R-071](../product/requests.md#r-071): ADR-0058's behaviour ratified, the hand
+edit accepted for the first release)*, and the dead end they record — "go and edit this file" — is now
+reached by a second route, from the restore. **OQ-45** is narrowed (ADR-0041 takes the improvement store's
+export and only the export) and simultaneously **more** owed; the interaction it named between
+`REQ-LIBRARY-047`'s best-effort version write and `REQ-LIBRARY-176`'s "how many were dropped" clause is what
+ESC-30 ruled on, and both requirements are now amended, so what stays open here is the storage half alone.
+**OQ-48** is more owed again, at five leftover kinds rather than three: the restore and the corruption
+ladder each displace a store and keep it, a confirmed establishment orphans one, and the restore now also
+leaves a full staging copy and an obstruction aside-name — so **the operations a user in trouble reaches for
+first are the ones that leave the most behind**, and the surface that would clear any of it exists nowhere.
+**OQ-49** was new and is now closed by amendment: what makes two directory strings the same directory, which
+ADR-0002 decided because it needed a key and `REQ-STARTUP-163` now owns.
 
 **OQ-41's "what would close it" was wrong and is corrected.** It proposed a runtime API exposing
 share-delete on open. That remedy does not exist because the problem is not there: the runtime already
@@ -2183,7 +2192,7 @@ THIRTEEN reports exist, all in [`spikes/`](spikes/) — eleven for live spikes, 
 | `commit-on-the-publish-path.md` | **21 — discharged** | ADR-0058's own open item on the commit; `REQ-MONITOR-221`, `REQ-MONITOR-222`, `REQ-MONITOR-223`, `REQ-ORCH-155` and `REQ-EVENTS-029` **with the commit in the interval**; the checkpoint period as arithmetic; that the readability clause does not need the stronger durability setting; that ADR-0002, ADR-0008 and ADR-0010 are not reopened | a real schema with declared indexes (spike 8); two run hosts contending; **any failure path at all**; packaging and the native module's unpacking obligation; power loss, which is now the sole ground for forcing the stronger setting; macOS and Linux |
 | `remote-and-synchronised-storage.md` | **19 — discharged on its own question** | ESC-15 on stronger evidence, and its stated mechanism disproved; the read-back guard as necessary-but-insufficient; that a naive copy of a live store is not a backup and the engine snapshot is; that exclusive create is a genuine primitive over a network share; that `REQ-STARTUP-166`'s classification is implementable, precise and cheap | **ESC-21's second premise — no second machine, and it declined to fake one**; no synchronisation client was written to; no Electron; one binding, one store engine version; loopback rather than a network, so the 12 ms rename and the 6.2 % failure rate are both floors; no power loss |
 | `cached-portable-launch.md` | **20 — discharged; SR-7's gate condition met** | the cached-launch figure, the fast-path check's cost, cache invalidation across an update; that self-update is **rescued** rather than merely preserved by SR-7; **two defects in ADR-0054's own mechanism** — the first two of the four-for-four finding above | `REQ-STARTUP-165`(c)'s "no usable preparation at all" branch and its notice — **not attempted**; clause (d) independently verified; a read-only volume rather than an access-control approximation; the commit's durability discipline; a real download with the platform's reputation check |
-| `presenter-liveness-and-instance-claim.md` | **14 and 16 — 16 discharged and its ADR's rule fired; 14 measured, OQ-39 not closed** | that the liveness poll works and must be **gap-based**; that the exposure is every synchronous native dialog and not the approval dialog; that the run host dies with main and never sees the channel close; that the platform single-instance primitive **fails** `REQ-STARTUP-164` on Windows | **macOS and Linux — zero coverage, on both sides of the decision**; the decision path (no gate, no pending-approval map, no headless policy), so *never a silent allow* is unexercised; sizing the lapse window under product-shaped load; whether every native dialog the product needs has a non-blocking form on every platform; packaged builds |
+| `presenter-liveness-and-instance-claim.md` | **14 and 16 — 16 discharged and its ADR's rule fired; 14 measured, OQ-39 not closed** *(ruled 2026-10-06, [R-071](../product/requests.md#r-071): accepted as built)* | that the liveness poll works and must be **gap-based**; that the exposure is every synchronous native dialog and not the approval dialog; that the run host dies with main and never sees the channel close; that the platform single-instance primitive **fails** `REQ-STARTUP-164` on Windows | **macOS and Linux — zero coverage, on both sides of the decision**; the decision path (no gate, no pending-approval map, no headless policy), so *never a silent allow* is unexercised; sizing the lapse window under product-shaped load; whether every native dialog the product needs has a non-blocking form on every platform; packaged builds |
 
 | `store-schema-and-open-path.md` | **8 — discharged** | the declared indexes' cost on the commit (+37 % p50) and on the checkpoint period (below 100 commits); `REQ-EVENTS-179`'s probe at 0.15 ms; whole log recovery after a kill; that an integrity check (~2.8 ms/MB) may **not** sit on the startup path; listing and summary as index reads; the trim's delete at ~35 ms; **that a declared index the planner never used had passed every test** — the fifth of the finding above | `REQ-TRACE-239`'s board (no table yet); any failure path but the kill; macOS and Linux; Node's long-path behaviour on the identifier file |
 | `two-writers-one-store.md` | **18 — discharged** | two compliant writers on one store lose nothing and cost +12 % at p50; one 258 ms sample in 6,000 | three writers; a reader beside them; the trim under contention |

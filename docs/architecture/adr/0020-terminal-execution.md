@@ -91,7 +91,8 @@ into one pipe, stdin piped, its own process group on POSIX and inside the Job Ob
 never touches a terminal session, so the concurrency statement holds by construction. Termination is
 SIGTERM, grace-until-exit capped at 5 s, then SIGKILL; on Windows, where signals do not exist, this
 maps onto graceful-close-then-terminate and the specification supplies no mapping (open question
-OQ-10).
+OQ-10) *(ruled 2026-10-06, [R-071](../../product/requests.md#r-071): the foreground scope confirmed as built,
+beside R-044's ruling for background pipe sessions)*.
 
 **Library.** `node-pty` for the PTY, checked against its current documentation: Linux, macOS and
 Windows support, Windows through the ConPTY API requiring Windows 10 1809 or later with winpty support
@@ -182,7 +183,8 @@ nonce. The reading a reviewer would reach — "the marker is unguessable, so the
 **OQ-10, read rather than answered:** on Windows `SIGTERM` and `SIGKILL` both terminate the process tree
 (`taskkill /T`, then `/F` after the 5 s grace); `SIGINT` writes `C-c` to a foreground PTY and is refused with
 `invalid_request` for a background pipe; `SIGHUP` likewise. `node-pty`'s ignored signal argument is exactly
-what made the tree kill the only kill.
+what made the tree kill the only kill. *(OQ-10 ruled 2026-10-06, [R-071](../../product/requests.md#r-071): the foreground scope
+confirmed as built, beside R-044's ruling for background pipe sessions.)*
 
 **Consequence 2 as met today:** under ConPTY the capture is VT-stripped, the echoed wrapper and both marker
 frames removed; the headless screen emulator of ADR-0021 is not built and lands with streaming. The

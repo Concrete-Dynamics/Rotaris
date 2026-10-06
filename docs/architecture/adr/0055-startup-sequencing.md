@@ -318,7 +318,8 @@ startup properties rather than packaging ones:
   — so the outcome has to survive into a process that has all three. ADR-0054 carries it in the marker
   the stub writes into the tree it placed, deliberately not in an environment variable
   (`REQ-STARTUP-147`'s list is closed) and not in a launch argument (the product has none, and OQ-43 is
-  already open on the one sentinel this record needs). **What this record fixes is the consequence for
+  already open on the one sentinel this record needs *(ruled 2026-10-06,
+  [R-071](../../product/requests.md#r-071): the exception stated as built in `PD-STARTUP-002`)*). **What this record fixes is the consequence for
   ordering:** the application reads that marker relative to its own image during the pre-window phase,
   where it is one read of a file the fast path has already touched, and **holds the finding until after
   the show**. Reading it early and delivering it late is the only arrangement that satisfies both
@@ -576,6 +577,7 @@ into one — in particular the successor's readiness signal has no timeout of it
 successor that never arrives. And the successor
 must not be sent through phase 0's ordinary path at all, which means the sentinel branch is now load-
 bearing for a third case; **OQ-43 covers two of the three and should be read as covering this one too.**
+*(Ruled 2026-10-06, [R-071](../../product/requests.md#r-071): `PD-STARTUP-002` names all three, the update-restart successor among them.)*
 
 **Amended 2026-09-28 (R-062) — the pass is two steps, because "tells the successor" is not "the successor was
 told".** The sequence above has the predecessor rewrite the record and *then* tell the successor. Built that way

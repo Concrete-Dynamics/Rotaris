@@ -332,11 +332,13 @@ While a task run is executing, a user must be able to watch what every agent is 
 
 **REQ-MONITOR-119** — Given the same silence with no tool call in flight, every stall evaluation must do three things: log a warning saying the agent appears stalled and that the run is still waiting on it; emit a diagnostic issue of kind `stall` at warning severity carrying the agent's active tools, its recent tool calls, and the type of the last model event received; and invoke the host's stall callback. The callback fires on every evaluation, at the interval of REQ-MONITOR-117, so a host countdown advances at that rate. How often the warning itself may repeat is bounded by REQ-MONITOR-120.
 
-> **Narrowed by [`PD-MONITOR-005`](../product/directives.md#pd-monitor-005), 2026-10-06.** The silence is that of a model
-> step the agent has in flight: between its turns, through a retry backoff or a suspended wait on a provider limit, and
-> through a compression's own model call, an evaluation emits no warning and no `stall` issue and invokes the callback with
-> not stalled. The provider library's own short retries inside one model step are still this silence. Every other clause
-> is as stated above.
+> **Narrowed by [`PD-MONITOR-005`](../product/directives.md#pd-monitor-005), 2026-10-06 (revision 2 the same day).** The
+> silence is that of a model step the agent has in flight: between its turns, through a retry backoff or a suspended wait
+> on a provider limit, and through a compression's own model call, an evaluation emits no warning and no `stall` issue and
+> invokes the callback with not stalled. The provider library's own short retries inside one model step are still this
+> silence. Revision 2: at an evaluation that finds this silence, the `stall` issue is emitted only when the evaluation also
+> writes the warning — at stall entry, and then no more often than REQ-MONITOR-120 lets the warning repeat; the warning and
+> the callback are as stated above. Every other clause is as stated above.
 
 **REQ-MONITOR-120** — Repeat stall warnings are throttled: the gap between them is the stall timeout, or 30 seconds, whichever is longer. When activity resumes, recovery must be logged and notified.
 

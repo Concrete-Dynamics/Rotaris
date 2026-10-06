@@ -58,6 +58,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   let dal: StoreDal;
   let clock: FakeClock;
   const warnings: string[] = [];
+  /** The run's lines at `INFO` (`SessionsDeps.log`): an intended state, such as a wait, since OQ-127's ruling. */
+  const infos: string[] = [];
   // One counter for the whole file: every Sessions instance in a test mints a distinct id (a shared 'S1' read another scenario's rows).
   let minted = 0;
   beforeEach(() => {
@@ -67,6 +69,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     dal = new StoreDal(db);
     clock = new FakeClock();
     warnings.length = 0;
+    infos.length = 0;
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
@@ -124,7 +127,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const helpers: { onRunResult: HelperModel[]; supervisor: HelperModel[] } = { onRunResult: [], supervisor: [] };
     let configured = 0;
     const sessions = new Sessions({
-      clocks: clock, publisher: pub, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++minted}`,
+      clocks: clock, publisher: pub, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), log: (m) => infos.push(m), mintSessionId: () => `S${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: (_sid, r, helper) => { results.push(r.status); helpers.onRunResult.push(helper); },
       supervisor: (_root, _sid, _count, helper) => { helpers.supervisor.push(helper); return null; },
       configure: () => (++configured >= (opts.configureRefusesFrom ?? Infinity) ? { ok: false as const, error: { reason: 'the configuration no longer loads' } } : { ok: true, value: {
@@ -383,7 +386,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(stallLines()).toEqual([]);
       expect(pub.snapshots.every((s) => s.entryStalledSeconds === null)).toBe(true);
       // REQ-MONITOR-118's manner: the silence is logged as the wait it is, once at entry and at each repeat the throttle allows.
-      expect(warnings.filter((m) => m.startsWith('agent waiting on a provider limit:'))).toEqual([expect.stringMatching(/^agent waiting on a provider limit: orchestrator \(bg_[0-9a-f]{8}\) has no model event or token for 90 seconds; the wait is the run's own and not a stall \(OQ-173\)$/)]);
+      expect(infos.filter((m) => m.startsWith('agent waiting on a provider limit:'))).toEqual([expect.stringMatching(/^agent waiting on a provider limit: orchestrator \(bg_[0-9a-f]{8}\) has no model event or token for 90 seconds; the wait is the run's own and not a stall \(OQ-173\)$/)]);
     });
 
     it('a child\'s 120 s suspended wait on a provider limit raises no `stall` issue and no stalled seconds on its agent row', async () => {
@@ -401,7 +404,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(issues(sid)).not.toContain('stall');
       expect(stallLines()).toEqual([]);
       expect(pub.snapshots.every((s) => s.agents.every((a) => a.stalledSeconds === null))).toBe(true);
-      expect(warnings.filter((m) => m.startsWith('child waiting on a provider limit: limited'))).toHaveLength(1);
+      expect(infos.filter((m) => m.startsWith('child waiting on a provider limit: limited'))).toHaveLength(1);
+      expect(warnings.filter((m) => m.includes('waiting on a provider limit'))).toEqual([]);
     });
 
     it('the wait\'s end restarts the silence: a step that then says nothing for the threshold is a stall again', async () => {

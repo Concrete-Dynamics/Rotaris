@@ -365,6 +365,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   let dal: StoreDal;
   let clock: FakeClock;
   const warnings: string[] = [];
+  /** The lines the run writes at `INFO` (`SessionsDeps.log`): an intended state, since OQ-127's ruling. */
+  const infos: string[] = [];
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'rotaris-iter-'));
     const db = openStore(join(dir, 'workspace.db'));
@@ -372,6 +374,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     dal = new StoreDal(db);
     clock = new FakeClock();
     warnings.length = 0;
+    infos.length = 0;
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
@@ -435,7 +438,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: over.images === true ? { ...MODEL, acceptsImageInput: true } : MODEL, ...(over.modelKey === undefined ? {} : { modelKey: over.modelKey }), credentialFor: () => async () => 'k' };
     const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, ...(over.capFor ? { modelCapFor: over.capFor } : {}), drainTimeoutMs: over.drainTimeoutMs ?? 0, ...(over.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: over.childStallTimeoutMs }), ...(over.childTimeoutMs === undefined ? {} : { childTimeoutMs: over.childTimeoutMs }) } as const;
     const sessions = new Sessions({
-      clocks: clock, publisher: over.publisher ?? NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++n}`,
+      clocks: clock, publisher: over.publisher ?? NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), log: (m) => infos.push(m), mintSessionId: () => `S${++n}`,
       model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       tools: (ctx) => {
         // The mode each agent was BUILT with, in construction order. The run host's port SELECTS it through
@@ -1476,28 +1479,35 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       // The corrective message follows the conversation the failed turn left: the task, then the message.
       expect(childAsked[1]).toContain('TASK: be quiet');
       expect(childAsked[1]).toContain('[Corrective message] You produced no output for 90 seconds (the stall window, runtime.child_stall_timeout, is 90 seconds), and your last model request then failed: the stream ended with no answer.');
-      // REQ-ORCH-139: no timeline word is minted for it; the session log says it was sent (OQ-127, as OQ-76 did).
-      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toEqual([`child corrective message: quiet (${child(sid).task_id}) produced no output for 90 seconds and its model request then failed (the stream ended with no answer); it was given its one corrective message and resumes (REQ-NOTIFY-111)`]);
-      expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('child_corrective') || t.name.startsWith('child_stall') || t.name.startsWith('child_waiting'))).toEqual([]);
+      // OQ-127's ruling: the session log says it was sent, at WARNING (it follows a failed step), and the timeline records
+      // it as a `corrective_message` entry (OQ-157's word).
+      const line = `child corrective message: quiet (${child(sid).task_id}) produced no output for 90 seconds and its model request then failed (the stream ended with no answer); it was given its one corrective message and resumes (REQ-NOTIFY-111)`;
+      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toEqual([line]);
+      const entries = dal.timelineOf(sid).filter((t) => t.name === 'corrective_message');
+      expect(entries.map((t) => [t.actor, t.message, t.severity])).toEqual([['quiet', line, 'info']]);
+      expect(JSON.parse(entries[0]!.metadata)).toEqual({ task_id: child(sid).task_id, quiet_seconds: 90, window_seconds: 90, failure: 'the stream ended with no answer' });
       expect(child(sid).state).toBe('succeeded');
       expect(JSON.parse(child(sid).report!)).toMatchObject({ status: 'succeeded' });
     });
 
-    it('REQ-MONITOR-119/120: a `stall` issue at every stall evaluation, and the warning only at entry and at the throttle', async () => {
+    it('PD-MONITOR-005 revision 2 (REQ-MONITOR-119/120): the `stall` issue is written with each throttled warning and only then — at entry and at the throttle', async () => {
       const { sessions, gates } = stalling(['silent', 'answers']);
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
       await settle(() => gates.length === 1);
       clock.advance(90_000);
       clock.advance(10_000);
       const silent = () => dal.issuesOf(sid).filter((i) => i.kind === 'stall').map((i) => (JSON.parse(i.metadata) as { silent_seconds: number }).silent_seconds);
-      // The evaluations at 90, 95 and 100 s each record the issue; the warning is written once, at entry.
-      expect(silent()).toEqual([90, 95, 100]);
+      // The evaluations at 90, 95 and 100 s each find the stall; the warning and its issue are written once, at entry.
+      expect(silent()).toEqual([90]);
       expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall').every((i) => i.severity === 'warning')).toBe(true);
       expect(warnings.filter((m) => m.startsWith('child appears stalled'))).toEqual([`child appears stalled: no model event or token for 90 seconds (quiet, ${child(sid).task_id}); the run is still waiting on it.`]);
       // REQ-MONITOR-120: the next warning is due max(90 s, 30 s) after the first.
       clock.advance(80_000);
-      expect(silent()).toHaveLength(19);
+      // Nineteen evaluations found the stall; two issues, each beside its warning, so one long stall cannot evict the
+      // session's other issues from REQ-SESSION-133's ring.
+      expect(silent()).toEqual([90, 180]);
       expect(warnings.filter((m) => m.startsWith('child appears stalled')).map((m) => /for (\d+) seconds/.exec(m)![1])).toEqual(['90', '180']);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall').map((i) => i.message)).toEqual(warnings.filter((m) => m.startsWith('child appears stalled')));
       gates[0]!();
       expect((await sessions.running(sid)!).status).toBe('completed');
     });
@@ -1519,7 +1529,14 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       await settle(() => dal.timelineOf(sid).length > 0 && child(sid)?.state === 'running');
       await new Promise((r) => setTimeout(r, 20));
       clock.advance(90_000);
-      expect(warnings.filter((m) => m.startsWith('child waiting on tools:'))).toEqual([`child waiting on tools: quiet (${child(sid).task_id}) has 1 active tool call and no model event or token for 90 seconds; the run is still waiting on it (REQ-MONITOR-118)`]);
+      // OQ-127's ruling: REQ-MONITOR-118's informational message is an intended state — at INFO, never a warning — and a
+      // `waiting_on_tools` timeline entry.
+      const waitLine = `child waiting on tools: quiet (${child(sid).task_id}) has 1 active tool call and no model event or token for 90 seconds; the run is still waiting on it (REQ-MONITOR-118)`;
+      expect(infos.filter((m) => m.startsWith('child waiting on tools:'))).toEqual([waitLine]);
+      expect(warnings.filter((m) => m.startsWith('child waiting on tools:'))).toEqual([]);
+      const waited = dal.timelineOf(sid).filter((t) => t.name === 'waiting_on_tools');
+      expect(waited.map((t) => [t.actor, t.message, t.severity])).toEqual([['quiet', waitLine, 'info']]);
+      expect(JSON.parse(waited[0]!.metadata)).toEqual({ task_id: child(sid).task_id, silent_seconds: 90, active_calls: 1 });
       expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall')).toEqual([]);
       releaseTool();
       await new Promise((r) => setTimeout(r, 20));
@@ -1528,12 +1545,14 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       speak();
       await new Promise((r) => setTimeout(r, 20));
       clock.advance(5_000);
-      expect(warnings.filter((m) => m.startsWith('child stall recovered:'))).toEqual([`child stall recovered: quiet (${child(sid).task_id}) is active again after a stall (REQ-MONITOR-120)`]);
+      const recoveredLine = `child stall recovered: quiet (${child(sid).task_id}) is active again after a stall (REQ-MONITOR-120)`;
+      expect(infos.filter((m) => m.startsWith('child stall recovered:'))).toEqual([recoveredLine]);
+      expect(warnings.filter((m) => m.startsWith('child stall recovered:'))).toEqual([]);
       finish();
       await sessions.running(sid)!;
       expect(child(sid).state).toBe('succeeded');
-      // REQ-ORCH-139: neither is a timeline word (OQ-127).
-      expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('child_stall') || t.name.startsWith('child_waiting'))).toEqual([]);
+      // OQ-127's ruling: the recovery is a `stall_recovered` timeline entry beside its line.
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'stall_recovered').map((t) => [t.actor, t.message, JSON.parse(t.metadata)])).toEqual([['quiet', recoveredLine, { task_id: child(sid).task_id }]]);
     });
 
     it('at most one corrective message per child: a second silent failure ends it failed', async () => {
@@ -1683,7 +1702,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(midAsked).toBe(3);
       expect(byName('mid').state).toBe('succeeded');
       // Its resumed turn after the wait is not a recovery from a stall it never had.
-      expect(warnings.filter((m) => m.startsWith('child stall recovered:') && m.includes('(mid,'))).toEqual([]);
+      expect(infos.filter((m) => m.startsWith('child stall recovered:') && m.includes('(mid,'))).toEqual([]);
       expect(stallsOf('mid')).toEqual([]);
     });
 
@@ -1734,7 +1753,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect((await sessions.running(sid)!).status).toBe('completed');
       expect(midAsked).toBe(3);
       expect(byName('mid').state).toBe('succeeded');
-      expect(warnings.filter((m) => m.startsWith('child stall recovered:') && m.includes('(mid,'))).toEqual([]);
+      expect(infos.filter((m) => m.startsWith('child stall recovered:') && m.includes('(mid,'))).toEqual([]);
       expect(stallsOf('mid')).toEqual([]);
     });
   });
@@ -1865,7 +1884,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       speak();
       await new Promise((r) => setTimeout(r, 20));
       clock.advance(5_000); clock.advance(100);
-      expect(warnings.filter((m) => m.startsWith('agent stall recovered:'))).toEqual([`agent stall recovered: orchestrator (${rootTaskId}) is active again after a stall (REQ-MONITOR-120)`]);
+      expect(infos.filter((m) => m.startsWith('agent stall recovered:'))).toEqual([`agent stall recovered: orchestrator (${rootTaskId}) is active again after a stall (REQ-MONITOR-120)`]);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'stall_recovered').map((t) => t.actor)).toEqual(['orchestrator']);
       expect(snapshots.at(-1)!.entryStalledSeconds).toBeNull();
       finish();
       expect((await sessions.running(sid)!).status).toBe('completed');
@@ -1883,7 +1903,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(snapshots.at(-1)!.entryStalledSeconds).toBe(90);
       expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } })).toEqual({ ok: true });
       await sessions.running(sid)!;
-      expect(warnings.filter((m) => m.startsWith('agent stall recovered:'))).toEqual([]);
+      expect(infos.filter((m) => m.startsWith('agent stall recovered:'))).toEqual([]);
       expect(snapshots.at(-1)!.entryStalledSeconds).toBeNull();
     });
 
@@ -2234,6 +2254,9 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', outcome: null, interruption: 'stop' }]);
     expect(dal.getSession(sid)!.execution_status).toBe('paused');
     expect(dal.getSession(sid)!.iterations_completed).toBe(0);
+    // OQ-127's ruling: a stop is the user's own too, and the child it leaves paused is logged at INFO.
+    expect(infos).toContain('iteration 1: 1 child(ren) left paused by stop (PD-ORCH-005)');
+    expect(warnings.filter((m) => m.includes('left paused by'))).toEqual([]);
   });
 
   it('PD-ORCH-005 clause 3: the explicit cancel (REQ-MONITOR-126, the reserved run id) is final — its child settles cancelled with a report and the iteration closes', async () => {
@@ -2570,6 +2593,10 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases[0]!.tasks[0]!.state).toBe('in_progress');
       expect(dal.timelineOf(sid).filter((t) => t.name === 'child_paused')).toHaveLength(2);
       expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'iteration_paused')!.metadata)).toMatchObject({ iteration: 1, interruption: 'pause', paused_agents: 3 });
+      // OQ-127's ruling (the repair of the-users-own-pause-is-logged-at-warning.md): the user's own pause leaving its children
+      // paused is an intended state — written at INFO, never as a warning.
+      expect(infos).toContain('iteration 1: 2 child(ren) left paused by pause (PD-ORCH-005)');
+      expect(warnings.filter((m) => m.includes('left paused by'))).toEqual([]);
     });
 
     it('REQ-MONITOR-134 with clause 4, the repair of a-steering-prompt-pending-at-a-rest-is-lost: a prompt pending when the run comes to rest is delivered into the record of the paused agent it names, marked injected once, and the resumed agent reads it at its first step; one for an agent with no record yet is recorded as not delivered, and said so', async () => {

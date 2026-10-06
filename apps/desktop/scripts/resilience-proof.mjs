@@ -271,7 +271,9 @@ await scenarioRun('retry-after', async () => {
 // the stall threshold is the run's own wait and not the agent's silence. With `child_stall_timeout: 3` the entry agent's
 // watch evaluates every second; a 10 s retry-after wait raises no `stall` issue, and its session log says the agent is
 // waiting on a provider limit (REQ-MONITOR-118's manner) beside the wait's own notice and issue (REQ-NOTIFY-083..087).
-const s1b = scenario('quota-wait', ['  child_stall_timeout: 3']);
+// Since OQ-127's ruling (2026-10-06) that line records an intended state and is written at INFO, so the scenario's session
+// log is kept at INFO to read it; the default WARNING log carries no line for the wait, and still none calls it a stall.
+const s1b = scenario('quota-wait', ['  child_stall_timeout: 3', '  session_log_level: INFO']);
 await scenarioRun('quota-wait', async () => {
   const r = await launch('quota-wait', s1b, { ROTARIS_SCRIPT: 'fail:429:retry-after=10,answer', ROTARIS_CAPTURE_PROMPT: 'wait past the stall threshold', ROTARIS_CAPTURE_PROBE_AT: '.wait-header@~9000', ROTARIS_CAPTURE_PROBE: '.wait-header', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
   const db = open(s1b);
@@ -289,6 +291,7 @@ await scenarioRun('quota-wait', async () => {
   const sessionLog = existsSync(logFile) ? readFileSync(logFile, 'utf8') : '';
   const waitLines = sessionLog.split('\n').filter((l) => l.includes('agent waiting on a provider limit:'));
   expect(waitLines.length >= 1, `the session log does not say the agent is waiting on a provider limit (${logFile})`);
+  expect(waitLines.every((l) => / INFO {4}/.test(l)), `the wait is not logged at INFO (OQ-127's ruling): ${waitLines[0]}`);
   expect(!/appears stalled/.test(sessionLog), 'the session log calls the wait a stall');
   results.quotaWait = { status: row.execution_status, wait: JSON.parse(wait.metadata), stallIssues: stalls.length, headerDuringWait: header.text, waitLine: waitLines[0], png: r.png, elapsedMs: r.elapsedMs };
 });

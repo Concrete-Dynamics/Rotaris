@@ -6056,7 +6056,9 @@ run. The reading built says it does not — the last three messages that carry t
 with tool-only steps between them now declare a loop where the code before the repair, which compared the last three
 events whatever they held, did not.
 
-**OQ-127 — What counts as "an outcome that produced no output within `child_stall_timeout`" when the stall watchdog never cancels, and what does the watchdog count, write and call?** *(REQ-NOTIFY-111, REQ-NOTIFY-112, REQ-NOTIFY-100, REQ-NOTIFY-105, REQ-ORCH-089, REQ-MONITOR-117 to REQ-MONITOR-120, REQ-MONITOR-285, REQ-CONFIG-108, REQ-CONFIG-113, REQ-ORCH-144, REQ-ORCH-139 and REQ-SESSION-133. Raised 2026-09-29 by building the watchdog and the corrective message under R-067, the repair of [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/fixed/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md). Raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered OQ-127 at the merge, OQ-126 having been taken on `main` meanwhile.)*
+**OQ-127 — What counts as "an outcome that produced no output within `child_stall_timeout`" when the stall watchdog never cancels, and what does the watchdog count, write and call?** *(REQ-NOTIFY-111, REQ-NOTIFY-112, REQ-NOTIFY-100, REQ-NOTIFY-105, REQ-ORCH-089, REQ-MONITOR-117 to REQ-MONITOR-120, REQ-MONITOR-285, REQ-CONFIG-108, REQ-CONFIG-113, REQ-ORCH-144, REQ-ORCH-139 and REQ-SESSION-133. Raised 2026-09-29 by building the watchdog and the corrective message under R-067, the repair of [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/fixed/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md). Raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered OQ-127 at the merge, OQ-126 having been taken on `main` meanwhile. Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** as recommended, with OQ-157 — the `stall` issue is written only with the throttled warning (revision 2 of [`PD-MONITOR-005`](../product/directives.md#pd-monitor-005), which narrows REQ-MONITOR-119), and the three facts are timeline entries under the words OQ-157's ruling adds: `waiting_on_tools` (REQ-MONITOR-118), `stall_recovered` (REQ-MONITOR-120) and `corrective_message` (REQ-NOTIFY-111). A session-log line that records an intended state — the wait on tools, OQ-173's wait the run imposes, the recovery, and the children the user's own pause, stop or quit leaves paused (PD-ORCH-005 clause 2) — is written at `INFO`; REQ-MONITOR-119's stall warning, and the corrective-message line, which follows a failed step, stay at `WARNING` (`stallRecords` and `recordCorrectiveMessage` in `packages/engine/src/children/stall.ts`).
 
 The requirements pull two ways:
 - REQ-NOTIFY-100 names `runtime.child_stall_timeout` as the bound on "a child task producing no output". It says that
@@ -6176,7 +6178,7 @@ None of them says what ends a silent child's step so that there is an outcome to
   written at WARNING again, and a further case of the same level sits outside these three records —
   `iteration 1: 2 child(ren) left paused by pause (PD-ORCH-005)`, written through the run's `warn` when the user's own
   pause rests the children, as PD-ORCH-005 clause 2 says it does
-  ([`the-users-own-pause-is-logged-at-warning.md`](../defects/the-users-own-pause-is-logged-at-warning.md)). What the
+  ([`the-users-own-pause-is-logged-at-warning.md`](../defects/fixed/the-users-own-pause-is-logged-at-warning.md)). What the
   build proceeds under: every one of these lines keeps its level until the owner rules; a ruling on the level of an
   intended state answers this case with the three.)*
 

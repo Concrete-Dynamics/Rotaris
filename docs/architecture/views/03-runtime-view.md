@@ -1075,20 +1075,30 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
   evaluation past the threshold reports the wait and no stall — the callback *not stalled* — and its release restarts the
   silence, as a call's result does.
 
-What it writes:
-- a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a
-  warning at entry and then every `max(threshold, 30)` s (REQ-MONITOR-120);
-- the same silence with calls in flight: a `child waiting on tools: …` line (REQ-MONITOR-118);
+What it writes (`stallRecords`, one function for a child's watch and the root's; OQ-127's ruling, 2026-10-06):
+- a silence of the threshold with no call in flight: a warning at entry and then every `max(threshold, 30)` s
+  (REQ-MONITOR-120), and beside each warning, and only then, a `stall` issue (REQ-MONITOR-119 narrowed by
+  `PD-MONITOR-005` revision 2: before it, an issue at every evaluation could evict the session's other issues from
+  REQ-SESSION-133's ring);
+- the same silence with calls in flight: a `child waiting on tools: …` line at `INFO` (REQ-MONITOR-118) and a
+  `waiting_on_tools` timeline entry, at entry and then every `max(threshold, 30)` s;
 - the same silence while the run holds the agent in a wait of its own: a `child waiting on a provider limit: …` line
-  (or `a retry backoff`, `a context compression`), at entry and then every `max(threshold, 30)` s, in REQ-MONITOR-118's
-  manner (OQ-173); the suspended wait's own notice and `model_wait` issue (REQ-NOTIFY-083..087) are unchanged;
-- activity resuming after a stall: a `child stall recovered: …` line (REQ-MONITOR-120) — only when the agent was active
+  (or `a retry backoff`, `a context compression`) at `INFO`, at entry and then every `max(threshold, 30)` s, in
+  REQ-MONITOR-118's manner (OQ-173), and no timeline entry; the suspended wait's own notice and `model_wait` issue
+  (REQ-NOTIFY-083..087) are unchanged;
+- activity resuming after a stall: a `child stall recovered: …` line at `INFO` (REQ-MONITOR-120) and a `stall_recovered`
+  timeline entry — only when the agent was active
   after the evaluation that last found it stalled (a model event that is not an error, or something the run gave it). A
   stall that ends otherwise — a cancel, a stop, a pause, a hard timeout, a failed turn, at the watch's `stop` or at an
   evaluation between its turns — clears the figure with no line (`StallWatch.endStall`, OQ-153).
 
-Those lines, and the `child corrective message: …` line below, go to the session log through the run's `warn`, as
-OQ-76's do: REQ-ORCH-139's closed timeline vocabulary has no word for them and none is minted (OQ-127).
+The lines go to the session log (REQ-SESSION-142) and the application log: the warning through the run's `warn`, the
+waits and the recovery through its `info` (`RunDeps.info` and `ChildrenDeps.info`, which `Sessions` wires to the session
+log at `INFO` and to `SessionsDeps.log`; absent, `warn`), since each records an intended state. The corrective message
+below is a `corrective_message` timeline entry and a `child corrective message: …` line at `WARNING`
+(`recordCorrectiveMessage`), since a failed step precedes it. *(Until 2026-10-06 every one of these lines went through
+`warn`, and none was a timeline entry, because REQ-ORCH-139's closed vocabulary had no word for them; OQ-127 and OQ-157
+were ruled together that day.)*
 
 Its per-evaluation callback reaches the host (REQ-ORCH-089, REQ-MONITOR-119/120/122; OQ-153; the repair of
 [`a-stalled-child-is-never-shown-stalled.md`](../../defects/fixed/a-stalled-child-is-never-shown-stalled.md), 2026-09-30):
@@ -1101,7 +1111,7 @@ same evaluation serves REQ-MONITOR-135: an agent waiting between its turns on it
 starts for it injects the steer; every delivered steer restarts the watch's silence (`refreshing`). **The root is watched
 too**: `Run.turn` arms a `StallWatch` over the root's whole execution, against its role's `stall_timeout`, else
 `runtime.child_stall_timeout`, else 90 s, fed as a child's is, with no silence counted between its turns
-(`betweenTurns`) — a root resumed into waiting (PD-ORCH-005 clause 4) is between its turns from the start. It writes the same warning, `stall` issue and log lines naming `agent`, and its figure is
+(`betweenTurns`) — a root resumed into waiting (PD-ORCH-005 clause 4) is between its turns from the start. It writes the same warning, `stall` issue, log lines and timeline entries naming `agent`, and its figure is
 `SessionRecord.entryStalledSeconds` (`Run.entryStalledSeconds`), which the run-level agent carries. It gets no corrective
 message. A child's turn can end `failed` after no output for the whole window,
 with no call in flight. Unless the outcome is one REQ-NOTIFY-112 excludes, that child is given one corrective message:

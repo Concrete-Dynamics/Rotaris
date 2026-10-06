@@ -67,6 +67,7 @@ export const AWAITING = {
   child_resumed: { file: 'packages/engine/src/session-writer.ts', fact: 'a paused child resumed, or a settled child followed up (PD-ORCH-005)' },
   context_compressed: { file: 'packages/engine/src/run/compression.ts', fact: 'a completed compression, which REQ-MONITOR-086\'s count is seeded from (ADR-0060 decisions 6 and 7, OQ-53)' },
   context_selection: { file: 'packages/engine/src/children/orchestration.ts', fact: 'the sibling and attached artifacts a child was given' },
+  corrective_message: { file: 'packages/engine/src/children/stall.ts', fact: 'REQ-NOTIFY-111\'s one corrective message given to a child (OQ-127, ruled 2026-10-06 with OQ-157)' },
   entry_model_switched: { file: 'packages/engine/src/run/run.ts', fact: 'the entry model switched by the user' },
   entry_reasoning_switched: { file: 'packages/engine/src/run/run.ts', fact: 'the entry reasoning level switched by the user' },
   iteration_paused: { file: 'packages/engine/src/run/run.ts', fact: 'an iteration left open by a pause, a stop or a crash (PD-ORCH-005)' },
@@ -87,9 +88,11 @@ export const AWAITING = {
   run_paused_message_limit: { file: 'packages/engine/src/session-writer.ts', fact: 'the run pausing at the message limit (REQ-ORCH-087)' },
   steering_injected: { file: 'packages/engine/src/run/turn.ts', fact: 'a steering prompt reaching its agent' },
   steering_not_delivered: { file: 'packages/engine/src/run/run.ts', fact: 'a steering prompt the run ended before delivering (REQ-MONITOR-134)' },
+  stall_recovered: { file: 'packages/engine/src/children/stall.ts', fact: 'REQ-MONITOR-120\'s recovery after a stall (OQ-127, ruled 2026-10-06 with OQ-157)' },
   steering_submitted: { file: 'packages/engine/src/run/run.ts', fact: 'a steering prompt submitted by the user' },
   todo_edited: { file: 'packages/engine/src/run/run.ts', fact: 'a todo item added, updated or removed by the user' },
   transcript_cleared: { file: 'packages/engine/src/session-writer.ts', fact: 'the transcript cleared by the user (REQ-CHAT-081)' },
+  waiting_on_tools: { file: 'packages/engine/src/children/stall.ts', fact: 'REQ-MONITOR-118\'s wait on tool calls in flight (OQ-127, ruled 2026-10-06 with OQ-157)' },
 };
 
 /** A name passed as a variable, accepted only here: `{ file, expression, reason }`. */

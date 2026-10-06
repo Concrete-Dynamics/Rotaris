@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**The stall watch files one issue per throttled warning, and records its facts on the timeline (PD-MONITOR-005 revision 2,
+OQ-127's ruling; fin20).** `stallRecords` and `recordCorrectiveMessage` (`engine/children/stall.ts`) are the one writer for
+a child's watch and the root's: the `stall` issue beside each throttled warning only, `waiting_on_tools`, `stall_recovered`
+and `corrective_message` timeline entries, and the intended states (the waits, the recovery, the children a user's rest
+leaves paused) through the run's new `info` channel (`RunDeps.info`, `ChildrenDeps.info`, wired by `Sessions` to the session
+log at `INFO`). The **runtime view**'s stall-watch paragraph and its `timeline` row say so. No package, edge, process,
+channel, command or store column changed.
+
 **The remaining confirm-as-built questions are ruled, and no code moved (R-071; fin20).** OQ-154 to OQ-203's
 confirm-as-built rulings are written into their entries, with `PD-HOOKS-001`, `PD-ORCH-010` to `PD-ORCH-012`, `PD-ORCH-006`
 revision 2, `PD-MONITOR-003` to `PD-MONITOR-005`, `PD-WORKSPACE-006` to `PD-WORKSPACE-008`, `PD-SHELL-007`, `PD-SHELL-008`,

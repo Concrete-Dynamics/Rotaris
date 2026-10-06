@@ -54,11 +54,12 @@ describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
 
   it('OQ-157: AWAITING can only shrink — its names are pinned here, so adding one is a deliberate edit of this test', () => {
     expect(Object.keys(AWAITING as Record<string, unknown>).sort()).toEqual([
-      'approval_withdrawn', 'child_paused', 'child_resumed', 'context_compressed', 'context_selection', 'entry_model_switched',
+      'approval_withdrawn', 'child_paused', 'child_resumed', 'context_compressed', 'context_selection', 'corrective_message', 'entry_model_switched',
       'entry_reasoning_switched', 'iteration_paused', 'iteration_resumed', 'loop_supervisor_activation', 'model_exhausted',
       'model_override', 'notice', 'pause_resolved', 'prompt_edited', 'prompt_queued', 'prompt_removed', 'prompt_triggered',
       'question_withdrawn', 'run_continuation_intent', 'run_pause_refused', 'run_pause_requested', 'run_paused_message_limit',
-      'steering_injected', 'steering_not_delivered', 'steering_submitted', 'todo_edited', 'transcript_cleared',
+      'stall_recovered', 'steering_injected', 'steering_not_delivered', 'steering_submitted', 'todo_edited', 'transcript_cleared',
+      'waiting_on_tools',
     ]);
   });
 

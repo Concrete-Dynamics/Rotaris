@@ -1,5 +1,6 @@
 import { type Clocks, countNoun, millis, type Millis, type TimerHandle } from '@rotaris/kernel';
 import type { ChatMessage, ModelError } from '@rotaris/model';
+import type { SessionWriter } from '../session-writer.js';
 
 /**
  * REQ-ORCH-089 / REQ-MONITOR-117..120, the stall watchdog, and REQ-NOTIFY-111/112, the one corrective message a child
@@ -9,7 +10,8 @@ import type { ChatMessage, ModelError } from '@rotaris/model';
  * the stall threshold it asks how long the child has gone without a model event or token:
  * - with a tool call in flight, it reports that the child is waiting on its calls (REQ-MONITOR-118);
  * - with none, it reports a stall at every evaluation, and marks the warning due only at entry and then no more often
- *   than the throttle (REQ-MONITOR-119/120);
+ *   than the throttle (REQ-MONITOR-119/120); the `stall` issue is written with the warning only (PD-MONITOR-005
+ *   revision 2, `stallRecords`);
  * - when activity resumes, it reports the recovery;
  * - between the child's turns — its turn has ended and the run asks nothing of it until it starts the next, which is a
  *   wait on its own children or the end of its execution — there is no model step to be silent, so it reports neither
@@ -71,8 +73,9 @@ export interface StallReport {
   /** True at stall entry, false after it. */
   readonly entry: boolean;
   /**
-   * REQ-MONITOR-120: whether this evaluation's warning is due — at entry, then no sooner than the throttle. The issue and
-   * the callback are not throttled (REQ-MONITOR-119: "every stall evaluation"); only the warning is.
+   * REQ-MONITOR-120: whether this evaluation's warning is due — at entry, then no sooner than the throttle. The callback is
+   * not throttled (REQ-MONITOR-119: "every stall evaluation"); the warning is, and since PD-MONITOR-005 revision 2 (OQ-127,
+   * ruled 2026-10-06) the `stall` issue is written with the warning and only then (`stallRecords`).
    */
   readonly warn: boolean;
   readonly activeTools: readonly string[];
@@ -81,7 +84,7 @@ export interface StallReport {
 }
 
 export interface StallSinks {
-  /** REQ-MONITOR-119: a stall, at every evaluation that finds one; `warn` says whether the warning is due too. */
+  /** REQ-MONITOR-119: a stall, at every evaluation that finds one; `warn` says whether the warning (and its issue) is due too. */
   readonly stalled: (report: StallReport) => void;
   /** REQ-MONITOR-118: the same silence with tool calls in flight, at entry and at each repeat the throttle allows. */
   readonly waiting: (report: { readonly silentS: number; readonly activeCalls: number }) => void;
@@ -295,9 +298,11 @@ export function stallWarning(agentName: string, taskId: string, silentS: number,
 }
 
 /*
- * The three lines below go to the session log through the run's `warn` (REQ-SESSION-142), in the manner OQ-76 set for the
- * user's presence: REQ-ORCH-139 closes the timeline vocabulary and it has no word for any of them, so none is minted here.
- * OQ-127 asks the owner for the words.
+ * The lines below go to the session log (REQ-SESSION-142). Since OQ-127's ruling (2026-10-06, R-071), the three facts
+ * REQ-ORCH-139's vocabulary had no word for — the wait on tools, the stall recovered, the corrective message — are also
+ * timeline entries under the words OQ-157's ruling gives them (`waiting_on_tools`, `stall_recovered`,
+ * `corrective_message`), and a line that records an intended state — a wait, or a recovery — is written at `INFO`, not
+ * `WARNING` (`stallRecords`).
  */
 
 /** REQ-MONITOR-118's informational message: the silence with tool calls in flight, which is a wait and not a stall. */
@@ -322,6 +327,71 @@ export function stallRecoveredLine(agentName: string, taskId: string, subject: S
 /** REQ-NOTIFY-111: that the child was given its one corrective message, and why. */
 export function correctiveMessageLine(agentName: string, taskId: string, quietS: number, failure: string): string {
   return `child corrective message: ${agentName} (${taskId}) produced no output for ${quietS} seconds and its model request then failed (${failure}); it was given its one corrective message and resumes (REQ-NOTIFY-111)`;
+}
+
+/** What `stallRecords` writes through: the session's writer, and the session log at its two levels. */
+export interface StallRecordPorts {
+  readonly writer: Pick<SessionWriter, 'recordIssue' | 'appendTimeline'>;
+  /** The session log at `WARNING` (and the application log): REQ-MONITOR-119's warning. */
+  readonly warn: (message: string) => void;
+  /** The session log at `INFO` (and the application log): an intended state — a wait, a recovery. */
+  readonly info: (message: string) => void;
+}
+
+/** One agent's stall records: whom they are about, and whether its execution still belongs to a live run. */
+export interface StallRecordSubject {
+  readonly subject: StallSubject;
+  readonly agentName: string;
+  readonly taskId: string;
+  /** False once the execution is detached from its run (REQ-SESSION-094): nothing more is written. */
+  readonly live: () => boolean;
+}
+
+/**
+ * What a stall watch's reports write, for a child or the root alike (REQ-ORCH-089, REQ-MONITOR-118..120; OQ-127 and
+ * OQ-173; PD-MONITOR-005 and its revision 2):
+ * - a stall: REQ-MONITOR-119's warning and its `stall` issue at warning severity, both only when the warning is due — at
+ *   entry, then no sooner than REQ-MONITOR-120's throttle. Before PD-MONITOR-005's revision 2 the issue was written at
+ *   every evaluation, so one long stall could evict every other issue from REQ-SESSION-133's ring;
+ * - a wait on tools: REQ-MONITOR-118's informational line at `INFO`, and a `waiting_on_tools` timeline entry;
+ * - a wait the run imposes (OQ-173): the same informational manner, at `INFO`; no timeline word was ruled for it;
+ * - a recovery: REQ-MONITOR-120's line at `INFO`, and a `stall_recovered` timeline entry.
+ * The callback (`evaluated`) is the caller's.
+ */
+export function stallRecords(ports: StallRecordPorts, who: StallRecordSubject): Omit<StallSinks, 'evaluated'> {
+  const { subject, agentName, taskId } = who;
+  return {
+    stalled: (s) => {
+      if (!who.live() || !s.warn) return;
+      const message = stallWarning(agentName, taskId, s.silentS, subject);
+      ports.warn(message);
+      ports.writer.recordIssue({ kind: 'stall', severity: 'warning', actor: agentName, message, metadata: { task_id: taskId, silent_seconds: s.silentS, active_tools: s.activeTools, recent_tool_calls: s.recentCalls, last_model_event: s.lastModelEvent } });
+    },
+    waiting: (w) => {
+      if (!who.live()) return;
+      const message = stallWaitingLine(agentName, taskId, w.activeCalls, w.silentS, subject);
+      ports.info(message);
+      ports.writer.appendTimeline('waiting_on_tools', agentName, message, { task_id: taskId, silent_seconds: w.silentS, active_calls: w.activeCalls });
+    },
+    imposed: (w) => { if (who.live()) ports.info(stallImposedWaitLine(agentName, taskId, w.wait, w.silentS, subject)); },
+    recovered: () => {
+      if (!who.live()) return;
+      const message = stallRecoveredLine(agentName, taskId, subject);
+      ports.info(message);
+      ports.writer.appendTimeline('stall_recovered', agentName, message, { task_id: taskId });
+    },
+  };
+}
+
+/**
+ * REQ-NOTIFY-111: that a child was given its one corrective message — a session-log line at `WARNING` (it follows a failed
+ * step) and a `corrective_message` timeline entry (OQ-127, OQ-157). The message itself is in the child's conversation
+ * record (REQ-ORCH-140).
+ */
+export function recordCorrectiveMessage(ports: StallRecordPorts, agentName: string, taskId: string, quietS: number, windowS: number, failure: string): void {
+  const message = correctiveMessageLine(agentName, taskId, quietS, failure);
+  ports.warn(message);
+  ports.writer.appendTimeline('corrective_message', agentName, message, { task_id: taskId, quiet_seconds: quietS, window_seconds: windowS, failure });
 }
 
 /** REQ-NOTIFY-112's stuck condition this build detects: the child produced no output within the window before it failed. */

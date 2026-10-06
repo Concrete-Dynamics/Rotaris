@@ -38,7 +38,7 @@ import { callsRun, interruptedResult } from './interruption.js';
 import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
 import { offersForFirstMessage } from './offers.js';
 import { randomUUID } from 'node:crypto';
-import { StallWatch, stallImposedWaitLine, stallRecoveredLine, stallWaitingLine, stallWarning } from '../children/stall.js';
+import { StallWatch, stallRecords } from '../children/stall.js';
 import { CHILD_STALL_TIMEOUT_MS } from '../children/cut-off.js';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
@@ -237,6 +237,11 @@ export interface RunDeps {
   readonly host: MachineId;
   readonly readSession: () => SessionRow | undefined;
   readonly warn: (message: string) => void;
+  /**
+   * A line at `INFO` (the session log, REQ-SESSION-142, and the application log): an intended state — the stall watch's
+   * wait or recovery, the children a rest leaves paused (OQ-127's ruling). Absent means such a line goes through `warn`.
+   */
+  readonly info?: ((message: string) => void) | undefined;
   /** After every save's commit, off the path (REQ-SESSION-028's one file). */
   readonly onSaved?: (generation: number) => void;
   readonly supervisorFor?: ((conversationId: string) => LoopSupervisor) | undefined;
@@ -403,6 +408,8 @@ export class Run {
   private recordingFailure: { reason: string; lastEventOrdinal: number } | null = null;
   private readonly unsubscribeRecordingFailure: () => void;
   private readonly dispatched = new Map<string, string>();
+  /** The run's `INFO` line (`RunDeps.info`), else its `warn`. */
+  private readonly info = (message: string): void => { (this.deps.info ?? this.deps.warn)(message); };
   private children: IterationChildren | null = null;
   /** REQ-ORCH-072: the root agent's own child identity for this iteration. */
   private rootId = 'root';
@@ -1740,7 +1747,7 @@ export class Run {
         countToolCalls: (n, child) => { this.aggregates.addToolCalls(n); if (child) this.persistToolCalls({ children: [child] }); },
         // REQ-EVENTS-053, PD-MONITOR-001: a child's provider requests are the run's, counted where the entry agent's are.
         onRequestUsage: this.onRequestUsage,
-        summariser: this.summariserDeps(), hooks: this.hooks, playbookFor: this.preflightInEffect?.playbookFor ?? null, route: this.preflightInEffect?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), ...(this.deps.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: this.deps.childStallTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
+        summariser: this.summariserDeps(), hooks: this.hooks, playbookFor: this.preflightInEffect?.playbookFor ?? null, route: this.preflightInEffect?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), ...(this.deps.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: this.deps.childStallTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn, info: this.info,
         // REQ-WORKSPACE-060/065 (ADR-0063): a child is an agent, so it receives the SAME units the entry agent
         // does — the getter is passed through, not a copy, which is what makes "a skill can never be visible to
         // one persona and hidden from another" true by construction rather than by two call sites agreeing.
@@ -1799,16 +1806,8 @@ export class Run {
      * message: REQ-NOTIFY-112's is a child task's.
      */
     const rootWatch = new StallWatch(this.deps.clocks, millis(this.deps.personas?.resolve(config.persona)?.persona.stallTimeoutMs ?? this.deps.childStallTimeoutMs ?? CHILD_STALL_TIMEOUT_MS), {
-      stalled: (r) => {
-        if (rootDetached) return;
-        const message = stallWarning(rootName, rootTaskId, r.silentS, 'agent');
-        if (r.warn) this.deps.warn(message);
-        writer.recordIssue({ kind: 'stall', severity: 'warning', actor: rootName, message, metadata: { task_id: rootTaskId, silent_seconds: r.silentS, active_tools: r.activeTools, recent_tool_calls: r.recentCalls, last_model_event: r.lastModelEvent } });
-      },
-      waiting: (w) => { if (!rootDetached) this.deps.warn(stallWaitingLine(rootName, rootTaskId, w.activeCalls, w.silentS, 'agent')); },
       // OQ-173: a backoff, a provider-limit wait or a compression the run holds the root in is a wait, not a stall.
-      imposed: (w) => { if (!rootDetached) this.deps.warn(stallImposedWaitLine(rootName, rootTaskId, w.wait, w.silentS, 'agent')); },
-      recovered: () => { if (!rootDetached) this.deps.warn(stallRecoveredLine(rootName, rootTaskId, 'agent')); },
+      ...stallRecords({ writer, warn: this.deps.warn, info: this.info }, { subject: 'agent', agentName: rootName, taskId: rootTaskId, live: () => !rootDetached }),
       evaluated: (stalled) => { if (!rootDetached) this.rootStallEvaluated(rootName, stalled ? rootWatch.silentSeconds : null); },
     });
     /** OQ-116 as ruled: counts one call the root completed; set below, once the root's counts are known. */
@@ -1998,7 +1997,7 @@ export class Run {
         // Every child's execution had the stop's grace beside the root's, counted from the same first request: the rest
         // is given what is left of it — none after a root given up on, and never a fresh 30 s after a root that returned
         // late — so the stop stays bounded at the one 30 s (REQ-SESSION-092).
-        if (children) { const n = await children.rest(rest, this.stopGraceLeft()); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) left paused by ${rest} (PD-ORCH-005)`); }
+        if (children) { const n = await children.rest(rest, this.stopGraceLeft()); if (n > 0) this.info(`iteration ${iteration}: ${n} child(ren) left paused by ${rest} (PD-ORCH-005)`); }
         /*
          * Clause 3: the explicit cancel is final even when it arrives while the run is coming to rest — the rest waits on
          * every execution, which can take the pause's whole tool deadline. Read again once the rest is done: cancelled

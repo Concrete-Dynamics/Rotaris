@@ -16,7 +16,7 @@ import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport,
 import { resolveRole, type Persona, type PersonaResolver } from './personas.js';
 import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
-import { correctiveInstruction, correctiveMessageLine, hadCorrectiveMessage, StallWatch, stallImposedWaitLine, stallRecoveredLine, stallRecoveryDue, stallWaitingLine, stallWarning } from './stall.js';
+import { correctiveInstruction, hadCorrectiveMessage, recordCorrectiveMessage, StallWatch, stallRecords, stallRecoveryDue } from './stall.js';
 import { fileWriters, scopeWithoutWriterReason, validateWriteScope, WriteClaims, writeScopeBlock, writesFiles, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
 import type { HookPort } from '../hooks-port.js';
 import { withContextUnits, withPlaybook } from '../run/run.js';
@@ -91,6 +91,12 @@ export interface ChildrenDeps {
   readonly childStallTimeoutMs?: Millis | undefined;
   readonly runSignal: AbortSignal;
   readonly warn: (m: string) => void;
+  /**
+   * The run's line at `INFO` (the session log, REQ-SESSION-142, and the application log): an intended state the stall
+   * watch records — a wait on tools, a wait the run imposes, a recovery (OQ-127's ruling). Absent means such a line goes
+   * through `warn`.
+   */
+  readonly info?: ((m: string) => void) | undefined;
   /**
    * REQ-MONITOR-102: the persisted total is SESSION-wide, so a child's calls reach the run's aggregates as the
    * child settles — once per child, from the one place its count is known. Without it the total is the entry
@@ -1101,22 +1107,12 @@ export class IterationChildren implements DelegationOps {
     const stallMs = millis(persona?.stallTimeoutMs ?? deps.childStallTimeoutMs ?? CHILD_STALL_TIMEOUT_MS);
     const progress = new ProgressLog(deps.workspaceRoot);
     // REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch over the same window — visibility only, it cancels nothing. What
-    // it reports is written only while this execution still belongs to a live run (REQ-SESSION-094). REQ-ORCH-139's closed
-    // timeline vocabulary has no word for the wait on tools, the recovery or the corrective message, so, as OQ-76 did for
-    // the user's presence, they are written to the session log through the run's `warn` and no timeline word is minted;
-    // OQ-127 asks the owner for the words.
+    // it reports is written only while this execution still belongs to a live run (REQ-SESSION-094): the warning with its
+    // `stall` issue at entry and at REQ-MONITOR-120's throttle (PD-MONITOR-005 revision 2), and the wait on tools and the
+    // recovery as timeline entries with their lines at `INFO` (OQ-127's ruling, `stallRecords`).
+    const stallPorts = { writer: deps.writer, warn: deps.warn, info: deps.info ?? deps.warn };
     const stallWatch = new StallWatch(deps.clocks, stallMs, {
-      // REQ-MONITOR-119: the `stall` issue at every stall evaluation; REQ-MONITOR-120 throttles only the warning.
-      stalled: (s) => {
-        if (this.detached) return;
-        const message = stallWarning(row.canonical_name, row.task_id, s.silentS);
-        if (s.warn) deps.warn(message);
-        deps.writer.recordIssue({ kind: 'stall', severity: 'warning', actor: row.canonical_name, message, metadata: { task_id: row.task_id, silent_seconds: s.silentS, active_tools: s.activeTools, recent_tool_calls: s.recentCalls, last_model_event: s.lastModelEvent } });
-      },
-      waiting: (w) => { if (!this.detached) deps.warn(stallWaitingLine(row.canonical_name, row.task_id, w.activeCalls, w.silentS)); },
-      // OQ-173: a backoff, a provider-limit wait or a compression the run holds the child in is a wait, not a stall.
-      imposed: (w) => { if (!this.detached) deps.warn(stallImposedWaitLine(row.canonical_name, row.task_id, w.wait, w.silentS)); },
-      recovered: () => { if (!this.detached) deps.warn(stallRecoveredLine(row.canonical_name, row.task_id)); },
+      ...stallRecords(stallPorts, { subject: 'child', agentName: row.canonical_name, taskId: row.task_id, live: () => !this.detached }),
       // REQ-ORCH-089's stall callback, at every evaluation: the child's stalled figure reaches its `AgentRecord`, republished
       // when it changes (REQ-MONITOR-119's countdown, REQ-MONITOR-120's recovery notified; REQ-MONITOR-122), and a steer
       // pending for a child waiting on its own children wakes it (REQ-MONITOR-135). The repair of
@@ -1302,8 +1298,9 @@ export class IterationChildren implements DelegationOps {
           corrected = true;
           const quietS = Math.floor(stallWatch.quietFor() / 1000);
           const instruction = correctiveInstruction({ quietS, windowS: stallMs / 1000, failure: failedStep?.headline ?? 'no reason was given' });
-          // The message itself is in the child's conversation record (REQ-ORCH-140); the session log says it was sent (OQ-127).
-          deps.warn(correctiveMessageLine(row.canonical_name, row.task_id, quietS, failedStep?.headline ?? 'no reason was given'));
+          // The message itself is in the child's conversation record (REQ-ORCH-140); the session log and the timeline say it
+          // was sent (OQ-127's ruling: a `corrective_message` entry).
+          recordCorrectiveMessage(stallPorts, row.canonical_name, row.task_id, quietS, stallMs / 1000, failedStep?.headline ?? 'no reason was given');
           stallWatch.activity();
           const stopped = outcome;
           let first = true;

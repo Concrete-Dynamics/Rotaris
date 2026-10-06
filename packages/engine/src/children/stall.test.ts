@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock, millis } from '@rotaris/kernel';
 import { modelError } from '@rotaris/model';
-import { correctiveInstruction, duringImposedWait, FIXED_CORRECTIVE_INSTRUCTION, hadCorrectiveMessage, stallCadence, stallImposedWaitLine, stallRecoveryDue, stallRepeat, StallWatch, stallWarning, type ImposedWait, type StallRecoveryInput, type StallReport } from './stall.js';
+import { correctiveInstruction, duringImposedWait, FIXED_CORRECTIVE_INSTRUCTION, hadCorrectiveMessage, recordCorrectiveMessage, stallCadence, stallImposedWaitLine, stallRecords, stallRecoveryDue, stallRepeat, StallWatch, stallWarning, type ImposedWait, type StallRecordPorts, type StallRecoveryInput, type StallReport } from './stall.js';
 
 function watched(thresholdMs: number) {
   const clock = new FakeClock();
@@ -34,7 +34,8 @@ describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
     w.clock.advance(5_000);
     expect(w.stalled).toEqual([{ silentS: 90, entry: true, warn: true, activeTools: [], recentCalls: ['read_file'], lastModelEvent: 'usage' }]);
     expect(w.evaluated.at(-1)).toBe(true);
-    // Every evaluation reports the stall (its issue) and calls back; the warning waits for max(90 s, 30 s).
+    // Every evaluation reports the stall and calls back; the warning (and, since PD-MONITOR-005 revision 2, its issue)
+    // waits for max(90 s, 30 s).
     w.clock.advance(85_000);
     expect(w.stalled).toHaveLength(18);
     expect(w.stalled.slice(1).map((r) => [r.silentS, r.entry, r.warn])).toEqual(Array.from({ length: 17 }, (_, i) => [95 + i * 5, false, false]));
@@ -214,6 +215,91 @@ describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
 
   it('the warning says what REQ-ORCH-089 and REQ-MONITOR-119 say', () => {
     expect(stallWarning('build', 'bg_0000000a', 90)).toBe('child appears stalled: no model event or token for 90 seconds (build, bg_0000000a); the run is still waiting on it.');
+  });
+});
+
+describe('OQ-127\'s ruling (2026-10-06, R-071): what a stall watch\'s reports write — PD-MONITOR-005 revision 2 and the three timeline words', () => {
+  function recorded(live = () => true) {
+    const clock = new FakeClock();
+    const issues: { kind: string; severity: string; actor: string; message: string; metadata?: Record<string, unknown> }[] = [];
+    const timeline: { name: string; actor: string; message: string; metadata: Record<string, unknown> }[] = [];
+    const warned: string[] = [];
+    const informed: string[] = [];
+    const ports: StallRecordPorts = {
+      writer: {
+        recordIssue: (i) => { issues.push(i); return { ok: true, value: `i${issues.length}` } as const; },
+        appendTimeline: (name, actor, message, metadata) => { timeline.push({ name, actor, message, metadata }); return { ok: true, value: timeline.length } as const; },
+      },
+      warn: (m) => warned.push(m),
+      info: (m) => informed.push(m),
+    };
+    const watch = new StallWatch(clock, millis(90_000), { ...stallRecords(ports, { subject: 'child', agentName: 'build', taskId: 'bg_0000000a', live }), evaluated: () => undefined });
+    return { clock, watch, ports, issues, timeline, warned, informed };
+  }
+
+  it('PD-MONITOR-005 revision 2: the `stall` issue is written with each throttled warning and only then — not at every evaluation', () => {
+    const r = recorded();
+    r.watch.start();
+    r.clock.advance(90_000);
+    r.clock.advance(85_000);
+    // Eighteen evaluations found the stall (90 to 175 s); one warning, and one issue beside it.
+    expect(r.warned).toEqual([stallWarning('build', 'bg_0000000a', 90)]);
+    expect(r.issues.map((i) => [i.kind, i.severity, i.actor, i.message])).toEqual([['stall', 'warning', 'build', r.warned[0]]]);
+    expect(r.issues[0]!.metadata).toEqual({ task_id: 'bg_0000000a', silent_seconds: 90, active_tools: [], recent_tool_calls: [], last_model_event: null });
+    r.clock.advance(5_000);
+    expect(r.issues.map((i) => i.metadata!['silent_seconds'])).toEqual([90, 180]);
+    expect(r.issues.map((i) => i.message)).toEqual(r.warned);
+    // A stall from 90 s to the 1200 s `child_timeout` writes thirteen issues, not 223, so REQ-SESSION-133's 500-issue ring keeps the session's others.
+    r.clock.advance(1_020_000);
+    expect(r.issues).toHaveLength(13);
+    expect(r.timeline).toEqual([]);
+    expect(r.informed).toEqual([]);
+  });
+
+  it('REQ-MONITOR-118 and REQ-MONITOR-120: the wait on tools and the recovery are `waiting_on_tools` and `stall_recovered` entries, their lines at INFO', () => {
+    const r = recorded();
+    r.watch.start();
+    r.watch.toolStarted('c1', 'terminal');
+    r.clock.advance(90_000);
+    const wait = 'child waiting on tools: build (bg_0000000a) has 1 active tool call and no model event or token for 90 seconds; the run is still waiting on it (REQ-MONITOR-118)';
+    expect(r.informed).toEqual([wait]);
+    expect(r.timeline).toEqual([{ name: 'waiting_on_tools', actor: 'build', message: wait, metadata: { task_id: 'bg_0000000a', silent_seconds: 90, active_calls: 1 } }]);
+    r.watch.toolCompleted('c1');
+    r.clock.advance(90_000);
+    r.watch.modelEvent('text');
+    r.clock.advance(5_000);
+    const recovered = 'child stall recovered: build (bg_0000000a) is active again after a stall (REQ-MONITOR-120)';
+    expect(r.informed).toEqual([wait, recovered]);
+    expect(r.timeline.at(-1)).toEqual({ name: 'stall_recovered', actor: 'build', message: recovered, metadata: { task_id: 'bg_0000000a' } });
+    // The stall itself stays a warning: REQ-MONITOR-119 says "log a warning".
+    expect(r.warned).toEqual([stallWarning('build', 'bg_0000000a', 90)]);
+  });
+
+  it('OQ-173\'s wait the run imposes is REQ-MONITOR-118\'s manner: a line at INFO, and no timeline word was ruled for it', () => {
+    const r = recorded();
+    r.watch.start();
+    r.watch.imposedWait('provider_limit');
+    r.clock.advance(90_000);
+    expect(r.informed).toEqual([stallImposedWaitLine('build', 'bg_0000000a', 'provider_limit', 90)]);
+    expect([r.warned, r.timeline, r.issues]).toEqual([[], [], []]);
+  });
+
+  it('a detached execution writes nothing (REQ-SESSION-094)', () => {
+    const r = recorded(() => false);
+    r.watch.start();
+    r.watch.toolStarted('c1', 'terminal');
+    r.clock.advance(90_000);
+    r.watch.toolCompleted('c1');
+    r.clock.advance(180_000);
+    expect([r.warned, r.informed, r.timeline, r.issues]).toEqual([[], [], [], []]);
+  });
+
+  it('REQ-NOTIFY-111: the corrective message is a `corrective_message` entry, its line a warning since a failed step precedes it', () => {
+    const r = recorded();
+    recordCorrectiveMessage(r.ports, 'build', 'bg_0000000a', 92, 90, 'the stream ended');
+    const line = 'child corrective message: build (bg_0000000a) produced no output for 92 seconds and its model request then failed (the stream ended); it was given its one corrective message and resumes (REQ-NOTIFY-111)';
+    expect(r.warned).toEqual([line]);
+    expect(r.timeline).toEqual([{ name: 'corrective_message', actor: 'build', message: line, metadata: { task_id: 'bg_0000000a', quiet_seconds: 92, window_seconds: 90, failure: 'the stream ended' } }]);
   });
 });
 

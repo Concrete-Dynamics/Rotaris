@@ -231,6 +231,8 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
   let dal: StoreDal;
   let clock: FakeClock;
   const warnings: string[] = [];
+  /** The run's lines at `INFO` (`SessionsDeps.log`): an intended state, such as a wait, since OQ-127's ruling. */
+  const infos: string[] = [];
   let minted = 0;
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'rotaris-compression-'));
@@ -239,6 +241,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     dal = new StoreDal(db);
     clock = new FakeClock();
     warnings.length = 0;
+    infos.length = 0;
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
@@ -276,7 +279,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: base, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
     const pub = recorder();
     const sessions = new Sessions({
-      clocks: clock, publisher: pub, pid: 78, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++minted}`,
+      clocks: clock, publisher: pub, pid: 78, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), log: (m) => infos.push(m), mintSessionId: () => `S${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: () => undefined,
       tools: () => globPort(compression.resultText),
       configure: () => ({ ok: true, value: {
@@ -434,6 +437,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
   it('REQ-MONITOR-117..119 (OQ-173): a compression\'s own model call, automatic or on a rejection, is a wait the run imposes — 100 s of it raises no `stall` issue and no stalled seconds', async () => {
     for (const trigger of ['automatic', 'rejection'] as const) {
       warnings.length = 0;
+    infos.length = 0;
       let release!: () => void;
       const held = new Promise<void>((r) => { release = r; });
       const { sessions, counts, pub } = sessionsWith((persona, turn) => {
@@ -453,7 +457,8 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
       expect(issues(sid)).not.toContain('stall');
       expect(warnings.filter((m) => /appears stalled/.test(m))).toEqual([]);
       expect((pub.snapshots as { entryStalledSeconds: number | null }[]).every((s) => s.entryStalledSeconds === null)).toBe(true);
-      expect(warnings.filter((m) => m.startsWith('agent waiting on a context compression:'))).toHaveLength(1);
+      expect(infos.filter((m) => m.startsWith('agent waiting on a context compression:'))).toHaveLength(1);
+      expect(warnings.filter((m) => m.includes('waiting on a context compression'))).toEqual([]);
     }
   });
 

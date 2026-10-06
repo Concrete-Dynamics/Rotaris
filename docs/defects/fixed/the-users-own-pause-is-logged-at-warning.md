@@ -56,3 +56,16 @@ the run's waits, as something either log must carry.** Whether the waits belong 
 that produced no output within `child_stall_timeout`' when the stall watchdog never cancels, and what does the watchdog
 count, write and call?"); whether an `error` issue must also reach a log is not asked by any requirement. Recorded as
 evidence only; no level and no log line is changed, and nothing is ruled.
+
+## Outcome — repaired 2026-10-06 under OQ-127's ruling ([R-071](../../product/requests.md#r-071))
+
+The owner ruled OQ-127 as recommended, and the ruling settles this line's level with the watchdog's: a log line that
+records an intended state is written at `INFO`. `Run` writes `iteration N: n child(ren) left paused by <rest>` through
+its own `info` (`RunDeps.info`, wired by `Sessions` to the session log at `INFO` and the application log), for every
+rest that reaches it — the user's own pause, stop or quit, each of which PD-ORCH-005 clause 2 or 3 says leaves its
+agents paused. REQ-MONITOR-118's `waiting on tools` and REQ-MONITOR-120's `stall recovered` lines, the 32 of 32
+warnings of the 2026-10-06 duress run, are written at `INFO` too, and are also timeline entries (`waiting_on_tools`,
+`stall_recovered`). Pinned by `packages/engine/src/children/children.test.ts` (the clause 2 pause and the clause 3 stop
+each assert the line reaches `INFO` and no warning; red on `37f7a98`) and by `stall.test.ts`'s `stallRecords` cases.
+The two `error` issues the second section records as reaching neither log are not a defect of this note: no requirement
+asks for them there, and nothing was changed for them.

@@ -1555,7 +1555,7 @@ export class Sessions {
       // at the top level and NOT inside the tools block: an agent with no tool port still holds a conversation.
       ...(model.compression ? { compression: { backend: meteredBackend(model.backend, countUsage), timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor, model: model.compression.model, timeoutMs: millis(model.compression.timeoutMs), charsPerToken: model.compression.charsPerToken, preserveRecentTurns: model.compression.preserveRecentTurns, triggerFor: model.compression.triggerFor } } : {}),
       // PD-ORCH-005: every run's store for the conversation and iteration records, with or without a tool port.
-      dal, readSession: () => dal.getSession(sessionId), warn, hooks, settledBeforeStart, checkpoints, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
+      dal, readSession: () => dal.getSession(sessionId), warn, info: (m: string) => { log?.info(m); this.deps.log?.(m); }, hooks, settledBeforeStart, checkpoints, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
       onSaved: (g) => summary.rebuild(g, () => dal.getSession(sessionId)),
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, helperModel }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
@@ -1849,7 +1849,7 @@ export class Sessions {
       ...(open ? { openIteration: { resume: openIteration !== 'decline', delivered: openIteration !== 'decline' && openIteration.message !== null } } : {}),
       // PD-ORCH-004 revision 4: the offers the payload's handoff covers, named or left out, told no later root again.
       handoffOffers: openOfferIds(s.dal, sessionId),
-      tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
+      tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn, info: (m: string) => { s.log?.info(m); this.deps.log?.(m); },
       continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(appendsTask && !restatesUnfinished ? {} : { appendsTask: false }), ...(hooks ? { hooks } : {}), settledBeforeStart, checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),

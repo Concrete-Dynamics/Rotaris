@@ -161,10 +161,35 @@ function endedOnItsOwn(interval, quitAt) {
 }
 
 /**
+ * Whether a tool call waits on the caller's children rather than running anything itself: `wait_for_tasks` always, and a
+ * `delegate` with `run_in_background: false`, which waits on its child the same way (REQ-TOOLS-153). Takes a call as
+ * `live-run.mjs`'s `readToolCalls` reads it (`tool_name`, `args`).
+ */
+export function waitsOnChildren(call) {
+  if (call?.tool_name === 'wait_for_tasks') return true;
+  return call?.tool_name === 'delegate' && call.args !== null && typeof call.args === 'object' && call.args.run_in_background === false;
+}
+
+/**
+ * The tool intervals `attributeWait` sweeps, from the session's finished tool calls (each call's end and `elapsed_ms`).
+ * A wait on children is left out: it runs no tool, and an instant it alone holds belongs to what the children were doing
+ * then — their requests, their tools, or nothing. Until 2026-10-06 every call was an interval, so the coordinator's
+ * `wait_for_tasks`, open for nearly the whole duress run at 27a5127, filed each gap between its children's steps as "tools"
+ * (18 s tools and 2 s product printed, 12.1 s and 7.9 s once it is left out;
+ * `docs/defects/fixed/the-duress-time-split-counts-a-parents-wait-on-its-children-as-tools.md`, finding H7).
+ */
+export function toolIntervals(calls) {
+  return calls
+    .filter((c) => c.endedAt !== null && c.elapsedMs !== null && !waitsOnChildren(c))
+    .map((c) => ({ start: c.endedAt - c.elapsedMs, end: c.endedAt }));
+}
+
+/**
  * The wait divided by what was in flight (H-h). Every instant of the launch, from its spawn to its exit, lands in
  * exactly one bucket, in this order of precedence:
  *   endpoint  at least one model request was open at the endpoint (the recorded traffic: each record's `at` and `ms`);
- *   tools     no request was open and at least one tool call was running (the store: each call's end and `elapsed_ms`);
+ *   tools     no request was open and at least one tool call was running (the store: each call's end and `elapsed_ms`,
+ *             through `toolIntervals`, which leaves a wait on children out — it runs no tool);
  *   launch    before the first request or tool call — the application starting and the run being set up;
  *   product   the rest: the product between steps with nothing in flight, and the quit after the wait.
  * The buckets are OCCUPANCY, not a critical path: a request open while the run's next step waits on something else is
@@ -223,7 +248,7 @@ export function deadlineReading({ timedOut, attribution: a, budgetMs, traffic, u
   const s = (ms) => `${n(ms / 1000)} s`;
   const parts = [
     `endpoint generating ${s(a.endpointMs)} (${pct(a.endpointMs, a.waitMs)} %${usage ? `; ${a.requests} request${a.requests === 1 ? '' : 's'}, ${n(usage.completionTokens)} output tokens of which ${n(usage.reasoningTokens)} reasoning` : ''})`,
-    `tools alone ${s(a.toolsMs)}`,
+    `tools alone ${s(a.toolsMs)} (a wait on children counted as what the children were doing)`,
     `launch ${s(a.launchMs)}`,
     `the product with nothing in flight ${s(a.productMs)} (${pct(a.productMs, a.waitMs)} %)`,
   ];

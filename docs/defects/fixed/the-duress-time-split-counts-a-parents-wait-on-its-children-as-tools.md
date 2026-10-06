@@ -30,3 +30,26 @@ so counting it there contradicts what the line says it measures.
   on children.
 
 Noticed 2026-10-06 by the autopsy of the final duress live run at `27a5127` (H7); recorded by plan fin19 before any repair.
+
+## Outcome (2026-10-06, fin19, repaired)
+
+A wait on children is no longer a tool interval. `waitsOnChildren` (`apps/desktop/scripts/lib/duress-checks.mjs`) names the
+two calls that wait on children: `wait_for_tasks`, and a `delegate` with `run_in_background: false`. `toolIntervals` builds the
+intervals `attributeWait` sweeps from the session's finished calls, leaving those out, and the duress scenario in
+`live-run.mjs` passes its calls through it. An instant that only a parent's wait holds now goes to whatever the children were
+doing then: endpoint if one of their requests was open, tools if one of their calls was, product otherwise. A background
+`delegate` returns at once and stays a tool like any other. `deadlineReading` names the rule in the line: "tools alone N s
+(a wait on children counted as what the children were doing)". A reader comparing with an earlier pack can then see why
+the figure shrank.
+
+Pinned by "H7 (27a5127): a parent's wait on its children is counted as what the children were doing, never as tools" in
+`apps/desktop/scripts/lib/duress-checks.test.ts`. A coordinator waits across its child's two requests and a terminal call,
+with a foreground and a background `delegate` beside them. The split is endpoint 40 s, tools 11 s, launch 7 s and product
+42 s. Under the old rule (every finished call an interval) the same test reads tools 44 s and product 9 s, and fails.
+
+Shown on the evidence pack (the 27a5127 pack's `results.json`, `duress/model-traffic.jsonl` and `duress/app.log`, and a
+private copy of its `workspace.db`), by a scratch script that runs `attributeWait` both ways. The launch's start was taken
+from the first line of `app.log`, a little after the real spawn, so launch and product differ from the console's figures by
+about half a second. Old rule: endpoint 3,335.7 s, tools 18.2 s (the PASS line's 18 s), launch 4.8 s, product 2.3 s. With
+`toolIntervals`: tools 12.1 s and product 8.5 s, matching the autopsy's recomputed 12.1 s and 7.9 s up to that start. No live
+run was made for this repair: the orchestrator runs them after the plan lands.

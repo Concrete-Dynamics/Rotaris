@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the readers are plain ESM beside the script that runs them.
-import { PRODUCT_SHARE_BOUND, PROGRESSING_TAIL_MS, attributeWait, childrenThatRanCommands, commandsReading, compressionNote, compressionTrigger, deadlineReading, saysSomething, silentFailedChildren, trafficCall, usageOf, waitRanOutAt } from './duress-checks.mjs';
+import { PRODUCT_SHARE_BOUND, PROGRESSING_TAIL_MS, attributeWait, childrenThatRanCommands, toolIntervals, waitsOnChildren, commandsReading, compressionNote, compressionTrigger, deadlineReading, saysSomething, silentFailedChildren, trafficCall, usageOf, waitRanOutAt } from './duress-checks.mjs';
 
 type Report = Record<string, unknown>;
 const reportOf = (c: { report: Report | null }) => c.report ?? {};
@@ -146,6 +146,35 @@ describe('an overrun says where the time went (H-h)', () => {
     });
     expect(a).toEqual({ waitMs: 100_000, endpointMs: 55_000, toolsMs: 15_000, launchMs: 5_000, productMs: 25_000, quietTailMs: 15_000, requests: 2, openAtQuit: 0, longestOpenAtQuitMs: 0 });
     expect(a.endpointMs + a.toolsMs + a.launchMs + a.productMs).toBe(a.waitMs);
+  });
+
+  /*
+   * Finding H7 of the duress live run at 27a5127: the coordinator's `wait_for_tasks` was open for nearly the whole run, so
+   * every gap between its children's steps was filed as "tools" and the PASS line read "tools alone 18 s … the product with
+   * nothing in flight 2 s" where the children's own tools took 12.1 s and the product 7.9 s. A wait on children runs no tool
+   * of its own: an instant it alone holds is the children's, and they had nothing in flight.
+   */
+  it('H7 (27a5127): a parent\'s wait on its children is counted as what the children were doing, never as tools', () => {
+    const calls = [
+      // The coordinator waits from t(10) to t(90) while its child steps: a request, a terminal call, a request.
+      { tool_name: 'wait_for_tasks', args: { task_ids: [] }, endedAt: t(90), elapsedMs: 80_000 },
+      { tool_name: 'terminal', args: { command: 'node --test' }, endedAt: t(50), elapsedMs: 10_000 },
+      // A foreground delegate waits on its child the same way; a background one returns at once and is a tool like any other.
+      { tool_name: 'delegate', args: { persona: 'tester', task_name: 'x', task: 'y', run_in_background: false }, endedAt: t(95), elapsedMs: 3_000 },
+      { tool_name: 'delegate', args: { persona: 'tester', task_name: 'x', task: 'y' }, endedAt: t(8), elapsedMs: 1_000 },
+    ];
+    expect(calls.map(waitsOnChildren)).toEqual([true, false, true, false]);
+    const a = attributeWait({
+      startedAt: t(0), endedAt: t(100),
+      requests: [{ start: t(10), end: t(30) }, { start: t(60), end: t(80) }],
+      tools: toolIntervals(calls),
+    });
+    // Tools: the terminal call (40 to 50) and the background delegate (7 to 8). Product: 30 to 40, 50 to 60, 80 to 100.
+    expect(a).toMatchObject({ endpointMs: 40_000, toolsMs: 11_000, launchMs: 7_000, productMs: 42_000 });
+    expect(a.endpointMs + a.toolsMs + a.launchMs + a.productMs).toBe(a.waitMs);
+    // The line names the rule, so a reader comparing it with an earlier pack knows why "tools alone" shrank.
+    const r = deadlineReading({ timedOut: false, attribution: a, budgetMs: 200_000, traffic: true, usage: { completionTokens: 1, reasoningTokens: 0 } });
+    expect(r.detail).toContain('tools alone 11 s (a wait on children counted as what the children were doing)');
   });
 
   it('clips intervals to the launch and ignores a record with no interval', () => {

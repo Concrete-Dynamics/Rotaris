@@ -126,7 +126,7 @@ import { refusalIssues } from './lib/refusal-issues.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
-import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
+import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, toolIntervals, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
@@ -2095,7 +2095,8 @@ if (wanted.includes('duress')) {
   const attribution = attributeWait({
     startedAt, endedAt: startedAt + elapsed, quitAt: waitRanOutAt(log),
     requests: durTraffic,
-    tools: durCalls.filter((c) => c.endedAt !== null && c.elapsedMs !== null).map((c) => ({ start: c.endedAt - c.elapsedMs, end: c.endedAt })),
+    // A wait on children is not a tool running: `toolIntervals` leaves it out (finding H7 at 27a5127).
+    tools: toolIntervals(durCalls),
   });
   const usage = { completionTokens: durTraffic.reduce((t, c) => t + (c.completionTokens ?? 0), 0), reasoningTokens: durTraffic.reduce((t, c) => t + (c.reasoningTokens ?? 0), 0) };
   const deadline = deadlineReading({ timedOut: /capture: wait for result timed out/.test(log), attribution, budgetMs: DURESS_MS, traffic: proxy !== null && durTraffic.length > 0, usage });

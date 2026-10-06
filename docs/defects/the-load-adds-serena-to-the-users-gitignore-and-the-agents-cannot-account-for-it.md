@@ -70,7 +70,9 @@ once the runtime's marker exists", red on the code before, with the other four n
 load appends `.rotaris/` alone to the workspace's `.gitignore`, the one line REQ-CONFIG-013 and REQ-MCP-089 name. The
 marker's directory goes to the repository-local exclude file (`info/exclude` in the common directory of the repository
 whose top level is the workspace, a linked worktree's included), which Git honours and nobody tracks: `git status`
-stays clean, and no file the user tracks changes, so there is nothing left for an agent to account for. Best-effort and
+stays clean, and no file the user tracks changes, ~~so there is nothing left for an agent to account for~~ *(falsified
+2026-10-06 by the duress run at `27a5127`: the file tools still list the marker's directory as workspace content, and the
+agents documented it as the user's repository — see "Seen again" below)*. Best-effort and
 idempotent; nothing is written for a workspace below a repository's top level or in none (OQ-161 states why), nor
 through a `.git` file whose `gitdir:` names no git directory Git would recognise (a stale pointer, or one to any other
 directory), and nothing is created in the repository but `info/` and its file. Pinned by nine cases in `load.test.ts`
@@ -90,3 +92,30 @@ the unrequested child appeared, was not run in this round (the acceptance plan's
 whether the exclude file is the place, or whether the runtime should be started so that it creates no marker in the
 workspace root. A `.gitignore` an earlier build amended keeps its `.serena/` line: the product never removes a line from
 a file the user owns. The note stays open until the ruling.
+
+## Seen again 2026-10-06, on `main` `27a5127`: the repaired part's reason is falsified; still open
+
+The orchestrator's final duress live run at `27a5127` against the self-hosted endpoint (pack
+`.live-run/runs/2026-10-06T01-47-53-900Z/` of the live worktree, git-ignored; `--only=duress`, `live-run PASSED` with 19
+PASS, 0 FAIL, 5 NOTE), finding H3 of its autopsy. The part repaired held: `git status` stayed clean (tool calls #212 and
+#301), and #177's `git check-ignore -v` names `.git/info/exclude:7:.serena/` as the only rule that applies. **The reason
+the repair gave, "there is nothing left for an agent to account for", did not.** It is kept above, struck through, beside
+this evidence (CLAUDE.md: a falsified reason is kept beside its replacement).
+
+- **The file tools list it.** REQ-TOOLS-139's search filter honours "the workspace's `.gitignore`" and nothing else, so
+  `.git/info/exclude` hides nothing from it, and `.serena` is not one of REQ-TOOLS-140's hard-coded ignore components
+  (`.rotaris` is). `glob **/*` (#4, #28, #32, #133) lists four `.serena/` files — `.serena/.gitignore`,
+  `.serena/memories/memory_maintenance.md`, `.serena/project.local.yml`, `.serena/project.yml` — beside the fixture's
+  own, while `glob {node_modules,dist,.rotaris}/**` (#77) answers "No files found" although `.rotaris/` holds two files
+  (#302's `find`). The tools behave as specified; the marker sits in the workspace root, where they look.
+- **Three children documented it as repository content.** `wave1c repo overview` (#83) tabulated the four `.serena/`
+  files as repository files and wrote that `.rotaris/` was absent; `wave2d reconcile docs` (#206, #220) grew the table to
+  "28 rows … 29 files", six of them under `.serena/`, and its own `write_memory` (#237) added a fifth file there; the
+  verifier `wave3 verify result` raised three of its five defects (D3, D4, D5) about `.serena/` rows or counts.
+- **The user was told.** The final answer (transcript row 671) passed two `.serena/` items to the user as two of the five
+  "remaining defects": "its `.serena/` ignore claim is wrong" and "one `.serena/memories/…` file has no table row".
+- **Volume.** 38 tool calls by 5 agents name `.serena`, and 80 reasoning or answer rows mention it.
+
+Recorded as evidence only; nothing is changed. Whether the runtime may leave a marker in the workspace root at all, and
+where, stays the owner's ruling of OQ-161, "May a configuration load append the code-intelligence runtime's marker directory
+to the user's `.gitignore` beside `.rotaris/`?" in [`open-questions.md`](../architecture/open-questions.md). The build proceeds under the current behaviour.

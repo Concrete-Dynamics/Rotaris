@@ -78,3 +78,29 @@ build proceeds under the current behaviour, unchanged until the owner rules. No 
 
 Noticed 2026-10-03 by the autopsy of the duress live run at `1763f7f`. Open, the owner's: a ruling on what a
 continuation is given and what its parent is told.
+
+## Seen again in part 2026-10-06, on `main` `27a5127`; still open
+
+The orchestrator's final duress live run at `27a5127` against the self-hosted endpoint (pack
+`.live-run/runs/2026-10-06T01-47-53-900Z/` of the live worktree, git-ignored; `--only=duress`, `live-run PASSED` with 19
+PASS, 0 FAIL, 5 NOTE) briefed its one continuation as if it remembered again; finding H2 of its autopsy.
+
+- **The brief.** Tool call #298 (`workspace.db`, `tool_calls`; #297 before it was refused at the schema gate for a missing
+  `task_name`) told the continuation `wave3 verification report` (`bg_d06a3153`) that its work was done and forbade
+  redoing it: "You ran out of time before writing the report, but your verification work is done. Now write
+  `docs/verification.md` from what you already checked, and nothing else. Work efficiently — do NOT redo the
+  exploration." It then restated the three sections and all six risks.
+- **What it had.** Its first request carried the workspace root line, its write scope, the sibling artifact index and
+  the brief, and nothing of its predecessor (`PD-ORCH-004` revision 2, met). The index listed the predecessor's report
+  artifact (`wave3-verify-result`, `art_5sRxt8Ry`, `status=failed`); the continuation never opened it (0 `artifact_read`
+  calls).
+- **What it did.** It redid every check (row 594: "Now let me gather the remaining facts …"): the suite (#300), git state
+  (#301, #315), re-reads of 11 files (#303 to #313) and the citation checks with its own scripts (#314, #316, #318). It
+  wrote the file (#324) and edited it 7 times: 36 calls and 26 requests in **375 s**, 1.22M input tokens.
+- **Where it went.** It stayed inside the workspace. All 16 of its terminal commands begin with `cd` into the workspace;
+  its only paths outside it are three scratch scripts written to `/tmp` by heredoc. No call names the product's data
+  directory, the session store, `workspace.db` or the credential tree, and the same holds for every other agent of the
+  run. The store mining recorded above did not recur; the difference is the brief, which this time restated every check.
+
+Recorded as evidence only. What a continuation is given and what its parent is told stay the owner's to rule; the build
+proceeds under the current behaviour.

@@ -82,3 +82,23 @@ and that waits on OQ-139's ruling, which is the owner's. Since `1303184` (merged
 refusal also files a `tool_error` issue
 ([`fixed/a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md`](fixed/a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md)).
 The model still regenerates its file all the same.
+
+## Seen again 2026-10-06, on `main` `27a5127`, at its highest rate; still open
+
+The orchestrator's final duress live run at `27a5127` against the self-hosted endpoint (pack
+`.live-run/runs/2026-10-06T01-47-53-900Z/` of the live worktree, git-ignored; `--only=duress`, `live-run PASSED` with 19
+PASS, 0 FAIL, 5 NOTE), finding H6 of its autopsy. Six agents made a first `write_file` call and **4 of the 6 were
+refused**, each sending `path` and `content` with no `operation`:
+
+- **#81** `wave1a api reference`, **#82** `wave1b branch tests`, **#176** `wave2e design decisions` and **#278**
+  `wave3 verify result` (`workspace.db`, `tool_calls`); the same child's second attempt, #283, was refused too. Each
+  refusal filed a `tool_error` issue, as the schema gate's repair made it do.
+- The two first uses that succeeded were #83 (`wave1c repo overview`) and #324 (the continuation).
+- **Regenerating cost 179.4 s and 16,966 output tokens** (`duress/model-traffic.jsonl`, 0-based): #39 33.2 s and 3,039
+  tokens; #41 33.4 s and 2,852; #100 97.0 s and 9,777; #185 6.4 s and 416; #190 9.4 s and 882. Only the failed child's
+  15.8 s lay on the run's critical path.
+
+The rate was 2 of 5 at `71ad8e8` and at `1763f7f`, and 1 of 4 on 2026-09-30. Recorded as evidence only; no code changes.
+The reading the build proceeds under is still OQ-139's, "May a `write_file` call with no `operation` be read as the one
+operation its other arguments allow?" — no inference, the call refused as REQ-TOOLS-032 says — and the ruling is the
+owner's.

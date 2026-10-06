@@ -63,3 +63,25 @@ proceeds under the current behaviour, unchanged until the owner rules. No code i
 
 Noticed 2026-10-03 by the autopsy of the duress live run at `1763f7f`. Open, the owner's: a ruling on the landing's
 bound and on what is kept when it is reached.
+
+## Seen again 2026-10-06, on `main` `27a5127`; still open
+
+The orchestrator's final duress live run at `27a5127` against the self-hosted endpoint (pack
+`.live-run/runs/2026-10-06T01-47-53-900Z/` of the live worktree, git-ignored; `--only=duress`,
+`LIVE_RUN_DURESS_MS=5400000`, 01:48 to 02:44 UTC, `live-run PASSED` with 19 PASS, 0 FAIL, 5 NOTE) hit it exactly, as
+finding H1 of its autopsy. No check reads the traffic's `aborted` outcomes, so it passed every check again.
+
+- **The abort.** The child `wave3 verify result` (coding-agent, `bg_a4a53a25`) reached its 1200 s ceiling at
+  02:35:18.435. Its step in flight, traffic #203 (`duress/model-traffic.jsonl`, 0-based), began at 02:34:03.655 and was
+  `aborted` at 02:35:48.471: **ceiling + 30.036 s**, after **104.8 s** of generation and **30,277 reasoning characters**,
+  with **no tool call**. The timeout issue (issue 12, `error`) followed 18 ms later.
+- **What was lost.** The reasoning is kept as transcript row 582 (`workspace.db`), which opens "Now I have a very complete
+  picture. Let me enumerate branches from the source myself for risk 4". Nothing of it reached the report or the
+  continuation.
+- **The cost.** The child's whole 1,285.6 s (1.86M in / 94.8k out; tool call #296 was its last, 74.9 s before the ceiling)
+  produced no file. The deliverable then took 19.3 s of the orchestrator and a **391.8 s continuation** (`bg_d06a3153`,
+  375.4 s of life plus a 16.4 s summary), which wrote `docs/verification.md`.
+
+Whether a longer landing would have written the file is not shown here either. Recorded as evidence only; the build
+proceeds under the current behaviour, and the bound is the owner's to rule ("How long may a child at its time limit take
+to finish the model step in flight, and what is kept when that bound is reached?", OQ-196).

@@ -31,3 +31,28 @@ proceeds under: the level stays as it is until the owner rules. No level is chan
   iteration's children and returns the count the line reports.
 
 Noticed 2026-10-03 by the autopsy of the live run at `1763f7f`. Open, the owner's: a ruling on the level.
+
+## Seen again 2026-10-06, on `main` `27a5127`: every warning a wait, and the run's two errors in neither log; still open
+
+The orchestrator's final duress live run at `27a5127` against the self-hosted endpoint (pack
+`.live-run/runs/2026-10-06T01-47-53-900Z/` of the live worktree, git-ignored; `--only=duress`, `live-run PASSED` with 19
+PASS, 0 FAIL, 5 NOTE), G9 of the default run's autopsy recurring in the duress one.
+
+- **Every warning is a wait.** All 32 warnings of `duress/app.log`, and 32 of `duress/session.log`'s 38 lines (the other
+  six are `INFO`), are REQ-MONITOR-118's "agent waiting on tools: orchestrator …", one every 90 s of its four
+  `wait_for_tasks` (3,075.3 s, 92 % of the run).
+- **The run's two `error` issues reach neither log.** Issue 12 (`timeout`, `error`, 02:35:48.489, "Child
+  wave3-verify-result timed out after 1200s.") and issue 7 (`terminal_shell_failure`, `error`, 02:02:12.897, "A terminal
+  command failed (exit 1).") are in the store's `issues` table and nowhere in `app.log` or `session.log`, although the
+  session log was written at `INFO` and a line at `ERROR` would have passed its threshold.
+
+**What the specification says those logs carry.** REQ-SESSION-142 and REQ-MONITOR-238 fix the session log's form (a file
+an ordinary text reader opens) and its threshold (the configured level, default WARNING); REQ-SESSION-087 attaches it at
+run start; REQ-SESSION-191 offers it for reading; REQ-TOOLS-171 names application log files among the surfaces one
+redaction pass backs. The application log is named as the place for a few facts of other domains — REQ-LIBRARY-035(b)'s
+failed analysis pass is "a warning … recorded in the application log" (REQ-LIBRARY-124 keeps it), and REQ-HOOKS-102 bounds
+what a withheld-hooks diagnostic may disclose there. **None names a run's issues, an `error`-severity one among them, or
+the run's waits, as something either log must carry.** Whether the waits belong at WARNING is this note's question and OQ-127's ("What counts as 'an outcome
+that produced no output within `child_stall_timeout`' when the stall watchdog never cancels, and what does the watchdog
+count, write and call?"); whether an `error` issue must also reach a log is not asked by any requirement. Recorded as
+evidence only; no level and no log line is changed, and nothing is ruled.

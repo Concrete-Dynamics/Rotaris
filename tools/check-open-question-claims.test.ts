@@ -1,7 +1,8 @@
 /**
  * The gate over claims about open questions, against the tree and over fixtures for what it must tell apart: a settled
- * question called open fails, an open or deferred one passes, history that says it was ruled passes, and a question said
- * to be raised fails unless its sentence names one. Acceptance finding F16 of finacc3 (2026-10-06):
+ * question called open fails, an open or deferred one passes, history that says it was ruled passes, a settled question's
+ * answer called the build's reading fails unless its ruling stands beside it, and a question said to be raised fails
+ * unless its sentence names one. Acceptance finding F16 of finacc3 (2026-10-06):
  * `docs/defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`.
  */
 import { join } from 'node:path';
@@ -33,7 +34,7 @@ const RECORD = [
   '**OQ-6 — Resolved.** See above.',
 ].join('\n');
 
-type Claim = { line: number; kind: 'open' | 'unraised'; numbers: number[]; text: string };
+type Claim = { line: number; kind: 'open' | 'reading' | 'unraised'; numbers: number[]; text: string };
 
 describe('check-open-question-claims (F16)', () => {
   it('no claim in the code or the record that describes the build is refuted by the open-questions record', () => {
@@ -94,6 +95,39 @@ describe('check-open-question-claims (F16)', () => {
         'the build\'s reading of OQ-2 while it was open.',
       ].join('\n');
       expect(claims(text)).toEqual([]);
+    });
+
+    it('a settled question\'s answer called the build\'s reading fails unless its ruling stands beside it (repair round 1)', () => {
+      const text = [
+        'draws them on a crash-left session too (OQ-2\'s reading).',
+        '',
+        ' * the tokens item (OQ-5\'s build reading).',
+        '',
+        'which persona is drawn; this is the build\'s reading, recorded beside OQ-1. Until then it read the first.',
+        '',
+        'drawn as built (OQ-2\'s reading, confirmed 2026-10-06 by R-071).',
+        '',
+        'Confirmed 2026-10-06: OQ-5\'s reading holds.',
+        '',
+        ' * Until 2026-10-06 this read: "nothing is re-sent (OQ-2\'s reading)".',
+        '',
+        'the open one (OQ-3\'s reading) and the deferred one (OQ-4\'s reading) are the build\'s to proceed under.',
+        '',
+        'a side reading (OQ-5\'s reading), not ruled.',
+        '',
+        'drawn as the latest root (OQ-2\'s reading). Until 2026-10-01 the first root was drawn.',
+      ].join('\n');
+      expect(claims(text).map((c) => [c.line, c.kind, c.numbers])).toEqual([
+        [1, 'reading', [2]],
+        [3, 'reading', [5]],
+        [5, 'reading', [1]],
+        [15, 'reading', [5]],
+        [17, 'reading', [2]],
+      ]);
+    });
+
+    it('a bare "closed" after an open claim is no ruling', () => {
+      expect(claims('OQ-2 stays open; the socket is closed after use.').map((c) => [c.line, c.kind, c.numbers])).toEqual([[1, 'open', [2]]]);
     });
 
     it('a question said to be raised fails unless its sentence names one', () => {

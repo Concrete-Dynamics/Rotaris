@@ -69,7 +69,33 @@ Repaired 2026-10-06 by finacc3's acceptance repair (bundle `finacc3-accept1-3`).
   line above but three, the views' OQ-154 note (its sentence names no question), their OQ-172 line ("the build's reading
   of OQ-172", a form it does not read, below) and `first-executions.md`, which it does not read; after it, none. The other
   three comments said "OQ-<n>'s reading", the form below, and were found by reading, not by the gate.
-- **Not repaired here, and why.** Code comments that call a ruled behaviour "OQ-<n>'s reading" without saying "the build's
+- ~~**Not repaired here, and why.** Code comments that call a ruled behaviour "OQ-<n>'s reading" without saying "the build's
   reading" or "asked" (some forty, OQ-22, OQ-38, OQ-82, OQ-145, OQ-147, OQ-165 and others) name the behaviour the
   question settled and do not claim the question open; the gate does not read them, nor ADRs, the defect notes or
-  `open-questions.md` itself, whose history stays as written.
+  `open-questions.md` itself, whose history stays as written.~~ *Falsified at the bundle's verification (repair round 1):
+  the form "OQ-<n>'s reading" is the one this note's own first paragraph counts as the defect for `ArtifactLinks.tsx` and
+  `WorkspaceView.tsx`, and the swept views still carried it for ruled questions, `03-runtime-view.md`'s OQ-103 line
+  making the very claim the `WorkspaceView` comment had been repaired of.*
+- **Repair round 1: a ruled question's answer called the build's reading.** The gate reads a third kind of sentence,
+  "OQ-<n>'s reading", "OQ-<n>'s build reading" or "the build's reading, recorded beside OQ-<n>" of a settled question, and
+  fails it unless the ruling stands beside it. Run over the round's base tree (`b7d8c3d`) the final gate names 64: eleven in
+  the views and `first-release-plan.md` (`02-process-view.md` OQ-161; `03-runtime-view.md` OQ-103, OQ-159 and OQ-194;
+  `04-seams.md` OQ-181 and OQ-184; the views' change log OQ-102, OQ-103 and OQ-165; `first-release-plan.md` OQ-69 and
+  OQ-71), one in `packages/engine/CONTEXT.md` (OQ-102, "which no directive governs" of what `PD-ORCH-005` clause 25 now
+  states, struck and annotated) and fifty-two in code comments, tests and proofs (OQ-5, OQ-22, OQ-23, OQ-38, OQ-82,
+  OQ-100, OQ-102, OQ-141, OQ-145, OQ-147, OQ-149, OQ-152, OQ-154, OQ-159, OQ-161, OQ-164, OQ-165, OQ-178, OQ-181, OQ-182,
+  OQ-184, OQ-190, OQ-193). Each now says how it was ruled: "confirmed 2026-10-06 by R-071" where the owner confirmed the
+  build, "ruled 2026-10-06 by R-071" for OQ-165, the closing of 2026-09-06 or 2026-09-11 for OQ-5, OQ-23 and OQ-38, the
+  directive clause where one states it (`PD-ORCH-005` clauses 23, 25 and 26, `PD-STARTUP-003`), "superseded by its
+  ruling" for OQ-194's literal reading. Four lines of the same form already carried words the gate takes as history
+  and are unchanged ("Until 2026-10-06 this read" at `sessions.ts`'s OQ-182 and `config/src/mcp/index.ts`'s OQ-194,
+  "clause 18 supersedes OQ-98's reading" in `continue-action.test.ts`, "since the ruling of 2026-10-06" at `todo.ts`'s
+  OQ-102); two more passed on a word that was not their ruling and were annotated all the same (`02-process-view.md`'s
+  OQ-82, `03-runtime-view.md`'s OQ-182). `packages/ui/src/agents.ts`'s run-level persona is no answer to OQ-97 but a side
+  note its entry records as not ruled; its comment said "the build's reading, recorded beside OQ-97" and now says that.
+  The gate also reads `AGENTS.md`, `docs/module-map.md`, the domain glossaries and `.claude/rules/`, which describe the
+  build too. Its history words are tied to a ruling: a bare "closed" ("OQ-37 stays open; the socket is closed after
+  use") and "not ruled" no longer pass, and "until 2026-…" counts only before a reading, in its own sentence. Two
+  fixture cases in `tools/check-open-question-claims.test.ts` pin the reading form and the bare "closed", both red on
+  the round's base gate; the tree case is red on the base tree with the 64 above. ADRs, directives, `open-questions.md`,
+  `first-executions.md` and the defect notes keep their history as written and are not read.

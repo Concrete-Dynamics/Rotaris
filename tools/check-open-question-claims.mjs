@@ -2,23 +2,32 @@
 // An open question is the owner's: the build raises it and proceeds under a stated reading until the owner rules
 // (`CLAUDE.md`, "A question the specification leaves open is raised, never ruled by you"). Two kinds of sentence
 // outlived that rule's bookkeeping, and nothing read either (acceptance finding F16 of finacc3, 2026-10-06,
-// `docs/defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`):
+// `docs/defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`),
+// and its first repair found a third:
 //
 //   - a claim that a question is OPEN — "OQ-37 stays open", "OQ-114 to OQ-116 are open", "OQ-67 open against …",
 //     "the build's reading, asked as OQ-120", "carried as open question OQ-1" — about a question the owner has ruled,
 //     closed or withdrawn. After R-071 ruled every question then standing, a dozen such sentences stood in the code
 //     and the record;
 //   - a claim that a question was RAISED — "raised as an open question rather than settled here" — naming no
-//     question. Three comments said so of questions `open-questions.md` never had, so the owner was never asked.
+//     question. Three comments said so of questions `open-questions.md` never had, so the owner was never asked;
+//   - a settled question's answer presented as the BUILD'S READING — "OQ-103's reading", "OQ-190's build reading",
+//     "the build's reading, recorded beside OQ-97" — with nothing beside it saying the owner has answered. Of a
+//     question still open it is what the build proceeds under; of a settled one it reads as unruled. Some sixty such
+//     sentences stood in the code and the views after the first repair fixed three of them (repair round 1).
 //
 // This gate reads `docs/architecture/open-questions.md` for each question's state (`questionStates`) and fails on
-// either kind of sentence (`claimsIn`) in the code (comments, tests and proofs under `apps/`, `packages/` and
-// `tools/`) and in the parts of the record that describe the build as it stands: the architecture views,
-// `codebase.md`, `first-release-plan.md` and the architecture README. History that says a question WAS open passes
-// when it says so: the sentence is struck through (`~~…~~`), or the words after the claim, up to the paragraph's
-// end and at most 240 characters, say it was ruled, closed, confirmed, withdrawn or deferred, or "while it was open".
-// A question still open, or deferred by the owner, may be called open. `open-questions.md` itself, the ADRs and the
-// defect notes keep their history as written and are not read.
+// any of the three (`claimsIn`) in the code (comments, tests and proofs under `apps/`, `packages/` and `tools/`) and
+// in the parts of the record that describe the build as it stands: the architecture views, `codebase.md`,
+// `first-release-plan.md`, the architecture README, `AGENTS.md`, `docs/module-map.md`, the domain glossaries
+// (`CONTEXT-MAP.md` and each package's `CONTEXT.md`) and `.claude/rules/`. History passes when it says so: the
+// sentence is struck through (`~~…~~`), or the words after the claim, up to the paragraph's end and at most 240
+// characters, carry the ruling (`HISTORY`: ruled, confirmed, resolved, withdrawn, deferred, ratified, superseded, a
+// ruling, "closed 2026-…", the request `R-NNN` that ruled it, "while it was open"); a reading may carry it earlier
+// in its own sentence too, where "until 2026-…" also dates it as past. A bare "closed" or a "not ruled" is no
+// ruling. A question still open, or deferred by the owner, may be called open and its answer the build's reading.
+// `open-questions.md` itself, the ADRs, the directives, `first-executions.md` and the defect notes keep their history
+// as written and are not read.
 //
 // Runs as part of `pnpm lint`. Reads the tree; costs no subprocess. The pure parts are exported for the test beside
 // this file.
@@ -79,8 +88,24 @@ const OPEN_CLAIMS = [
 ];
 /** The sentences that say a question was raised. */
 const RAISED_CLAIM = /\b(?:raised|recorded|carried|left)\s+as\s+an?\s+open\s+question\b|\ban open question rather than\b|\bOpen question, not a settled reading\b/gi;
-/** What, after an open claim, says it is history. */
-const HISTORY = /\b(?:ruled|closed|confirmed|withdrawn|deferred|resolved)\b|while it was open/i;
+/**
+ * The sentences that present a question's answer as the build's own reading: "OQ-103's reading", "OQ-190's build
+ * reading", "the build's reading, recorded beside OQ-97". Of a question still open that is what the build proceeds
+ * under; of a settled one it hides that the owner has answered, unless the words beside it say so (repair round 1 of
+ * F16: the form stood in the views after the comments that used it were repaired).
+ */
+const READING_CLAIMS = [
+  new RegExp(String.raw`(${LIST})'s\s+(?:(?:literal|build|built|recorded|own)\s+)?reading\b`, 'g'),
+  new RegExp(String.raw`\bbuild's\s+reading\b[^.\n]{0,40}?\b(?:beside|of|under|as|in)\s+(${LIST})`, 'g'),
+];
+/**
+ * What, beside a claim, says it is history: the ruling's own words, its date, or the owner's request that ruled it.
+ * A bare "closed" is not one ("OQ-37 stays open; the socket is closed after use" is no history), and neither is "not
+ * ruled".
+ */
+const HISTORY = /(?<!\bnot\s)\b(?:ruled|confirmed|withdrawn|deferred|resolved|ratified|superseded|supersedes|rulings?)\b|\b(?:closed|decided),?\s+20\d\d-\d\d-\d\d|\bdecision closed\b|\bR-\d{3}\b|\bwhile (?:it|they) (?:was|were) open\b|\bwhile OQ-\d+ was open\b/i;
+/** What, earlier in a reading's own sentence, dates the claim as past: "Until 2026-10-06 this read: … (OQ-182's reading)". */
+const UNTIL = /\buntil\s+20\d\d-\d\d-\d\d\b/i;
 
 /** The question numbers a reference list names, ranges expanded. */
 export function numbersOf(list) {
@@ -121,11 +146,16 @@ function struck(text, at) {
   return ((before.match(/~~/g) ?? []).length % 2) === 1;
 }
 
-/** The sentence around [from, to): back to the last sentence end, on to the next. */
-function sentenceAround(text, from, to) {
+/** Where the sentence holding `from` starts: after the last sentence end before it, at most 400 characters back. */
+function sentenceStart(text, from) {
   const head = text.slice(Math.max(0, from - 400), from);
   const ends = [...head.matchAll(/[.!?](?:\*|\)|`)*\s/g)];
-  const start = ends.length > 0 ? from - head.length + ends[ends.length - 1].index + ends[ends.length - 1][0].length : Math.max(0, from - 400);
+  return ends.length > 0 ? from - head.length + ends[ends.length - 1].index + ends[ends.length - 1][0].length : Math.max(0, from - 400);
+}
+
+/** The sentence around [from, to): back to the last sentence end, on to the next. */
+function sentenceAround(text, from, to) {
+  const start = sentenceStart(text, from);
   const tail = text.slice(to, to + 400);
   const next = /[.!?](?:\*|\)|`)*(?:\s|$)/.exec(tail);
   return text.slice(start, next ? to + next.index + 1 : to + tail.length);
@@ -138,24 +168,34 @@ function sentenceAround(text, from, to) {
  * @param {Map<number, 'open' | 'settled' | 'deferred'>} states
  */
 export function claimsIn(text, states) {
-  /** @type {{ line: number, kind: 'open' | 'unraised', numbers: number[], text: string }[]} */
+  /** @type {{ line: number, kind: 'open' | 'reading' | 'unraised', numbers: number[], text: string }[]} */
   const found = [];
   const lineOf = (at) => text.slice(0, at).split('\n').length;
   const seen = new Set();
-  for (const re of OPEN_CLAIMS) {
-    re.lastIndex = 0;
-    for (const m of text.matchAll(re)) {
-      const at = m.index ?? 0;
-      const numbers = numbersOf(m[1]).filter((n) => states.get(n) === 'settled');
-      if (numbers.length === 0 || struck(text, at)) continue;
-      const after = text.slice(at + m[0].length, Math.min(claimEnd(text, at), at + m[0].length + 240));
-      if (HISTORY.test(after)) continue;
-      const key = `${lineOf(at)}:${numbers.join(',')}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      found.push({ line: lineOf(at), kind: 'open', numbers, text: m[0].replace(/\s+/g, ' ') });
+  /** @param {RegExp[]} res @param {'open' | 'reading'} kind */
+  const scan = (res, kind) => {
+    for (const re of res) {
+      re.lastIndex = 0;
+      for (const m of text.matchAll(re)) {
+        const at = m.index ?? 0;
+        const numbers = numbersOf(m[1]).filter((n) => states.get(n) === 'settled');
+        if (numbers.length === 0 || struck(text, at)) continue;
+        const after = text.slice(at + m[0].length, Math.min(claimEnd(text, at), at + m[0].length + 240));
+        if (HISTORY.test(after)) continue;
+        // A reading may be annotated before it too, in its own sentence: "confirmed 2026-10-06, OQ-81's reading".
+        if (kind === 'reading') {
+          const before = text.slice(sentenceStart(text, at), at);
+          if (HISTORY.test(before) || UNTIL.test(before)) continue;
+        }
+        const key = `${lineOf(at)}:${numbers.join(',')}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        found.push({ line: lineOf(at), kind, numbers, text: m[0].replace(/\s+/g, ' ') });
+      }
     }
-  }
+  };
+  scan(OPEN_CLAIMS, 'open');
+  scan(READING_CLAIMS, 'reading');
   RAISED_CLAIM.lastIndex = 0;
   for (const m of text.matchAll(RAISED_CLAIM)) {
     const at = m.index ?? 0;
@@ -193,6 +233,11 @@ export function filesOf(root) {
     join(root, 'docs', 'architecture', 'codebase.md'),
     join(root, 'docs', 'architecture', 'first-release-plan.md'),
     join(root, 'docs', 'architecture', 'README.md'),
+    join(root, 'AGENTS.md'),
+    join(root, 'CONTEXT-MAP.md'),
+    join(root, 'docs', 'module-map.md'),
+    ...walk(join(root, '.claude', 'rules'), (n) => n.endsWith('.md')),
+    ...CODE_ROOTS.flatMap((r) => walk(join(root, r), (n) => n === 'CONTEXT.md')),
   ].filter((f) => existsSync(f));
   return [...code, ...record].filter((f) => !SELF.has(relative(root, f).split(sep).join('/')));
 }
@@ -211,9 +256,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
   const problems = checkTree(root);
   for (const p of problems) {
+    const named = p.numbers.map((n) => `OQ-${n}`).join(', ');
     const what = p.kind === 'open'
-      ? `calls ${p.numbers.map((n) => `OQ-${n}`).join(', ')} open, and open-questions.md records ${p.numbers.length > 1 ? 'them' : 'it'} settled`
-      : 'says a question was raised and names none: raise it in open-questions.md and cite its number';
+      ? `calls ${named} open, and open-questions.md records ${p.numbers.length > 1 ? 'them' : 'it'} settled`
+      : p.kind === 'reading'
+        ? `presents ${named} as the build's reading, and open-questions.md records ${p.numbers.length > 1 ? 'them' : 'it'} settled: say how it was ruled`
+        : 'says a question was raised and names none: raise it in open-questions.md and cite its number';
     console.error(`${p.file}:${p.line}: "${p.text}" ${what}`);
   }
   if (problems.length > 0) {

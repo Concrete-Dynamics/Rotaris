@@ -153,9 +153,12 @@ plain process with no React and the restore run against a fake run host with a c
   each question's state from `open-questions.md` (open, deferred, or settled: ruled, closed, withdrawn or resolved) and
   fails on a sentence in the code or in the record that describes the build (the views, this file,
   `first-release-plan.md`, the architecture README) that calls a settled question open — "OQ-37 stays open", "asked as
-  OQ-120", "OQ-114 to OQ-116 are open" — unless it is struck through or its next words say it was ruled; and on a
-  sentence saying a question was "raised as an open question" that names none. After R-071 a dozen of the first stood,
-  and three comments claimed questions no entry held, which became OQ-210 to OQ-212 (since 2026-10-06, acceptance F16).
+  OQ-120", "OQ-114 to OQ-116 are open" — unless it is struck through or its next words say it was ruled; on a sentence
+  presenting a settled question's answer as the build's reading — "OQ-103's reading", "OQ-190's build reading" — with
+  no ruling beside it; and on a sentence saying a question was "raised as an open question" that names none. It also
+  reads `AGENTS.md`, `docs/module-map.md`, the glossaries and `.claude/rules/`; a bare "closed" or a "not ruled" is no
+  ruling. After R-071 a dozen of the first stood, some sixty of the second, and three comments claimed questions no
+  entry held, which became OQ-210 to OQ-212 (since 2026-10-06, acceptance F16 and its repair round 1).
 - **A whole-session update keeps the transcript rows** — `REQ-MONITOR-216` omits the transcript from it, so
   it cannot say which rows survived; the increment after an attach or a reconcile upserts by index. The
   first run loop's status saves emptied a transcript still being written before this was so (ADR-0043

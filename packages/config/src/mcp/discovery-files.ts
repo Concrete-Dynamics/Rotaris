@@ -45,6 +45,8 @@ export interface DiscoveredServers {
   readonly origins: Readonly<Record<string, McpOrigin>>;
   /** Which file each entry came from, for the merge's source label. */
   readonly files: readonly string[];
+  /** The file each winning entry was read from, by server name: what REQ-CONFIG-225's unresolved-placeholder warning names. */
+  readonly sources: Readonly<Record<string, string>>;
 }
 
 const NAME = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
@@ -160,9 +162,10 @@ export function readDiscoveryFiles(input: DiscoveryInput): Staged<DiscoveredServ
   const servers: Record<string, McpServerEntry> = {};
   const stated: Record<string, Record<string, unknown>> = {};
   const origins: Record<string, McpOrigin> = {};
+  const sources: Record<string, string> = {};
   for (const f of [user, project]) {
     if (!f) continue;
-    for (const [name, entry] of Object.entries(f.servers)) { servers[name] = entry; stated[name] = f.stated[name]!; origins[name] = f.origin; }
+    for (const [name, entry] of Object.entries(f.servers)) { servers[name] = entry; stated[name] = f.stated[name]!; origins[name] = f.origin; sources[name] = f.file; }
   }
-  return { value: { servers, stated, origins, files: [locations.project, ...(locations.user === null ? [] : [locations.user])] }, diagnostics: [...(user?.diagnostics ?? []), ...project.diagnostics] };
+  return { value: { servers, stated, origins, files: [locations.project, ...(locations.user === null ? [] : [locations.user])], sources }, diagnostics: [...(user?.diagnostics ?? []), ...project.diagnostics] };
 }

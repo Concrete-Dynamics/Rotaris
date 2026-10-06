@@ -231,6 +231,13 @@ describe('REQ-MCP-082/083/087/088/090 — secrets and the environment', () => {
     // An enabled entry's warning keeps its sentence: there the placeholder is what holds it back.
     expect(u.diagnostics[0]!.message).toMatch(/unavailable until it is/);
   });
+  it('REQ-CONFIG-225: the unresolved-placeholder line names the file that stated the url, or the built-in defaults', () => {
+    // docs/defects/fixed/the-unresolved-placeholder-warning-names-no-configuration-file.md
+    const filed = resolveRemoteUrl('srv', 'https://x/?k=${MISSING}', {}, {}, true, '/ws/.rotaris/agents.yaml');
+    expect(filed.diagnostics[0]!.message).toContain('mcp srv: the placeholder ${MISSING} in its url, set in /ws/.rotaris/agents.yaml, could not be resolved');
+    const shipped = resolveRemoteUrl('web_search', 'https://x/?k=${MISSING}', {}, {}, false);
+    expect(shipped.diagnostics[0]!.message).toContain('in its url, from the built-in defaults, could not be resolved');
+  });
 });
 
 describe('REQ-MCP-043 — the normalised description has exactly the keys', () => {
@@ -404,7 +411,7 @@ describe('REQ-MCP-034: the configuration a run in an isolated working tree launc
   const tree = '/work/ws/.rotaris/requirements/worktrees/rotaris-req-req-104-u1';
   const binding = CODE_INTELLIGENCE_BINDING;
   const configured = (servers: Record<string, McpServerEntry>) => resolveMcpConfiguration({
-    servers, yamlNamed: new Set(Object.keys(servers)), discovered: { servers: {}, stated: {}, origins: {}, files: [] } satisfies DiscoveredServers,
+    servers, yamlNamed: new Set(Object.keys(servers)), discovered: { servers: {}, stated: {}, origins: {}, files: [], sources: {} } satisfies DiscoveredServers,
     workspaceRoot: ws, globalDir: '/nowhere', env: {}, onPath: () => true, readFile: () => null,
     builtinLaunch: { command: '/opt/rotaris/rotaris', args: [CODE_INTELLIGENCE_TOKEN, '--'] },
   });

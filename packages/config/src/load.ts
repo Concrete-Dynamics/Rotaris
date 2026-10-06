@@ -414,8 +414,14 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   const hooks = ctx.hooks;
   // REQ-MCP-026: "yaml" when any YAML scope named the server; the raw documents say which did.
   const yamlNamed = new Set<string>();
-  for (const scope of ['global', 'workspace'] as const) { const m = ctx.raw[scope].agents?.['mcp_servers']; if (isPlainMap(m)) for (const k of Object.keys(m)) yamlNamed.add(k); }
-  const mcp = resolveMcpConfiguration({ servers: mcpServers, yamlNamed, discovered: ctx.mcp.discovered, workspaceRoot: ctx.workspaceRoot, globalDir: ctx.mcp.globalDir, env: ctx.mcp.env, platform: ctx.mcp.platform, ...(ctx.mcp.onPath ? { onPath: ctx.mcp.onPath } : {}), ...(ctx.mcp.readFile ? { readFile: ctx.mcp.readFile } : {}), builtinLaunch: ctx.mcp.builtinLaunch ?? null });
+  // REQ-CONFIG-225: the YAML file that stated each entry's url, the workspace scope's winning (its warning names it).
+  const urlFiles: Record<string, string> = {};
+  for (const scope of ['global', 'workspace'] as const) {
+    const m = ctx.raw[scope].agents?.['mcp_servers'];
+    if (!isPlainMap(m)) continue;
+    for (const [k, v] of Object.entries(m)) { yamlNamed.add(k); if (isPlainMap(v) && v['url'] !== undefined && v['url'] !== null) urlFiles[k] = files[scope].agents; }
+  }
+  const mcp = resolveMcpConfiguration({ servers: mcpServers, yamlNamed, urlFiles, discovered: ctx.mcp.discovered, workspaceRoot: ctx.workspaceRoot, globalDir: ctx.mcp.globalDir, env: ctx.mcp.env, platform: ctx.mcp.platform, ...(ctx.mcp.onPath ? { onPath: ctx.mcp.onPath } : {}), ...(ctx.mcp.readFile ? { readFile: ctx.mcp.readFile } : {}), builtinLaunch: ctx.mcp.builtinLaunch ?? null });
   // REQ-MCP-103/105: the server set the referential stage validates against is the merged map (ADR-0016 consequence 3).
   const referential = referentialMessages({ defaultPersona, slots: draft.slots, models: draft.models, personas: draft.personas, compressorModel: draft.compressorModel, toolServers: ctx.toolServers ?? Object.keys(mcp.servers), authenticatedProviders: ctx.authenticatedProviders ?? [] });
 

@@ -47,6 +47,12 @@ export interface McpConfiguration {
 export interface McpResolveInput {
   readonly servers: Readonly<Record<string, McpServerEntry>>;
   readonly yamlNamed: ReadonlySet<string>;
+  /**
+   * REQ-CONFIG-225: per server, the YAML file whose `mcp_servers:` entry stated the `url` the merge kept (the workspace
+   * scope's over the global's), so an unresolved placeholder's warning names the file to correct. A server absent here
+   * took its url from a discovered file (`discovered.sources`) or from the built-in defaults.
+   */
+  readonly urlFiles?: Readonly<Record<string, string>>;
   readonly discovered: DiscoveredServers;
   readonly workspaceRoot: string;
   readonly globalDir: string;
@@ -88,7 +94,7 @@ export function resolveMcpConfiguration(input: McpResolveInput): McpConfiguratio
       diagnostics.push(...r.diagnostics);
       resolved = r.value;
     } else {
-      const u = resolveRemoteUrl(name, entry.url ?? '', input.env, own, entry.enabled);
+      const u = resolveRemoteUrl(name, entry.url ?? '', input.env, own, entry.enabled, urlSourceOf(name, input));
       diagnostics.push(...u.diagnostics);
       url = u.value.url;
       unresolved = u.value.unresolved;
@@ -102,6 +108,19 @@ export function resolveMcpConfiguration(input: McpResolveInput): McpConfiguratio
     };
   }
   return { servers, origins, secrets, diagnostics };
+}
+
+/**
+ * REQ-CONFIG-225: "the file the entry came from", read as the file that stated the url the placeholder sits in — the
+ * entry is merged field by field (REQ-CONFIG-043), so a workspace file that only switches the shipped `web_search` on
+ * did not write its url. `null` when no file did: the built-in defaults (REQ-CONFIG-181).
+ */
+export function urlSourceOf(name: string, input: Pick<McpResolveInput, 'urlFiles' | 'discovered'>): string | null {
+  const yaml = input.urlFiles?.[name];
+  if (yaml !== undefined) return yaml;
+  const stated = input.discovered.stated[name];
+  if (stated !== undefined && stated['url'] !== undefined) return input.discovered.sources[name] ?? null;
+  return null;
 }
 
 type ProjectBinding = { readonly launchSubcommand: string; readonly projectPathOption: string; readonly projectFromCwdOption: string };

@@ -28,3 +28,26 @@ to correct.
 Noticed 2026-10-06 by fin18 (bundle `fin18-rail-label-and-observations`) while confirming the autopsy's observation of
 a disabled server's placeholder line (`docs/defects/fixed/a-disabled-servers-unresolved-placeholder-line-says-a-key-would-make-it-available.md`).
 Not repaired: recorded on the way, outside the observation it was found beside.
+
+## Repaired — 2026-10-06 (fin21, bundle `fin21-leftover-notes`)
+
+"The file the entry came from" is read as the file that **stated the url** the placeholder sits in: the entry is merged
+field by field (REQ-CONFIG-043), so a workspace file that only switches the shipped `web_search` on wrote none of its
+url, and naming it would send the reader to the wrong file.
+
+- `packages/config/src/load.ts` (`resolveMerged`) records, per server, the `agents.yaml` whose `mcp_servers:` entry
+  stated a `url` (the workspace scope's over the global's) and hands it to `resolveMcpConfiguration` as `urlFiles`.
+- `packages/config/src/mcp/discovery-files.ts`: `DiscoveredServers.sources` keeps the `mcp.json` each winning discovered
+  entry was read from.
+- `packages/config/src/mcp/index.ts`: `urlSourceOf` chooses the YAML file, else the discovered file when that file stated
+  the url, else none (the built-in defaults, REQ-CONFIG-181).
+- `packages/config/src/mcp/environment.ts`: `resolveRemoteUrl` takes that source and the line now reads "mcp <server>: the
+  placeholder ${<VAR>} in its url, set in <file>, could not be resolved …", or "…, from the built-in defaults, …" when no
+  file stated it. Severity, scope, channel and key are unchanged.
+
+Pinned by `packages/config/src/load.test.ts`, "REQ-CONFIG-225: the unresolved-placeholder warning names the file the entry
+came from" (the workspace file over the global one; the global one when the workspace entry states no url; a discovered
+`.mcp.json`; the built-in defaults for a `web_search` a workspace only switches on), and by
+`packages/config/src/mcp/mcp.test.ts`, "REQ-CONFIG-225: the unresolved-placeholder line names the file that stated the url,
+or the built-in defaults". All three were red before the repair (the message held no file). No proof names this line; the
+next default live run shows the shipped `web_search`'s line in `app.log` reading "from the built-in defaults".

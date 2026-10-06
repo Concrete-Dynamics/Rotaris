@@ -675,3 +675,30 @@ describe('REQ-GIT-070/071/072 the checkpoints section (Part P)', () => {
     expect(loaded(null, 'checkpoints:\n  max_per_session: 1\n').checkpoints.max_per_session).toBe(1);
   });
 });
+
+describe('REQ-CONFIG-225: the unresolved-placeholder warning names the file the entry came from', () => {
+  // docs/defects/fixed/the-unresolved-placeholder-warning-names-no-configuration-file.md
+  const lineFor = (r: ReturnType<typeof loadConfiguration>, server: string): string => {
+    if (!r.ok) throw new Error(`load failed: ${r.error.lines.join(' | ')}`);
+    const line = r.value.mcp.diagnostics.find((d) => d.key.startsWith(`mcp.url-unresolved.${server}.`));
+    if (!line) throw new Error(`no unresolved-placeholder line for ${server}`);
+    return line.message;
+  };
+  it('names the workspace file over the global one when both state the url, and the global one when only it does', () => {
+    const s = scopes(
+      'mcp_servers:\n  both: { type: http, url: "https://g.example/?k=${NOPE_G}" }\n  global_only: { type: http, url: "https://g.example/?k=${NOPE_O}" }\n',
+      'mcp_servers:\n  both: { type: http, url: "https://w.example/?k=${NOPE_W}" }\n  global_only: { enabled: true }\n',
+    );
+    const r = loadConfiguration({ ...s, env: {}, home: tmp() });
+    expect(lineFor(r, 'both')).toContain(`set in ${join(s.workspaceRoot, '.rotaris', 'agents.yaml')}`);
+    // The workspace entry states no url, so the global file is the one to correct.
+    expect(lineFor(r, 'global_only')).toContain(`set in ${join(s.globalDir, 'agents.yaml')}`);
+  });
+  it('names a discovered file, and the built-in defaults for the shipped web_search a workspace only switches on', () => {
+    const s = scopes(null, 'mcp_servers:\n  web_search: { enabled: true }\n');
+    writeFileSync(join(s.workspaceRoot, '.mcp.json'), JSON.stringify({ mcpServers: { found: { type: 'http', url: 'https://d.example/?k=${NOPE_D}' } } }));
+    const r = loadConfiguration({ ...s, env: {}, home: tmp() });
+    expect(lineFor(r, 'found')).toContain(`set in ${join(s.workspaceRoot, '.mcp.json')}`);
+    expect(lineFor(r, 'web_search')).toContain('from the built-in defaults');
+  });
+});

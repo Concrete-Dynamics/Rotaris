@@ -317,8 +317,9 @@ unchanged**: `config` gains the `zod` dependency `contracts` already carries; no
 ### `agent-tools`' JSON Schema validator (2026-10-06; fin18, live-run finding G3)
 
 `agent-tools/advertised-schema.ts` checks an MCP call against the input schema its server advertised (REQ-TOOLS-032), and
-validates with **`ajv` 8.20.0**, pinned exactly and declared by `agent-tools` and, so that electron-vite externalises it
-and the installer carries it (ADR-0056's rule), by `apps/desktop`. It is the engine `@modelcontextprotocol/client` 2.0.0
+validates with **`ajv` 8.20.0**, pinned exactly and declared by `agent-tools`, which imports it, and by `apps/desktop` beside
+the app's other node-side runtime dependencies (`zod`, the MCP client); the build bundles it into `out/main/run-host.js`,
+as it does those. It is the engine `@modelcontextprotocol/client` 2.0.0
 bundles and validates with (ADR-0033 leaves schema validation to the SDK), declared directly because the SDK's validator
 returns one flattened error string and does not export its 2020-12 engine, and the gate needs each violation's location.
 The lockfile already carried 8.20.0 (beneath electron-builder). **Edges unchanged**: a third-party dependency; no package

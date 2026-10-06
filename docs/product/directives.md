@@ -4542,6 +4542,15 @@ as `PD-MONITOR-003`, a directive of its own, and made this directive's revision 
 > it), both red on `37f7a98`. **What was not measured.** No live run: the `faults-stall` scenario's root stall should
 > now leave one `stall` issue at 90 s before the 120 s idle bound, where it left one per evaluation. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Measured live, 2026-10-06 (finacc3, finding F14):** the root stall left **one** `stall` issue, at 94 s of silence
+> (the evaluation after the 90 s threshold, at the 5 s cadence), beside its one `WARNING` line, before the 120 s idle bound
+> gave the call up. The `faults-stall` packs of the orchestrator's default live runs that day (at `c2fdd6a`, 15:47 UTC, and at 17:41
+> UTC) already showed one such warning each, but the scenario's check asked only that an issue existed and would have passed one
+> per evaluation as well ([`the-faults-stall-check-does-not-assert-the-stall-issue-throttle`](../defects/fixed/the-faults-stall-check-does-not-assert-the-stall-issue-throttle.md)).
+> It now fails a repeat sooner than REQ-MONITOR-120's throttle (`apps/desktop/scripts/lib/stall-issue-cadence.mjs`), and
+> `live-run.mjs --only=faults` at `4ddcc02` passed it ("1 stall(s): orchestrator at 94 s"). The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

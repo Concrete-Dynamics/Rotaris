@@ -38,3 +38,9 @@ the live run does not know the entry persona's `stall_timeout`). The `faults-sta
 came sooner (`readIssues` reads `recorded_at` and `metadata` too, and the pack's issues carry `recordedAt`).
 `lib/stall-issue-cadence.test.ts` pins it: one issue at 90 s passes, and an issue at every 5 s evaluation from 90 s to
 120 s, the shape before revision 2, fails six times. `AGENTS.md`'s `faults` row names the check.
+
+Shown live on 2026-10-06: `live-run.mjs --confirm --skip-build --only=faults` against `katalyst` at `4ddcc02` (pack
+`.live-run/runs/2026-10-06T20-00-40-851Z`) passed the new check, "1 stall(s): orchestrator at 94 s", the one `stall`
+issue beside the session log's one `WARNING`, before the 120 s idle bound. Reported in place into
+[`PD-MONITOR-005`](../../product/directives.md#pd-monitor-005)'s first execution of revision 2, with a row in
+[`first-executions.md`](../../architecture/first-executions.md).

@@ -114,7 +114,7 @@
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
@@ -124,9 +124,8 @@ import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
-import { refusalIssues } from './lib/refusal-issues.mjs';
 import { summaryReading } from './lib/summary-sections.mjs';
-import { todoActiveReadings, writeSelectorReadings } from './lib/tool-frictions.mjs';
+import { runWideReadings } from './lib/tool-frictions.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
@@ -608,6 +607,8 @@ function oneDatabase() {
 
 /** What each scenario left in the pack, reported in `results.json` so a reader knows what exists without listing it. */
 const scenarioEvidence = {};
+/** Every session `preserveRun` kept, `{ scenario, sessionId }` in run order: what `checkToolRecord` reads at the end. */
+const preservedSessions = [];
 
 /** One scenario's recorded model traffic, as records. An absent or half-written file reads as no records. */
 function readTraffic(name) {
@@ -844,29 +845,54 @@ function readIssues(sessionId) {
   finally { db.close(); }
 }
 /**
- * REQ-SESSION-136 for the tool gate's own refusals (live-run finding a71-6): every call the gate refused as
- * `invalid_request` — an unknown tool, unreadable arguments, a schema violation — is a failure in the record, and files
- * a `tool_error` issue referencing it. The duress run of 2026-10-01 held two that no issue named. A run with no such
- * call asked nothing, which is a NOTE, not a pass.
+ * The write fence's reading of a path a call named, as PD-TOOLS-007 needs it: outside the run's workspace (where every
+ * scenario's agents write, a requirements worktree included) is a path the fence refuses, and the directive does not read
+ * such a call as a create. A relative path is resolved against the workspace.
  */
-function checkRefusalIssues(scenario, sessionId, calls) {
-  const { refused, unfiled } = refusalIssues(calls, readIssues(sessionId));
-  if (refused.length === 0) noted(`${scenario}: no call was refused at the tool gate as invalid_request`, 'REQ-SESSION-136\'s issue for such a refusal was not observed this run');
-  else check(unfiled.length === 0, `${scenario}: every call refused at the tool gate as invalid_request filed a tool_error issue referencing it`, unfiled.length === 0 ? `${refused.length} refusal(s), e.g. ordinal ${refused[0].ordinal} (${refused[0].tool_name})` : `${unfiled.length} of ${refused.length} filed none, e.g. ordinal ${unfiled[0].ordinal} (${unfiled[0].tool_name})`);
+function outsideWorkspace(path) {
+  const roots = [workspace];
+  try { roots.push(realpathSync(workspace)); } catch { /* the sandbox is gone: the path as given */ }
+  return roots.every((root) => {
+    const rel = relative(root, isAbsolute(path) ? path : resolve(root, path));
+    return rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel);
+  });
 }
 
 /**
- * The two tool frictions the owner ruled on 2026-10-06 (R-071), read from the tool-call record (`lib/tool-frictions.mjs`):
- * PD-TOOLS-007, a `write_file` with a path and content and no `operation` for a new file read as a create, and
- * PD-TOOLS-008, a `todo` `replace` marking two tasks in progress refused without naming an id it never stored. A run in
- * which neither shape arose asked nothing, which is a NOTE.
+ * The tool-call record of EVERY session the run preserved, read once at the end (`lib/tool-frictions.mjs`'s
+ * `runWideReadings`), for three rulings:
+ *
+ * - **REQ-SESSION-136 for the tool gate's own refusals** (live-run finding a71-6): every call the gate refused as
+ *   `invalid_request` — an unknown tool, unreadable arguments, a schema violation — is a failure in the record, and files a
+ *   `tool_error` issue referencing it. The duress run of 2026-10-01 held two that no issue named.
+ * - **PD-TOOLS-007** (R-071): a `write_file` with a path and content and no `operation` for a new file is read as a create;
+ *   one refused for want of an operation is the old shape — its arguments read from the record whole, or from the string
+ *   the session writer cuts an error-path record's long arguments to. A path the fence refuses is the directive's own
+ *   refusal, reported and not failed.
+ * - **PD-TOOLS-008** (R-071): a `todo` `replace` marking two tasks in progress refused without naming an id it never stored.
+ *
+ * Until fin23 these read the `frictions` and `duress` sessions alone and their NOTEs spoke for the whole run, while the
+ * requirements session held a refusal and the resume session the first inferred create
+ * (`docs/defects/fixed/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`).
+ * A shape no session held asked nothing, which is a NOTE naming the sessions read.
  */
-function checkToolFrictions(scenario, calls) {
-  const { inferred, refusedInferable } = writeSelectorReadings(calls);
-  if (inferred.length === 0 && refusedInferable.length === 0) noted(`${scenario}: no write_file call left out its operation`, 'PD-TOOLS-007\'s inferred create was not asked this run');
-  else check(refusedInferable.length === 0, `${scenario}: every write_file call with a path and content and no operation was read as a create, or refused because its file exists (PD-TOOLS-007)`, refusedInferable.length === 0 ? `${inferred.length} read as a create, e.g. ordinal ${inferred[0].ordinal} (${inferred[0].agent_name ?? '?'})` : `${refusedInferable.length} refused for want of an operation, e.g. ordinal ${refusedInferable[0].ordinal} (${refusedInferable[0].agent_name ?? '?'})`);
-  const { severalActive, phantoms } = todoActiveReadings(calls);
-  check(phantoms.length === 0, `${scenario}: no todo call was sent to a task id a refusal named but never stored (PD-TOOLS-008)`, phantoms.length === 0 ? `${severalActive.length} replace(s) refused for marking more than one task in progress` : `ordinal ${phantoms[0].ordinal}: ${JSON.stringify(String(phantoms[0].result).slice(0, 100))}`);
+function checkToolRecord() {
+  if (preservedSessions.length === 0) return;
+  let r;
+  try {
+    r = runWideReadings(preservedSessions.map(({ scenario, sessionId }) => ({ scenario, calls: readToolCalls(sessionId), issues: readIssues(sessionId) })), { outside: outsideWorkspace });
+  } catch (cause) {
+    check(false, 'the tool-call record of every session the run kept was read', cause instanceof Error ? cause.message : String(cause));
+    return;
+  }
+  const where = `the ${r.read.length} session(s) read: ${r.read.join(', ')}`;
+  const at = (call) => `${call.scenario} #${call.ordinal}`;
+  if (r.refused.length === 0) noted('no call was refused at the tool gate as invalid_request', `REQ-SESSION-136's issue for such a refusal was not observed in ${where}`);
+  else check(r.unfiled.length === 0, 'every call refused at the tool gate as invalid_request filed a tool_error issue referencing it', r.unfiled.length === 0 ? `${r.refused.length} refusal(s): ${r.refused.map((c) => `${at(c)} (${c.tool_name})`).join(', ')}` : `${r.unfiled.length} of ${r.refused.length} filed none: ${r.unfiled.map((c) => `${at(c)} (${c.tool_name})`).join(', ')}`);
+  const fenced = r.refusedFenced.length === 0 ? '' : `; ${r.refusedFenced.length} refused because the fence refuses the path, as the directive reads it (${r.refusedFenced.map(at).join(', ')})`;
+  if (r.inferred.length === 0 && r.refusedInferable.length === 0) noted('no write_file call left out its operation for a path inside the workspace', `PD-TOOLS-007's inferred create was not asked in ${where}${fenced}`);
+  else check(r.refusedInferable.length === 0, 'every write_file call with a path and content and no operation was read as a create, or refused because its file exists or its path is fenced (PD-TOOLS-007)', r.refusedInferable.length === 0 ? `${r.inferred.length} read as a create: ${r.inferred.map((c) => `${at(c)} (${c.agent_name ?? '?'})`).join(', ')}${fenced}` : `${r.refusedInferable.length} refused for want of an operation: ${r.refusedInferable.map((c) => `${at(c)} (${c.agent_name ?? '?'})`).join(', ')}`);
+  check(r.phantoms.length === 0, 'no todo call was sent to a task id a refusal named but never stored (PD-TOOLS-008)', r.phantoms.length === 0 ? `${r.severalActive.length} replace(s) refused for marking more than one task in progress, in ${where}` : `${at(r.phantoms[0])}: ${JSON.stringify(String(r.phantoms[0].result).slice(0, 100))}`);
 }
 
 /**
@@ -897,6 +923,7 @@ function checkSummary(scenario, sessionId, text) {
  * run red over its own bookkeeping, so each half reports what it could not write and continues.
  */
 function preserveRun(name, sessionId) {
+  preservedSessions.push({ scenario: name, sessionId });
   const dir = scenarioDir(name);
   const wrote = [];
   const failed = [];
@@ -989,6 +1016,8 @@ const results = {
   qualifiedModel: QUALIFIED, accounting: accountingKind, budgetUsd: BUDGET, maxTokens: MAX_TOKENS, keySource, sandbox, codeIntelligenceBundle, scenarios: {},
 };
 function finish(code) {
+  // Every session's tool-call record, read while the sandbox still holds the store (`checkToolRecord`).
+  checkToolRecord();
   results.finishedAt = new Date().toISOString();
   results.checks = checks;
   // The store goes into the pack BEFORE `cleanup` takes the sandbox — on every exit path through `finish`,
@@ -1603,11 +1632,6 @@ if (wanted.includes('frictions')) {
   const resultOf = (call) => String(entryOf(call).result ?? '');
   const argsOf = (call) => entryOf(call).args ?? {};
   const writeOp = calls.filter((call) => call.tool_name === 'write_file' && call.status !== 'ok' && resultOf(call).includes('requires an operation'));
-  if (read) {
-    const recorded = readToolCalls(read.session.session_id);
-    checkRefusalIssues('frictions', read.session.session_id, recorded);
-    checkToolFrictions('frictions', recorded);
-  }
   check(writeOp.length === 0, 'write_file needed no operation repair on first use', writeOp.length === 0 ? 'no refusal in the record' : `${writeOp.length} refusal(s), e.g. ordinal ${writeOp[0].ordinal} (${writeOp[0].agent_name})`);
   // Live-run finding L6: `probe-ok\n` was reported "2 line(s) created". A final newline ends a line, so every create
   // reports the lines its content holds as `wc -l` counts them, plus an unterminated last line.
@@ -2230,9 +2254,6 @@ if (wanted.includes('duress')) {
       noted('the long run never compressed its context', compressionNote({ largestPrompt: prompts.length === 0 ? null : Math.max(...prompts), trigger, calls: { withUsage: prompts.length, total: durTraffic.length } }));
     }
     else check(aggregate === compressed, 'the compressions aggregate counted what the timeline recorded', `aggregate ${aggregate} against ${compressed} timeline entr${compressed === 1 ? 'y' : 'ies'}`);
-
-    checkRefusalIssues('duress', sessionId, calls);
-    checkToolFrictions('duress', calls);
 
     const leaked = calls.filter((call) => call.tool_name === 'terminal' && /__rot_/.test(call.result));
     check(leaked.length === 0, 'no end marker leaked into what the model read', leaked.length === 0 ? 'no __rot_ in any terminal result' : `${leaked.length} call(s), e.g. ordinal ${leaked[0].ordinal}`);

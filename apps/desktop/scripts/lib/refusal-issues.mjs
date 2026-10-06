@@ -1,6 +1,7 @@
 /**
  * The live run's reading of REQ-SESSION-136 for the calls the tool gate refuses before any executor runs them
- * (`apps/desktop/scripts/live-run.mjs`, the `frictions` and `duress` scenarios). An unknown tool name, arguments that
+ * (`apps/desktop/scripts/live-run.mjs`, over every session the run keeps since fin23, through `runWideReadings` in
+ * `lib/tool-frictions.mjs`; before, the `frictions` and `duress` scenarios only). An unknown tool name, arguments that
  * cannot be read as JSON, and arguments that fail the tool's schema are each settled `failed`, `is_error`,
  * `failure_kind: invalid_request` (REQ-TOOLS-032), which makes each REQ-SESSION-136's "any other failure": it files a
  * `tool_error` issue referencing its tool-call record, `tool_call_evidence#<call id>`.

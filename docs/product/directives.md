@@ -3446,6 +3446,15 @@ wrong, rather than telling it so first. The result says what was read, so the mo
 > show. The note is repaired:
 > [`write-files-first-use-refusal-recurred-under-duress.md`](../defects/fixed/write-files-first-use-refusal-recurred-under-duress.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **The live shape, 2026-10-06 (fin23).** The default live run at `c2a9444` met the directive in two sessions its check
+> did not read: the resume session's ordinal 9 was read as a create, the sentence in its result — the directive's first
+> live execution — and the requirements session's ordinal 62, a create-shaped call naming a path outside the workspace,
+> was refused as the reading above says a fenced path is. The run's NOTE said the inferred create "was not asked this
+> run", because the check read the `frictions` and `duress` sessions only, and it could not have seen a refused whole-file
+> write in any session, whose arguments the record stores cut to a string. Since fin23 the check reads every session the
+> run keeps, reads cut arguments, and reports a fenced refusal without failing it:
+> [`the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`](../defects/fixed/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md).
 
 ---
 

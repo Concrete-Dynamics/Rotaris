@@ -41,3 +41,32 @@ note leaves the live shape "their next run's to show") and REQ-SESSION-136 (the 
 - `apps/desktop/scripts/lib/tool-frictions.mjs` — `createShaped`, `writeSelectorReadings`.
 - `apps/desktop/scripts/lib/refusal-issues.mjs` — `refusalIssues`.
 - `packages/engine/src/session-writer.ts` — `settleToolCall`, the error-path cut to 2,000 characters.
+
+## Outcome
+
+Repaired 2026-10-06 by fin23 (bundle `fin23-summary-and-live-checks`).
+
+- **Every session.** `preserveRun` registers each session it keeps, and `finish` reads the tool-call record and the issues
+  of all of them once, before the store is copied and the sandbox goes (`checkToolRecord` in
+  `apps/desktop/scripts/live-run.mjs`, over `runWideReadings` in `apps/desktop/scripts/lib/tool-frictions.mjs`). The
+  `frictions` and `duress` call sites are gone. Each finding names its session as `<scenario> #<ordinal>`, and a shape no
+  session held is a NOTE naming the sessions read ("… was not asked in the 8 session(s) read: ask, edit, …"), never a claim
+  about the run.
+- **Cut arguments.** `createShaped` reads a recorded `args` through `argumentFields`: an object as before, or the string the
+  session writer cuts an error-path record's long arguments to, read key by key as far as the cut allows,
+  REQ-SESSION-194's `...` marker at its end or not, so the reading does not depend on how the M3 repair (the marker on the
+  error-path cut, not landed when this was built) settles. A cut call is create-shaped when its path survived whole, its
+  content began, and no key read is `operation` or another operation's field; one whose path the cut took away is not
+  called create-shaped, since what it named cannot be read.
+- **A fenced path.** PD-TOOLS-007's first execution reads "a path the fence refuses is not read as anything, and is refused
+  as before". A refused create-shaped call whose path lies outside the run's workspace (`outsideWorkspace`) is reported
+  as `refusedFenced` beside the passing check, not failed: the c2a9444 requirements session's ordinal 62 is one.
+
+Pinned by `apps/desktop/scripts/lib/tool-frictions.test.ts`: a refused whole-file write cut to a string, with and without
+the marker, is the old shape; cut arguments naming an operation, carrying `old_string`, or cut before their path, are not;
+ordinal 62's shape is `refusedFenced` given the fence and `refusedInferable` without it; and `runWideReadings` over the
+c2a9444 run's three shapes finds the requirements refusal and its issue, and the resume session's inferred create, which
+the frictions session alone did not hold. Five of these were red on the old reader. PD-TOOLS-007's record says so in
+`docs/product/directives.md`. The live run itself is the orchestrator's: its next default run should show a PASS for the
+gate's refusals and one for PD-TOOLS-007 wherever any session held the shape, each naming `<scenario> #<ordinal>`, and a
+NOTE naming every session read where none did.

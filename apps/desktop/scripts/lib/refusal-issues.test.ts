@@ -1,6 +1,7 @@
 /**
- * REQ-SESSION-136 for the gate's own refusals (live-run finding a71-6): the reading the live run's `frictions` and
- * `duress` scenarios make, pinned against the shape the duress pack of 2026-10-01 recorded (session `57095770`).
+ * REQ-SESSION-136 for the gate's own refusals (live-run finding a71-6): the reading the live run makes over every session
+ * it keeps (since fin23; before, its `frictions` and `duress` scenarios only), pinned against the shape the duress pack of
+ * 2026-10-01 recorded (session `57095770`).
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.

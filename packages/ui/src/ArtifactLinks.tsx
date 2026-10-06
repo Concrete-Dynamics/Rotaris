@@ -6,8 +6,9 @@ import { Button as DesignButton } from './design-system/index.js';
  * persona window's instance card and its persona-wide card. Each link names the artifact by its slug in the accent the
  * language gives a link (`.btn-link`, the mockup's inspector "Artifacts" line), carries the title as its tooltip, and states
  * its ready flag as text (REQ-MONITOR-044; REQ-LIBRARY-136's "ready", else the status), never by colour alone
- * (REQ-SHELL-149). Following one opens the artifact (`onOpen`; what it opens is OQ-125's reading); with no opener the link
- * is drawn disabled, not inert.
+ * (REQ-SHELL-149). Following one opens the artifact (`onOpen`; what it opens is OQ-125's, ruled 2026-10-06 (R-071) as built:
+ * the Library's Artifacts tab with the inspector on it in the main window, the inspector in place in a persona window); with
+ * no opener the link is drawn disabled, not inert.
  */
 export function ArtifactLinkList({ links, onOpen, testId }: { links: readonly SessionArtifactLink[]; onOpen?: ((id: string) => void) | undefined; testId?: string | undefined }) {
   return (

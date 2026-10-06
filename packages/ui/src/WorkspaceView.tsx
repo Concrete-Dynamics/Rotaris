@@ -1646,8 +1646,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
                 * tooltip. At full labels the paused strip scrolled at every density but narrow (found by phase 5's
                 * second review). PD-CHAT-001 revision 4 ("The paused continues"): the continue by message reads
                 * `Send`, the word of the send pill it stands in for. That revision prescribes the two continues "on a
-                * paused session" only; drawing them on a crash-left one too is OQ-103's reading of clause 18's "as a
-                * `paused` session does". */}
+                * paused session" only; drawing them on a crash-left one too was OQ-103's reading of clause 18's "as a
+                * `paused` session does", confirmed by its ruling of 2026-10-06 (R-071) and stated by PD-ORCH-005 clause 26
+                * (revision 6). */}
               <DesignButton type="button" className="btn btn-primary composer__continue" onClick={() => { void continueRun(); }} aria-label="Continue run" title="Continue run" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Continue</DesignButton>
               <DesignButton type="submit" className="btn btn-secondary composer__continue" disabled={busy} aria-label="Continue with a message" title="Continue with a message" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Send</DesignButton>
             </>

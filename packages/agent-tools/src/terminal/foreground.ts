@@ -1892,7 +1892,8 @@ export class ForegroundSession {
    * stream, which opens at the printed start marker (L9), stayed blank (A10). The partial line is cleared first with
    * the POSIX line discipline's kill character — `^U`, which node-pty sets as `VKILL` and an interactive shell's own line
    * editor binds to the same — so the wrapper is the whole of the line the shell reads. The keystrokes were written as
-   * is; what is cleared is a line no one ended, which is OQ-146's reading. PowerShell is left as it was: its wrapper's
+   * is; what is cleared is a line no one ended, as OQ-146's ruling of 2026-10-06 (R-071) confirmed as built, the
+   * PowerShell backend unchanged. PowerShell is left as it was: its wrapper's
    * first statement is the exit-status reset, not the start marker, so a prefix costs that statement and, by construction,
    * not the marker (reasoned; no Windows host has run it), and ConPTY's cooked input has no `^U`.
    */

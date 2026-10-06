@@ -160,7 +160,8 @@ function marker(n: number): string {
  * given to the pass beside the transcript, so a summary written over a transcript whose middle is omitted cannot deny
  * work the record shows. They are REQ-ORCH-109's runner-owned kind, derived from the WHOLE transcript by the same
  * functions that fill the report's fields; the pass condenses them and never writes them. Each command is cut to 2,000
- * characters and the block to 12,000, REQ-ORCH-110's two figures, so the pass stays bounded — the build's reading, asked as OQ-120.
+ * characters and the block to 12,000, REQ-ORCH-110's two figures, so the pass stays bounded — the build's reading, raised
+ * as OQ-120 and confirmed as built by its ruling of 2026-10-06 (R-071), a cut block keeping its head.
  */
 export function reportFacts(messages: readonly ChatMessage[]): string {
   const edited = editedFilesFrom(messages);

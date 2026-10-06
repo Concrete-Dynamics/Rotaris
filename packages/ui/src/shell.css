@@ -2298,11 +2298,16 @@
 .req-column__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--rt-space-2); }
 .req-column__slot, .req-column__spacer { flex: none; }
 .req-column__empty { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); line-height: var(--rt-leading-body); }
-/* The folded rail (REQ-TRACE-303..321): upright text, 8 characters of its own font wide, margin 4; a button. */
-.req-rail { flex: none; width: calc(8ch + 8px); padding: 4px; display: flex; flex-direction: column; align-items: center; gap: var(--rt-space-2); background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md); color: var(--rt-text-tertiary); font: inherit; font-size: var(--rt-text-2xs); cursor: pointer; text-align: center; }
+/* The folded rail (REQ-TRACE-303..321): upright text, 8 characters of its own font wide, margin 4; a button. The rail
+   is a border-box button, so its two hairlines are added to the width rather than taken out of the eight characters. */
+.req-rail { flex: none; width: calc(8ch + 8px + 2 * var(--rt-hairline-width)); padding: 4px; display: flex; flex-direction: column; align-items: center; gap: var(--rt-space-2); background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md); color: var(--rt-text-tertiary); font: inherit; font-size: var(--rt-text-2xs); cursor: pointer; text-align: center; }
 .req-rail:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: 2px; }
 .req-rail__glyph { font-family: var(--rt-font-mono); font-size: var(--rt-text-sm); }
-.req-rail__heading { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; letter-spacing: var(--rt-tracking-label); text-transform: uppercase; font-weight: var(--rt-weight-medium); line-height: var(--rt-leading-tight); max-width: 100%; }
+/* REQ-TRACE-310/309: the heading is set in the rail's own font, sentence case and untracked, because eight characters of
+   that font are what the width was chosen to hold — a seven-letter label on one line, "Needs Update" wrapping at its space
+   onto two. Drawn as an uppercase, tracked kicker it read "BLOCKE / D" (docs/defects/fixed/the-folded-blocked-rail-breaks-its-label-inside-the-word.md);
+   the kicker is the one exception to sentence case (docs/design/README.md §1.4) and a rail's label is not a section kicker. */
+.req-rail__heading { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-weight: var(--rt-weight-medium); line-height: var(--rt-leading-tight); max-width: 100%; }
 .req-rail__count { font-size: var(--rt-text-2xs); }
 /* REQ-TRACE-318/319: during a drag every rail states its answer in the engine's words, takes an open column's minimum width and 1.5 lines more height, unanimated. */
 .req-rail.is-dragging { min-width: 276px; padding-block: calc(4px + 0.75em); transition: none; }

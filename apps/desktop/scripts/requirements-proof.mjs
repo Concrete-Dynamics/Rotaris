@@ -25,7 +25,10 @@
  *               is still there on a RELAUNCH of the same workspace, and a second workspace opened against the same
  *               preference root does not have it (REQ-TRACE-312/321); the rail's computed writing mode and transform
  *               (REQ-TRACE-497's rotated-text clause, which is asserted here because this is the stage that has a
- *               rail) and REQ-TRACE-493's two accessible names with the rail operable without a pointer.
+ *               rail) and REQ-TRACE-493's two accessible names with the rail operable without a pointer; and
+ *               (2026-10-06) every closed-vocabulary label set into that rail's heading in turn, its line boxes read:
+ *               no word broken inside itself, a one-word label on one line, "Needs Update" on at most two
+ *               (REQ-TRACE-310/309).
  *   filter    — an epic filter survives a switch of the grouping axis and the summary still states it (REQ-TRACE-299).
  *   chord     — a card selected, Ctrl+M places focus on the move control, which names the first reachable target
  *               with the consequence in the sentence and its accessible description equal to it (REQ-TRACE-390/391).
@@ -413,9 +416,19 @@ const SCROLL_TO_DONE = `(() => { const el = document.querySelector('[data-testid
 // nothing at all. The claim belongs in the one stage that folds a column, and this is it. REQ-TRACE-493's two
 // accessible names and the rail's operability without a pointer are read in the same instant, from the same DOM.
 const RAIL_AND_HEADING = `(() => { const rail = document.querySelector('[data-testid="req-rail"]'); const heading = document.querySelector('[data-testid="req-heading"]'); if (rail === null) return null; const s = getComputedStyle(rail); const r = rail.getBoundingClientRect(); return { writingMode: s.writingMode, transform: s.transform, w: Math.round(r.width), h: Math.round(r.height), railName: rail.getAttribute('aria-label'), railTag: rail.tagName, railDisabled: rail.disabled === true, railTabIndex: rail.tabIndex, headingName: heading === null ? null : (heading.getAttribute('aria-label') ?? heading.textContent.trim()), headingTag: heading === null ? null : heading.tagName }; })()`;
+// REQ-TRACE-310 with REQ-TRACE-309, measured: the rail is eight characters of its own font wide because that is where
+// the longest ordinary delivery label still fits on one line, and a heading too long for it wraps onto at most two.
+// Only one column is folded here, so every closed-vocabulary label is set in turn into a copy of THIS rail's heading
+// — the rail's own width, font and rules — and its lines read off the text's own line boxes: a word whose range spans
+// two line tops was broken inside the word. The labels are `columnLabel`'s spelling of the seven tokens
+// (`packages/ui-core/src/requirements/display.ts`): the six delivery states of REQ-TRACE-232 and Blocked (REQ-TRACE-233).
+// Until 2026-10-06 the rail drew its heading as an uppercase, tracked kicker and "Blocked" read "BLOCKE / D"
+// (`docs/defects/fixed/the-folded-blocked-rail-breaks-its-label-inside-the-word.md`).
+const RAIL_LABELS = ['Backlog', 'Ready', 'Running', 'Review', 'Needs Update', 'Done', 'Blocked'];
+const RAIL_LABEL_FIT = `(() => { const rail = document.querySelector('[data-testid="req-rail"]'); const real = rail === null ? null : rail.querySelector('.req-rail__heading'); if (real === null) return null; const tops = (rects) => new Set([...rects].filter((q) => q.width > 0 && q.height > 0).map((q) => Math.round(q.top))).size; const measure = (el) => { const text = el.firstChild; const broken = []; let i = 0; for (const word of el.textContent.split(' ')) { const r = document.createRange(); r.setStart(text, i); r.setEnd(text, i + word.length); if (tops(r.getClientRects()) > 1) broken.push(word); i += word.length + 1; } const all = document.createRange(); all.selectNodeContents(el); return { lines: tops(all.getClientRects()), broken, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }; }; const s = getComputedStyle(real); const out = { railWidth: Math.round(rail.getBoundingClientRect().width * 10) / 10, transform: s.textTransform, tracking: s.letterSpacing, own: { label: real.textContent, ...measure(real) }, labels: [] }; for (const label of ${JSON.stringify(RAIL_LABELS)}) { const copy = real.cloneNode(false); copy.textContent = label; rail.insertBefore(copy, real); out.labels.push({ label, ...measure(copy) }); copy.remove(); } return out; })()`;
 const folded = await launch('fold', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '4@1200',
-  ROTARIS_CAPTURE_EVAL_AT: `${SCROLL_TO_DONE}@3200;;${RAIL_AND_HEADING}@4600`,
+  ROTARIS_CAPTURE_EVAL_AT: `${SCROLL_TO_DONE}@3200;;${RAIL_AND_HEADING}@4600;;${RAIL_LABEL_FIT}@4700`,
   ROTARIS_CAPTURE_CLICKS: '[data-testid="req-column"][data-column="done"] [data-testid="req-heading"]@3600',
   ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="req-rail"]@4400',
   ROTARIS_CAPTURE_AFTER_MS: '5200',
@@ -437,6 +450,18 @@ expect(railShape.w > 0 && railShape.h > 0, `REQ-TRACE-497: the folded rail occup
 expect(typeof railShape.railName === 'string' && railShape.railName.length > 0, `REQ-TRACE-493: the folded rail has no accessible name (${JSON.stringify(railShape)})`);
 expect(railShape.railTag === 'BUTTON' && !railShape.railDisabled && railShape.railTabIndex >= 0, `REQ-TRACE-493: the rail is not operable without a pointer (${JSON.stringify({ tag: railShape.railTag, disabled: railShape.railDisabled, tabIndex: railShape.railTabIndex })})`);
 expect(typeof railShape.headingName === 'string' && railShape.headingName.length > 0, `REQ-TRACE-493: an unfolded column heading has no accessible name (${JSON.stringify(railShape)})`);
+const railLabels = folded.evals['4700'];
+expect(railLabels !== null && typeof railLabels === 'object' && Array.isArray(railLabels.labels) && railLabels.labels.length === RAIL_LABELS.length, `REQ-TRACE-310: the rail's labels could not be measured (${JSON.stringify(railLabels)})`);
+expect(railLabels.own.label === 'Done' && railLabels.own.lines === 1 && railLabels.own.broken.length === 0, `REQ-TRACE-310: the folded Done rail's own heading is not one unbroken line (${JSON.stringify(railLabels.own)})`);
+for (const fit of railLabels.labels) {
+  // No label of the closed vocabulary is broken inside a word: a one-word label is one line, which is what eight
+  // characters were chosen to hold (REQ-TRACE-310), and the one label longer than the rail wraps at its space onto at
+  // most two (REQ-TRACE-309) — never mid-word, never eliding.
+  expect(fit.broken.length === 0, `REQ-TRACE-310: the folded rail breaks "${fit.label}" inside ${JSON.stringify(fit.broken)} at ${railLabels.railWidth} px (text-transform ${railLabels.transform}, letter-spacing ${railLabels.tracking}; ${JSON.stringify(fit)})`);
+  const words = fit.label.split(' ').length;
+  expect(words === 1 ? fit.lines === 1 : fit.lines >= 1 && fit.lines <= 2, `REQ-TRACE-309/310: the folded rail sets "${fit.label}" on ${fit.lines} line(s) at ${railLabels.railWidth} px (${JSON.stringify(fit)})`);
+  expect(fit.scrollWidth <= fit.clientWidth, `REQ-TRACE-310: "${fit.label}" overflows the rail's heading sideways (${JSON.stringify(fit)})`);
+}
 const relaunched = await launch('fold-relaunch', boardProfile.workspace, boardProfile.local, boardProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
 const relaunchRails = (relaunched.probes['[data-testid="req-rail"]'] ?? []).map((r) => r.data['data-column']);
 expect(relaunchRails.join(',') === 'done', `REQ-TRACE-321: after the relaunch the folded columns are ${JSON.stringify(relaunchRails)}, not the Done column alone`);
@@ -444,7 +469,7 @@ const otherProfile = profile('other', boardProfile.preferences);
 const other = await launch('fold-other-workspace', otherProfile.workspace, otherProfile.local, otherProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
 const otherRails = (other.probes['[data-testid="req-rail"]'] ?? []).map((r) => r.data['data-column']);
 expect(otherRails.length === 0, `REQ-TRACE-312: a fold made in one workspace reached another (${JSON.stringify(otherRails)})`);
-stage2.fold = { folded: 'done', offscreenBeforeScroll: doneColumn.offscreen, focusAfterFold: railInspect.active?.testId, railName: railInspect.matches[0].attrs['aria-label'], afterRelaunch: relaunchRails, otherWorkspace: otherRails, railShape };
+stage2.fold = { folded: 'done', offscreenBeforeScroll: doneColumn.offscreen, focusAfterFold: railInspect.active?.testId, railName: railInspect.matches[0].attrs['aria-label'], afterRelaunch: relaunchRails, otherWorkspace: otherRails, railShape, railLabels };
 
 // ── filter: an epic filter survives the axis switch (REQ-TRACE-299) ───────────────────────────────
 const filterProfile = profile('filter');

@@ -160,4 +160,19 @@ describe('minimum-window layout regressions', () => {
     expect(rule('.status-strip__spacer')).toContain('min-width: 0');
     expect(rule('.status-strip')).toContain('gap: var(--rt-space-3)');
   });
+  it('sets a folded rail\'s heading so a seven-letter label fits the eight-character rail on one line (REQ-TRACE-310, REQ-TRACE-309)', () => {
+    // The rail is eight `ch` of its own font plus its 4 px margin a side; the heading had been drawn as a section kicker —
+    // uppercase and tracked at --rt-tracking-label — and seven tracked capitals are wider than eight `ch`, so
+    // `overflow-wrap: anywhere` broke "Blocked" as "BLOCKE / D" (docs/defects/fixed/the-folded-blocked-rail-breaks-its-label-inside-the-word.md).
+    // Measured on the built rail by requirements-proof's `fold` stage; this pins the rules that measurement depends on.
+    expect(rule('.req-rail')).toContain('width: calc(8ch + 8px + 2 * var(--rt-hairline-width))');
+    expect(rule('.req-rail')).toContain('padding: 4px');
+    const heading = rule('.req-rail__heading');
+    expect(heading).not.toMatch(/text-transform:\s*uppercase/u);
+    expect(heading).not.toMatch(/letter-spacing:/u);
+    expect(heading).toContain('-webkit-line-clamp: 2');
+    // A label longer than the rail still wraps (at its space first) onto at most two lines and then elides.
+    expect(heading).toContain('overflow: hidden');
+    expect(heading).toContain('overflow-wrap: anywhere');
+  });
 });

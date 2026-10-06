@@ -34,3 +34,35 @@ measures and each tracked, are wider than eight `ch`, so the browser breaks the 
   but not whether its label fits.
 
 Noticed 2026-10-06 by the autopsy of the default live run at `27a5127`.
+
+## Repaired — 2026-10-06
+
+The rail's heading is set in the rail's own font: sentence case and untracked, keeping weight 500, the two-line clamp,
+`overflow: hidden` and `overflow-wrap: anywhere` (`.req-rail__heading` in `packages/ui/src/shell.css`). The kicker is
+the one exception to sentence case in the adopted language (`docs/design/README.md` §1.4), and a rail's label is a
+control's text, not a section kicker; eight characters of the rail's own font are what REQ-TRACE-310 sized it to
+hold, so the text has to be set in that font. A second, smaller cause turned up in the measurement: the rail is a
+border-box button, so its two hairlines came out of the eight characters (49 px of content in a 58.9 px rail). The
+width is now `calc(8ch + 8px + 2 * var(--rt-hairline-width))`, which leaves the heading exactly eight `ch`.
+
+The reading the repair takes, from REQ-TRACE-309/310: the ordinary delivery labels are REQ-TRACE-232's six; "Needs
+Update" is the one longer than the rail and wraps at its space onto two lines, which REQ-TRACE-309 provides for; every
+one-word label, Blocked included, sits on one line. The design material's board (`docs/design/mockup/rotaris-ui-mockup.dc.html`) draws no
+folded or collapsed column, so the adopted language alone decides the craft.
+
+Pinned by:
+
+- `packages/ui/src/layout-regression.test.ts` — "sets a folded rail's heading so a seven-letter label fits the
+  eight-character rail on one line (REQ-TRACE-310, REQ-TRACE-309)": the rail's width and margin, and a heading with no
+  `text-transform: uppercase` and no `letter-spacing` that still clamps to two lines and wraps (red before the repair on
+  the uppercase rule);
+- `apps/desktop/scripts/requirements-proof.mjs`, `fold` stage — every closed-vocabulary label set in turn into the
+  folded Done rail's heading on the built app, its line boxes read: no word broken inside itself, a one-word label on
+  one line, a two-word label on at most two, no sideways overflow. Red before the repair: `the folded rail breaks
+  "Backlog" inside ["Backlog"] at 58.9 px (text-transform uppercase, letter-spacing 0.75px; … "lines":2 …)`. Green
+  after it at a 60.9 px rail: Backlog 40 px, Ready 31, Running 41, Review 36, Done 26, Blocked 39 — each one line —
+  and Needs Update two lines of at most 51 px, none broken (load average 4.5 on 4 CPUs beside the other two bundles'
+  agents; the measurement is geometry, not timing).
+
+`pnpm ui-audit --views=4` after the repair: 0 findings at both sizes. It does not fold a column (its workspace holds
+no requirement), so it moved no number here; the proof's measurement is the one that moved.

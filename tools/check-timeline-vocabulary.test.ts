@@ -13,6 +13,36 @@ import { AWAITING, checkProduct, FORBIDDEN, specVocabulary, timelineWritesIn, VO
 
 const repo = join(import.meta.dirname, '..');
 
+/** A directive's entry in `docs/product/directives.md`, from its anchor to the next. */
+function entryOf(id: string): string | undefined {
+  const directives = readFileSync(join(repo, 'docs', 'product', 'directives.md'), 'utf8');
+  const at = directives.indexOf(`<a id="${id.toLowerCase()}"></a>`);
+  if (at < 0) return undefined;
+  const end = directives.indexOf('<a id="pd-', at + 1);
+  return directives.slice(at, end < 0 ? undefined : end);
+}
+
+/**
+ * The twenty-eight names `AWAITING` held for OQ-157 until the owner ruled it (2026-10-06, R-071): the product wrote them
+ * under no vocabulary's word. History, so pinned here; the gate's `AWAITING` is empty now.
+ */
+const HELD_FOR_OQ_157 = [
+  'approval_withdrawn', 'child_paused', 'child_resumed', 'context_compressed', 'context_selection', 'entry_model_switched',
+  'entry_reasoning_switched', 'iteration_paused', 'iteration_resumed', 'loop_supervisor_activation', 'model_exhausted',
+  'model_override', 'notice', 'pause_resolved', 'prompt_edited', 'prompt_queued', 'prompt_removed', 'prompt_triggered',
+  'question_withdrawn', 'run_continuation_intent', 'run_pause_refused', 'run_pause_requested', 'run_paused_message_limit',
+  'steering_injected', 'steering_not_delivered', 'steering_submitted', 'todo_edited', 'transcript_cleared',
+];
+
+/**
+ * The five facts the rulings of OQ-127 and OQ-76 had the product record, raised beside the twenty-eight in the same
+ * amendment, each with the directive that gives its word: never written on `main` under no word.
+ */
+const RAISED_BESIDE: Record<string, string> = {
+  waiting_on_tools: 'PD-ORCH-014', stall_recovered: 'PD-ORCH-014', corrective_message: 'PD-ORCH-014',
+  user_away: 'PD-TOOLS-011', user_returned: 'PD-TOOLS-011',
+};
+
 describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
   it('every timeline name the product writes is a word of a vocabulary (AWAITING, empty since OQ-157\'s ruling, holds none), and every entry still excuses one', () => {
     const { problems, stale, drift } = checkProduct(repo);
@@ -39,13 +69,6 @@ describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
 
   it('REQ-ORCH-139: each word another domain fixes is stated, in backticks, by the requirement VOCABULARY cites for it — or, for a directive\'s word, by that directive\'s entry', () => {
     const spec = readdirSync(join(repo, 'docs', 'spec')).filter((f) => f.endsWith('.md')).flatMap((f) => readFileSync(join(repo, 'docs', 'spec', f), 'utf8').split('\n'));
-    const directives = readFileSync(join(repo, 'docs', 'product', 'directives.md'), 'utf8');
-    const entryOf = (id: string): string | undefined => {
-      const at = directives.indexOf(`<a id="${id.toLowerCase()}"></a>`);
-      if (at < 0) return undefined;
-      const end = directives.indexOf('<a id="pd-', at + 1);
-      return directives.slice(at, end < 0 ? undefined : end);
-    };
     const unstated = Object.entries(VOCABULARY as Record<string, string>).filter(([, cite]) => cite !== 'REQ-ORCH-139').filter(([word, cite]) => {
       const text = cite.startsWith('PD-') ? entryOf(cite) : spec.find((l) => l.startsWith(`**${cite}**`) || l.startsWith(`- **${cite}**`));
       return text === undefined || !text.includes(`\`${word}\``);
@@ -63,8 +86,9 @@ describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
     expect(Object.keys(AWAITING as Record<string, unknown>)).toEqual([]);
   });
 
-  it('OQ-157, OQ-53, OQ-76 and OQ-127 ruled together: the thirty-three names once held are words, each cited to the directive that adds it', () => {
-    const byDirective = (id: string) => Object.entries(VOCABULARY as Record<string, string>).filter(([, cite]) => cite === id).map(([name]) => name).sort();
+  it('OQ-157, OQ-53, OQ-76 and OQ-127 ruled together: the twenty-eight names AWAITING held for OQ-157 and the five raised beside them are words, each cited to the directive that adds it', () => {
+    const vocabulary = VOCABULARY as Record<string, string>;
+    const byDirective = (id: string) => Object.entries(vocabulary).filter(([, cite]) => cite === id).map(([name]) => name).sort();
     expect(byDirective('PD-ORCH-014')).toEqual([
       'approval_withdrawn', 'child_paused', 'child_resumed', 'context_compressed', 'context_selection', 'corrective_message',
       'iteration_paused', 'iteration_resumed', 'loop_supervisor_activation', 'model_exhausted', 'model_override', 'notice',
@@ -76,6 +100,33 @@ describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
       'todo_edited', 'transcript_cleared',
     ]);
     expect(byDirective('PD-TOOLS-011')).toEqual(['user_away', 'user_returned']);
+    // The split: the held names are PD-ORCH-014's fifteen and PD-CHAT-009's thirteen; the five raised beside them are
+    // OQ-127's three and OQ-76's two; together they are every word the three directives add, and no name is both.
+    expect(HELD_FOR_OQ_157).toHaveLength(28);
+    expect(HELD_FOR_OQ_157.filter((name) => vocabulary[name] === 'PD-ORCH-014')).toHaveLength(15);
+    expect(HELD_FOR_OQ_157.filter((name) => vocabulary[name] === 'PD-CHAT-009')).toHaveLength(13);
+    expect(Object.entries(RAISED_BESIDE).filter(([name, cite]) => vocabulary[name] !== cite)).toEqual([]);
+    expect(HELD_FOR_OQ_157.filter((name) => Object.hasOwn(RAISED_BESIDE, name))).toEqual([]);
+    expect([...HELD_FOR_OQ_157, ...Object.keys(RAISED_BESIDE)].sort())
+      .toEqual([...byDirective('PD-ORCH-014'), ...byDirective('PD-CHAT-009'), ...byDirective('PD-TOOLS-011')].sort());
+  });
+
+  it('OQ-157\'s ruling: PD-ORCH-014 and the gate state that split — the twenty-eight names held, the five raised beside them, thirty-three in all — and never the sum as what was held', () => {
+    const number = (n: number): string => ({ 5: 'five', 28: 'twenty-eight', 33: 'thirty-three' } as Record<number, string>)[n] ?? String(n);
+    const held = number(HELD_FOR_OQ_157.length);
+    const raised = number(Object.keys(RAISED_BESIDE).length);
+    const all = number(HELD_FOR_OQ_157.length + Object.keys(RAISED_BESIDE).length);
+    const flat = (text: string) => text.replace(/\n\s*(?:\*\s+|>\s?)?/g, ' ').replace(/\s+/g, ' ');
+    const entry = flat(entryOf('PD-ORCH-014') ?? '');
+    // "Why, and what it costs": what the product wrote under no word, and what the rulings added beside it.
+    expect(entry).toContain(`The product wrote ${held} names under no vocabulary's word`);
+    expect(entry).toContain(`add ${raised} facts the product now records`);
+    // "First execution": what the gate held and moved, and the sum VOCABULARY cites.
+    expect(entry).toContain(`the ${held} names it held for OQ-157`);
+    expect(entry).toContain(`${all} words in all`);
+    const gate = flat(readFileSync(join(repo, 'tools', 'check-timeline-vocabulary.mjs'), 'utf8'));
+    expect(gate).toContain(`the ${held} names it held for OQ-157`);
+    for (const text of [entry, gate]) expect(text).not.toMatch(new RegExp(`${all} names (it held|under no vocabulary's word|from \`AWAITING\`)`));
   });
 
   describe('over fixtures', () => {

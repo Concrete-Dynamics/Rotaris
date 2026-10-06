@@ -4912,10 +4912,13 @@ REQ-ORCH-139's closure is unchanged and reads over the vocabularies as extended 
 Data & Formats fix, the timeline words of the chat domain ([`PD-CHAT-009`](#pd-chat-009)) and of domain 05
 ([`PD-TOOLS-011`](#pd-tools-011)) are among those vocabularies, and a run uses no name outside them.
 
-**Why, and what it costs.** The product wrote these thirty-three names under no vocabulary's word, a recorded departure
-from REQ-ORCH-139's "MUST NOT" that a lint gate held on a closed waiting list (OQ-157). The alternative was to move the
-facts to another record, and the only candidate, the session log, is worse on every count: autopsies and exports read
-the timeline (REQ-SESSION-199) and the log is in neither; the product reads several of these entries back
+**Why, and what it costs.** The product wrote twenty-eight names under no vocabulary's word — fifteen of the words above
+and the chat domain's thirteen — a recorded departure from REQ-ORCH-139's "MUST NOT" that a lint gate held on a closed
+waiting list (OQ-157), and the three issue kinds under none either. The rulings of OQ-127 and OQ-76 add five facts the
+product now records — the three watchdog words above and `PD-TOOLS-011`'s two — so thirty-three timeline words join the
+vocabularies in all. The alternative was to move the facts to another record, and the only candidate, the session log,
+is worse on every count: autopsies and exports read the timeline (REQ-SESSION-199) and the log is in neither; the
+product reads several of these entries back
 (`model_exhausted` and `model_override` on resume, ADR-0027; `context_compressed` for REQ-MONITOR-086's count,
 ADR-0060; PD-ORCH-005's rest and resume, whose checks read the metadata); and moving them would need store changes
 and lose what earlier sessions recorded. What is given up: domain 01's list alone is no longer the whole of its
@@ -4928,13 +4931,19 @@ write.
 `PD-ORCH-006` and renumbered `PD-ORCH-014` before it landed, `main`'s `PD-ORCH-006` to `PD-ORCH-013` having landed
 meanwhile.*
 
-> **First execution, 2026-10-06, built under [R-071](requests.md#r-071):** the names were already written; the
-> directive's execution is the gate. `tools/check-timeline-vocabulary.mjs` (in `pnpm lint`) moved the thirty-three
-> names from `AWAITING` to `VOCABULARY`, each cited to this directive, `PD-CHAT-009` or `PD-TOOLS-011`, and `AWAITING`
-> is empty, so a new name fails the gate again. Its test checks that each cited directive's entry states its word in
-> backticks, as it already checked a requirement's. Nothing in the text was wrong. The issue kinds are not gated: no
-> gate reads an issue's kind, and every other kind the product writes is named by a requirement of its own domain (read
-> once, by hand, on this day). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+> **First execution, 2026-10-06, built under [R-071](requests.md#r-071):** the twenty-eight names were already
+> written, and the five raised beside them are written by the builds of OQ-127's and OQ-76's rulings (`stallRecords`,
+> `UserPresence`); the directive's execution is the gate. `tools/check-timeline-vocabulary.mjs` (in `pnpm lint`) moved
+> every name `AWAITING` held to `VOCABULARY` — the twenty-eight names it held for OQ-157, and OQ-127's three, which it
+> held from the stall watch's build until this ruling — and added OQ-76's two: thirty-three words in all, each cited to
+> this directive, `PD-CHAT-009` or `PD-TOOLS-011`. `AWAITING` is empty, so a new name fails the gate again. Its test
+> checks that each cited directive's entry states its word in backticks, as it already checked a requirement's, and that
+> this entry and the gate state the split of twenty-eight held and five raised beside them. Nothing in the rule was
+> wrong. The issue kinds are not gated: no gate reads an issue's kind, and every other kind the product writes is named
+> by a requirement of its own domain (read once, by hand, on this day). The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md). *Corrected in place 2026-10-06, before it
+> landed (the verifier's review): this entry first gave the sum, thirty-three, as the count the product wrote under no
+> word and the gate moved, where twenty-eight were held and five raised beside them.*
 
 ---
 

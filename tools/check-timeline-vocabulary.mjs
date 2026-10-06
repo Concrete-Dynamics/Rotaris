@@ -13,8 +13,9 @@
  *   - AWAITING: the names the product writes that no list in `docs/spec/` or `docs/product/` has, each held by an open
  *     question until the owner rules on it. The list is closed: a new name fails the gate, and an entry the product no
  *     longer writes fails it too, so the list cannot outlive what it excuses. Empty since 2026-10-06, when the owner ruled
- *     OQ-157 with OQ-53, OQ-76 and OQ-127 (R-071): the thirty-three names it held became the words of `PD-ORCH-014`,
- *     `PD-CHAT-009` and `PD-TOOLS-011`, which VOCABULARY cites, and the vocabulary is closed again.
+ *     OQ-157 with OQ-53, OQ-76 and OQ-127 (R-071): the twenty-eight names it held for OQ-157, and OQ-127's three, held
+ *     here from the stall watch's build until that ruling, became words of `PD-ORCH-014` and `PD-CHAT-009`; with OQ-76's
+ *     two, words of `PD-TOOLS-011`, VOCABULARY cites thirty-three, and the vocabulary is closed again.
  *
  * A name passed as a variable is accepted only where PASS_THROUGH names the file and the expression, each with its reason.
  * Acceptance finding A29 (2026-09-30) is why this exists:

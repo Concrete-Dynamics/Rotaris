@@ -1,0 +1,109 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FakeClock, err, failure, millis, ok } from '@rotaris/kernel';
+import * as platform from '@rotaris/platform';
+import { LOCK_BUSY, withLock, type LockDeps } from './lock.js';
+import { ProjectSettingsStore } from '../project-settings.js';
+
+/**
+ * REQ-PROVIDER-152 / REQ-PROVIDER-018: the busy refusal is for a lock that exists and is held past the 5 s bound.
+ * A lock file that cannot be created at all is reported as what it is, at once, and never as a store being updated
+ * (docs/defects/fixed/the-credential-lock-reports-a-busy-store-when-the-lock-file-cannot-be-created.md).
+ */
+vi.mock('@rotaris/platform', async (importOriginal) => {
+  const real = await importOriginal<typeof platform>();
+  return { ...real, exclusiveCreate: vi.fn(real.exclusiveCreate) };
+});
+
+let dir: string;
+let clock: FakeClock;
+beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rotaris-lock-')); clock = new FakeClock(); });
+afterEach(() => { rmSync(dir, { recursive: true, force: true }); vi.mocked(platform.exclusiveCreate).mockClear(); });
+
+const lockDeps = (over: Partial<LockDeps> = {}): LockDeps => ({ pid: process.pid, startedAt: '2026-10-06T00:00:00.000Z', timers: clock, monotonic: clock, ...over });
+
+describe('a lock file that cannot be created is not a busy store (REQ-PROVIDER-152, REQ-PROVIDER-018)', () => {
+  it('a regular file where the lock\'s folder would go: refused at once, naming the lock and the cause, never busy', async () => {
+    writeFileSync(join(dir, 'f'), 'not a folder');
+    const lock = join(dir, 'f', 'tokens', 'deepseek.lock');
+    let ran = false;
+    const r = await withLock(lock, lockDeps(), async () => { ran = true; return ok('ran'); });
+    expect(ran).toBe(false);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.code).toBe('credential.lock.create');
+      expect(r.error.headline).not.toBe(LOCK_BUSY);
+      expect(r.error.headline).not.toMatch(/being updated|in a moment/i);
+      expect(r.error.headline).toContain(lock);
+      expect(r.error.headline).toContain('Nothing was changed');
+      expect(r.error.detail).toMatch(/EEXIST|ENOTDIR/);
+    }
+    expect(clock.now()).toBe(0);
+  });
+
+  it('a folder standing at the lock\'s own path: refused at once as an unusable lock, never busy', async () => {
+    const lock = join(dir, 'x.lock');
+    mkdirSync(lock);
+    const r = await withLock(lock, lockDeps({ probe: () => 'alive' }), async () => ok('ran'));
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.code).toBe('credential.lock.create');
+      expect(r.error.headline).not.toBe(LOCK_BUSY);
+      expect(r.error.detail).toMatch(/EISDIR/);
+    }
+    expect(existsSync(lock)).toBe(true);
+    expect(clock.now()).toBe(0);
+  });
+
+  it('a write that fails after the create (a full disk) is reported as the failure it is', async () => {
+    vi.mocked(platform.exclusiveCreate).mockReturnValueOnce(err(failure('document.exclusive.write', 'Could not write the created document', 'Error: ENOSPC: no space left on device, write')));
+    const r = await withLock(join(dir, 'z.lock'), lockDeps(), async () => ok('ran'));
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.code).toBe('credential.lock.create');
+      expect(r.error.headline).not.toBe(LOCK_BUSY);
+      expect(r.error.detail).toContain('ENOSPC');
+    }
+  });
+
+  it('a lock released between the create and the read of its holder is taken on the next attempt, not refused', async () => {
+    const enoent = Object.assign(new Error('ENOENT: no such file or directory, open'), { code: 'ENOENT' });
+    vi.mocked(platform.exclusiveCreate).mockReturnValueOnce(err(failure('document.exclusive.read', 'The existing document could not be read', String(enoent), enoent)));
+    const lock = join(dir, 'w.lock');
+    const p = withLock(lock, lockDeps({ pollMs: millis(50) }), async () => ok('ran'));
+    for (let i = 0; i < 2; i++) { await Promise.resolve(); clock.advance(50); await Promise.resolve(); }
+    const r = await p;
+    expect(r).toEqual({ ok: true, value: 'ran' });
+    expect(vi.mocked(platform.exclusiveCreate)).toHaveBeenCalledTimes(2);
+    expect(existsSync(lock)).toBe(false);
+  });
+
+  it('a held lock still answers busy, and only after the bound', async () => {
+    const lock = join(dir, 'h.lock');
+    writeFileSync(lock, JSON.stringify({ pid: process.pid + 1, started_at: 'now' }));
+    const p = withLock(lock, lockDeps({ probe: () => 'alive', boundMs: millis(200), pollMs: millis(50) }), async () => ok('ran'));
+    for (let i = 0; i < 6; i++) { await Promise.resolve(); clock.advance(50); await Promise.resolve(); }
+    const r = await p;
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.code).toBe('credential.lock');
+      expect(r.error.headline).toBe(LOCK_BUSY);
+    }
+    expect(clock.now()).toBeGreaterThanOrEqual(200);
+  });
+
+  it('the provider snapshot under a regular file: the upsert reports the lock it could not create, not a busy store', async () => {
+    writeFileSync(join(dir, 'config'), 'not a folder');
+    const path = join(dir, 'config', 'project_settings.yaml');
+    const s = new ProjectSettingsStore({ path, lock: lockDeps(), timers: clock, warn: () => {} });
+    const r = await s.upsertProvider({ id: 'p', display_name: 'P', authenticated: true, discovered_at: '2026-10-06T00:00:00.000Z', models: [] });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.code).toBe('credential.lock.create');
+      expect(r.error.headline).not.toBe(LOCK_BUSY);
+      expect(r.error.headline).toContain(`${path}.lock`);
+    }
+  });
+});

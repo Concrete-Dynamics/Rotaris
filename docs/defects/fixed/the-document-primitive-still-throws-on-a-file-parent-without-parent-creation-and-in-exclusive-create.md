@@ -65,7 +65,8 @@ on the unrepaired form. The refused-permission case for exclusive create (`EACCE
   own error on any refusal, by design), the instance record (`instance.ts`, now `refused` rather than an exception) and
   the credential and project-settings locks (`credentials/lock.ts`). The last now answers its busy headline for a lock
   file that cannot be created, recorded as
-  [the-credential-lock-reports-a-busy-store-when-the-lock-file-cannot-be-created.md](../the-credential-lock-reports-a-busy-store-when-the-lock-file-cannot-be-created.md).
+  [the-credential-lock-reports-a-busy-store-when-the-lock-file-cannot-be-created.md](the-credential-lock-reports-a-busy-store-when-the-lock-file-cannot-be-created.md)
+  (repaired 2026-10-06).
 
 **Reported back** in ADR-0004's write side ("Corrected a third time 2026-10-04"), and in its row of 2026-10-04 in
 [first-executions.md](../../architecture/first-executions.md).

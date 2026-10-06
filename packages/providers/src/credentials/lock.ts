@@ -30,6 +30,22 @@ export const LOCK_BOUND_MS = millis(5_000);
 const POLL_MS = millis(50);
 export const LOCK_BUSY = 'The credential store is being updated; try the action again in a moment.';
 
+/**
+ * REQ-PROVIDER-152 gives the busy refusal to "a lock that cannot be taken within 5 seconds", and REQ-PROVIDER-018 has a
+ * failed write report *its* error. A lock file that cannot be created at all (a regular file where its folder would go,
+ * a folder standing at its own path, a folder the account may not write into, a full disk) is neither a store being
+ * updated nor anything a retry "in a moment" cures, so it is reported at once as what it is, naming the lock file and
+ * the cause. Until 2026-10-06 every such refusal answered `LOCK_BUSY` at once, without the bound
+ * (docs/defects/fixed/the-credential-lock-reports-a-busy-store-when-the-lock-file-cannot-be-created.md).
+ */
+export const lockUnavailable = (lockPath: string, cause: string): string =>
+  `Nothing was changed: the lock file ${lockPath} could not be created. ${cause.replace(/\.?$/, '.')}`;
+
+/** The lock existed when the create was refused and was gone before its holder could be read: released, so try again. */
+function releasedMeanwhile(e: Failure): boolean {
+  return e.code === 'document.exclusive.read' && (e.cause as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
+}
+
 function readHolder(path: string): LockHolder | null {
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<LockHolder>;
@@ -48,7 +64,13 @@ export async function withLock<T>(lockPath: string, deps: LockDeps, fn: () => Pr
   const start = deps.monotonic.now();
   for (;;) {
     const r = exclusiveCreate(lockPath, content);
-    if (!r.ok) return err(failure('credential.lock', LOCK_BUSY, `${r.error.headline}: ${r.error.detail ?? ''}`));
+    if (!r.ok) {
+      if (!releasedMeanwhile(r.error)) return err(failure('credential.lock.create', lockUnavailable(lockPath, r.error.headline), r.error.detail ?? r.error.headline, r.error.cause));
+      // Waited on like a held lock, never spun: a synchronous retry loop would hold main's event loop for the bound.
+      if (deps.monotonic.now() - start >= bound) return err(failure('credential.lock', LOCK_BUSY, `the lock at ${lockPath} was released and retaken for the whole bound`));
+      await new Promise<void>((resolve) => { deps.timers.after(poll, () => resolve()); });
+      continue;
+    }
     if (r.value.minted) break;
     const holder = readHolder(lockPath);
     // A malformed record names no pid: it is reclaimed, since no live holder can be identified from it.

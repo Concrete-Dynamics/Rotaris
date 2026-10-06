@@ -57,6 +57,11 @@ writes such a command to `<os temp>/rotaris-command-<random>/<n>.sh` and wraps `
 files-on-disk table carries the staging directory, what a killed run host leaves of it, and that a staging which fails is
 the call's `execution_error`. No package, edge, process, channel, command or store column changed.
 
+**Undoing a `write_file` create removes the file it made (REQ-TOOLS-132, REQ-TOOLS-135; fin24).** `FileToolState`'s undo
+stack holds an `UndoEntry` per write (the previous content, or none for a create with the first directory it made), and
+`write_file`'s `undo` of a create removes the file and the empty directories the create made, where it wrote an empty file.
+The **runtime view**'s file-tools paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **`summary.md`'s Tool errors line is the issues record's (REQ-SESSION-140, REQ-SESSION-136; fin23).** `warningLines`
 (`run/summary.ts`) reads `issues_by_kind.tool_error`, the figure the Metrics section's Issues line prints, where it read the
 tool-outcomes histogram's `tool_error` bucket. The histogram is unchanged (REQ-SESSION-139; its `mcp` bucket is OQ-208's).

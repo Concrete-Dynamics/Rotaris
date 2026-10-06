@@ -641,6 +641,15 @@ The entry role's port is the one at **depth 0** (`isEntryPort`): the pre-flight'
 reach that port and no other. The same grant reaches the entry turn's instructions (`entryInstructionsFor`, `PD-ORCH-006`), so a coordinator offered
 the bundle's writing and command tools is told it does the work with them rather than that it must not.
 
+**The file tools' shared state (`tools/files.ts`, `FileToolState`; REQ-TOOLS-132/133/137).** One per workspace root, shared by
+every run and agent there: the read record, and an undo stack of the ten most recent writes per path that `write_file` and
+`haet_edit`/`haet` both push and `write_file`'s `undo` pops. An entry is what the path held before the write (`UndoEntry`): its
+content, or nothing for a create, which also keeps the first directory the create made for the file. Undoing an entry with
+content writes it back; undoing a create removes the file, then each directory the create made while it is empty, and says so
+("Removed <p>: it did not exist before the create this undoes …"), its diff row the file's lines removed (REQ-CHAT-050). A file
+gone since is not written back. Until 2026-10-06 an undone create wrote an empty file and a second undo had no history, which
+left the final duress run's continuation child a stray file it had no tool to remove (finding N2).
+
 **The ladder over every model step (Part Q — `run/ladder.ts`, `run/resilience.ts`, `run/waits.ts`; REQ-ORCH-088/090/091/092,
 REQ-NOTIFY-081..092/263).** It sits at the step, not the turn, so a retry re-issues the call over the conversation as it stands
 and never replays an executed tool call. Each agent (the root for the run, every child) has a **cell**: its current model

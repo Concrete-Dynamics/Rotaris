@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
@@ -702,5 +702,89 @@ describe('REQ-TOOLS-135: an edit reports the lines it replaced and the lines it 
     const r = await writeFileTool(state, fence).execute({ operation: 'edit', path: 'src/todos.js', old_string: OLD, new_string: '', replace_all: false }, ctx());
     expect(r.text.replace(/ \(sha256 [0-9a-f]{64}\)$/, '')).toBe('Edited src/todos.js: 3 lines replaced by 0 at line 3 (+0 -3).');
     expect(readFileSync(join(root, 'src/todos.js'), 'utf8')).toBe('// head\n\n\n// tail\n');
+  });
+});
+
+/**
+ * Finding N2 of the final duress live run at c2a9444: undoing a create wrote an empty file where there had been none and
+ * answered "Restored <p> to its previous content (0 lines)", so a child with no terminal was left with a stray file it could
+ * not remove (docs/defects/fixed/undoing-a-create-leaves-an-empty-file.md).
+ */
+describe('undo puts the path back as it was before the write: a create is undone by removing the file (REQ-TOOLS-132, REQ-TOOLS-135, REQ-CHAT-050)', () => {
+  const exists = (rel: string): boolean => existsSync(join(root, rel));
+
+  it('create then undo removes the file and says so; a second undo has no history', async () => {
+    const w = writeFileTool(state, fence);
+    expect(await w.execute({ operation: 'create', path: '.tmp-run-tests.sh', content: 'placeholder\n', replace_all: false }, ctx())).toMatchObject({ isError: false });
+    const u = await w.execute({ operation: 'undo', path: '.tmp-run-tests.sh', replace_all: false }, ctx());
+    expect(u).toMatchObject({ isError: false, text: 'Removed .tmp-run-tests.sh: it did not exist before the create this undoes (1 line removed).' });
+    // REQ-CHAT-050: the diff of the restoration, every line of the file removed.
+    expect(u.diff).toBe('.tmp-run-tests.sh +0 -1\n[1]- placeholder');
+    expect(exists('.tmp-run-tests.sh')).toBe(false);
+    expect(await w.execute({ operation: 'undo', path: '.tmp-run-tests.sh', replace_all: false }, ctx())).toMatchObject({ isError: true, text: 'No edit history for .tmp-run-tests.sh.' });
+    expect(exists('.tmp-run-tests.sh')).toBe(false);    // the child in the run reasoned "I can't delete files with these tools": the prose it reads says what an undone create does
+    expect(w.description).toContain('undo {path} (undoing a create removes the file it made)');
+  });
+
+  it('the directories a create made are removed with its file when nothing else is in them; one that existed or holds another file stays', async () => {
+    const w = writeFileTool(state, fence);
+    await w.execute({ operation: 'create', path: 'new/deep/n.txt', content: 'one\ntwo', replace_all: false }, ctx());
+    const u = await w.execute({ operation: 'undo', path: 'new/deep/n.txt', replace_all: false }, ctx());
+    expect(u.text).toBe('Removed new/deep/n.txt: it did not exist before the create this undoes (2 lines removed). Also removed the empty directory new/ the create made.');
+    expect(exists('new')).toBe(false);
+    // a directory that was already there is never the create's to remove
+    await w.execute({ operation: 'create', path: 'src/c.ts', content: 'c', replace_all: false }, ctx());
+    expect((await w.execute({ operation: 'undo', path: 'src/c.ts', replace_all: false }, ctx())).text).toBe('Removed src/c.ts: it did not exist before the create this undoes (1 line removed).');
+    expect(exists('src/a.ts')).toBe(true);
+    // a directory the create made that has gained another file since keeps it, and only the empty one below it goes
+    await w.execute({ operation: 'create', path: 'gen/sub/x.txt', content: 'x', replace_all: false }, ctx());
+    writeFileSync(join(root, 'gen', 'other.txt'), 'kept');
+    const v = await w.execute({ operation: 'undo', path: 'gen/sub/x.txt', replace_all: false }, ctx());
+    expect(v.text).toBe('Removed gen/sub/x.txt: it did not exist before the create this undoes (1 line removed). Also removed the empty directory gen/sub/ the create made.');
+    expect(exists('gen/sub')).toBe(false);
+    expect(readFileSync(join(root, 'gen', 'other.txt'), 'utf8')).toBe('kept');
+  });
+
+  it('a file removed since its create is not written back: the undo says nothing was there to remove', async () => {
+    const w = writeFileTool(state, fence);
+    await w.execute({ operation: 'create', path: 'gone.txt', content: 'g\n', replace_all: false }, ctx());
+    rmSync(join(root, 'gone.txt'));
+    const u = await w.execute({ operation: 'undo', path: 'gone.txt', replace_all: false }, ctx());
+    expect(u).toMatchObject({ isError: false, text: 'gone.txt did not exist before the create this undoes, and it does not exist now: nothing to remove.' });
+    expect(u.diff).toBe('gone.txt +0 -0');
+    expect(exists('gone.txt')).toBe(false);
+  });
+
+  it('edit then undo restores the previous content and keeps the file; each undo steps back one write, the create last', async () => {
+    const w = writeFileTool(state, fence);
+    await readFileTool(state, fence).execute({ path: 'src/a.ts', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    await w.execute({ operation: 'edit', path: 'src/a.ts', old_string: 'const b = 2;', new_string: 'const b = 3;', replace_all: false }, ctx());
+    const u = await w.execute({ operation: 'undo', path: 'src/a.ts', replace_all: false }, ctx());
+    expect(u).toMatchObject({ isError: false, text: 'Restored src/a.ts to its previous content (3 lines).' });
+    expect(readFileSync(join(root, 'src', 'a.ts'), 'utf8')).toBe('const a = 1;\nconst b = 2;\nexport { a, b };\n');
+    expect(await w.execute({ operation: 'undo', path: 'src/a.ts', replace_all: false }, ctx())).toMatchObject({ isError: true, text: 'No edit history for src/a.ts.' });
+    expect(exists('src/a.ts')).toBe(true);
+
+    // create, overwrite, edit through haet_edit (the same stack, REQ-TOOLS-189): three undos walk back to no file at all
+    await w.execute({ operation: 'create', path: 'notes.txt', content: 'one\n', replace_all: false }, ctx());
+    await w.execute({ operation: 'overwrite', path: 'notes.txt', content: 'two\n', replace_all: false }, ctx());
+    await haetEditTool(state, fence).execute({ path: 'notes.txt', content_hash: sha256('two\n'), old_string: 'two', new_string: 'three', replace_all: false }, ctx());
+    expect((await w.execute({ operation: 'undo', path: 'notes.txt', replace_all: false }, ctx())).text).toBe('Restored notes.txt to its previous content (1 line).');
+    expect(readFileSync(join(root, 'notes.txt'), 'utf8')).toBe('two\n');
+    expect((await w.execute({ operation: 'undo', path: 'notes.txt', replace_all: false }, ctx())).text).toBe('Restored notes.txt to its previous content (1 line).');
+    expect(readFileSync(join(root, 'notes.txt'), 'utf8')).toBe('one\n');
+    expect((await w.execute({ operation: 'undo', path: 'notes.txt', replace_all: false }, ctx())).text).toBe('Removed notes.txt: it did not exist before the create this undoes (1 line removed).');
+    expect(exists('notes.txt')).toBe(false);
+    expect(await w.execute({ operation: 'undo', path: 'notes.txt', replace_all: false }, ctx())).toMatchObject({ isError: true, text: 'No edit history for notes.txt.' });
+  });
+
+  it('a create read from a call with no operation (PD-TOOLS-007) is undone the same way', async () => {
+    const w = writeFileTool(state, fence);
+    const inferred = w.inferArguments?.({ path: 'inferred.txt', content: 'i\n' });
+    expect(inferred?.args).toMatchObject({ operation: 'create' });
+    await w.execute({ ...(inferred!.args as { operation: 'create'; path: string; content: string }), replace_all: false }, ctx());
+    expect(exists('inferred.txt')).toBe(true);
+    expect((await w.execute({ operation: 'undo', path: 'inferred.txt', replace_all: false }, ctx())).text).toMatch(/^Removed inferred\.txt:/);
+    expect(exists('inferred.txt')).toBe(false);
   });
 });

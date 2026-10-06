@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import { z } from 'zod';
 import { countNoun, similarity } from '@rotaris/kernel';
 import { lineChanges, renderDiff } from './diff.js';
@@ -22,6 +22,16 @@ export const DEFAULT_LIMIT = 2000;
 export const UNDO_DEPTH = 10;
 
 /**
+ * One write's entry on REQ-TOOLS-132's undo stack: what the path held before it. `previous` is null when the write made the
+ * file (a create), and `madeDir` is then the first directory that write made for it, absolute, so its undo can take away
+ * the directories it made as well as the file. A create into a directory that was already there leaves `madeDir` unset.
+ */
+export interface UndoEntry {
+  readonly previous: string | null;
+  readonly madeDir?: string;
+}
+
+/**
  * REQ-TOOLS-132/133/137 — the read record and the undo stacks, shared by every run in one workspace, which
  * is what those requirements say is shared.
  *
@@ -38,8 +48,8 @@ export const UNDO_DEPTH = 10;
 export class FileToolState {
   /** REQ-TOOLS-133: the paths (real, lower-cased) read through this workspace's tools. */
   readonly read = new Set<string>();
-  /** REQ-TOOLS-132: the 10 most recent previous contents per path; `null` = the file did not exist. */
-  readonly undo = new Map<string, (string | null)[]>();
+  /** REQ-TOOLS-132: the 10 most recent writes per path, each as what the path held before it. */
+  readonly undo = new Map<string, UndoEntry[]>();
   key(resolved: string): string {
     return resolved.replace(/\\/g, '/').toLowerCase();
   }
@@ -49,14 +59,14 @@ export class FileToolState {
   wasRead(resolved: string): boolean {
     return this.read.has(this.key(resolved));
   }
-  pushUndo(resolved: string, previous: string | null): void {
+  pushUndo(resolved: string, previous: string | null, madeDir?: string): void {
     const k = this.key(resolved);
     const stack = this.undo.get(k) ?? [];
-    stack.push(previous);
+    stack.push(madeDir === undefined ? { previous } : { previous, madeDir });
     while (stack.length > UNDO_DEPTH) stack.shift();
     this.undo.set(k, stack);
   }
-  popUndo(resolved: string): string | null | undefined {
+  popUndo(resolved: string): UndoEntry | undefined {
     const stack = this.undo.get(this.key(resolved));
     return stack && stack.length > 0 ? stack.pop() : undefined;
   }
@@ -77,12 +87,37 @@ export function decodeText(bytes: Buffer): { text: string; binary: boolean } {
   }
 }
 
-/** Temp-then-rename in the target's directory; the previous content is never partially replaced. */
-export function atomicWrite(target: string, content: string): void {
-  mkdirSync(dirname(target), { recursive: true });
+/**
+ * Temp-then-rename in the target's directory; the previous content is never partially replaced. Returns the first directory
+ * it had to make for the target (absolute), or undefined when the target's directory was already there.
+ */
+export function atomicWrite(target: string, content: string): string | undefined {
+  const madeDir = mkdirSync(dirname(target), { recursive: true });
   const tmp = join(dirname(target), `.${basename(target)}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`);
   writeFileSync(tmp, content, 'utf8');
   renameSync(tmp, target);
+  return madeDir;
+}
+
+/**
+ * The undo of a create (REQ-TOOLS-132, REQ-TOOLS-135): the path held no file before it, so the file is removed rather than
+ * written empty, and then each directory the create made for it, deepest first, while it is empty. A directory that was
+ * already there is never one the create made, and one that has gained another entry since stays, with every directory above
+ * it. Returns the directories removed, deepest first.
+ */
+function removeCreated(resolved: string, madeDir: string | undefined): string[] {
+  unlinkSync(resolved);
+  const removed: string[] = [];
+  if (madeDir === undefined) return removed;
+  for (let dir = dirname(resolved); dir === madeDir || dir.startsWith(`${madeDir}${sep}`); dir = dirname(dir)) {
+    try {
+      rmdirSync(dir);
+    } catch {
+      break;
+    }
+    removed.push(dir);
+  }
+  return removed;
 }
 
 function listing(dir: string): string {
@@ -433,7 +468,7 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
      * docs/defects/fixed/write-files-first-use-refusal-recurred-under-duress.md). The duress run after it still had 1 of 4
      * children omit the field; reading the selector from the call is the fourth repair PD-TOOLS-007 allows (`inferArguments`).
      */
-    description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path}. Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it.',
+    description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path} (undoing a create removes the file it made). Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it.',
     schema: writeSchema,
     /**
      * REQ-TOOLS-032's recoverable refusal, with the expected shape named: the run's first uses omitted
@@ -485,8 +520,9 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
       const before = current?.text ?? null;
       const mustHaveRead = () => (!state.wasRead(resolved) ? errorObservation(`You must read ${rel} before editing it. Call read_file(path="${rel}") first, then retry your edit.`) : null);
       const commit = (after: string, message: string): Observation => {
-        state.pushUndo(resolved, before);
-        atomicWrite(resolved, after);
+        // The directory a create had to make is known only once it is made, so the entry is completed after the write.
+        const madeDir = atomicWrite(resolved, after);
+        state.pushUndo(resolved, before, before === null ? madeDir : undefined);
         state.markRead(resolved);
         return observation(`${message} (sha256 ${sha256(after)})`, { diff: renderDiff(rel, before, after) });
       };
@@ -548,9 +584,32 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
           return commit(after, `${replacementMessage(rel, before ?? '', after, a.old_string, start)}${note}`);
         }
         case 'undo': {
-          const previous = state.popUndo(resolved);
-          if (previous === undefined) return errorObservation(`No edit history for ${rel}.`);
-          const after = previous ?? '';
+          const entry = state.popUndo(resolved);
+          if (entry === undefined) return errorObservation(`No edit history for ${rel}.`);
+          if (entry.previous === null) {
+            /*
+             * The write being undone made the file, so undoing it removes the file. Until 2026-10-06 this wrote
+             * `previous ?? ''`: an empty file where there had been none, "Restored <p> to its previous content (0 lines)",
+             * and a second undo with no history. The final duress run's continuation child (finding N2) was left with a
+             * stray `.tmp-run-tests.sh` it had no tool to remove
+             * (docs/defects/fixed/undoing-a-create-leaves-an-empty-file.md). A file gone since is not written back.
+             */
+            if (before === null) return observation(`${rel} did not exist before the create this undoes, and it does not exist now: nothing to remove.`, { diff: `${rel} +0 -0` });
+            let dirs: string[];
+            try {
+              dirs = removeCreated(resolved, entry.madeDir);
+            } catch (cause) {
+              // Nothing changed, so the write stays undoable.
+              state.pushUndo(resolved, entry.previous, entry.madeDir);
+              return errorObservation(`Could not remove ${rel}: ${cause instanceof Error ? cause.message : String(cause)}`);
+            }
+            const outermost = dirs[dirs.length - 1];
+            // The directory's own spelling is `rel`'s, less the segments between it and the file.
+            const depth = outermost === undefined ? 0 : relative(outermost, resolved).split(sep).length;
+            const also = outermost === undefined ? '' : ` Also removed the empty directory ${rel.split(/[\\/]/).slice(0, -depth).join('/')}/ the create made.`;
+            return observation(`Removed ${rel}: it did not exist before the create this undoes (${countNoun(lineCount(before), 'line')} removed).${also}`, { diff: renderDiff(rel, before, '') });
+          }
+          const after = entry.previous;
           atomicWrite(resolved, after);
           return observation(`Restored ${rel} to its previous content (${countNoun(lineCount(after), 'line')}).`, { diff: renderDiff(rel, before, after) });
         }

@@ -10410,14 +10410,15 @@ so `swarm` becomes an input to REQ-ORCH-016's mapping as `single` is, and `PD-OR
 keeps the bundle and is told both. The repair of the defect note can render REQ-ORCH-025's `swarm` text on the other
 intents whichever way this is ruled; what it renders on the granted ones waits on the ruling.
 
-**OQ-205 — Which closes of a main window ask REQ-STARTUP-046's active-run confirmation, now that the instance holds several
+**OQ-206 — Which closes of a main window ask REQ-STARTUP-046's active-run confirmation, now that the instance holds several
 main windows and a quit can start outside any window?** *(REQ-STARTUP-046, "When a run is active, a confirmation SHALL be
 presented before anything is torn down", its text conveying "that closing the window ends it"; REQ-SHELL-119's third guard,
 "with runs active, a user-initiated close asks 'Quit while a run is active?'"; REQ-STARTUP-161, several main windows in one
 instance; REQ-STARTUP-047 with REQ-SHELL-018, the switch's close; `PD-ORCH-005` clause 3, a quit leaves unfinished agents
 `paused`. Raised 2026-10-06 by the repair of
 [`closing-a-window-while-a-run-is-active-asks-no-confirmation.md`](../defects/closing-a-window-while-a-run-is-active-asks-no-confirmation.md)
-(fin22, bundle `fin22-window-strip-config`), which stays open on it. Open.)*
+(fin22, bundle `fin22-window-strip-config`), which stays open on it. Raised on that branch as OQ-205 and renumbered
+OQ-206 at its landing, OQ-205 being the `swarm` question `fin22-record-tidy` raised first on main. Open.)*
 
 Both requirements were written when the instance held one main window and its close was the quit. Since REQ-STARTUP-161
 the run host keeps executing while any main window stays, and the run host's count of active runs is instance-wide

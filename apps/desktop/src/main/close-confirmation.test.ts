@@ -64,7 +64,7 @@ describe('the active-run confirmation at a window\'s close (REQ-STARTUP-046, REQ
   });
 });
 
-describe('which main windows stay at a close (OQ-205\'s reading, REQ-STARTUP-161)', () => {
+describe('which main windows stay at a close (OQ-206\'s reading, REQ-STARTUP-161)', () => {
   const open = (wcId: number, destroyed = false) => ({ wcId, win: { isDestroyed: () => destroyed } });
   const none = () => false;
 

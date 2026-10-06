@@ -8,7 +8,7 @@
  * REQ-SHELL-055). Under PD-ORCH-005 clause 3 the quit's shutdown leaves the run's unfinished agents `paused`; the box says
  * the run is stopped, which is what the shutdown does, and adds nothing beyond REQ-STARTUP-046's three things.
  *
- * When it is asked (OQ-205): on a person's close of a main window that leaves no other main window open, since only that
+ * When it is asked (OQ-206): on a person's close of a main window that leaves no other main window open, since only that
  * close ends a run (the run host keeps executing while any main window stays, REQ-STARTUP-161), with the run host's
  * instance-wide count (sessions are not keyed by workspace, as at REQ-SHELL-021's gate 3 and OQ-86). A quit Electron
  * starts on its own account (`before-quit`: SIGTERM, the desktop's logout, the driver's `app.quit()`) is not a
@@ -33,7 +33,7 @@ export function activeRunCloseBox(activeRuns: number | null): { type: 'warning';
 }
 
 /**
- * OQ-205's reading: whether another main window stays open once the window `closing` closes. A window already destroyed,
+ * OQ-206's reading: whether another main window stays open once the window `closing` closes. A window already destroyed,
  * or one whose close its guard has already confirmed (`QuitState.isClosing`, `exit.ts`), does not stay.
  */
 export function anotherMainWindowStays(

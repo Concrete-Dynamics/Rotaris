@@ -255,7 +255,7 @@ closed). Nothing a quit closes answers for a person. `QuitState` (`main/exit.ts`
 `exitCleanly` and from each main window's confirmed close, which `guardClose` reports before closing. While it is under
 way an approval dialog that closes sends no Deny, and the question dock's cancellation is not forwarded. The run host's
 `shutdown` withdraws both instead (PD-ORCH-005 clause 9, OQ-96). **Since 2026-10-06 a person's close of a main window asks
-REQ-SHELL-119's guards in order** (REQ-STARTUP-046, OQ-205; fin22): the renderer's unsaved-settings guard, then, when no
+REQ-SHELL-119's guards in order** (REQ-STARTUP-046, OQ-206; fin22): the renderer's unsaved-settings guard, then, when no
 other main window stays open and the run host's `runs.active` counts a run (a count that cannot be read counts), the
 active-run confirmation — a message box over the closing window, "Quit while a run is active?" with Cancel and Yes, Cancel
 the default and Escape's answer (`activeRunCloseBox`, `confirmActiveRunClose`, `main/close-confirmation.ts`, reached through

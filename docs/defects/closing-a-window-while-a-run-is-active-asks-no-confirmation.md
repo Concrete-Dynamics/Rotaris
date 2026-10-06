@@ -32,10 +32,10 @@ REQ-SHELL-055 (Escape and the close control as the returning answer). `PD-ORCH-0
 
 ## Outcome so far
 
-**Open on [OQ-205](../architecture/open-questions.md).** The repair below is built, and the note stays open until OQ-205
+**Open on [OQ-206](../architecture/open-questions.md).** The repair below is built, and the note stays open until OQ-206
 is ruled: the requirements do not settle which closes ask, and the build asks at the close of the last main window only,
 not at the close of one of several, nor at a quit Electron starts on its own account (SIGTERM, logout, `app.quit()`).
-When OQ-205 is ruled, the build is made to agree with the ruling (or confirmed as built) and the note moves to
+When OQ-206 is ruled, the build is made to agree with the ruling (or confirmed as built) and the note moves to
 `docs/defects/fixed/`.
 
 Repaired in part 2026-10-06 (fin22, bundle `fin22-window-strip-config`). A person's close of a main window now asks REQ-SHELL-119's
@@ -51,7 +51,7 @@ box that cannot be shown, leaves the window, its state and the run as they were,
 is open asks nothing more. A count that cannot be read asks.
 
 Which closes ask is not settled by the requirements, written for one main window: raised as
-[OQ-205](../architecture/open-questions.md), with the reading the build proceeds under — asked only when no other main
+[OQ-206](../architecture/open-questions.md), with the reading the build proceeds under — asked only when no other main
 window stays open (only that close ends a run, REQ-STARTUP-161), and not on a quit Electron starts on its own account
 (`before-quit`, which REQ-SHELL-119's "user-initiated close" does not name), so the application's quit
 (`closeThroughGuards`) still asks the renderer's guards alone. The switch's outgoing window closes beside its replacement

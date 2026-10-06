@@ -80,7 +80,7 @@ branch name and no detached HEAD, and `StatusStripItem` draws no `title` and no 
 then the item drew the branch icon and a branch named `—`. The **seams view**'s status-strip item says so. No package,
 edge, process, channel, command or store column changed.
 
-**A person's close of the last main window asks the active-run confirmation (REQ-STARTUP-046, REQ-SHELL-119; OQ-205
+**A person's close of the last main window asks the active-run confirmation (REQ-STARTUP-046, REQ-SHELL-119; OQ-206
 raised, fin22).** `guardClose` takes a third guard, `confirmRunsAtClose`, asked after the renderer's unsaved-settings guard
 allows; main answers it from the run host's `runs.active` and `activeRunCloseBox` (`main/close-confirmation.ts`) when no
 other main window stays open. The application's quit asks the renderer's guards alone, as before. The **process view**'s

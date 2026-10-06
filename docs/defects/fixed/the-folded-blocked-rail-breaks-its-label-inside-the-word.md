@@ -90,3 +90,12 @@ that fires). `pnpm build`, then `requirements-proof.mjs --skip-build` as root un
 CPUs with another plan's agents on the host (the measurement is geometry, not timing): the proof stopped at
 `REQ-TRACE-310: "Backlog" is 39.5 px wide in a rail whose content box is 32 px ({"label":"Backlog","lines":1,"broken":[],"widest":39.5})`.
 The CSS was then restored and the app rebuilt.
+
+*Corrected the same day after the first verification:* the scratch width named above, "`5ch`", does not give the 32 px
+recorded. fin21's verifier reproduced that edit literally (rail `width: 5ch`, heading `overflow-wrap: normal`) and the
+stage went red the same way but on a **22 px** content box. The rail is a `<button>`, which the browser sizes
+`border-box`, so its content box is the width less 8 px of padding and two 1 px hairlines; 22 px puts `5ch` at 32 px
+(`ch` 6.4 px at the rail's type size), and 32 px is what `calc(5ch + 8px + 2 * var(--rt-hairline-width))` leaves, 42 px
+less 10. So the builder's scratch build most likely narrowed only the `8ch` term inside the calc, not the whole width.
+That is derived from the two figures and was not re-run; the edit's exact text was not kept. Either narrowing turns the
+assertion red on "Backlog" (39.5 px) for the reason recorded above.

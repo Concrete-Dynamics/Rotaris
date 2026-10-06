@@ -14,6 +14,8 @@ record already decides, and every ruling it needs is named as the owner's rather
 - **"thats it"** defers everything else on the go-live gap list from the first release. Deferring is scheduling
   only. No requirement is superseded, and each deferred item stays owed where it is recorded now.
 
+*2026-10-06 ([R-071](../product/requests.md#r-071)): the owner confirmed as built the open questions this plan names as open — OQ-58, OQ-59, OQ-67 to OQ-71, OQ-79, OQ-80, OQ-87 to OQ-89, OQ-92, OQ-93 and OQ-131 among them — and deferred the release pipeline's notices and signing (OQ-72 to OQ-75, OQ-83), continuous integration and the Linux and macOS builds; the work counts as finished without them. Each ruling is in its entry in [`open-questions.md`](open-questions.md), and those that depart from a requirement are directives (`PD-WORKSPACE-003`, `PD-WORKSPACE-004`, `PD-STARTUP-002` to `PD-STARTUP-005`). The mentions below of those questions as open are kept as the record of the plan as it ran.*
+
 ## 1. Scope
 
 | In the first release | Where it stands | Section |

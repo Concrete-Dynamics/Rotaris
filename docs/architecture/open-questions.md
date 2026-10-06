@@ -116,6 +116,8 @@ path) — which is the first time a ruling closed more than one at once, and it 
 had been priced by measurement before they were put. Each of the four is stated where it
 was found, with what the build shipped meanwhile, so a ruling replaces an interim rather than filling a gap.
 
+**On 2026-10-06 the owner ruled every decision still waiting ([R-071](../product/requests.md#r-071)).** The rulings confirmed as built are written into each entry, dated and citing R-071: OQ-2, OQ-4, OQ-6, OQ-10, OQ-17, OQ-18, OQ-22, OQ-25, OQ-29, OQ-32 to OQ-34, OQ-39, OQ-40, OQ-43, OQ-47, OQ-50 to OQ-52, OQ-58, OQ-59, OQ-65, OQ-67 to OQ-71, OQ-79 to OQ-82, OQ-84, OQ-85, OQ-87 to OQ-93, OQ-100 to OQ-104, OQ-106 to OQ-109, OQ-117, OQ-118, OQ-120 to OQ-126, OQ-128 to OQ-138, OQ-141 to OQ-153, and in `owner-decisions.md` ESC-36 and ESC-41. Where a ruling departs from a requirement's text it is carried by a directive with its back-pointer: `PD-PROVIDER-001`, `PD-CONFIG-002`, `PD-TOOLS-007`, `PD-TOOLS-008`, `PD-SHELL-004` to `PD-SHELL-006`, `PD-CHAT-007`, `PD-WORKSPACE-003`, `PD-WORKSPACE-004`, `PD-STARTUP-002` to `PD-STARTUP-005`, `PD-ORCH-005` revision 6 and `PD-ORCH-003` revision 3. Two rulings meet a build that does something else, and each entry says so with a defect note: OQ-6 (the quota cap lives in configuration, not on the catalogue entry) and OQ-33 (the preference root honours the configuration-home variable on every platform). OQ-39's amendment was already in REQ-SANDBOX-101's text. **Deferred by the same ruling, and the work counts as finished without them:** OQ-72 to OQ-75 and OQ-83 (the release pipeline's notices and signing), OQ-140 (Linux confinement), and OQ-48, OQ-62, OQ-183 and OQ-195 (after the first release); each entry carries the deferral. The questions ruled as a change to build are ruled in their own entries by the plans that build them.
+
 ***Three of those counts changed on 2026-09-02 and the direction is not the usual one, so a reader should
 not skim them.*** The seven escalations this register carried as open were **all ruled on that date** and
 all seven have landed in requirements; OQ-14 and OQ-44 were **closed by amendment** and their entries below
@@ -1282,6 +1284,8 @@ the parent environment. Servers launched through package runners plainly need a 
 contract, and the official client library's own default is a curated safe subset, which would be a third
 behaviour.
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the overlay is ratified as built, with no scrubbing: a stdio server inherits the run host's environment with REQ-MCP-090's resolved map overlaid, as other coding tools launch their tool servers, and a secret in the run host's own environment reaching every stdio server is accepted. The two variables naming the launch's artifact, which main removes from its own environment before it starts any child (OQ-90, `PD-STARTUP-004`), are not a scrubbing list.
+
 > **Reading taken on first execution, 2026-09-05 (Part S) — flagged for the owner, not resolved.** The child
 > inherits the run host's environment **with the resolved map of `REQ-MCP-090` overlaid** (overlay, not
 > replace): `REQ-MCP-087`'s "when the variable is unset, the key is omitted entirely" only makes sense as an
@@ -1413,6 +1417,8 @@ the verdict that the topology stands, with one of its original reasons — the c
 rewrite plus rename was not. The other six reasons are untouched by the store and each is independently
 sufficient. **Neither of the two new costs has been measured.**
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** closed as ADR-0002 decided it. The workspace service stays a process of its own, as built, and the two costs this entry names as unmeasured are accepted with it.
+
 *Two further costs land on the same bill under ESC-15 and neither changes the balance on its own.* The
 workspace service becomes the **only** process that resolves a workspace identifier and the only one that
 opens the store, handing the run host a resolved store path (constraint W-18) — which is an argument
@@ -1431,6 +1437,8 @@ tracked focus, an unfocused session's next `ask` would be classed unattended and
 policy — silently, with the run still executing. The record reads registration as **per application
 window**, with "unattended" a property of the application. **Confirm**, because it changes what
 `REQ-TOOLS-069`'s "the presenter was torn down" means in a multi-window application.
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built. Presenter registration is per application window (ADR-0019; `PresenterRegistry`, a 250 ms poll and a 3 s lapse), so attendedness is a property of the application and not of focus, and an unfocused session's `ask` still reaches a person (REQ-MONITOR-253). REQ-TOOLS-069's "the presenter was torn down" means that no window's registration remains, because the last window closed or every registration lapsed.
 
 **OQ-6 — The provider catalogue's declared attributes.** *(ADR-0012, ADR-0028.)* `REQ-PROVIDER-002`
 declares the attribute set closed and `REQ-PROVIDER-003` rejects a build that violates it, yet
@@ -1503,6 +1511,8 @@ refuses them. The chosen pseudo-terminal library documents that its signal argum
 Windows.
 
 **Ruled 2026-09-21 for background pipe sessions, on the owner's fix instruction ([R-044](../product/requests.md#r-044)); the foreground/PTY scope stays open.** A pipe has no graceful interrupt on Windows, so SIGINT and SIGHUP terminate the session's own tree there — the mapping SIGTERM and SIGKILL already used (`packages/agent-tools/src/terminal/background.ts`). `send_signal` therefore delivers every signal in its vocabulary on every platform, as `REQ-TOOLS-110` states, and the stream-control `interrupt` (`REQ-TOOLS-128`) stops a win32 background session instead of answering false.
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the foreground scope is confirmed as built, and recorded here beside R-044's ruling for background pipe sessions. A foreground session runs in a pseudo-terminal on every platform, and is interrupted by writing the interrupt character (`C-c`, ETX) into it, which the Windows console host delivers to the running program as Ctrl+C (`ForegroundSession.interrupt`); the user's kill terminates the process tree behind the running command. No signal argument is ever passed to the pseudo-terminal library, which ignores one on Windows, and `send_signal` addresses background sessions alone. The Windows half is reasoned and not run on a Windows host (IC-3).
 
 **OQ-11 — Resolved by dissolution.** See *Resolved, and closed with the reason* above, and **OQ-44**,
 which the closure opened.
@@ -1669,12 +1679,16 @@ calls the external runtime performs itself.** This decides whether that provider
 agent. If the answer is "they do not", it is a **user-visible narrowing of the permission guarantee** and
 must be escalated rather than absorbed.
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the locally hosted agent runtime is left out of the first release. If it is ever built, every tool call it performs SHALL pass through the product's approval flow (domain 05) and produce REQ-EVENTS-041's tool events and domain 03's transcript rows, as a model provider's calls do; nothing narrower is offered. As built, the `claude-code` catalogue entry stays listed and its sign-in states that this build does not provide its method (`packages/providers/src/signin.ts`), so no external runtime is ever started.
+
 **OQ-18 — What "shipped model-capability metadata" is.** *(ADR-0028.)* *Part K (2026-09-05) ships the module EMPTY with a shape test: every discovered model exposes no reasoning levels until the owner decides the table's source and update policy; the slots grid keeps offering the five levels for a configured model.* `REQ-PROVIDER-137` and
 `REQ-PROVIDER-149` both draw on metadata the product ships that knows, per model, whether a
 reasoning-effort parameter is supported, which levels are disclaimed, and whether images are accepted.
 Nothing states where it comes from, how it is keyed, or how it is updated. Treating it as build data
 alongside the known-limits table is the obvious reading, but it is a **third table of third-party model
 facts** and its update policy should be decided deliberately.
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the model-capability metadata is build data in the repository, keyed by model and refreshed at each release, its first entries the models the owner uses most. As built, Part K's module still ships empty with its shape test, so a discovered model exposes no reasoning levels; filling it is release data owed at the next refresh, and this ruling builds nothing.
 
 **OQ-19 — CLOSED by accepted review, applied 2026-09-07.** REQ-PROVIDER-018/063
 and ADR-0029 now permit adjacent coordination locks. Completed operations remove
@@ -1739,6 +1753,8 @@ wedged. ADR-0002's worker-thread placement makes it terminable; **whether it sho
 what the user is told, is not specified.** The pattern arrives with a checked-out repository, not from the
 user.
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** closed as Part R″ recommended. The bound stands as Part AJ decided it: no limit on a project's pattern, and a pass is terminated on the user's cancel alone, never on the engine's initiative, the user told only "cancelled". The pattern-cost guard Part R″ suggested raising as an item of its own is not raised; the ruling leaves termination to the user.
+
 *Part AJ (2026-09-09), the first execution's decision: no bound on the pattern (REQ-TRACE-154/225 forbid one). The pass runs on a worker thread; a cancel raises a shared flag the pass observes at its next checkpoint, and a worker that has not answered 2 s after the cancel is terminated and respawned for the next job. Termination happens only on the user's cancel, never on the engine's initiative, and the user is told only "cancelled". Whether the engine should ever terminate on its own, and what it says when it does, stays open.*
 
 *Part R″ (2026-09-11): the regex bound stands as Part AJ decided it. Recommended: close, with the
@@ -1757,17 +1773,23 @@ require the product to use native choosers. The record's reading is that `REQ-SH
 surfaces the application itself tints and `REQ-SHELL-164` carves out the host's own dialogs. **Needs
 confirming rather than assuming.**
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the reading is confirmed. REQ-SHELL-160(b) covers the surfaces the application itself tints, and REQ-SHELL-164 carves out the host's own dialogs, which follow the operating system's setting, so a native chooser drawn light under a dark theme is not a failure of REQ-SHELL-160(b).
+
 **OQ-32 — Which process the benchmark's per-process figures describe.** *(ADR-0053.)* `REQ-UIBENCH-050`
 reports memory, thread and handle counts "for the process that produced the record". In a multi-process
 engine there are several. The record proposes the renderer process of the measured window; the sum over
 the iteration's process tree is also defensible and gives different numbers. Since comparability is only
 claimed between runs of one revision, either is conformant, **but the choice must be recorded**.
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the per-process figures describe the renderer process of the measured window, as the record proposed, and this is the recorded choice. ADR-0053's benchmark harness is not built, so nothing measures them yet.
+
 **OQ-33 — The configuration-home variable on non-Linux hosts.** *(ADR-0053, ADR-0042.)*
 `REQ-UIBENCH-039` names it contractually and it is meaningful on one platform only. The record reads it
 as named because it is the one *standard* variable available, with the benchmark-private variable
 carrying the same job elsewhere. If instead the preference store must honour it on all three platforms,
 ADR-0042's resolution order should say so. Either reading is implementable; they are different.
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the configuration-home variable is to be honoured on Linux alone, the benchmark-private variable carrying the same job on the other platforms; ADR-0042's order is otherwise unchanged. **The build differs:** `resolvePreferenceRoot` reads `XDG_CONFIG_HOME` before its platform branch, so the preference store honours it on Windows and macOS too, while `resolveUserDirs` honours it on Linux alone. Recorded in [`the-preference-root-honours-xdg-config-home-on-every-platform.md`](../defects/the-preference-root-honours-xdg-config-home-on-every-platform.md), not built here.
 
 **OQ-34 — Demo mode and process-wide network silence.** *(ADR-0055.)* `REQ-SHELL-005` says that in demo
 mode "the process opens no outbound network connection for its whole lifetime", while `REQ-SHELL-162`
@@ -1814,6 +1836,8 @@ rather than a library default**.
 **OQ-39 — A presenter that is registered and never answers. *Premise stale on one side; the record's
 answer is strengthened; the window is still unanchored. MEASURED 2026-09-02 AND EXPLICITLY NOT CLOSED.***
 *(ADR-0019; not blocking. Constraints T-41, T-31.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the poll and the window are accepted as built — a gap-based liveness poll every 250 ms, a registration lapsing after 3 s without a reply (`PresenterRegistry`, `DEFAULT_POLL_MS`, `DEFAULT_LAPSE_MS`), revoking every registration and routing later asks to the headless policy without a timer on the user's wait. The amendment the owner asked for, REQ-SANDBOX-101 defining attendedness as REQ-TOOLS-053 does, **is already in the requirement's text**: it now reads attendedness as "a test of capability, not of registration", under which "a session whose presenter is present but wedged is unattended", and the sentence this entry quotes ("Only the presence of that channel is tested") is no longer there. Nothing further is minted; `PD-TOOLS-002`'s narrowing of the requirement is unchanged. The window stays sized by the spike's floor and not by a product-load measurement.
 
 ***What spike 14 settled, and what it deliberately did not.*** `spikes/presenter-liveness-and-instance-claim.md`
 **settled the mechanism**: a gap-based poll detected all nine blocked runs at **+386 to +468 ms** on a
@@ -1878,6 +1902,8 @@ a fixed capacity or `REQ-UIBENCH-054`'s element-count invariant has no meaning, 
 specification bounds the viewport: `REQ-SHELL-022` fixes the opening (1440×900) and minimum (1000×680)
 window sizes and **no maximum**. ADR-0045 declares a product constant `H_max` and sizes the pool at
 `ceil(H_max ÷ 30 px)` plus overscan, 30 px being `REQ-CHAT-057`'s minimum row height.
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the maximum supported transcript viewport height is **4,320 CSS pixels**, an 8K display at 100 % scale, and a taller viewport keeps ADR-0045's growth path. That is the value built (`H_MAX` in `packages/ui/src/transcript/constants.ts`).
 
 ***The earlier formulation — size the pool for "the largest viewport the window can reach" — is now known
 to have no referent, which was argued and is now measured.*** On Windows a content height of **20,000 CSS
@@ -2319,6 +2345,8 @@ the notice vocabulary `REQ-NOTIFY-044` and `REQ-NOTIFY-048` to `REQ-NOTIFY-050` 
 **OQ-47 — Two concurrently open workspaces presenting one identifier. *NOT closed by ESC-26, and ADR-0058
 now says so explicitly (2026-09-02).*** *(ADR-0058, ADR-0002; constraints W-19, W-01, W-27.)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** ADR-0058's behaviour is ratified: the identifier is claimed once per instance, and a second concurrently open workspace presenting one opens without a store, reporting it in REQ-SESSION-089's vocabulary and naming both paths; a sequential open is not detected. For the first release the remedy for a copied folder or a corrupt identifier file stays the user's hand edit of that file, and no product action is added.
+
 ***Read this before assuming ESC-26 covered it.*** ESC-26 granted `REQ-SESSION-197` one exception and the
 amendment has landed — but it is **confined to `REQ-SESSION-201`'s restore action** and the requirement
 names, one by one, the paths that do *not* gain it. **A user who copies a workspace folder and wants the
@@ -2383,6 +2411,8 @@ open.**
 
 **OQ-48 — Reclaiming a machine-local store whose workspace no longer exists. *MORE owed after ESC-26, and
 the surface changes purpose (2026-09-02).*** *(ADR-0058; constraints W-17, W-22, W-24.)*
+
+**Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
 
 ***ESC-26 adds a third producer and a third shape of leftover.*** A confirmed identifier establishment
 leaves the **old** identifier's store intact and merely unreferenced — that is one of the five conditions
@@ -2480,6 +2510,8 @@ validated and leaves the provider's health unchecked. What the specification sho
 OpenAI-compatible instance's validation may issue a minimal paid request (the only authenticated call every such
 endpoint has), whether a public catalog is a warning or a refusal, and where the statement lives.
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the built warning stands: after a successful discovery the catalog is asked again without the key, and where that also succeeds the sign-in completes saying the key could not be validated and leaves the provider's health unchecked. No paid validation request is made, and a public catalog is a warning, not a refusal.
+
 **OQ-51 — Does an UNSCOPED queued prompt still exist?** *(No ADR; raised against `REQ-CHAT-039` by the composer's
 first execution, Part AB, 2026-09-07.)* `REQ-CHAT-038` gives a queued prompt "a session ownership field (empty =
 unscoped)" and `REQ-CHAT-039` gives an unscoped prompt a behaviour of its own: it "MUST be consumable by any run
@@ -2517,6 +2549,8 @@ rather than a foreign-key error.
 structured questions' first execution, Part AC, 2026-09-07, and entered here by the manager — Part AC recorded it
 in `children/personas.ts` and ADR-0016's note but not in this register, which is where a question has to be to be
 answered.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** `ask_questions` stays on the orchestrator alone; a delegated child may not ask the user a structured question, and REQ-CHAT-051's single question trailer is unchanged.
 
 The mechanism supports it: the wait registry is per tool port, and a port is one conversation, so a child could
 hold its own pending prompt without disturbing the run's. Two things stop it being a decision the implementation
@@ -2618,6 +2652,8 @@ define. The layout half is not waiting on the answer and can be repaired under e
 one line, adjacent.
 
 **OQ-58 — "the current session" has no referent while a workspace has several.** *(REQ-WORKSPACE-057, REQ-WORKSPACE-058, REQ-WORKSPACE-073 against `PD-WORKSPACE-001`; raised 2026-09-14 while planning portable-skill discovery, ADR-0063.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: skill session state is per session, keyed by session id, with a pending bucket per workspace root that the next session created for it adopts; a second session's creation clears the root's catalog cache and leaves every other live session's forced skills untouched.
 
 Three requirements scope skill state to "the current session": a manually loaded skill "applies to the
 current session only" (057), the catalog cache is "cleared on every session creation" (058), and an
@@ -2752,6 +2788,8 @@ linked worktree with the pointer file, packed-only ref, detached HEAD, non-repos
 names, the mandated refusals), plus the registry, planning-grants and contract pins — all green.
 
 **OQ-62 — May a price come from a provider's discovery payload, and may a provider-reported cost be shown under its own qualifier? PARTLY RULED 2026-09-16 — the second half is answered, the first is not.** *(REQ-PROVIDER-072, REQ-MONITOR-166, REQ-CONFIG-088, with ADR-0031 and OQ-21; raised 2026-09-16 from a run whose cost read `0` throughout.)*
+
+**Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
 
 Every run's `cost` column reads `"0"` and every cost label reads "price not established". That is not a
 defect of the aggregate: `Aggregates` has no mutator for cost because there is nothing to feed one.
@@ -2903,6 +2941,8 @@ third row state — *suppressed* — so that the screen stops disagreeing with t
 
 **OQ-65 — Do the instruction-file switches reach the retrospective, or only what agents are given?** *(`PD-LIBRARY-002` over REQ-WORKSPACE-041, since narrowed by `PD-WORKSPACE-002`; REQ-WORKSPACE-048. Raised 2026-09-22 by repairing [`the-retrospective-reads-instruction-files-the-user-switched-off.md`](../defects/fixed/the-retrospective-reads-instruction-files-the-user-switched-off.md).)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: the instruction-file switches reach the retrospective as well as the agents, which reads exactly the set injection reads, master switch and per-file switches included. The retrospective does not state that a file was present and withheld.
+
 `PD-LIBRARY-002` let the retrospective read the instruction files a workspace holds, and pointed it at one
 rule for finding them: REQ-WORKSPACE-041's discovery, "the two names, the workspace root, nothing else —
 governs that read unchanged". `PD-WORKSPACE-002` has since narrowed that requirement, so the rule the
@@ -2989,6 +3029,8 @@ OQ-131. The defect note is repaired:
 
 **OQ-67 — Where does the `/skills` listing go when there is no transcript to write it into?** *(REQ-CHAT-162 with REQ-WORKSPACE-067 and REQ-WORKSPACE-151; OQ-58. Raised 2026-09-27 by building the listing, `first-release-plan.md` §2.2; raised as OQ-66 and renumbered OQ-67 when it reached `main`, where OQ-66 had been taken by the question `PD-ORCH-004` revision 2 rules.)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** every reading built is confirmed: (a) the Skills tab's table is the listing's reach from Settings and the tab keeps its two header actions; (b) `/skills` with no followed session, or one not loaded in the run host, is refused with `SKILL_LISTING_NO_SESSION`'s words; (c) every discovered skill is listed, hidden and auto-only ones included and while skills are switched off; (d) `/skills` is always listed as available and states its refusal once invoked; (e) a description is cut at 120 code points after whitespace runs collapse; (f) both fixed commands carry the `skill` badge; and (g) the listing row is evidence the improvement analyst may read, hidden skills included.
+
 REQ-CHAT-162 makes the listing "a single system row" in the transcript and requires that "a system row a skill
 command writes MUST be saved with the session". Two routes to the capability have no session transcript to
 write into, and the requirement does not say what either does.
@@ -3073,6 +3115,8 @@ reaches. And if the count is ever to be reached, what discovery rule reaches it.
 
 **OQ-69 — Does a default entry shipped switched off count as one the default configuration "launches"?** *(REQ-STARTUP-059 with REQ-MCP-095 and REQ-STARTUP-064; REQ-MCP-010, REQ-CONFIG-181. Raised 2026-09-27 by building the version guard, first-release plan §4.1; raised as OQ-66 and renumbered OQ-69 when it reached `main` after the `/skills` listing's OQ-67 and the injection proof's OQ-68.)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a default entry shipped `enabled: false` counts as one the default configuration launches, so REQ-STARTUP-059's pin agreement covers `browser`, and `tools/release-guard/src/pins.ts` keeps checking it.
+
 REQ-STARTUP-059 has the setup manifest pin "every package that the built-in default tool-server configuration of that
 same build launches through `npx` or `uvx`". The one such default is `browser`, `npx -y @playwright/mcp@0.0.80
 --headless`, and it ships `enabled: false`. Two requirements read the word "launches" in opposite ways against it.
@@ -3092,6 +3136,8 @@ a runner, or only those enabled by default. If the second, the guard stops check
 and REQ-MCP-095's own cross-check still requires the pin.
 
 **OQ-70 — Are the numbers in a release tag canonical decimals?** *(REQ-STARTUP-027, REQ-STARTUP-029, REQ-STARTUP-031, REQ-STARTUP-109. Raised 2026-09-27 by building the version guard, first-release plan §4.1; raised as OQ-67 and renumbered OQ-70 when it reached `main` after the `/skills` listing's OQ-67 and the injection proof's OQ-68.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a release tag's numbers are canonical decimals with no leading zero, in the three places and in the suffix number, and `v01.2.3` and `v1.2.3rc01` are refused with REQ-STARTUP-027's message (`parseReleaseTag`).
 
 REQ-STARTUP-027 fixes the shape `v<major>.<minor>.<patch>` with an optional PEP 440 suffix, and its counter-examples
 say nothing about leading zeros. PEP 440 permits them and normalises them away, so `v01.2.3` would be the same release
@@ -3131,6 +3177,8 @@ sentence and REQ-STARTUP-159's About observation forbid it, and electron-builder
 changes and nothing else does; if `dev`, REQ-STARTUP-004's second sentence is amended to agree.
 
 **OQ-72 — What is one entry of the notices file: a package, or everything compiled into one?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by building the notices generator, `first-release-plan.md` §4.3; raised as OQ-66 and renumbered OQ-72 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
+
+**Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
 
 REQ-STARTUP-142 wants "one entry for every dependency present in the shipped artifact", each naming "the component,
 its version, its license identifier, and its full license text", and REQ-STARTUP-143 fails the release on a
@@ -3179,6 +3227,8 @@ records (the full archive, not the install-only one) or declaring them by hand i
 
 **OQ-73 — REQ-STARTUP-142 names two things the first release does not carry: Manrope, and Git and ripgrep.** *(REQ-STARTUP-142 with REQ-STARTUP-040, REQ-STARTUP-058, `PD-STARTUP-001`. Raised 2026-09-27 by building the notices generator; raised as OQ-67 and renumbered OQ-73 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
 
+**Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
+
 REQ-STARTUP-142 states the file "SHALL further contain the license texts of the bundled fonts JetBrains Mono,
 Manrope and Space Grotesk", and that its tools section is "generated from the setup manifest of that same build,
 listing for Git and for ripgrep the name, provisioned version, source URL and license identifier the manifest
@@ -3221,6 +3271,8 @@ without it REQ-STARTUP-058's first list is unmet, which is a larger question tha
 
 **OQ-74 — May the reviewed-exceptions table supply a licence identifier a dependency does not declare?** *(REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's first run against the bundled runtime; raised as OQ-68 and renumbered OQ-74 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
 
+**Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
+
 REQ-STARTUP-143 fails the release on "a dependency in the shipped closure declares no license identifier", and
 separately on "a dependency carries no license text and is not covered by the ... maintainer-review table". The
 table's entries each carry "the license identifier claimed for it", but the requirement gives the table only the
@@ -3249,6 +3301,8 @@ normalised. The runtime's distributions declare `BSD License` (`itsdangerous`, `
 supplies one where the component does not, belongs to the same ruling.
 
 **OQ-75 — When does a component carry "its full license text"?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's gate review; raised as OQ-69 and renumbered OQ-75 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
+
+**Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
 
 REQ-STARTUP-142 wants each entry to carry the component's "full license text", and REQ-STARTUP-143 fails a release on
 a dependency that "carries no license text" unless a reviewed exception covers it. Neither says what a licence file
@@ -3382,6 +3436,8 @@ one unanswered approval costs one timeout.
 
 **OQ-79 — Is a `SKILL.md` that cannot be decoded as UTF-8 an "unreadable file"?** *(REQ-WORKSPACE-053, with REQ-WORKSPACE-045 and REQ-WORKSPACE-044. Raised 2026-09-28 by repairing REQ-WORKSPACE-045's decoding half, R-062. Raised as OQ-76 on its branch; renumbered OQ-79 at the merge, because OQ-76 to OQ-78 were already on `main`.)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a `SKILL.md` that cannot be decoded as UTF-8 is an unreadable file, skipped with `unreadable file: <the decoder's error>` and logged, and a hand-loaded one fails with REQ-WORKSPACE-057's message and the decoder's reason.
+
 REQ-WORKSPACE-045 names two ways a context file can be unreadable — "I/O or decoding error" — and REQ-WORKSPACE-044
 measures every limit "as UTF-8 bytes", so for an instruction file the encoding is settled: it is UTF-8, and a file that is
 not is skipped with a warning. REQ-WORKSPACE-053 lists "unreadable file" among the reasons a `SKILL.md` is skipped, but
@@ -3413,6 +3469,8 @@ the walk's skip arm stays for the I/O half, and the decode becomes lenient for `
 
 **OQ-80 — Does REQ-STARTUP-158's "every artifact … SHALL declare … that same version" reach the Windows installer's own version metadata?** *(REQ-STARTUP-158, REQ-STARTUP-018, REQ-STARTUP-027, REQ-STARTUP-031. Raised 2026-09-28 by repairing the prerelease naming defect, R-062; `docs/defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md` Raised as OQ-76 on its branch; renumbered OQ-80 at the merge, because OQ-76 to OQ-79 were already on `main`.)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the normalised spelling is accepted in the installer's Windows metadata and recorded: `DisplayVersion`, `ProductVersion` and `VIProductVersion` carry electron-builder's normalised value (`0.1.0-rc1`, `0.1.0.0`) and are not declarations of the release's version in REQ-STARTUP-158's sense; the artifact's name and its run-time report carry the declared text, which the guard compares. Windows shows a prerelease as `0.1.0-rc1` in "Installed apps".
+
 A prerelease is written without a separator (`0.1.0rc1`, REQ-STARTUP-027), and after the repair every published filename
 carries that text and the running application reports it. electron-builder still normalises the manifest's version through
 loose SemVer when it reads it, and the NSIS installer's own metadata is written from that normalised value: the `VERSION`
@@ -3435,6 +3493,8 @@ prerelease is `0.1.0-rc1` and the record says so.
 **OQ-81 — What is another parent's completed task to a `delegate` call's `inherited_context`?** *(REQ-TOOLS-152 with
 REQ-TOOLS-155, REQ-ORCH-032 and REQ-ORCH-072; REQ-ORCH-046. Raised 2026-09-28 by repairing
 `the-inherited-context-reports-never-reach-the-child` under [R-062](../product/requests.md#r-062). Raised as OQ-76 on its branch; renumbered OQ-81 at the merge, because OQ-76 to OQ-80 were already on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a completed task that is not the caller's own child is refused for ownership, naming its owner; an id no task has is refused as referring to nothing; a task not completed is ignored; an earlier iteration's root, held in memory only, refuses as referring to nothing; and the ignored ids are not reported to the caller.
 
 REQ-TOOLS-152 handles an `inherited_context` id by field: one "that names no task at all refuses the call", one "naming a
 task that failed or has not finished is ignored without refusing", and the field carries "the reports of already-completed
@@ -3472,6 +3532,8 @@ it may not carry for that reason.
 
 **OQ-82 — Does the reserved token's launch of the application's own executable carry the parent's Chromium switches?** *(REQ-MCP-033, REQ-STARTUP-002, REQ-STARTUP-015. Raised 2026-09-28 by repairing `the-code-intelligence-server-dies-when-the-app-runs-as-root.md` (R-062). Raised as OQ-76 on its branch; renumbered OQ-82 at the merge, because OQ-76 to OQ-81 were already on `main`.)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: the launch carries exactly the sandbox switch the parent was started with (`--no-sandbox`) between the token, which stays first, and the `--` separator, and nothing else of the parent's command line; the sentinel drops the switch before the runtime sees it.
+
 REQ-MCP-033 fixes that a `stdio` entry carrying the token launches the application's own executable "with the same
 token `builtin:code-intelligence` as its first argument", and that "a process started with that first argument SHALL
 answer the MCP protocol"; REQ-STARTUP-002 that this child is the one exception to the single entry point; and
@@ -3506,6 +3568,8 @@ product unable to host its own tool server on a host that needs the switch, and 
 
 **OQ-83 — Should the record fix the manifest signature's algorithm and the forms of the key and the signature?** *(REQ-STARTUP-032, REQ-STARTUP-167, REQ-STARTUP-168; ADR-0054 "The updater". Raised 2026-09-28 by building the updater, first-release-plan.md §4.6, under R-062. Raised as OQ-76 on its branch; renumbered OQ-83 at the merge, because OQ-76 to OQ-82 were already on `main`.)*
 
+**Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
+
 Domain 11's Data & Formats says "the form of a key, the form of a signature, and how many keys a build carries are implementation choices and no surface of the product reports them", and REQ-STARTUP-168 says how a key is generated, held or transferred "is an architecture decision and is fixed nowhere in this document". ADR-0054 decided the mechanism (a detached signature, a compiled-in set) and named no algorithm. The build had to choose one, because a verifier cannot verify an unnamed form, and it chose **Ed25519 (RFC 8032) through Node's `crypto`**: `SHA256SUMS.txt.sig` is the raw 64-byte signature over the manifest's exact published bytes, and a carried key is an SPKI PEM block — the forms `openssl genpkey -algorithm ed25519`, `openssl pkey -pubout` and `openssl pkeyutl -sign -rawin` produce, so O-2 and §4.7's pipeline need no tool of ours. The choice is stated in `apps/desktop/src/main/updater/keys.ts` and in ADR-0054, and a test key pair exercises it.
 
 **What the build proceeds under.** That reading. **What a ruling decides.** Whether the record should fix the algorithm and both forms as a decision (an ADR consequence the pipeline's §4.7 and O-2 are bound by) rather than leave them as a reading a later builder of the pipeline could choose differently — a signature the verifier cannot read is refused as not verifying, which strands nothing but installs nothing either. The residue is one line in ADR-0054 either way; the question is whether it is a decision or an implementation note.
@@ -3534,6 +3598,8 @@ REQ-STARTUP-046: "When a run is active, a confirmation SHALL be presented before
 
 **OQ-87 — What does a machine tool's "archive layout" comprise, and what are its expected executables relative to?** *(REQ-STARTUP-058 with REQ-STARTUP-085, REQ-STARTUP-086 and REQ-STARTUP-088. Raised 2026-09-28 by building the setup manifest, first-release plan §4.1. Raised as OQ-76 on its branch; renumbered OQ-87 at the merge, because OQ-76 to OQ-86 were already on `main`.)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built, before the first manifest ships: `layout` is the archive `format` with its `topLevelDirectory` (or `null`), and expected executables are relative to that directory when one is declared and to the archive root otherwise.
+
 REQ-STARTUP-058 has each per-platform archive artifact declare "archive layout, expected executables" and says no more
 about either. REQ-STARTUP-085 fixes the three archive formats extraction accepts and normalises entry names;
 REQ-STARTUP-086 requires every expected executable to exist in staging before the tree is promoted, but names no base
@@ -3558,6 +3624,8 @@ have set up from.
 
 **OQ-88 — May a setup manifest key an archive under REQ-STARTUP-060's raw `<os>-<machine>` fallback?** *(REQ-STARTUP-060 with REQ-STARTUP-058. Raised 2026-09-28 by the independent verification of the setup manifest, first-release plan §4.1. Raised as OQ-77 on its branch; renumbered OQ-88 at the merge, because OQ-76 to OQ-86 were already on `main`.)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a setup manifest keys an archive under the three platform keys alone, and a host whose key is REQ-STARTUP-060's raw fallback finds no archive to select.
+
 REQ-STARTUP-060 names three platform keys, "with a raw `<os>-<machine>` fallback for anything else", and says the keys
 are shared between release artifact naming, updater asset selection and manifest artifact selection. It does not say
 whether the fallback is a key a manifest may *write* an archive under, or only one a host may *compute* and then find
@@ -3575,6 +3643,8 @@ first reading widens the schema's key to a pattern and changes nothing in the sh
 consumer to state what a host with no matching archive is told.
 
 **OQ-89 — Under a burst, is REQ-CHAT-055's append comparison read on the update as it arrived, or on an update that arrived alone?** *(REQ-CHAT-055, REQ-CHAT-154, REQ-CHAT-157; ADR-0045's measurement point. Raised 2026-09-28 by the measurement round R-048 authorized, taken under [R-062](../product/requests.md#r-062); the note is `docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`. Raised as OQ-76 on its branch; renumbered OQ-89 at the merge, because OQ-76 to OQ-88 were already on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the first reading is taken, as the entry recommends: REQ-CHAT-055's comparison is read on every update as it arrived, the queue in front of it included, with the third sentence read at one frame of slack as `transcript-proof` reads it. A conformance harness need not construct the quiet-surface case, and work proportional to the visible rows is within the requirement.
 
 REQ-CHAT-055 fixes "cost" as the time from an update's application to the frame that shows it, and compares that
 figure for an appended row at a thousand rows with the same figure on an empty transcript. The round found the proof's
@@ -3655,6 +3725,8 @@ ADR-0046 step 4, the lookback its bounded form preserves. Raised 2026-09-28 by r
 `docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md` under
 [R-062](../product/requests.md#r-062); raised as OQ-90 on its branch and renumbered at the merge, OQ-90 having been taken on `main`.)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: "per agent" scopes the whole rule, so an agent's unstamped repeat is compared with that agent's own previous thinking row, whatever other agents reasoned in between.
+
 REQ-CHAT-048 reads: "per agent, an unstamped (no duration) thinking row whose content equals the immediately previous
 thinking row's content MUST project to zero rows". When two agents' reasoning interleaves — agent A's burst, then
 agent B's, then an unstamped repeat of A's — the sentence has two readings:
@@ -3696,6 +3768,8 @@ manifest that pins no package. REQ-STARTUP-142's order, machine tools then the r
 somewhere else in the file.
 
 **OQ-93 — Is a text field spell-checked, and if so, from what?** *(REQ-STARTUP-160, REQ-SHELL-005, REQ-STARTUP-159. Raised 2026-09-28 by the repair of `docs/defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, under [R-062](../product/requests.md#r-062). Numbered OQ-91 on its branch because OQ-90 was already taken on a branch in flight beside it; renumbered OQ-93 at the merge, OQ-91 and OQ-92 having been taken on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** no text field is spell-checked in the first release: the dictionary list is emptied and the spellchecker turned off for every session on every platform, as built (`apps/desktop/src/main/runtime-requests.ts`).
 
 The specification says nothing about spell-checking the composer or any other text field. The runtime's built-in
 spellchecker, left at its default, fetches a Hunspell dictionary for the OS locale from `redirector.gvt1.com` whenever a
@@ -5263,6 +5337,8 @@ its own rather than a stop's `paused` and "came to rest".
 
 **OQ-109 — Does a `code_intelligence` entry configured `enabled: false` still make `code-intelligence-setup` applicable?** *(REQ-WORKSPACE-090, REQ-MCP-037, REQ-CONFIG-465, REQ-MCP-040, REQ-WORKSPACE-083. Raised 2026-09-28 by the repair of [`plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md`](../defects/fixed/plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md), under [R-062](../product/requests.md#r-062). Raised as OQ-94 on its branch and renumbered at the merge, OQ-94 to OQ-108 having been taken on `main`.)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: `enabled: false` is not part of what "launchable" means for this task, so a disabled `code_intelligence` entry still makes `code-intelligence-setup` applicable, by availability alone.
+
 REQ-WORKSPACE-090 makes the initialization task applicable exactly when the resolved configuration holds a server
 named `code_intelligence` that is launchable, "judged by the one availability rule REQ-MCP-037 fixes", and it forbids
 this domain a second rule. REQ-MCP-037's rule looks at the transport and the command, and never at `enabled`. So a
@@ -5702,7 +5778,9 @@ other event keeps the 2,000; and a task that alone fills the total keeps its hea
 event marked omitted. **Built 2026-10-06 (fin20):** `reportTranscript` (`packages/engine/src/children/report.ts`), two cases
 in `children/report.test.ts`, red on the code before.
 
-**OQ-120 — How large may the facts given to the report summariser be, and which are kept when they are larger?** *(OQ-111's ruling, which gives the pass the report's deterministic facts and no bound on them; REQ-ORCH-110, "The report-producing pass MUST be bounded"; REQ-ORCH-109. Raised 2026-09-29 by the repair of D1 under [R-067](../product/requests.md#r-067), from the branch's verification; raised as OQ-119 on its branch and renumbered at the merge. Open.)*
+**OQ-120 — How large may the facts given to the report summariser be, and which are kept when they are larger?** *(OQ-111's ruling, which gives the pass the report's deterministic facts and no bound on them; REQ-ORCH-110, "The report-producing pass MUST be bounded"; REQ-ORCH-109. Raised 2026-09-29 by the repair of D1 under [R-067](../product/requests.md#r-067), from the branch's verification; raised as OQ-119 on its branch and renumbered at the merge. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: the facts are bounded by REQ-ORCH-110's two figures as their own — each command to 2,000 characters, the block to 12,000 — and a block cut keeps its head, the edited files and the earliest commands.
 
 The ruling adds the edited files and the commands with their outcomes to what the pass reads, and says nothing of their
 size. A child that ran many long commands would make the pass unbounded, which REQ-ORCH-110 forbids.
@@ -5720,7 +5798,9 @@ timeout (default 120 s; 0 disables) for still-running background children withou
 clause 3, which keeps the explicit cancel "as today", and OQ-96's "The explicit cancel and a child summarising". Raised
 2026-09-29 by the repair round of
 [`a-root-call-that-ignores-the-stop-holds-the-run-open.md`](../defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md)
-under [R-067](../product/requests.md#r-067). Numbered OQ-119 on its branch; renumbered OQ-121 at the merge, origin/main's OQ-119 and OQ-120 having taken the numbers first. Open.)*
+under [R-067](../product/requests.md#r-067). Numbered OQ-119 on its branch; renumbered OQ-121 at the merge, origin/main's OQ-119 and OQ-120 having taken the numbers first. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built, since it follows REQ-ORCH-080: the explicit cancel's drain is REQ-ORCH-080's own bound and runs after the 30 s grace, whether or not the root returned, so it can take 150 s at the defaults; the 30 s still bounds how long any one execution is awaited, and a stop or a quit drains nothing.
 
 A stop that brings the run to rest leaves the background children `paused` and drains nothing (`PD-ORCH-005`). The
 explicit cancel cancels them, so REQ-ORCH-080's drain applies to it: the run waits up to the drain timeout for them,
@@ -5744,6 +5824,8 @@ whether REQ-ORCH-080's drain should still apply to the explicit cancel at all, n
 the background children paused rather than cancelled.
 
 **OQ-122 — May the window open the setup dialog before the open's resolution, and what does a skip answered in that interval record?** *(REQ-WORKSPACE-083, REQ-WORKSPACE-084, REQ-WORKSPACE-086, REQ-WORKSPACE-088, REQ-WORKSPACE-102, REQ-WORKSPACE-105, REQ-WORKSPACE-111, REQ-WORKSPACE-141; ADR-0064, "On Linux as root — 2026-09-28". Raised 2026-09-29 by repairing `../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md` under [R-062](../product/requests.md#r-062). Raised as OQ-109 on its branch, then renumbered OQ-118 on the branch, OQ-109 to OQ-117 having been taken on `main` meanwhile, and renumbered OQ-122 at the merge, OQ-118 to OQ-121 having been taken on `main` by then.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: the window may open the setup dialog before the open's resolution, and a skip answered in that interval performs the open's one automatic resolution first, recording every given id except one the live run is attempting or one already completed.
 
 The window reads the initialization state as it mounts. REQ-WORKSPACE-105 makes the prompt due "exactly when at least
 one consent-requiring task is pending and no run is in progress", and the mount read's values say so, so the window
@@ -5783,6 +5865,8 @@ answer (REQ-WORKSPACE-102). **A ruling would decide** whether the dialog may pre
 not, the first reading replaces the second, and the skip path then never meets an unresolved open.
 
 **OQ-123 — Which run does REQ-WORKSPACE-105's "no run is in progress" mean: any run, or one that answers the setup prompt?** *(REQ-WORKSPACE-083, REQ-WORKSPACE-103, REQ-WORKSPACE-105, REQ-WORKSPACE-106, REQ-WORKSPACE-107, REQ-WORKSPACE-110, REQ-WORKSPACE-112; ADR-0064, "On Linux as root — 2026-09-28". Raised 2026-09-29 by repairing `../defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md` under [R-062](../product/requests.md#r-062). Raised as OQ-110 on its branch, then renumbered OQ-119 on the branch, OQ-109 to OQ-117 having been taken on `main` meanwhile — `main`'s OQ-110 already stood when this one was raised under that number — and renumbered OQ-123 at the merge, OQ-118 to OQ-121 having been taken on `main` by then.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: REQ-WORKSPACE-105's "no run is in progress" means a run that answers the setup prompt — one the user started — so a background run neither withdraws the prompt nor is drawn in its dialog until Initialize is pressed.
 
 REQ-WORKSPACE-105 makes the setup prompt due "exactly when at least one consent-requiring task is pending and no run is
 in progress", and its nine values carry one in-progress flag. On a fresh workspace with a consent task, the open's
@@ -5850,8 +5934,10 @@ REQ-MONITOR-111's "a surface that has a spawn timestamp and shows a fallback …
 
 **OQ-125 — What does an agent surface's artifact link open, and which artifacts does it list as an agent's?** *(REQ-MONITOR-052 and REQ-MONITOR-069, "artifact links", which name no target; REQ-MONITOR-044, "artifacts (name, producer, ready flag), produced and received artifact ids"; REQ-MONITOR-068's persona-wide card; REQ-LIBRARY-102, which lets "actions" deep-link to the Library's artifacts tab; REQ-LIBRARY-131's modeless, per-window artifact inspector; REQ-LIBRARY-136, which hides superseded artifacts from the Library's table. Raised 2026-09-29 by the repair of
 [`the-inspector-says-no-artifact-store-and-no-tools.md`](../defects/fixed/the-inspector-says-no-artifact-store-and-no-tools.md)
-(live-run finding K1) under [R-067](../product/requests.md#r-067). Open. Raised as OQ-123 and renumbered OQ-125 at
+(live-run finding K1) under [R-067](../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06. Raised as OQ-123 and renumbered OQ-125 at
 the merge, main having taken OQ-122 and OQ-123.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: in the main window a link opens the Library on its Artifacts tab with the artifact inspector on that artifact, and in a persona window it opens the inspector in place; a superseded artifact is listed nowhere.
 
 The specification asks for artifact links on three agent surfaces and says what an agent carries about its artifacts,
 but not what following a link does, nor whether a superseded artifact is still one of an agent's.
@@ -5884,8 +5970,10 @@ trigger counts "tool calls" and "messages" against their thresholds; REQ-ORCH-10
 REQ-ORCH-104, whose raw-count fallback declares a loop from "repeated identical assistant messages". Raised 2026-09-29 by
 the repair of live-run finding D3,
 [`tool-only-steps-read-as-three-identical-messages.md`](../defects/fixed/tool-only-steps-read-as-three-identical-messages.md),
-under [R-067](../product/requests.md#r-067). Open. Raised as OQ-124 and renumbered
+under [R-067](../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06. Raised as OQ-124 and renumbered
 OQ-126 at the merge, main having taken OQ-124 and OQ-125.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: every model step counts toward REQ-ORCH-101's message count, a tool-only step included, while REQ-ORCH-104's evidence compares the last three messages that carry text.
 
 The turn observes every model step as a message carrying its text, and a step that only called tools carries none
 (`runTurn`'s `observe({ kind: 'message', text: report.text })`). The repair of D3 reads such a step as **no assistant
@@ -6277,7 +6365,9 @@ not be held to. A ruling that REQ-TOOLS-064 governs the gap would restore the de
 REQ-TOOLS-110, REQ-TOOLS-112, REQ-TOOLS-128, REQ-TOOLS-179; OQ-10 as ruled in [R-044](../product/requests.md#r-044).
 Raised 2026-09-29 by the repair of live-run finding L4 under [R-067](../product/requests.md#r-067),
 [`a-background-session-ended-by-a-signal-reads-failed.md`](../defects/fixed/a-background-session-ended-by-a-signal-reads-failed.md).
-Open; numbered OQ-132 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
+~~Open;~~ ruled 2026-10-06; numbered OQ-132 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a death by a signal the product delivered is `killed`, exit −1, at `warning`; a death by a signal it never sent is `failed` with `128 + n`; an exit code always wins; and Windows is unchanged under OQ-10.
 
 REQ-TOOLS-109's vocabulary is `completed` (exit 0), `failed` (nonzero), `killed` (the explicit kill, −1) and `timeout`
 (124). REQ-TOOLS-179 keeps −1 for `killed` alone on a background session. A process that dies of a signal has no exit
@@ -6306,7 +6396,9 @@ the second reading. A ruling that every one is `failed` would need a code other 
 **OQ-134 — Which shell state does a hard-timeout reset restore when a command completed that the product never saw
 complete?** *(`PD-TOOLS-001`, which narrows REQ-TOOLS-099; REQ-TOOLS-097, REQ-TOOLS-098. Raised 2026-09-29 by the
 repair of [`a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md`](../defects/fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md)
-under [R-067](../product/requests.md#r-067). Open; numbered OQ-133 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
+under [R-067](../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-133 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a hard-timeout reset restores the snapshot of the last command the product saw complete, so what a soft-paused command that finished unseen changed is not restored.
 
 `PD-TOOLS-001` says the product "SHALL snapshot the shell's working directory and exported variables before the
 respawn". The respawn follows a wedged command, and a wedged shell cannot be asked for its state. So the build takes
@@ -6507,7 +6599,9 @@ is left unread.
 does not name a poll; REQ-TOOLS-098, whose empty-capture observation states "the elapsed no-output window". Raised
 2026-09-29 by the repair of live-run finding L2 under [R-067](../product/requests.md#r-067),
 [`an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md`](../defects/fixed/an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md).
-Open.)*
+~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a poll returns at once, and an empty one states the time since the previous observation, the time since the command last wrote, and that a poll does not wait for output.
 
 No requirement says how long a poll waits. The product's poll returns at once with what has arrived since the
 previous observation. Before this entry its empty answer repeated the soft pause's own sentence, "No output for 30
@@ -6623,6 +6717,8 @@ backend parity, REQ-SANDBOX-127's first effect, and REQ-TOOLS-123. Raised 2026-0
 [`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../defects/fixed/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md)
 under [R-067](../product/requests.md#r-067). Open.)*
 
+**Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
+
 IC-8's first Linux execution measured that the rendering case (c) names cannot meet the closing paragraph of its own
 requirement. bubblewrap creates a mountpoint before it mounts. Under a writable root bound in from the host, that
 mountpoint is created on the host. No mount arrangement avoids this: a name that does not exist can be hidden only by a
@@ -6665,7 +6761,9 @@ already under way … reach its own conclusion", and which says of closing only 
 every attempted task given exactly one recorded outcome; PD-SHELL-001, under which "closing the added window changes
 nothing else". Raised 2026-09-30 by the verification of the repair of
 [`a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`](../defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md)
-under [R-067](../product/requests.md#r-067). Open.)*
+under [R-067](../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: REQ-WORKSPACE-013's rule applies to every run of a workspace no window holds any more, in all three cases, a user-started run included; the run is cancelled on REQ-WORKSPACE-109's terms and nothing is recorded for it.
 
 REQ-WORKSPACE-013 names one case: a switch's outgoing window, with a background run under way. The repair made main
 tell the initialization coordinator whenever no live main window holds a workspace any more (`MainWindows`'
@@ -6705,7 +6803,9 @@ compares "the run's recorded stop reason" and says a stop reason outside the lis
 under which a failed recording step stops every further authoritative write for the run. Raised 2026-09-30 by the
 verifier of the repair of
 [`an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md`](../defects/fixed/an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md)
-under [R-067](../product/requests.md#r-067). Open.)*
+under [R-067](../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: REQ-ORCH-137's reading governs, so a run that ended on a recording failure yields no improvement job and the capture reads nothing.
 
 The two readings agree for every run whose record holds its own ending. They part only under REQ-EVENTS-088. The engine
 then reports the run as `agent_session_aborted`, with completion unconfirmed. The record cannot be written any further,
@@ -6728,8 +6828,10 @@ record governs even then, so that the capture must read the store before it may 
 **OQ-143 — Which status and exit code does a background session read when its process could not be started?**
 *(REQ-TOOLS-109, REQ-TOOLS-179, REQ-TOOLS-100, REQ-TOOLS-103, REQ-TOOLS-112. Raised 2026-09-30 by the repair of
 [`a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md`](../defects/fixed/a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md)
-under [R-067](../product/requests.md#r-067). Open; numbered OQ-142 on its branch, renumbered OQ-143 at the merge, OQ-142
+under [R-067](../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-142 on its branch, renumbered OQ-143 at the merge, OQ-142
 having been taken on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a background session whose process could not be started reads `failed` with a null exit code, every poll or termination of it an `execution_error`, and an `error` raised once the child has a pid is not its end.
 
 Node reports some spawn failures synchronously and others — ENOENT and EACCES among them — only after `spawn` has
 returned, through the child's `error` event and never its `exit`. For the first kind the product already answers the
@@ -6766,8 +6868,10 @@ the start, by waiting for Node's `spawn` or `error` before `start` returns.
 session?** *(REQ-TOOLS-097, REQ-TOOLS-098, REQ-TOOLS-103, REQ-TOOLS-104, REQ-TOOLS-179; `PD-TOOLS-001`. Raised
 2026-09-30 by the repair of
 [`a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`](../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md)
-under [R-067](../product/requests.md#r-067), acceptance finding A9. Open; numbered OQ-143 on its branch, renumbered
+under [R-067](../product/requests.md#r-067), acceptance finding A9. ~~Open;~~ ruled 2026-10-06; numbered OQ-143 on its branch, renumbered
 OQ-144 at the merge, OQ-142 having been taken on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a command that replaces or ends the session's shell ends the call at once, the session keeps or respawns the shell it started with the snapshot re-applied, and a background job the exiting command left behind keeps running.
 
 A foreground command that replaces the shell — `exec bash`, `exec sh`, any `exec <program>` — keeps the shell's pid
 and never returns to the rest of the wrapped line, so the end frame never prints. Before this entry the call waited out
@@ -6865,8 +6969,10 @@ restricts named entities; an entity absent from the map is unrestricted"; REQ-CO
 of a role's `tool_restrictions` mapping" as a role name; REQ-CONFIG-046; `PD-TOOLS-006` revision 3's "after
 REQ-TOOLS-006's controls". Raised 2026-09-29 under [R-067](../product/requests.md#r-067) by the repair of
 [`a-personas-tool-restrictions-never-narrow-its-grant.md`](../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md),
-acceptance finding A4. Open; numbered OQ-141 on its branch, renumbered OQ-145 at the merge, OQ-141
+acceptance finding A4. ~~Open;~~ ruled 2026-10-06; numbered OQ-141 on its branch, renumbered OQ-145 at the merge, OQ-141
 to OQ-144 having been taken on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a persona's `tool_restrictions` narrows its own grant by the entry naming its persona, and the grant of each role it delegates to by the entry naming that role; a grandparent's map is not read; aliases and `delegate`'s companions travel together; and a tool-server tool the list does not name is withheld.
 
 The map sits on a persona, and REQ-CONFIG-062 makes its keys role names. REQ-TOOLS-006 says it narrows "a persona's
 declared tool set". The requirements do not say whose set an entry narrows when it names a role other than the persona
@@ -6897,8 +7003,10 @@ REQ-TOOLS-098, under which a soft-paused command keeps running and the next call
 under which the live stream and the observation carry what the command wrote. Raised 2026-09-29 by the repair of
 acceptance finding A10,
 [`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md`](../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md),
-under [R-067](../product/requests.md#r-067). Open; numbered OQ-143 on its branch, renumbered OQ-146 at the merge,
+under [R-067](../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-143 on its branch, renumbered OQ-146 at the merge,
 OQ-143 to OQ-145 having been taken on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: on the POSIX backend a partial line left without a line end is erased with `^U` before the product submits its next line, never run, and the PowerShell backend is unchanged.
 
 An agent's `is_input` text or a control surface's send-keys with no Enter after it waits in the shell's input as a
 partial line when nothing reads it, as under a soft-paused `sleep`. A person at a terminal would see it on the next
@@ -6928,8 +7036,10 @@ verification).
 names −1 for a soft pause in the foreground and for a kill in the background, and otherwise the command's real outcome.
 Raised 2026-09-30 by the verification of acceptance finding A10,
 [`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md`](../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md),
-under [R-067](../product/requests.md#r-067). Open; numbered OQ-144 on its branch, renumbered OQ-147 at the merge,
+under [R-067](../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-144 on its branch, renumbered OQ-147 at the merge,
 OQ-143 to OQ-145 having been taken on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a soft-paused command that ended without printing its own status is handed over with exit −1, its reason as an `execution_error`, and its output up to the next call's start marker.
 
 An interactive `sh` that takes the interrupt abandons the rest of the wrapper's line, so the paused call's end frame,
 which carries `$?`, never prints. The shell reaches the next call's line only once the paused one is done, so that
@@ -6973,8 +7083,10 @@ whether the product may write that line is OQ-168, raised with it built.)*
 ahead of item (1) of the payload; REQ-ORCH-088's fallback retry; PD-ORCH-005 clause 4. Raised 2026-09-30 by the repair of
 acceptance finding A25,
 [`a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`](../defects/fixed/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md),
-under [R-067](../product/requests.md#r-067). Open; numbered OQ-148 when it was raised, renumbered OQ-151 at merge
+under [R-067](../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-148 when it was raised, renumbered OQ-151 at merge
 once origin/main's OQ-148 to OQ-150 had landed.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: REQ-ORCH-047's block is given once per conversation a payload starts, so a retry, in the first run or a later one, renders it again from its dependencies as they read at the retry.
 
 REQ-ORCH-088's retry starts the child's conversation again from its payload, so whatever the first attempt was given is
 gone from what the retry's model reads. Within the run that started the child, the retry has always reused the block the
@@ -6999,7 +7111,9 @@ state a child reaches, and whether or not its execution raised, that child MUST 
 closed, a `child_conversation_closed` timeline event is emitted for it, …"; REQ-ORCH-048, whose cascade settles a child
 `blocked` before it starts; REQ-ORCH-052's finalize sweep. Raised 2026-09-30 by the repair of acceptance finding A16,
 [`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../defects/fixed/a-child-that-never-started-gets-no-teardown-timeline-entries.md),
-under [R-067](../product/requests.md#r-067). Open.)*
+under [R-067](../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: every terminal child is torn down alike, a child that never started included, whose `child_conversation_closed` records that it will have none.
 
 A child the cascade blocks, or one the finalize sweep cancels while it waits on its dependencies, in `queued` or on its
 model slot, reaches a terminal state without its execution ever starting, so it never had a conversation. The build
@@ -7030,7 +7144,9 @@ REQ-MONITOR-117, "each agent is evaluated for a stall"; REQ-MONITOR-118 to REQ-M
 "opportunistically from stall evaluations … while a conversation is running"; REQ-MONITOR-047; ADR-0010 reading (d);
 OQ-127. Raised 2026-09-30 by the repair of acceptance finding A6,
 [`a-stalled-child-is-never-shown-stalled.md`](../defects/fixed/a-stalled-child-is-never-shown-stalled.md), under
-[R-067](../product/requests.md#r-067). Open.)*
+[R-067](../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: the stall badge (`stalled Ns`, `tag-wait`) on the agent trees, the Mission table, the persona window and the inspector; the recovery notified by the republished record alone; the root watched against the one stall timeout; and an evaluation waking an agent that waits between its turns on its own children to inject a pending steer. Whether the recovery also gets a timeline word is the timeline vocabulary's ruling (OQ-127, OQ-157), not this one's.
 
 The requirements name a callback, a badge, a host countdown and a recovery that is "notified", and say nothing of what
 this product's surfaces draw (REQ-SHELL-023's surfaces have no stall clause; REQ-TUI-139's activity text belongs to the
@@ -8014,7 +8130,9 @@ even where they name the same provider model, since the cap is a property of the
 REQ-CONFIG-031, under which a workspace's configuration may define its own `models:` entries; ADR-0013. Raised 2026-09-30
 under [R-067](../product/requests.md#r-067) by the verification of the repair of
 [`the-per-model-cap-counts-only-one-iterations-children.md`](../defects/fixed/the-per-model-cap-counts-only-one-iterations-children.md),
-acceptance finding A13. Open.)*
+acceptance finding A13. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: the per-model cap counts by the key string across every session of the process, each session judging the sum against its own configuration's cap.
 
 The run host serves sessions of several workspaces in one `Sessions`, each run configured from its own workspace's
 loaded configuration. Two workspaces can define different entries under one key — `fast` a local endpoint with
@@ -9214,6 +9332,8 @@ the repair of
 [`the-retry-action-resubmits-a-prompt-without-its-images.md`](../defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md)
 (fin8). Open.)*
 
+**Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
+
 The retry resubmits "the current composer draft" where there is one. The composer holds images beside its text
 (REQ-CHAT-170..172), but the draft the specification stores and publishes (REQ-NOTIFY-066, REQ-CHAT-014) is text, and
 nothing says whether images held in the composer at the moment a notice's retry is activated belong to "the draft" the
@@ -9610,6 +9730,8 @@ already present, and SHALL never overwrite an existing project"; OQ-161's readin
 repository's own exclude file. Raised 2026-10-03 by the repair of
 [`fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`](../defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md)
 (fin12). Open.)*
+
+**Deferred 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)).**
 
 Bound to the tree's root as REQ-MCP-034 requires, the runtime works on a project of its own. Measured on 2026-10-03 against the
 pinned runtime (serena-agent 1.7.0, launched as the product launches it, in a scratch repository whose main tree had been set

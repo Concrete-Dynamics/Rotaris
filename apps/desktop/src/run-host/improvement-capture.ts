@@ -10,7 +10,8 @@ export interface CaptureAfterRunDeps {
    * The stop reason of the run's RESULT, as `run.result` reports it — REQ-ORCH-137's "the stop reason", in the tokens its
    * skip list is written in. It is not the record's: REQ-LIBRARY-032 compares the RECORDED stop reason, which
    * `captureImprovementJob` reads. The two agree except where recording failed (REQ-EVENTS-088), when the engine
-   * reports `agent_session_aborted` and the record keeps what it last held. That case is OQ-142.
+   * reports `agent_session_aborted` and the record keeps what it last held. That case was OQ-142, ruled 2026-10-06 (R-071)
+   * as built: REQ-ORCH-137's reading governs, so such a run yields no improvement job.
    */
   readonly stopReason: string;
   readonly input: CaptureAfterRunInput;

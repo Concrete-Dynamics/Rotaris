@@ -393,7 +393,7 @@ results.exactlyOnce = { winnerRowsChanged: winner, loserWhileInFlight: lockedOut
 results.notEstablished = {
   'REQ-CHAT-007 second limb': 'implemented and unreachable: nothing in this build raises a project-setup prompt that gates execution (the code-intelligence setup of REQ-MCP-099/112 is a settings action and gates nothing).',
   'REQ-CHAT-155 third limb': 'transcript clearing’s confirmation dialog (REQ-CHAT-083) is out of the plan with section 14; 155 is met in two limbs of three.',
-  'REQ-CHAT-039 unscoped half': 'blocked on OQ-51 — `queued_prompts.session_id` is NOT NULL and REQ-CHAT-041’s 2026-09-07 amendment reads "one session-scoped queue"; the scoped half is built and measured above.',
+  'REQ-CHAT-039 unscoped half': 'withdrawn by PD-CHAT-007 (OQ-51 as ruled, R-071, 2026-10-06): every queued prompt belongs to a session, as `queued_prompts.session_id` is NOT NULL; the scoped half is built and measured above.',
   'REQ-CHAT-158 model-call boundary': 'no field publishes one; the indicator counts from the newest row the run produced, which restarts per call but is not the instant the call was issued.',
 };
 

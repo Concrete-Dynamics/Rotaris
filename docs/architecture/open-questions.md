@@ -2517,7 +2517,7 @@ first execution, Part AB, 2026-09-07.)* `REQ-CHAT-038` gives a queued prompt "a 
 unscoped)" and `REQ-CHAT-039` gives an unscoped prompt a behaviour of its own: it "MUST be consumable by any run
 but invisible to session-scoped listings". **Two things in the record now disagree with that sentence.**
 
-**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the unscoped queued prompt is withdrawn: every queued prompt belongs to a session, as the store has required since v6. [`PD-CHAT-007`](../product/directives.md#pd-chat-007) narrows REQ-CHAT-038 and REQ-CHAT-039. The code's comments that call this question open (`packages/engine/src/sessions.ts`, `packages/store/src/schema.ts`) are not changed by this ruling.
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the unscoped queued prompt is withdrawn: every queued prompt belongs to a session, as the store has required since v6. [`PD-CHAT-007`](../product/directives.md#pd-chat-007) narrows REQ-CHAT-038 and REQ-CHAT-039. The code's comments that call this question open (`packages/engine/src/sessions.ts`, `packages/store/src/schema.ts`) are not changed by this ruling. *(2026-10-06, fin22: `sessions.ts`'s are now worded to `PD-CHAT-007`; `schema.ts`'s sits in the shipped v13 migration and keeps its words.)*
 
 1. **The store cannot represent one, and has not been able to since v6.** `queued_prompts.session_id` is
    `TEXT NOT NULL REFERENCES sessions(session_id)` (`store/src/schema.ts`, the v6 migration), so every queued

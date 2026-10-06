@@ -19,7 +19,7 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *                       that child's compression count, 1, in its Compressions column (REQ-MONITOR-281/086).
  *   6. root-and-child — the root and its child each cross the threshold and compress once: the inspector's ring caption
  *                       and the run-level agent's persona window draw the run-wide count, 2, the root's own included
- *                       (REQ-MONITOR-086/281, OQ-159's recorded reading).
+ *                       (REQ-MONITOR-086/281, OQ-159 as ruled, R-071).
  *   7. after-a-move   — the root starts on alpha (capacity 10,000), meets insufficient quota and moves to its same-tier
  *                       candidate beta (capacity 1,000); a 900-token step on beta compresses at beta's 600-token
  *                       trigger (REQ-MONITOR-078/079/080; since fin10 — before, the trigger stayed alpha's 6,000 and no

@@ -3782,7 +3782,9 @@ and ownership preserved across edit and trigger.
 
 **As built.** `queued_prompts.session_id` is `NOT NULL` since store v6, so no unscoped prompt can be stored, and
 `resolveQueueOwnership` (`packages/engine/src/sessions.ts`) refuses an `unscoped` verdict; every route supplies the
-addressed session. Its comments still cite OQ-51 as open.
+addressed session. Its comments cited OQ-51 as open until 2026-10-06 (fin22), when they were worded to this directive; the
+store migration's comment that names it (`packages/store/src/schema.ts`, v13) keeps its words, a shipped migration being
+never edited.
 
 **Why, and what it costs.** OQ-51: REQ-CHAT-041's amendment of 2026-09-07 assigned one session-scoped queue to the
 instance, and the store has never been able to hold a prompt with no session, while REQ-CHAT-039 still described one. The

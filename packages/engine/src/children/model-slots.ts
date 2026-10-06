@@ -9,7 +9,8 @@
  * running and summarizing, with REQ-ORCH-050's `starting`); it is woken when a slot frees in another session, so a child
  * it holds `waiting_on_model_slot` is promoted by its own scheduler's pass (REQ-MONITOR-020, REQ-ORCH-050) rather than
  * waiting for something in its own run to change. Held children stay in their own session's queue; the order across
- * sessions is OQ-148's. The key is the string alone, whichever workspace's configuration defines it (OQ-150).
+ * sessions is `PD-ORCH-005` clause 39's (OQ-148 as ruled, R-071). The key is the string alone, whichever workspace's
+ * configuration defines it (OQ-150).
  *
  * Process state, held in memory: a slot is a live child, and no child outlives the process that runs it (REQ-ORCH-053).
  */

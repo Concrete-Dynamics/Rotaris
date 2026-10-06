@@ -95,8 +95,9 @@ export function runLevelGrant(resolved: readonly string[], declared: readonly st
  * before that it drew "No tools resolved." beside a run that had made fifteen calls. Its tool-call count is the session's
  * `entryToolCalls` (REQ-MONITOR-044/052, acceptance A20, R-067): the roots' share of the persisted total plus the live root's
  * calls not counted yet — else, for a record with no projection, the total less the children's. The agent's own count, not
- * REQ-MONITOR-101's aggregate run count for the synthetic root: which of the two it shows is OQ-159's. The total alone read
- * `0 tool calls` while the root's turn ran, since a root's calls join it only when its turn returns.
+ * REQ-MONITOR-101's aggregate run count for the synthetic root: OQ-159 as ruled (R-071, `PD-MONITOR-003`). The total alone
+ * read `0 tool calls` while the root's turn ran, since a root's calls then joined it only when its turn returned (each
+ * joins as it completes since `PD-ORCH-008`).
  */
 export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }, recovery: boolean): AgentRecord | null {
   if (!session || session.runStartedAt === null) return null;
@@ -112,7 +113,7 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     id: RUN_AGENT_ID, name: entry.persona, givenName: entry.persona, persona: entry.persona, state: resting ? 'paused' : busy ? 'running' : presentationState === 'done' ? 'succeeded' : presentationState === 'failed' ? 'failed' : 'cancelled',
     presentationState, parentId: '', dependencies: [], activity: session.summary?.message ?? '', model: runLevelModel(session, entry.model, busy), depth: 0, background: false, category: '',
     spawnedAt: session.runStartedAt, completedAt: busy || resting ? null : session.updatedAt, toolCalls: session.entryToolCalls ?? Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
-    // REQ-MONITOR-086: the run-wide count, which the synthetic root shows (OQ-159's recorded reading): the session's
+    // REQ-MONITOR-086: the run-wide count, which the synthetic root shows (OQ-159 as ruled, R-071): the session's
     // maintained aggregate, the roots' own compressions included. Until 2026-10-02 it summed `session.agents`, which holds
     // the children alone, so a root's compressions were counted nowhere
     // (docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md).

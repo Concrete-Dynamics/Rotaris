@@ -53,8 +53,8 @@ const INTENT_LINE = /\] info +run host: intent: |run host info: intent: /;
 
 /**
  * What the intent line of one scenario-3b launch says, and the problem with it, if any: none written, the classifier's
- * fallback (REQ-ORCH-007; a timeout on REQ-ORCH-008's bound is named as OQ-114's question), or a category outside the
- * prompt's `accept`.
+ * fallback (REQ-ORCH-007; a timeout on REQ-ORCH-008's bound names OQ-114, whose ruling of 2026-10-06 keeps the 12 s bound),
+ * or a category outside the prompt's `accept`.
  */
 export function intentVerdict(log, intent) {
   const line = log.split('\n').find((l) => INTENT_LINE.test(l)) ?? '';
@@ -64,7 +64,7 @@ export function intentVerdict(log, intent) {
   const [, category, detail, rung] = m;
   const verdict = { category, confidence: detail ?? null, rung: rung ?? null, rungNotes };
   if (/fallback/.test(line)) {
-    const bound = /timed out/.test(line) ? ' (REQ-ORCH-007\'s fallback at REQ-ORCH-008\'s bound; whether that bound suits a model that reasons, or an endpoint another run shares, is OQ-114\'s question)' : '';
+    const bound = /timed out/.test(line) ? ' (REQ-ORCH-007\'s fallback at REQ-ORCH-008\'s bound, which OQ-114\'s ruling of 2026-10-06 keeps at 12 s for this release)' : '';
     return { ...verdict, problem: `the classifier fell back: ${line.trim()}${bound}` };
   }
   if (!intent.accept.includes(category)) return { ...verdict, problem: `"${intent.prompt}" classified as ${category}, outside what REQ-ORCH-006 and REQ-ORCH-021 leave in reach of it: ${intent.accept.join(', ')}` };

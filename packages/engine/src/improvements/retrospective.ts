@@ -43,8 +43,8 @@ const PERSONA_MEMORY_DIR = join(".rotaris", "persona_memory");
  *
  * The set is no longer decided here. It arrives on the input, computed by the run host, which owns the
  * configuration and the policy; the engine may not depend on `@rotaris/config` and should not be the place
- * a policy is restated. Which switches reach an analysis rather than an agent is **OQ-65**; what the build
- * proceeds under is that the retrospective consumes exactly the set injection consumes.
+ * a policy is restated. Which switches reach an analysis rather than an agent was **OQ-65**, ruled 2026-10-06 (R-071) as
+ * built: the retrospective consumes exactly the set injection consumes.
  */
 export interface RetrospectiveInstructionFile {
   /** The stable identity the per-file switch keys on, e.g. `workspace:AGENTS.md`. */

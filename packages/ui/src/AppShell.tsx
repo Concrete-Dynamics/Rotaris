@@ -80,7 +80,8 @@ export interface AppShellProps {
    * rail-and-view region, at its top corner, so it is shown in every view and stands below the title bar's controls and
    * the notice slot's answers at any notice height; until 2026-10-02 it was fixed at the window's corner, over them
    * (`docs/defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`). Where it may stand
-   * over the view's own controls is OQ-187.
+   * over the view's own controls was OQ-187, ruled 2026-10-06 (R-071): this floating placement is accepted, lying over
+   * the view's top corner while it is open.
    */
   readonly windowDialog?: ReactNode;
   /** PD-SHELL-003: the main window's product-drawn frame. */

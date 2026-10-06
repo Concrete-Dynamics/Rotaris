@@ -230,7 +230,7 @@ describe('REQ-MONITOR-089 / REQ-MONITOR-065 (acceptance A36): the run-level agen
  * docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md: the inspector
  * and a persona window drew an agent's tokens and tool calls and never its compression count (REQ-MONITOR-281), and nothing
  * drew the run-wide count (REQ-MONITOR-086). Each now draws it as an element of its own, labelled with its unit; the
- * run-level agent's is the run-wide count, the roots' compressions included (OQ-159's recorded reading).
+ * run-level agent's is the run-wide count, the roots' compressions included (OQ-159 as ruled, R-071).
  */
 describe('REQ-MONITOR-281/086: the inspector and the persona window draw the compression count', () => {
   const testText = (html: string, testId: string) => html.match(new RegExp(`data-testid="${testId}">([^<]*)<`))?.[1] ?? null;

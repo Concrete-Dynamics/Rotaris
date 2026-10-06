@@ -180,8 +180,8 @@ export function resolveShippedEntry(server: string, entry: Readonly<Record<strin
  * Every package the built-in default configuration launches through `npx` or `uvx`. An entry switched off by default
  * counts: `enabled: false` is the shipped state, not the launch, and a user switching it on launches exactly this
  * specification — REQ-MCP-095 requires the `browser` entry's pin in the manifest whatever its switch says. REQ-STARTUP-064
- * reads a switched-off entry as one "nothing will ever launch"; which reading governs here is OQ-69, and this one is the
- * stricter of the two.
+ * reads a switched-off entry as one "nothing will ever launch"; which reading governs here was OQ-69, ruled 2026-10-06
+ * (R-071) for this one, the stricter of the two.
  */
 export function defaultLaunches(servers: Readonly<Record<string, unknown>>): { readonly launches: readonly DefaultLaunch[]; readonly errors: readonly string[] } {
   const launches: DefaultLaunch[] = [];

@@ -251,8 +251,8 @@ export interface RunDeps {
    * todo already carries every task, the gated work and any continue's message among them (complete, or pending and
    * taken up first), so appending the last request again would duplicate it (OQ-104, the reading kept under PD-ORCH-003
    * revision 2's hold). False too for a continue that states no new request while the todo still holds the last one
-   * unfinished: OQ-102's reading, a departure from REQ-ORCH-004 that no directive governs, since PD-ORCH-005 clause 17
-   * speaks only of the message a continue delivers. Absent means a continuation appends its prompt (REQ-ORCH-004).
+   * unfinished: OQ-102's reading, a departure from REQ-ORCH-004 that PD-ORCH-005 clause 25 states since OQ-102's ruling
+   * (R-071, 2026-10-06); clause 17 speaks only of the message a continue delivers. Absent means a continuation appends its prompt (REQ-ORCH-004).
    */
   readonly appendsTask?: boolean | undefined;
   /**
@@ -630,7 +630,7 @@ export class Run {
      * PD-ORCH-005 clause 17: a continue that resumes an open iteration delivers its message to the resumed root (clause 4)
      * and appends it as a task that iteration holds, closing with it — done when it succeeds, pending otherwise. A continue
      * that resumes and delivers no message (the Continue action) adds no task for a message. Beyond the clause, by OQ-102's
-     * reading (a departure from REQ-ORCH-004 no directive governs): a continue that states no new request while the todo
+     * reading (a departure from REQ-ORCH-004 that PD-ORCH-005 clause 25 states since the ruling of 2026-10-06): a continue that states no new request while the todo
      * holds the last one unfinished — the Continue action, "continue without them" or the message-limit resolution, after
      * a message was left pending or while the open iteration holds it — adds none either (`appendsTask`, set by the session
      * manager). A plan decision resumes nothing (the iteration closed before the hold) and states no new task, so it

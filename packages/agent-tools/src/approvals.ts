@@ -13,7 +13,8 @@ import type { ApprovalOption, ApprovalPayload } from '@rotaris/contracts';
  *
  * Decision 5 of the plan: the lapse window is 3,000 ms on a 250 ms poll — ten missed replies, an order
  * of magnitude above the measured 303 ms idle maximum, inside the 22 s lag the spike says must read as
- * unattended. OQ-39 stays open: the loaded case is unmeasured.
+ * unattended. OQ-39, ruled 2026-10-06 (R-071): the poll and the window are accepted as built; the loaded case is still
+ * unmeasured, and the window stays sized by the spike.
  */
 export type ApprovalOutcome =
   | { readonly kind: 'resolved'; readonly option: ApprovalOption }

@@ -213,7 +213,7 @@ export class SkillHost {
    * and could still be proposed as an edit, while injection honoured every switch
    * (`docs/defects/fixed/the-retrospective-reads-instruction-files-the-user-switched-off.md`). One
    * computation, both callers. Whether an ANALYSIS is bound by a switch stated over what agents are GIVEN
-   * is **OQ-65**; what the build proceeds under is that it is.
+   * was **OQ-65**, ruled 2026-10-06 (R-071) as built: it is.
    */
   instructionFiles(workspaceRoot: string, executionRoot?: string, forLog = 'instruction files'): readonly InstructionFileEntry[] {
     const readRoot = executionRoot === undefined || executionRoot === '' ? workspaceRoot : executionRoot;

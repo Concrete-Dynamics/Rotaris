@@ -1038,12 +1038,12 @@ function queuedOf(dal: StoreDal, sessionId: SessionId): { id: string; content: s
  * addressed session would silently mis-scope a prompt and writing it under the named one would cross a session
  * boundary the store's foreign key owns.
  *
- * **The unscoped case is not decided here.** REQ-CHAT-038 admits "empty = unscoped" and REQ-CHAT-039 gives an
- * unscoped prompt a behaviour of its own; `queued_prompts.session_id` is NOT NULL by construction and the owner's
- * 2026-09-07 amendment to REQ-CHAT-041 reads "one session-scoped queue" per instance without amending 039. That
- * is OQ-51, raised against REQ-CHAT-039. Every route in this build supplies the addressed session, so `unscoped`
- * is unreachable through the product and is returned rather than thrown, so a future route meets a refusal that
- * names the open question instead of a foreign-key error.
+ * **There is no unscoped prompt** (`PD-CHAT-007`, the ruling of OQ-51, R-071, 2026-10-06). REQ-CHAT-038 admitted
+ * "empty = unscoped" and REQ-CHAT-039 gave an unscoped prompt a behaviour of its own, while `queued_prompts.session_id`
+ * is NOT NULL by construction and the owner's 2026-09-07 amendment to REQ-CHAT-041 reads "one session-scoped queue" per
+ * instance; the directive withdrew the unscoped prompt. Every route in this build supplies the addressed session, so
+ * `unscoped` is unreachable through the product and is returned rather than thrown, so a future route meets a refusal
+ * that names the directive instead of a foreign-key error.
  */
 /**
  * The control channel's arguments are scalars, arrays of scalars and one-level records of scalars
@@ -1782,8 +1782,8 @@ export class Sessions {
     }
     /*
      * OQ-102's reading beside PD-ORCH-005 clause 17, which governs only a continue that delivers a message, and the repair
-     * of `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md` (departing from REQ-ORCH-004,
-     * which no directive governs for these continues): a continue that delivers no
+     * of `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md` (departing from REQ-ORCH-004, as
+     * PD-ORCH-005 clause 25 states for these continues since OQ-102's ruling of 2026-10-06): a continue that delivers no
      * message — the Continue action, "continue without them", and the message-limit resolution's 'continue' and
      * 'double' (REQ-SESSION-110, REQ-ORCH-086/087), which `continueSession` launches the same way — restates the last
      * request, so it appends no task while the
@@ -1998,8 +1998,8 @@ export class Sessions {
         /**
          * REQ-CHAT-039 (Part AB): the optional context snapshot travels as one JSON object, and ownership is resolved
          * from it and from the addressed session before the row exists. A snapshot that names another session is a
-         * refusal, not a silent re-scoping; an unscoped prompt cannot be represented and is refused with OQ-51 as the
-         * reason rather than guessed at.
+         * refusal, not a silent re-scoping; an unscoped prompt cannot be represented and is refused, as `PD-CHAT-007`
+         * (OQ-51 as ruled) has it, rather than guessed at.
          */
         const snapshot = readContextSnapshot(req.args['context']);
         const ownership = resolveQueueOwnership(req.sessionId, snapshot);

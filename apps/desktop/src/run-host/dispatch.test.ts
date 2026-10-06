@@ -183,7 +183,7 @@ describe('session.start discovers ahead of the run against the root the run exec
     await dispatch(base, hostFor(prepared));
     expect(prepared.map(([, root]) => root)).toEqual([tree, ws]);
     expect(projectOf(prepared[0]![0])).toEqual(['--project', tree]);
-    // The anchoring root is absent from the command line; the working directory is OQ-194's question, not this case's.
+    // The anchoring root is absent from the command line; the working directory is `PD-MCP-002`'s (OQ-194 as ruled), not this case's.
     const d = prepared[0]![0].mcp.servers['code_intelligence']!.description;
     expect(d.transport === 'stdio' ? d.args : []).not.toContain(ws);
     expect(projectOf(prepared[1]![0])).toEqual(['--project', ws]);

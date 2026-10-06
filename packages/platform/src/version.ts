@@ -16,9 +16,9 @@ import { join } from 'node:path';
 
 /**
  * The version reported when the metadata declares none. REQ-STARTUP-007 says `dev` for the running desktop and
- * REQ-STARTUP-004 says `0+unknown`; the two disagree, and this is OQ-71's reading — REQ-STARTUP-007 is the one written
- * for the running desktop and the About surface, and `dev` is also what REQ-STARTUP-109's unanswerable comparison
- * names. Demo mode's fixed `0.1.0` (REQ-STARTUP-007) waits for the demo entry (REQ-SHELL-162), which is not built.
+ * REQ-STARTUP-004 said `0+unknown`; the two disagreed, and OQ-71's ruling (R-071, 2026-10-06) keeps `dev`, amending
+ * REQ-STARTUP-004 by `PD-STARTUP-003` — REQ-STARTUP-007 is the one written for the running desktop and the About surface,
+ * and `dev` is also what REQ-STARTUP-109's unanswerable comparison names. Demo mode's fixed `0.1.0` (REQ-STARTUP-007) waits for the demo entry (REQ-SHELL-162), which is not built.
  */
 export const VERSION_WITHOUT_METADATA = 'dev';
 

@@ -240,7 +240,8 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
    * with nothing open and the last user row finished. The resolution's 'continue' and 'double' (REQ-SESSION-110) then
    * find no unfinished task of its text (OQ-102), append it again beside the pending work, and a new iteration re-works
    * it. The same holds after any iteration that finishes the request its run was launched with as the limit is reached,
-   * with no resume and no directive, as at the base. Pinned as built, so a ruling either way turns it red.
+   * with no resume and no directive, as at the base. Pinned as built, which OQ-103's ruling of 2026-10-06 keeps
+   * (`PD-ORCH-005` clause 26).
    */
   for (const action of ['continue', 'double'] as const) it(`the message-limit resolution's '${action}' after a limit reached as the resumed iteration closed appends the finished message again (OQ-103)`, async () => {
     const { sessions, runtime, sid } = await restedWithPending([answer('resumed, done'), answer('later, done'), answer('go on, again'), answer('spare')]);
@@ -343,7 +344,7 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
    * `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` kept (it rebuilds no handoff). Its
    * "Authoritative session handoff" therefore shows the resumed iteration's task still in progress and not the message,
    * while the preamble, read from the live todo, says that iteration closed and carried the message out. Pinned as built,
-   * so a ruling either way turns it red.
+   * which OQ-104's ruling of 2026-10-06 keeps (`PD-ORCH-003` revision 3).
    */
   it('the plan cycle held after a resumed iteration is sent the handoff the continue built before that iteration ran (OQ-104)', async () => {
     const { sessions, client, sid } = await restedWithPending([answer('resumed, done'), answer('Plan: do later.')]);

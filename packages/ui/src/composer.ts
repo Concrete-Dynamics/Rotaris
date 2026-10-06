@@ -85,7 +85,7 @@ export function statusStripModeItem(sessionMode: string | null, configuredMode: 
  * tooltip words confinement as the settings page's Sandbox mode control does ("OS-level confinement", "Active — <backend>")
  * and joins it to the short form as REQ-SHELL-041's flags do. A record written before the backend was recorded, and whose
  * start event no longer holds it, reads `sandbox: confined`. Where the indicator stands among REQ-SHELL-038's items, and
- * its words, are OQ-184's.
+ * its words, were OQ-184's, ruled 2026-10-06 as built (`PD-SHELL-008`).
  */
 export function statusStripSandboxItem(session: { readonly sandboxed: boolean; readonly sandboxBackend: string } | null): { readonly text: string; readonly name: string; readonly title: string; readonly testId: string } | null {
   if (session === null || !session.sandboxed) return null;

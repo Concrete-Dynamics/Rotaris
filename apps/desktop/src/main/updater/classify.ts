@@ -28,8 +28,8 @@ import type { ArtifactKind } from '@rotaris/release-naming';
  * variable by which that form names the artifact file a launch started from", whose value is a file path and nothing
  * else. An installed tree made no copy of itself, so its artifact is the executable that is running. With neither a
  * variable nor a registry match, a packaged Windows build is **not updatable** here — ADR-0054's reading ("absent
- * variable → not updatable"), where REQ-STARTUP-106's copied-tree sentence would read it as portable; that
- * disagreement is OQ-84 and the build proceeds under ADR-0054.
+ * variable → not updatable"), where REQ-STARTUP-106's copied-tree sentence read it as portable; that disagreement was
+ * OQ-84, ruled 2026-10-06 (R-071) for ADR-0054's reading, which `PD-STARTUP-004` carries into REQ-STARTUP-106 and 147.
  *
  * A build that is not packaged — the source tree, `pnpm dev`, every proof — is classified not updatable: no check is
  * performed, and the process issues no request to the endpoint and none to any release-asset URL (REQ-STARTUP-150).

@@ -215,7 +215,7 @@ function restoreSentence(o: RestoreOutcome): string {
 /**
  * OQ-164: the sentence an observation gives a soft-paused command other than its own subject (`ForegroundResult.earlier`) —
  * on a call, whether the call waited behind it and when it ended relative to the call's submission; on a poll, that it was
- * ahead of the polled command and how long ago it ended. Under OQ-164's recorded reading; the question is the owner's.
+ * ahead of the polled command and how long ago it ended. OQ-164 as ruled (R-071, 2026-10-06): the reading built is the rule.
  */
 export function earlierSentence(e: PausedEnd, polled: boolean): string {
   const name = `the soft-paused command \`${e.label}\``;

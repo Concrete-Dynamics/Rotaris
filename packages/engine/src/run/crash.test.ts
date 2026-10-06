@@ -1232,11 +1232,11 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       }
 
       /**
-       * OQ-103's undecided reading: a crash between an iteration closing `succeeded` and the run's teardown leaves the
+       * OQ-103's reading, confirmed 2026-10-06 (R-071, `PD-ORCH-005` clause 26): a crash between an iteration closing `succeeded` and the run's teardown leaves the
        * session busy with nothing open and the last request `complete`. The build continues the last request, as
        * REQ-MONITOR-125 has it, and OQ-102's no-append covers only a request the todo holds unfinished — so the finished
        * request is appended again and a second iteration re-works it, as on the `paused` session below that reaches the
-       * same state. Pinned so that a ruling either way turns this red.
+       * same state. Pinned as built, which the ruling keeps.
        */
       for (const state of ['recovery', 'interrupted'] as const) {
         it(`${state}, nothing open and the last request finished: the Continue action appends that request again and a new iteration re-works it (OQ-103)`, async () => {
@@ -1269,9 +1269,9 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
        * `succeeded` — while its checkpoint is captured, its `iteration_end` hooks fire or its events drain — is met at
        * the loop head, which comes to rest before the stop conditions run. Nothing is open, the last request is
        * `complete`, and the session is `paused`; only a pause accepted during the turn puts the task back to pending.
-       * So the Continue action re-works the finished request here too, and OQ-103's question covers every route (the
-       * plan mode's third and the message limit's fourth are pinned in `plan-gate-resume.test.ts`). Pinned so that a
-       * ruling either way turns this red.
+       * So the Continue action re-works the finished request here too, and OQ-103's ruling (2026-10-06, `PD-ORCH-005`
+       * clause 26) covers every route (the plan mode's third and the message limit's fourth are pinned in
+       * `plan-gate-resume.test.ts`). Pinned as built, which the ruling keeps.
        */
       const restingBy = { pause: 'pause', cancel: 'stop', announceShutdown: 'quit' } as const;
       for (const op of ['pause', 'cancel', 'announceShutdown'] as const) {

@@ -411,10 +411,11 @@ export const SessionRecordSchema = z.object({
   /**
    * REQ-MONITOR-044/052 (the repair of `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`, acceptance
    * A20, R-067): the run-level agent's tool-call count — the roots' calls the session's total holds (the total less every
-   * child's persisted count), plus the live root's calls that have not joined it yet, since a root's calls join the total
-   * only when its turn returns (REQ-ORCH-097's cadence, OQ-116). Null for a record read with no projection; a surface then
-   * derives it from the total. The agent's own count, not REQ-MONITOR-101's aggregate run count for the synthetic root:
-   * which of the two the run-level agent shows is OQ-159's, and this figure stays the agent's own until it is ruled.
+   * child's persisted count), plus the live root's calls that have not joined it yet — its calls in flight, since each call
+   * joins the total as it completes (OQ-116 as ruled, R-071, `PD-ORCH-008`; until then a root's calls joined it only when
+   * its turn returned, REQ-ORCH-097's cadence). Null for a record read with no projection; a surface then derives it from
+   * the total. The agent's own count, not REQ-MONITOR-101's aggregate run count for the synthetic root: OQ-159 as ruled
+   * (R-071, `PD-MONITOR-003`), the run-level agent carries its own count.
    */
   entryToolCalls: z.number().int().nonnegative().nullable(),
   /**

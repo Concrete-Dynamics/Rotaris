@@ -299,8 +299,8 @@ export class ChildLedger {
      * cancelled or is still under way — is ignored. "Completed" is REQ-ORCH-047's notion: `succeeded` with the report
      * stored, since it is the report that is carried. A completed task that is not the caller's own child (another
      * parent's, or an earlier iteration's) is not a sibling; it is refused, for ownership and never as nonexistent, as
-     * the `depends_on` check above refuses one — that reading is OQ-81. This runs after the dependency checks and before
-     * the cycle check (5). A refusal creates no record and issues no id (REQ-TOOLS-153).
+     * the `depends_on` check above refuses one — OQ-81's reading, confirmed 2026-10-06 (R-071). This runs after the
+     * dependency checks and before the cycle check (5). A refusal creates no record and issues no id (REQ-TOOLS-153).
      */
     const siblings = this.childrenOf(input.parentId);
     const inherited: ChildRow[] = [];

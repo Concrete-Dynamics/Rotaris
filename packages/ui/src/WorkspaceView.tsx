@@ -439,8 +439,8 @@ export function waitHeaderText(wait: NonNullable<SessionRecord['wait']>, nowMs: 
 
 /**
  * REQ-MONITOR-194 / REQ-MONITOR-303: the change-model list of the wait header. Every configured key, as the selector has
- * always listed them (which list the picker offers — REQ-MONITOR-193's same-tier candidates or REQ-NOTIFY-074's — is an
- * open question, OQ-186); a key whose pair the session recorded out of quota (`wait.excluded`) is listed in place,
+ * always listed them (which list the picker offers — REQ-MONITOR-193's same-tier candidates or REQ-NOTIFY-074's — was
+ * OQ-186, ruled 2026-10-06 for this full list, `PD-MONITOR-004`); a key whose pair the session recorded out of quota (`wait.excluded`) is listed in place,
  * never hidden, with the reason as its hint. It stays choosable — no `unavailableReason`, which would grey it out — since
  * choosing it explicitly is what clears the exclusion (REQ-MONITOR-194, the run's `setEntryModel` through
  * `ResilienceMemory.clearExhausted`; in a quota wait on that very pair, a retry on it).

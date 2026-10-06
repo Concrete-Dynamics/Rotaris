@@ -219,7 +219,8 @@ export class Todo {
   }
 
   /**
-   * OQ-102's reading, beside PD-ORCH-005 clause 17 (which governs only a continue's message): whether a task carrying
+   * OQ-102's reading, stated by PD-ORCH-005 clause 25 since the ruling of 2026-10-06, beside clause 17 (which governs only a
+   * continue's message): whether a task carrying
    * `text` is still to be worked, so a continue that states no new request (the Continue action, "continue without
    * them", the message-limit resolution's 'continue' and 'double') appends it no second time: pending, or in progress and held by
    * the open iteration `open` — its own task, or a message it holds — which closes it to pending before the run selects.

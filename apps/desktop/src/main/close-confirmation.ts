@@ -32,6 +32,18 @@ export function activeRunCloseBox(activeRuns: number | null): { type: 'warning';
   return { type: 'warning', title: question, message: question, detail: activeRunCloseDetail(activeRuns), buttons: ['Cancel', 'Yes'], defaultId: 0, cancelId: 0, noLink: true };
 }
 
+/**
+ * OQ-205's reading: whether another main window stays open once the window `closing` closes. A window already destroyed,
+ * or one whose close its guard has already confirmed (`QuitState.isClosing`, `exit.ts`), does not stay.
+ */
+export function anotherMainWindowStays(
+  windows: readonly { readonly wcId: number; readonly win: { isDestroyed(): boolean } }[],
+  closing: number,
+  isClosing: (wcId: number) => boolean,
+): boolean {
+  return windows.some((m) => m.wcId !== closing && !m.win.isDestroyed() && !isClosing(m.wcId));
+}
+
 export interface ActiveRunCloseDeps {
   /** Whether another main window stays open after this close (then nothing ends, and nothing is asked). */
   readonly othersStaying: () => boolean;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeRunCloseBox, confirmActiveRunClose, type ActiveRunCloseDeps } from './close-confirmation.js';
+import { activeRunCloseBox, anotherMainWindowStays, confirmActiveRunClose, type ActiveRunCloseDeps } from './close-confirmation.js';
 
 function deps(over: Partial<ActiveRunCloseDeps> & { answer?: number }, asked: unknown[] = [], logged: string[] = []): ActiveRunCloseDeps {
   return {
@@ -61,5 +61,24 @@ describe('the active-run confirmation at a window\'s close (REQ-STARTUP-046, REQ
     const logged: string[] = [];
     expect(await confirmActiveRunClose(deps({ ask: async () => { throw new Error('no display'); } }, [], logged))).toBe(false);
     expect(logged.some((l) => l.includes('could not be shown'))).toBe(true);
+  });
+});
+
+describe('which main windows stay at a close (OQ-205\'s reading, REQ-STARTUP-161)', () => {
+  const open = (wcId: number, destroyed = false) => ({ wcId, win: { isDestroyed: () => destroyed } });
+  const none = () => false;
+
+  it('the last main window stays alone: nothing else stays, so the close asks', () => {
+    expect(anotherMainWindowStays([open(1)], 1, none)).toBe(false);
+  });
+
+  it('another open main window stays: the close ends no run and asks nothing', () => {
+    expect(anotherMainWindowStays([open(1), open(2)], 1, none)).toBe(true);
+  });
+
+  it('a window already destroyed, or one whose close is already confirmed, does not stay', () => {
+    expect(anotherMainWindowStays([open(1), open(2, true)], 1, none)).toBe(false);
+    expect(anotherMainWindowStays([open(1), open(2)], 1, (id) => id === 2)).toBe(false);
+    expect(anotherMainWindowStays([open(1), open(2), open(3)], 1, (id) => id === 2)).toBe(true);
   });
 });

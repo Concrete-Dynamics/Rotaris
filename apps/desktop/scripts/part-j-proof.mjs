@@ -351,17 +351,21 @@ const quitLog = await launch('quit', s6, { ROTARIS_SCRIPT: 'read,read,read,read,
 }
 
 // 5b. The same close declined (REQ-STARTUP-046): Cancel aborts the close, the window stays and accepts input, and the run
-// keeps executing to its own end — not stopped for shutdown. The capture then photographs the window that stayed.
+// keeps executing to its own end — not stopped for shutdown. "Accepts input" is measured: a message typed into the composer
+// after the Cancel, while the run is still executing, is taken as a queued prompt (REQ-CHAT-040), which only the window that
+// stayed can send. The capture then photographs it.
 const s6b = scenario('quit-declined', []);
-const declinedLog = await launch('quit-declined', s6b, { ROTARIS_SCRIPT: 'read,read,read,answer', ROTARIS_CAPTURE_PROMPT: 'keep me', ROTARIS_CAPTURE_QUIT_MS: '2200', ROTARIS_CAPTURE_ANSWERS: '0', ROTARIS_CAPTURE_AFTER_MS: '16000' });
+const declinedLog = await launch('quit-declined', s6b, { ROTARIS_SCRIPT: 'read,read,read,answer', ROTARIS_CAPTURE_PROMPT: 'keep me', ROTARIS_CAPTURE_QUIT_MS: '2200', ROTARIS_CAPTURE_ANSWERS: '0', ROTARIS_CAPTURE_TYPE: 'still here>>composer@3400', ROTARIS_CAPTURE_AFTER_MS: '20000' });
 {
   if (ACTIVE_RUN_BOX.exec(declinedLog)?.[1] !== '0') throw new Error('the close during a run asked no active-run confirmation to decline (REQ-STARTUP-046); see quit-declined.log');
   if (!/close: active-run confirmation \(\d+ active\) → return to the window/.test(declinedLog)) throw new Error('main did not record the declined close; see quit-declined.log');
   const db = open(s6b);
   const session = db.prepare('SELECT execution_status, stop_reason FROM sessions').get();
+  const typed = db.prepare('SELECT content, status FROM queued_prompts').all();
   db.close();
   if (session.stop_reason === 'application_shutdown' || session.execution_status !== 'completed') throw new Error(`the declined close did not leave the run executing to its own end: ${JSON.stringify(session)}`);
-  results.quitDeclined = { session, confirmation: 'asked; answered Cancel' };
+  if (!typed.some((p) => p.content === 'still here')) throw new Error(`the window that stayed did not accept input after the Cancel (REQ-STARTUP-046): ${JSON.stringify(typed)}`);
+  results.quitDeclined = { session, confirmation: 'asked; answered Cancel', inputAfterCancel: typed.find((p) => p.content === 'still here') };
 }
 
 // 6. A root resumed before its first reply in a later iteration (the repair of

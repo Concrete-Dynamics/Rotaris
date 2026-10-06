@@ -9620,3 +9620,49 @@ The second run is held to every check, and a second answerless run is a red that
 **What a ruling decides.** Whether an entry-role turn that ends with neither text nor a tool call should be told so and
 continued, re-queued as `partial`, or reported to the person as a run that ended without an answer, rather than completing.
 Each would add to REQ-ORCH-069, REQ-ORCH-113 or REQ-ORCH-115, so each is a revision or a directive, not a repair.
+
+**OQ-200 — Which model call does the run timer count while a run has more than one?** *(REQ-CHAT-158, the run-timing
+indicator counts "the time spent inside the model call currently in flight" and restarts "each time the run moves on to
+the next model call within the same run"; REQ-ORCH-095 and the delegated children whose calls run beside the root's;
+REQ-CHAT-063, the live-refresh rules the tick follows. Raised 2026-10-06 by
+[`the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md`](../defects/the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md)
+(fin18, bundle `fin18-rail-label-and-observations`). Open, the owner's.)*
+
+The default live run at `27a5127` captured the run header at a moment when the one call in flight was the transcript
+summariser's, 5.5 s in, and the header read 0:09, counted from the newest transcript row. A run can have several calls out
+at once: the root's, each running child's, a summariser's, a classifier's. REQ-CHAT-158 speaks of "the model call
+currently in flight" as if there were one, and does not say whether a call the product makes for itself (a summary, an
+intent or completion classification) is one of "the run's" calls.
+
+**What the build proceeds under.** Unchanged: the value counts from the newest transcript row the run produced, the
+unsettled one first (`modelCallStartedAt`, `packages/ui/src/composer.ts`), so a call that writes no row does not restart
+it. No call boundary is published on the record (`SessionRecord` carries `runStartedAt` only); the note above records
+that as a defect whatever the ruling.
+
+**What a ruling decides.** Which call the value counts when more than one is in flight — the root's alone, the newest to
+start, or the oldest still running (the one "taking an unusual length of time") — and whether the product's own calls
+count. Each needs the engine to publish a call's start on the record, which is a contracts and engine change before it is
+a surface one.
+
+**OQ-201 — Do the repository card's "touched" and "uncommitted" take the Git view's definitions?** *(REQ-MONITOR-168, the
+repository card states "how many files were touched and how many changes are uncommitted"; REQ-GIT-105, the Git view's
+uncommitted-path count includes untracked paths so that it and the cleanliness gates of REQ-GIT-014 never disagree;
+REQ-GIT-107, a worktree row's "files-touched" figure; REQ-GIT-003, the `.rotaris/` exclusion of every working-tree read
+the Git domain performs. Raised 2026-10-06 by
+[`the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md`](../defects/the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md)
+(fin18, bundle `fin18-rail-label-and-observations`). Open, the owner's.)*
+
+In one launch of the default live run at `27a5127` the Overview's repository card read "4 files touched · 2 uncommitted"
+and the Git view counted 4 uncommitted paths in the same tree. The card counts an untracked path as touched and not as
+uncommitted, and does not exclude `.rotaris/`; the Git view counts it as uncommitted and excludes `.rotaris/`.
+REQ-MONITOR-168 defines neither word. If the card took REQ-GIT-105's count, "touched" and "uncommitted" would be the same
+number for the base tree unless "touched" means something else — REQ-GIT-107's files figure is the nearest candidate,
+and for the base tree it is the same set again.
+
+**What the build proceeds under.** Unchanged: the card's touched is every path `git status` lists, its uncommitted the
+tracked paths with a staged or unstaged change (`countStatus`, `packages/workspace/src/git/repository.ts`); the Git view
+keeps REQ-GIT-105's count.
+
+**What a ruling decides.** What each of the card's two figures counts — in particular whether an untracked path is
+uncommitted on the card as it is in the Git view, and whether the card's read applies REQ-GIT-003's exclusion — so that
+one window never shows two different "uncommitted" counts for one tree.

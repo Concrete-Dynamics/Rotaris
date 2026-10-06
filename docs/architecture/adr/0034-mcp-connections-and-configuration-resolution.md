@@ -167,7 +167,7 @@ press on.
    through package runners plainly need a search path, and `REQ-MCP-037` judges availability by a path
    lookup, so some inheritance is implied — but "some" is not a contract, and the SDK's own default is a
    curated safe subset, which would be a third behaviour. The signature of the environment-resolution
-   stage differs depending on the answer, so this blocks that stage. See OQ-22.
+   stage differs depending on the answer, so this blocks that stage. See OQ-22. *(Ruled 2026-10-06, [R-071](../../product/requests.md#r-071): the overlay as built, with no scrubbing.)*
 
 ## Revisit if
 
@@ -211,7 +211,7 @@ files show it (one discovery launch plus one session launch per server).
 **OQ-22's reading — overlay on the parent environment, flagged for the owner** (recorded under OQ-22):
 `resolveServerEnvironment` produces `REQ-MCP-090`'s map (full-value `${VAR}` expansion, unset → the key omitted,
 secrets last) and the child inherits the run host's environment with that map overlaid. No scrubbing of the parent
-environment is applied; which names to scrub is the owner's. **Falsified at the merge and kept (the manager,
+environment is applied; which names to scrub is the owner's *(ruled 2026-10-06, [R-071](../../product/requests.md#r-071): none, the overlay ratified as built, OQ-22)*. **Falsified at the merge and kept (the manager,
 2026-09-05):** this paragraph first read "the run host hands the child `{ ...process.env, ...map }`" — the code handed
 the child the map ALONE (`transportFor` spawned with the description's `env`), so the shipped `browser` entry's `npx`
 had no PATH and the settings PNG still read `spawn npx ENOENT` after the twenty-ninth's wrap; the unit test had masked

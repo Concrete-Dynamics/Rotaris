@@ -260,7 +260,7 @@ same report as the copied-folder case and it is the safe direction.
 
 **What this settles in OQ-47 and what it does not.** OQ-47's closing paragraph — "two records disagree
 about what identifies a workspace" — is **discharged**; both records now state the same two-key
-arrangement and this section is the statement. OQ-47's first two paragraphs stay open and are not touched
+arrangement and this section is the statement. OQ-47's first two paragraphs stay open *(ruled 2026-10-06, [R-071](../../product/requests.md#r-071): ADR-0058's behaviour ratified, the hand edit accepted for the first release)* and are not touched
 by this: what happens when two folders presenting one identifier are open at once is architecture-invented
 behaviour on a specification silence and still wants ratifying, and the absence of any product remedy for
 a copied folder or a corrupt identifier file is still a gap whose only answer is the user editing a file.

@@ -24,7 +24,7 @@
 - **Origin:** EXEC (ADR-EXEC-05), RUNTIME (constraint C10.5), UI (ADR-UI-05)
 - **Depends on:** ADR-0002, ADR-0013, ADR-0017
 - **Contains an unresolved conflict between slices** (presenter registration per window or per session,
-  OQ-4 — narrowed by SR-1, not closed).
+  OQ-4 — narrowed by SR-1, not closed) *(OQ-4 ruled 2026-10-06, [R-071](../../product/requests.md#r-071): per application window, as built)*.
 - **No longer names a conflict between two live requirements.** The earlier header read: "`REQ-TOOLS-053`
   and `REQ-TOOLS-069` test attendedness by *presence* of a presenter alone, while `REQ-TOOLS-064` forbids
   a hang; a wedged presenter satisfies the first and defeats the second (OQ-39)." Both requirements have
@@ -148,7 +148,7 @@ ordinary case rather than an edge (`REQ-STARTUP-163`), which strengthens it. And
 that "one channel carries every registration main holds, so a lapse makes the whole application
 unattended at once" becomes literally true rather than a design intention, because there is exactly one
 main. **OQ-4 is narrowed, not answered:** it asked per window or per session, and SR-1 removes an
-alternative from the field without deciding between those two.
+alternative from the field without deciding between those two. *(Ruled 2026-10-06, [R-071](../../product/requests.md#r-071): per application window, as built.)*
 
 ## Alternatives considered
 
@@ -248,7 +248,7 @@ of 22,777 ms while dropping and reordering nothing**: a main that answers eventu
 a measured mode of this topology, not a hypothetical. That is precisely the state `REQ-TOOLS-053`'s
 capability test must call unattended, and it is the state a timeout on the *user's* wait would
 misdiagnose. That spike's own gap — that it never measured a main showing a dialog — is closed by the
-liveness spike below. **Neither sizes the window. Sizing it remains open (OQ-39).**
+liveness spike below. **Neither sizes the window. Sizing it remains open (OQ-39).** *(Ruled 2026-10-06, [R-071](../../product/requests.md#r-071): the 250 ms poll and the 3 s lapse accepted as built.)*
 
 **Detection, measured.** `../spikes/presenter-liveness-and-instance-claim.md` reproduced this record's
 topology — main, a `utilityProcess` standing in for the run host, and a renderer — and heartbeated three
@@ -463,7 +463,7 @@ Two positions:
 
 The recommendation is taken in the decision above. It should be confirmed, because it changes what
 `REQ-TOOLS-069`'s "the presenter was torn down" means in a multi-window application (open question
-OQ-4).
+OQ-4). *(Confirmed 2026-10-06 by the owner, [R-071](../../product/requests.md#r-071): per application window, and "torn down" means no window's registration remains.)*
 
 ## Consequences accepted
 

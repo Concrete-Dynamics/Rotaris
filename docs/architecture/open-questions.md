@@ -9777,3 +9777,32 @@ tell apart: REQ-TOOLS-146's `replace` keeps a `COMPLETED`, `IN_PROGRESS` or `ABA
 re-listed in the documented id-less shape is given a new id (`packages/agent-tools/src/tools/todo.ts`), so a `PENDING` item a
 given-up task left, re-listed by the next task's root, stops being excused and counts against that task. A ruling decides
 whether such a re-listed item is the new task's (it re-wrote it) or still the earlier task's.
+
+**OQ-204 — When the expanded plan gate cannot hold all its parts, which clause of PD-ORCH-002 revision 2 yields?**
+*(PD-ORCH-002 revision 2, over REQ-ORCH-153: expanded, the plan's own text "SHALL be the largest element of the surface and
+the only element that grows with it: every other part of the gate is sized by its own content"; REQ-SHELL-022, the
+1000x680 minimum; REQ-SHELL-048, every action reachable. Raised 2026-10-06 by
+[`the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md`](../defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md)
+(finacc2, bundle `finacc2-accept1-6`). First committed as OQ-202 on the bundle's branch; origin/main had already taken
+OQ-202 and OQ-203 (`ef1e6d9`, `6998e3f`), so it takes the next free number, OQ-204. Open, the owner's.)*
+
+On a short window the gate's row is less than its parts need: at 1000x680 with a 97 px persistent notice it is 261 px, and
+199 px with the re-authentication bar as well. The two clauses then pull apart. If every other part keeps its content
+height, the plan takes the whole loss (18 px beside the todo's 56 in finacc2's acceptance). If the plan is to stay the
+largest, some other part must stand smaller than its content, or the gate must scroll. The repair gives the plan a floor
+above the todo's cap, lets the todo (which already scrolls inside its cap) yield to its label's line, and lets the gate
+scroll after that with its answers pinned. That keeps the plan the largest of the parts that are bounded: the heading,
+the intent sentence, the todo, the closed revision field and the answers. Two parts have no bound: a later cycle's "You
+asked for" line (`.plan-gate__prior`, the whole of the changes the user stated) and the revision field once opened, which
+the user can drag taller (`resize: vertical`). On a short window either can stand taller than the plan's 72 px floor, and
+no floor fixed in advance is above a part with no bound.
+
+**What the build proceeds under.** The plan's floor is `calc(var(--rt-space-16) + var(--rt-space-2))`, above the todo's cap,
+the answers' row and the heading. The todo yields first, then the gate scrolls with its three answers pinned to its floor.
+The "You asked for" line and an opened revision field keep their content height, so on a short window either may stand
+taller than the plan.
+
+**What a ruling decides.** Whether "largest" holds against parts the user wrote or sized (then they need a cap or their
+own scroll, like the todo's), or "sized by its own content" holds for them (then "largest" is read over the gate's fixed
+parts only). Also whether a gate that scrolls below its minimum, with its answers pinned, is the intended reading when
+the window is shorter than the gate's parts.

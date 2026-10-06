@@ -61,6 +61,11 @@ row's `updated_at` back right after the `starting` save and writes that as `run_
 took the row's last `updated_at` at that save, which a continuation's "Intent classified" row had moved past its pre-flight.
 The **runtime view**'s `Run.start()` sequence says so. No package, edge, process, channel, command or store column changed.
 
+**The expanded plan gate keeps the plan its largest part when a notice shares the window (PD-ORCH-002 revision 2,
+REQ-SHELL-022; finacc2's A2).** In `packages/ui/src/shell.css` the plan's text has a floor above the todo's cap and a zero
+basis, and the todo yields first, so the gate scrolls only once the todo is at its label's line. The **runtime view**'s
+plan-gate passage says so. No package, edge, process, channel, command or store column changed.
+
 **The window that starts a session shows it from the start, and the fallback restart clears the session's notice
 (REQ-NOTIFY-032, REQ-NOTIFY-058; finacc2's A1).** `session.start` mints every start's id and marks it as the asking window's
 start (`MainWindows.beginStart`, cleared by its subscription, unsubscribe, release or a refused start), and the focus test of

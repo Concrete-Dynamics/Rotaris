@@ -293,7 +293,11 @@ the prompt now **yields as the transcript does** (PD-ORCH-002 revision 2: one ac
 title and its answers (the key field with its label inline, and the two buttons) on one wrapping row, nothing pinned since
 nothing scrolls, and no height written; its sentence, the provider's words and the key's hint stay in the document (the
 dialog's description) and are drawn again the moment the gate is collapsed or answered. The gate's row takes the rest at
-every size from REQ-SHELL-022's minimum up. A bounded band (a fixed `max-height` in tokens) was the first form of this
+every size from REQ-SHELL-022's minimum up (*corrected 2026-10-06*: true, but it did not keep the plan the largest part
+of the gate, as the next sentences take it to. With a persistent notice on screen the rest at the minimum is short of the
+gate's parts, and every part but the plan kept its content height. finacc2's acceptance (A2) read the plan 18 px beside the todo's 56 at 1000x680
+with this bar and a "Session … failed" notice; repaired by a floor for the plan and a todo that yields first,
+`docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md`). A bounded band (a fixed `max-height` in tokens) was the first form of this
 repair and was dropped before it was committed: weighed against the gate's parts as the proof measured them (heading,
 intent, todo, revision field and answers, about 210 px of the roughly 380 px the two rows share at 1000x680), any band that
 still holds the prompt's title and answers leaves the plan no height, where PD-ORCH-002 makes it the largest part of the

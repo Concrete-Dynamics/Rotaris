@@ -287,10 +287,12 @@ results.twoStates = {
  * 2c. The same two facts at REQ-SHELL-022's minimum, 1000x680, with a persistent notice sharing the window: REQ-NOTIFY-032's
  * warning about ANOTHER session's failure, published through the real notice store in the words the product writes
  * (`unfocusedFailureNotice`). The notice slot stands above the view, so its height comes off the gate's row. Every part
- * of the gate but the plan kept its content height, and the whole loss fell on the plan: 18 px against the todo's 56 in
- * finacc2's acceptance (A2), at the minimum with a notice and the re-authentication bar
- * (docs/defects/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
- * The three answers are asserted reachable here too (REQ-SHELL-048), since a gate shorter than its parts scrolls.
+ * of the gate but the plan kept its content height, and the whole loss fell on the plan: 41 px against the todo's 56 on
+ * the first pass of this reading, 18 px against 56 in finacc2's acceptance (A2) with the re-authentication bar as well
+ * (docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
+ * Repaired the same day: the plan has a floor above the todo's cap and a basis of 0, and the todo yields first. The gate
+ * read 261 px, the plan 72, the todo 32, and the gate scrolled 7 px, so the three answers are asserted hit here too
+ * (REQ-SHELL-048).
  * One notice is drawn at a time and the latest publication replaces it, and this launch raises its own on the way up (no
  * provider is authenticated; on a host without the code-intelligence bundle the project setup's failure), at times the
  * host decides: the first pass of this reading met each of them in turn, 75 px and 97 px. So the warning is published
@@ -299,18 +301,20 @@ results.twoStates = {
  */
 const OTHER_SESSION = 'ses_otherfailedsession';
 const AT_MINIMUM_WITH_NOTICE = `innerWidth + 'x' + innerHeight === '1000x680' && document.querySelector('[data-testid="plan-gate-preview"]') !== null && (document.querySelector('.notice-slot')?.innerText ?? '').includes('${OTHER_SESSION}')`;
-const whenReady = (probe) => `(async () => { for (let i = 0; i < 400 && !(${AT_MINIMUM_WITH_NOTICE}); i += 1) await new Promise((r) => setTimeout(r, 100)); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); return ${probe}; })()`;
+// Each reading marks the body once taken, and the launch waits for both marks: the wait ending on the notice alone let the
+// window close before the readings it was kept open for (the second pass of this reading, 2026-10-06).
+const whenReady = (probe, mark) => `(async () => { for (let i = 0; i < 400 && !(${AT_MINIMUM_WITH_NOTICE}); i += 1) await new Promise((r) => setTimeout(r, 100)); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const read = ${probe}; document.body.dataset.${mark} = '1'; return read; })()`;
 const NOTICE_PROBE = "(() => { const n = document.querySelector('.notice-slot'); const b = n ? n.getBoundingClientRect() : null; const reach = ['plan-approve', 'plan-revise', 'plan-cancel'].map((id) => { const e = document.querySelector('[data-testid=\"' + id + '\"]'); if (!e) return id + '=absent'; const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return id + '=' + (hit === e || e.contains(hit) ? 'ok' : 'not-hit'); }).join('|'); const g = document.querySelector('[data-testid=\"plan-gate\"]'); return { size: innerWidth + 'x' + innerHeight, notice: b ? Math.round(b.height) : null, noticeText: n ? n.innerText.slice(0, 200) : '', reach, gateScrolls: g ? g.scrollHeight - g.clientHeight : null }; })()";
 // REQ-NOTIFY-032's warning in the words `unfocusedFailureNotice` writes.
 const OTHER_FAILED = `${JSON.stringify({ op: 'report', severity: 'warning', title: `Session ${OTHER_SESSION} failed`, message: 'The session on screen is unaffected. Open the failed session to see its recovery.', detail: 'HTTP 401 Unauthorized: the provider refused the key.', persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: OTHER_SESSION } }, sessionId: OTHER_SESSION })}`;
-const SMALL_STATE = whenReady(STATE_PROBE);
-const SMALL_NOTICE = whenReady(NOTICE_PROBE);
+const SMALL_STATE = whenReady(STATE_PROBE, 'smallState');
+const SMALL_NOTICE = whenReady(NOTICE_PROBE, 'smallNotice');
 const log2c = await launch('notice-at-minimum', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_RESIZE: '1000x680@200',
   ROTARIS_CAPTURE_NOTICES: [1500, 6000, 12000].map((at) => `${OTHER_FAILED}@${at}`).join(';;'),
   ROTARIS_CAPTURE_EVAL_AT: `${SMALL_STATE}@2000;;${SMALL_NOTICE}@2000`,
-  ROTARIS_CAPTURE_WAIT: `js:${AT_MINIMUM_WITH_NOTICE}`,
+  ROTARIS_CAPTURE_WAIT: `js:document.body.dataset.smallState === '1' && document.body.dataset.smallNotice === '1'`,
   ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
   ROTARIS_CAPTURE_AFTER_MS: '1500',
 });

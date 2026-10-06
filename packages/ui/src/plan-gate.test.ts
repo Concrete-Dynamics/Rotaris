@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -119,5 +120,51 @@ describe('PlanGate — the two states of PD-ORCH-002 revision 2', () => {
     expect(render(false)).toContain('data-ui="plan-gate-actions"');
     expect(render(true)).toContain('data-ui="plan-gate-actions"');
     expect(render(false)).toContain('data-ui="plan-gate"');
+  });
+});
+
+describe('PlanGate — the plan stays the largest part when the window is short (PD-ORCH-002 revision 2, REQ-SHELL-022)', () => {
+  const css = readFileSync(new URL('./shell.css', import.meta.url), 'utf8');
+  const base = readFileSync(new URL('../../../docs/design/system/base.css', import.meta.url), 'utf8');
+  const spacing = readFileSync(new URL('../../../docs/design/system/tokens/spacing.css', import.meta.url), 'utf8');
+  /** Every declaration block whose selector list is exactly `selector`, joined. */
+  const rule = (selector: string): string => [...css.matchAll(/(?<=^|\})\s*([^{}]+)\{([^}]*)\}/g)]
+    .filter((m) => (m[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '').trim() === selector).map((m) => m[2] ?? '').join(' ');
+  /** A length written in `--rt-space-N` tokens (`var(--rt-space-16)`, `calc(2 * var(--rt-space-2) + …)`), in px. */
+  const px = (value: string): number => {
+    const space = (n: string): number => Number(new RegExp(`--rt-space-${n}:\\s*(\\d+)px`).exec(spacing)?.[1]);
+    const expr = value.replace(/var\(--rt-space-(\d+)\)/g, (_, n: string) => String(space(n))).replace(/^calc\((.*)\)$/, '$1');
+    if (!/^[\d\s+*]+$/.test(expr)) throw new Error(`not a sum of spacing tokens: ${value}`);
+    return expr.split('+').reduce((sum, term) => sum + term.split('*').reduce((product, factor) => product * Number(factor.trim()), 1), 0);
+  };
+  const length = (block: string, property: string): number => px(new RegExp(`(?:^|[;\\s])${property}:\\s*([^;]+);`).exec(block)?.[1]?.trim() ?? '');
+
+  it('gives the plan a floor above the todo\'s cap and a zero basis, in both modes', () => {
+    // Until 2026-10-06 the plan was `flex: 1 1 auto; min-height: 0` and every other part kept its content height, so at
+    // 1000x680 with a 97 px notice the plan stood 41 px beside the todo's 56 (finacc2's A2;
+    // docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
+    expect(base).toMatch(/\*,\s*\*::before,\s*\*::after\s*\{\s*box-sizing:\s*border-box/);
+    const preview = rule('.plan-gate__preview-wrap');
+    const field = rule('.plan-gate__plan');
+    const todo = rule('.plan-gate__todo');
+    expect(preview).toContain('flex: 1 1 0;');
+    expect(field).toContain('flex: 1 1 0;');
+    // Every box is border-box, so a floor and a cap compare as written: the plan at its floor is taller than the todo can
+    // ever be (72 px against 64; the answers' row measures 41, the heading 24).
+    expect(length(preview, 'min-height')).toBeGreaterThan(length(todo, 'max-height'));
+    expect(length(field, 'min-height')).toBe(length(preview, 'min-height'));
+  });
+
+  it('lets the todo yield before the gate scrolls, and grows nothing but the plan', () => {
+    const todo = rule('.plan-gate__todo');
+    expect(todo).toContain('flex: 0 1 auto;');
+    expect(todo).toContain('overflow: auto;');
+    // It yields down to its padding and its label's line, which stays below the plan's floor.
+    expect(length(todo, 'min-height')).toBeGreaterThanOrEqual(2 * length(todo, 'padding'));
+    expect(length(todo, 'min-height')).toBeLessThan(length(rule('.plan-gate__preview-wrap'), 'min-height'));
+    // Every other part keeps its content height, and no other part of the gate is given a grow factor.
+    expect(rule('.plan-gate > *')).toContain('flex: 0 0 auto;');
+    const growers = [...css.matchAll(/(\.plan-gate__[\w-]+)\s*\{[^}]*flex:\s*([1-9][\d.]*)\s/g)].map((m) => m[1]);
+    expect([...new Set(growers)].sort()).toEqual(['.plan-gate__plan', '.plan-gate__preview-wrap']);
   });
 });

@@ -776,6 +776,23 @@ export class SessionWriter {
   }
 
   /**
+   * PD-ORCH-005 clause 14 with OQ-105 as ruled (R-071): the fingerprint a resume stated a change against is replaced by the
+   * one it ran with, so a change is stated once; a fingerprint taken before the ruling, of the whole request, is replaced
+   * the same way. The row keeps its iteration (clause 12's clear reads it). `false` when the agent has none.
+   */
+  replaceAgentFingerprint(taskId: string, instructions: string, tools: string): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    let replaced = false;
+    try {
+      dal.transaction(() => { replaced = dal.replaceAgentFingerprint(sessionId, taskId, instructions, tools, toIsoUtc(wall.instant())); });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    return ok(replaced);
+  }
+
+  /**
    * REQ-SESSION-067/068: durable when it returns; captures the state at the instant of the
    * call (the status and, REQ-SESSION-168, the aggregates the patch carries). REQ-SESSION-070:
    * a terminal status takes the stronger setting, so "readable by any other reader before the

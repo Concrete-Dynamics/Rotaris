@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { SessionId } from '@rotaris/kernel';
-import type { ChatMessage, ToolSpec } from '@rotaris/model';
+import type { ChatMessage } from '@rotaris/model';
+import type { Persona } from '../children/personas.js';
 import type { AgentMessageRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import type { ConversationRecorder } from './conversation.js';
@@ -38,28 +39,39 @@ export class ConversationRecord {
   }
 
   /**
-   * PD-ORCH-005 revision 4 clause 14: the check one execution of an agent makes at its first model step, handed the system
-   * prompt and the tool definitions that step's request carries. An agent with no fingerprint recorded has it recorded —
-   * what it started with. An agent that has one is being resumed (a task id is never executed twice otherwise), and when
-   * either digest differs the run states, as a warning, which agent resumed under changed instructions: an issue at
-   * warning severity with its timeline entry, and a line in the transcript (OQ-105). Only the first call of an execution
-   * acts, so REQ-ORCH-088's retry and REQ-ORCH-095's re-prompt, which run within it, compare nothing. Nothing with no store.
+   * PD-ORCH-005 clause 14 with OQ-105 as ruled (R-071, `PD-ORCH-005` revision 6): the check one execution of an agent makes
+   * at its first model step, taken of its persona's own definition (`definition`). An agent with no fingerprint recorded has
+   * it recorded — what it started with. An agent that has one is being resumed (a task id is never executed twice
+   * otherwise), and when either digest differs the run states, as a warning, which agent resumed under changed
+   * instructions: an issue at warning severity with its timeline entry, and a line in the transcript. The fingerprint is
+   * then replaced by the current one, so a change is stated once and a later resume under the same definition states
+   * nothing. A fingerprint recorded before the ruling, of the whole request, is not comparable with a definition's: it is
+   * replaced and nothing is stated, as for an agent that had none. Only the first call of an execution acts, so REQ-ORCH-088's
+   * retry and REQ-ORCH-095's re-prompt, which run within it, compare nothing. Nothing with no store.
+   *
+   * Until the ruling the check was taken of the system prompt and the tool listing the step's request carried, and the
+   * first was kept for every comparison: a playbook a new classification chose, a skill, the MCP section, a workspace
+   * instruction file the run's own agents edited, or a presenter-bound tool each warned for an agent whose persona no one
+   * had edited, and at every resume while it differed (live-run findings a71-3 and G1).
    */
-  fingerprint(taskId: string, agentName: string, iteration: number): FingerprintCheck {
+  fingerprint(taskId: string, agentName: string, iteration: number, definition: PersonaDefinition): FingerprintCheck {
     let checked = false;
-    return (systemPrompt, specs) => {
+    return () => {
       if (checked || !this.dal) return;
       checked = true;
-      const current = fingerprintOf(systemPrompt, specs);
+      const current = fingerprintOf(definition);
       const started = this.dal.agentFingerprintOf(this.sessionId, taskId);
       if (!started) { this.writer.recordAgentFingerprint(taskId, iteration, current.instructions, current.tools); return; }
+      if (!isDefinitionPrint(started.instructions) || !isDefinitionPrint(started.tools)) { this.writer.replaceAgentFingerprint(taskId, current.instructions, current.tools); return; }
       const instructionsChanged = started.instructions !== current.instructions;
       const toolsChanged = started.tools !== current.tools;
       if (!instructionsChanged && !toolsChanged) return;
-      const what = instructionsChanged && toolsChanged ? 'system instructions and tool definitions' : instructionsChanged ? 'system instructions' : 'tool definitions';
-      const message = `Agent ${agentName} (${taskId}) resumed under changed instructions: its ${what} differ from the ones it started with.`;
+      const what = instructionsChanged && toolsChanged ? 'instructions and tool definitions' : instructionsChanged ? 'instructions' : 'tool definitions';
+      const message = `Agent ${agentName} (${taskId}) resumed under changed instructions: its persona's ${what} changed since it last ran.`;
       this.writer.recordIssue({ kind: 'resumed_under_changed_instructions', severity: 'warning', actor: agentName, message, metadata: { task_id: taskId, iteration, instructions_changed: instructionsChanged, tools_changed: toolsChanged } });
       this.writer.appendRow('system', message, true);
+      // OQ-105 as ruled: once per change — the next resume compares against what this one ran with.
+      this.writer.replaceAgentFingerprint(taskId, current.instructions, current.tools);
     };
   }
 
@@ -104,19 +116,43 @@ export function conversationOf(rows: readonly AgentMessageRow[]): ChatMessage[] 
   return out;
 }
 
-/** PD-ORCH-005 revision 4 clause 14: handed the system prompt and the tool definitions of an agent's model request. */
-export type FingerprintCheck = (systemPrompt: string, specs: readonly ToolSpec[]) => void;
+/** PD-ORCH-005 clause 14: made once at an agent's first model step, so the comparison happens where its execution begins. */
+export type FingerprintCheck = () => void;
 
 /**
- * PD-ORCH-005 revision 4 clause 14: the fingerprint of an agent's instructions and tools — the SHA-256 of the system
- * prompt as the request carries it, and of its tool definitions. The definitions are taken in name order with every
- * object's keys sorted, so the order a listing was assembled in is not a change; a name, a description or a parameter
- * schema that differs is.
+ * OQ-105 as ruled (R-071, `PD-ORCH-005` revision 6 clause 14): what an agent's fingerprint is taken of — its persona's
+ * own definition, and nothing the run adds around it. `instructions` is the persona's own system prompt, before the
+ * playbook (REQ-ORCH-019), the context units (REQ-WORKSPACE-060) and the MCP section (REQ-MCP-101) are appended; `tools` is
+ * its own tool declaration — the declared tools (REQ-CONFIG-102), `tool_restrictions` (REQ-CONFIG-103) and the two flags
+ * that bound what it may hold — not the listing a request offered, which the grant, the mode, the presenter and the
+ * connected servers also shape. Null `tools` for a persona the run cannot resolve.
  */
-export function fingerprintOf(systemPrompt: string, specs: readonly ToolSpec[]): { readonly instructions: string; readonly tools: string } {
+export interface PersonaDefinition {
+  readonly instructions: string;
+  readonly tools: { readonly declared: readonly string[]; readonly coordinatorOnly: boolean; readonly readOnly: boolean; readonly restrictions: Readonly<Record<string, readonly string[]>> | null } | null;
+}
+
+/** The definition of `persona` an agent instructed with `systemPrompt` runs under (OQ-105 as ruled). */
+export function personaDefinitionOf(systemPrompt: string, persona: Pick<Persona, 'tools' | 'coordinatorOnly' | 'readOnly' | 'toolRestrictions'> | null | undefined): PersonaDefinition {
+  return {
+    instructions: systemPrompt,
+    tools: persona ? { declared: [...persona.tools].sort(), coordinatorOnly: persona.coordinatorOnly, readOnly: persona.readOnly, restrictions: persona.toolRestrictions ?? null } : null,
+  };
+}
+
+/** The mark a fingerprint of a persona's definition carries, which tells it apart from one taken of a request before OQ-105's ruling. */
+const DEFINITION_PRINT = 'persona:';
+function isDefinitionPrint(digest: string): boolean { return digest.startsWith(DEFINITION_PRINT); }
+
+/**
+ * PD-ORCH-005 clause 14 with OQ-105 as ruled: the fingerprint of a persona's definition — the SHA-256 of its instructions
+ * and of its tool declaration, each marked `persona:`. The declaration is serialised with every object's keys sorted and
+ * the declared tools in name order, so the order a configuration lists them in is not a change.
+ */
+export function fingerprintOf(definition: PersonaDefinition): { readonly instructions: string; readonly tools: string } {
   const sha = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
-  const ordered = [...specs].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  return { instructions: sha(systemPrompt), tools: sha(stableJson(ordered)) };
+  const tools = definition.tools === null ? null : { ...definition.tools, declared: [...definition.tools.declared].sort() };
+  return { instructions: `${DEFINITION_PRINT}${sha(definition.instructions)}`, tools: `${DEFINITION_PRINT}${sha(stableJson(tools))}` };
 }
 
 /** JSON with every object's keys in sorted order, so two equal values serialise alike whatever order they were built in. */

@@ -5039,7 +5039,14 @@ what became of the continue's message; and whether a Continue action after a Can
 the message-limit resolution after the limit won over it, should re-run a message the resumed iteration carried out, as
 built, or continue with the pending work alone (with OQ-103's ruling on the same state); and whether the run-start control should offer the re-arm on a paused session.
 
-**OQ-105 — What is an agent's fingerprint taken of, when is it compared, and where is the warning stated?** *(`PD-ORCH-005` clause 14 over OQ-95's reading; REQ-SESSION-029, REQ-SESSION-132, REQ-SESSION-134, REQ-SESSION-135, REQ-ORCH-019, REQ-ORCH-088, REQ-ORCH-095, REQ-WORKSPACE-047, REQ-WORKSPACE-050, REQ-WORKSPACE-058, REQ-WORKSPACE-060, REQ-TOOLS-010, REQ-TOOLS-053, REQ-TOOLS-069, REQ-MCP-101, REQ-CONFIG-166 and REQ-MONITOR-305, which the directive does not name; and REQ-ORCH-139, whose issue-kind vocabulary has no kind for the warning, which the reading below departs from by coining `resumed_under_changed_instructions`. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-065](../product/requests.md#r-065). Numbered OQ-78 while it was built; renumbered when it reached `main`, where OQ-78 had been taken meanwhile.)*
+**OQ-105 — What is an agent's fingerprint taken of, when is it compared, and where is the warning stated?** *(`PD-ORCH-005` clause 14 over OQ-95's reading; REQ-SESSION-029, REQ-SESSION-132, REQ-SESSION-134, REQ-SESSION-135, REQ-ORCH-019, REQ-ORCH-088, REQ-ORCH-095, REQ-WORKSPACE-047, REQ-WORKSPACE-050, REQ-WORKSPACE-058, REQ-WORKSPACE-060, REQ-TOOLS-010, REQ-TOOLS-053, REQ-TOOLS-069, REQ-MCP-101, REQ-CONFIG-166 and REQ-MONITOR-305, which the directive does not name; and REQ-ORCH-139, whose issue-kind vocabulary has no kind for the warning, which the reading below departs from by coining `resumed_under_changed_instructions`. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-065](../product/requests.md#r-065). Numbered OQ-78 while it was built; renumbered when it reached `main`, where OQ-78 had been taken meanwhile. **Ruled 2026-10-06.**)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the fingerprint is taken of the persona's own
+definition alone — its instructions before a playbook, the context units and the MCP section are appended, and its tool
+declaration rather than the listing a request offered — and a change is warned once: the fingerprint is then replaced by
+the definition the agent resumed under. When and where the warning is stated (a `resumed_under_changed_instructions`
+warning issue and one transcript line, at the resumed execution's first model step) stays as built. By
+[`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, clause 14.
 
 Clause 14 has each agent's record keep "a fingerprint of the system instructions and the tool definitions the agent
 started with", and has the run state, as a warning, which agent resumed under changed instructions when its persona's
@@ -5103,6 +5110,16 @@ tool does not warn; whether a warning should be stated once per change (replacin
 fingerprint after a warned resume) rather than at every resume while it differs; and whether the warning should also
 reach REQ-MONITOR-305's warnings surface once that is built, or be stated at the continue rather than at the agent's
 first step; and what the issue kind is called, since the specification's vocabulary has none for it.
+
+*Built 2026-10-06 (fin20, `fin20-continue-and-continuation`).* `ConversationRecord.fingerprint` takes the persona's
+definition (`personaDefinitionOf`: the persona's own system prompt, and its declared tools, `tool_restrictions` and
+`coordinatorOnly`/`readOnly` flags), the root's from the entry persona and a child's from its own, and each digest is
+marked `persona:`. A warned resume replaces the row's digests in place, its iteration kept (`SessionWriter.replaceAgentFingerprint`,
+`StoreDal.replaceAgentFingerprint`); a fingerprint recorded before the ruling, unmarked, is replaced the same way and nothing
+is stated. The warning reads "Agent <name> (<task id>) resumed under changed instructions: its persona's instructions |
+tool definitions | instructions and tool definitions changed since it last ran." Pinned by
+`packages/engine/src/run/record.test.ts`'s clause 14 describe, among it "OQ-105 as ruled (live-run findings a71-3 and G1): a
+resume whose playbook, skills, MCP section or tool listing changed, with no persona edited, states nothing".
 
 **OQ-106 — Whose root is "the iteration's root" when the handoff is built for an iteration that has not started?** *(`PD-ORCH-005` clause 20 over REQ-SESSION-115, with clause 16 and `PD-ORCH-003` revision 2; REQ-ORCH-153, REQ-ORCH-154, REQ-LIBRARY-092, REQ-LIBRARY-093 and REQ-LIBRARY-096, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-065](../product/requests.md#r-065). Numbered OQ-79 while it was built; renumbered when it reached `main`, where OQ-79 had been taken meanwhile.)*
 
@@ -8386,9 +8403,16 @@ first iteration"; REQ-ORCH-013, the prior intent inherited only "when (a) the fr
 REQ-ORCH-016, the intent-to-tools mapping that "MUST gate the entry role's tool set"; REQ-ORCH-014, the status that
 conveys the classified intent; REQ-ORCH-007 and REQ-ORCH-008, the 12 s bound and its fallback (OQ-114). Raised 2026-10-01
 from the live-run autopsy at 71ad8e8 finding a71-3,
-[`continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`](../defects/continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md).
-Open. Raised as OQ-161 on its branch and renumbered OQ-162 before it reached `main`, where OQ-160 had been taken
+[`continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`](../defects/fixed/continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md).
+~~Open.~~ **Ruled 2026-10-06.** Raised as OQ-161 on its branch and renumbered OQ-162 before it reached `main`, where OQ-160 had been taken
 meanwhile.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** every continue resumes the paused iteration
+with the intent and tools it started with. The Continue action, and a message-limit resolution, which brings no request
+either, make no classification call and carry the intent in effect; a continue that brings a message classifies it, and
+that classification takes effect from the run's next iteration, once the resumed one has closed. The intent in effect —
+the newest continuation's, else the launch's — is what the status shows and what REQ-ORCH-013 carries over. By
+[`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, clause 23.
 
 The directive resumes an iteration "where it stood" and runs a resumed agent with its persona's current instructions and
 tools. It does not say whether the run's classification is taken again. REQ-ORCH-005 places the classification before
@@ -8431,6 +8455,18 @@ continue that classified is part of this ruling.
 launch's intent and grant. Whether a resumed iteration keeps the grant it started with, so that a new classification
 takes effect only from the next iteration. Whether a successful fresh classification replaces a fallback launch intent,
 as built. And which intent the status shows after a continue.
+
+*Built 2026-10-06 (fin20, `fin20-continue-and-continuation`).* `Sessions.launchContinuation` takes `intentFrom`: the
+Continue action and the message-limit resolution (`continueSessionHeld`) pass `carry`, and the pre-flight is handed the
+intent in effect (`PreflightContext.intent`, `carriedIntent`), which the run host's `runPreflight` resolves the grant,
+playbooks and clamp for with no classification call. A continue by message that resumes an open iteration classifies its
+message for the run (`RunDeps.preflight`) and hands the resumed iteration the carried pre-flight
+(`RunDeps.resumedPreflight`); `Run.preflightInEffect` is what the ports, the playbooks and the clamp read, and when the
+resumed iteration closes, `nextIntentInEffect` records the message's classification as a `run_continuation_intent` entry
+with its row. The resumed iteration's entry carries the message's classification beside its own as `next_run_intent`.
+`previousIntent` (REQ-ORCH-013's prior) is the intent in effect. A plan decision resumes nothing (the iteration closed
+before the hold) and classifies as before. Pinned by `packages/engine/src/run/preflight.test.ts`, "OQ-162 as ruled …" (three
+cases, each red on the code before it) and `apps/desktop/src/run-host/intent.test.ts`.
 
 **OQ-163 — What does REQ-TOOLS-145's refusal name when a `replace`'s own list marks two tasks in progress and no task is
 active?** *(REQ-TOOLS-145, "At most one task may be `IN_PROGRESS` at a time, enforced both when marking a task and on

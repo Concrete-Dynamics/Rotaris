@@ -32,7 +32,7 @@ import { entryOf, excludedModelKeys, isLoaderCopyKey, overridesInForce, pairKey,
 import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
-import { ConversationRecord } from './record.js';
+import { ConversationRecord, personaDefinitionOf } from './record.js';
 import { answerOpenCalls, iterationAgents } from './crash.js';
 import { callsRun, interruptedResult } from './interruption.js';
 import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
@@ -215,6 +215,13 @@ export interface RunDeps {
   readonly checkpoints?: CheckpointPort | null | undefined;
   /** REQ-ORCH-005: classify, grant, resolve the playbooks — before the coordinator exists. Absent: the fallback intent, no playbook. */
   readonly preflight?: ((signal: AbortSignal) => Promise<Preflight>) | undefined;
+  /**
+   * OQ-162 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): the pre-flight of the intent the iteration this run
+   * resumes started with, carried and unclassified. Given, it governs that iteration — its root's and its children's
+   * grant, playbook and clamp — and `preflight`'s classification governs from the run's next iteration. Absent, `preflight`
+   * governs every iteration. Read only by a run that resumes an open iteration.
+   */
+  readonly resumedPreflight?: ((signal: AbortSignal) => Promise<Preflight>) | undefined;
   readonly pid: number;
   readonly host: MachineId;
   readonly readSession: () => SessionRow | undefined;
@@ -438,6 +445,13 @@ export class Run {
   /** REQ-HOOKS-087: the session's hook attachment, removed at the end of the run. */
   private hooks: HookPort | null;
   private preflight: Preflight | null = null;
+  /** OQ-162 as ruled: the carried pre-flight the resumed iteration runs under, until it closes; null otherwise. */
+  private resumedPreflight: Preflight | null = null;
+  /**
+   * OQ-162 as ruled (R-071): the pre-flight in effect for the iteration running now — the resumed iteration's carried one
+   * while it runs, else the run's own. What the ports are granted, the roles are instructed with and the ledger is clamped by.
+   */
+  get preflightInEffect(): Preflight | null { return this.resumedPreflight ?? this.preflight; }
   /**
    * REQ-ORCH-014: true while this run's pre-flight classification is in flight, so the status reads `classifying` before
    * the call and is replaced in place by its result. Derived from the live run, as `currentWait` is: a continuation's
@@ -962,10 +976,11 @@ export class Run {
         try { this.preflight = await this.deps.preflight(this.abort.signal); } catch (cause) { this.deps.warn(`the pre-flight raised and the run continues on the fallback intent: ${String(cause)}`); }
         finally { this.classifying = false; }
       }
-      if (this.deps.continuation) {
-        const intent = this.preflight?.intent ?? NO_PREFLIGHT_INTENT;
-        writer.appendRow('system', `Intent classified: ${intent.category}${intent.carried_over ? ' (continued from previous run)' : ''}`, true);
+      // OQ-162 as ruled (R-071, PD-ORCH-005 revision 6 clause 23): the iteration this run resumes keeps the intent it started with.
+      if (this.deps.resumedPreflight && this.resumeFrom !== null) {
+        try { this.resumedPreflight = await this.deps.resumedPreflight(this.abort.signal); } catch (cause) { this.deps.warn(`the resumed iteration's pre-flight raised and it continues on this run's intent: ${String(cause)}`); }
       }
+      if (this.deps.continuation) this.appendIntentRow(this.preflightInEffect);
       /*
        * REQ-ORCH-153: the hold is settled HERE — after the pre-flight, so the answer group is known, and ahead of
        * everything the gate withholds: the tool ports the first turn builds, the first hook command (`session_start`
@@ -988,12 +1003,13 @@ export class Run {
         writer.save('starting');
       }
       if (this.stop.requested) return await this.teardown(this.stop.reason ?? 'user_cancelled');
-      const auditPayload = {
-        session_id: this.sessionId, workspace_root: this.deps.workspaceRoot, created_at: this.deps.readSession()?.created_at ?? null,
-        run_intent: this.preflight?.intent ?? NO_PREFLIGHT_INTENT, intent_grant: this.preflight?.grant ?? 'none',
-        permission_mode: this.deps.permission.effective, check_suite: null, resolved_playbooks: this.preflight?.resolvedPlaybooks ?? {}, hooks: this.hooks?.auditSnapshot() ?? [], config_snapshot: this.deps.configurationSnapshot ?? {},
-      };
-      if (this.deps.continuation) writer.appendTimeline('run_continuation_intent', 'rotaris', `Continuation intent: ${auditPayload.run_intent.category}.`, auditPayload);
+      const auditPayload = this.intentAudit(this.preflightInEffect);
+      if (this.deps.continuation) {
+        // OQ-162 as ruled: a resumed iteration's carried intent is the one in effect; the request's classification is
+        // recorded beside it, and in effect once that iteration closes (`nextIntentInEffect`).
+        const next = this.resumedPreflight !== null ? { next_run_intent: this.preflight?.intent ?? NO_PREFLIGHT_INTENT } : {};
+        writer.appendTimeline('run_continuation_intent', 'rotaris', `Continuation intent: ${auditPayload.run_intent.category}.`, { ...auditPayload, ...next });
+      }
       else {
         const audit = writer.recordLaunchAudit(auditPayload);
         if (audit.ok && !audit.value) this.deps.warn(`launch audit for ${this.sessionId} already existed and was not rewritten (REQ-SESSION-138)`);
@@ -1059,6 +1075,8 @@ export class Run {
           }
         }
         const escalated = await this.iterate(resuming);
+        // OQ-162 as ruled: once the resumed iteration has closed, the run's own classification governs the next.
+        if (resuming !== null && this.resumedPreflight !== null && this.deps.dal?.openIterationOf(this.sessionId)?.iteration !== resuming.iteration) this.nextIntentInEffect();
         resuming = null;
         if (escalated) { stopReason = 'agent_session_aborted'; break; }
         // REQ-ORCH-085/087: the limit in force is checked at the boundary; the pause is recorded durably before the loop stops.
@@ -1076,6 +1094,35 @@ export class Run {
       // The pause's tool deadline outlives no run, whichever way it ended.
       this.toolDeadline?.cancel();
     }
+  }
+
+  /** REQ-SESSION-138 / REQ-ORCH-027: the audit payload of an intent — the launch audit's, and every continuation entry's. */
+  private intentAudit(p: Preflight | null) {
+    return {
+      session_id: this.sessionId, workspace_root: this.deps.workspaceRoot, created_at: this.deps.readSession()?.created_at ?? null,
+      run_intent: p?.intent ?? NO_PREFLIGHT_INTENT, intent_grant: p?.grant ?? 'none',
+      permission_mode: this.deps.permission.effective, check_suite: null, resolved_playbooks: p?.resolvedPlaybooks ?? {}, hooks: this.hooks?.auditSnapshot() ?? [], config_snapshot: this.deps.configurationSnapshot ?? {},
+    };
+  }
+
+  /** REQ-SESSION-114 / REQ-ORCH-014: a continuation's intent row, with the carried-over suffix where it applies. */
+  private appendIntentRow(p: Preflight | null): void {
+    const intent = p?.intent ?? NO_PREFLIGHT_INTENT;
+    this.deps.writer.appendRow('system', `Intent classified: ${intent.category}${intent.carried_over ? ' (continued from previous run)' : ''}`, true);
+  }
+
+  /**
+   * OQ-162 as ruled (R-071, PD-ORCH-005 revision 6 clause 23): the resumed iteration closed, so the intent this run's
+   * request was classified as comes into effect for the run's next iteration — recorded as a continuation intent with its
+   * row, so the status (REQ-ORCH-014) and REQ-ORCH-013's prior intent read it from here on. An iteration a rest left open
+   * again keeps its carried intent, and this is not reached.
+   */
+  private nextIntentInEffect(): void {
+    this.resumedPreflight = null;
+    const audit = this.intentAudit(this.preflight);
+    this.deps.writer.appendTimeline('run_continuation_intent', 'rotaris', `Continuation intent: ${audit.run_intent.category}.`, audit);
+    this.appendIntentRow(this.preflight);
+    this.saveRunning({});
   }
 
   /**
@@ -1615,14 +1662,14 @@ export class Run {
         // cell calls next, read at each pass (REQ-MONITOR-080).
         compressionFor: this.compressionFor,
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
-        budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
+        budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflightInEffect?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
         ...(this.deps.modelSlots ? { slotsHeldElsewhere: this.deps.modelSlots.heldElsewhere, onSlotFreed: this.deps.modelSlots.freed } : {}),
         // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below. The
         // child's own count is persisted with the total, in one transaction, so a crash leaves the two agreeing.
         countToolCalls: (n, child) => { this.aggregates.addToolCalls(n); if (child) this.persistToolCalls({ children: [child] }); },
         // REQ-EVENTS-053, PD-MONITOR-001: a child's provider requests are the run's, counted where the entry agent's are.
         onRequestUsage: this.onRequestUsage,
-        summariser: this.summariserDeps(), hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), ...(this.deps.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: this.deps.childStallTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
+        summariser: this.summariserDeps(), hooks: this.hooks, playbookFor: this.preflightInEffect?.playbookFor ?? null, route: this.preflightInEffect?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), ...(this.deps.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: this.deps.childStallTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
         // REQ-WORKSPACE-060/065 (ADR-0063): a child is an agent, so it receives the SAME units the entry agent
         // does — the getter is passed through, not a copy, which is what makes "a skill can never be visible to
         // one persona and hidden from another" true by construction rather than by two call sites agreeing.
@@ -1655,14 +1702,16 @@ export class Run {
     const rootResilience = this.rootResilience();
     const compression = this.compressionFor(() => this.callsOn(rootResilience.cell), () => this.plannerTodoLines());
     // PD-ORCH-005 revision 4 clause 14: one check per execution of the root, at its first model step.
-    const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration);
+    // OQ-105 as ruled (R-071): taken of the entry persona's own definition — its instructions and its tool declaration.
+    const entryPersona = (this.deps.personas ? this.deps.personas.resolve(config.persona) : resolveRole(config.persona))?.persona;
+    const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration, personaDefinitionOf(config.systemPrompt, entryPersona));
     /*
      * OQ-202 as ruled (R-071, `PD-ORCH-006`): a coordinator its run grants the direct-work bundle (REQ-ORCH-016) is told to
      * do the work itself, so its instructions agree with the tools it is offered; every other entry keeps its own prompt.
      * While the plan gate holds the run, REQ-ORCH-153 withholds the bundle's writing and command tools, so the held turn
      * keeps the prompt it had before the ruling (`turnFn` reads the hold per turn, as the supervisor below does).
      */
-    const entryInstructions = entryInstructionsFor(config.systemPrompt, this.preflight?.grant ?? null, (this.deps.personas ? this.deps.personas.resolve(config.persona) : resolveRole(config.persona))?.persona ?? null);
+    const entryInstructions = entryInstructionsFor(config.systemPrompt, this.preflight?.grant ?? null, entryPersona ?? null);
     /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
     let rootDetached = false;
     /*
@@ -1701,7 +1750,7 @@ export class Run {
       // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
       // REQ-WORKSPACE-060 (ADR-0063): then the session's always-active context units, read at THIS construction
       // so a skill force-loaded since the last turn reaches this agent (REQ-CONFIG-166).
-      systemPrompt: withContextUnits(withPlaybook(this.planHeld ? config.systemPrompt : entryInstructions, this.preflight?.playbookFor(config.persona) ?? ''), this.deps.contextUnits?.() ?? []), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
+      systemPrompt: withContextUnits(withPlaybook(this.planHeld ? config.systemPrompt : entryInstructions, this.preflightInEffect?.playbookFor(config.persona) ?? ''), this.deps.contextUnits?.() ?? []), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
       // PD-ORCH-001: no supervision while the plan gate holds the run. The hold withholds every writing tool,
       // so the only work left is reading the same region repeatedly — REQ-ORCH-101's first trigger, fired by the

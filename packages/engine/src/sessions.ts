@@ -36,7 +36,7 @@ import { toArtifactRecord } from './artifacts/record.js';
 import { decodeStoredAttachments, persistAttachments, projectAttachments, readAttachmentBody, readBackAttachments, validateAttachmentInputs, type StoredAttachment } from './attachments.js';
 import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
-import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
+import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentResult, type IntentStatus } from '@rotaris/contracts';
 import type { PlanDecision, PlanGatePayload, ResumablePayload } from '@rotaris/contracts';
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import { meteredBackend, type CountUsage } from './run/metered.js';
@@ -571,13 +571,36 @@ export function stateUnreadable(row: SessionRow): string | null {
   return null;
 }
 
-function previousIntent(dal: StoreDal, sessionId: SessionId): IntentCategory | null {
-  const payload = dal.getLaunchAudit(sessionId)?.payload;
+/**
+ * REQ-ORCH-014 with OQ-162 as ruled (R-071): the intent in effect — the newest continuation's, else the launch audit's
+ * (`intentPayloadOf`) — or null when neither reads.
+ */
+function intentInEffect(dal: StoreDal, sessionId: SessionId): IntentResult | null {
+  const payload = intentPayloadOf(dal, sessionId);
   if (!payload) return null;
   try {
     const result = IntentResultSchema.safeParse((JSON.parse(payload) as { run_intent?: unknown }).run_intent);
-    return result.success ? result.data.category : null;
+    return result.success ? result.data : null;
   } catch { return null; }
+}
+
+/**
+ * REQ-ORCH-013's prior intent, which a continue's classification inherits when its own is unusable: the intent in effect.
+ * It was the launch audit's alone until OQ-162's ruling (R-071), so a second continue whose classification failed carried
+ * the launch's category over while the status showed the first continue's.
+ */
+function previousIntent(dal: StoreDal, sessionId: SessionId): IntentCategory | null {
+  return intentInEffect(dal, sessionId)?.category ?? null;
+}
+
+/**
+ * OQ-162 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): the intent a continue carries without classifying — the
+ * intent in effect, fallback or not, restated as carried over (REQ-ORCH-014's continued-from-previous-run suffix). Null
+ * when none is recorded, and the continue then classifies as before, since an intent must be in effect (REQ-ORCH-005).
+ */
+function carriedIntent(dal: StoreDal, sessionId: SessionId): IntentResult | null {
+  const inEffect = intentInEffect(dal, sessionId);
+  return inEffect === null ? null : { category: inEffect.category, confidence: null, reason: `continued the intent in effect, '${inEffect.category}', without classifying again (OQ-162)`, fallback: false, carried_over: true };
 }
 
 /**
@@ -1024,7 +1047,7 @@ export function resolveQueueOwnership(addressedSessionId: string | null, snapsho
 /**
  * REQ-ORCH-014: the audit payload whose `run_intent` is the intent in effect — the newest continuation's
  * (`run_continuation_intent`, written by every continue's pre-flight, OQ-162), else the launch audit's, else null. The
- * repair of the header half of `continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`:
+ * repair of the header half of `docs/defects/fixed/continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`:
  * the status read the launch audit alone, so after a continue it went on showing an intent the resumed run no longer used.
  */
 export function intentPayloadOf(dal: Pick<StoreDal, 'getLaunchAudit' | 'latestTimelineEntry'>, sessionId: SessionId): string | null {
@@ -1642,8 +1665,14 @@ export class Sessions {
    * `openIteration` is PD-ORCH-005 clauses 4 and 6 for a session whose last run left an iteration open: resume it — with
    * the message a continue by message delivers to its root, which clause 17 also appends as a task the resumed iteration
    * holds — or decline it. Every route resumes unless told to decline.
+   *
+   * `intentFrom` is OQ-162 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): `carry` for the Continue action and the
+   * message-limit resolution, which bring nothing new to classify — the run carries the intent in effect and makes no
+   * classification call; `classify` for every route that brings a request (a continue by message, a plan decision), whose
+   * pre-flight classifies as before. Either way an iteration this run resumes keeps the intent it started with, and a new
+   * classification governs from the run's next iteration (`RunDeps.resumedPreflight`).
    */
-  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup, attachmentContent: readonly ContentPart[] = [], plan?: { readonly cycle: number; readonly changes: string }, openIteration: OpenIterationChoice = { message: null }, appendsTask = true): void {
+  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup, attachmentContent: readonly ContentPart[] = [], plan?: { readonly cycle: number; readonly changes: string }, openIteration: OpenIterationChoice = { message: null }, appendsTask = true, intentFrom: 'classify' | 'carry' = 'classify'): void {
     const { model, runtime } = setupIn;
     const sessionId = s.writer.sessionId;
     const storedRow = s.dal.getSession(sessionId)!;
@@ -1669,7 +1698,8 @@ export class Sessions {
     }
     // REQ-GIT-051: numbering continues across a resume — the port reads the rows and the refs at each capture.
     const checkpoints = this.checkpointPortFor({ sessionId, workspaceRoot, effectiveRoot, isolated: effectiveRootOf(storedRow).binding !== null, dal: s.dal, writer: s.writer, warn, log: (m) => { s.log?.info(m); } });
-    const decided: { grant: IntentGrant; intent: IntentCategory | undefined } = { grant: 'none', intent: undefined };
+    // OQ-162 as ruled: the grant and the intent a port is built under are the ones in effect for the iteration it serves.
+    const inEffect = (): Preflight | null => runRef.run?.preflightInEffect ?? null;
     // Part Y (REQ-ORCH-149): the store outlives the run — a continuation reads the artifacts earlier iterations published.
     const artifacts = s.artifacts ?? this.newArtifactStore(s.dal, sessionId, () => s.writer, warn);
     s.artifacts = artifacts;
@@ -1743,6 +1773,14 @@ export class Sessions {
     const cap = runtime?.modelConcurrencyCap ?? null;
     const capFor = runtime?.modelCapFor ?? (() => cap);
     const preflight = this.deps.preflight;
+    /*
+     * OQ-162 as ruled (R-071, PD-ORCH-005 revision 6 clause 23): the Continue action carries the intent in effect for the
+     * whole run; any other continue that resumes the open iteration classifies its request for the run's next iteration
+     * and carries the intent in effect for the resumed one. Where nothing is recorded to carry, the continue classifies.
+     */
+    const carried = carriedIntent(s.dal, sessionId);
+    const runCarries = intentFrom === 'carry' && carried !== null;
+    const resumedCarries = !runCarries && carried !== null && open !== null && openIteration !== 'decline';
     // Part Q / REQ-SESSION-196: a loaded session's exhausted pairs and model override come back from its timeline, once.
     if (s.memory === null) {
       const resolve = (key: string): ModelChoice | null => { const r = setupIn.models?.(key); return r && r.ok ? r.choice : null; };
@@ -1781,10 +1819,11 @@ export class Sessions {
       continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(appendsTask && !restatesUnfinished ? {} : { appendsTask: false }), ...(hooks ? { hooks } : {}), settledBeforeStart, checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
-      ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
+      ...(preflight ? { preflight: (signal: AbortSignal) => preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, ...(runCarries ? { intent: carried } : { previousIntent: priorIntent, hasUnfinishedWork: true }) }) } : {}),
+      ...(preflight && resumedCarries ? { resumedPreflight: (signal: AbortSignal) => preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, intent: carried }) } : {}),
       ...(this.deps.tools ? {
         // REQ-LIBRARY-093: a publish records the instance's canonical name — the root's comes apart from its agent name, its persona.
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, ...(parentPersona === undefined ? {} : { parentPersona }), modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: canonicalName ?? agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, ...(parentPersona === undefined ? {} : { parentPersona }), modeOverride: modeOverride.value, grant: inEffect()?.grant ?? 'none', intent: inEffect()?.intent.category, artifacts: artifactOps(artifacts, { canonicalName: canonicalName ?? agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
         artifacts, budget, modelCap: capFor, modelSlots: slots,
         summariser: { backend: meteredBackend(model.backend, countUsage), model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
@@ -2351,7 +2390,8 @@ export class Sessions {
     if (!todo.ok) return todo;
     const payload = buildContinuationPayload(s.dal, stored, lastPrompt, todo.value);
     const runtimeWithLimit: RunSetup = { ...setup.value, runtime: { ...setup.value.runtime, messageLimit: limit } };
-    this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), runtimeWithLimit, [], undefined, opts.withoutPaused === true ? 'decline' : { message: null });
+    // OQ-162 as ruled (R-071): the Continue action brings nothing new, so it classifies nothing and carries the intent in effect.
+    this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), runtimeWithLimit, [], undefined, opts.withoutPaused === true ? 'decline' : { message: null }, true, 'carry');
     return ok({ resumed: true, messageLimit: limit });
   }
 

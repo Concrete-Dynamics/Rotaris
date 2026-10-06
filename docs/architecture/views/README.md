@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**A continue resumes the paused iteration with the intent and tools it started with, and the fingerprint is the persona's
+(OQ-162, OQ-105; `PD-ORCH-005` revision 6, R-071; fin20).** The Continue action and a message-limit resolution hand the
+pre-flight the intent in effect (`PreflightContext.intent`), which `runPreflight` resolves with no classification call; a
+continue by message that resumes an open iteration runs it under the carried pre-flight (`RunDeps.resumedPreflight`,
+`Run.preflightInEffect`) and records its own classification as in effect once that iteration closes (`nextIntentInEffect`).
+`ConversationRecord.fingerprint` takes the persona's own definition (`personaDefinitionOf`) and replaces the row after a
+stated change (`SessionWriter.replaceAgentFingerprint`, `StoreDal.replaceAgentFingerprint`, a statement over the v24 table).
+The **runtime view**'s `Run.start()` order, its conversation-record paragraph and its §7 row, the **state-ownership** row and
+the **sequences** view's continue say so. No package, edge, process, channel, command or store column changed.
+
 **The code-intelligence manual tool carries the product's description; an isolated run's servers are handed its tree
 (PD-MCP-001, PD-MCP-002, OQ-115, OQ-194; fin21).** The binding manifest gains `productDescriptions`, written by its
 generator, and `filterServerTools` puts the usage-instruction tool's on the bundled server's tool. `mcpConfigurationForExecutionRoot`
@@ -572,8 +582,8 @@ newest `run_continuation_intent` entry's payload, else the launch audit's (`inte
 new `StoreDal.latestTimelineEntry`, a read under the timeline's primary key whose plan `store.test.ts` asserts), and
 reads `classifying` while the live run's pre-flight classification is in flight (`Run.intentClassifying`), a
 continuation's included, so the previous run's intent is not shown meanwhile. This
-repairs the header half of `continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`,
-whose other half stays OQ-162's. The **runtime view**'s `Run.start()` order says so. No package, edge, process, message
+repairs the header half of `docs/defects/fixed/continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`,
+whose other half stayed OQ-162's until its ruling (R-071, 2026-10-06; built below). The **runtime view**'s `Run.start()` order says so. No package, edge, process, message
 kind, channel, command or store column changed.
 
 **A wait the run imposes is not a stall (REQ-MONITOR-117..119, REQ-ORCH-091, REQ-ORCH-092, REQ-ORCH-093, ADR-0060,

@@ -30,6 +30,13 @@ export interface PreflightContext {
   readonly warn: (message: string) => void;
   readonly previousIntent?: IntentResult['category'] | null | undefined;
   readonly hasUnfinishedWork?: boolean | null | undefined;
+  /**
+   * OQ-162 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): the intent already in effect, carried without classifying
+   * again. Given, the pre-flight makes no classification call — the Continue action brings nothing new to classify, and a
+   * resumed iteration keeps the intent it started with — and resolves the grant, the playbooks and the clamp for this
+   * intent as it would for a classified one. `previousIntent` and `hasUnfinishedWork` are then not read.
+   */
+  readonly intent?: IntentResult | undefined;
   /** REQ-EVENTS-053: the run's counter for the classification requests the pre-flight makes (`meteredBackend`). */
   readonly countUsage?: CountUsage | undefined;
 }

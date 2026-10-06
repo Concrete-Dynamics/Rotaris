@@ -31,7 +31,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       playbookFor: (role) => (role === 'orchestrator' ? 'PLAYBOOK\nROUTE: routed text' : ''), budgetCell: { maxActive: 2, maxTotal: 6, maxDepth: 2 }, warnings: [],
     };
   }
-  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | (() => Preflight | Promise<Preflight>) | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void, publisher: Publisher = NONE, systemPrompt?: string) {
+  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | ((ctx: PreflightContext) => Preflight | Promise<Preflight>) | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void, publisher: Publisher = NONE, systemPrompt?: string) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
     const seen: string[] = [];
@@ -41,7 +41,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', ...(systemPrompt === undefined ? {} : { systemPrompt }) } }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       tools: (ctx) => { onTools?.(ctx); return port; }, attended: () => true,
       runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' },
-      ...(preflight ? { preflight: async (ctx) => { seen.push(ctx.prompt); onPreflight?.(ctx); return typeof preflight === 'function' ? preflight() : preflight; } } : {}),
+      ...(preflight ? { preflight: async (ctx) => { seen.push(ctx.prompt); onPreflight?.(ctx); return typeof preflight === 'function' ? preflight(ctx) : preflight; } } : {}),
     });
     return { sessions, client, seen };
   }
@@ -104,28 +104,24 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     expect(dal.getSession(sid)).toMatchObject({ tokens_input: 50, tokens_output: 5, cost: '0.0014' });
     expect(dal.eventsOfKind(sid, 'usage.update')).toHaveLength(2);
   });
-  it('REQ-ORCH-014 (OQ-162, live-run finding a71-3): after the Continue action the status is the intent the continuation classified, not the launch\'s', async () => {
+  it('REQ-ORCH-014 (OQ-162, live-run finding a71-3): after a continue that classified, the status is the intent the continuation classified, not the launch\'s', async () => {
+    // Changed 2026-10-06 with OQ-162's ruling (R-071): this case was the Continue action, which classified the last prompt
+    // again; it now carries the intent in effect (the describe below). A continue by message still classifies, and the
+    // header half of the repair is what this case keeps pinning: the status reads the continuation's intent.
     const fallback: Preflight = { ...preflightOf('none', 'whole_project'), intent: { category: 'moderate_feature', confidence: 0, reason: 'the classification call timed out after 12 s', fallback: true, carried_over: false } };
     const classified: Preflight = { ...preflightOf('direct-work', 'single_file_change'), intent: { category: 'explicit_trivial', confidence: 0.92, reason: 'a one-line edit', fallback: false, carried_over: false } };
     const answers = [fallback, classified];
-    let release!: () => void;
-    const held = new Promise<void>((r) => { release = r; });
     const snapshots: { intent: unknown }[] = [];
     const publisher: Publisher = { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } };
-    const { sessions, seen } = sessionsWith([{ parts: [{ hold: held }, ...toolCalls([{ callId: 'c1', name: 'read_file', args: { path: 'README.md' } }], 'looking').parts] }, answer('done')], () => answers.shift() ?? classified, undefined, undefined, publisher);
+    const { sessions, seen } = sessionsWith([answer('first, done'), answer('done')], () => answers.shift() ?? classified, undefined, undefined, publisher);
     const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
-    for (let i = 0; i < 40 && dal.getSession(sid)!.execution_status !== 'running'; i++) await new Promise((r) => setTimeout(r, 5));
-    expect(snapshots.at(-1)!.intent).toMatchObject({ phase: 'classified', category: 'moderate_feature', fallback: true });
-    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
-    release();
-    await sessions.running(sid)!;
-    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
-    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
     expect((await sessions.running(sid)!).status).toBe('completed');
-    // The Continue action classified the last user prompt again (OQ-162's built reading) …
-    expect(seen).toEqual(['fix the typo', 'fix the typo']);
+    expect(snapshots.at(-1)!.intent).toMatchObject({ phase: 'classified', category: 'moderate_feature', fallback: true });
+    expect(sessions.prompt(sid, 'and the other typo').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(seen).toEqual(['fix the typo', 'and the other typo']);
     expect(dal.timelineOf(sid).filter((t) => t.name === 'run_continuation_intent').map((t) => (JSON.parse(t.metadata) as { run_intent: { category: string } }).run_intent.category)).toEqual(['explicit_trivial']);
-    // … and the status shows that intent, the one in effect for the resumed iteration; the launch audit is unchanged.
+    // … and the status shows that intent, the one in effect; the launch audit is unchanged.
     expect(snapshots.at(-1)!.intent).toEqual({ phase: 'classified', category: 'explicit_trivial', confidence: 0.92, reason: 'a one-line edit', fallback: false, carried_over: false });
     expect(JSON.parse(dal.getLaunchAudit(sid)!.payload)).toMatchObject({ run_intent: { category: 'moderate_feature', fallback: true } });
     expect(intentStatusOf(dal.getSession(sid)!, intentPayloadOf(dal, sid))).toMatchObject({ phase: 'classified', category: 'explicit_trivial' });
@@ -141,15 +137,14 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     let calls = 0;
     const snapshots: { executionStatus: string; intent: unknown }[] = [];
     const publisher: Publisher = { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } };
-    const { sessions } = sessionsWith([{ parts: [{ hold: turnHeld }, ...toolCalls([{ callId: 'c1', name: 'read_file', args: { path: 'README.md' } }], 'looking').parts] }, answer('done')],
+    const { sessions } = sessionsWith([{ parts: [{ hold: turnHeld }, ...answer('first, done').parts] }, answer('done')],
       async () => { calls += 1; if (calls === 1) return fallback; await classifierHeld; return classified; }, undefined, undefined, publisher);
     const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
-    for (let i = 0; i < 40 && dal.getSession(sid)!.execution_status !== 'running'; i++) await new Promise((r) => setTimeout(r, 5));
-    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
     releaseTurn();
     await sessions.running(sid)!;
     const before = snapshots.length;
-    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    // Since OQ-162's ruling (R-071) the Continue action classifies nothing; a continue by message still does.
+    expect(sessions.prompt(sid, 'and the other typo').ok).toBe(true);
     for (let i = 0; i < 40 && calls < 2; i++) await new Promise((r) => setTimeout(r, 5));
     expect(calls).toBe(2);
     // The continuation's classification call is in flight: the previous run's fallback is not shown as the intent.
@@ -163,6 +158,108 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     const after = snapshots.slice(before + during.length);
     expect(after.find((s) => (s.intent as { phase: string }).phase === 'classified')!.intent).toMatchObject({ phase: 'classified', category: 'explicit_trivial' });
     expect(snapshots.at(-1)!.intent).toMatchObject({ phase: 'classified', category: 'explicit_trivial' });
+  });
+
+  /**
+   * OQ-162 and OQ-105 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): a continue resumes the paused iteration with the
+   * intent and tools it started with. The pre-flight the stub stands in for honours a carried intent as the run host's
+   * does (`runPreflight`): no classification, the grant and the playbook resolved for that intent.
+   */
+  describe('OQ-162 as ruled: a continue resumes the paused iteration with the intent and tools it started with', () => {
+    const grantOf = (category: string): 'direct-work' | 'none' => (category === 'explicit_trivial' || category === 'single_file_change' ? 'direct-work' : 'none');
+    const resolvedFor = (intent: Preflight['intent']): Preflight => ({ ...preflightOf(grantOf(intent.category), 'single_file_change'), intent, grant: grantOf(intent.category), playbookFor: (role) => (role === 'orchestrator' ? `PLAYBOOK for ${intent.category}` : '') });
+    const classifiedAs = (category: 'moderate_feature' | 'explicit_trivial' | 'single_file_change' | 'whole_project', fallback = false): Preflight['intent'] =>
+      ({ category, confidence: fallback ? 0 : 0.9, reason: fallback ? 'the classification call timed out after 12 s' : 'test', fallback, carried_over: false });
+    const pausedMidTurn = (held: Promise<void>): ScriptedCall => ({ parts: [{ hold: held }, ...toolCalls([{ callId: 'c1', name: 'read_file', args: { path: 'README.md' } }], 'looking').parts] });
+    const systemOf = (req: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }): string => req.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('');
+
+    it('the Continue action classifies nothing: the resumed root keeps the launch\'s intent, grant and playbook, the status reads it carried, and nothing is warned (live-run findings a71-3 and G1)', async () => {
+      // The live run's shape: the launch fell back at the 12 s bound; classified again, the same prompt would have come back
+      // `explicit_trivial` with the direct-work grant (a71-3) or another playbook row (G1).
+      const answers = [resolvedFor(classifiedAs('moderate_feature', true)), resolvedFor(classifiedAs('explicit_trivial'))];
+      const classifications: string[] = [];
+      const carried: Preflight['intent'][] = [];
+      const ports: ToolPortContext[] = [];
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const { sessions, client } = sessionsWith([pausedMidTurn(held), answer('done')],
+        (ctx) => { if (ctx.intent) { carried.push(ctx.intent); return resolvedFor(ctx.intent); } classifications.push(ctx.prompt); return answers.shift()!; },
+        (ctx) => { if (ctx.persona === 'orchestrator') ports.push(ctx); });
+      const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && dal.getSession(sid)!.execution_status !== 'running'; i++) await new Promise((r) => setTimeout(r, 5));
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await sessions.running(sid)!;
+      expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // One classification, the launch's; the Continue carried the intent in effect in.
+      expect(classifications).toEqual(['fix the typo']);
+      expect(carried).toMatchObject([{ category: 'moderate_feature', carried_over: true, fallback: false }]);
+      // The resumed root was offered the grant it started with, and instructed with the playbook it started with.
+      expect(ports.map((p) => [p.grant, p.intent])).toEqual([['none', 'moderate_feature'], ['none', 'moderate_feature']]);
+      expect(client.requests.map(systemOf).every((text) => text.includes('PLAYBOOK for moderate_feature'))).toBe(true);
+      // The record: the continuation's intent is the launch's, carried; the status reads it so.
+      const entries = dal.timelineOf(sid).filter((t) => t.name === 'run_continuation_intent').map((t) => (JSON.parse(t.metadata) as { run_intent: Preflight['intent']; intent_grant: string }));
+      expect(entries).toMatchObject([{ run_intent: { category: 'moderate_feature', carried_over: true }, intent_grant: 'none' }]);
+      expect(dal.residentRows(sid).some((r) => r.body === 'Intent classified: moderate_feature (continued from previous run)')).toBe(true);
+      expect(intentStatusOf(dal.getSession(sid)!, intentPayloadOf(dal, sid))).toMatchObject({ phase: 'classified', category: 'moderate_feature', carried_over: true });
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'resumed_under_changed_instructions')).toEqual([]);
+    });
+
+    it('a continue by message classifies its message, the resumed iteration keeps the intent it started with, and the new intent governs from the next iteration', async () => {
+      const answers = [resolvedFor(classifiedAs('single_file_change')), resolvedFor(classifiedAs('whole_project'))];
+      const classifications: string[] = [];
+      const ports: ToolPortContext[] = [];
+      let releaseFirst!: () => void;
+      const first = new Promise<void>((r) => { releaseFirst = r; });
+      let releaseResumed!: () => void;
+      const resumed = new Promise<void>((r) => { releaseResumed = r; });
+      const { sessions, client } = sessionsWith([pausedMidTurn(first), { parts: [{ hold: resumed }, ...answer('resumed, done').parts] }, answer('next, done')],
+        (ctx) => { if (ctx.intent) return resolvedFor(ctx.intent); classifications.push(ctx.prompt); return answers.shift()!; },
+        (ctx) => { if (ctx.persona === 'orchestrator') ports.push(ctx); });
+      const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && dal.getSession(sid)!.execution_status !== 'running'; i++) await new Promise((r) => setTimeout(r, 5));
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      releaseFirst();
+      await sessions.running(sid)!;
+      expect(sessions.prompt(sid, 'and rename it too').ok).toBe(true);
+      for (let i = 0; i < 80 && client.requests.length < 2; i++) await new Promise((r) => setTimeout(r, 5));
+      // While the resumed iteration runs, the status reads the intent it started with, carried.
+      expect(intentStatusOf(dal.getSession(sid)!, intentPayloadOf(dal, sid))).toMatchObject({ phase: 'classified', category: 'single_file_change', carried_over: true });
+      // A second request the resumed iteration does not hold, so a new iteration follows it in the same run.
+      expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'then this' } }).ok).toBe(true);
+      releaseResumed();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(classifications).toEqual(['fix the typo', 'and rename it too']);
+      expect(dal.iterationsOf(sid).map((r) => r.iteration)).toEqual([1, 2]);
+      // The launch's root, the resumed root, then the next iteration's root under the message's classification.
+      expect(ports.map((p) => [p.grant, p.intent])).toEqual([['direct-work', 'single_file_change'], ['direct-work', 'single_file_change'], ['none', 'whole_project']]);
+      expect(systemOf(client.requests[1]!)).toContain('PLAYBOOK for single_file_change');
+      expect(systemOf(client.requests[2]!)).toContain('PLAYBOOK for whole_project');
+      const entries = dal.timelineOf(sid).filter((t) => t.name === 'run_continuation_intent').map((t) => (JSON.parse(t.metadata) as { run_intent: Preflight['intent']; next_run_intent?: Preflight['intent'] }));
+      expect(entries).toMatchObject([
+        { run_intent: { category: 'single_file_change', carried_over: true }, next_run_intent: { category: 'whole_project' } },
+        { run_intent: { category: 'whole_project', carried_over: false } },
+      ]);
+      expect(intentStatusOf(dal.getSession(sid)!, intentPayloadOf(dal, sid))).toMatchObject({ phase: 'classified', category: 'whole_project' });
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'resumed_under_changed_instructions')).toEqual([]);
+    });
+
+    it('REQ-ORCH-013: the prior intent a continue\'s classification inherits is the intent in effect, a continue\'s over the launch\'s', async () => {
+      const answers = [resolvedFor(classifiedAs('single_file_change')), resolvedFor(classifiedAs('whole_project')), resolvedFor(classifiedAs('moderate_feature', true))];
+      const priors: (string | null | undefined)[] = [];
+      const { sessions } = sessionsWith([answer('one'), answer('two'), answer('three')],
+        (ctx) => { if (ctx.intent) return resolvedFor(ctx.intent); priors.push(ctx.previousIntent); return answers.shift()!; });
+      const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(sessions.prompt(sid, 'now the whole thing').ok).toBe(true);
+      await sessions.running(sid)!;
+      expect(sessions.prompt(sid, 'continue').ok).toBe(true);
+      await sessions.running(sid)!;
+      // The second continue's prior is the first continue's `whole_project`, not the launch's `single_file_change`.
+      expect(priors).toEqual([undefined, 'single_file_change', 'whole_project']);
+    });
   });
 
   it('REQ-CHAT-158 / REQ-SESSION-154 (live-run finding G8): a continuation\'s run starts at its `starting` save, its pre-flight counted as a launch\'s is', async () => {

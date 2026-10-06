@@ -21,7 +21,7 @@ Live-run finding: a71-3
 
 OQ-105's reading already covers the warning half ("every continue runs the pre-flight again"). Whether the Continue
 action classifies at all, and whether the grant may change mid-iteration, are raised as
-[OQ-162](../architecture/open-questions.md). Recorded, not repaired.
+[OQ-162](../../architecture/open-questions.md). Recorded, not repaired.
 
 ## Specs
 
@@ -67,7 +67,7 @@ action classifies at all, and whether the grant may change mid-iteration, are ra
 
 ## Partly repaired: the header (2026-10-01)
 
-The header half is repaired; the rest stays open under [OQ-162](../architecture/open-questions.md), the owner's.
+The header half is repaired; the rest stays open under [OQ-162](../../architecture/open-questions.md), the owner's.
 
 - **Repaired.** The record's intent status (REQ-ORCH-014) is the intent in effect: the newest `run_continuation_intent`
   entry's payload, else the launch audit's (`intentPayloadOf` in `packages/engine/src/sessions.ts`, read by both
@@ -135,6 +135,38 @@ changed mid-iteration, not the grant. Default pack `.live-run/runs/2026-10-06T01
   session), and a coordinator told in the middle of its iteration to verify and report less than it started under.
 
 No code changed: the note stays open and waits on the owner's ruling of
-[OQ-162](../architecture/open-questions.md) ("Does continuing a paused iteration classify the intent again, and may the
+[OQ-162](../../architecture/open-questions.md) ("Does continuing a paused iteration classify the intent again, and may the
 resumed root's grant change with it?"). (The same scenario's run timing, which started after this classification,
 is a separate defect: `docs/defects/fixed/a-continuations-run-timing-starts-after-its-pre-flight-where-a-launchs-counts-it.md`.)
+
+## Repaired: ruled and built (2026-10-06)
+
+The owner ruled [OQ-162](../../architecture/open-questions.md) and OQ-105 as recommended on 2026-10-06
+([R-071](../../product/requests.md#r-071)), by [`PD-ORCH-005`](../../product/directives.md#pd-orch-005) revision 6 (clauses 14
+and 23), and the ruling is built on branch `fin20-continue-and-continuation`:
+
+- **The Continue action classifies nothing.** It, and the message-limit resolution, carry the intent in effect (the newest
+  continuation's, else the launch's) into the pre-flight (`PreflightContext.intent`), which resolves the grant, the
+  playbooks and the clamp for it with no classification call (`runPreflight` in `apps/desktop/src/run-host/intent.ts`). The
+  classification's 6.6 s to 12 s no longer sits on the Continue's critical path, and the record reads the carried intent
+  ("Intent classified: moderate_feature (continued from previous run)").
+- **A resumed iteration keeps the intent and tools it started with.** A continue by message classifies its message for the
+  run, and the iteration it resumes runs under the carried pre-flight (`RunDeps.resumedPreflight`, `Run.preflightInEffect`);
+  the message's classification takes effect from the run's next iteration, once the resumed one has closed
+  (`Run.nextIntentInEffect`). The coordinator's tools and playbook no longer change in the middle of its iteration.
+- **No warning nobody caused.** Clause 14's fingerprint is taken of the persona's own definition (its instructions and its
+  tool declaration), not of the whole request, and a change is stated once (`ConversationRecord.fingerprint`). A changed
+  playbook, skill, MCP section or listing no longer warns.
+- REQ-ORCH-013's prior intent is the intent in effect (`previousIntent`), so a second continue whose classification is
+  unusable carries over what the status showed.
+
+Pinned by `packages/engine/src/run/preflight.test.ts` ("OQ-162 as ruled: a continue resumes the paused iteration with the
+intent and tools it started with": the Continue action classifies nothing and the resumed root keeps the launch's grant and
+playbook with no warning — the live run's a71-3 and G1 shape; a continue by message's classification governs from the next
+iteration; the prior intent is the intent in effect — each red on the code before the repair), by
+`apps/desktop/src/run-host/intent.test.ts` (a carried intent makes no classification call), and by
+`packages/engine/src/run/record.test.ts`'s clause 14 describe ("a resume whose playbook, skills, MCP section or tool listing
+changed, with no persona edited, states nothing"; a change stated once). A live run's `resume` scenario should now show the
+Continue with no classification request in `resume/model-traffic.jsonl` between the pause and the resumed orchestrator's
+request, the same tool count and system prompt before and after, a `run_continuation_intent` entry with `carried_over: true`,
+and no `resumed_under_changed_instructions` issue.

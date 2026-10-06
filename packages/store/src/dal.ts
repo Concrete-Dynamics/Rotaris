@@ -635,6 +635,8 @@ export class StoreDal {
       insertAgentFingerprint: db.prepare(`INSERT OR IGNORE INTO agent_fingerprints (session_id, task_id, iteration, instructions, tools, at)
         VALUES (@session_id, @task_id, @iteration, @instructions, @tools, @at)`),
       agentFingerprintOf: db.prepare('SELECT * FROM agent_fingerprints WHERE session_id = ? AND task_id = ?'),
+      // OQ-105 as ruled (R-071): a change is stated once, so the fingerprint it was stated against is replaced; the iteration stays.
+      replaceAgentFingerprint: db.prepare('UPDATE agent_fingerprints SET instructions = ?, tools = ?, at = ? WHERE session_id = ? AND task_id = ?'),
       // Clause 12, as for the conversation: the fingerprints of closed iterations go with their records.
       clearClosedAgentFingerprints: db.prepare("DELETE FROM agent_fingerprints WHERE session_id = ? AND iteration NOT IN (SELECT iteration FROM iterations WHERE session_id = ? AND state = 'open')"),
 
@@ -844,6 +846,11 @@ export class StoreDal {
     return this.stmts['agentFingerprintOf']!.get(id, taskId) as AgentFingerprintRow | undefined;
   }
   /** Clause 12: the fingerprints of every closed iteration's agents removed, an open iteration's kept; the count removed. */
+  /** OQ-105 as ruled (R-071): the agent's fingerprint replaced in place, its iteration kept. False when it has none. */
+  replaceAgentFingerprint(id: SessionId, taskId: string, instructions: string, tools: string, at: string): boolean {
+    return this.stmts['replaceAgentFingerprint']!.run(instructions, tools, at, id, taskId).changes === 1;
+  }
+
   clearClosedAgentFingerprints(id: SessionId): number {
     return this.stmts['clearClosedAgentFingerprints']!.run(id, id).changes;
   }

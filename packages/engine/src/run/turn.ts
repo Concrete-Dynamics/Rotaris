@@ -345,9 +345,9 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       const afterCompression = stopsHere();
       if (afterCompression) return afterCompression;
     }
-    // PD-ORCH-005 revision 4 clause 14: what this step's request carries — the instructions after the MCP section is
-    // appended and the listing after the port is ready — is what an agent's fingerprint is taken of.
-    deps.fingerprint?.(stepDeps.systemPrompt, specs);
+    // PD-ORCH-005 clause 14: the comparison is made at the execution's first model step, once the port is ready. Since
+    // OQ-105's ruling (R-071) it is taken of the persona's own definition, not of what this step's request carries.
+    deps.fingerprint?.();
     // REQ-CHAT-054: one stable message key per response SEGMENT. A tool boundary ends a segment, so the next step's
     // response is a distinct row; the ladder re-running THIS step on a fallback reuses the key and so persists once.
     const segment = `${deps.agentName}#${steps}`;

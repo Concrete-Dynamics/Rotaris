@@ -33,14 +33,14 @@ export interface PreflightDeps {
 export async function runPreflight(ctx: PreflightContext, deps: PreflightDeps): Promise<Preflight> {
   const warnings: string[] = [];
   const warn = (m: string) => { warnings.push(m); ctx.warn(m); };
-  const freshIntent = await classifyIntent(
+  // OQ-162 as ruled (R-071, PD-ORCH-005 revision 6 clause 23): an intent carried in is in effect as it stands, unclassified.
+  const intent = ctx.intent ?? carryOver(await classifyIntent(
     { prompt: ctx.prompt, metadata: { entrypoint: 'desktop', workspace_hash: String(ctx.workspaceRoot.length) } },
     deps.slots,
     // REQ-EVENTS-053: the classification requests are the run's, counted against it where the engine hands a counter.
     { backend: ctx.countUsage ? meteredBackend(deps.backend, ctx.countUsage) : deps.backend, timers: deps.clocks.timers, credentialFor: deps.credentialFor, modelTimeoutMs: deps.modelTimeoutMs, memory: deps.memory, warn },
     ctx.signal,
-  );
-  const intent = carryOver(freshIntent, ctx.previousIntent ?? null, ctx.hasUnfinishedWork ?? null);
+  ), ctx.previousIntent ?? null, ctx.hasUnfinishedWork ?? null);
   deps.log(`intent: ${intent.category}${intent.fallback ? ` (fallback: ${intent.reason})` : intent.confidence === null ? '' : ` (${intent.confidence})`}${intent.rung ? ` via ${intent.rung}` : ''}`);
   const mapping = resolveIntentMapping(readIntentMapping(join(deps.globalDir, 'intent-tools.yaml')));
   if (mapping.warning !== '') warn(mapping.warning);

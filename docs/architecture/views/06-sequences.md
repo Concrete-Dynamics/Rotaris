@@ -401,8 +401,10 @@ sequenceDiagram
   summarising during REQ-ORCH-080's drain finish (OQ-96).
 - **The next continue resumes it** (`03-runtime-view.md` §2): the open iteration first, the same root and task, every
   paused agent moved back and carrying on from its record, told of its background sessions, the root handed a new
-  message as its next. At its first model step each resumed agent's instructions and tools are compared with the
-  fingerprint its record kept (PD-ORCH-005 clause 14, OQ-105); when they differ the run writes a
-  `resumed_under_changed_instructions` warning issue and a transcript `system` row naming the agent. Declined
+  message as its next. It runs under the intent it started with, carried and unclassified (PD-ORCH-005 clause 23, OQ-162):
+  the Continue action makes no classification call, and a continue by message's classification governs from the run's
+  next iteration. At its first model step each resumed agent's persona definition is compared with the fingerprint its
+  record kept (PD-ORCH-005 clause 14, OQ-105); when they differ the run writes a `resumed_under_changed_instructions`
+  warning issue and a transcript `system` row naming the agent, and keeps the new definition, so a change is stated once. Declined
   ("continue without them"), its paused agents end `cancelled` and it closes before the new run's first iteration
   (`closeLeftOpenIteration`).

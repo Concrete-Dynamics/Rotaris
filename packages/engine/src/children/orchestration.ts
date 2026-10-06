@@ -27,7 +27,7 @@ import { providerIdentity, type ModelChoice } from '../run/resilience.js';
 import type { TurnCompression } from '../run/compression.js';
 import type { PricedUsage } from '../run/pricing.js';
 import { todoLinesFromStored } from '../todo-view.js';
-import type { ConversationRecord } from '../run/record.js';
+import { personaDefinitionOf, type ConversationRecord } from '../run/record.js';
 import { firstTurn, resumedStart, type TurnStart } from '../run/resume.js';
 
 /**
@@ -1213,7 +1213,8 @@ export class IterationChildren implements DelegationOps {
     let progressing = false;
     // PD-ORCH-005 revision 4 clause 14: one check per execution, at the child's first model step — REQ-ORCH-088's retry and
     // REQ-ORCH-095's re-prompt run within it and compare nothing.
-    const fingerprint = deps.record?.fingerprint(row.task_id, row.canonical_name, row.iteration);
+    // OQ-105 as ruled (R-071): taken of the persona's own definition — its instructions and its tool declaration.
+    const fingerprint = deps.record?.fingerprint(row.task_id, row.canonical_name, row.iteration, personaDefinitionOf(persona?.systemPrompt ?? '', persona));
     // REQ-ORCH-088: the child runs under the hard timeout; on expiry, once, it is retried on the role's fallback when one is untried.
     for (;;) {
       const controller = new AbortController();

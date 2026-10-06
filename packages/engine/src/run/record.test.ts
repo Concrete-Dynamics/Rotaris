@@ -6,7 +6,7 @@ import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId }
 import { migrateStore, openStore, StoreDal, forgetSpelling, type AgentMessageRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRef, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type DelegationOps, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type SessionsDeps, type ToolPort } from '../index.js';
-import { ConversationRecord, conversationOf, fingerprintOf } from './record.js';
+import { ConversationRecord, conversationOf, fingerprintOf, personaDefinitionOf, type PersonaDefinition } from './record.js';
 import { takenTaskIds } from '../children/naming.js';
 import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 
@@ -376,32 +376,29 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
 });
 
 /**
- * PD-ORCH-005 revision 4 clause 14: each agent's record keeps a fingerprint of the system instructions and the tool
- * definitions it started with; a resumed agent runs with its persona's current ones, and when they differ the run states,
- * as a warning, which agent resumed under changed instructions (OQ-105).
+ * PD-ORCH-005 clause 14: each agent's record keeps a fingerprint of the instructions and the tools it started with; a
+ * resumed agent runs with its persona's current ones, and when they differ the run states, as a warning, which agent
+ * resumed under changed instructions. OQ-105 as ruled (R-071, `PD-ORCH-005` revision 6): the fingerprint is taken of the
+ * persona's own definition, and a change is stated once.
  */
 describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
-  const spec = (name: string, parameters: Record<string, unknown> = { type: 'object' }, description = name) => ({ name, description, parameters });
+  const def = (instructions: string, declared: readonly string[], over: Partial<NonNullable<PersonaDefinition['tools']>> = {}): PersonaDefinition => ({ instructions, tools: { declared, coordinatorOnly: false, readOnly: false, restrictions: null, ...over } });
 
-  it('fingerprintOf: the same instructions and tools give the same digests whatever order the listing or its keys were built in', () => {
-    const a = fingerprintOf('You are x.', [spec('read', { type: 'object', properties: { path: { type: 'string' } } }), spec('write')]);
-    const b = fingerprintOf('You are x.', [spec('write'), { parameters: { properties: { path: { type: 'string' } }, type: 'object' }, description: 'read', name: 'read' }]);
-    expect(b).toEqual(a);
-    // A key present but undefined is the key absent: the request serialises neither.
-    expect(fingerprintOf('You are x.', [spec('read', { type: 'object', properties: { path: { type: 'string' } }, required: undefined }), spec('write')])).toEqual(a);
-    expect(a.instructions).toMatch(/^[0-9a-f]{64}$/);
-    expect(a.tools).toMatch(/^[0-9a-f]{64}$/);
-    // A changed prompt changes the instructions only; a changed description, schema or name changes the tools only.
-    const prompt = fingerprintOf('You are y.', [spec('read', { type: 'object', properties: { path: { type: 'string' } } }), spec('write')]);
+  it('fingerprintOf (OQ-105 as ruled): the persona\'s own instructions and tool declaration, whatever order the tools are declared in', () => {
+    const a = fingerprintOf(def('You are x.', ['read_file', 'write_file']));
+    expect(fingerprintOf(def('You are x.', ['write_file', 'read_file']))).toEqual(a);
+    expect(a.instructions).toMatch(/^persona:[0-9a-f]{64}$/);
+    expect(a.tools).toMatch(/^persona:[0-9a-f]{64}$/);
+    // Changed instructions change the instructions only; a changed declaration, restriction or flag changes the tools only.
+    const prompt = fingerprintOf(def('You are y.', ['read_file', 'write_file']));
     expect([prompt.instructions === a.instructions, prompt.tools === a.tools]).toEqual([false, true]);
-    for (const tools of [
-      [spec('read', { type: 'object', properties: { path: { type: 'string' } } }, 'reads'), spec('write')],
-      [spec('read', { type: 'object', properties: { path: { type: 'number' } } }), spec('write')],
-      [spec('read', { type: 'object', properties: { path: { type: 'string' } } })],
-    ]) {
-      const changed = fingerprintOf('You are x.', tools);
-      expect([changed.instructions === a.instructions, changed.tools === a.tools]).toEqual([true, false]);
+    for (const changed of [def('You are x.', ['read_file']), def('You are x.', ['read_file', 'write_file'], { readOnly: true }), def('You are x.', ['read_file', 'write_file'], { restrictions: { coder: ['read_file'] } })]) {
+      const print = fingerprintOf(changed);
+      expect([print.instructions === a.instructions, print.tools === a.tools]).toEqual([true, false]);
     }
+    // The definition is the persona's: its declaration in name order, and nothing a request adds.
+    expect(personaDefinitionOf('You are x.', { tools: ['write_file', 'read_file'], coordinatorOnly: false, readOnly: false })).toEqual(def('You are x.', ['read_file', 'write_file']));
+    expect(personaDefinitionOf('You are x.', null)).toEqual({ instructions: 'You are x.', tools: null });
   });
 
   let dir: string;
@@ -422,9 +419,12 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
   const ok = (text: string): PortToolResult => ({ text, isError: false, status: 'ok', durationMs: 1, label: 'x', args: {} });
   const ROOT = RUN_CONFIG_DEFAULTS.systemPrompt;
   const CHILD = BUILT_IN_PERSONAS['coding-agent' as RoleName]!;
+  const ORCHESTRATOR = BUILT_IN_PERSONAS['orchestrator' as RoleName]!;
+  /** The fingerprint of a persona's definition, as the run takes it (OQ-105 as ruled). */
+  const printOf = (prompt: string, persona: typeof CHILD | null) => fingerprintOf(personaDefinitionOf(prompt, persona));
 
-  /** A root and its children over `delegate` and `probe`; `extraTool` widens every agent's listing. */
-  function harness(script: (persona: string, turn: number) => ScriptedCall, over: { rootPrompt?: string; rootPersona?: string; childPrompt?: string; extraTool?: boolean; contextUnits?: () => readonly string[]; childTimeoutMs?: number; childFallback?: ModelRef; childReady?: () => Promise<void> } = {}) {
+  /** A root and its children over `delegate` and `probe`; `extraTool` widens every agent's listing, `mcpSection` its instructions. */
+  function harness(script: (persona: string, turn: number) => ScriptedCall, over: { rootPrompt?: string; rootPersona?: string; childPrompt?: string; childTools?: readonly string[]; extraTool?: boolean; mcpSection?: string; contextUnits?: () => readonly string[]; childTimeoutMs?: number; childFallback?: ModelRef; childReady?: () => Promise<void> } = {}) {
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
     const original = client.stream.bind(client);
@@ -448,14 +448,14 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
         }
         return ok(`probed`);
       },
-      // REQ-MCP-101: the MCP section the port renders is appended to the instructions, and is fingerprinted with them.
-      promptSection: () => 'MCP servers: none connected.',
+      // REQ-MCP-101: the MCP section the port renders is appended to the instructions; since OQ-105's ruling it is not fingerprinted.
+      promptSection: () => over.mcpSection ?? 'MCP servers: none connected.',
       cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
     });
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', systemPrompt: over.rootPrompt ?? ROOT, ...(over.rootPersona === undefined ? {} : { persona: over.rootPersona }) };
     const backend = new DefaultAgentBackend(client);
     const models = (key: string): ModelLookup => ({ ok: false, reason: `'${key}' is not a configured model` });
-    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; if (!base) return null; const child = name === 'coding-agent'; return { persona: { ...base, ...(child && over.childPrompt ? { systemPrompt: over.childPrompt } : {}), ...(child && over.childFallback ? { fallbackModel: over.childFallback } : {}) }, alias: null }; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
+    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; if (!base) return null; const child = name === 'coding-agent'; return { persona: { ...base, ...(child && over.childPrompt ? { systemPrompt: over.childPrompt } : {}), ...(child && over.childTools ? { tools: over.childTools } : {}), ...(child && over.childFallback ? { fallbackModel: over.childFallback } : {}) }, alias: null }; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
     const sessions = new Sessions({
       clocks: clock, publisher: NONE, pid: 79, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => `S-fp-${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: () => undefined,
@@ -481,18 +481,17 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     dal.updateSessionRun(sid, { iterations_completed: 0, todo: encodeStoredTodo({ ...stored, planner }) });
   }
 
-  it('each agent records the fingerprint of what its first request carried, once; a resume under the same instructions states nothing', async () => {
+  it('each agent records the fingerprint of its persona\'s definition, once; a resume under the same definition states nothing', async () => {
     const first = harness((persona, turn) => (persona === 'orchestrator' ? (turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { task_name: 'work' } }], 'Delegating.') : answer('All done.')) : persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Probed.')));
     const sid = (first.sessions.start(dal, 'C:/ws', 'probe the thing') as { value: SessionId }).value;
     expect((await first.sessions.running(sid)!).status).toBe('completed');
     const root = dal.iterationsOf(sid)[0]!.root_task_id;
     const child = dal.childrenOf(sid)[0]!.task_id;
     const request = (persona: string) => first.client.requests.find((r) => personaOf(r) === persona)!;
-    for (const [taskId, persona] of [[root, 'orchestrator'], [child, 'child']] as const) {
-      const req = request(persona);
-      expect(systemOf(req)).toContain('MCP servers: none connected.');
-      expect(dal.agentFingerprintOf(sid, taskId)).toMatchObject({ iteration: 1, ...fingerprintOf(systemOf(req), req.tools ?? []) });
-    }
+    // The request carried more than the persona's definition — the MCP section among it — and the fingerprint is of the definition.
+    expect(systemOf(request('orchestrator'))).toContain('MCP servers: none connected.');
+    expect(dal.agentFingerprintOf(sid, root)).toMatchObject({ iteration: 1, ...printOf(ROOT, ORCHESTRATOR) });
+    expect(dal.agentFingerprintOf(sid, child)).toMatchObject({ iteration: 1, ...printOf(CHILD.systemPrompt, CHILD) });
     // The root's later requests (after its child reported) record nothing more: one row per agent.
     expect((dal.db.prepare('SELECT count(*) AS c FROM agent_fingerprints WHERE session_id = ?').get(sid) as { c: number }).c).toBe(2);
 
@@ -506,7 +505,7 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     expect(systemRows(sid)).toEqual([]);
   });
 
-  it('a root resumed after its instructions changed is named in a warning issue, its timeline entry and a transcript line; the fingerprint it started with is kept', async () => {
+  it('a root resumed after its persona\'s instructions changed is named in a warning issue, its timeline entry and a transcript line, once: the fingerprint becomes the one it ran with (OQ-105 as ruled)', async () => {
     // A persona id the canonicaliser rewrites (REQ-ORCH-045), so the name the warning carries is seen to be the
     // agent's canonical name and not its persona's id.
     const rootPersona = 'Lead Orchestrator';
@@ -515,7 +514,6 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     expect((await first.sessions.running(sid)!).status).toBe('completed');
     const root = dal.iterationsOf(sid)[0]!;
     expect(root.root_canonical_name).toBe('Lead-Orchestrator');
-    const started = dal.agentFingerprintOf(sid, root.root_task_id)!;
     dieIn(sid);
 
     const changed = harness(() => answer('Answered under new instructions.'), { rootPrompt: `${ROOT} Always answer in French.`, rootPersona });
@@ -525,18 +523,26 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     // It ran with its persona's current instructions…
     expect(systemOf(changed.client.requests.at(-1)!)).toContain('Always answer in French.');
     // …and the run said so, naming the agent: once, as a warning.
-    const message = `Agent ${root.root_canonical_name} (${root.root_task_id}) resumed under changed instructions: its system instructions differ from the ones it started with.`;
+    const message = `Agent ${root.root_canonical_name} (${root.root_task_id}) resumed under changed instructions: its persona's instructions changed since it last ran.`;
     expect(warnings(sid)).toMatchObject([{ severity: 'warning', actor: root.root_canonical_name, message }]);
     expect(JSON.parse(warnings(sid)[0]!.metadata)).toEqual({ task_id: root.root_task_id, iteration: 1, instructions_changed: true, tools_changed: false });
     expect(dal.timelineOf(sid).filter((t) => t.name === 'issue' && t.message === message)).toHaveLength(1);
     expect(systemRows(sid)).toEqual([message]);
     // A finished row, as every system row the writer commits is — never one drawn as still streaming (REQ-CHAT-054).
     expect(dal.residentRows(sid).filter((r) => r.body === message).map((r) => r.settled)).toEqual([1]);
-    // The fingerprint is of what it STARTED with: a resume never replaces it.
-    expect(dal.agentFingerprintOf(sid, root.root_task_id)).toEqual(started);
+    // OQ-105 as ruled: the change is stated once — the fingerprint is now what it ran with, its iteration kept…
+    expect(dal.agentFingerprintOf(sid, root.root_task_id)).toMatchObject({ iteration: 1, ...printOf(`${ROOT} Always answer in French.`, null) });
+    // …so resumed again under the same instructions it is not named a second time.
+    dieIn(sid);
+    const again = harness(() => answer('Answered again.'), { rootPrompt: `${ROOT} Always answer in French.`, rootPersona });
+    expect(again.sessions.resume(dal, 'C:/ws', sid).ok).toBe(true);
+    expect(again.sessions.prompt(sid, 'go on').ok).toBe(true);
+    expect((await again.sessions.running(sid)!).status).toBe('completed');
+    expect(warnings(sid)).toHaveLength(1);
+    expect(systemRows(sid)).toEqual([message]);
   });
 
-  it('a child resumed after its persona\'s tools and instructions changed is named for both; the root, whose tools alone changed, for its tools', async () => {
+  it('a child resumed after its persona\'s tools and instructions changed is named for both; the root, whose listing alone widened, is not named (OQ-105 as ruled)', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     const first = harness((persona, turn) => {
@@ -553,22 +559,45 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     expect(child.state).toBe('paused');
     expect(dal.agentFingerprintOf(sid, child.task_id)).toBeDefined();
 
-    const changed = harness((persona) => (persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Done.')), { childPrompt: `${CHILD.systemPrompt}\nNever touch tests.`, extraTool: true });
+    const changed = harness((persona) => (persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Done.')), { childPrompt: `${CHILD.systemPrompt}\nNever touch tests.`, childTools: [...CHILD.tools, 'fetch'], extraTool: true });
     expect(changed.sessions.resume(dal, 'C:/ws', sid).ok).toBe(true);
     expect(changed.sessions.continueSession(sid, 'continue').ok).toBe(true);
     expect((await changed.sessions.running(sid)!).status).toBe('completed');
-    // The root's tools changed too (`extra` joined every listing), so it is named for its tools alone.
+    // The child's persona declares another tool and carries another prompt: it is named for both.
+    expect(warnings(sid).map((w) => [w.actor, JSON.parse(w.metadata) as unknown])).toEqual([[child.canonical_name, { task_id: child.task_id, iteration: 1, instructions_changed: true, tools_changed: true }]]);
+    expect(systemRows(sid)).toEqual([`Agent ${child.canonical_name} (${child.task_id}) resumed under changed instructions: its persona's instructions and tool definitions changed since it last ran.`]);
+    // The root's listing widened too (`extra` joined every listing), but its persona did not change, so it is not named.
     const root = dal.iterationsOf(sid)[0]!;
-    expect(warnings(sid).map((w) => [w.actor, JSON.parse(w.metadata) as unknown])).toEqual(expect.arrayContaining([
-      [child.canonical_name, { task_id: child.task_id, iteration: 1, instructions_changed: true, tools_changed: true }],
-      [root.root_canonical_name, { task_id: root.root_task_id, iteration: 1, instructions_changed: false, tools_changed: true }],
-    ]));
-    expect(systemRows(sid)).toContain(`Agent ${child.canonical_name} (${child.task_id}) resumed under changed instructions: its system instructions and tool definitions differ from the ones it started with.`);
-    // The wording names what changed: the root's tools alone, in the transcript and in the issue.
-    const toolsOnly = `Agent ${root.root_canonical_name} (${root.root_task_id}) resumed under changed instructions: its tool definitions differ from the ones it started with.`;
-    expect(systemRows(sid)).toContain(toolsOnly);
-    expect(warnings(sid).find((w) => w.actor === root.root_canonical_name)?.message).toBe(toolsOnly);
-    expect(warnings(sid)).toHaveLength(2);
+    expect(warnings(sid).some((w) => w.actor === root.root_canonical_name)).toBe(false);
+  });
+
+  it('OQ-105 as ruled (live-run findings a71-3 and G1): a resume whose playbook, skills, MCP section or tool listing changed, with no persona edited, states nothing', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const first = harness((persona, turn) => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { task_name: 'work' } }], 'Delegating.') : answer('Waiting.');
+      if (persona === 'summariser') return answer('{"summary":"probed"}');
+      return turn === 1 ? { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'probe', args: {} }], 'Probing.').parts] } : answer('Probed.');
+    });
+    const sid = (first.sessions.start(dal, 'C:/ws', 'probe the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 400 && !first.client.requests.some((r) => personaOf(r) === 'child'); i += 1) await new Promise((r) => setTimeout(r, 2));
+    expect(first.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await first.sessions.running(sid);
+    const changed = harness((persona) => (persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Done.')),
+      { contextUnits: () => ['Skill: loaded since the pause.'], mcpSection: 'MCP servers: docs (2 tools).', extraTool: true });
+    expect(changed.sessions.resume(dal, 'C:/ws', sid).ok).toBe(true);
+    expect(changed.sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await changed.sessions.running(sid)!).status).toBe('completed');
+    // The precondition: both resumed agents' requests carried instructions and a listing their first did not.
+    for (const persona of ['orchestrator', 'child']) {
+      const req = changed.client.requests.find((r) => personaOf(r) === persona)!;
+      expect(systemOf(req)).toContain('Skill: loaded since the pause.');
+      expect(systemOf(req)).toContain('MCP servers: docs (2 tools).');
+      expect((req.tools ?? []).map((t) => t.name)).toContain('extra');
+    }
+    expect(warnings(sid)).toEqual([]);
+    expect(systemRows(sid)).toEqual([]);
   });
 
   it('once per execution, placed where the execution begins: a run never paused states nothing, though a skill loaded mid-run changes what the root\'s re-entry and the child\'s fallback retry are instructed with', async () => {
@@ -603,27 +632,38 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     expect(systemRows(sid)).toEqual([]);
     const root = dal.iterationsOf(sid)[0]!.root_task_id;
     const child = dal.childrenOf(sid)[0]!.task_id;
-    expect(dal.agentFingerprintOf(sid, root)?.instructions).toBe(fingerprintOf(requests('orchestrator')[0]!, []).instructions);
-    expect(dal.agentFingerprintOf(sid, child)?.instructions).toBe(fingerprintOf(requests('child')[0]!, []).instructions);
+    expect(dal.agentFingerprintOf(sid, root)).toMatchObject(printOf(ROOT, ORCHESTRATOR));
+    expect(dal.agentFingerprintOf(sid, child)).toMatchObject(printOf(CHILD.systemPrompt, CHILD));
   });
 
-  it('the check acts once per execution: a second call within it compares nothing, and a record with no store checks nothing', () => {
+  it('the check acts once per execution and states a change once; a fingerprint taken before the ruling is replaced unstated; a record with no store checks nothing', () => {
     const sid = asSessionId('S-fp-unit');
     dal.upsertSession({ session_id: sid, execution_status: 'running', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
     const w = SessionWriter.open({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { pid: 5, host: HOST, isProcessAlive: () => false });
     if (!w.ok) throw new Error('writer');
     const record = new ConversationRecord(w.value, dal, sid);
-    record.fingerprint('bg_0000aa01', 'work', 1)('You are a.', []);
-    expect(dal.agentFingerprintOf(sid, 'bg_0000aa01')).toMatchObject({ iteration: 1, ...fingerprintOf('You are a.', []) });
-    // A later execution under changed instructions warns once, however many steps it takes — even when they change again.
-    const resumed = record.fingerprint('bg_0000aa01', 'work', 1);
-    resumed('You are b.', []);
-    resumed('You are c.', [spec('x')]);
+    const a = def('You are a.', ['read_file']);
+    const b = def('You are b.', ['read_file']);
+    record.fingerprint('bg_0000aa01', 'work', 1, a)();
+    expect(dal.agentFingerprintOf(sid, 'bg_0000aa01')).toMatchObject({ iteration: 1, ...fingerprintOf(a) });
+    // A later execution under a changed definition warns once, however many steps it takes.
+    const resumed = record.fingerprint('bg_0000aa01', 'work', 1, b);
+    resumed();
+    resumed();
     expect(warnings(sid)).toHaveLength(1);
-    // One under the instructions it started with states nothing.
-    record.fingerprint('bg_0000aa01', 'work', 1)('You are a.', []);
+    // OQ-105 as ruled: once per change — the next execution under the same changed definition states nothing…
+    record.fingerprint('bg_0000aa01', 'work', 1, b)();
     expect(warnings(sid)).toHaveLength(1);
-    new ConversationRecord(w.value, undefined, sid).fingerprint('bg_0000aa02', 'other', 1)('You are a.', []);
+    expect(dal.agentFingerprintOf(sid, 'bg_0000aa01')).toMatchObject({ iteration: 1, ...fingerprintOf(b) });
+    // …and a change back is a change.
+    record.fingerprint('bg_0000aa01', 'work', 1, a)();
+    expect(warnings(sid)).toHaveLength(2);
+    // A fingerprint recorded before the ruling — a digest of the whole request, unmarked — is not comparable: replaced, unstated.
+    dal.insertAgentFingerprint({ session_id: sid, task_id: 'bg_0000aa03', iteration: 1, instructions: 'f'.repeat(64), tools: 'e'.repeat(64), at: 't' });
+    record.fingerprint('bg_0000aa03', 'old', 1, a)();
+    expect(warnings(sid)).toHaveLength(2);
+    expect(dal.agentFingerprintOf(sid, 'bg_0000aa03')).toMatchObject({ iteration: 1, ...fingerprintOf(a) });
+    new ConversationRecord(w.value, undefined, sid).fingerprint('bg_0000aa02', 'other', 1, a)();
     expect(dal.agentFingerprintOf(sid, 'bg_0000aa02')).toBeUndefined();
   });
 
@@ -641,7 +681,7 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'transcript_cleared')!.metadata)).toMatchObject({ fingerprints_removed: 1 });
   });
 
-  it('an agent paused before its first model step has no fingerprint: resumed under changed instructions it records the current ones and is not named', async () => {
+  it('an agent paused before its first model step has no fingerprint: resumed under a changed persona it records the current definition and is not named', async () => {
     // ADR-0034: the child's port is still resolving its surface when the pause lands, so its turn stops before any request.
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
@@ -666,7 +706,7 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     // Its first step went out under the changed instructions, and that is the fingerprint it started with.
     const req = changed.client.requests.find((r) => personaOf(r) === 'child')!;
     expect(systemOf(req)).toContain('Never touch tests.');
-    expect(dal.agentFingerprintOf(sid, child.task_id)).toMatchObject({ iteration: 1, ...fingerprintOf(systemOf(req), req.tools ?? []) });
+    expect(dal.agentFingerprintOf(sid, child.task_id)).toMatchObject({ iteration: 1, ...printOf(`${CHILD.systemPrompt}\nNever touch tests.`, CHILD) });
     expect(warnings(sid)).toEqual([]);
     expect(systemRows(sid)).toEqual([]);
   });
@@ -699,14 +739,13 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     expect(dal.agentFingerprintOf(sid, two!.root_task_id)).toBeDefined();
     expect(dal.agentFingerprintOf(sid, child.task_id)).toBeDefined();
 
-    const changed = harness((persona) => (persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Done.')), { childPrompt: `${CHILD.systemPrompt}\nNever touch tests.`, extraTool: true });
+    const changed = harness((persona) => (persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Done.')), { childPrompt: `${CHILD.systemPrompt}\nNever touch tests.`, childTools: [...CHILD.tools, 'fetch'], extraTool: true });
     expect(changed.sessions.resume(dal, 'C:/ws', sid).ok).toBe(true);
     expect(changed.sessions.continueSession(sid, 'continue').ok).toBe(true);
     expect((await changed.sessions.running(sid)!).status).toBe('completed');
-    expect(warnings(sid).map((w) => [w.actor, JSON.parse(w.metadata) as unknown])).toEqual(expect.arrayContaining([
+    // The child's persona changed; the root's did not (its listing widened, which is not its definition).
+    expect(warnings(sid).map((w) => [w.actor, JSON.parse(w.metadata) as unknown])).toEqual([
       [child.canonical_name, { task_id: child.task_id, iteration: 2, instructions_changed: true, tools_changed: true }],
-      [two!.root_canonical_name, { task_id: two!.root_task_id, iteration: 2, instructions_changed: false, tools_changed: true }],
-    ]));
-    expect(warnings(sid)).toHaveLength(2);
+    ]);
   });
 });

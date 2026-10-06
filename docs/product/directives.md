@@ -2329,6 +2329,10 @@ earlier text is replaced, but two earlier clauses are qualified, and each carrie
 sentence ("settled as before") no longer holds for the agents a crash left, which clause 23 presents `paused` before the
 crash is recorded; and clause 15's "whichever surface asks it" no longer holds on one surface, a persona window on the
 run's own instance while the session rests, where clause 24 refuses the run's cancel.*
+*Revision 6 (2026-10-06, [R-071](requests.md#r-071)) — **two rulings on what the build left open**: clause 14 is replaced
+(the fingerprint is of the persona's own definition, and a change is stated once, OQ-105) and clause 23 is added (a continue
+resumes the paused iteration with the intent and tools it started with, OQ-162); `REQ-ORCH-005` and `REQ-ORCH-013` join the
+Narrows list. The owner took both recommendations.*
 
 *Revision 5 (2026-09-29, [R-067](requests.md#r-067)) — **two rulings on what the build left open**: clause 21 (the
 status a stop persists, OQ-96) and clause 22 (a follow-up by `session_id` resumes a settled child, OQ-66's open part)
@@ -2422,10 +2426,20 @@ to the run's outcome for display; every other unfinished agent of a session at r
 > *Qualified by clause 23 (revision 6): the agents a crash left present `paused`, by `crash`, before the crash is recorded,
 > and are not "settled as before".*
 
-**(14) What the record keeps beside the conversation (revision 4).** Each agent's record SHALL also keep a fingerprint
-of the system instructions and the tool definitions the agent started with. A resumed agent runs with its persona's
-current instructions and tools; when they differ from the fingerprint, the run SHALL state, as a warning, which agent
-resumed under changed instructions.
+**(14) What the record keeps beside the conversation — revision 6.** Each agent's record SHALL also keep a fingerprint
+of its persona's own definition: the persona's instructions, before anything the run adds to them (a playbook, the
+session's context units, the MCP section), and the persona's tool declaration, not the listing a request offers. A
+resumed agent runs with its persona's current instructions and tools; when its persona's definition differs from the
+fingerprint, the run SHALL state, as a warning, which agent resumed under changed instructions, and the fingerprint then
+becomes the definition it resumed under, so that each change is stated once.
+
+> Revision 5 said, and no longer governs, clause (14): "**(14) What the record keeps beside the conversation (revision
+> 4).** Each agent's record SHALL also keep a fingerprint of the system instructions and the tool definitions the agent
+> started with. A resumed agent runs with its persona's current instructions and tools; when they differ from the
+> fingerprint, the run SHALL state, as a warning, which agent resumed under changed instructions." The build took "the
+> system instructions" to be the whole system prompt a request carried and kept the first fingerprint for every
+> comparison (OQ-105), so a playbook a new classification chose, a skill, the MCP section or a workspace instruction file
+> warned for agents whose persona no one had edited, at every resume while it differed.
 
 **(15) The stop and the explicit cancel (revision 4).** A forced stop is a stop: its agents come to rest as clause 3
 says. A stop or a quit during a plan cycle ends the cycle's agents and records no interruption, and the plan gate keeps
@@ -2605,6 +2619,15 @@ is offered first to the other sessions, in the order they joined, and then to th
 `starting`, `running` or `summarizing` SHALL keep its slot while its session rests and resume into it, in place of
 REQ-MONITOR-020's "only running and summarizing agents count" and REQ-CONFIG-094's "currently running". A session paused
 by an earlier process holds no place until a run of it starts in this one, and a resting session's places do not lapse.
+**(23) A continue resumes the paused iteration with the intent and tools it started with (revision 6).** An iteration a
+continue resumes SHALL run under the intent in effect when it was left open — the newest intent the session recorded, a
+continuation's or else the launch's — with that intent's grant to the entry role, its playbook and its budget clamp, for
+its root and every agent it resumes or delegates. The Continue action, and the resolution of a message-limit pause, bring
+no new request, and SHALL make no classification call: the run carries the intent in effect, conveyed as continued from
+the previous run. A continue that brings a request — a message, or a plan decision — classifies it as any run does, and
+that classification SHALL take effect from the run's next iteration, once the resumed iteration has closed; an iteration
+left open again keeps the intent it started with. The prior intent a classification inherits when its own is unusable
+(REQ-ORCH-013) is the intent in effect.
 
 **What is unchanged.** A continuation is still not a resume: a timed-out child is never resumed and earns no corrective
 message (REQ-NOTIFY-112). The message-limit pause and the plan gate keep their durable holds. The run host is still
@@ -2640,6 +2663,23 @@ What it costs:
 - a fingerprint beside each agent's record.
 
 Until they are built, the product behaves as the readings in OQ-94 to OQ-99 recorded.
+
+**Why revision 6, and what it costs.** The owner ruled two questions the build had left open ([R-071](requests.md#r-071)).
+Every continue classified the intent again, the Continue action on the session's last prompt, which added up to 12 s to a
+continue that brought nothing new; and the new classification governed the iteration it resumed, so the coordinator's
+tools or playbook changed in the middle of its iteration (24 tools to 29 in the live run of 2026-10-01, finding a71-3;
+three playbook lines in that of 2026-10-06, finding G1). Clause 14's fingerprint, taken of the whole system prompt and
+the listing, then warned that the agent had resumed under changed instructions although no persona had been edited. What
+it costs:
+- `REQ-ORCH-005` asks that classification complete before the coordinator starts and be in effect from the first
+  iteration; the Continue action classifies nothing, and a continue by message's first iteration runs under the intent it
+  resumes, so the directive names it;
+- `REQ-ORCH-013` carries the prior intent over only when a fresh classification was unusable; the Continue action carries
+  it with no fresh classification at all;
+- a persona whose definition is unchanged is never named, even when what it was instructed with changed — a workspace
+  instruction file its own run edited, a skill loaded since, another MCP server — since those are the run's, not the
+  persona's;
+- a change is stated once, so a session resumed many times under a changed persona does not repeat the warning.
 
 **Why revision 5, and what it costs.** The owner ruled two questions the build had left to the record ([R-067](requests.md#r-067)).
 REQ-SESSION-186 has a graceful, clean stop persist `stopped`, and REQ-SESSION-073's vocabulary glosses `stopped` with
@@ -2715,7 +2755,7 @@ finds this directive. Nothing in the product changes. What the readings cost, no
 > back-pointer is removed. It extended REQ-ORCH-053, REQ-SESSION-065 and REQ-NOTIFY-121; revision 2 narrows them,
 > because the settle no longer cancels a `paused` agent.
 
-> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-ORCH-072, REQ-ORCH-002, REQ-ORCH-052, REQ-MONITOR-300, REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121, REQ-SESSION-115, REQ-SESSION-129, REQ-SESSION-025, REQ-TOOLS-054, REQ-TOOLS-111, REQ-ORCH-134, REQ-MONITOR-014, REQ-MONITOR-046, REQ-MONITOR-211, REQ-MONITOR-213, REQ-SESSION-078, REQ-SESSION-180, REQ-ORCH-135, REQ-MONITOR-130, REQ-SESSION-108, REQ-TOOLS-063, REQ-CHAT-029, REQ-MONITOR-063, REQ-ORCH-004, REQ-SESSION-186, REQ-SESSION-073, REQ-MONITOR-169, REQ-MONITOR-064, REQ-MONITOR-128, REQ-CHAT-069, REQ-MONITOR-107, REQ-MONITOR-111, REQ-TRACE-464, REQ-GIT-051, REQ-TOOLS-064, REQ-TOOLS-058, REQ-CHAT-094, REQ-MONITOR-020, REQ-CONFIG-094
+> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-ORCH-072, REQ-ORCH-002, REQ-ORCH-052, REQ-MONITOR-300, REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121, REQ-SESSION-115, REQ-SESSION-129, REQ-SESSION-025, REQ-TOOLS-054, REQ-TOOLS-111, REQ-ORCH-134, REQ-MONITOR-014, REQ-MONITOR-046, REQ-MONITOR-211, REQ-MONITOR-213, REQ-SESSION-078, REQ-SESSION-180, REQ-ORCH-135, REQ-MONITOR-130, REQ-SESSION-108, REQ-TOOLS-063, REQ-CHAT-029, REQ-MONITOR-063, REQ-ORCH-004, REQ-SESSION-186, REQ-SESSION-073, REQ-MONITOR-169, REQ-MONITOR-064, REQ-MONITOR-128, REQ-CHAT-069, REQ-MONITOR-107, REQ-MONITOR-111, REQ-TRACE-464, REQ-GIT-051, REQ-TOOLS-064, REQ-TOOLS-058, REQ-CHAT-094, REQ-MONITOR-020, REQ-CONFIG-094, REQ-ORCH-005, REQ-ORCH-013
 > **Extends:** REQ-MONITOR-125
 
 *Raised by the owner, 2026-09-27; logged as [R-058](requests.md#r-058) and ruled as drafted, every fork as recommended,
@@ -3011,6 +3051,43 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > driven; main's `revokePresenter` is wiring no unit reaches. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+
+> **First execution of revision 6, 2026-10-06, ruled by [R-071](requests.md#r-071) and built on branch
+> `fin20-continue-and-continuation`:** clauses 14 and 23 were built as written. The text met the code in these places:
+> - **Where the carried intent comes from.** "The intent in effect" is the newest `run_continuation_intent` entry's, else the
+>   launch audit's — the reading REQ-ORCH-014's status already took (`intentPayloadOf`). It is carried restated as carried
+>   over (`carriedIntent`), so a fallback launch intent is carried as the category it fell back to, conveyed as continued
+>   from the previous run, not as a fallback. A session with nothing recorded to carry classifies, since an intent must be
+>   in effect (REQ-ORCH-005).
+> - **The pre-flight still runs for a carried intent**, with no classification call: the run host resolves the grant, the
+>   playbooks and the clamp for it (`PreflightContext.intent`, `runPreflight`), so a playbook override edited since is read
+>   again, as every run reads it.
+> - **A continue by message classifies at the continue**, as before, and the iteration it resumes runs under the carried
+>   pre-flight (`RunDeps.resumedPreflight`, `Run.preflightInEffect`); the plan gate is settled on the run's own
+>   classification, since it holds before the first new iteration (PD-ORCH-003 revision 2). The resumed iteration's entry
+>   records the message's classification beside its own (`next_run_intent`), and once that iteration closes the
+>   classification is recorded as a further entry and row (`nextIntentInEffect`). A plan decision resumes nothing and
+>   classifies as before.
+> - **The persona's definition** is its own system prompt and its tool declaration (declared tools, `tool_restrictions`,
+>   the `coordinatorOnly` and `readOnly` flags); the root's is the entry persona's. Digests are marked `persona:`, so a
+>   fingerprint recorded before the ruling, of the whole request, is told apart and replaced with nothing stated. A
+>   stated change replaces the row's digests in place, its iteration kept (clause 12's clear reads it). The issue kind
+>   and the transcript line stay as built (OQ-105), the line now naming the persona's instructions or tool definitions
+>   as "changed since it last ran".
+>
+> **What was measured.** Unit and scripted end-to-end tests: three cases in `packages/engine/src/run/preflight.test.ts`
+> ("OQ-162 as ruled …"), each red on the code before the repair — the live run's a71-3 and G1 shape (a launch that fell
+> back, a Continue that would have classified otherwise: one classification, the resumed root's grant and playbook the
+> launch's, no warning), a continue by message whose classification governs from the next iteration, and the prior
+> intent; `apps/desktop/src/run-host/intent.test.ts` (a carried intent makes no classification request); and the clause
+> 14 describe in `packages/engine/src/run/record.test.ts`, rewritten to the ruling, with a case in which a skill, the MCP
+> section and the listing all changed across a pause and nothing is warned. In the built app, `pnpm part-j-proof`
+> (pause, steer at rest and a quit's relaunch, each continued by the Continue action) recorded each Continue's intent as
+> the launch's `moderate_feature` carried, with no classification, every fingerprint marked `persona:`, and no
+> `resumed_under_changed_instructions` issue; `pnpm part-h-proof`'s continue by message still carried its intent over from
+> an unusable classification. Both ran at a load average of 5 to 9 beside another plan's agents.
+> **What was not measured.** No live run: the orchestrator's default run's `resume` scenario is the evidence still owed.
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 ---
 
 <a id="pd-orch-006"></a>

@@ -80,3 +80,13 @@ Pinned by:
 
 `pnpm ui-audit --views=4` after the repair: 0 findings at both sizes. It does not fold a column (its workspace holds
 no requirement), so it moved no number here; the proof's measurement is the one that moved.
+
+**The sideways assertion shown red (fin21, 2026-10-06, a verifier's finding).** The `fold` stage's last check, each
+label's widest line box within the rail's content box, had never been seen to fail. In a scratch build (not committed)
+`.req-rail`'s width was narrowed from `calc(8ch + 8px + 2 * var(--rt-hairline-width))` to `5ch`, and the heading's
+`overflow-wrap: anywhere` set to `normal`, so a word too wide for the rail overflows sideways on one line rather than
+breaking (with `anywhere` kept, the narrowed rail breaks the word, and the stage's earlier "breaks inside" check is the one
+that fires). `pnpm build`, then `requirements-proof.mjs --skip-build` as root under Xvfb, Node 24, load 9.0 to 10.4 on 4
+CPUs with another plan's agents on the host (the measurement is geometry, not timing): the proof stopped at
+`REQ-TRACE-310: "Backlog" is 39.5 px wide in a rail whose content box is 32 px ({"label":"Backlog","lines":1,"broken":[],"widest":39.5})`.
+The CSS was then restored and the app rebuilt.

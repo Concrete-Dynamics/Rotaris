@@ -4737,12 +4737,16 @@ acknowledgement for the timed one (OQ-188). What it costs: in the timed wait kee
 > (`WaitRegistry.retryOn`); the header sends once per wait drawn (`keepWaitingAction`'s `sent`). The change-model chooser's
 > choice of the waiting pair is unchanged. **Measured:** three `ladder.test.ts` cases on two agents parked at once (the root
 > on a1, a child on b1): keep waiting on a1 leaves the child in its own wait on b1, retried there next, with no override and
-> both exclusions cleared — red before, the child moved to a1 with a `b1 → a1` override; a second press for the wait already
+> both exclusions cleared — red before, the child moved to a1 with a `b1 → a1` override. The same case pins the pair filter of
+> `WaitRegistry.retryOn` (repair round 2, the verifier's finding that it could be removed with every test green): after the
+> press on a1 the child's wait is still its first (attempt 1), the session still has two `model_wait` issues and b1 was called
+> once — red with the filter cut to `p.state.exhausted`, where the press took the child off its own wait and it re-entered a
+> new one at attempt 2 with a third `model_wait` issue; a second press for the wait already
 > retried is refused and writes no `entry_model_switched` — red before, `{ok: true}` and a switch to b1; presses naming another
 > pair, another attempt or another agent are refused and change nothing — red before. `ui.test.ts`: `keepWaitingAction`
 > answers `sent` after a retry was sent for the wait shown — red before. `resilience-proof`'s `keep-waiting` now presses Keep
 > waiting twice in one frame and requires one retry row and no `entry_model_switched`.
-> **Measured:** `ladder.test.ts` (a quota wait's record names `modelKey: 'a1'`, and `setModel` with it completes the run on a1,
+> **Measured as first built (the plain `setModel` the correction above replaced):** `ladder.test.ts` (a quota wait's record names `modelKey: 'a1'`, and `setModel` with it completes the run on a1,
 > a1 recorded then cleared, no override, no refusal; a timed wait names its key too), `ui.test.ts` (`keepWaitingAction`:
 > retry in the out-of-quota wait, acknowledgement in the timed one, with no key, or with no `setModel` — red before, the
 > function absent), and `resilience-proof`'s driven `keep-waiting` scenario on the built app (alpha refused on quota, Keep

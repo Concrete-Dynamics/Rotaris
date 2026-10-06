@@ -1766,7 +1766,16 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(keepWaiting(h, sid)).toEqual({ ok: true });
       // The child's wait on b1 is the one outstanding now, and the header shows it (before: none, the child moved to a1).
       for (let i = 0; i < 40 && lastWait(h.pub)?.model !== 'b1'; i++) await tick();
-      expect(lastWait(h.pub)).toMatchObject({ provider: 'b', model: 'b1', agent: 'side', modelKey: 'b1' });
+      // The root's retry on a1 went out and the run settled before the child's wait is judged.
+      const callsBefore = h.client.requests.length;
+      for (let i = 0; i < 40 && h.client.requests.length === callsBefore; i++) await tick();
+      for (let i = 0; i < 20; i++) await tick();
+      // The child is still in the wait it entered first: the same attempt, no second `model_wait` issue and no second
+      // waiting row. A press that resumed every out-of-quota wait (WaitRegistry.retryOn without its pair filter) took the
+      // child off its own wait, so it re-entered a new one at attempt 2 with a third `model_wait` issue.
+      expect(lastWait(h.pub)).toMatchObject({ provider: 'b', model: 'b1', agent: 'side', modelKey: 'b1', attempt: 1 });
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'model_wait')).toHaveLength(2);
+      expect(h.client.requests.filter((r) => r.model.modelId === 'b1')).toHaveLength(1);
       expect(keepWaiting(h, sid)).toEqual({ ok: true });
       expect((await h.sessions.running(sid)!).status).toBe('completed');
       // Every call of the child went to b1 (before: b1 then a1), and no override was written (before: b1 → a1).

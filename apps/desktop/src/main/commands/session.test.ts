@@ -39,6 +39,8 @@ interface Harness {
   readonly focused: string[];
   /** PD-ORCH-005 clause 9: what `quitting()` answers. */
   readonly quit: { now: boolean };
+  /** REQ-NOTIFY-030/032: `MainWindows.beginStart` / `endStart`, in order, and the host requests already sent at each. */
+  readonly starts: { readonly op: 'begin' | 'end'; readonly wcId: number; readonly sessionId: string; readonly hostAskedBefore: number }[];
 }
 
 function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | ProcessReply, host: (req: RunHostRequest) => Promise<ProcessReply> | ProcessReply): Harness {
@@ -49,13 +51,18 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
   const hostAsked: RunHostRequest[] = [];
   const quit = { now: false };
   const focused: string[] = [];
+  const starts: Harness['starts'] = [];
   const ctx = {
     capturing: false,
     clocks: new FakeClock(),
     quitting: () => quit.now,
     dialogs: new Map(),
     log: (m: string) => { logs.push(m); },
-    mainWindows: { takeMintedSession: () => 'minted-1' } as unknown as CommandContext['mainWindows'],
+    mainWindows: {
+      takeMintedSession: () => 'minted-1',
+      beginStart: (wcId: number, sessionId: string) => { starts.push({ op: 'begin', wcId, sessionId, hostAskedBefore: hostAsked.length }); },
+      endStart: (wcId: number, sessionId: string) => { starts.push({ op: 'end', wcId, sessionId, hostAskedBefore: hostAsked.length }); },
+    } as unknown as CommandContext['mainWindows'],
     notices: { clearForRunStart: async () => undefined, report: async (input: ReportInput) => { reported.push(input); return { id: reported.length, shown: true }; } } as unknown as CommandContext['notices'],
     pauseWindows: new Map(),
     raiseNotice: (...args: Parameters<CommandContext['raiseNotice']>) => { raised.push({ severity: args[0], headline: args[1], detail: args[2] }); },
@@ -65,7 +72,7 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
     runHost: { request: async (req: RunHostRequest) => { hostAsked.push(req); return host(req); } },
     services: new Map([[canonicalPath(WORKSPACE), { link: { request: async (req: WorkspaceServiceRequest) => { svcAsked.push(req); return svc(req); } } }]]) as unknown as CommandContext['services'],
   };
-  return { logs, raised, reported, svcAsked, hostAsked, ctx, quit, focused };
+  return { logs, raised, reported, svcAsked, hostAsked, ctx, quit, focused, starts };
 }
 
 const created = { kind: 'worktree.created', path: `${WORKSPACE}/.rotaris/worktrees/minted-1`, branch: 'rotaris/session/minted-1', baseBranch: 'main', baseRevision: 'abc' } as const;
@@ -185,6 +192,41 @@ describe('session.start, driven without a process behind it', () => {
   });
 });
 
+/*
+ * docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md:
+ * main learned that the window follows the session it started only at the renderer's `session.subscribe`, so a run failing
+ * before it was read as another session's failure. The window now follows it from the moment the run host is asked.
+ */
+describe('REQ-NOTIFY-030/032: the window that starts a session follows it from the start', () => {
+  const idle = (started: (req: RunHostRequest) => ProcessReply) => (req: RunHostRequest): ProcessReply => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: 'ws-1', count: 0 } : started(req));
+
+  it('a base-tree start carries a main-minted id, marked as the window\'s start before the run host is asked', async () => {
+    const h = harness(() => ({ kind: 'ack' }), idle((req) => ({ kind: 'session.started', sessionId: (req as { sessionId: string }).sessionId })));
+    const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'));
+    const asked = h.hostAsked.find((r) => r.kind === 'session.start') as { sessionId?: string } | undefined;
+    expect(asked?.sessionId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(out).toEqual({ ok: true, value: { sessionId: asked?.sessionId } });
+    // Marked before the start was sent (only the runs.active probe had gone), and never unmarked.
+    expect(h.starts).toEqual([{ op: 'begin', wcId: 7, sessionId: asked?.sessionId, hostAskedBefore: 1 }]);
+  });
+
+  it('an isolated start marks the minted id it binds', async () => {
+    const h = harness(() => ({ ...created, kind: 'worktree.created' }), () => ({ kind: 'session.started', sessionId: 'minted-1' }));
+    await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Write the notes in a worktree.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
+    expect(h.starts).toEqual([{ op: 'begin', wcId: 7, sessionId: 'minted-1', hostAskedBefore: 0 }]);
+  });
+
+  it('a refused or unanswered start unmarks it: the window follows no session that never came to exist', async () => {
+    const refused = harness(() => ({ kind: 'ack' }), idle(() => ({ kind: 'refused', code: 'session.configuration', headline: 'The run was refused before it started' })));
+    await sessionCommands(refused.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'));
+    expect(refused.starts.map((s) => s.op)).toEqual(['begin', 'end']);
+    expect(refused.starts[1]?.sessionId).toBe(refused.starts[0]?.sessionId);
+    const unanswered = harness(() => ({ ...created, kind: 'worktree.created' }), () => Promise.reject(new Error('no reply to session.start within 10000 ms')));
+    await sessionCommands(unanswered.ctx)['session.start']({ kind: 'session.start', prompt: 'Write the notes in a worktree.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
+    expect(unanswered.starts).toEqual([{ op: 'begin', wcId: 7, sessionId: 'minted-1', hostAskedBefore: 0 }, { op: 'end', wcId: 7, sessionId: 'minted-1', hostAskedBefore: 1 }]);
+  });
+});
+
 describe('session.continue (PD-ORCH-005 clause 6)', () => {
   const continued = { kind: 'session.continued', sessionId: 'S1', resumed: true, messageLimit: null } as const;
   it('relays the decline to the run host, and a plain continue without one', async () => {
@@ -249,6 +291,37 @@ describe("session.subscribe's verification seam: the reply held after the attach
       expect(await reply).toEqual({ ok: true });
       expect(h.logs).toEqual(['capture: session.subscribe reply held 1500 ms', 'capture: session.subscribe reply released']);
     } finally { delete process.env['ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS']; }
+  });
+
+  /*
+   * The seam resilience-proof's auth-fallback launches use: the subscription itself held before it takes effect, so a run
+   * failing in its first milliseconds certainly ends before the window subscribes (finacc2's A1).
+   */
+  it('holds the subscription itself the configured time before it takes effect, while capturing', async () => {
+    process.env['ROTARIS_CAPTURE_SUBSCRIBE_DELAY_MS'] = '500';
+    try {
+      const h = harness(() => ({ kind: 'ack' }), () => ({ kind: 'ack' }));
+      const clock = new FakeClock();
+      const subscribed: string[] = [];
+      const commands = sessionCommands({
+        ...h.ctx, capturing: true, clocks: clock,
+        relay: { subscribe: (_id: number, sid: string) => { subscribed.push(sid); } } as unknown as CommandContext['relay'],
+        mainWindows: { setFollowedSession: () => undefined, followerOfSession: () => undefined } as unknown as CommandContext['mainWindows'],
+      });
+      const reply = Promise.resolve(commands['session.subscribe'](subscribe, windowOn('ws-1')));
+      expect(await settledWithin(reply)).toBe(false);
+      expect(subscribed).toEqual([]);
+      expect(h.hostAsked).toEqual([]);
+      clock.advance(500);
+      expect(await reply).toEqual({ ok: true });
+      expect(subscribed).toEqual(['S1']);
+      expect(h.logs).toEqual(['capture: session.subscribe held 500 ms before it takes effect']);
+      // Outside a capture the environment is ignored.
+      const quiet = harness(() => ({ kind: 'ack' }), () => ({ kind: 'ack' }));
+      const plain = sessionCommands({ ...quiet.ctx, relay: { subscribe: () => undefined } as unknown as CommandContext['relay'], mainWindows: { setFollowedSession: () => undefined, followerOfSession: () => undefined } as unknown as CommandContext['mainWindows'] });
+      expect(await plain['session.subscribe'](subscribe, windowOn('ws-1'))).toEqual({ ok: true });
+      expect(quiet.logs).toEqual([]);
+    } finally { delete process.env['ROTARIS_CAPTURE_SUBSCRIBE_DELAY_MS']; }
   });
 
   it('holds nothing outside a capture, whatever the environment says', async () => {

@@ -1279,6 +1279,16 @@ run that ended otherwise on a provider limit (a cancelled quota wait) carries th
 (`runEndingPublication`'s `quota`); a session no main window follows raises REQ-NOTIFY-031's notice as above and **holds the
 `quota` class**, so the focus publishes REQ-NOTIFY-063's notice and its model-settings action (REQ-NOTIFY-093/030), and a
 later ending supersedes it. Until then nothing was held and the limit reached the user only as a plain ending.
+*Since 2026-10-06 (finacc2's A1,
+`docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md`):*
+the focus test is `MainWindows.showingSession` — the main window following the session among its subscribers, **or the
+window starting it**: `session.start` mints the id (the base tree's too) and marks it as that window's start
+(`beginStart`) before the run host is asked, unmarked by the window's `session.subscribe`, its unsubscribe or release, or
+a refused start (`endStart`). A run failing before the renderer's subscription arrives is the focused session's failure;
+until then it raised REQ-NOTIFY-032's warning about the session on screen. And REQ-NOTIFY-070's restart is a run of the
+session starting, so the publisher clears the session's notice as one does (REQ-NOTIFY-058/029, the new
+`clearForRunStart` dependency): a failure held while the session was not on screen and restarted on its fallback when it is
+focused leaves its warning standing beside the prompt no longer.
 
 Main presents `run.result` once as the notice — **except where that result carries `persistence: {confirmed: false}`**,
 the run host having already published the one failure notice `REQ-EVENTS-088` allows, with the last durable ordinal

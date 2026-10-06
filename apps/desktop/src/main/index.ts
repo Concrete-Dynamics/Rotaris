@@ -698,15 +698,17 @@ async function main(): Promise<void> {
   });
   /**
    * REQ-NOTIFY-060/064 with REQ-NOTIFY-030/032 (`run-failure-notice.ts`): a failed run's class publication, gated on its
-   * session being on screen — followed by a main window. A session no main window follows gets REQ-NOTIFY-032's warning, and
-   * its class notice (and, for the authentication class, the recovery dialog) waits for `session.subscribe` to follow it.
+   * session being on screen — followed by a main window, or being started by one (`MainWindows.showingSession`). A session no
+   * main window follows gets REQ-NOTIFY-032's warning, and its class notice (and, for the authentication class, the recovery
+   * dialog) waits for `session.subscribe` to follow it.
    */
   const runFailures = new RunFailurePublisher({
-    isFocused: (sessionId) => mainWindows.followerOfSession(sessionId, relay.subscribersOf(sessionId).map((sink) => sink.id)) !== undefined,
+    isFocused: (sessionId) => mainWindows.showingSession(sessionId, relay.subscribersOf(sessionId).map((sink) => sink.id)) !== undefined,
     report: (notice) => { void notices.report(notice); },
     fallBack: async (sessionId, failure) => await authFallback.onAuthenticationFailure(sessionId, failure),
     recoverAuthentication: async (sessionId, failure) => await authRecovery.onAuthenticationFailure(sessionId, failure),
     closePrompts: () => { authFallback.closeAllPrompts('the recovery dialog opened, REQ-NOTIFY-079'); },
+    clearForRunStart: (sessionId) => { void notices.clearForRunStart(sessionId); },
     log: (message) => log(message),
   });
 

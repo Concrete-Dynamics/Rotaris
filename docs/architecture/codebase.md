@@ -1209,7 +1209,11 @@ through the focus gate (`main/run-failure-notice.ts`, which also holds a failed 
 is followed by a main window, REQ-NOTIFY-030/032, and since 2026-10-02 raises REQ-NOTIFY-031's notice naming the session for
 a non-failure ending no main window follows — `notice-proof`'s `background-ending` drives it — and, since fin10, holds
 REQ-NOTIFY-063's quota notice for the focus of such a session whose run ended on a provider limit, which
-`notice-proof`'s `background-quota` drives); an authentication failure asks the automatic fallback first
+`notice-proof`'s `background-quota` drives; since finacc2's A1 of 2026-10-06 a session counts as on screen in the window
+that is starting it, before its subscription — `MainWindows.showingSession` — and REQ-NOTIFY-070's restart clears the
+session's notice as a run start does, REQ-NOTIFY-058; `auth-fallback`, `auth-fallback-dialog` and `generic` assert both
+[note](../defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md));
+an authentication failure asks the automatic fallback first
 (`main/auth-fallback.ts`, parts A and B) and opens the recovery dialog (`main/auth-recovery.ts`,
 `packages/ui/src/AuthRecoveryDialog.tsx`, parts C and D) only where that answers it is the dialog's — a second failure, or
 a first with no usable fallback (REQ-NOTIFY-072). **`fatal` is driven** (`drivenLaunch`, its steps in `fatal.steps.json`):

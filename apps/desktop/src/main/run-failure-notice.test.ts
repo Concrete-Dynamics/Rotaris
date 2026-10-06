@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ReportInput } from './notices.js';
+import { createNoticeStore, type ReportInput } from './notices.js';
 import type { FallbackOutcome } from './auth-fallback.js';
 import {
   AUTHENTICATION_FAILED, authenticationFailureNotice, genericFailureNotice, PROVIDER_LIMIT_REACHED, quotaFailureNotice, RUN_FAILED,
@@ -84,6 +84,7 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
       fallBack: async (sid) => { const r = automatic(sid); order.push(`fallback:${r.kind}`); return r; },
       recoverAuthentication: async (sid) => { recovered.push(sid); order.push('dialog'); return recovery(sid); },
       closePrompts: () => { order.push('prompts-closed'); },
+      clearForRunStart: (sid) => { order.push(`run-start:${sid}`); },
       log: () => undefined,
     });
     return { publisher, reported, recovered, order };
@@ -102,7 +103,8 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
   it('REQ-NOTIFY-070 ahead of REQ-NOTIFY-072: the automatic fallback is asked first; a restart publishes nothing more and opens no dialog', async () => {
     const restarted = harness(new Set(['S1']), undefined, () => ({ kind: 'restarted', restart: { failed: { provider: 'a', model: 'a1', key: 'a1' }, fallback: { provider: 'f', model: 'f1', key: 'f1' } } }));
     await restarted.publisher.failed('S1', 'authentication', 'HTTP 401');
-    expect(restarted.order).toEqual(['fallback:restarted']);
+    // REQ-NOTIFY-058: the restart is a run of the session starting, and clears the session's notice as one does.
+    expect(restarted.order).toEqual(['fallback:restarted', 'run-start:S1']);
     expect(restarted.reported).toEqual([]);
     expect(restarted.recovered).toEqual([]);
     // No usable fallback, or a second failure: the dialog opens, every prompt is closed (REQ-NOTIFY-079), and the class's notice stands beside it.
@@ -131,7 +133,7 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
     expect(h.order).toEqual([`notice:Session S2 failed`]);
     focused.add('S2');
     await h.publisher.focused('S2');
-    expect(h.order).toEqual([`notice:Session S2 failed`, 'fallback:restarted']);
+    expect(h.order).toEqual([`notice:Session S2 failed`, 'fallback:restarted', 'run-start:S2']);
   });
 
   it('REQ-NOTIFY-069: an authentication failure whose dialog cannot open takes the generic notice; a superseded one raises nothing', async () => {
@@ -219,5 +221,59 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
     expect(h.publisher.holds('S3')).toBe(false);
     await h.publisher.focused('S3');
     expect(h.recovered).toEqual([]);
+  });
+});
+
+/*
+ * docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md:
+ * resilience-proof's auth-fallback-plan left REQ-NOTIFY-032's warning on screen beside the prompt of REQ-NOTIFY-071, because
+ * the held class's publication was the restart, which reports nothing and cleared nothing. Driven here through the one
+ * notice store main has, so what is checked is the notice on screen.
+ */
+describe('main/run-failure-notice — REQ-NOTIFY-032 with REQ-NOTIFY-058/070: two notices about one failure are never on screen at once', () => {
+  const restart = { kind: 'restarted', restart: { failed: { provider: 'a', model: 'a1', key: 'a1' }, fallback: { provider: 'f', model: 'f1', key: 'f1' } } } as const;
+  function wired(focused: Set<string>, automatic: FallbackOutcome) {
+    const store = createNoticeStore({ broadcast: () => undefined, pushAcknowledgement: () => undefined, record: async () => true, log: () => undefined, focusedSession: () => null });
+    const publisher = new RunFailurePublisher({
+      isFocused: (sid) => focused.has(sid),
+      report: (n) => { void store.report(n); },
+      fallBack: async () => automatic,
+      recoverAuthentication: async () => ({ opened: true }),
+      closePrompts: () => undefined,
+      clearForRunStart: (sid) => { void store.clearForRunStart(sid); },
+      log: () => undefined,
+    });
+    return { store, publisher };
+  }
+
+  it('a held first authentication failure that restarts on the fallback when focused leaves no warning standing', async () => {
+    const focused = new Set<string>();
+    const h = wired(focused, restart);
+    await h.publisher.failed('S2', 'authentication', 'HTTP 401');
+    await h.store.settled();
+    expect(h.store.current()?.title).toBe('Session S2 failed');
+    focused.add('S2');
+    await h.publisher.focused('S2');
+    await h.store.settled();
+    // The restart's acknowledgement and the non-modal prompt are the failure's report now; the warning is gone.
+    expect(h.store.current()).toBeNull();
+  });
+
+  it('a restart clears only the restarted session\'s notice and an unscoped one, never another session\'s (REQ-NOTIFY-029)', async () => {
+    const h = wired(new Set(['S1']), restart);
+    await h.store.report({ severity: 'warning', title: 'Session S9 failed', sessionId: 'S9' });
+    await h.publisher.failed('S1', 'authentication', 'HTTP 401');
+    await h.store.settled();
+    expect(h.store.current()?.title).toBe('Session S9 failed');
+  });
+
+  it('every other held class still replaces the warning with its own notice when focused', async () => {
+    const focused = new Set<string>();
+    const h = wired(focused, { kind: 'dialog', reason: 'no usable fallback' });
+    await h.publisher.failed('S2', 'authentication', 'HTTP 401');
+    focused.add('S2');
+    await h.publisher.focused('S2');
+    await h.store.settled();
+    expect(h.store.current()?.title).toBe(AUTHENTICATION_FAILED);
   });
 });

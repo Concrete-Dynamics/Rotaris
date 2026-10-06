@@ -120,9 +120,18 @@ export function sessionCommands(
           binding = { worktree_path: checked.path, branch: checked.branch, base_branch: checked.baseBranch, base_revision: checked.baseRevision, created_by_session: false, merge_status: 'ready', integration_session_id: null };
         }
       }
+      /*
+       * REQ-NOTIFY-030/032: main mints the base tree's id too, so the window that asked follows the session from the moment it
+       * is asked for (`MainWindows.beginStart`): a run failing before the renderer's `session.subscribe` arrives is the
+       * focused session's failure, not another's. Until 2026-10-06 main learned of the follow only at that subscription
+       * (docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
+       */
+      sessionId ??= randomUUID();
+      mainWindows.beginStart(w.wcId, sessionId);
       // ADR-0019, as above: an unanswered run host refuses the start rather than throwing out of it.
-      const r = await runHost.request({ kind: 'session.start', workspaceId: w.workspaceId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }), ...(sessionId === undefined ? {} : { sessionId }), ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) }, millis(10_000)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'run-host.unreachable', headline: 'The run host did not answer', detail: cause.message }));
+      const r = await runHost.request({ kind: 'session.start', workspaceId: w.workspaceId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }), sessionId, ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) }, millis(10_000)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'run-host.unreachable', headline: 'The run host did not answer', detail: cause.message }));
       if (r.kind !== 'session.started') {
+        mainWindows.endStart(w.wcId, sessionId);
         // A tree this request created for a session that never came to exist is taken away again, so nothing is left behind (REQ-GIT-023).
         if (binding?.created_by_session && svc) {
           const path = binding.worktree_path;
@@ -214,6 +223,16 @@ export function sessionCommands(
       return r.kind === 'session.attachment' ? { ok: true, value: r } : refusal(r, 'The image attachment could not be loaded');
     },
     'session.subscribe': async (req, { senderId }) => {
+      // A seam (verification only, ROTARIS_CAPTURE_PNG): ROTARIS_CAPTURE_SUBSCRIBE_DELAY_MS holds the subscription that long
+      // BEFORE it takes effect. A run that fails within milliseconds of its start can end before the renderer's subscription
+      // reaches main — 30 ms against 57 ms at load 10 in finacc2's acceptance, and not at all on a quiet host — so
+      // resilience-proof's auth-fallback launches widen that window to make it certain, and assert the started session is
+      // still the focused one (docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
+      const delay = capturing ? Number(process.env['ROTARIS_CAPTURE_SUBSCRIBE_DELAY_MS'] ?? 0) : 0;
+      if (delay > 0) {
+        log(`capture: session.subscribe held ${delay} ms before it takes effect`);
+        await new Promise<void>((done) => { clocks.timers.after(millis(delay), done); });
+      }
       // Subscribe the relay FIRST so the attach's snapshot and transcript reach this window.
       // Part R found the twenty-seventh defect here: this subscribed `wcId` — the MAIN window — whatever window asked, so a
       // second renderer on one session (ADR-0043's "several windows", REQ-SHELL-076) would have fed the main window twice and

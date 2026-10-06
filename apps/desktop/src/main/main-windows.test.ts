@@ -407,6 +407,42 @@ describe('MainWindows', () => {
     expect(h.mainWindows.followerOfSession('S1', [first.wcId])).toBeUndefined();
   });
 
+  /*
+   * docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md:
+   * a run that failed before the starting window's `session.subscribe` reached main was read as another session's failure.
+   */
+  it('REQ-NOTIFY-030/032: the window starting a session shows it before it subscribes, until it subscribes, stops following it or the start is refused', async () => {
+    const h = harness();
+    const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const second = await h.mainWindows.build({ workspace: 'C:/b', origin: 'open-request' });
+    // Not yet a subscriber of the session it asked for: the focus test still names it.
+    h.mainWindows.beginStart(first.wcId, 'S1');
+    expect(h.mainWindows.showingSession('S1', [])?.wcId).toBe(first.wcId);
+    expect(h.mainWindows.showingSession('S2', [])).toBeUndefined();
+    // The subscription and routing rules are unchanged: a start is not a follow among the subscribers.
+    expect(h.mainWindows.followerOfSession('S1', [first.wcId, second.wcId])).toBeUndefined();
+    // Subscribed: the ordinary rule from here — followed among its subscribers.
+    h.mainWindows.setFollowedSession(first.wcId, 'S1');
+    expect(h.mainWindows.showingSession('S1', [first.wcId])?.wcId).toBe(first.wcId);
+    expect(h.mainWindows.showingSession('S1', [second.wcId])).toBeUndefined();
+    // A refused start: not on screen.
+    h.mainWindows.beginStart(second.wcId, 'S3');
+    h.mainWindows.endStart(second.wcId, 'S3');
+    expect(h.mainWindows.showingSession('S3', [])).toBeUndefined();
+    // Released or unsubscribed before its subscription arrived: not on screen.
+    h.mainWindows.beginStart(second.wcId, 'S4');
+    h.mainWindows.clearFollowedSession(second.wcId, 'S4');
+    expect(h.mainWindows.showingSession('S4', [])).toBeUndefined();
+    // Switched to another session before subscribing to the started one: the started one is not on screen there.
+    h.mainWindows.beginStart(second.wcId, 'S5');
+    h.mainWindows.setFollowedSession(second.wcId, 'S6');
+    expect(h.mainWindows.showingSession('S5', [])).toBeUndefined();
+    // A closed window shows nothing.
+    h.mainWindows.beginStart(second.wcId, 'S7');
+    h.windows.get(second.wcId)!.destroyed = true;
+    expect(h.mainWindows.showingSession('S7', [])).toBeUndefined();
+  });
+
   it('destroys and cleans up a window if loading fails after registration', async () => {
     const h = harness({ failLoads: new Set([1]) });
     await expect(h.mainWindows.build({ workspace: 'C:/broken', origin: 'launch' })).rejects.toThrow('load-failed:1');

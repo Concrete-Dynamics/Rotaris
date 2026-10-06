@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**The window that starts a session shows it from the start, and the fallback restart clears the session's notice
+(REQ-NOTIFY-032, REQ-NOTIFY-058; finacc2's A1).** `session.start` mints every start's id and marks it as the asking window's
+start (`MainWindows.beginStart`, cleared by its subscription, unsubscribe, release or a refused start), and the focus test of
+a run's ending is `MainWindows.showingSession`, so a run failing before the renderer's `session.subscribe` is the focused
+session's failure. `RunFailurePublisher` gains `clearForRunStart`, called for REQ-NOTIFY-070's restart. The **runtime
+view**'s focus-gate passage, the **process view**'s start passage and a **state ownership** row say so. No package, edge,
+process, channel, command or store column changed.
+
 **The instruction files close before whatever the prompt carries next (REQ-WORKSPACE-043, REQ-WORKSPACE-047, REQ-MCP-101;
 fin19).** `contextUnits` builds the workspace-context unit with `instructionContextUnit` (`config/src/instructions.ts`): the
 merged output unchanged, then `INSTRUCTION_FILES_END_COMMENT`. `runTurn` appends the MCP section through the exported

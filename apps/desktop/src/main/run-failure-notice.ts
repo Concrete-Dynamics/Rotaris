@@ -142,6 +142,11 @@ export interface RunFailurePublisherDeps {
   readonly recoverAuthentication: (sessionId: string, failure: string) => Promise<AuthenticationRecoveryOutcome>;
   /** REQ-NOTIFY-079: the recovery dialog opened — every non-modal re-authentication prompt open is closed. */
   readonly closePrompts: () => void;
+  /**
+   * REQ-NOTIFY-058/029: a run of the session started — the standing notice is cleared where it is unscoped or scoped to that
+   * session (`NoticeStore.clearForRunStart`). Called for REQ-NOTIFY-070's restart, which is a run of the session starting.
+   */
+  readonly clearForRunStart: (sessionId: string) => void;
   readonly log: (message: string) => void;
 }
 
@@ -214,7 +219,14 @@ export class RunFailurePublisher {
     // REQ-NOTIFY-070 ahead of REQ-NOTIFY-072: the session's first failure restarts on its fallback where it can; the dialog
     // takes the rest.
     const automatic = await this.deps.fallBack(sessionId, failure);
-    if (automatic.kind === 'restarted') return;
+    if (automatic.kind === 'restarted') {
+      // REQ-NOTIFY-058: the restart is a run of the session starting, so it clears the session's notice — REQ-NOTIFY-032's
+      // warning, where the failure was held while the session was not on screen — and the acknowledgement and the prompt of
+      // REQ-NOTIFY-070/071 are the failure's only report. Until 2026-10-06 the warning stayed beside the prompt: two notices
+      // about one failure (docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
+      this.deps.clearForRunStart(sessionId);
+      return;
+    }
     if (automatic.kind === 'stale') { this.deps.log(`authentication recovery: nothing to recover for session ${sessionId} (${automatic.reason})`); return; }
     if (automatic.kind === 'generic') {
       this.deps.log(`authentication recovery: session ${sessionId} takes the generic failure notice (${automatic.reason})`);

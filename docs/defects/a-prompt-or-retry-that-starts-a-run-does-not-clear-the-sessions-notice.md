@@ -1,7 +1,7 @@
 ## A prompt or a retry that starts a run does not clear the session's notice
 
 Recorded 2026-10-06 by the builder of finacc2's `accept1-2`, noticed while repairing
-`docs/defects/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md`;
+`docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md`;
 not fixed there.
 
 Main clears the standing notice for a run start (`NoticeStore.clearForRunStart`) in exactly two places: `session.start`

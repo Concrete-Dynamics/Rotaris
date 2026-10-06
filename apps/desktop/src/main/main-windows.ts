@@ -97,6 +97,8 @@ interface WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TD
   workspace: string;
   workspaceId: string | undefined;
   followedSessionId: string | null;
+  /** REQ-NOTIFY-032: the session this window asked to start and has not yet subscribed to (`beginStart`), or null. */
+  startingSessionId: string | null;
   readonly personaWindows: TPersonaWindows;
   readonly terminalWindows: TTerminalWindows;
   readonly approvals: TApproval[];
@@ -123,6 +125,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
       workspace: input.workspace,
       workspaceId: undefined,
       followedSessionId: null,
+      startingSessionId: null,
       approvals: [],
       openDialog: null,
       mintedSessionId: null,
@@ -227,14 +230,53 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     return undefined;
   }
 
+  /**
+   * REQ-NOTIFY-030/032 — the focus test of a run's ending (`RunFailurePublisher`): the main window the session is on screen
+   * in. That is the window following it among its subscribers (`followerOfSession`), else the window that is starting it and
+   * has not subscribed yet (`beginStart`); undefined where neither holds — the session is not focused.
+   */
+  showingSession(sessionId: string, subscriberIds: readonly number[]): MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> | undefined {
+    const follower = this.followerOfSession(sessionId, subscriberIds);
+    if (follower !== undefined) return follower;
+    for (const record of this.#records.values()) {
+      if (record.startingSessionId === sessionId && !this.dependencies.adapter.isDestroyed(record.win)) return this.#view(record);
+    }
+    return undefined;
+  }
+
+  /**
+   * REQ-NOTIFY-030/032: the window that starts a session follows it from the moment it asks the run host for it. The renderer
+   * follows every session it starts (`session-actions.ts`), but its `session.subscribe` reaches main only after the start has
+   * answered, and until 2026-10-06 a run that failed in between — 30 ms after the start in resilience-proof's
+   * `auth-fallback-plan` — was read as another session's failure and raised REQ-NOTIFY-032's warning about the session on
+   * screen (docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
+   * Until the window's subscription arrives (`setFollowedSession`), it stops following the session
+   * (`clearFollowedSession`) or the start is refused (`endStart`), `showingSession` names it for that session whatever the
+   * session's subscribers.
+   */
+  beginStart(senderId: number, sessionId: string): void {
+    const record = this.#liveRecord(senderId);
+    if (record) record.startingSessionId = sessionId;
+  }
+
+  /** The start `beginStart` marked was refused: the window does not follow that session. */
+  endStart(senderId: number, sessionId: string): void {
+    const record = this.#liveRecord(senderId);
+    if (record?.startingSessionId === sessionId) record.startingSessionId = null;
+  }
+
   setFollowedSession(senderId: number, sessionId: string): void {
     const record = this.#liveRecord(senderId);
-    if (record) record.followedSessionId = sessionId;
+    if (!record) return;
+    record.followedSessionId = sessionId;
+    // The window subscribed (to its started session, or to another it switched to): the ordinary rule holds from here.
+    record.startingSessionId = null;
   }
 
   clearFollowedSession(senderId: number, sessionId: string): void {
     const record = this.#liveRecord(senderId);
     if (record?.followedSessionId === sessionId) record.followedSessionId = null;
+    if (record?.startingSessionId === sessionId) record.startingSessionId = null;
   }
 
   setWorkspaceId(senderId: number, workspaceId: string | undefined): void {

@@ -997,6 +997,8 @@ await scenarioRun('generic', async () => {
   expect(v.notice.dismiss === true && v.notice.session === row.session_id, `the generic notice is not persistent or not scoped to the session: ${JSON.stringify(v.notice)}`);
   expect(v.notice.action === 'Back to the workspace' && v.notice.actionKind === 'open-view' && v.back === 'workspace' && v.away !== 'workspace', `the action does not return to the workspace view: ${JSON.stringify({ notice: v.notice, away: v.away, back: v.back })}`);
   expect(v.windows.length === 0, `a recovery dialog opened for a failure that is not an authentication failure: ${JSON.stringify(v.windows)}`);
+  // REQ-NOTIFY-032: the session this window started is the focused one, however early its run fails (A1 of finacc2).
+  expect(!/run failure: session \S+ is not focused/.test(r.log), `main read the failure of the session this window started as another session's (REQ-NOTIFY-032): see generic.log`);
   results.generic = { status: row.execution_status, error, notice: v.notice, away: v.away, back: v.back, elapsedMs: r.elapsedMs };
 });
 
@@ -1042,7 +1044,9 @@ await scenarioRun('auth-fallback', async () => {
     const r = await launch(v.name, s8, {
       // `:only=<provider>`: alpha's provider refuses the key, beta's does not; the restarted root takes its script from the
       // first step again, so the fault is scoped to the provider rather than to the step.
-      ROTARIS_SCRIPT: `fail:401:only=${v.provider}`, ROTARIS_CAPTURE_PROMPT: 'bad key, then the fallback',
+      // REQ-NOTIFY-032 (finacc2's A1): the window's subscription held 600 ms, so the 401 certainly ends the first run before
+      // the window subscribes — the race the acceptance met at load 10 and a quiet host never does.
+      ROTARIS_SCRIPT: `fail:401:only=${v.provider}`, ROTARIS_CAPTURE_PROMPT: 'bad key, then the fallback', ROTARIS_CAPTURE_SUBSCRIBE_DELAY_MS: '600',
       ...(v.resize === null ? {} : { ROTARIS_CAPTURE_RESIZE: `${v.resize}@200` }),
       ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && ${v.plan ? `document.querySelector('[data-testid="plan-gate-plan"]') !== null` : `document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed'`} && document.querySelector('[data-testid="reauth-prompt"]') !== null${v.resize === null ? '' : ` && innerWidth + 'x' + innerHeight === '${v.resize}'`} && ${composerUsable} && ${chromeUsable}${v.plan ? ` && ${gateUsable}` : ''}`, ROTARIS_CAPTURE_WAIT_MS: '90000',
       ROTARIS_CAPTURE_PROBE: 'body;;.notice-slot;;[data-testid="reauth-prompt"];;[data-action="reauth-keep"];;[data-testid="reauth-error"]', ROTARIS_CAPTURE_AFTER_MS: '800',
@@ -1069,6 +1073,12 @@ await scenarioRun('auth-fallback', async () => {
     expect(ack.includes(`Authentication failed on ${primary}`) && /scripted-b\/beta/.test(ack), `${v.name}: the acknowledgement did not name both models: ${JSON.stringify(ack)}`);
     const notice = probes(r.log, 'probe').find((p) => p.selector === '.notice-slot')?.found[0];
     expect(notice === undefined || !/The run failed|Authentication failed\b(?! on)/.test(notice.text), `${v.name}: the restarted run left a failure notice on screen: ${JSON.stringify(notice)}`);
+    // REQ-NOTIFY-032 is for "a run other than the focused one": the session this window started is the focused one, however
+    // early its run fails, so its warning is never raised about it, and a restart (REQ-NOTIFY-058) leaves none standing. Until
+    // 2026-10-06 a 401 arriving before the window's subscription raised it, and the check above let its words through
+    // (docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
+    expect(notice === undefined || !/Session \S+ failed|The session on screen is unaffected/.test(notice.text), `${v.name}: REQ-NOTIFY-032's warning about another session is on screen about the session this window started: ${JSON.stringify(notice)}`);
+    expect(!/run failure: session \S+ is not focused/.test(r.log), `${v.name}: main read the failure of the session this window started as another session's (REQ-NOTIFY-032): see ${v.name}.log`);
     // REQ-NOTIFY-070 ahead of REQ-NOTIFY-072: the first failure with a usable fallback restarts and opens no recovery dialog.
     expect(!/authentication recovery: the dialog is open for session/.test(r.log), `${v.name}: the recovery dialog opened for a first failure with a usable fallback: see ${v.name}.log`);
     // REQ-NOTIFY-071: the non-modal prompt beside the continuing run — the primary named, the fallback in use, the provider's
@@ -1153,6 +1163,9 @@ await scenarioRun('auth-fallback-dialog', async () => {
   const at = (re) => r.log.search(re);
   const order = [at(/pinned scripted-b\/beta in place of scripted\/alpha/), at(/re-authentication prompt opened for session/), at(/authentication recovery: the dialog is open for session \S+ \(scripted-b\/beta failed/), at(/re-authentication prompt\(s\) closed \(the recovery dialog opened/)];
   expect(order.every((n) => n >= 0) && order.every((n, k) => k === 0 || n > order[k - 1]), `the restart, the prompt, the dialog and the prompt's closing are not in that order: ${JSON.stringify(order)} (see auth-fallback-dialog.log)`);
+  // REQ-NOTIFY-032: the session this window started is the focused one, however early its run fails — the passing re-run of
+  // finacc2's acceptance logged it as not focused here, a later notice hiding the warning (A1).
+  expect(!/run failure: session \S+ is not focused/.test(r.log), `main read the failure of the session this window started as another session's (REQ-NOTIFY-032): see auth-fallback-dialog.log`);
   expect(v.dialog.title === 'Authentication failed for beta', `the dialog does not name the fallback that failed: ${JSON.stringify(v.dialog.title)}`);
   expect(v.promptWhileOpen === null, `the re-authentication prompt stayed drawn beside the recovery dialog (REQ-NOTIFY-079): ${v.promptWhileOpen}`);
   // REQ-NOTIFY-068: neither pair that failed with the credentials it still has is offered.

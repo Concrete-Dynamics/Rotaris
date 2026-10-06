@@ -78,3 +78,6 @@ Pinned by tests that fail without the repair:
 - `pnpm mcp-proof`, new launch 2b (`schema`): `echo` without `text` refused (`invalid_request`, the text, the issue) with
   nothing reaching the fixture's `--call-file`; `beta_echo` with an extra property received by the fixture exactly as
   written. Green on 2026-10-06 (load average 2.5 to 2.9 on 4 CPUs).
+- `pnpm code-intel-proof` against the bundled runtime: PASSED on 2026-10-06 (load average 2.5 to 4.0 on 4 CPUs). Every one
+  of the runtime's 22 advertised schemas compiled (no "could not be compiled" line in any launch's log), and the scripted
+  `list_memories` and `get_symbols_overview {relative_path}` calls passed the check and succeeded.

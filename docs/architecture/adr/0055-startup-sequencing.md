@@ -379,7 +379,7 @@ numbers**. The entry point therefore takes those branches and returns before the
 `REQ-STARTUP-161`'s prohibition enumerates a configuration key, an environment variable, a preference
 and an interface control, and names no command-line argument, so a sentinel argument does not create the
 thing it forbids — but **the composition of the two requirements is inferred here rather than stated
-anywhere, and that is OQ-43.** It is left open rather than closed by this record.
+anywhere, and that is OQ-43.** It is left open rather than closed by this record. *(OQ-43 ruled 2026-10-06, [R-071](../../product/requests.md#r-071): the exception stated as built in `PD-STARTUP-002`.)*
 
 - **The record is our own file, on every platform, and the platform primitive is not used at all.** It
   lives in the per-user data directory of `REQ-STARTUP-145`, which gives `REQ-STARTUP-161`'s observables

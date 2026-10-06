@@ -1204,7 +1204,7 @@ dead end is reached from two independent routes — a restore into a re-cloned w
 one folder — and that reaching it twice was evidence. ESC-26 answers the restore route only, deliberately
 and in terms: the exception exists "only inside the restore action. No other path gains it — not workspace
 open, not repair, not a migration, not a future convenience." A user who copies a folder and wants the copy
-to have an identity of its own still has no product action, and OQ-47 stays open on that side.
+to have an identity of its own still has no product action, and OQ-47 stays open on that side *(ruled 2026-10-06, [R-071](../../product/requests.md#r-071): this behaviour ratified, the hand edit accepted for the first release)*.
 
 **Then the target store.** Cases (a) and (b), and case (c) under outcome 3, all end holding the artifact's
 identifier; case (c) under outcome 2 ends holding it without the workspace pointing at it, which changes

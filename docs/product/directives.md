@@ -2324,8 +2324,11 @@ builds "failed". That would be false, and it would read as a broken pipeline. Wh
 
 *Revision 6 (2026-10-06, [R-071](requests.md#r-071)) — **the readings the build proceeds under, ratified**: the owner
 confirmed as built every reading OQ-100 to OQ-104, OQ-106 to OQ-108, OQ-117, OQ-118, OQ-124, OQ-128 to OQ-132, OQ-148 and
-OQ-149 record. Clauses 23 to 39 are added, and the Narrows list names the requirements those readings depart from. Nothing
-earlier is replaced.*
+OQ-149 record. Clauses 23 to 39 are added, and the Narrows list names the requirements those readings depart from. No
+earlier text is replaced, but two earlier clauses are qualified, and each carries a note saying so: clause 13's last
+sentence ("settled as before") no longer holds for the agents a crash left, which clause 23 presents `paused` before the
+crash is recorded; and clause 15's "whichever surface asks it" no longer holds on one surface, a persona window on the
+run's own instance while the session rests, where clause 24 refuses the run's cancel.*
 
 *Revision 5 (2026-09-29, [R-067](requests.md#r-067)) — **two rulings on what the build left open**: clause 21 (the
 status a stop persists, OQ-96) and clause 22 (a follow-up by `session_id` resumes a settled child, OQ-66's open part)
@@ -2416,6 +2419,9 @@ presentation state of its own, `paused`, on every agent surface — the agent tr
 Mission view and a persona window — and SHALL keep its last activity. A session at rest SHALL NOT settle a `paused` agent
 to the run's outcome for display; every other unfinished agent of a session at rest is settled as before.
 
+> *Qualified by clause 23 (revision 6): the agents a crash left present `paused`, by `crash`, before the crash is recorded,
+> and are not "settled as before".*
+
 **(14) What the record keeps beside the conversation (revision 4).** Each agent's record SHALL also keep a fingerprint
 of the system instructions and the tool definitions the agent started with. A resumed agent runs with its persona's
 current instructions and tools; when they differ from the fingerprint, the run SHALL state, as a warning, which agent
@@ -2431,6 +2437,9 @@ its hold (clause 11). `/stop` SHALL be the stop, offered with the description "S
 - a pause SHALL stop every agent before its next model step, in place of REQ-SESSION-108's outer-loop boundary;
 - an approval dialog the application's quit closes SHALL answer nothing, and the quit withdraws the approval
   (clause 9). REQ-TOOLS-063's Deny governs every other close. A question the quit dismisses is PD-CHAT-002 revision 2's.
+
+> *Qualified by clause 24 (revision 6): on a persona window on the run's own instance, a "Cancel the run?" confirmed while
+> the session rests is refused, "The run is no longer cancellable.", so "whichever surface asks it" does not hold there.*
 
 **(16) One paused child may be cancelled while its session rests (revision 4).** A `paused` child SHALL offer Cancel
 wherever a live agent offers it. Confirmed as REQ-MONITOR-128 requires, naming the child and one line per paused
@@ -3376,8 +3385,9 @@ provider. The owner kept the built behaviour. What it costs: the list is longer,
 ### PD-TOOLS-009 — exit 1 from a diff or a search is an answer, not a failure
 
 REQ-TOOLS-112's test 4 ("a non-zero exit code → `shell_failure` / error") SHALL NOT apply to exit code 1 from a command
-whose leading tokens name a convention that uses exit 1 for an answer: `diff`; `git` with a `diff` subcommand among its
-tokens (`git diff`, `git --no-pager diff`, `git diff --no-index`; not `git difftool`); and the searches `grep`, `egrep`,
+whose leading tokens name a convention that uses exit 1 for an answer: `diff`; `git` with a token `diff` anywhere after it,
+whitespace-separated and case-insensitive (`git diff`, `git --no-pager diff`, `git diff --no-index`, and also a token that is
+not the subcommand, as in `git log --grep diff`; not `git difftool`, whose token is not `diff`); and the searches `grep`, `egrep`,
 `fgrep`, `rg` and `findstr`. The head is matched case-insensitively, as REQ-TOOLS-033 matches it. Such an observation
 SHALL classify `success` / `info`. Every other non-zero exit still classifies `shell_failure` / error, a test earlier in the
 cascade still decides first (a present `failure_kind` among them), and no other test of the cascade moves.

@@ -553,7 +553,7 @@ main window, a 250 ms poll on the channel that carries registration, and the lap
 LAST REPLY on the run host's own clock, never a receipt for sequence *N*. **The lapse window is 3,000 ms**:
 ten missed replies, an order of magnitude above the measured 303 ms idle maximum, inside the 22,777 ms lag
 the `ipc-hop-latency` spike says must read as unattended. That is a first figure, not a sizing: the loaded
-case is still unmeasured and **OQ-39 stays open**. Main registers each window on creation and revokes it on
+case is still unmeasured and **OQ-39 stays open** *(ruled 2026-10-06, [R-071](../../product/requests.md#r-071): the poll and the window accepted as built)*. Main registers each window on creation and revokes it on
 `closed` (consequence 1), answers each poll at once with the windows it holds, owns the per-window dialog
 queue and nothing else; the dialog is a modal `BrowserWindow` painting the one renderer bundle with
 `role=approval` — never a synchronous native call. The gate's flow is the one this record describes:

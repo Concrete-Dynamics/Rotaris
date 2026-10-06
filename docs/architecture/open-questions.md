@@ -1753,7 +1753,7 @@ wedged. ADR-0002's worker-thread placement makes it terminable; **whether it sho
 what the user is told, is not specified.** The pattern arrives with a checked-out repository, not from the
 user.
 
-**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** closed as Part R″ recommended. The bound stands as Part AJ decided it: no limit on a project's pattern, and a pass is terminated on the user's cancel alone, never on the engine's initiative, the user told only "cancelled". The pattern-cost guard Part R″ suggested raising as an item of its own is not raised; the ruling leaves termination to the user.
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** closed; the pattern-cost question is answered by termination on the user's cancel alone. The bound stands as Part AJ decided it: no limit on a project's pattern, and a pass is terminated on the user's cancel alone, never on the engine's initiative, the user told only "cancelled". Part R″ recommended closing with a pattern-cost guard raised as an item of its own; that guard is not raised, and the ruling leaves termination to the user.
 
 *Part AJ (2026-09-09), the first execution's decision: no bound on the pattern (REQ-TRACE-154/225 forbid one). The pass runs on a worker thread; a cancel raises a shared flag the pass observes at its next checkpoint, and a worker that has not answered 2 s after the cancel is terminated and respawned for the next job. Termination happens only on the user's cancel, never on the engine's initiative, and the user is told only "cancelled". Whether the engine should ever terminate on its own, and what it says when it does, stays open.*
 
@@ -1801,7 +1801,7 @@ mixed process is not an unusual configuration to be avoided but the **only one a
 window must be its own process" is no longer an option the architecture can take, because a second
 process of this application is exactly what `REQ-STARTUP-161` forbids. The per-window reading is
 therefore the only one that can hold, and it should be **stated in the requirement rather than inferred**
-by every reader who meets the pair. Still needs a product-owner statement.
+by every reader who meets the pair. ~~Still needs a product-owner statement.~~ Stated 2026-10-06 (below).
 
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the claim is per window: a demo window opens no outbound connection for its whole lifetime, and a non-demo window of the same instance behaves normally. [`PD-SHELL-004`](../product/directives.md#pd-shell-004) states it and narrows REQ-SHELL-005. Demo mode itself is not built; the directive governs it when it is.
 

@@ -131,8 +131,8 @@ describe('REQ-MONITOR-128: a confirmed cancel of one agent is shown at once', ()
  * REQ-MONITOR-127 / REQ-MONITOR-130 / REQ-MONITOR-296 — the optimistic cancel of the whole run (acceptance A35, the note "the
  * Mission view and a persona window do not show a confirmed run cancel as cancelling"). On confirmation the session's status
  * is shown `cancelling`; a refusal restores the record's own; an accepted cancel is shown until the run's record leaves the
- * active statuses, because the engine writes no `cancelling` for the explicit cancel and its records keep reading `running`
- * through the graceful stop (OQ-165). Since OQ-165 was ruled (2026-10-06) the engine does save `cancelling`, and the overlay
+ * active statuses, because the engine ~~writes~~ *wrote* no `cancelling` for the explicit cancel and its records ~~keep~~
+ * *kept* reading `running` through the graceful stop (OQ-165; superseded by the ruling). Since OQ-165 was ruled (2026-10-06) the engine does save `cancelling`, and the overlay
  * also ends at the first record reading it (the handover case below).
  */
 describe('REQ-MONITOR-127: a confirmed cancel of the run is shown cancelling at once', () => {

@@ -312,7 +312,6 @@ function relabelIfLauncherFailed(confined: boolean, failureKind: FailureKind | n
   return outputIsLauncherOnly(output) ? 'sandbox_unavailable' : failureKind;
 }
 
-/** REQ-SANDBOX-085's detail: the cause lies in the host's configuration, not in the command. */
 /**
  * OQ-168 (ruled 2026-10-06, R-071): a poll after an interrupt on a host that cannot see whether the shell holds its terminal
  * again (Windows, macOS) writes nothing into the session, and says so ahead of REQ-TOOLS-098's soft-pause explanation, which
@@ -320,6 +319,7 @@ function relabelIfLauncherFailed(confined: boolean, failureKind: FailureKind | n
  * outcome (OQ-164's report of a paused command's end).
  */
 export const INTERRUPT_UNSEEN_NOTE = 'An interrupt (C-c) was sent to this command, and on this system the terminal cannot show whether the command has ended without typing a line of its own into the session, which it does not do, so the command may have ended. The next command you run in this session reports how it ended, beside its own result.';
+/** REQ-SANDBOX-085's detail: the cause lies in the host's configuration, not in the command. */
 const LAUNCHER_FAILED_DETAIL = 'Confinement could not be started, so the command never executed. The cause lies in the host\'s configuration rather than in the command; neither retrying nor rewording the command changes the outcome.';
 
 /**

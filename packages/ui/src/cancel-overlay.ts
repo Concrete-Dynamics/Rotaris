@@ -31,9 +31,10 @@ import { cancelCascade } from './agents.js';
  *
  * REQ-MONITOR-127 / REQ-MONITOR-130 — the optimistic cancel of the whole run (acceptance A35). On confirmation "the session
  * status is optimistically set to `cancelling`", and a refusal restores it. Before this only the Workspace set anything —
- * its stop button's "Force stop" — and no surface showed `cancelling`, because the engine writes no `cancelling` for the
- * explicit cancel: the reserved run id's `cancelAgent` raises the final stop in memory, and the run's records keep reading
- * `running` (or `waiting`) through the graceful stop until the teardown writes the run's end. So a run overlay (`run` set,
+ * its stop button's "Force stop" — and no surface showed `cancelling`, because the engine ~~writes~~ *wrote* no `cancelling`
+ * for the explicit cancel: the reserved run id's `cancelAgent` raised the final stop in memory, and the run's records kept
+ * reading `running` (or `waiting`) through the graceful stop until the teardown wrote the run's end. *(Superseded
+ * 2026-10-06 by OQ-165's ruling below: the engine now saves `cancelling` at the acceptance.)* So a run overlay (`run` set,
  * no agent ids) covers every ACTIVE record of the run it was confirmed against, unanswered or accepted, and none at rest:
  * the run's own final read overwrites it (REQ-MONITOR-296), and a lagging reader's older record of that run is still
  * covered. The session's status is shown `cancelling`; no agent is shown cancelled by it, since the engine settles them in

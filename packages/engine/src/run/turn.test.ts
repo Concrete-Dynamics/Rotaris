@@ -231,7 +231,8 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     expect(dal.getSession(sid)!.execution_status).toBe('cancelling');
     release();
     await sessions.running(sid)!;
-    expect(dal.getSession(sid)!.execution_status).not.toBe('cancelling');
+    // The teardown's write replaces it: the run rests on the user's interrupt, `user_cancelled` (REQ-ORCH-136), read paused (REQ-ORCH-082).
+    expect(dal.getSession(sid)).toMatchObject({ execution_status: 'paused', stop_reason: 'user_cancelled' });
   });
 
   it('OQ-165: cancelling one child saves no `cancelling` for the run', async () => {

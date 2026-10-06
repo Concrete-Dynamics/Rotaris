@@ -51,6 +51,12 @@ merged output unchanged, then `INSTRUCTION_FILES_END_COMMENT`. `runTurn` appends
 `withMcpSection`. The **runtime view**'s system-prompt paragraph says so. No package, edge, process, channel, command or
 store column changed.
 
+**A row committed below the last is published with every row after it (REQ-MONITOR-214, PD-CHAT-004; fin19).**
+`ProjectionOwner.onCommitted` publishes the held rows from the committed row's index onward (`rowsFrom`, walking the
+indices up to the new `highestHeld`), so an append or the last row's settle is still one row and a settle below it carries
+what follows. The **runtime view**'s §9 opening says so. No package, edge, process, channel, command or store column
+changed.
+
 **Settings adopts a reload in one update of the whole form, and a permission mode written elsewhere wins (REQ-CONFIG-419,
 REQ-CONFIG-423; fin13).** The Settings hook holds the saved and pending values as one form (`SettingsForm`) and folds each
 `config:changed` through `adoptSnapshot`, so a second announcement in the same tick is rebased against what the first left;

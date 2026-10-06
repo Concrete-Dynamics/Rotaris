@@ -291,6 +291,57 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       expect(projector.project(next).display).toEqual(projectDisplay(next));
     });
 
+    // H5 of the final duress autopsy at 27a5127 (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md):
+    // All activity drew a failed child's 21-minute run as its first row alone. The rows had left the replica — the
+    // publisher sent a row settled below the last without the rows after it — and this pins the projector's half of the
+    // chain against the run's exact order: given what REQ-MONITOR-214's increments carry, every row is drawn, bounded or whole.
+    it('PD-CHAT-004 rev 2 / REQ-MONITOR-214: a child\'s row settled under the coordinator\'s running wait, then the child\'s further rows, then the wait settled — every row drawn', () => {
+      const at = (s: number) => new Date(Date.UTC(2026, 9, 6, 2, 15, 0) + s * 1000).toISOString();
+      const O = { persona: 'orchestrator', name: 'orchestrator' };
+      const C = { persona: 'coding-agent', name: 'wave3-verify-result' };
+      const make = (index: number, who: object, over: Partial<TranscriptRow>): TranscriptRow =>
+        ({ index, at: at(index), ts: at(index).slice(11, 19), body: `row ${index}`, kind: 'agent', settled: true, ...who, ...over }) as TranscriptRow;
+      const think = (i: number, who: object, settled: boolean) => make(i, who, { kind: 'thinking', settled, body: `thought ${i}`, ...(settled ? { durationMs: 1709 } : {}) });
+      const call = (i: number, who: object, name: string, settled: boolean) =>
+        make(i, who, { kind: 'tool', toolName: name, body: name, callKey: `c${i}`, settled, toolStatus: settled ? 'ok' : 'running', startedAt: at(i), ...(settled ? { durationMs: 5, output: 'out' } : {}) });
+      // The publisher's side of REQ-MONITOR-214: the committed row and every recorded row after it.
+      const recorded = new Map<number, TranscriptRow>();
+      let held: TranscriptRow[] = [];
+      const projector = createProjector();
+      const base = options({ running: true });
+      const commit = (r: TranscriptRow) => {
+        recorded.set(r.index, r);
+        const from = [...recorded.values()].filter((x) => x.index >= r.index).sort((a, b) => a.index - b.index);
+        held = projectIncrement(held, r.index, from);
+        const o = { ...base, rows: held };
+        const { display } = projector.project(o);
+        expect(display).toEqual(projectDisplay(o));
+        return display;
+      };
+      commit(make(0, {}, { kind: 'user', body: 'go', persona: undefined, name: undefined }));
+      commit(make(1, O, { kind: 'agent', body: 'Wave 2 is in.' }));        // 483, which closes the coordinator's earlier run
+      for (let i = 2; i <= 4; i += 1) commit(call(i, O, 'todo', true));    // 484 to 489
+      commit(call(5, O, 'delegate', true));                                // 490
+      commit(think(6, O, false));                                          // 491, streaming
+      commit(think(7, C, false));                                          // 492, the child's first row, unsettled
+      commit(think(6, O, true));                                           // 491 settles under it
+      commit(call(8, O, 'wait_for_tasks', false));                         // 493, running for 1,281 s
+      commit(think(7, C, true));                                           // 492 settles in place
+      let i = 9;
+      for (let k = 0; k < 12; k += 1) {                                    // 494 to 582
+        commit(call(i, C, 'terminal', false)); commit(call(i, C, 'terminal', true)); i += 1;
+        commit(think(i, C, false)); commit(think(i, C, true)); i += 1;
+      }
+      const childRows = [7, ...Array.from({ length: i - 9 }, (_, k) => 9 + k)];
+      commit(call(8, O, 'wait_for_tasks', true));                          // the wait settles under the child's run
+      commit(think(i, O, true));                                           // 583
+      const display = commit(make(i + 1, O, { kind: 'agent', body: 'The verifier ran out of time.' })); // 584
+      // The child's run is one line at its first member's place, holding every row the child wrote; the coordinator's is
+      // one line holding 484 to 491, 493 and 583; then its prose.
+      expect(indices(display)).toEqual(['row:0', 'row:1', `group:2,3,4,5,6,8,${i}`, `group:${childRows.join(',')}`, `row:${i + 1}`]);
+      expect(projector.incrementals).toBeGreaterThan(50);
+    });
+
     /**
      * A small deterministic generator (mulberry32): appends of every kind across three agents — reasoning with and
      * without a duration, repeating its own body, and edit diffs repeating their call — settles and growth in place, a

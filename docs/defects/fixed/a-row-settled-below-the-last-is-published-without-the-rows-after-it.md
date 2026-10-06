@@ -13,8 +13,8 @@ Live-run finding: H5 of the final duress autopsy at `27a5127` (2026-10-06), "dra
 only". The autopsy left the mechanism unverified; replaying the run's stored `transcript.row` events through the
 publisher's single-row increments and the replica's rule reproduces the screen exactly.
 
-This is **not** a recurrence of [`the-bounded-projection-strands-a-run-whose-member-changed-in-place.md`](fixed/the-bounded-projection-strands-a-run-whose-member-changed-in-place.md)
-or [`the-bounded-projection-reads-runs-on-rows-hygiene-drops.md`](fixed/the-bounded-projection-reads-runs-on-rows-hygiene-drops.md):
+This is **not** a recurrence of [`the-bounded-projection-strands-a-run-whose-member-changed-in-place.md`](the-bounded-projection-strands-a-run-whose-member-changed-in-place.md)
+or [`the-bounded-projection-reads-runs-on-rows-hygiene-drops.md`](the-bounded-projection-reads-runs-on-rows-hygiene-drops.md):
 those were the renderer's bounded projection drawing something other than the whole-state projection of the rows it
 held. Here the projection is right about what it is handed; the rows were never handed to it. Fed the run's exact event
 order (the child's row appended unsettled, the coordinator's `wait_for_tasks` row appended running, the child's row
@@ -52,3 +52,25 @@ self-hosted endpoint.
   `flushPending` already publish every held row from the changed index.
 - `packages/ui-core/src/replica.ts` — `projectIncrement`, REQ-MONITOR-214's rule on the receiving side (correct).
 - `packages/ui/src/transcript/project.ts`, `projector.ts` — the projection the finding first suspected (correct here).
+
+## Repaired — 2026-10-06 under fin19
+
+`ProjectionOwner.onCommitted` publishes the held rows from the committed row's index onward (`rowsFrom`), walking the
+indices from that row to the highest held (`highestHeld`, kept by `hold` and reset where the held rows are cleared), so an
+append or the last row's settle is still one row and costs what it did, and a settle below the last carries what follows
+it. Pinned by:
+
+- `packages/engine/src/projection-owner.test.ts`, "the duress run's order — the child's row settled under the
+  coordinator's wait, the wait settled under the child's rows — leaves the view holding every recorded row", which applies
+  each publication by REQ-MONITOR-214's rule and checks the view after every one; and "an append, and a settle of the
+  last row, still publish that one row". Both fail on the single-row form (the first after the publication from row 4:
+  `[0, 1, 2, 4]` held where `[0, 1, 2, 3, 4]` were recorded).
+- `packages/ui/src/transcript/projector.test.ts`, "a child's row settled under the coordinator's running wait, then the
+  child's further rows, then the wait settled — every row drawn": the projector's half of the chain, fed the run's exact
+  order through the replica's `projectIncrement`, draws the child's run as one line holding every row, bounded and whole
+  alike. It passes on both forms of the publisher — the projector was never the fault — and stands as the guard the
+  finding asked for.
+- `pnpm transcript-proof`'s stage 3d (`interleave`): two scripted children each hold `sleep 2.5` open while the other
+  appends, so ten rows settle below a later one. On the build without the repair the replica held **16 of 31** recorded
+  rows (missing 6 to 8, 10 to 14, 16 to 20, 22 and 23); with it, all 31 in their recorded form (load 4.2 to 5.3 on 4
+  CPUs, two other plans on the host).

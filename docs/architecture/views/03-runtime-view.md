@@ -1568,7 +1568,14 @@ after being specified and drawn by nothing since Part AF. And the configuration 
 ## 9. What a surface does with a publication (ADR-0046, ADR-0045; Part Z)
 
 The run host publishes; this is the other end of the same numbered stream, in the renderer, and it is where the
-reader's place is kept. Six steps, in order, on every publication:
+reader's place is kept. An increment carries its earliest-changed index and **every row from it onward**
+(REQ-MONITOR-214), and step 3 replaces everything the replica holds from that index with what it carries; so the
+projection owner publishes a committed row alone only when it is the last row held, and a row committed below the last
+— one agent's row settling after another agent appended behind it, the coordinator's `wait_for_tasks` settling under
+its child's whole run — with the rows after it (`ProjectionOwner.rowsFrom`, 2026-10-06; the first form published it
+alone and the view dropped every row behind it, H5 of the final duress run:
+`docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md`). Six steps, in order, on
+every publication:
 
 | step | where | what it does |
 |---|---|---|

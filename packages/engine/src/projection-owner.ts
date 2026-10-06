@@ -53,6 +53,8 @@ export class ProjectionOwner {
   private frozen = false;
   private lastSession: SessionRecord;
   private lowestHeld = Number.POSITIVE_INFINITY;
+  /** The highest index held, so `rowsFrom` walks only the indices from a changed row to the end. Released rows are the lowest, never this. */
+  private highestHeld = Number.NEGATIVE_INFINITY;
   private pendingGrowth: { handle: TimerHandle; fromIndex: number } | null = null;
   /** A record publication owed to a child or tool event, coalesced (REQ-SHELL-076's spirit; one read per interval, not one per event). */
   private pendingRecord: TimerHandle | null = null;
@@ -86,7 +88,14 @@ export class ProjectionOwner {
       this.durableRows.set(c.row.index, c.row);
       // A pending growth tick for this or a later row is superseded by the committed publication.
       if (this.pendingGrowth && this.pendingGrowth.fromIndex >= c.row.index) this.cancelGrowth();
-      this.publishIncrement(c.row.index, [c.row]);
+      // REQ-MONITOR-214: the increment carries every row from its earliest-changed index onward, and the replica replaces
+      // everything from that index with what it carries. An append, or a settle of the last row, is that row alone. A row
+      // committed BELOW the last — one agent's row settling after another agent appended behind it, the coordinator's
+      // `wait_for_tasks` settling under its child's whole run — carries the rows after it too. The first form published
+      // the row alone, and the view dropped every row behind it: H5 of the final duress autopsy at 27a5127, the failed
+      // child's 89 rows gone from All activity
+      // (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md).
+      this.publishIncrement(c.row.index, this.rowsFrom(c.row.index));
       return;
     }
     if (c.kind === 'save') { this.publishSnapshot(); return; }
@@ -103,6 +112,7 @@ export class ProjectionOwner {
       this.rows.clear();
       this.durableRows.clear();
       this.lowestHeld = Number.POSITIVE_INFINITY;
+      this.highestHeld = Number.NEGATIVE_INFINITY;
       this.publishIncrement(0, []);
       this.publishSnapshot();
       return;
@@ -191,14 +201,29 @@ export class ProjectionOwner {
     this.pendingRecord = null;
     this.rows.clear();
     this.lowestHeld = Number.POSITIVE_INFINITY;
+    this.highestHeld = Number.NEGATIVE_INFINITY;
     for (const row of this.durableRows.values()) this.hold(row);
     try { this.lastSession = this.deps.readSession(); } catch { /* The last published durable snapshot remains available. */ }
     this.attach();
   }
 
+  /**
+   * The held rows from `index` onward, in index order: walked over the indices up to the highest held, so an append or
+   * the last row's settle reads one row and a settle below it reads the rows after it — never a sort of the window.
+   */
+  private rowsFrom(index: number): TranscriptRow[] {
+    const out: TranscriptRow[] = [];
+    for (let i = index; i <= this.highestHeld; i++) {
+      const r = this.rows.get(i);
+      if (r) out.push(r);
+    }
+    return out;
+  }
+
   private hold(r: TranscriptRow): void {
     this.rows.set(r.index, r);
     if (r.index < this.lowestHeld) this.lowestHeld = r.index;
+    if (r.index > this.highestHeld) this.highestHeld = r.index;
     if (this.rows.size > RESIDENT_ROW_CAP) {
       // Defensive only: the writer releases before the append (REQ-SESSION-192), so this does not fire in practice.
       this.rows.delete(this.lowestHeld);

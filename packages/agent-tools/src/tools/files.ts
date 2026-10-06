@@ -308,24 +308,38 @@ export function matchEdit(lines: readonly string[], oldText: string): { level: 1
   return null;
 }
 
-/** Apply the single match: a level-1 match replaces the exact span; a window match replaces whole lines. */
 /**
  * REQ-TOOLS-135's success message for one replacement (`write_file`'s `edit`, and `haet_edit` under REQ-TOOLS-189): the
- * lines it replaced, how many lines replaced them, where, and the lines it added and removed — what the edit DID. The
- * replaced region is the `k` lines the match spans from `start`; what replaced them is that region's length after the
- * edit, the only lines whose number changed being inside it. Until 2026-10-06 the message was "<k> lines changed at line
- * <n>" with `k` the old string's line count alone: the live run at 27a5127 was told "4 lines changed" for a 4-line block
- * that became 9, beside a row reading `+5 -0`, and re-read the file to see which was true (live-run finding G6,
+ * lines it replaced, how many lines replaced them, where, and the lines it added and removed — what the edit DID. Until
+ * 2026-10-06 the message was "<k> lines changed at line <n>" with `k` the old string's line count alone: the live run at
+ * 27a5127 was told "4 lines changed" for a 4-line block that became 9, beside a row reading `+5 -0`, and re-read the file
+ * to see which was true (live-run finding G6,
  * docs/defects/fixed/an-edit-reports-the-old-strings-line-count-as-the-lines-it-changed.md).
+ *
+ * The replaced region is read from the file, not from the strings. It starts at the match's first line (every line before
+ * it is untouched) and ends where the two texts' common trailing lines begin, but never before the last line the match
+ * spans, so the old string's own lines are always the ones it reports replacing. The falsified reading, kept beside its
+ * replacement: the first repair took the region as the old string's `k` lines and their length after the edit as `k` plus
+ * the change in the file's line count. That is true only while the edit moves no line boundary: an old string ending in a
+ * newline its new string lacks merges the next line into the replacement, which that region left out, and `'a\nb\nc\n'`
+ * with `'b\n'` -> `'x'` read "1 line removed (+0 -1)" beside a row of `+1 -2` (the fin18 verifier's probe). Lines outside
+ * the region are equal on both sides, so the region's line LCS (`lineChanges`) is the row's own `+A -R`.
  */
 function replacementMessage(rel: string, before: string, after: string, oldText: string, start: number): string {
-  const k = Math.max(1, lineCount(oldText));
-  const n = Math.max(0, k + lineCount(after) - lineCount(before));
-  const { added, removed } = lineChanges(splitLines(before).slice(start, start + k), splitLines(after).slice(start, start + n));
-  const what = n === 0 ? `${countNoun(k, 'line')} removed` : `${countNoun(k, 'line')} replaced by ${n}`;
+  const b = splitLines(before);
+  const a = splitLines(after);
+  const spanned = Math.min(b.length, start + Math.max(1, lineCount(oldText)));
+  let common = 0;
+  while (common < b.length - spanned && common < a.length - start && b[b.length - 1 - common] === a[a.length - 1 - common]) common += 1;
+  const replaced = b.slice(start, b.length - common);
+  const by = a.slice(start, a.length - common);
+  const { added, removed } = lineChanges(replaced, by);
+  const k = replaced.length;
+  const what = by.length === 0 ? `${countNoun(k, 'line')} removed` : `${countNoun(k, 'line')} replaced by ${by.length}`;
   return `Edited ${rel}: ${what} at line ${start + 1} (+${added} -${removed}).`;
 }
 
+/** Apply the single match: a level-1 match replaces the exact span; a window match replaces whole lines. */
 function applyMatch(text: string, lines: readonly string[], m: NonNullable<ReturnType<typeof matchEdit>>, oldText: string, newText: string): string {
   if (m.level === 1 && m.offsets) {
     const o = m.offsets[0] as number;

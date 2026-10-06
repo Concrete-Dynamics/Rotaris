@@ -57,3 +57,23 @@ run's shape), shrinks (3 by 1, `+1 -3`) and keeps its line count (3 by 3, `+2 -2
 row's header; an edit inside one line ("1 line replaced by 1"), and a block removed outright. All eight were red on the
 code before ("3 lines changed at line 3."). The first write_file test's message assertion follows the new form. No proof
 drives an edit; the live run's `edit` scenario, the orchestrator's after landing, is where the model reads it next.
+
+## Corrected — 2026-10-06 (fin18, repair round 1)
+
+The region above was wrong for an edit that moves a line boundary, and is kept as written beside its replacement. "`n` is
+that region's length after the edit (`k` plus the change in the file's line count, since no line outside the region
+moves)" holds only while the old and new strings agree on ending in a newline: an old string ending in a newline its new
+string lacks merges the following line into the replacement, a line outside the `k`-line region that did change. The
+verifier's probe: `a\nb\nc\n` with `b\n` -> `x` (now `a\nxc\n`) read "1 line removed at line 2 (+0 -1)" beside a row
+reading `+1 -2`, the same contradiction G6 recorded, in a new shape.
+
+`replacementMessage` now reads the region from the file: from the match's first line to where the two texts' common
+trailing lines begin, never ending before the last line the match spans. Every line outside it is equal on both sides, so
+the region's line LCS is the whole file's, and the message's `+A -R` is the row's header (short of `renderDiff`'s
+whole-replacement fallback past 4,000,000 cells, where the message stays exact and the row does not). The probe now reads
+"2 lines replaced by 1 at line 2 (+1 -2)".
+
+Pinned beside the earlier cases in `packages/agent-tools/src/tools/tools.test.ts`, for both tools: the old string ending
+in a newline the new one lacks, the reverse, and the verifier's mid-line case (`= 1;\n` -> `= 10; `), each message's counts
+equal to its row's header; and 300 seeded random single replacements over short lines, blank lines and newlines, each
+message's counts equal to its header. The first, the third and the random cases were red on the round-0 region.

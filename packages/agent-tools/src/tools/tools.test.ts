@@ -508,6 +508,65 @@ describe('REQ-TOOLS-135: an edit reports the lines it replaced and the lines it 
     expect(r.text.replace(/ \(sha256 [0-9a-f]{64}\)$/, '')).toBe('Edited src/todos.js: 1 line replaced by 1 at line 4 (+1 -1).');
   });
 
+  /*
+   * A replacement whose old string ends in a newline its new string does not (or the reverse) moves a line boundary: the
+   * line after the match merges into the replacement, or the replacement splits its own line. The region the message counts
+   * is the lines the edit touched in the file, not the old string's lines alone, so its counts are the row's header
+   * (the verifier's probe of fin18: 'a\nb\nc\n' with 'b\n' -> 'x' read "1 line removed (+0 -1)" beside `+1 -2`).
+   */
+  const BOUNDARY = [
+    ['the old string ends in a newline the new one does not', 'b\n', 'x', 'a\nxc\n', 'Edited src/f.txt: 2 lines replaced by 1 at line 2 (+1 -2).'],
+    ['the new string ends in a newline the old one does not', 'b', 'x\n', 'a\nx\n\nc\n', 'Edited src/f.txt: 1 line replaced by 2 at line 2 (+2 -1).'],
+    ['a mid-line old string ending in a newline is replaced by text without one', '= 1;\n', '= 10; ', 'const a = 10; const b = 2;\n', 'Edited src/f.txt: 2 lines replaced by 1 at line 1 (+1 -2).'],
+  ] as const;
+  for (const [shape, oldString, newString, result, message] of BOUNDARY) {
+    const start = shape.startsWith('a mid-line') ? 'const a = 1;\nconst b = 2;\n' : 'a\nb\nc\n';
+    it(`write_file edit: ${shape}`, async () => {
+      writeFileSync(join(root, 'src/f.txt'), start);
+      await readFileTool(state, fence).execute({ path: 'src/f.txt', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+      const r = await writeFileTool(state, fence).execute({ operation: 'edit', path: 'src/f.txt', old_string: oldString, new_string: newString, replace_all: false }, ctx());
+      expect(r.isError).toBe(false);
+      expect(readFileSync(join(root, 'src/f.txt'), 'utf8')).toBe(result);
+      expect(r.text.replace(/ \(sha256 [0-9a-f]{64}\)$/, '')).toBe(message);
+      expect(r.diff!.split('\n')[0]).toBe(`src/f.txt ${/\((\+\d+ -\d+)\)/.exec(message)![1]}`);
+    });
+
+    it(`haet_edit: ${shape}`, async () => {
+      writeFileSync(join(root, 'src/f.txt'), start);
+      const r = await haetEditTool(state, fence).execute({ path: 'src/f.txt', content_hash: sha256(Buffer.from(start)), old_string: oldString, new_string: newString, replace_all: false }, ctx());
+      expect(r.isError).toBe(false);
+      expect(readFileSync(join(root, 'src/f.txt'), 'utf8')).toBe(result);
+      expect(r.text.replace(/ content_hash: [0-9a-f]{64}$/, '')).toBe(message);
+      expect(r.diff!.split('\n')[0]).toBe(`src/f.txt ${/\((\+\d+ -\d+)\)/.exec(message)![1]}`);
+    });
+  }
+
+  it('over 300 seeded random single replacements, the message\'s counts are always the diff header\'s', async () => {
+    let seed = 0x5eed;
+    const rand = (n: number) => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed % n;
+    };
+    const piece = () => ['a', 'b', 'cc', '', '\n', '\n', 'd\n'][rand(7)] as string;
+    let checked = 0;
+    for (let i = 0; checked < 300 && i < 5000; i += 1) {
+      const text = Array.from({ length: 2 + rand(10) }, piece).join('');
+      if (text.length < 2) continue;
+      const from = rand(text.length);
+      const oldString = text.slice(from, from + 1 + rand(Math.min(6, text.length - from)));
+      if (text.split(oldString).length !== 2) continue; // exactly one occurrence
+      const newString = Array.from({ length: rand(4) }, piece).join('');
+      if (newString === oldString) continue;
+      writeFileSync(join(root, 'src/f.txt'), text);
+      const r = await haetEditTool(state, fence).execute({ path: 'src/f.txt', content_hash: sha256(Buffer.from(text)), old_string: oldString, new_string: newString, replace_all: false }, ctx());
+      expect(r.isError, JSON.stringify({ text, oldString, newString })).toBe(false);
+      const counts = /\((\+\d+ -\d+)\)\. content_hash/.exec(r.text)?.[1];
+      expect(`src/f.txt ${counts}`, JSON.stringify({ text, oldString, newString, message: r.text })).toBe(r.diff!.split('\n')[0]);
+      checked += 1;
+    }
+    expect(checked).toBe(300);
+  });
+
   it('a block removed outright is reported removed', async () => {
     writeFileSync(join(root, 'src/todos.js'), BEFORE);
     await readFileTool(state, fence).execute({ path: 'src/todos.js', offset: 1, limit: 2000, grep_context: 3 }, ctx());

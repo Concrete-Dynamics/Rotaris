@@ -92,7 +92,7 @@ the record; the confirming window's run overlay hands over to the first record r
 `cancelAgent` row and the **state-ownership view**'s overlay row say so. No package, edge, process, channel, command or store
 column changed.
 
-**A setup banner names its project; every stop of a setup step gets 2 s (PD-WORKSPACE-003, PD-MCP-001; OQ-171, OQ-172
+**A setup banner names its project; every stop of a setup step gets 2 s (PD-WORKSPACE-005, PD-MCP-003; OQ-171, OQ-172
 ruled 2026-10-06; fin21).** The initialization coordinator's two banners stay application notices and name the project they
 concern (`namedBanner`: `{headline}: {the folder's name}`, the detail area opening on the folder). A setup step is
 force-killed 2 s after any stop — Cancel, a switch's cancellation, an exhausted budget, the close — where a cancellation

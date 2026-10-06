@@ -299,7 +299,7 @@ The product integrates external MCP (Model Context Protocol) servers as tool pro
 
   A failed step SHALL stop the steps that would otherwise follow it: the three are ordered because each depends on the one before, and indexing a project that was never created cannot succeed. A step not attempted for that reason SHALL be reported with status `not-attempted`, distinct from a failure of its own. The status vocabulary for the three steps SHALL therefore be exactly `succeeded`, `failed`, `skipped-no-code` and `not-attempted`, and a run in which any step is `failed` or `not-attempted` SHALL be reported as not having completed setup.
 
-  > **Narrowed by [`PD-MCP-001`](../product/directives.md#pd-mcp-001), 2026-10-06.** A stopped step is given 2 seconds to
+  > **Narrowed by [`PD-MCP-003`](../product/directives.md#pd-mcp-003), 2026-10-06.** A stopped step is given 2 seconds to
   > exit, not 5, at every stop — an exhausted budget, a cancellation and the application's close alike — and is then
   > force-killed. Everything else above still holds.
 

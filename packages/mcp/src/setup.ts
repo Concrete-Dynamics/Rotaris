@@ -80,7 +80,7 @@ export const SETUP_POLL_MS: Millis = millis(250);
 /**
  * The grace a setup step is given to exit once asked to terminate, before the force-kill: 2 s at every stop — an exhausted
  * budget, a cancellation (Cancel, or a workspace switch's), and the run host's shutdown at a close — under
- * `PD-MCP-001`, which narrows REQ-MCP-099's "given 5 seconds to exit" (OQ-172, ruled 2026-10-06 by the owner, R-071).
+ * `PD-MCP-003`, which narrows REQ-MCP-099's "given 5 seconds to exit" (OQ-172, ruled 2026-10-06 by the owner, R-071).
  * REQ-WORKSPACE-092 bounds every one of those stops alike — "nothing the step launched SHALL still be running 5 s later" —
  * and a 5 s grace left no room inside it for the force-kill, its settling and the poll: measured on Windows 2026-10-02, a
  * switch's step was gone 5.489 s after the cancellation was asked and a Cancel's 5.603 s after. The 2 s was the build's
@@ -96,7 +96,7 @@ export const SETUP_TERMINATE_GRACE_MS: Millis = millis(2_000);
  * REQ-WORKSPACE-109: closing the application completes within 5000 ms, the run stopped by force if it has not ended by
  * then; REQ-WORKSPACE-092: nothing a step launched is still running 5 s after the close. At the run host's shutdown a
  * step is asked to terminate and force-killed after this much, a cancellation already under way included. Since
- * `PD-MCP-001` it is the one grace every stop gets (`SETUP_TERMINATE_GRACE_MS`); it was 2 s against the cancellation's 5 s
+ * `PD-MCP-003` it is the one grace every stop gets (`SETUP_TERMINATE_GRACE_MS`); it was 2 s against the cancellation's 5 s
  * before, the build's reading of OQ-172 while it was open.
  */
 export const SETUP_SHUTDOWN_GRACE_MS: Millis = SETUP_TERMINATE_GRACE_MS;

@@ -8917,7 +8917,7 @@ workspace independently"; PD-SHELL-001's two main windows, one per project. Rais
 raised as OQ-170 on its branch and renumbered at the merge, OQ-170 having been taken on `main` meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the banners stay the application's, shown in
-every window, and name the project they concern — by [`PD-WORKSPACE-003`](../product/directives.md#pd-workspace-003), which
+every window, and name the project they concern — by [`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005), which
 narrows REQ-WORKSPACE-102 and REQ-WORKSPACE-103. Both banners are named, the failed resolution's as well as the failed
 background run's, since both reach every window: the title reads `{headline}: {the folder's name}`, the message stays the
 requirement's sentence, and the detail area opens on the project's full folder path, which tells two projects of one name
@@ -8951,7 +8951,7 @@ meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** every stop of a setup step gets the 2 s grace
 before the force-kill — a close, a workspace switch's cancellation, Cancel and, by the same reading, an exhausted stage
 budget, which REQ-WORKSPACE-092 bounds by the same 5 s — so REQ-WORKSPACE-092's 5 s holds at each; by
-[`PD-MCP-001`](../product/directives.md#pd-mcp-001), which narrows REQ-MCP-099's 5 s grace. Built the same day
+[`PD-MCP-003`](../product/directives.md#pd-mcp-003), which narrows REQ-MCP-099's 5 s grace. Built the same day
 (`SETUP_TERMINATE_GRACE_MS` in `packages/mcp/src/setup.ts`, equal to `SETUP_SHUTDOWN_GRACE_MS`; `setup.test.ts`).
 
 At an orderly quit the window's close cancels the initialization run, so the step in flight is asked to terminate under

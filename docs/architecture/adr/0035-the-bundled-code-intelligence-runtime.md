@@ -422,7 +422,7 @@ REQ-WORKSPACE-092's 5 s as binding there, a conflict between the requirements ra
 [OQ-172](../open-questions.md) (2026-10-01, on the verifier's finding).
 
 *Ruled 2026-10-06 ([R-071](../../product/requests.md#r-071)): the owner took OQ-172's recommendation, and
-[`PD-MCP-001`](../../product/directives.md#pd-mcp-001) gives every stop of a step the same 2 s grace — a Cancel, a
+[`PD-MCP-003`](../../product/directives.md#pd-mcp-003) gives every stop of a step the same 2 s grace — a Cancel, a
 workspace switch's cancellation and an exhausted budget as well as the close. `SETUP_TERMINATE_GRACE_MS` is 2 s and
 `SETUP_SHUTDOWN_GRACE_MS` equals it, so the 5 s cancellation grace this round kept outside a close is gone; it had left a
 switch's step running 5.489 s and a Cancel's 5.603 s on Windows (`workspace-proof`, 2026-10-02). Pinned in

@@ -466,11 +466,11 @@ retryable failure and keeps REQ-WORKSPACE-094's "not a local launch" for the `un
 `detail`, from which the coordinator writes REQ-WORKSPACE-092's two fixed sentences (2026-10-01, R-067). Beside it a step carries `skipped: marker-present | no-code` when it had no need to run, `output` (its output's trimmed tail, at most 400 characters, without the prose) when its command ran, and `startError` when its command could not be started; the coordinator writes REQ-WORKSPACE-091's fixed sentences and REQ-WORKSPACE-092's last 400 bytes from them, and the MCP category keeps `detail` (OQ-175; 2026-10-01). REQ-MCP-099's three steps run in the
 run host as children of the derived invocation (`Rotaris.exe builtin:code-intelligence -- project create <root>`, then
 `project index`, then `memories initialize`), each polled at 0.25 s on the clock port under 300 / 1800 / 120 s, asked to
-terminate then tree-killed after 2 s on cancel or timeout (`SETUP_TERMINATE_GRACE_MS`; `PD-MCP-001`, OQ-172 ruled 2026-10-06 —
+terminate then tree-killed after 2 s on cancel or timeout (`SETUP_TERMINATE_GRACE_MS`; `PD-MCP-003`, OQ-172 ruled 2026-10-06 —
 it was REQ-MCP-099's 5 s until then) — on POSIX each step leads a process group of its own and the
 signals go to the group, so what the step started is ended with it (REQ-WORKSPACE-092; 2026-10-01) — and the run host's
 `shutdown` ends a setup under way the same way after the same 2 s (`McpHost.endSetup`, `SETUP_SHUTDOWN_GRACE_MS`), cutting a
-cancellation's grace already running to 2 s from the shutdown (since `PD-MCP-001` every stop's grace is that 2 s; before,
+cancellation's grace already running to 2 s from the shutdown (since `PD-MCP-003` every stop's grace is that 2 s; before,
 only the close was cut from 5 s, the build's reading of OQ-172 while it was open)
 and exits only once the step has gone (REQ-WORKSPACE-092/109; 2026-10-01); the
 category polls the status every 500 ms while it runs.

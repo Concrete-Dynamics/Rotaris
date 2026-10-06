@@ -19,7 +19,7 @@ function workspace(): { root: string; agents: string } {
 
 const step = (id: McpSetupStep['id'], status: McpSetupStep['status'], detail = '', facts: Partial<McpSetupStep> = {}): McpSetupStep => ({ id, label: id, status, detail, elapsedMs: null, ...facts });
 /**
- * PD-WORKSPACE-003 (OQ-171): a banner names its project — the headline followed by the folder's name, and the detail area
+ * PD-WORKSPACE-005 (OQ-171): a banner names its project — the headline followed by the folder's name, and the detail area
  * opening on the project's folder.
  */
 const named = (root: string, headline: string, message: string, detail: string): { headline: string; message: string; detail: string } =>
@@ -145,11 +145,11 @@ describe('the default task set', () => {
 });
 
 /**
- * PD-WORKSPACE-003 (OQ-171, ruled 2026-10-06, R-071): the initialization banners are application notices, shown in every open
+ * PD-WORKSPACE-005 (OQ-171, ruled 2026-10-06, R-071): the initialization banners are application notices, shown in every open
  * window, so each names the project it is about. Before, both read the requirement's headline alone, and with two main
  * windows open the second window showed "Project setup did not finish" for the first window's project with nothing saying so.
  */
-describe('a banner names its project (PD-WORKSPACE-003, OQ-171)', () => {
+describe('a banner names its project (PD-WORKSPACE-005, OQ-171)', () => {
   it('names a project by its folder, on either separator, and a root that has none by the root itself', () => {
     expect(projectNameOf('/home/u/work/atlas-billing')).toBe('atlas-billing');
     expect(projectNameOf('/home/u/work/atlas-billing/')).toBe('atlas-billing');

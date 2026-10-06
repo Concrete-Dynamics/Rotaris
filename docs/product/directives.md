@@ -3727,9 +3727,9 @@ section of the file to keep in step with the manifest.
 
 ---
 
-<a id="pd-workspace-003"></a>
+<a id="pd-workspace-005"></a>
 
-### PD-WORKSPACE-003 — a project-setup banner names the project it is about
+### PD-WORKSPACE-005 — a project-setup banner names the project it is about
 
 **The banner.** The two initialization banners — a failed background run's "Project setup did not finish"
 (REQ-WORKSPACE-103) and a failed resolution's "Project setup could not be checked" (REQ-WORKSPACE-102) — SHALL stay
@@ -3758,7 +3758,7 @@ reader or a test matching the headline whole must match its start; and a long fo
 
 > **Narrows:** REQ-WORKSPACE-102, REQ-WORKSPACE-103
 
-*Raised by the owner, 2026-10-06, ruling OQ-171 as recommended; logged as [R-071](requests.md#r-071).*
+*Raised by the owner, 2026-10-06, ruling OQ-171 as recommended; logged as [R-071](requests.md#r-071). Minted on its branch as PD-WORKSPACE-003 and renumbered PD-WORKSPACE-005 before the merge, `origin/main` having taken PD-WORKSPACE-003 and PD-WORKSPACE-004 meanwhile.*
 
 > **First execution, 2026-10-06.** Built the day it was written: `InitializationCoordinator.banner`, `namedBanner` and
 > `projectNameOf` in `apps/desktop/src/main/initialization.ts`. **What was measured.** Three cases in
@@ -3774,9 +3774,9 @@ reader or a test matching the headline whole must match its start; and a long fo
 
 ---
 
-<a id="pd-mcp-001"></a>
+<a id="pd-mcp-003"></a>
 
-### PD-MCP-001 — a code-intelligence setup step gets 2 seconds to exit at every stop
+### PD-MCP-003 — a code-intelligence setup step gets 2 seconds to exit at every stop
 
 **The grace.** When a code-intelligence setup step is stopped — its stage budget exhausted, the setup cancelled (the
 user's Cancel, or the cancellation a workspace switch or a window's close makes), or the application closed while it runs
@@ -3799,7 +3799,7 @@ and may leave a partly written project or index for the next setup to redo.
 
 > **Narrows:** REQ-MCP-099
 
-*Raised by the owner, 2026-10-06, ruling OQ-172 as recommended; logged as [R-071](requests.md#r-071).*
+*Raised by the owner, 2026-10-06, ruling OQ-172 as recommended; logged as [R-071](requests.md#r-071). Minted on its branch as PD-MCP-001 and renumbered PD-MCP-003 before the merge, `origin/main` having taken PD-MCP-001 and PD-MCP-002 meanwhile.*
 
 > **First execution, 2026-10-06.** Built the day it was written: `SETUP_TERMINATE_GRACE_MS` in
 > `packages/mcp/src/setup.ts` is 2 s, and `SETUP_SHUTDOWN_GRACE_MS` is the same grace. **What was measured.** Three cases in

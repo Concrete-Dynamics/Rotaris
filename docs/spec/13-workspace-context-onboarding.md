@@ -340,13 +340,13 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 ### Initialization UI, Consent, and Run Gating (Desktop)
 
 - **REQ-WORKSPACE-102** — Initialization SHALL be resolved automatically exactly once per workspace open, and SHALL NOT begin before the window is on screen and accepting input, so that the window paints and answers input no matter how the resolution goes. A resolution that fails SHALL leave the window fully usable: the error surface SHALL read "Project setup could not be checked" / "Rotaris could not work out whether this workspace still needs setting up. Runs are not blocked; you can check again.", SHALL offer a "Check again" action, and the composer gate of REQ-WORKSPACE-112 SHALL stay off. Activating "Check again" SHALL resolve initialization once more, producing the outcomes of REQ-WORKSPACE-083 when it succeeds and this same error surface when it fails again; such a user-requested check is additional to, and does not consume, the one automatic resolution per workspace open.
-  > **Narrowed by [`PD-WORKSPACE-003`](../product/directives.md#pd-workspace-003), 2026-10-06.** The banner a failed
+  > **Narrowed by [`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005), 2026-10-06.** The banner a failed
   > resolution raises, shown in every window, reads "Project setup could not be checked: " followed by the project's name, the
   > project's folder heading its detail area; its message is the sentence above, unchanged. The window's own surface keeps
   > the headline as stated.
 
 - **REQ-WORKSPACE-103** — Background tasks SHALL start immediately, without any dialog and without blocking the interface; nothing renders their progress live; the recorded outcome is visible in Settings Project. Success is silent. No estimate of how long such a task will take, no completion percentage, no progress bar, and no elapsed-time reading SHALL be presented for a background task while it runs: a task the user did not ask for and cannot be blocked by has nothing to report until it has a result. Its only timing contract is the per-stage wall-clock budgets of REQ-WORKSPACE-091, a stage exceeding its budget being a retryable failure. A failed background run SHALL reach an error banner "Project setup did not finish" carrying the task's own summary (fallback "Rotaris could not finish setting this workspace up for code search.") and a "Try again" action; a run that broke down entirely additionally states "Runs are not blocked; you can try again."
-  > **Narrowed by [`PD-WORKSPACE-003`](../product/directives.md#pd-workspace-003), 2026-10-06.** The banner stays an
+  > **Narrowed by [`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005), 2026-10-06.** The banner stays an
   > application notice shown in every window, and its title reads "Project setup did not finish: " followed by the project's name,
   > the project's folder heading its detail area; its message is the sentence above, unchanged.
 

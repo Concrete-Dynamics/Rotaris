@@ -438,7 +438,7 @@ export class McpHost {
     return { ...this.setup.status, applicable: cfg === null ? this.setup.status.applicable : this.setupApplicable(cfg) };
   }
 
-  /** REQ-MCP-112: cancellable at any point; the step in flight is terminated (REQ-MCP-099's ask, its 2 s grace under PD-MCP-001, tree kill) and the rest are not attempted. */
+  /** REQ-MCP-112: cancellable at any point; the step in flight is terminated (REQ-MCP-099's ask, its 2 s grace under PD-MCP-003, tree kill) and the rest are not attempted. */
   cancelSetup(): McpSetupStatus {
     if (this.setup.abort && this.setup.status.state === 'running') { this.setup.abort.abort(); this.deps.log('mcp setup: cancellation requested'); }
     return this.setup.status;
@@ -451,7 +451,7 @@ export class McpHost {
    * app: both still running 5 s after it exited;
    * `docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
    * The step is asked to terminate and force-killed after `SETUP_SHUTDOWN_GRACE_MS`, a cancellation already under way
-   * included — 2 s, the grace every stop of a step gets under `PD-MCP-001` (OQ-172, ruled 2026-10-06; before the ruling
+   * included — 2 s, the grace every stop of a step gets under `PD-MCP-003` (OQ-172, ruled 2026-10-06; before the ruling
    * only a close cut REQ-MCP-099's 5 s to 2 s, the build's reading while it was open). `dispatch`'s `shutdown`
    * calls this and awaits it before the stores close (pinned in `dispatch.test.ts` and `workspace-proof` 8f).
    */

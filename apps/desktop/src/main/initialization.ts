@@ -131,7 +131,7 @@ export function failureDetail(failed: readonly { readonly error: string; readonl
 }
 
 /**
- * PD-WORKSPACE-003 (OQ-171, ruled 2026-10-06 under R-071): an initialization banner is an application notice, shown in every
+ * PD-WORKSPACE-005 (OQ-171, ruled 2026-10-06 under R-071): an initialization banner is an application notice, shown in every
  * open window (ADR-0049's one notice store), so it names the project it is about. The project's name is its folder's — the
  * root's last path segment, either separator — and the root itself where it has none (a drive or filesystem root). A
  * Windows drive designator (`C:` of `C:\`) is not a segment, so a drive root reads `C:\`, never the bare letter.
@@ -143,7 +143,7 @@ export function projectNameOf(root: string): string {
 }
 
 /**
- * PD-WORKSPACE-003: the banner's title is the requirement's headline followed by the project's name, `{headline}: {name}`,
+ * PD-WORKSPACE-005: the banner's title is the requirement's headline followed by the project's name, `{headline}: {name}`,
  * and its detail area (REQ-NOTIFY-005) starts with the project's folder, which tells two projects of one name apart.
  */
 export function namedBanner(root: string, headline: string, detail: string): { readonly headline: string; readonly detail: string } {
@@ -768,7 +768,7 @@ export class InitializationCoordinator {
   }
 
   /**
-   * REQ-WORKSPACE-102/103 under PD-WORKSPACE-003: the banner reaches every live window, so it says which project it is about
+   * REQ-WORKSPACE-102/103 under PD-WORKSPACE-005: the banner reaches every live window, so it says which project it is about
    * (`namedBanner`); `message` stays the requirement's sentence.
    */
   private banner(e: WorkspaceEntry, headline: string, message: string, detail: string): void {

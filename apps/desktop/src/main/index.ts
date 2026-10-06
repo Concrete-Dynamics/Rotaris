@@ -27,7 +27,7 @@ import { countNoun, millis, toIsoUtc } from '@rotaris/kernel';
 import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
 import { claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
-import { createUpdater, RETURN_TO_WINDOW, updateCloseDetail, updateCloseMessage } from './updater/updater.js';
+import { createUpdater, updateCloseBox } from './updater/updater.js';
 import { createSuccessorWait } from './updater/successor.js';
 import { classifyThisInstallation, createUpdaterPorts, successorArguments, successorEndpointFromArgv } from './updater/electron.js';
 import { updateCommands } from './commands/update.js';
@@ -464,24 +464,21 @@ async function main(): Promise<void> {
     // (REQ-STARTUP-119/121): every main window is destroyed and the ordinary quit path follows.
     closeWindows: () => { mainWindows.dispose(); },
     /*
-     * REQ-STARTUP-046 at the update's own close (OQ-86, ruled 2026-10-06 by R-071): asked when `Update now` (the installer
-     * flavour) or `Restart now` is clicked, before the installer or the successor starts, since afterwards declining could
-     * not keep the window. The run host's count is instance-wide, as every window closes; a count that cannot be read is
-     * treated as a run being active, so a run is never ended without warning. Two answers, returning the default, and
+     * REQ-STARTUP-046 at the update's own close (OQ-86, ruled 2026-10-06 by R-071): the updater asks at the click and again
+     * immediately before the installer or the successor starts (`mustAskAtHandOff`), never after, since afterwards
+     * declining could not keep the window. The run host's count is instance-wide, as every window closes; a count that
+     * cannot be read is `null`, which the updater asks about. The box is `updateCloseBox`: returning the default, and
      * Escape or the box's close control returning (`cancelId`, REQ-SHELL-055).
      */
-    confirmClose: async (action) => {
+    activeRuns: async () => {
       const active = await runHost.request({ kind: 'runs.active', workspaceId: '' }, millis(5_000)).catch(() => null);
-      const count = active?.kind === 'runs.count' ? active.count : null;
-      if (count === 0) return true;
+      return active?.kind === 'runs.count' ? active.count : null;
+    },
+    confirmClose: async (closeAsk) => {
+      const opts = updateCloseBox(closeAsk);
       const parent = mainWindows.active()?.win;
-      const opts: Electron.MessageBoxOptions = {
-        type: 'warning', title: 'A run is still executing', message: updateCloseMessage(count),
-        detail: updateCloseDetail(action),
-        buttons: [RETURN_TO_WINDOW, action === 'install' ? 'Close and install the update' : 'Close and restart'], defaultId: 0, cancelId: 0, noLink: true,
-      };
-      const answer = parent === undefined || parent.isDestroyed() ? await askBox(null, opts) : await askBox(parent, opts);
-      log(`update ${action}: active-run confirmation (${count === null ? 'run count unknown' : `${count} active`}) → ${answer === 1 ? 'close anyway' : 'return to the window'} (REQ-STARTUP-046, OQ-86)`);
+      const answer = await askBox(parent === undefined || parent.isDestroyed() ? null : parent, opts);
+      log(`update ${closeAsk.action}: active-run confirmation at the ${closeAsk.moment} (${closeAsk.activeRuns === null ? 'run count unknown' : `${closeAsk.activeRuns} active`}) → ${answer === 1 ? 'close anyway' : 'return to the window'} (REQ-STARTUP-046, OQ-86)`);
       return answer === 1;
     },
   });

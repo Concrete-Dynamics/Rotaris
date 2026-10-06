@@ -92,7 +92,7 @@ sequenceDiagram
   participant S as the successor
   R->>M: update.install (Update now / Try again)
   opt installer flavour, a run active (REQ-STARTUP-046, OQ-86 since 2026-10-06)
-    M->>M: confirmClose — runs.active, instance-wide; the message box "A run is still executing", Return to the window the default
+    M->>M: activeRuns — runs.active, instance-wide; confirmClose at the click, the message box "A run is still executing", Return to the window the default
     M-->>R: returned: { cancelled } — nothing downloaded or started, the offer notice stays
   end
   M->>M: the offer notice becomes "Downloading Rotaris {v}" IN PLACE, action disabled (REQ-STARTUP-118, REQ-SHELL-118)
@@ -105,6 +105,7 @@ sequenceDiagram
     M->>M: "Update installed" + Restart now (REQ-STARTUP-119)
     R->>M: update.restart
     M->>M: confirmClose first when a run is active (REQ-STARTUP-046, OQ-86); returned → { cancelled }, nothing started
+    M->>M: activeRuns re-read just before the start; a run past what the click covered is asked about again (mustAskAtHandOff)
     M->>S: spawn <artifact> builtin:update-successor -- <this endpoint>, detached
     S->>S: no claim; open its own endpoint (inheritInstance)
     S->>M: {"successor": {pid, host, acquired_at, endpoint}} — then waits ≤ the hand-over interval for the offer
@@ -118,7 +119,8 @@ sequenceDiagram
     end
     M-->>S: {"ok":true,"record":"passed"} (should the connection end without it, the successor reads the record)
     M->>M: destroy the windows; the ordinary quit; close leaves a record that no longer names it
-  else installer: spawn the setup, detached (REQ-STARTUP-125)
+  else installer: beforeApply — activeRuns re-read; any run active now is asked about again (OQ-86); returned → the download discarded, the offer back in place, { cancelled }
+    M->>M: spawn the setup, detached (REQ-STARTUP-125)
     M->>M: "Finish the update", no action; the window closes after ONE 1200 ms delay (REQ-STARTUP-119)
   else any failure
     M->>M: the notice becomes "Update not installed" in place, the sentence as detail, Try again (REQ-STARTUP-120)
@@ -131,7 +133,13 @@ active-run confirmation at the click (`UpdaterDeps.confirmClose`), before anythi
 or the successor started: main asks the run host `runs.active` (instance-wide, since every window closes; a count it cannot
 read is taken as a run active) and, for any active run, shows a message box whose default, Escape and close control are
 `Return to the window`; that answer starts nothing and leaves the notice as it was. The portable's in-place apply closes
-nothing and asks nothing.
+nothing and asks nothing. *Corrected the same day at verification:* the count is read again **immediately before the
+installer is spawned or the successor started** (`UpdaterDeps.activeRuns`; `runInstall`'s `beforeApply`;
+`mustAskAtHandOff`), because the installer's download runs for minutes while the window accepts input and a run started
+then was ended by the auto-close unasked. After a download any run active then is asked about again (a count has no
+identity); `Restart now` asks again only for a run past the count its click was asked about, or where the click asked
+nothing. Declined there, the verified download is discarded and the offer comes back in the same notice. The confirmation
+belongs to the one update operation in flight, so a second click while its box is open is `update.busy`.
 
 A successor that cannot be started surfaces through `Update not installed` and nothing closes; one that never
 signals leaves this instance holding its record and its window, with no timeout (REQ-STARTUP-121, ADR-0055). A

@@ -263,4 +263,46 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     expect(spawned).toEqual([`/tmp/rotaris-update-1/${setup}`]);
     expect(staging.dirs.has('/tmp/rotaris-update-1')).toBe(true);
   });
+
+  /*
+   * OQ-86 (ruled 2026-10-06 by R-071; fin21's repair round 1): `beforeApply` is the last moment before the installer is
+   * started — asked only once the download is verified, and a false answer discards it and starts nothing.
+   */
+  it('beforeApply is asked after the digest is verified and before the installer starts; declined, staging is discarded and nothing is spawned', async () => {
+    const setup = 'Rotaris-0.2.0-windows-x64-setup.exe';
+    const release = published({ manifestEntries: [{ name: setup, sha256: digest }] });
+    const staging = stagingArea();
+    const asked: number[] = [];
+    const { ctx, spawned } = context(release, staging, targetVolume(), {
+      flavour: 'installer', target: 'C:\\Users\\u\\AppData\\Local\\Rotaris',
+      beforeApply: async () => { asked.push(release.requests.length); return false; },
+    });
+    const result = await runInstall(offer({ asset: { name: setup, url: 'https://github.com/x/asset', size: payload.byteLength } }), ctx);
+    expect(result).toMatchObject({ ok: false, stage: 'declined' });
+    // Asked once, after all three round trips (manifest, signature, asset).
+    expect(asked).toEqual([3]);
+    expect(spawned).toEqual([]);
+    expect(staging.dirs.size).toBe(0);
+    expect(staging.files.size).toBe(0);
+  });
+
+  it('beforeApply is never asked when the download does not verify', async () => {
+    const release = published({ manifestEntries: [] });
+    let asked = 0;
+    const { ctx, spawned } = context(release, stagingArea(), targetVolume(), { flavour: 'installer', beforeApply: async () => { asked += 1; return true; } });
+    expect(await runInstall(offer(), ctx)).toMatchObject({ ok: false, stage: 'digest' });
+    expect(asked).toBe(0);
+    expect(spawned).toEqual([]);
+  });
+
+  it('a quit that abandons the operation while beforeApply is answered starts nothing, even when the answer was to go on', async () => {
+    const setup = 'Rotaris-0.2.0-windows-x64-setup.exe';
+    const release = published({ manifestEntries: [{ name: setup, sha256: digest }] });
+    const staging = stagingArea();
+    const abort = new AbortController();
+    const { ctx, spawned } = context(release, staging, targetVolume(), { flavour: 'installer', signal: abort.signal, beforeApply: async () => { abort.abort(); return true; } });
+    expect(await runInstall(offer({ asset: { name: setup, url: 'https://github.com/x/asset', size: payload.byteLength } }), ctx)).toMatchObject({ ok: false, stage: 'download' });
+    expect(spawned).toEqual([]);
+    expect(staging.dirs.size).toBe(0);
+  });
 });

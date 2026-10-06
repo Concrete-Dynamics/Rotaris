@@ -1717,6 +1717,11 @@ above no longer stands.* REQ-STARTUP-046's confirmation governs both closes and 
 the installer is spawned or the successor started, since declining after either could not keep the window — by
 `UpdaterDeps.confirmClose` for `Restart now` and for `Update now` on the installer flavour alone (the portable's apply closes
 nothing). Declined, nothing starts and the notice stays; accepted, the closes are made as before, without asking again.
+*Falsified the same day by the build's verification:* "without asking again" let a run started during the installer's
+download — minutes in which the window accepts input — be ended by the auto-close unasked. The count is now re-read
+immediately before the installer is spawned or the successor started (`UpdaterDeps.activeRuns`, `runInstall`'s
+`beforeApply`, `mustAskAtHandOff`): after a download, any run active then is asked about again; for `Restart now`, a run
+past the count the click covered. Declined there, the verified download is discarded and the offer returns in place.
 
 **Repaired at verification, 2026-09-28 (same item, R-062).** The independent verification found three defects in the
 build above, and writing the third's test found a fourth; each is repaired with a test beside it, and nothing in this

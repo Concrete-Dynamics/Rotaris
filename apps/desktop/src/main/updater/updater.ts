@@ -81,12 +81,44 @@ export interface UpdaterDeps {
   /** Close every window; the quit follows through main's ordinary path. */
   readonly closeWindows: () => void;
   /**
-   * REQ-STARTUP-046's active-run confirmation, asked at the click (OQ-86, ruled 2026-10-06 by R-071): resolves true when no
-   * run is active or the user chose to close anyway, false when they returned to the window. Asked by `install` only where
-   * the hand-off closes the windows (the installer flavour, REQ-STARTUP-119), and by `restart` always (REQ-STARTUP-121),
-   * before the installer or the successor is started. A confirmation that cannot be asked is read as the returning answer.
+   * REQ-STARTUP-046's "a run is active", instance-wide since every window closes (OQ-86): the run host's count, `null`
+   * when it cannot be read — which the updater treats as a run being active.
    */
-  readonly confirmClose: (action: 'install' | 'restart') => Promise<boolean>;
+  readonly activeRuns: () => Promise<number | null>;
+  /**
+   * REQ-STARTUP-046's active-run confirmation (OQ-86, ruled 2026-10-06 by R-071): resolves true when the user chose to
+   * close anyway, false when they returned to the window. The updater asks it only when a run is active (or the count
+   * cannot be read): at the click of `Restart now`, and of `Update now` / `Try again` on the installer flavour (the hand-off
+   * that closes the windows, REQ-STARTUP-119), and again at the hand-off — immediately before the installer or the
+   * successor is started — for a run the click's answer did not cover (`mustAskAtHandOff`). A confirmation that cannot be
+   * asked is read as the returning answer.
+   */
+  readonly confirmClose: (ask: CloseAsk) => Promise<boolean>;
+}
+
+/** One asking of OQ-86's confirmation: which action, the count read just before it, and whether it is the click's. */
+export interface CloseAsk {
+  readonly action: 'install' | 'restart';
+  readonly activeRuns: number | null;
+  readonly moment: 'click' | 'hand-off';
+}
+
+/** What the click's confirmation covered: nothing asked (no run was active), or the runs it was asked about. */
+export type ClickAnswer = { readonly asked: false } | { readonly asked: true; readonly activeRuns: number | null };
+
+/**
+ * OQ-86 (ruled 2026-10-06 by R-071, "so a run is never ended without warning"): whether the hand-off — immediately before
+ * the installer or the successor is started — must ask again, given the click's answer, the count read now, and whether a
+ * download ran in between. The count carries no identity, so after a download (minutes, during which the window accepts
+ * input) any run active now may have begun after the answer and is asked about again; with nothing in between but the
+ * click's own message box (`Restart now`), the answer covers the runs it was asked about, and only a run past that count,
+ * or one where the click asked nothing, is asked about. A count that cannot be read is a run active.
+ */
+export function mustAskAtHandOff(click: ClickAnswer, now: number | null, downloadedSince: boolean): boolean {
+  if (now === 0) return false;
+  if (downloadedSince || !click.asked) return true;
+  if (click.activeRuns === null || now === null) return false;
+  return now > click.activeRuns;
 }
 
 /**
@@ -96,8 +128,26 @@ export interface UpdaterDeps {
  */
 export const RETURN_TO_WINDOW = 'Return to the window';
 export const updateCloseMessage = (activeRuns: number | null): string => (activeRuns !== null && activeRuns > 1 ? `${activeRuns} runs are still executing.` : 'A run is still executing.');
-export const updateCloseDetail = (action: 'install' | 'restart'): string =>
-  `${action === 'install' ? 'Installing the update' : 'Restarting into the update'} closes every Rotaris window, which ends the run. Return to the window to let it finish, and ${action === 'install' ? 'update' : 'restart'} afterwards.`;
+export const updateCloseDetail = (action: 'install' | 'restart', moment: 'click' | 'hand-off' = 'click'): string =>
+  action === 'install' && moment === 'hand-off'
+    ? 'The update is downloaded and verified. Installing it closes every Rotaris window, which ends the run. Return to the window to let it finish; the update stays offered.'
+    : `${action === 'install' ? 'Installing the update' : 'Restarting into the update'} closes every Rotaris window, which ends the run. Return to the window to let it finish, and ${action === 'install' ? 'update' : 'restart'} afterwards.`;
+export const closeAnywayLabel = (action: 'install' | 'restart'): string => (action === 'install' ? 'Close and install the update' : 'Close and restart');
+
+/**
+ * The message box main shows for one `CloseAsk` (OQ-86): two answers, the returning one first, the default, and what
+ * Escape and the box's close control give (`cancelId`, REQ-SHELL-055). Shaped as Electron's `MessageBoxOptions`; the
+ * answer `1` is "close anyway".
+ */
+export function updateCloseBox(ask: CloseAsk): { type: 'warning'; title: string; message: string; detail: string; buttons: string[]; defaultId: 0; cancelId: 0; noLink: true } {
+  return {
+    type: 'warning', title: 'A run is still executing', message: updateCloseMessage(ask.activeRuns), detail: updateCloseDetail(ask.action, ask.moment),
+    buttons: [RETURN_TO_WINDOW, closeAnywayLabel(ask.action)], defaultId: 0, cancelId: 0, noLink: true,
+  };
+}
+
+/** OQ-86: what the click covered when it asked nothing — the portable's apply, or no run active. */
+const NOTHING_ASKED: ClickAnswer = { asked: false };
 
 /** OQ-86's ruling: the user returned to the window from the active-run confirmation; nothing was started. */
 export const UPDATE_DECLINED = { ok: true, value: { cancelled: true, reason: 'a run is active and the user returned to the window (REQ-STARTUP-046)' } } as const satisfies CommandOutcome;
@@ -248,7 +298,7 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     return 'offered';
   };
 
-  const doInstall = async (offer: Offer, startingNoticeId: number, updatable: Extract<Classification, { updatable: true }>): Promise<CommandOutcome> => {
+  const doInstall = async (offer: Offer, startingNoticeId: number, updatable: Extract<Classification, { updatable: true }>, click: ClickAnswer): Promise<CommandOutcome> => {
     abort = new AbortController();
     let measured = measuredLabel({ bytesSoFar: 0, claimedTotal: offer.asset.size });
     let noticeId = await show(startingNoticeId, downloadingFace(offer.version, measured));
@@ -264,8 +314,17 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     const result = await runInstall(offer, {
       flavour: updatable.flavour, target: updatable.target, network: deps.network, staging: deps.staging, files: deps.files, spawn: deps.spawn,
       onProgress, signal: abort.signal, ...(deps.keys === undefined ? {} : { keys: deps.keys }),
+      // OQ-86: the installer's hand-off closes the windows, and the download ran for as long as it took — a run begun
+      // meanwhile is asked about here, immediately before the installer is started.
+      ...(updatable.flavour === 'installer' ? { beforeApply: () => confirmAtHandOff('install', click, true) } : {}),
     });
     await repaint;
+    if (!result.ok && result.stage === 'declined') {
+      // Declining keeps the update offered: the offer's face comes back in the same notice, and nothing was started.
+      noticeId = await show(noticeId, offerFace(offer));
+      state = { kind: 'offered', offer, noticeId };
+      return UPDATE_DECLINED;
+    }
     if (!result.ok) {
       deps.log('warn', `update install: ${result.stage} step failed — ${result.sentence} (REQ-STARTUP-120)`);
       noticeId = await show(noticeId, failureFace(result.sentence));
@@ -287,7 +346,9 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     return { ok: true, value: { outcome: 'handed-off', quitRequired: result.applied.quitRequired } };
   };
 
-  const doRestart = async (offer: Offer, noticeId: number, target: string): Promise<CommandOutcome> => {
+  const doRestart = async (offer: Offer, noticeId: number, target: string, click: ClickAnswer): Promise<CommandOutcome> => {
+    // OQ-86: re-read immediately before the successor starts; a run past what the click's answer covered is asked about.
+    if (!await confirmAtHandOff('restart', click, false)) return UPDATE_DECLINED;
     deps.log('info', `update restart: starting the updated Rotaris at ${target} as the successor (REQ-STARTUP-121)`);
     try {
       await deps.startSuccessor(target);
@@ -305,14 +366,37 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     return { ok: true, value: { outcome: 'handed-over' } };
   };
 
-  /** OQ-86: REQ-STARTUP-046's confirmation for an update action that closes the windows; a failure to ask declines. */
-  const askBeforeClosing = async (action: 'install' | 'restart'): Promise<boolean> => {
-    const proceed = await deps.confirmClose(action).catch((cause: unknown) => {
+  /** OQ-86: the run host's count, `null` (a run active, for the asking) when it cannot be read. */
+  const readActiveRuns = async (action: 'install' | 'restart'): Promise<number | null> =>
+    deps.activeRuns().catch((cause: unknown) => {
+      deps.log('warn', `update ${action}: the active-run count could not be read (${messageOf(cause)}); the confirmation is asked (REQ-STARTUP-046)`);
+      return null;
+    });
+
+  /** OQ-86: REQ-STARTUP-046's confirmation itself; a failure to ask declines. */
+  const ask = async (closeAsk: CloseAsk): Promise<boolean> => {
+    const { action, moment } = closeAsk;
+    const proceed = await deps.confirmClose(closeAsk).catch((cause: unknown) => {
       deps.log('warn', `update ${action}: the active-run confirmation could not be asked (${messageOf(cause)}); nothing is started (REQ-STARTUP-046)`);
       return false;
     });
-    if (!proceed) deps.log('info', `update ${action}: a run is active and the user returned to the window; nothing is started and the notice stays (REQ-STARTUP-046, OQ-86)`);
+    if (!proceed) deps.log('info', `update ${action}: a run is active and the user returned to the window at the ${moment}; nothing is started and the update stays offered (REQ-STARTUP-046, OQ-86)`);
     return proceed;
+  };
+
+  /** OQ-86, at the click: no run active asks nothing; otherwise the answer, or `null` when the user returned. */
+  const confirmAtClick = async (action: 'install' | 'restart'): Promise<ClickAnswer | null> => {
+    const activeRuns = await readActiveRuns(action);
+    if (activeRuns === 0) return { asked: false };
+    return await ask({ action, activeRuns, moment: 'click' }) ? { asked: true, activeRuns } : null;
+  };
+
+  /** OQ-86, immediately before the installer or the successor starts: true to go on. */
+  const confirmAtHandOff = async (action: 'install' | 'restart', click: ClickAnswer, downloadedSince: boolean): Promise<boolean> => {
+    const activeRuns = await readActiveRuns(action);
+    if (!mustAskAtHandOff(click, activeRuns, downloadedSince)) return true;
+    deps.log('info', `update ${action}: ${activeRuns === null ? 'the run count is unknown' : `${activeRuns} run${activeRuns === 1 ? ' is' : 's are'} active`} at the hand-off, which the click's answer did not cover; the confirmation is asked again (REQ-STARTUP-046, OQ-86)`);
+    return ask({ action, activeRuns, moment: 'hand-off' });
   };
 
   const busyRefusal = (): CommandOutcome => ({ ok: false, code: 'update.busy', headline: 'An update operation is already in flight', detail: 'Only one update check or install runs at a time (REQ-STARTUP-114).' });
@@ -343,15 +427,20 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       };
       const before = refused();
       if (before !== null) return before;
-      // OQ-86 (REQ-STARTUP-046): only the installer's hand-off closes the windows (REQ-STARTUP-119), so only it asks — at the
-      // click, before anything is downloaded or started; the portable's in-place apply closes nothing.
-      if (classification.updatable && classification.flavour === 'installer' && !await askBeforeClosing('install')) return UPDATE_DECLINED;
-      const after = refused();
-      if (after !== null) return after;
-      if (!classification.updatable || (state.kind !== 'offered' && state.kind !== 'failed')) return { ok: false, code: 'update.none', headline: 'No update is offered' };
-      const { offer, noticeId } = state;
+      if (!classification.updatable) return { ok: false, code: 'update.notUpdatable', headline: 'This build cannot update itself' };
       const updatable = classification;
-      return guard(() => doInstall(offer, noticeId, updatable));
+      // The confirmation is part of the one operation in flight (REQ-STARTUP-114), so a second click while its box is
+      // open is refused rather than asking twice.
+      return guard(async () => {
+        // OQ-86 (REQ-STARTUP-046): only the installer's hand-off closes the windows (REQ-STARTUP-119), so only it asks —
+        // at the click, before anything is downloaded, and again before the installer starts (`beforeApply`); the
+        // portable's in-place apply closes nothing.
+        const click = updatable.flavour === 'installer' ? await confirmAtClick('install') : NOTHING_ASKED;
+        if (click === null) return UPDATE_DECLINED;
+        if (state.kind !== 'offered' && state.kind !== 'failed') return { ok: false, code: 'update.none', headline: 'No update is offered' };
+        const { offer, noticeId } = state;
+        return doInstall(offer, noticeId, updatable, click);
+      });
     },
     async restart() {
       const refused = (): CommandOutcome | null => {
@@ -361,14 +450,17 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       };
       const before = refused();
       if (before !== null) return before;
-      // OQ-86 (REQ-STARTUP-046, REQ-STARTUP-121): the restart always closes the windows, so it asks first, before the successor starts.
-      if (!await askBeforeClosing('restart')) return UPDATE_DECLINED;
-      const after = refused();
-      if (after !== null) return after;
-      if (state.kind !== 'applied' || !classification.updatable) return { ok: false, code: 'update.notApplied', headline: 'No installed update to restart into' };
-      const { offer, noticeId } = state;
+      if (!classification.updatable) return { ok: false, code: 'update.notApplied', headline: 'No installed update to restart into' };
       const { target } = classification;
-      return guard(() => doRestart(offer, noticeId, target));
+      return guard(async () => {
+        // OQ-86 (REQ-STARTUP-046, REQ-STARTUP-121): the restart always closes the windows, so it asks first, at the
+        // click, and `doRestart` re-reads the count immediately before the successor starts.
+        const click = await confirmAtClick('restart');
+        if (click === null) return UPDATE_DECLINED;
+        if (state.kind !== 'applied') return { ok: false, code: 'update.notApplied', headline: 'No installed update to restart into' };
+        const { offer, noticeId } = state;
+        return doRestart(offer, noticeId, target, click);
+      });
     },
     async noticeDismissed(noticeId) {
       if (state.kind !== 'offered' && state.kind !== 'failed') return;

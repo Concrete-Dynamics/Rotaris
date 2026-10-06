@@ -142,7 +142,9 @@ passage says so. No package, edge, process, channel, command or store column cha
 **An update action that closes the windows asks the active-run confirmation first (REQ-STARTUP-046, REQ-STARTUP-119,
 REQ-STARTUP-121; OQ-86 ruled by R-071, fin21).** `UpdaterDeps.confirmClose` is asked by `Restart now`, and by `Update now`
 on the installer flavour, before anything starts; main answers it from the run host's `runs.active` and a message box whose
-default is `Return to the window`. The **sequences view**'s `Update now` / `Restart now` diagram and prose say so. No
+default is `Return to the window`; the count is read again immediately before the installer or the successor starts
+(`UpdaterDeps.activeRuns`, `runInstall`'s `beforeApply`, `mustAskAtHandOff`), so a run started during the download is asked
+about too (verification round 1). The **sequences view**'s `Update now` / `Restart now` diagram and prose say so. No
 package, edge, process, channel, command or store column changed.
 
 **After one unanswered approval, the question tool's own ask still prompts and the waits already outstanding end

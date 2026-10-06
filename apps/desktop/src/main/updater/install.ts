@@ -47,12 +47,20 @@ export interface InstallContext {
   readonly signal?: AbortSignal;
   /** The key set to verify against; production passes nothing and gets the compiled-in set. */
   readonly keys?: readonly string[];
+  /**
+   * Asked once the download is verified and immediately before the apply starts anything (OQ-86, ruled 2026-10-06 by
+   * R-071): false declines — the verified download is discarded and nothing is started. The updater passes it for the
+   * installer flavour, whose hand-off closes the windows, so a run begun while the download ran is never ended unasked.
+   */
+  readonly beforeApply?: () => Promise<boolean>;
 }
 
 export type InstallStage = 'manifest' | 'signature' | 'download' | 'digest' | 'apply';
 export type InstallResult =
   | { readonly ok: true; readonly applied: Extract<ApplyOutcome, { ok: true }> }
-  | { readonly ok: false; readonly stage: InstallStage; readonly sentence: string };
+  | { readonly ok: false; readonly stage: InstallStage; readonly sentence: string }
+  /** `beforeApply` answered false: the verified download was discarded and nothing was started (OQ-86). */
+  | { readonly ok: false; readonly stage: 'declined'; readonly sentence: string };
 
 /** The one place a small response (the manifest, the signature) is read whole; anything larger is not one of them. */
 const SMALL_RESPONSE_LIMIT = CHUNK_BYTES;
@@ -165,6 +173,17 @@ export async function runInstall(offer: Offer, ctx: InstallContext): Promise<Ins
   if (published.toLowerCase() !== streamed.sha256.toLowerCase()) {
     await discard();
     return { ok: false, stage: 'digest', sentence: hashMismatchSentence(offer.asset.name, published, streamed.sha256) };
+  }
+
+  // 5a. OQ-86: the last moment before anything is started — a run begun while the download ran is asked about here.
+  if (ctx.beforeApply !== undefined) {
+    const proceed = await ctx.beforeApply();
+    if (!proceed || ctx.signal?.aborted === true) {
+      await discard();
+      return proceed
+        ? { ok: false, stage: 'download', sentence: `the download of ${offer.asset.name} was abandoned before it finished` }
+        : { ok: false, stage: 'declined', sentence: 'a run is active and the user returned to the window; the verified download was discarded and nothing was started (REQ-STARTUP-046)' };
+    }
   }
 
   // 6. Apply, by flavour (REQ-STARTUP-125).

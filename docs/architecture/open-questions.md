@@ -3616,6 +3616,16 @@ is the run host's instance-wide count, since every window closes, and a count th
 answer starts nothing and leaves the notice as it was; accepted, the closes are made as before without a second ask. No
 requirement's text is departed from — REQ-STARTUP-119/121 still close as they say, after the confirmation — so the ruling
 alone settles it. Built the same day (`UpdaterDeps.confirmClose`, `apps/desktop/src/main/updater/updater.ts`; plan fin21).
+Corrected the same day at the build's verification, which found "without a second ask" leaves a run unwarned: the
+installer's download follows the click and can take minutes while the window accepts input, so a run started then (or
+any run, where none was active at the click and nothing was asked) was ended by REQ-STARTUP-119's auto-close with no
+confirmation. Read since: the count is re-read again **immediately before the installer is spawned or the successor
+started** (`UpdaterDeps.activeRuns`, `runInstall`'s `beforeApply`, `mustAskAtHandOff`). After the download any run active
+then is asked about again, since a count carries no identity and cannot say the run is one the click's answer covered;
+`Restart now`, with nothing between the click and the start but the click's own box, asks again only for a run past the
+count the click was asked about, or where the click asked nothing. Declined at that point, the verified download is
+discarded, nothing is started, and the offer comes back in the same notice. The confirmation is part of the one update
+operation in flight (REQ-STARTUP-114), so a second click while its box is open is refused rather than opening another.
 The reading below is kept as the build proceeded under it until then.
 
 REQ-STARTUP-046: "When a run is active, a confirmation SHALL be presented before anything is torn down; declining it SHALL abort the close, leaving the window open and accepting input and the run still executing." REQ-STARTUP-119: "when the hand-off requires quitting (Windows installer), the window SHALL auto-close after a 1200 ms single delay." REQ-STARTUP-121: "the current window closes only after the successor has started". The installer's auto-close and the restart's close are closes of a window, and a run may be active in it when the user chooses `Update now` or `Restart now`. If the confirmation is asked and declined, the installer is already running against the tree the window runs from, and after a restart the record has already passed to the successor, so the declining instance would stay beside the one that now holds the record.

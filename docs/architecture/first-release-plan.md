@@ -26,7 +26,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
 | Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **built 2026-09-27** (`pnpm injection-proof`); the bound **met on Linux**, the Windows gate-class reading **owed**; OQ-64 **ruled 2026-09-27**; OQ-68 raised | §3 |
 | The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the version guard built 2026-09-27** (§4.1), ~~and the setup manifest it checks is owed~~ **the setup manifest built 2026-09-28** (§4.1; the guard passes both halves; its consumer, machine setup, is not built and not in this plan); **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3, O-11 and OQ-74; **the two bundled assets wired into `pnpm package` 2026-09-27** (§4.4), so a package refuses with it | §4 |
-| The updater, REQ-STARTUP-107..124 | ~~**not built** — no module in `apps/desktop/src/main/`~~; **in the first release**, ruled 2026-09-27; **built 2026-09-28** (`apps/desktop/src/main/updater/`, `pnpm updater-proof`; the compiled-in key set empty until O-2; the apply and the restart unit-tested over fakes, their run against a real artifact owed to the next Windows package, IC-3); OQ-83, OQ-84, OQ-85 raised; repaired at verification the same day (classification order, the record pass, the re-offer, the launch-time cleanup), OQ-86 raised; and at the second verification (a refused record pass now fails the restart) | §4.6 |
+| The updater, REQ-STARTUP-107..124 | ~~**not built** — no module in `apps/desktop/src/main/`~~; **in the first release**, ruled 2026-09-27; **built 2026-09-28** (`apps/desktop/src/main/updater/`, `pnpm updater-proof`; the compiled-in key set empty until O-2; the apply and the restart unit-tested over fakes, their run against a real artifact owed to the next Windows package, IC-3); OQ-83, OQ-84, OQ-85 raised; repaired at verification the same day (classification order, the record pass, the re-offer, the launch-time cleanup), OQ-86 raised (ruled 2026-10-06, R-071, and built: the active-run confirmation at the click and before the hand-off); and at the second verification (a refused record pass now fails the restart) | §4.6 |
 
 **Deferred by "thats it".** Each item stays owed where the record already carries it:
 
@@ -655,7 +655,8 @@ so that the next release can add the updater without stranding anyone.
 > instance — `acceptSuccessor`); a later window's check re-offered an installed update and dropped `Restart now`; and
 > the `<name>.old` cleanup ran per window rather than per launch, deleting the backup the same process had just made.
 > 152 unit cases. **Raised by it:** OQ-86 (whether the installer's auto-close and the restart's close ask
-> REQ-STARTUP-046's active-run confirmation); OQ-84 now cites REQ-STARTUP-147's sentence too.
+> REQ-STARTUP-046's active-run confirmation) — *ruled 2026-10-06 by the owner (R-071) and built (plan fin21): both ask at
+> the click and again immediately before the installer or the successor starts*; OQ-84 now cites REQ-STARTUP-147's sentence too.
 >
 > **Repaired at the second verification, the same day.** A successor that started and was accepted, but that the
 > record could not be passed to (the record no longer this instance's, or the atomic replacement failed), left the

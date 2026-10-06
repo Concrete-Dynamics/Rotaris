@@ -60,5 +60,6 @@ launch is refused): `run_started_at` precedes that run's `run_continuation_inten
 Not decided here: whether the session list's duration label is the latest run's (as built, OQ-192's reading:
 `durationLabel(run_started_at, …)`) or the session's whole (the autopsy reads 87.7 s for this session, its first run's
 22.6 s outside the label). REQ-SESSION-154 says "a relative-time duration label" and REQ-MONITOR-171 "a duration label";
-neither says which. The case is added to [OQ-192](../../architecture/open-questions.md), whose ruling decides whether the
-label stays on the row at all.
+neither says which. The case is added to [OQ-192](../../architecture/open-questions.md) ("The sessions card's rows carry a
+token label, a duration label and a detail caption, which the listing record's closed field set does not hold."), whose
+ruling decides whether the label stays on the row at all.

@@ -135,5 +135,6 @@ changed mid-iteration, not the grant. Default pack `.live-run/runs/2026-10-06T01
   session), and a coordinator told in the middle of its iteration to verify and report less than it started under.
 
 No code changed: the note stays open and waits on the owner's ruling of
-[OQ-162](../architecture/open-questions.md). (The same scenario's run timing, which started after this classification,
+[OQ-162](../architecture/open-questions.md) ("Does continuing a paused iteration classify the intent again, and may the
+resumed root's grant change with it?"). (The same scenario's run timing, which started after this classification,
 is a separate defect: `docs/defects/fixed/a-continuations-run-timing-starts-after-its-pre-flight-where-a-launchs-counts-it.md`.)

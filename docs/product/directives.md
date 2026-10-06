@@ -3253,6 +3253,15 @@ configuration (REQ-CONFIG-100) is kept whole, with that statement after it. Whil
 coordinating run. Every other run keeps REQ-ORCH-029 whole. *(Qualified by revision 2: on every run, the todo clause
 ranges over the task's own items, below.)*
 
+**A `swarm` run** (named 2026-10-06, a wording addition; nothing above changes). A `swarm` override is not an input to the
+mapping (REQ-ORCH-016), so a `swarm` run whose intent the mapping grants is granted the bundle and falls under this
+directive like any other: its entry role is told that it does the work itself, and `delegate` stays in the bundle, so it may
+still delegate. REQ-ORCH-025's `swarm` demands maximum parallel delegation by instruction text alone, and the build renders
+that text nowhere today (`packages/engine/src/children/personas.ts` reads no run override), so such a run is given the
+direct-work statement and no `swarm` demand beside it. What a `swarm` text, once rendered, says on a granted intent is for
+the repair of [the defect recorded for it](../defects/the-swarm-run-override-changes-no-instruction-text.md) to settle
+against this directive.
+
 **Which todo items the success clause ranges over (revision 2).** On every run, coordinating or granted the bundle,
 REQ-ORCH-029's constraint "it does not report the run successful while a todo item is non-terminal" SHALL range over the
 items of the plan that the task in hand answers for, as [`PD-ORCH-012`](#pd-orch-012) decides them: the items not already

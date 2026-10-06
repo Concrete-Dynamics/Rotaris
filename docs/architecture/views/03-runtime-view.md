@@ -1420,7 +1420,10 @@ focused leaves its warning standing beside the prompt no longer.
 launches a run of an existing session clears it the same way once the run host has launched it: `session.prompt` and
 `session.retry` on their `ack`, `session.continue` when it `resumed`, `session.planDecision` when it `relaunched`, and the
 recovery dialog's two restarts on `session.authRestarted` (`AuthRecovery`'s `clearForRunStart` dependency). A refused one,
-or one that left the session at rest, clears nothing.
+or one that left the session at rest, clears nothing. The clear follows the run host's answer, in the same order as
+`session.start`'s: a run that failed fast enough for its own failure notice to reach main before that answer would have
+the new notice cleared with the old. The order is inherited from `session.start`, not new; whether the run host can
+publish a run's failure ahead of its answer has not been measured.
 
 Main presents `run.result` once as the notice — **except where that result carries `persistence: {confirmed: false}`**,
 the run host having already published the one failure notice `REQ-EVENTS-088` allows, with the last durable ordinal

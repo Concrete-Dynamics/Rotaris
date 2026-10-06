@@ -27,7 +27,7 @@ import { countNoun, millis, toIsoUtc } from '@rotaris/kernel';
 import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
 import { claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
-import { createUpdater } from './updater/updater.js';
+import { createUpdater, RETURN_TO_WINDOW, updateCloseDetail, updateCloseMessage } from './updater/updater.js';
 import { createSuccessorWait } from './updater/successor.js';
 import { classifyThisInstallation, createUpdaterPorts, successorArguments, successorEndpointFromArgv } from './updater/electron.js';
 import { updateCommands } from './commands/update.js';
@@ -463,6 +463,27 @@ async function main(): Promise<void> {
     // The window closes only after the successor has started, and the installer's hand-off closes it after its delay
     // (REQ-STARTUP-119/121): every main window is destroyed and the ordinary quit path follows.
     closeWindows: () => { mainWindows.dispose(); },
+    /*
+     * REQ-STARTUP-046 at the update's own close (OQ-86, ruled 2026-10-06 by R-071): asked when `Update now` (the installer
+     * flavour) or `Restart now` is clicked, before the installer or the successor starts, since afterwards declining could
+     * not keep the window. The run host's count is instance-wide, as every window closes; a count that cannot be read is
+     * treated as a run being active, so a run is never ended without warning. Two answers, returning the default, and
+     * Escape or the box's close control returning (`cancelId`, REQ-SHELL-055).
+     */
+    confirmClose: async (action) => {
+      const active = await runHost.request({ kind: 'runs.active', workspaceId: '' }, millis(5_000)).catch(() => null);
+      const count = active?.kind === 'runs.count' ? active.count : null;
+      if (count === 0) return true;
+      const parent = mainWindows.active()?.win;
+      const opts: Electron.MessageBoxOptions = {
+        type: 'warning', title: 'A run is still executing', message: updateCloseMessage(count),
+        detail: updateCloseDetail(action),
+        buttons: [RETURN_TO_WINDOW, action === 'install' ? 'Close and install the update' : 'Close and restart'], defaultId: 0, cancelId: 0, noLink: true,
+      };
+      const answer = parent === undefined || parent.isDestroyed() ? await askBox(null, opts) : await askBox(parent, opts);
+      log(`update ${action}: active-run confirmation (${count === null ? 'run count unknown' : `${count} active`}) → ${answer === 1 ? 'close anyway' : 'return to the window'} (REQ-STARTUP-046, OQ-86)`);
+      return answer === 1;
+    },
   });
   /**
    * Part X (REQ-LIBRARY-105): the library revision, and the ONE place it is broadcast from. `bump` takes a member of
@@ -1451,13 +1472,13 @@ async function main(): Promise<void> {
   };
   // A3: REQ-GIT-118's "id the launch dialog last showed" is a field of the window record — the dialog belongs
   // to one window, and a second window's launch dialog must not consume the first window's minted id.
-  const askBox = async (parent: BrowserWindow, opts: Electron.MessageBoxOptions): Promise<number> => {
+  const askBox = async (parent: BrowserWindow | null, opts: Electron.MessageBoxOptions): Promise<number> => {
     if (capturing && scriptedAnswers.length > 0) {
       const answer = scriptedAnswers.shift()!;
       log(`capture: message box "${opts.title}" | ${opts.message} | ${opts.detail ?? ''} | buttons ${JSON.stringify(opts.buttons)} default ${opts.defaultId} → answered ${answer} (${opts.buttons?.[answer]})`);
       return answer;
     }
-    return (await dialog.showMessageBox(parent, opts)).response;
+    return (parent === null ? await dialog.showMessageBox(opts) : await dialog.showMessageBox(parent, opts)).response;
   };
 
   /**

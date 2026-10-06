@@ -3606,7 +3606,17 @@ REQ-STARTUP-118: "a non-persistent notice titled `Downloading Rotaris {version}`
 
 **What the build proceeds under.** The identity is kept and the notice updated in place (REQ-SHELL-118 and ADR-0054's "the same notice by identity, never by replacement"); the title and message are REQ-STARTUP-118's, because Distribution owns the words and Shell the surface (`CONTEXT-MAP.md`); the notice is not persistent while the download runs, so no dismissal can wave off a version whose install is in flight; the action is disabled with an accessible description; and the apply follows the verified download without a pause, so the "ready to install" state stands only for the length of the apply. The failure becomes REQ-STARTUP-120's `Update not installed` in place. **What a ruling decides.** Which of the two texts is amended to the other on the title, the persistence, the message and the pause. Nothing in the mechanism moves with the answer beyond the words and one boolean.
 
-**OQ-86 — Does the update's own close ask REQ-STARTUP-046's active-run confirmation?** *(REQ-STARTUP-046, REQ-STARTUP-119, REQ-STARTUP-121; ADR-0054 "The updater". Raised 2026-09-28 by the verification of the updater, first-release-plan.md §4.6, under R-062. Raised as OQ-79 on its branch; renumbered OQ-86 at the merge, because OQ-76 to OQ-82 were already on `main`.)*
+**OQ-86 — Does the update's own close ask REQ-STARTUP-046's active-run confirmation?** *(REQ-STARTUP-046, REQ-STARTUP-119, REQ-STARTUP-121; ADR-0054 "The updater". Raised 2026-09-28 by the verification of the updater, first-release-plan.md §4.6, under R-062. Raised as OQ-79 on its branch; renumbered OQ-86 at the merge, because OQ-76 to OQ-82 were already on `main`. Ruled 2026-10-06 by the owner, and built.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** REQ-STARTUP-046's confirmation governs the
+update's closes and is asked when the user clicks the action, before the installer or the successor starts, so a run is
+never ended without warning. Read, where the ruling leaves it open, as: `Restart now` always asks, `Update now` and `Try
+again` ask only on the installer flavour (the one whose hand-off closes the windows, REQ-STARTUP-119); "a run is active"
+is the run host's instance-wide count, since every window closes, and a count that cannot be read asks; the returning
+answer starts nothing and leaves the notice as it was; accepted, the closes are made as before without a second ask. No
+requirement's text is departed from — REQ-STARTUP-119/121 still close as they say, after the confirmation — so the ruling
+alone settles it. Built the same day (`UpdaterDeps.confirmClose`, `apps/desktop/src/main/updater/updater.ts`; plan fin21).
+The reading below is kept as the build proceeded under it until then.
 
 REQ-STARTUP-046: "When a run is active, a confirmation SHALL be presented before anything is torn down; declining it SHALL abort the close, leaving the window open and accepting input and the run still executing." REQ-STARTUP-119: "when the hand-off requires quitting (Windows installer), the window SHALL auto-close after a 1200 ms single delay." REQ-STARTUP-121: "the current window closes only after the successor has started". The installer's auto-close and the restart's close are closes of a window, and a run may be active in it when the user chooses `Update now` or `Restart now`. If the confirmation is asked and declined, the installer is already running against the tree the window runs from, and after a restart the record has already passed to the successor, so the declining instance would stay beside the one that now holds the record.
 

@@ -91,6 +91,10 @@ sequenceDiagram
   participant F as the release feed
   participant S as the successor
   R->>M: update.install (Update now / Try again)
+  opt installer flavour, a run active (REQ-STARTUP-046, OQ-86 since 2026-10-06)
+    M->>M: confirmClose — runs.active, instance-wide; the message box "A run is still executing", Return to the window the default
+    M-->>R: returned: { cancelled } — nothing downloaded or started, the offer notice stays
+  end
   M->>M: the offer notice becomes "Downloading Rotaris {v}" IN PLACE, action disabled (REQ-STARTUP-118, REQ-SHELL-118)
   M->>F: GET SHA256SUMS.txt, then SHA256SUMS.txt.sig
   M->>M: verify the signature against the compiled-in key set — BEFORE parsing (REQ-STARTUP-122/167); empty set → refused, nothing downloaded
@@ -100,6 +104,7 @@ sequenceDiagram
   alt portable: rename aside, move in (REQ-STARTUP-125)
     M->>M: "Update installed" + Restart now (REQ-STARTUP-119)
     R->>M: update.restart
+    M->>M: confirmClose first when a run is active (REQ-STARTUP-046, OQ-86); returned → { cancelled }, nothing started
     M->>S: spawn <artifact> builtin:update-successor -- <this endpoint>, detached
     S->>S: no claim; open its own endpoint (inheritInstance)
     S->>M: {"successor": {pid, host, acquired_at, endpoint}} — then waits ≤ the hand-over interval for the offer
@@ -119,6 +124,14 @@ sequenceDiagram
     M->>M: the notice becomes "Update not installed" in place, the sentence as detail, Try again (REQ-STARTUP-120)
   end
 ```
+
+*Since 2026-10-06 (OQ-86 ruled by R-071):* both actions that close the windows — `Update now` (and `Try again`) on the
+installer flavour, whose hand-off closes them after REQ-STARTUP-119's delay, and `Restart now` — ask REQ-STARTUP-046's
+active-run confirmation at the click (`UpdaterDeps.confirmClose`), before anything is downloaded, the installer is spawned
+or the successor started: main asks the run host `runs.active` (instance-wide, since every window closes; a count it cannot
+read is taken as a run active) and, for any active run, shows a message box whose default, Escape and close control are
+`Return to the window`; that answer starts nothing and leaves the notice as it was. The portable's in-place apply closes
+nothing and asks nothing.
 
 A successor that cannot be started surfaces through `Update not installed` and nothing closes; one that never
 signals leaves this instance holding its record and its window, with no timeout (REQ-STARTUP-121, ADR-0055). A

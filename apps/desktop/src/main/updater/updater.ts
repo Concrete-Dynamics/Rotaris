@@ -80,7 +80,27 @@ export interface UpdaterDeps {
   readonly startSuccessor: (target: string) => Promise<void>;
   /** Close every window; the quit follows through main's ordinary path. */
   readonly closeWindows: () => void;
+  /**
+   * REQ-STARTUP-046's active-run confirmation, asked at the click (OQ-86, ruled 2026-10-06 by R-071): resolves true when no
+   * run is active or the user chose to close anyway, false when they returned to the window. Asked by `install` only where
+   * the hand-off closes the windows (the installer flavour, REQ-STARTUP-119), and by `restart` always (REQ-STARTUP-121),
+   * before the installer or the successor is started. A confirmation that cannot be asked is read as the returning answer.
+   */
+  readonly confirmClose: (action: 'install' | 'restart') => Promise<boolean>;
 }
+
+/**
+ * REQ-STARTUP-046's confirmation at an update action's click (OQ-86): its text conveys exactly the three things the
+ * requirement names — a run is still executing, closing ends it, and the alternative is to return and let it finish —
+ * and the returning answer is the first, the default and Escape's.
+ */
+export const RETURN_TO_WINDOW = 'Return to the window';
+export const updateCloseMessage = (activeRuns: number | null): string => (activeRuns !== null && activeRuns > 1 ? `${activeRuns} runs are still executing.` : 'A run is still executing.');
+export const updateCloseDetail = (action: 'install' | 'restart'): string =>
+  `${action === 'install' ? 'Installing the update' : 'Restarting into the update'} closes every Rotaris window, which ends the run. Return to the window to let it finish, and ${action === 'install' ? 'update' : 'restart'} afterwards.`;
+
+/** OQ-86's ruling: the user returned to the window from the active-run confirmation; nothing was started. */
+export const UPDATE_DECLINED = { ok: true, value: { cancelled: true, reason: 'a run is active and the user returned to the window (REQ-STARTUP-046)' } } as const satisfies CommandOutcome;
 
 export type ActivationOutcome = 'not-updatable' | 'demo' | 'refused' | 'failed' | 'none' | 'dismissed' | 'already-offered' | 'already-applied' | 'offered';
 
@@ -285,6 +305,16 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     return { ok: true, value: { outcome: 'handed-over' } };
   };
 
+  /** OQ-86: REQ-STARTUP-046's confirmation for an update action that closes the windows; a failure to ask declines. */
+  const askBeforeClosing = async (action: 'install' | 'restart'): Promise<boolean> => {
+    const proceed = await deps.confirmClose(action).catch((cause: unknown) => {
+      deps.log('warn', `update ${action}: the active-run confirmation could not be asked (${messageOf(cause)}); nothing is started (REQ-STARTUP-046)`);
+      return false;
+    });
+    if (!proceed) deps.log('info', `update ${action}: a run is active and the user returned to the window; nothing is started and the notice stays (REQ-STARTUP-046, OQ-86)`);
+    return proceed;
+  };
+
   const busyRefusal = (): CommandOutcome => ({ ok: false, code: 'update.busy', headline: 'An update operation is already in flight', detail: 'Only one update check or install runs at a time (REQ-STARTUP-114).' });
 
   return {
@@ -305,16 +335,37 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       return guard(() => check(windowId, updatable));
     },
     async install() {
-      if (!classification.updatable) return { ok: false, code: 'update.notUpdatable', headline: 'This build cannot update itself', detail: classification.reason };
-      if (busy !== null) return busyRefusal();
-      if (state.kind !== 'offered' && state.kind !== 'failed') return { ok: false, code: 'update.none', headline: 'No update is offered', detail: 'Nothing is held to install; the next check offers a newer release when there is one.' };
+      const refused = (): CommandOutcome | null => {
+        if (!classification.updatable) return { ok: false, code: 'update.notUpdatable', headline: 'This build cannot update itself', detail: classification.reason };
+        if (busy !== null) return busyRefusal();
+        if (state.kind !== 'offered' && state.kind !== 'failed') return { ok: false, code: 'update.none', headline: 'No update is offered', detail: 'Nothing is held to install; the next check offers a newer release when there is one.' };
+        return null;
+      };
+      const before = refused();
+      if (before !== null) return before;
+      // OQ-86 (REQ-STARTUP-046): only the installer's hand-off closes the windows (REQ-STARTUP-119), so only it asks — at the
+      // click, before anything is downloaded or started; the portable's in-place apply closes nothing.
+      if (classification.updatable && classification.flavour === 'installer' && !await askBeforeClosing('install')) return UPDATE_DECLINED;
+      const after = refused();
+      if (after !== null) return after;
+      if (!classification.updatable || (state.kind !== 'offered' && state.kind !== 'failed')) return { ok: false, code: 'update.none', headline: 'No update is offered' };
       const { offer, noticeId } = state;
       const updatable = classification;
       return guard(() => doInstall(offer, noticeId, updatable));
     },
     async restart() {
-      if (busy !== null) return busyRefusal();
-      if (state.kind !== 'applied' || !classification.updatable) return { ok: false, code: 'update.notApplied', headline: 'No installed update to restart into', detail: 'Restart now is offered on the Update installed notice alone (REQ-STARTUP-121).' };
+      const refused = (): CommandOutcome | null => {
+        if (busy !== null) return busyRefusal();
+        if (state.kind !== 'applied' || !classification.updatable) return { ok: false, code: 'update.notApplied', headline: 'No installed update to restart into', detail: 'Restart now is offered on the Update installed notice alone (REQ-STARTUP-121).' };
+        return null;
+      };
+      const before = refused();
+      if (before !== null) return before;
+      // OQ-86 (REQ-STARTUP-046, REQ-STARTUP-121): the restart always closes the windows, so it asks first, before the successor starts.
+      if (!await askBeforeClosing('restart')) return UPDATE_DECLINED;
+      const after = refused();
+      if (after !== null) return after;
+      if (state.kind !== 'applied' || !classification.updatable) return { ok: false, code: 'update.notApplied', headline: 'No installed update to restart into' };
       const { offer, noticeId } = state;
       const { target } = classification;
       return guard(() => doRestart(offer, noticeId, target));

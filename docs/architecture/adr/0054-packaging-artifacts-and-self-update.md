@@ -1712,6 +1712,11 @@ auto-close and the restart's close destroy the main windows rather than asking t
 action, and after the record has passed the predecessor must not stay. That is a reading between two SHALLs —
 REQ-STARTUP-119's "the window SHALL auto-close" and REQ-STARTUP-121's close against REQ-STARTUP-046's confirmation
 "when a run is active" — and **OQ-86** asks which governs. **Nothing in this record's decision changes.**
+*Ruled 2026-10-06 by the owner ([R-071](../../product/requests.md#r-071)), and built the same day (plan fin21): the reading
+above no longer stands.* REQ-STARTUP-046's confirmation governs both closes and is asked when the action is clicked — before
+the installer is spawned or the successor started, since declining after either could not keep the window — by
+`UpdaterDeps.confirmClose` for `Restart now` and for `Update now` on the installer flavour alone (the portable's apply closes
+nothing). Declined, nothing starts and the notice stays; accepted, the closes are made as before, without asking again.
 
 **Repaired at verification, 2026-09-28 (same item, R-062).** The independent verification found three defects in the
 build above, and writing the third's test found a fourth; each is repaired with a test beside it, and nothing in this

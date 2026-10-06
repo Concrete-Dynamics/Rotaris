@@ -10,7 +10,7 @@ import { FEED_ACCEPT, FEED_ENDPOINT, FEED_TIMEOUT_MS, SUMMARY_FALLBACK } from '.
 import type { NetworkResponse, StagingArea, UpdateNetwork } from './install.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 import { passFailedSentence } from './successor.js';
-import { createUpdater, DOWNLOAD_IN_PROGRESS, downloadingMessage, downloadingTitle, FINISH_TITLE, INSTALLED_TITLE, INSTALLER_AUTO_CLOSE_MS, NOT_INSTALLED_MESSAGE, NOT_INSTALLED_TITLE, offerTitle, RESTART_NOW, TRY_AGAIN, UPDATE_NOW, type UpdaterDeps } from './updater.js';
+import { createUpdater, DOWNLOAD_IN_PROGRESS, downloadingMessage, downloadingTitle, FINISH_TITLE, INSTALLED_TITLE, INSTALLER_AUTO_CLOSE_MS, NOT_INSTALLED_MESSAGE, NOT_INSTALLED_TITLE, offerTitle, RESTART_NOW, RETURN_TO_WINDOW, TRY_AGAIN, UPDATE_DECLINED, UPDATE_NOW, updateCloseDetail, updateCloseMessage, type UpdaterDeps } from './updater.js';
 
 const PORTABLE = 'Rotaris-0.2.0-windows-x64-portable.exe';
 const SETUP = 'Rotaris-0.2.0-windows-x64-setup.exe';
@@ -105,7 +105,7 @@ const portable: Classification = { updatable: true, flavour: 'portable', target:
 const installer: Classification = { updatable: true, flavour: 'installer', target: INSTALL_DIR };
 const dev: Classification = { updatable: false, reason: 'a development or source-tree launch, not a released standalone artifact (REQ-STARTUP-106)' };
 
-function harness(options: { classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never' | 'refused'; volumeFiles?: Record<string, string> } = {}) {
+function harness(options: { classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never' | 'refused'; volumeFiles?: Record<string, string>; confirm?: boolean | 'throws' } = {}) {
   const srv = server(options.feed);
   const clock = new FakeClock();
   const logged: string[] = [];
@@ -126,6 +126,7 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
   const spawn: StrategySpawn = { spawnDetached: async (exe) => { spawned.push(exe); } };
   const started: string[] = [];
   let closed = 0;
+  const asked: string[] = [];
   const keys = options.keys === 'empty' ? [] : options.keys === 'other' ? [keyPair().pem] : [srv.pair.pem];
   const deps: UpdaterDeps = {
     classification: options.classification ?? portable,
@@ -141,9 +142,11 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
       if (options.successor === 'refused') throw new Error(passFailedSentence('the instance record could not be replaced: EBUSY'));
     },
     closeWindows: () => { closed += 1; },
+    // OQ-86: the active-run confirmation — by default no run is active (or the user closes anyway).
+    confirmClose: async (action) => { asked.push(action); if (options.confirm === 'throws') throw new Error('no window to ask from'); return options.confirm ?? true; },
   };
   const updater = createUpdater(deps);
-  return { updater, srv, clock, logged, recorded, broadcasts, notices, staging, vol, spawned, started, closed: () => closed, dismissed: () => dismissed };
+  return { updater, srv, clock, logged, recorded, broadcasts, notices, staging, vol, spawned, started, asked, closed: () => closed, dismissed: () => dismissed };
 }
 
 describe('activation — REQ-STARTUP-106, REQ-STARTUP-114, REQ-STARTUP-057, REQ-STARTUP-150', () => {
@@ -430,6 +433,67 @@ describe('dismissing the offer — REQ-STARTUP-116, REQ-STARTUP-117, REQ-SHELL-1
 });
 
 describe('`Restart now` — REQ-STARTUP-121', () => {
+  /*
+   * OQ-86, ruled 2026-10-06 by the owner (R-071): REQ-STARTUP-046's active-run confirmation is asked when the action is
+   * clicked, before the installer or the successor starts — afterwards declining could not keep the window. Until the
+   * ruling both closed every window without it.
+   */
+  it('Restart now asks the active-run confirmation first; returning to the window starts nothing, closes nothing and keeps the notice', async () => {
+    const h = harness({ confirm: false });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    // The portable's in-place apply closes nothing, so `Update now` asked nothing.
+    expect(h.asked).toEqual([]);
+    const notice = h.notices.current();
+    expect(notice).toMatchObject({ title: INSTALLED_TITLE });
+    expect(await h.updater.restart()).toEqual(UPDATE_DECLINED);
+    expect(h.asked).toEqual(['restart']);
+    expect(h.started).toEqual([]);
+    expect(h.closed()).toBe(0);
+    expect(h.notices.current()).toEqual(notice);
+    expect(h.updater.state().kind).toBe('applied');
+    expect(h.updater.inFlight()).toBe(false);
+    expect(h.logged.some((l) => /update restart: a run is active and the user returned to the window/.test(l))).toBe(true);
+  });
+
+  it('Update now on the installer flavour asks before anything is downloaded or started; declined, the offer stands; accepted, the hand-off proceeds', async () => {
+    const declined = harness({ classification: installer, confirm: false });
+    await declined.updater.activate({ windowId: 1 });
+    const requestsBefore = declined.srv.requests.length;
+    expect(await declined.updater.install()).toEqual(UPDATE_DECLINED);
+    expect(declined.asked).toEqual(['install']);
+    expect(declined.srv.requests.length).toBe(requestsBefore);
+    expect(declined.spawned).toEqual([]);
+    expect(declined.notices.current()).toMatchObject({ title: offerTitle('0.2.0'), action: { label: UPDATE_NOW } });
+    expect(declined.updater.state().kind).toBe('offered');
+    declined.clock.advance(INSTALLER_AUTO_CLOSE_MS * 10);
+    expect(declined.closed()).toBe(0);
+
+    const accepted = harness({ classification: installer, confirm: true });
+    await accepted.updater.activate({ windowId: 1 });
+    expect(await accepted.updater.install()).toMatchObject({ ok: true, value: { outcome: 'handed-off' } });
+    expect(accepted.asked).toEqual(['install']);
+    expect(accepted.spawned).toHaveLength(1);
+  });
+
+  it('a confirmation that cannot be asked is read as returning to the window: nothing starts', async () => {
+    const h = harness({ confirm: 'throws' });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    expect(await h.updater.restart()).toEqual(UPDATE_DECLINED);
+    expect(h.started).toEqual([]);
+    expect(h.logged.some((l) => /the active-run confirmation could not be asked \(no window to ask from\)/.test(l))).toBe(true);
+  });
+
+  it('the confirmation\'s words convey REQ-STARTUP-046\'s three things, and the returning answer is named', () => {
+    expect(RETURN_TO_WINDOW).toBe('Return to the window');
+    expect(updateCloseMessage(1)).toBe('A run is still executing.');
+    expect(updateCloseMessage(null)).toBe('A run is still executing.');
+    expect(updateCloseMessage(3)).toBe('3 runs are still executing.');
+    expect(updateCloseDetail('install')).toBe('Installing the update closes every Rotaris window, which ends the run. Return to the window to let it finish, and update afterwards.');
+    expect(updateCloseDetail('restart')).toBe('Restarting into the update closes every Rotaris window, which ends the run. Return to the window to let it finish, and restart afterwards.');
+  });
+
   it('starts the successor from the target, and closes the window only after the record has passed', async () => {
     const h = harness();
     await h.updater.activate({ windowId: 1 });
@@ -468,6 +532,8 @@ describe('`Restart now` — REQ-STARTUP-121', () => {
     await h.updater.activate({ windowId: 1 });
     await h.updater.install();
     const pending = h.updater.restart();
+    // The restart starts once the active-run confirmation has answered (OQ-86), a turn after the click.
+    await new Promise((r) => setTimeout(r, 0));
     h.clock.advance(600_000);
     expect(h.closed()).toBe(0);
     expect(h.updater.inFlight()).toBe(true);

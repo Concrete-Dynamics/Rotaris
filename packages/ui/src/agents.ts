@@ -289,7 +289,8 @@ export function resolvedTools(agent: Pick<AgentRecord, 'id' | 'grantedTools' | '
  * (REQ-MONITOR-064/128): every descendant not yet finished, live or paused, through a finished one; for the run, its
  * every live or paused agent. Since clause 13 made a paused agent its own state rather than `queued`, a live agent's
  * cancel still ends its paused descendants (OQ-100), so counting them departs from REQ-MONITOR-064/128's "live"
- * descendants — a departure OQ-100 and OQ-101 record and put to the owner. A paused child's is the same set: at rest
+ * descendants — a departure OQ-100 recorded and its ruling of 2026-10-06 confirmed (`PD-ORCH-005` clause 23, which
+ * narrows REQ-MONITOR-064 and REQ-MONITOR-128). A paused child's is the same set: at rest
  * every unfinished descendant is paused, so it is the paused ones the at-rest cancel ends (PD-ORCH-005 clause 16,
  * OQ-101); while a run is still `pausing`, a persona window's cancel (REQ-SHELL-075(g)) reaches the live cancel, which
  * also ends a descendant whose in-flight call has not yet let it rest.

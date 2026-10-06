@@ -56,7 +56,8 @@ export interface McpHostDeps {
   /**
    * REQ-MCP-044 channel 1: the warning as a transient acknowledgement of kind `warn` (Part V). It rode `notice.publish` with an
    * 8 s `ttlMs` from Part S; REQ-NOTIFY-040 forbids a notice leaving on a timer, and REQ-NOTIFY-011 fixes the transient lifetime
-   * once (4200 ms, not this requirement's 8 s — the disagreement is ADR-0049's open question), so the surface is the
+   * once (4200 ms, not this requirement's 8 s — the disagreement was ADR-0049's open question, ruled 2026-09-06 as ESC-33:
+   * REQ-MCP-044 now cites the lifetime rather than restating it), so the surface is the
    * acknowledgement stack and the lifetime is the stack's. Channel 2, the `mcp_config` issue, is unchanged.
    */
   readonly acknowledge: (a: { kind: 'warn'; title: string; body?: string }) => void;

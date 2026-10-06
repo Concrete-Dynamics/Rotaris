@@ -47,7 +47,8 @@ const OUTPUT_EVENTS: ReadonlySet<string> = new Set(['text', 'reasoning', 'tool-c
  * (REQ-ORCH-092), the suspended wait on a provider limit (REQ-ORCH-091 (c)), or a context compression's own model call,
  * automatic or on a rejection (REQ-MONITOR-076, REQ-ORCH-093). "Imposed wait" is not the specification's word: the
  * specification names the backoff, the suspended wait and the compression one by one and has no word for the three
- * together; the term is OQ-173's to settle with its ruling.
+ * together. OQ-173's ruling (2026-10-06, R-071, `PD-MONITOR-005`) accepted the behaviour and gave the waits no
+ * timeline word, so "imposed wait" stays this code's own name for the three.
  */
 export type ImposedWait = 'backoff' | 'provider_limit' | 'compression';
 

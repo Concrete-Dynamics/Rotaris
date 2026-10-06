@@ -45,11 +45,12 @@ const DELEGATION: readonly string[] = ['delegate', 'todo'];
  * is that one. `coordinator_only` does not remove it: `COORDINATOR_REMOVES` is the closed five write-and-command
  * names (REQ-TOOLS-006), and asking a person a question is neither.
  *
- * **Whether a delegated child may ask the user is left open, deliberately.** REQ-CHAT-094's "per conversation"
+ * **Whether a delegated child may ask the user was left open, deliberately.** REQ-CHAT-094's "per conversation"
  * admits more than one asker and the mechanism supports it (the wait registry is per tool port, which is per
  * conversation), but no requirement says which personas should, REQ-CHAT-051 defines exactly one question trailer,
  * and `requirements-engineer` — the persona whose whole job is "the questions that remain" — is the obvious
- * candidate. Raised as an open question against REQ-TOOLS-002 rather than settled here.
+ * candidate. Raised as OQ-52 against REQ-TOOLS-002 rather than settled here, and ruled 2026-10-06 (R-071): `ask_questions`
+ * stays on the orchestrator alone, and a delegated child does not ask the user a structured question.
  */
 const ASK: readonly string[] = ['ask_questions'];
 

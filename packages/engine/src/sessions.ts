@@ -2424,7 +2424,8 @@ export class Sessions {
     // plan cycle held after a resumed iteration that carried out the continue's message (PD-ORCH-003 revision 2,
     // OQ-104), or `paused_message_limit` by a limit reached as the iteration that finished it closed (this resolution's
     // 'continue' and 'double') — appends it to the todo again (REQ-ORCH-004; OQ-102's no-append covers only a request
-    // held unfinished): the undecided case of OQ-103's "Nothing open to resume".
+    // held unfinished): the case of OQ-103's "Nothing open to resume" its ruling of 2026-10-06 confirmed as built
+    // (`PD-ORCH-005` clause 26: the Continue action re-runs that request).
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, opts.withoutPaused === true));
     if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     const lastPrompt = latestRequestOf(s.dal, stored);

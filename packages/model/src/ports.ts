@@ -14,7 +14,8 @@ import type { Result } from '@rotaris/kernel';
  *
  * `AgentBackend` owns a turn and exposes the ability NOT to drive the loop
  * (REQ-ORCH-146). The default backend runs over `ModelClient`; a provider
- * whose native loop owns the turn is a second backend (OQ-17 undecided).
+ * whose native loop owns the turn is a second backend (OQ-17, ruled 2026-10-06
+ * under R-071: left out of the first release, so none is built).
  *
  * No SDK type crosses either port (ADR-0027). Cost is never computed here
  * (REQ-PROVIDER-121, ADR-0031).

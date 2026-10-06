@@ -44,8 +44,8 @@ export const SETUP_MANIFEST_SCHEMA_VERSION = 1 as const;
  *
  * REQ-STARTUP-060's raw `<os>-<machine>` fallback is read as a key a host may compute, never one a manifest archive is
  * written under: the schema refuses it, so a host whose key is a fallback finds no archive to select. What machine setup
- * then does is the consumer's, which is not built (ADR-0054, "The setup manifest — first execution"). The reading is
- * raised as OQ-88, not ruled.
+ * then does is the consumer's, which is not built (ADR-0054, "The setup manifest — first execution"). The reading was
+ * raised as OQ-88 and confirmed as built on 2026-10-06 (R-071).
  */
 export const PLATFORM_KEYS = ['windows-x64', 'macos-arm64', 'linux-x86_64'] as const;
 export type PlatformKey = (typeof PLATFORM_KEYS)[number];

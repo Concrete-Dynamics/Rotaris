@@ -245,8 +245,9 @@ describe('R-043 — the run-autopsy snapshot', () => {
         expect(readAutopsy(dal, sid, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model → root-model', agents: ['orchestrator'], tool_calls: 3 });
       });
       // the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot: a switch onto another key is
-      // held on its run, and whether it reaches the next is an open question, so a continuation naming no entry model leaves
-      // the key undetermined (until 2026-10-02: `… → child-model`, the switched key kept as the configured one).
+      // held on its run and ends with it (OQ-185's ruling, `PD-MONITOR-006`), and a continuation naming no entry model does
+      // not say which model the new run was configured with, so it leaves the key undetermined (until 2026-10-02:
+      // `… → child-model`, the switched key kept as the configured one).
       it('a continuation recording no entry model after a switch onto another key prints the key undetermined', () => {
         const sid = plant('S-switch-then-bare-continue', 'completed');
         dal.transaction(() => {

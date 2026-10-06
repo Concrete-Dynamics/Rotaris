@@ -16,8 +16,9 @@ import type { Sessions } from '@rotaris/engine';
  * session's permission audit as user-originated input, one entry per submitted line, the typed line and the command
  * text through the ONE redaction pass (REQ-TOOLS-171) before writing. The entry's `decision: user-input` and
  * `source: user` are spec 12's own words (Data & Formats, "Permission audit entries for user terminal actions") and
- * sit OUTSIDE REQ-TOOLS-012/028's closed vocabularies — raised as an open question in the handoff, written as spec 12
- * says because the writer takes the strings as given.
+ * sat OUTSIDE REQ-TOOLS-012/028's closed vocabularies — raised as OQ-54, written as spec 12 says because the writer takes
+ * the strings as given. OQ-54's ruling (2026-10-06, R-071, `PD-TOOLS-011`) adds both to the audit vocabularies
+ * (`AUDIT_DECISIONS`, `AUDIT_DECISION_SOURCES`), carried by this entry alone.
  */
 export interface TerminalHostDeps {
   readonly ready: Promise<TerminalManager | null>;

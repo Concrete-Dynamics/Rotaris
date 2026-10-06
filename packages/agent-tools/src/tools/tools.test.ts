@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
 import { checkFence, realPathOf, type FenceConfig } from './fence.js';
-import { renderDiff } from './diff.js';
+import { diffChanges as lineChangesOf, renderDiff } from './diff.js';
 import { FileToolState, haetEditTool, haetReadTool, matchEdit, readFileTool, sha256, writeFileTool } from './files.js';
 import { globToRegExp, globTool, grepTool, parseGitignore, ignoredBy } from './search.js';
 import { TodoList, todoTool } from './todo.js';
@@ -179,6 +179,52 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
     const big = renderDiff('f', null, Array.from({ length: 80 }, (_, i) => `l${i}`).join('\n'));
     expect(big.split('\n')).toHaveLength(52);
     expect(big.split('\n').at(-1)).toBe('… +30 more lines, diff truncated');
+  });
+  it('REQ-CHAT-050: an edit to a file past 2000 lines draws the lines it changed, and its row agrees with its message', async () => {
+    // docs/defects/fixed/an-edit-diff-row-of-a-file-past-2000-lines-counts-every-line-as-added-and-removed.md: the row's
+    // LCS spanned the whole file and, past its bound, drew `+2001 -2001` and the file's first 50 lines for a one-line edit.
+    const w = writeFileTool(state, fence);
+    const r = readFileTool(state, fence);
+    writeFileSync(join(root, 'long.txt'), `${Array.from({ length: 2001 }, (_, i) => `line ${i + 1}`).join('\n')}\n`);
+    await r.execute({ path: 'long.txt', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    const e = await w.execute({ operation: 'edit', path: 'long.txt', old_string: 'line 1500\n', new_string: 'line fifteen hundred\n', replace_all: false }, ctx());
+    expect(e.isError).toBe(false);
+    expect(e.text).toContain('(+1 -1)');
+    expect(e.diff).toBe('long.txt +1 -1\n[1500]- line 1500\n[1500]+ line fifteen hundred');
+    // Two lines added near the end of a 3,000-line file and one removed near its start: each numbered in its own file.
+    const before = Array.from({ length: 3000 }, (_, i) => `row ${i + 1}`);
+    const after = [...before.slice(0, 9), ...before.slice(10, 2990), 'new a', 'new b', ...before.slice(2990)];
+    expect(renderDiff('wide.txt', `${before.join('\n')}\n`, `${after.join('\n')}\n`)).toBe('wide.txt +2 -1\n[10]- row 10\n[2990]+ new a\n[2991]+ new b');
+  });
+  it('REQ-CHAT-050: past the table\'s bound the row still counts a least change, and its lines are the ones that changed', () => {
+    // Regions of 2,100 to 2,400 lines a side (past the 4,000,000-cell table), changed in a few hundred places over a small
+    // alphabet so many alignments tie: the counts equal the LCS's (computed here in rolling rows), and taking the drawn
+    // `-` lines out of the before and the `+` lines out of the after leaves the same lines.
+    let seed = 7;
+    const rand = (k: number): number => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % k; };
+    for (let round = 0; round < 3; round += 1) {
+      const before = Array.from({ length: 2100 + rand(300) }, () => `t${rand(6)}`);
+      const after = [...before];
+      for (let e = 0; e < 150; e += 1) {
+        const at = rand(after.length);
+        if (rand(2) === 0) after.splice(at, 1); else after.splice(at, 0, `t${rand(6)}`);
+      }
+      let prev = new Uint32Array(after.length + 1);
+      for (let i = before.length - 1; i >= 0; i -= 1) {
+        const row = new Uint32Array(after.length + 1);
+        for (let j = after.length - 1; j >= 0; j -= 1) row[j] = before[i] === after[j] ? prev[j + 1]! + 1 : Math.max(prev[j]!, row[j + 1]!);
+        prev = row;
+      }
+      const lcs = prev[0]!;
+      const text = renderDiff('r', `x\n${before.join('\n')}\ny`, `x\n${after.join('\n')}\ny`);
+      const [header] = text.split('\n');
+      expect(header).toBe(`r +${after.length - lcs} -${before.length - lcs}`);
+      const changes = lineChangesOf(`x\n${before.join('\n')}\ny`, `x\n${after.join('\n')}\ny`);
+      const removed = new Set(changes.filter((c) => c.sign === '-').map((c) => c.line));
+      const added = new Set(changes.filter((c) => c.sign === '+').map((c) => c.line));
+      const kept = (lines: string[], gone: Set<number>) => lines.filter((_, i) => !gone.has(i + 1));
+      expect(kept(['x', ...after, 'y'], added)).toEqual(kept(['x', ...before, 'y'], removed));
+    }
   });
   it('REQ-TOOLS-135: write_file\'s description names its required `operation` field, each value, and the fields each reads', () => {
     // Live run 2026-09-29 (WF1): two children's first write_file omitted `operation` and regenerated their whole file

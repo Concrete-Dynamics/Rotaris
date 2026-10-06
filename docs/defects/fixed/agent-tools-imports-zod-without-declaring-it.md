@@ -24,3 +24,16 @@ declared dependencies.
   `packages/agent-tools/src/terminal/index.ts` — the imports.
 - `packages/config/package.json`, `packages/contracts/package.json`, `apps/desktop/package.json` — the packages that do
   declare `zod ^4.5.4`.
+
+## Repaired — 2026-10-06 (fin21, bundle `fin21-leftover-notes`)
+
+`packages/agent-tools/package.json` declares `zod ^4.5.4`, the range the three packages that already declared it carry
+(the lockfile resolves 4.5.4, the version every other importer gets, so nothing installed changes). Writing the pin found
+a second undeclared import of the same kind: `tools/search.ts` imports `@rotaris/config` (the gitignore grammar, ADR-0064)
+and the manifest did not list it; it is declared too, as `workspace:*`, along the `agent-tools → config` edge the
+component view already allows. The component view's `agent-tools` validator section says so.
+
+Pinned by `packages/agent-tools/src/manifest.test.ts`, "declares every package the source imports": it reads every
+non-test module under `src/`, takes each static and dynamic bare import (Node's built-ins left out), and fails any the
+manifest does not declare. Red before the repair, naming `zod (first imported by advertised-schema.ts)` and
+`@rotaris/config (first imported by tools/search.ts)`.

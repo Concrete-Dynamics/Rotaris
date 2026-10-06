@@ -325,7 +325,10 @@ as it does those. It is the engine `@modelcontextprotocol/client` 2.0.0
 bundles and validates with (ADR-0033 leaves schema validation to the SDK), declared directly because the SDK's validator
 returns one flattened error string and does not export its 2020-12 engine, and the gate needs each violation's location.
 The lockfile already carried 8.20.0 (beneath electron-builder). **Edges unchanged**: a third-party dependency; no package
-edge moves.
+edge moves. Its manifest now declares everything its source imports (2026-10-06, fin21): `zod ^4.5.4`, which the gate and every tool's
+argument schema import, and `@rotaris/config`, which `tools/search.ts` imports for the gitignore grammar along the
+`agent-tools → config` edge the table above already allows; both had resolved only through the flat `node_modules`, and
+`agent-tools/src/manifest.test.ts` now fails an undeclared import.
 
 ### `ui/design-system` (2026-09-12)
 

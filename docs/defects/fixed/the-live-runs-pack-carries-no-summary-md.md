@@ -27,3 +27,28 @@ its order) and REQ-SESSION-002 (the summary is one of the three kinds of file be
 - `apps/desktop/scripts/sessions-proof.mjs` — the built-app proof that reads one session's `summary.md` for
   REQ-SESSION-140's order; the live run has no such reading.
 - `packages/engine/src/run/summary.ts` — `renderSummary`, the file's sections and their order.
+
+## Outcome
+
+Repaired 2026-10-06 by fin23 (bundle `fin23-summary-and-live-checks`). `preserveRun` copies each run-bearing scenario's
+`summary.md` into the pack beside its `session.log` (redacted and asserted free of a bearer like every file it writes), and
+the header's EVIDENCE list and `AGENTS.md`'s pack table name it. A session that has none is recorded among the pack's
+`failed` files and is a failed check.
+
+Each copied file is then read (`checkSummary` in `apps/desktop/scripts/live-run.mjs`, over
+`apps/desktop/scripts/lib/summary-sections.mjs`): one check per session, "`<scenario>`: the session's summary.md carries
+REQ-SESSION-140's sections, in its order, its Tool errors line agreeing with its Issues line". It reads the heading
+naming the session; the status, workspace, created, updated and task lines; the stop-reason line exactly where the store
+records a stop reason, and none where it records none; Metrics, Warnings, Agents, Slowest Tools and the closing
+inspection note, in that order; every Warnings kind in its order, the denials naming the permission audit; and the
+Tool errors count equal to the Issues line's `tool_error` count
+([`summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`](summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md)).
+
+Pinned by `apps/desktop/scripts/lib/summary-sections.test.ts`, which renders files with the product's own `renderSummary`:
+the product's file reads clean with and without a stop reason, and a section out of order, a missing section, a stop-reason
+line with none recorded, a wrong session id, a missing Warnings kind, denials not naming the audit, and the pre-fin23 Tool
+errors line are each named. The reading was also run over the built app's own file from `pnpm sessions-proof`'s seed
+launch (`.proof/sessions-proof/seed-summary.md`): clean. The live run itself is the orchestrator's: its next default run
+should show one such PASS per scenario that preserves a session (ask, edit, resume, requirements, frictions,
+faults-ladder, faults-stall, terminal; duress under `--only=duress`), and a `summary.md` in each of those scenario
+directories.

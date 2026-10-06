@@ -69,3 +69,5 @@ Pinned by:
   ("- Issues: 2 (mcp_config 1, tool_error 1)")`, the file reading `- Tool errors: 0` beside
   `- Tool outcomes: success 1, tool_error 0, rejected 0, unknown 0, invalid_request 1`. With the repair it passed, 11
   scenarios, the file reading `- Tool errors: 1 (counted from the issues record, …)`.
+- The live run, from fin23 on, checks every session's `summary.md` for this agreement
+  ([`the-live-runs-pack-carries-no-summary-md.md`](the-live-runs-pack-carries-no-summary-md.md)).

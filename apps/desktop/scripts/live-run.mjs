@@ -93,6 +93,8 @@
  *                      sandbox path shortened — two thirds of a launch log is one language server booting
  *   autopsy.txt        `apps/desktop/scripts/autopsy.mjs` over this scenario's session
  *   session.log        the product's own per-session log, at `--session-log-level` (default INFO)
+ *   summary.md         the product's own human-readable summary of the session (REQ-SESSION-140), as it stood when the
+ *                      scenario ended; the run checks it carries the requirement's sections in their order
  *   transcript.md      every transcript row in full, not the 400 characters `results.json` keeps
  *   model-traffic.jsonl  what the model was SENT and what came back — bodies, status and duration per call,
  *                      recorded by a loopback proxy the sandbox is pointed at (`--no-record-traffic` skips it),
@@ -123,6 +125,7 @@ import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { refusalIssues } from './lib/refusal-issues.mjs';
+import { summaryReading } from './lib/summary-sections.mjs';
 import { todoActiveReadings, writeSelectorReadings } from './lib/tool-frictions.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
@@ -867,6 +870,21 @@ function checkToolFrictions(scenario, calls) {
 }
 
 /**
+ * REQ-SESSION-140 for each session the run drove (`lib/summary-sections.mjs`): its `summary.md` carries the requirement's
+ * sections in its order, the stop-reason line only where a stop reason is recorded, every Warnings kind, and a Tool errors
+ * line that agrees with the file's own Issues line (REQ-SESSION-136). Until fin23 no live run read the file.
+ */
+function checkSummary(scenario, sessionId, text) {
+  const Database = require('better-sqlite3');
+  const handle = new Database(oneDatabase(), { readonly: true });
+  let stopReason = null;
+  try { stopReason = handle.prepare('SELECT stop_reason FROM sessions WHERE session_id = ?').get(sessionId)?.stop_reason ?? null; }
+  finally { handle.close(); }
+  const { ok, problems } = summaryReading(text, { sessionId, stopReason });
+  check(ok, `${scenario}: the session's summary.md carries REQ-SESSION-140's sections, in its order, its Tool errors line agreeing with its Issues line`, ok ? `stop reason ${stopReason ?? 'none recorded'}` : problems.join('; '));
+}
+
+/**
  * The three records the run-autopsy skill asks for and this harness used to destroy.
  *
  * `.agents/skills/run-autopsy/SKILL.md` names its inputs — a launch log, the session store, a session id — and
@@ -901,6 +919,21 @@ function preserveRun(name, sessionId) {
       wrote.push('session.log');
     } else failed.push(`session.log (the run wrote none at ${SESSION_LOG_LEVEL})`);
   } catch (cause) { failed.push(`session.log (${cause instanceof Error ? cause.message : String(cause)})`); }
+  try {
+    // The product's human-readable summary (REQ-SESSION-140), written beside the log and deleted with the sandbox until
+    // fin23 copied it (docs/defects/fixed/the-live-runs-pack-carries-no-summary-md.md). Read here, then checked below.
+    const summary = join(dirname(db), 'sessions', sessionId, 'summary.md');
+    if (existsSync(summary)) {
+      const text = redact(readFileSync(summary, 'utf8'));
+      assertNoCredential(`${name}/summary.md`, text);
+      writeFileSync(join(dir, 'summary.md'), text);
+      wrote.push('summary.md');
+      checkSummary(name, sessionId, text);
+    } else {
+      failed.push('summary.md (the product wrote none)');
+      check(false, `${name}: the session's summary.md carries REQ-SESSION-140's sections, in its order`, `no summary.md beside the session's record (${sessionId})`);
+    }
+  } catch (cause) { failed.push(`summary.md (${cause instanceof Error ? cause.message : String(cause)})`); }
   try {
     // The transcript in full. `results.json` keeps 400 characters of the answer; this keeps what was actually said.
     const Database = require('better-sqlite3');

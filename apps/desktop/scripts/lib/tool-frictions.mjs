@@ -22,11 +22,14 @@ import { refusalIssues } from './refusal-issues.mjs';
 const CREATE_FIELDS = new Set(['path', 'file_path', 'content']);
 
 /**
- * The fields of a recorded `args`, `{ fields: Map<key, { value, complete }>, cut }`, or null where it is no object. The
- * session writer stores an error-path record's arguments longer than 2,000 characters as their JSON cut to a string
- * (REQ-SESSION-136; `settleToolCall` in `packages/engine/src/session-writer.ts`), REQ-SESSION-194's `...` marker counted
- * inside the cap or not: a whole-file write refused is exactly such a record. The cut string is read as far as it goes —
- * each key, and each string value with whether it was cut — so a key the cut took away is simply not seen.
+ * The fields of a recorded `args`, `{ fields: Map<key, { value, complete }>, cut }`, or null where it is no object. Until
+ * fin23's second repair (2026-10-06) the session writer stored an error-path record's arguments longer than 2,000
+ * characters as their JSON cut to a string (REQ-SESSION-136; `settleToolCall` in `packages/engine/src/session-writer.ts`),
+ * REQ-SESSION-194's `...` marker counted inside the cap or not: a whole-file write refused is exactly such a record, and a
+ * pack or a store written before then still holds them. The cut string is read as far as it goes — each key, and each
+ * string value with whether it was cut — so a key the cut took away is simply not seen. Since that repair the writer keeps
+ * the arguments an object, cutting only free-text values, each ending `...`, and never a path (`cutArguments` in
+ * `packages/engine/src/run/cut.ts`, OQ-209), so such a record is read as an object whose `content` ends with the marker.
  */
 export function argumentFields(args) {
   if (args !== null && typeof args === 'object' && !Array.isArray(args)) {

@@ -15,8 +15,12 @@ A repair has one interaction to settle: on the intents the mapping grants the di
 `single_file_change` with the built-in mapping), [`PD-ORCH-006`](../product/directives.md#pd-orch-006) tells the entry role
 to do the work itself, and a `swarm` demand for maximum delegation beside that statement would put back the contradiction
 the directive removed (finding G2 of the default live run at `27a5127`). Which of the two a granted `swarm` run is told is
-not decided by REQ-ORCH-016, REQ-ORCH-025 or the directive; a repair raises it as an open question with the reading it
-builds under.
+not decided by REQ-ORCH-016, REQ-ORCH-025 or the directive, and REQ-ORCH-025's "keeps its coordinating status and its
+coordination-only tool set" meets REQ-ORCH-016's grant on those intents. It is raised as
+[OQ-205](../architecture/open-questions.md) (2026-10-06, the repair round of the same bundle), open, with the reading the
+build proceeds under: the bundle granted, the direct-work statement, and no `swarm` text. This note stays open on it: the
+`swarm` text on the other intents can be built whichever way OQ-205 is ruled, and what it says on a granted intent waits on
+the ruling.
 
 ## Specs
 

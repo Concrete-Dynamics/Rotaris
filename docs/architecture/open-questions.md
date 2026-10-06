@@ -10373,3 +10373,39 @@ keeping both exists, and was withdrawn.)
 own scroll, like the todo's), or "sized by its own content" holds for them (then "largest" is read over the gate's fixed
 parts only). Also whether a gate that scrolls below its minimum, with its answers pinned, is the intended reading when
 the window is shorter than the gate's parts.
+
+**OQ-205 — What is a `swarm` run told on an intent the mapping grants the direct-work bundle: to do the work itself, or
+to coordinate and delegate as widely as it can?** *(REQ-ORCH-025, a `swarm` override "demands maximum parallel
+delegation … it changes instruction text only, and the entry role keeps its coordinating status and its
+coordination-only tool set"; REQ-ORCH-016, "Exactly the two simplest intents (`explicit_trivial`, `single_file_change`)
+grant the entry role the direct-work bundle … a `swarm` override is not an input to it";
+[`PD-ORCH-006`](../product/directives.md#pd-orch-006), which narrows REQ-ORCH-029 alone and tells the entry role a run
+granted the bundle does the work itself. Raised 2026-10-06 by the repair of fin22's bundle `fin22-record-tidy`, from its
+verifier's finding, beside
+[`the-swarm-run-override-changes-no-instruction-text.md`](../defects/the-swarm-run-override-changes-no-instruction-text.md).
+Open.)*
+
+The two requirements meet on one run: a `swarm` override on an `explicit_trivial` or `single_file_change` intent (with
+the built-in mapping). REQ-ORCH-016 grants that run the direct-work bundle, since `swarm` is not an input to the
+mapping, and the bundle is not the coordination-only tool set REQ-ORCH-025 says a `swarm` entry role keeps. REQ-ORCH-025
+demands maximum parallel delegation of the same run, while `PD-ORCH-006` tells a coordinator granted the bundle to do
+the work itself; the directive names REQ-ORCH-029 only, so it does not by itself displace REQ-ORCH-025's "keeps its
+coordinating status and its coordination-only tool set". Neither requirement names the case. A demand for delegation
+beside the direct-work statement would put back the contradiction `PD-ORCH-006` removed (finding G2 of the default live
+run at `27a5127`: a first turn of 14.5 s spent reasoning about tools it was told not to use).
+
+**What the build proceeds under** (the code as it stands; nothing changed for this question): the grant follows
+REQ-ORCH-016, so the `swarm` run on a granted intent holds the direct-work bundle with `delegate` in it
+(`packages/engine/src/intent/gate.ts`, `intentGrant`; `apps/desktop/src/run-host/intent.ts`). Its entry role keeps its
+coordinating status in REQ-ORCH-025's sense: it is not a `single` run, so `coordinating` holds
+(`packages/engine/src/sessions.ts`) and `delegate` is not withheld (`apps/desktop/src/run-host/tools.ts`). Its
+instructions are `PD-ORCH-006`'s, the direct-work statement, and no `swarm` text is rendered beside them, since the
+build renders that text on no run (`entryInstructionsFor`, `packages/engine/src/children/personas.ts`, reads no run
+override; the defect note above). On every other intent a `swarm` run is today the same run as an `orchestrator` one.
+
+**What a ruling decides.** Whether a `swarm` override on a granted intent keeps the bundle and is told to do the work
+itself (REQ-ORCH-025's coordination-only tool set and delegation demand yield on those intents, as built, carried by a
+directive naming REQ-ORCH-025), or keeps the coordination-only tool set and the delegation demand (the grant withheld,
+so `swarm` becomes an input to REQ-ORCH-016's mapping as `single` is, and `PD-ORCH-006` does not reach that run), or
+keeps the bundle and is told both. The repair of the defect note can render REQ-ORCH-025's `swarm` text on the other
+intents whichever way this is ruled; what it renders on the granted ones waits on the ruling.

@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**A stop's saved `cancelling` holds until the run rests (REQ-SESSION-186, OQ-165's reading; fin22).** The stop control
+(`op: 'cancel'`) saves the status through `Run.stopAccepted`, which sets the flag `saveRunning` keeps for the explicit cancel,
+so the run's later saves on the way to rest no longer write `running` again. The **runtime view**'s control table says so. No
+package, edge, process, channel, command or store column changed.
+
 **A child's unfinished calls are counted per attempt (`PD-ORCH-008`; fin22).** `IterationChildren.execute`'s settle counts
 each attempt's calls started and never completed (`unfinished`: the outcome's count less the attempt's completed calls, or
 its dispatched calls less them when it raised), so an attempt REQ-ORCH-088's fallback replaced no longer hides the retry's.

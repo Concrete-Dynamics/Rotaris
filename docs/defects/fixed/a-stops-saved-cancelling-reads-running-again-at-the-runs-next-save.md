@@ -24,3 +24,14 @@ rest `paused`, not `stopped`; which status a stop shows while it comes to rest i
 - `packages/engine/src/run/run.ts` — `saveRunning`: `pausing` and, since OQ-165, the explicit cancel's `cancelling` are kept;
   a stop's `cancelling` is not.
 - `packages/engine/src/run/turn.test.ts` — the OQ-165 case beside which a stop's case would sit.
+
+## Outcome
+
+Repaired 2026-10-06 by fin22 (bundle `fin22-summary-and-counts`), on OQ-165's ruling's reading. The stop control no longer
+writes the status itself: `Sessions.control`'s `cancel` raises the stop and calls `Run.stopAccepted`, which sets the flag
+the explicit cancel sets (`cancelSaved`) and saves through `saveRunning`, so the run's every later save on the way to rest
+keeps `cancelling` until the teardown writes the rest (`paused`, PD-ORCH-005 clause 3). Pinned by "REQ-SESSION-186 with
+OQ-165: the stop's saved `cancelling` holds through the run's later saves until it rests" in
+`packages/engine/src/run/turn.test.ts` — the probe the note describes, kept: red on the code before (`running` after the
+mode change), green after. No proof presses the composer's Stop run on the built app; `pnpm resilience-proof`'s cancel
+scenario drives the explicit cancel through the same `saveRunning` and still reads `user_cancelled`, `paused` at rest.

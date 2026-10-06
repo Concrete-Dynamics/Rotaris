@@ -235,6 +235,29 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     expect(dal.getSession(sid)).toMatchObject({ execution_status: 'paused', stop_reason: 'user_cancelled' });
   });
 
+  /**
+   * `docs/defects/fixed/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md` (fin21, OQ-165's build): the stop
+   * saved `cancelling` when it was accepted, but the run's next save on the way to rest wrote `running` again, so every window
+   * read `running` for the rest of the graceful stop. The stop's `cancelling` is held as the explicit cancel's is.
+   */
+  it('REQ-SESSION-186 with OQ-165: the stop\'s saved `cancelling` holds through the run\'s later saves until it rests (REQ-MONITOR-130)', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { port } = fakePort({ hold, holdOn: 'write_file' });
+    const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'write_file', args: { path: 'a' } }]), answer('never')], port);
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 400 && !dal.residentRows(sid).some((r) => r.kind === 'tool'); i += 1) await new Promise((r) => setTimeout(r, 2));
+    expect(dal.getSession(sid)!.execution_status).toBe('running');
+    expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+    expect(dal.getSession(sid)!.execution_status).toBe('cancelling');
+    expect(sessions.control({ op: 'setPermissionMode', sessionId: sid, args: { mode: 'autonomous' } })).toEqual({ ok: true });
+    expect(dal.getSession(sid)!.execution_status).toBe('cancelling');
+    release();
+    expect((await sessions.running(sid)!).status).toBe('interrupted');
+    // The teardown's write replaces it: a stop rests `paused` (PD-ORCH-005 clause 3).
+    expect(dal.getSession(sid)!.execution_status).toBe('paused');
+  });
+
   it('OQ-165: cancelling one child saves no `cancelling` for the run', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });

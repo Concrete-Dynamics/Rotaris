@@ -1954,7 +1954,8 @@ export class Sessions {
         // REQ-SESSION-186: a second activation while the stop is pending forces.
         const force = req.args['force'] === true || run.stop.requested;
         run.stop.request('user_cancelled', force);
-        s!.writer.save('cancelling');
+        // Saved `cancelling` through the run, which holds it through its later saves until it rests (OQ-165's reading).
+        run.stopAccepted();
         return { ok: true };
       }
       case 'pause':

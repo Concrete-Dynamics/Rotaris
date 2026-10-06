@@ -8747,8 +8747,9 @@ restores the record's own status. The requirements leave the engine's write open
 day (`Run.cancelAgent` and `saveRunning`'s `cancelSaved` in `packages/engine/src/run/run.ts`; `witness` in
 `packages/ui/src/cancel-overlay.ts`; cases in `run/turn.test.ts` and `cancel-overlay.test.ts`). Found beside it: a stop's own
 saved `cancelling` reads `running` again at the run's next save
-([`a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md`](../defects/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md)),
-recorded and not repaired.
+([`a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md`](../defects/fixed/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md)),
+recorded and not repaired; repaired 2026-10-06 by fin22 on this ruling's reading: the stop's `cancelling` is saved through
+the run (`Run.stopAccepted`) and held by its later saves until it rests, as the explicit cancel's is.
 
 The requirement sets an optimistic status and its rollback. It does not say what overwrites it, and the engine gives it
 nothing to be overwritten by: the explicit cancel (the reserved run id's `cancelAgent`, `Run.cancelAgent`) raises the final

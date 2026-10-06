@@ -488,7 +488,10 @@ export class Run {
   get intentClassifying(): boolean { return this.classifying; }
   /** REQ-MONITOR-123: a graceful pause requested; honoured at the next model step and at the iteration boundary. */
   private pauseRequested = false;
-  /** OQ-165 (ruled 2026-10-06): the explicit cancel was accepted and saved `cancelling`, which every later save keeps. */
+  /**
+   * OQ-165 (ruled 2026-10-06): the explicit cancel, or the stop (REQ-SESSION-186, `stopAccepted`), was accepted and saved
+   * `cancelling`, which every later save keeps until the teardown writes the run's end.
+   */
   private cancelSaved = false;
   /**
    * PD-ORCH-005 clause 2 / REQ-ORCH-134: aborted when the pause's tool deadline passes, cutting every tool call still in
@@ -2831,6 +2834,19 @@ export class Run {
   }
 
   /**
+   * REQ-SESSION-186's stop, accepted by the stop control (`Sessions.control`, `op: 'cancel'`): saved `cancelling`, and held
+   * there by every later save of the run on its way to rest, as the explicit cancel's is (OQ-165's reading). Until fin22 the
+   * control wrote the status itself and the run's next save (a token sample, a child's settle, a mode change) wrote `running`
+   * again, so every window read `running` for the rest of the graceful stop
+   * (`docs/defects/fixed/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md`).
+   */
+  stopAccepted(): void {
+    if (this.ended) return;
+    this.cancelSaved = true;
+    this.saveRunning({});
+  }
+
+  /**
    * PD-ORCH-005 clause 3 (OQ-103, R-067): the explicit cancel's durable mark, on the iteration open in the store — the one
    * this run works in, or resumes, or an earlier run left open for it to resume. Written again when this run opens an
    * iteration after the cancel was accepted (`turn`), so no iteration the cancel ends is left open unmarked. A failed write
@@ -2945,7 +2961,7 @@ export class Run {
     // REQ-MONITOR-124: an accepted pause reads `pausing` until the run has come to rest — a wait the pause releases, or any
     // other save on the way to rest, does not read `running` again (found by phase 3's second review).
     // OQ-165: an accepted explicit cancel reads `cancelling` until the teardown writes the run's end, over a pause accepted
-    // before it, since the cancel is final (PD-ORCH-005 clause 3).
+    // before it, since the cancel is final (PD-ORCH-005 clause 3); so does an accepted stop (`stopAccepted`, fin22).
     const r = this.deps.writer.save(this.cancelSaved ? 'cancelling' : this.pauseRequested ? 'pausing' : status, {
       ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), iterations_completed: this.iterationsCompleted,
       todo: this.todoJson(), progress: JSON.stringify(this.progress()),

@@ -13,7 +13,7 @@ Found by the autopsy of the final default live run at `c2a9444` (2026-10-06, fin
 `model-traffic.jsonl`, `node-test.log`, two PNGs, `session.log`, `transcript.md`). fin22 had just repaired the file
 (`docs/defects/fixed/summary-md-carries-none-of-the-sections-its-requirement-lists.md`), and that repair had no live
 evidence: the autopsy could only rebuild the files from the pack's `workspace.db` by `renderSummary`'s rules, which is how
-it found the Tool errors line's undercount (`docs/defects/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
+it found the Tool errors line's undercount (`docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
 
 ## Specs
 

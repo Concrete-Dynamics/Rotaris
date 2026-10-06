@@ -1559,7 +1559,9 @@ of §5 and none a channel: each is a request answered once.
   (`StoreDal.firstPromptRow`), the tool-call record and the permission audit read without their serialised entries
   (`toolCallDigestOf`, `auditDigestOf`), the issues, the iterations, plan roots and children; its counts are the metrics
   document's (`sessionMetrics` in `export.ts`). Its Warnings line for mostly-elided artifacts reads `n/a` while OQ-207 is
-  open (recorded open in `docs/defects/`). Its Agents lines read each agent's own count — an iteration's root
+  open (recorded open in `docs/defects/`); its Tool errors line counts the issues record's `tool_error` entries
+  (REQ-SESSION-136's "any other failure"), as its Issues line does, never the histogram's `tool_error` bucket, which a
+  record carrying an `outcome_kind` never reaches (fin23; the histogram's `mcp` bucket is OQ-208's). Its Agents lines read each agent's own count — an iteration's root
   `iterations.root_tool_calls`, a plan cycle's root `plan_roots.tool_calls` (v33), a child `children.tool_calls` — and
   read the tool-call record only where no count is kept (a plan cycle's root recorded before v33, an agent known only by
   its records), and then only while the ring has dropped nothing: `n/a` once it has. Every rebuild — a run's saves, a continuation's, the repair's — reads it so;

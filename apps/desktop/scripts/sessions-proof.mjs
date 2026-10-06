@@ -6,8 +6,10 @@
  * client, scratch store, one scratch repository with checkpoints enabled and `.rotaris/` ignored. Sessions a dead process
  * would leave are PLANTED as rows straight into the store between launches — a crash leaves exactly rows. The launches:
  *
- *   1. seed             write,answer → session A completed with checkpoint 1 and its summary file, which carries REQ-SESSION-140's
- *                       sections in its order (the task line, Metrics, Warnings, Agents, Slowest Tools, the inspection note).
+ *   1. seed             write,badterm,answer → session A completed with checkpoint 1 and its summary file, which carries
+ *                       REQ-SESSION-140's sections in its order (the task line, Metrics, Warnings, Agents, Slowest Tools, the
+ *                       inspection note); the terminal call its schema refused counted once on the Tool errors line, as on
+ *                       the Issues line (REQ-SESSION-136), though its record's outcome is `invalid_request`.
  *   2. live             resume A + wait:20000,answer; the browser during the run: Actions → Delete… → confirm → refused with
  *                       REQ-GIT-092's first sentence; the app exits mid-run leaving A `running` behind a dead lock.
  *   3. repair-one       the browser marks A stale; Actions → Repair → the report (id, `running` → `interrupted`, the reason
@@ -157,7 +159,7 @@ const NOTHING_STALE = 'Nothing was stale: every session either asserts no run in
 const LIVE_REFUSAL = "This session is still running. Deleting it would destroy the run's own record, so wait for it to finish or stop it first.";
 
 // 1. seed — session A with checkpoint 1.
-const seed = await launch('seed', { ROTARIS_SCRIPT: 'write,answer', ROTARIS_CAPTURE_PROMPT: 'Write the notes.', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500' });
+const seed = await launch('seed', { ROTARIS_SCRIPT: 'write,badterm,answer', ROTARIS_CAPTURE_PROMPT: 'Write the notes.', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500' });
 const A = latestSession().session_id;
 {
   expect(sessionRow(A).execution_status === 'completed', `seed ended ${sessionRow(A).execution_status}`);
@@ -176,9 +178,16 @@ const A = latestSession().session_id;
   const stopReason = sessionRow(A).stop_reason;
   expect(stopReason ? seedMd.includes(`- Stop reason: ${stopReason}`) : !seedMd.includes('Stop reason'), `A's stop-reason line (recorded: ${stopReason}):\n${seedMd}`);
   expect(/^- Stale-input drops: n\/a/m.test(seedMd) && !/^- (Tokens|Cost): 0$/m.test(seedMd), `A's Warnings or an unavailable value:\n${seedMd}`);
+  // REQ-SESSION-136 on REQ-SESSION-140's Warnings: the refused terminal call (`badterm`) is a `tool_error` issue, and the Tool
+  // errors line counts it although its record's outcome is `invalid_request`. Until fin23 the line read the histogram's
+  // `tool_error` bucket and said 0 beside "Issues: 1 (tool_error 1)"
+  // (`docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
+  const toolErrors = /^- Tool errors: (\d+) \(counted from the issues record/m.exec(seedMd)?.[1];
+  const issuesLine = /^- Issues: .*$/m.exec(seedMd)?.[0] ?? '';
+  expect(toolErrors === '1' && /\btool_error 1\b/.test(issuesLine) && /^- Tool outcomes: .*\binvalid_request 1\b/m.test(seedMd), `A's Tool errors line (${toolErrors}) against its Issues line ("${issuesLine}") and its outcomes:\n${seedMd}`);
   const slowest = seedMd.slice(seedMd.indexOf('## Slowest Tools'));
   expect(/^1\. \S+ — \d+ ms \(/m.test(slowest), `A's Slowest Tools names no call:\n${slowest}`);
-  results.seed = { sessionId: A, png: seed.png, summarySections: order.length, stopReason };
+  results.seed = { sessionId: A, png: seed.png, summarySections: order.length, stopReason, toolErrors: Number(toolErrors), issuesLine };
 }
 
 // 2. live — the delete refused during a run; the app exits mid-run and leaves A running behind a dead lock.

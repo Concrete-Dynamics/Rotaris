@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**`summary.md`'s Tool errors line is the issues record's (REQ-SESSION-140, REQ-SESSION-136; fin23).** `warningLines`
+(`run/summary.ts`) reads `issues_by_kind.tool_error`, the figure the Metrics section's Issues line prints, where it read the
+tool-outcomes histogram's `tool_error` bucket. The histogram is unchanged (REQ-SESSION-139; its `mcp` bucket is OQ-208's).
+The scripted client gains a `badterm` step, a terminal call its schema refuses, which `sessions-proof`'s seed launch takes.
+The **runtime view**'s repair paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **A stop's saved `cancelling` holds until the run rests (REQ-SESSION-186, OQ-165's reading; fin22).** The stop control
 (`op: 'cancel'`) saves the status through `Run.stopAccepted`, which sets the flag `saveRunning` keeps for the explicit cancel,
 so the run's later saves on the way to rest no longer write `running` again. The **runtime view**'s control table says so. No

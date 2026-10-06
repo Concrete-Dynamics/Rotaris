@@ -166,7 +166,14 @@ function warningLines(m: SessionMetrics): string[] {
     `- Mostly-elided artifacts: ${NA} (no record measures how much of an artifact was elided)`,
     `- Report downgrades: ${NA} (the report-validation record is ${NOT_KEPT})`,
     `- Permission denials: ${m.permission_denials} (counted from the permission audit, where each is an entry)`,
-    `- Tool errors: ${m.tool_outcomes['tool_error'] ?? 0}`,
+    /*
+     * REQ-SESSION-136's tool errors are its `tool_error` issues: "any other failure" than a shell failure, a suspicious
+     * success and a timeout, each referencing its record. Read from the issues record, as the Issues line above is, so the
+     * file never gives two counts for one thing. Until fin23 this read the histogram's `tool_error` bucket, which a failed
+     * record carrying an `outcome_kind` (`invalid_request`, `execution_error`, `mcp`) never reaches and a timeout with none
+     * does (docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md).
+     */
+    `- Tool errors: ${m.issues_by_kind['tool_error'] ?? 0} (counted from the issues record, where each failed call that is not a terminal failure, suspicious success or timeout is a tool_error entry)`,
     `- Terminal failures: ${m.terminal_shell_failures}`,
     `- Terminal suspicious successes: ${m.suspicious_successes}`,
     // The metrics document's `timeouts`: every tool call that timed out, the terminal's among them, or the terminal's issues.

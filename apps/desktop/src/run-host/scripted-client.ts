@@ -238,6 +238,9 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
     git: { name: 'terminal', args: { command: 'git status' } },
     push: { name: 'terminal', args: { command: 'git push origin main' } },
     todo: { name: 'todo', args: { operation: 'add_phase', name: 'main' } },
+    // A terminal call its schema refuses (a negative timeout): settled `failed` with `outcome_kind: invalid_request`, never run,
+    // and filed as a `tool_error` issue (REQ-SESSION-136) — the sessions proof reads it on summary.md's Tool errors line.
+    badterm: { name: 'terminal', args: { command: 'echo proof', timeout: -1 } },
   };
   return {
     async *stream(req: ModelRequest) {

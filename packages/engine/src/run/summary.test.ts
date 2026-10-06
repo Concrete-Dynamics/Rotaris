@@ -98,13 +98,41 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
       '- Mostly-elided artifacts: n/a (no record measures how much of an artifact was elided)',
       '- Report downgrades: n/a (the report-validation record is not kept by this store)',
       '- Permission denials: 1 (counted from the permission audit, where each is an entry)',
-      '- Tool errors: 0',
+      '- Tool errors: 0 (counted from the issues record, where each failed call that is not a terminal failure, suspicious success or timeout is a tool_error entry)',
       '- Terminal failures: 1',
       '- Terminal suspicious successes: 0',
       "- Timeouts: 1 (tool calls that timed out, a terminal's among them)",
     ]);
     // The audit is named whatever the count, a session with no denial included (the fin22 verifier's optional finding).
     expect(section(renderSummary(factsOf(row, { metrics: sessionMetrics(row, [], [], [], 0, 0, 0) })), 'Warnings')).toContain('- Permission denials: 0 (counted from the permission audit, where each is an entry)');
+  });
+
+  /*
+   * REQ-SESSION-136's tool errors are its `tool_error` issues — every failure but a shell failure, a suspicious success and a
+   * timeout. Until fin23 the line read the histogram's `tool_error` bucket, which a record carrying an `outcome_kind` never
+   * reaches: the requirements session of the c2a9444 live run would read "Issues: 5 (… tool_error 4)" beside "Tool errors: 3"
+   * (`docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
+   */
+  it('Tool errors counts every tool_error issue REQ-SESSION-136 filed, whatever outcome_kind its record carries, and agrees with the Issues line', () => {
+    const row = rowOf();
+    const rec = (n: number, status: string, isError: number, outcome_kind: string | null, failure_kind: string | null = null) =>
+      ({ call_id: `c${n}`, agent_name: 'Ada', tool_name: `tool${n}`, status, elapsed_ms: n, is_error: isError, outcome_kind, failure_kind });
+    const records = [
+      rec(1, 'failed', 1, 'invalid_request', 'invalid_request'), // refused at the gate's schema check
+      rec(2, 'failed', 1, 'execution_error', 'execution_error'), // a terminal that could not start
+      rec(3, 'failed', 1, 'mcp', 'tool_error'), // a failed MCP call
+      rec(4, 'failed', 1, null), // a file tool's failure: the histogram's own tool_error bucket
+      rec(5, 'failed', 1, 'shell_failure'), // its own kind
+      rec(6, 'failed', 1, null, 'timeout'), // its own kind, though it derives to the histogram's tool_error bucket
+      rec(7, 'ok', 0, 'mcp'),
+    ];
+    const issues = [{ kind: 'tool_error' }, { kind: 'tool_error' }, { kind: 'tool_error' }, { kind: 'tool_error' }, { kind: 'terminal_shell_failure' }, { kind: 'terminal_timeout' }];
+    const metrics = sessionMetrics(row, records, [], issues, 0, 0, 0);
+    const md = renderSummary(factsOf(row, { metrics }));
+    expect(section(md, 'Warnings')).toContain('- Tool errors: 4 (counted from the issues record, where each failed call that is not a terminal failure, suspicious success or timeout is a tool_error entry)');
+    expect(section(md, 'Metrics')).toContain('- Issues: 6 (terminal_shell_failure 1, terminal_timeout 1, tool_error 4)');
+    // The histogram is REQ-SESSION-139's and is unchanged: it classifies by outcome_kind first, an MCP call's included.
+    expect(metrics.tool_outcomes).toEqual({ success: 0, tool_error: 2, rejected: 0, unknown: 0, invalid_request: 1, execution_error: 1, mcp: 2, shell_failure: 1 });
   });
 
   it('Agents lists each agent with its counted calls, n/a where the record holds no count', () => {

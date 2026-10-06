@@ -10474,3 +10474,30 @@ drops and report downgrades, which read `n/a` for the records the store does not
 
 **What a ruling decides.** What makes an artifact "mostly elided" (a share of its body cut from a payload or a view, and
 which), which record counts it, and whether the warning is then built or withdrawn from REQ-SESSION-140.
+
+**OQ-208 — Does an MCP tool call's record carry an `outcome_kind`, and is `mcp` one?** *(REQ-SESSION-136's record fields,
+"`outcome_kind` … only when applicable"; REQ-SESSION-139's tool-outcomes histogram, "`outcome_kind` when the record carries
+one, otherwise derived from `status` and `is_error` into rejected, tool-error, success or unknown"; REQ-TOOLS-112's
+`outcome_kind` vocabulary, which names terminal observations only. Raised 2026-10-06 by fin23 (bundle
+`fin23-summary-and-live-checks`) while repairing
+[`summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`](../defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md),
+at the orchestrator's question whether a bucket named `mcp` belongs among the tool outcomes. Open, the owner's.)*
+
+Every MCP tool call's record carries `outcome_kind: 'mcp'`, the call succeeding or failing alike
+(`apps/desktop/src/run-host/mcp.ts`, the `execute` of each MCP tool executor the run host builds). The histogram follows REQ-SESSION-139's letter and
+files each under the bucket its record names, so `summary.md`'s Tool outcomes line and the metrics document read
+`mcp <n>` beside `success`, `tool_error`, `invalid_request`: in the c2a9444 default live run's pack
+(`.live-run/runs/2026-10-06T17-41-48-175Z/workspace.db`) the edit, requirements and terminal sessions each have such a
+bucket. `mcp` names the tool's family, not how the call ended; a reader of the histogram cannot tell an MCP call that
+succeeded from one that failed. The specification does not say whether REQ-SESSION-136's "only when applicable" makes an
+`outcome_kind` applicable to an MCP call at all, and gives an MCP call no outcome vocabulary of its own: REQ-TOOLS-112's
+set (`success`, `shell_failure`, …) is the terminal's.
+
+**What the build proceeds under.** The record is left as it is and the histogram keeps REQ-SESSION-139's letter, `mcp`
+bucket included. Nothing else depends on the answer since fin23: `summary.md`'s `- Tool errors:` line counts the issues
+record's `tool_error` entries, which REQ-SESSION-136 files for a failed MCP call whatever its `outcome_kind`, and the
+terminal counts read their own outcomes and issues.
+
+**What a ruling decides.** Whether an MCP call's record carries no `outcome_kind` (the histogram then derives `success` or
+`tool_error` from `status` and `is_error`), carries one from a vocabulary the specification would name, or keeps `mcp` as a
+bucket of its own.

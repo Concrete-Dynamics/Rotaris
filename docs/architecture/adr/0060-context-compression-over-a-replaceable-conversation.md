@@ -120,7 +120,10 @@ the next step sees the new one. Chosen.
    `model_override`: the `context_compressed` timeline entry carries `threshold_percentage`, `capacity`,
    `advertised_input_limit`, `default_threshold` and `trigger_tokens` as separate metadata fields, one
    `system` transcript row is rendered from those fields, and the same figures go to the log at
-   informational level. What the requirement asks for is delivered; where it is delivered is what OQ-53 asks.
+   informational level. What the requirement asks for is delivered; where it is delivered is what OQ-53 asks. *(2026-10-06,
+   [R-071](../../product/requests.md#r-071): OQ-53 ruled as recommended — the session's event stream is read as its
+   timeline, so the `context_compressed` entry is the event and the interim above stands as the decision; its name is a
+   word of [`PD-ORCH-014`](../../product/directives.md#pd-orch-014).)*
 
 8. **The capacity is the model's, not a constant.** `REQ-MONITOR-078` resolves capacity from the model's
    `context_compression_threshold`, else the smaller of its `max_input_tokens` and `default_threshold`.

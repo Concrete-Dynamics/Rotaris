@@ -748,7 +748,8 @@ the conversation at all: they travel on every request. Each completion writes a 
 entry** carrying REQ-CONFIG-135's four inputs and the trigger token number as separate fields beside
 `count_source`, the before/after token and message counts and the latency; one `system` transcript row is rendered
 from those fields; the log takes the same figures. That venue is **OQ-53** — the wire catalogue is closed at 23
-kinds (REQ-EVENTS-041) and none reports a compression. `AgentActivity` counts completions and a session opened
+kinds (REQ-EVENTS-041) and none reports a compression. *(OQ-53 ruled 2026-10-06, R-071: the timeline entry is the event,
+and `context_compressed` is a word of `PD-ORCH-014`.)* `AgentActivity` counts completions and a session opened
 again seeds the count by counting those entries, so REQ-MONITOR-086's "never counted a second time" holds by the
 shape of the record. While a pass runs, `SessionRecord.compression` names the agent and is **published at once**
 (`owner.reconcile()`), because a compressing pass writes nothing and a derived field is otherwise invisible

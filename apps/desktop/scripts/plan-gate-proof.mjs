@@ -283,6 +283,51 @@ results.twoStates = {
   decisionUntouched: stillHeld.session.execution_status,
 };
 
+/*
+ * 2c. The same two facts at REQ-SHELL-022's minimum, 1000x680, with a persistent notice sharing the window: REQ-NOTIFY-032's
+ * warning about ANOTHER session's failure, published through the real notice store in the words the product writes
+ * (`unfocusedFailureNotice`). The notice slot stands above the view, so its height comes off the gate's row. Every part
+ * of the gate but the plan kept its content height, and the whole loss fell on the plan: 18 px against the todo's 56 in
+ * finacc2's acceptance (A2), at the minimum with a notice and the re-authentication bar
+ * (docs/defects/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
+ * The three answers are asserted reachable here too (REQ-SHELL-048), since a gate shorter than its parts scrolls.
+ * One notice is drawn at a time and the latest publication replaces it, and this launch raises its own on the way up (no
+ * provider is authenticated; on a host without the code-intelligence bundle the project setup's failure), at times the
+ * host decides: the first pass of this reading met each of them in turn, 75 px and 97 px. So the warning is published
+ * three times, and each reading waits in the renderer for the size and for THAT notice on screen, then for two frames, so
+ * neither a clock nor the order of the launch's own notices decides what it read.
+ */
+const OTHER_SESSION = 'ses_otherfailedsession';
+const AT_MINIMUM_WITH_NOTICE = `innerWidth + 'x' + innerHeight === '1000x680' && document.querySelector('[data-testid="plan-gate-preview"]') !== null && (document.querySelector('.notice-slot')?.innerText ?? '').includes('${OTHER_SESSION}')`;
+const whenReady = (probe) => `(async () => { for (let i = 0; i < 400 && !(${AT_MINIMUM_WITH_NOTICE}); i += 1) await new Promise((r) => setTimeout(r, 100)); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); return ${probe}; })()`;
+const NOTICE_PROBE = "(() => { const n = document.querySelector('.notice-slot'); const b = n ? n.getBoundingClientRect() : null; const reach = ['plan-approve', 'plan-revise', 'plan-cancel'].map((id) => { const e = document.querySelector('[data-testid=\"' + id + '\"]'); if (!e) return id + '=absent'; const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return id + '=' + (hit === e || e.contains(hit) ? 'ok' : 'not-hit'); }).join('|'); const g = document.querySelector('[data-testid=\"plan-gate\"]'); return { size: innerWidth + 'x' + innerHeight, notice: b ? Math.round(b.height) : null, noticeText: n ? n.innerText.slice(0, 200) : '', reach, gateScrolls: g ? g.scrollHeight - g.clientHeight : null }; })()";
+// REQ-NOTIFY-032's warning in the words `unfocusedFailureNotice` writes.
+const OTHER_FAILED = `${JSON.stringify({ op: 'report', severity: 'warning', title: `Session ${OTHER_SESSION} failed`, message: 'The session on screen is unaffected. Open the failed session to see its recovery.', detail: 'HTTP 401 Unauthorized: the provider refused the key.', persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: OTHER_SESSION } }, sessionId: OTHER_SESSION })}`;
+const SMALL_STATE = whenReady(STATE_PROBE);
+const SMALL_NOTICE = whenReady(NOTICE_PROBE);
+const log2c = await launch('notice-at-minimum', {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_RESIZE: '1000x680@200',
+  ROTARIS_CAPTURE_NOTICES: [1500, 6000, 12000].map((at) => `${OTHER_FAILED}@${at}`).join(';;'),
+  ROTARIS_CAPTURE_EVAL_AT: `${SMALL_STATE}@2000;;${SMALL_NOTICE}@2000`,
+  ROTARIS_CAPTURE_WAIT: `js:${AT_MINIMUM_WITH_NOTICE}`,
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '1500',
+});
+const evals2c = parseEvals(log2c);
+const small = readEval(evals2c, 2000, SMALL_STATE);
+const slot = readEval(evals2c, 2000, SMALL_NOTICE);
+if (small === undefined || slot === undefined || small === null || slot === null) throw new Error(`the gate was not read at the minimum with a notice:\n${log2c}`);
+if (slot.size !== '1000x680') throw new Error(`the window was not measured at 1000x680: ${slot.size}`);
+if (!(slot.notice > 0) || !slot.noticeText.includes(OTHER_SESSION)) throw new Error(`REQ-NOTIFY-032's notice did not stand beside the gate: ${JSON.stringify(slot)}`);
+if (small.collapsed !== '' || small.children === null) throw new Error(`the gate did not stand expanded beside the notice: ${JSON.stringify(small.collapsed)}`);
+const grewSmall = small.children.filter((c) => Number(c.grow) > 0 && c.h > 1).map((c) => c.c);
+if (grewSmall.length !== 1 || !/plan-gate__(preview-wrap|plan)/.test(grewSmall[0])) throw new Error(`at 1000x680 with a notice the plan is not the only element that grows: ${JSON.stringify(grewSmall)}`);
+const tallestSmall = small.children.reduce((a, b) => (b.h > a.h ? b : a));
+if (!/plan-gate__(preview-wrap|plan)/.test(tallestSmall.c)) throw new Error(`at 1000x680 with a ${slot.notice} px notice the plan is not the largest element of the gate (gate ${JSON.stringify(small.gate)}): ${small.children.map((c) => `${c.c}=${c.h}`).join('|')}`);
+if (slot.reach !== 'plan-approve=ok|plan-revise=ok|plan-cancel=ok') throw new Error(`at 1000x680 with a notice an answer of the gate is not reachable (REQ-SHELL-048): ${slot.reach}`);
+results.noticeAtMinimum = { size: slot.size, notice: slot.notice, noticeText: slot.noticeText, gate: small.gate.h, plan: small.plan.h, gateScrolls: slot.gateScrolls, reach: slot.reach, children: small.children };
+
 // 3. Revise: a further cycle, carrying the changes stated, and still nothing written.
 const log3 = await launch('revised', {
   ROTARIS_CAPTURE_RESUME: 'latest',

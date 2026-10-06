@@ -177,3 +177,8 @@ Pinned by tests that fail on the round-1 module:
   the valid call sent unchanged and the near misses refused as `invalid_request`; the uncompiled case now a draft-04 schema.
 - Every round-0 and round-1 test passes unchanged against the new check except for the refusal wording (the required
   property, the pattern message) and the uncompilable example (`if`/`then`/`else` now compiles).
+- `pnpm mcp-proof --skip-build` on the built head (`7b2f292`), 2026-10-06 05:39–05:42 UTC (load average 6 to 10 on 4
+  CPUs): launch 2b's `echo` without `text` refused as `invalid_request` with "text: required property is missing", nothing
+  reaching the fixture; the valid call received as written. ajv's compiled validators run in the built run host.
+- `pnpm code-intel-proof --skip-build`, 05:42–05:51 UTC (load 6 to 8): PASSED; all 22 of the bundled runtime's schemas
+  compiled (no "could not be compiled" line in its logs), and the scripted calls passed the check and succeeded.

@@ -13,10 +13,10 @@ call (task 1 of `fin10-quota-exclusions-and-choices`), since it is in that code.
 do not agree on the auto-resume variant — an immediate retry there reads against REQ-MONITOR-192 ("the wait timing out
 resolves as a retry") and REQ-NOTIFY-087 ("the wait ends by itself once the computed interval has elapsed") — and REQ-MONITOR-004's
 enumeration of operations is closed at twenty-two, none of them a keep-waiting; the question is raised as OQ-188 in
-[`open-questions.md`](../architecture/open-questions.md), with the reading the build proceeds under (as built).
+[`open-questions.md`](../../architecture/open-questions.md), with the reading the build proceeds under (as built).
 
 **What any repair must carry.** Since the same bundle the ladder reads the exclusion before every call
-([an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md](fixed/an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md)):
+([an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md](an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md)):
 an agent on a pair the session holds out of quota is not called but moved, or parked in the wait that never auto-resumes.
 A keep waiting that resolves the exhausted variant as a retry must count as an explicit choice of the waiting pair
 (REQ-MONITOR-194: it clears the exclusion, as `Run.setEntryModel`'s quota-retry branch does through
@@ -40,3 +40,24 @@ keep waiting sends nothing, and the wait ends only by a change of model (which c
 - `packages/engine/src/run/waits.ts` — `WaitRegistry`: `resolveWithModel` and `releaseForRest`, no resolve-as-retry for one
   session's waits.
 - `packages/engine/src/run/run.ts` — `setEntryModel`'s quota-retry branch, the explicit choice a retry would have to count as.
+
+## Outcome — 2026-10-06 (plan fin21, under [R-071](../../product/requests.md#r-071)): ruled and repaired
+
+OQ-188 was ruled by the owner as recommended ([`PD-MONITOR-004`](../../product/directives.md#pd-monitor-004), narrowing
+REQ-MONITOR-303): in the wait that never auto-resumes, Keep waiting retries the waiting pair at once through the existing
+retry path; in the timed wait it stays an acknowledgement and the timer retries.
+
+- **The record** carries the waiting pair's model key, `wait.modelKey` (`packages/contracts/src/channels.ts`; `Run.currentWait`
+  over `keyOfPair`, `packages/engine/src/run/resilience.ts`: the first configured key naming the pair, else the first
+  discovered one, else null).
+- **The header** (`keepWaitingAction`, `packages/ui/src/WorkspaceView.tsx`): with `resumeAt` null and a key, Keep waiting
+  sends `setModel` with it and says "Retrying <key> now."; that reaches `Run.setEntryModel`'s quota-retry branch, the
+  explicit choice of the waiting pair, which clears its exclusion (`clearChosenExclusion`) and resolves the wait as a retry
+  with no override — so the pre-call exclusion read cannot send the retry straight back into the wait, as this note
+  required. Otherwise it says "Still waiting." and sends nothing. No operation was added: REQ-MONITOR-004's twenty-two stand.
+
+Pinned by `packages/engine/src/run/ladder.test.ts` (the quota wait's record names `modelKey: 'a1'`; `setModel` with it completes
+the run on a1 with a1 recorded then cleared, no override and no refusal — red before, no `modelKey`) and
+`packages/ui/src/ui.test.ts` (`keepWaitingAction`, red before: absent). Shown by `resilience-proof`'s driven `keep-waiting`
+scenario on the built app (2026-10-06): alpha refused on quota, Keep waiting pressed, calls alpha then alpha, the exclusion
+recorded then cleared, no `model_override`. ADR-0010's reading (a) carries the ruling in place.

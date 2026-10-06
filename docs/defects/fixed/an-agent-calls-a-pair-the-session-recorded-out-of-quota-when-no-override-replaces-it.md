@@ -33,7 +33,7 @@ REQ-ORCH-091's own order, (b) then (c).
   both wait branches), so the pre-call wait cannot loop. As built "Keep waiting" sends nothing, so such a wait ends only by a
   choice of model or a cancel; a later repair that makes keep waiting a retry must count that retry as an explicit choice of
   the pair, or the pre-call check sends each later call back into the wait — said in
-  [keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md](../keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md).
+  [keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md](keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md).
 - Pinned in `packages/engine/src/run/ladder.test.ts` ("REQ-MONITOR-194 / REQ-ORCH-091 (a)-(c): no automatic call reaches a
   pair the session recorded out of quota"): a root resumed after its child's quota answer on `a1` moves to `b1` before
   calling (red before: `root a1`); a continuation of a session whose configured `a1` is excluded, with no candidate, waits

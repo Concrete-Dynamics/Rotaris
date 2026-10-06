@@ -28,7 +28,7 @@ import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
 import { entryInstructionsFor, resolveRole, type Persona, type PersonaResolver } from '../children/personas.js';
 import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
-import { entryOf, excludedModelKeys, isLoaderCopyKey, overridesInForce, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
+import { entryOf, excludedModelKeys, isLoaderCopyKey, keyOfPair, overridesInForce, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
 import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
@@ -775,11 +775,13 @@ export class Run {
   /**
    * REQ-NOTIFY-263: the wait the record carries; null while no agent is parked on a provider limit. REQ-MONITOR-194 /
    * REQ-MONITOR-303: with it, the model keys the session holds out of quota (`excludedModelKeys`), read from the memory at
-   * every snapshot, so the change-model picker lists them annotated with the reason rather than as any other model.
+   * every snapshot, so the change-model picker lists them annotated with the reason rather than as any other model; and the
+   * waiting pair's own key (`keyOfPair`), which the header's keep waiting chooses in the out-of-quota wait (OQ-188's ruling,
+   * PD-MONITOR-004).
    */
-  get currentWait(): (WaitState & { readonly excluded: string[] }) | null {
+  get currentWait(): (WaitState & { readonly excluded: string[]; readonly modelKey: string | null }) | null {
     const wait = this.waits.current();
-    return wait === null ? null : { ...wait, excluded: this.excludedModelKeys };
+    return wait === null ? null : { ...wait, excluded: this.excludedModelKeys, modelKey: keyOfPair(this.catalogue, wait.provider, wait.model) };
   }
   /**
    * REQ-MONITOR-194: the configured model keys the session holds out of quota, for the record's `excludedModels` — read
@@ -2371,7 +2373,9 @@ export class Run {
   }
 
   /**
-   * REQ-MONITOR-142: applies from the next iteration; a system row states the switch. During a wait (REQ-ORCH-091 d,
+   * REQ-MONITOR-142: applies from the next iteration, for the rest of this run (PD-MONITOR-003, OQ-185: it ends with its run,
+   * and its row says so); a system row states the switch. It ends a ladder move and takes back an override an earlier wait
+   * choice set from the pair chosen (PD-ORCH-006, OQ-177). During a wait (REQ-ORCH-091 d,
    * REQ-NOTIFY-089/263) it is the change-model resolution: the parked agent rebuilds and re-runs at once, and the
    * override is persisted (`model_override` timeline entry) so later calls of the session never return to the
    * exhausted pair. A choice that cannot be applied is never discarded silently: `model_override_rejected` is
@@ -2407,29 +2411,33 @@ export class Run {
         // set for it is taken back (`takeBackOverrideOf`), so the retry calls the pair chosen. Another agent waiting on
         // another pair moves to it, as a change-model choice moves every parked agent.
         this.clearChosenExclusion(key, provider, resolved.choice.model.modelId);
-        this.takeBackOverrideOf(waiting, key, choice, waiting.agent === this.rootName ? {} : { switch_pending: this.entrySwitchPending });
+        this.takeBackOverrideOf(`during the wait on ${waiting.provider}/${waiting.model}`, key, choice, waiting.agent === this.rootName ? {} : { switch_pending: this.entrySwitchPending });
         this.overrideWaitingPairs(waiting, key, choice, provider, chosen);
         writer.appendRow('system', `${key} chosen during the wait on ${waiting.provider}/${waiting.model}: it is no longer treated as out of quota, and the call is retried on it now.`, true);
         this.waits.resolveWithModel(key, choice);
         return true;
       }
       this.clearChosenExclusion(key, provider, resolved.choice.model.modelId);
-      this.takeBackOverrideOf(waiting, key, choice, waiting.agent === this.rootName ? {} : { switch_pending: this.entrySwitchPending });
+      this.takeBackOverrideOf(`during the wait on ${waiting.provider}/${waiting.model}`, key, choice, waiting.agent === this.rootName ? {} : { switch_pending: this.entrySwitchPending });
       this.overrideWaitingPairs(waiting, key, choice, provider, chosen);
       writer.appendRow('system', `Model changed to ${key} during the wait; the run resumes on it now and keeps it for the rest of the session.`, true);
       this.waits.resolveWithModel(key, choice);
       return true;
     }
     this.clearChosenExclusion(key, providerIdentity(this.catalogue, resolved.choice.model), resolved.choice.model.modelId);
+    // OQ-177's ruling (R-071, PD-ORCH-006): every explicit switch wins. It ends a ladder move (`pendingEntrySwitch`), and it
+    // takes back an override an earlier wait choice set FROM the pair chosen (REQ-ORCH-091 d), as the quota-wait surface's
+    // own choice does, so the entry agent runs on the pair chosen from the next iteration. Until 2026-10-06 the override
+    // stood and the row said "but <key>, chosen for <pair> during an earlier wait, stands for the rest of the session".
+    // Written before the switch's own entry, so a reader replays the take-back, then the switch. The root's own placement:
+    // the switch it belongs to is recorded next and places both.
+    this.takeBackOverrideOf('as the entry model', key, withSettings(this.catalogue, resolved.choice), {});
     this.entryOverride = { ...this.entryOverride, model: resolved.choice.model, key };
     this.pendingEntrySwitch = 'model';
-    // OQ-177: the switch applies over a ladder move; a change-model resolution persisted for the pair (REQ-ORCH-091 d)
-    // stands for the rest of the session, and then the row says where the entry agent runs instead.
-    const kept = this.memory.overrideReaching(withSettings(this.catalogue, resolved.choice), this.catalogue);
-    const pair = `${providerIdentity(this.catalogue, resolved.choice.model)}/${resolved.choice.model.modelId}`;
-    writer.appendRow('system', kept === null
-      ? `Entry model switched to ${key}; it applies from the next iteration.`
-      : `Entry model switched to ${key}, but ${kept.key}, chosen for ${pair} during an earlier wait, stands for the rest of the session: the entry agent runs on ${kept.key} from the next iteration.`, true);
+    // OQ-185's ruling (R-071, PD-MONITOR-003): the switch holds for the rest of its own run, and the row says so; the
+    // composer's model chip is the one control for the next run. Until 2026-10-06 it read "it applies from the next
+    // iteration", untrue when the run had none of its own left.
+    writer.appendRow('system', `Entry model switched to ${key}; it applies for the rest of this run, after the iteration in flight. The next run starts on the composer's model.`, true);
     // `rebuilds`: whether the root's cell is built anew for this model at its next turn, unless a later switch supersedes
     // this one first. Since OQ-177 it is true on every switch (`pendingEntrySwitch`); until 2026-10-02 it was false onto
     // the model the cell was last built from, which left a ladder move of the root in force — stores written then carry
@@ -2483,7 +2491,9 @@ export class Run {
   /**
    * REQ-ORCH-091 (d) with REQ-MONITOR-303 and REQ-MONITOR-194: the user's newest explicit choice of a pair in a wait — a
    * change of model, or the waiting pair itself chosen for a retry — supersedes any override an earlier choice set FROM
-   * that pair, so the agent resumes on the pair chosen, as the wait's row says. The override is taken back in the memory
+   * that pair, so the agent resumes on the pair chosen, as the wait's row says. Since OQ-177's ruling (R-071, PD-ORCH-006,
+   * 2026-10-06) a switch of the entry model from the run header or the inspector does the same (`where`: "as the entry
+   * model"), so every explicit choice wins. The override is taken back in the memory
    * and as a `model_override` entry carrying `cleared: true`, `cause: 'superseded'` (fin6's shape for a taken-back pin),
    * which `rehydrate` and both autopsy readers replay; with the chosen pair's own override gone, the new override from the
    * waiting pair can never lead back to it, so the chain never cycles. An agent whose cell had already followed the
@@ -2503,7 +2513,7 @@ export class Run {
    * for a root on the chain's END: a root that had followed a1 → c1 and was still on c1 when c1 → f1 was added recorded
    * `elsewhere`, and both autopsy readers returned it to a1 while it called f1 (the verifier's repair-round-3 finding).
    */
-  private takeBackOverrideOf(w: WaitState, key: string, choice: ModelChoice, placed: Readonly<Record<string, unknown>>): void {
+  private takeBackOverrideOf(where: string, key: string, choice: ModelChoice, placed: Readonly<Record<string, unknown>>): void {
     const provider = providerIdentity(this.catalogue, choice.model);
     const modelId = choice.model.modelId;
     const old = this.memory.overrideFor(provider, modelId);
@@ -2511,7 +2521,7 @@ export class Run {
     const cell = this.rootCell?.model.model;
     const rootCell = cell === undefined ? 'elsewhere' : sameRef(cell, choice.model) ? 'on_pair' : this.onChainFrom(old.choice, cell) ? 'followed' : 'elsewhere';
     this.memory.clearOverride(provider, modelId);
-    this.deps.writer.appendTimeline('model_override', 'user', `${key} (${provider}/${modelId}) was chosen during the wait on ${w.provider}/${w.model}; the earlier override that replaced it with ${old.key} is taken back.`, { provider, model: modelId, cleared: true, cause: 'superseded', root_cell: rootCell, ...placed });
+    this.deps.writer.appendTimeline('model_override', 'user', `${key} (${provider}/${modelId}) was chosen ${where}; the earlier override that replaced it with ${old.key} is taken back.`, { provider, model: modelId, cleared: true, cause: 'superseded', root_cell: rootCell, ...placed });
   }
   /**
    * Whether `cell` is a pair of the override chain that starts at `from` — the taken-back override's own target or any pair
@@ -2551,7 +2561,8 @@ export class Run {
     if (this.ended) return false;
     this.entryOverride = { ...this.entryOverride, thinking: level };
     if (this.pendingEntrySwitch !== 'model') this.pendingEntrySwitch = 'reasoning';
-    this.deps.writer.appendRow('system', `Entry reasoning level switched to ${level}; it applies from the next iteration.`, true);
+    // OQ-185's ruling (R-071, PD-MONITOR-003): held for the rest of this run; the composer's reasoning chip chooses the next run's.
+    this.deps.writer.appendRow('system', `Entry reasoning level switched to ${level}; it applies for the rest of this run, after the iteration in flight. The next run starts at the composer's reasoning level.`, true);
     this.deps.writer.appendTimeline('entry_reasoning_switched', 'user', `The entry reasoning level switched to ${level}.`, { level });
     return true;
   }

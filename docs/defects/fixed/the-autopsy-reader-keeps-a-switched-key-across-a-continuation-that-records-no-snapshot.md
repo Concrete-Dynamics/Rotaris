@@ -28,7 +28,7 @@ prints `undetermined` (`ENTRY_KEY_UNDETERMINED`) and leaves the configured key u
 later snapshot, a switch, a ladder move of the root). A move in force ends there, as before. With no such switch, or a
 switch back onto the snapshot's own key, the last snapshot's key is kept as before, since either answer gives it. This
 holds under either answer to whether a switch reaches the next run, the open question
-[an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md](../an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md)
+[an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md](an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md)
 raises, and is to be revisited when that is ruled.
 
 The moves table's pinned row ("… back to the switched key") was a switch onto the launch snapshot's own key, which both

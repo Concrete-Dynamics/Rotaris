@@ -398,6 +398,10 @@ While a task run is executing, a user must be able to watch what every agent is 
 ### 16. Model and reasoning switching mid-run
 
 **REQ-MONITOR-142** — A switch of the run's entry model, or of its entry reasoning level, applies from the next iteration onward; the iteration already in flight finishes on the previous setting. Each switch appends a system transcript row stating the new model or reasoning level and that it applies from the next iteration.
+  > **Narrowed by [`PD-MONITOR-003`](../product/directives.md#pd-monitor-003), 2026-10-06.** A switch made from the run
+  > header or the inspector applies from the next iteration for the rest of that run only, and its row says it applies for
+  > the rest of this run, after the iteration in flight, and that the next run starts on the composer's choice — not
+  > only that it applies from the next iteration. The iteration in flight finishes on the previous setting, as stated.
 
 **REQ-MONITOR-143** — Given the run loop has already closed, a switch still records the override without announcing it, because no live loop remains to receive the announcement; the control must not error.
 
@@ -541,6 +545,10 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-197** — Every host (REQ-MONITOR-003) presents from the same wait state and `waiting` status, delivered to all of them alike (REQ-MONITOR-216), and every one of them must present the run as waiting on provider quota, not as stalled or failed.
 
 **REQ-MONITOR-303** — Entering a quota wait raises a decision surface in the desktop interface for the session that is waiting. It must convey that the run is parked because a provider reported its quota exhausted, and must name the model and the provider. It has two body variants, chosen by the wait state's automatic-resume flag (REQ-MONITOR-195): where automatic resume is allowed, it also conveys the approximate retry delay and that the run will retry by itself if left alone; where it is not, it also conveys that this provider-and-model pair is treated as out of quota for the remainder of the session (REQ-MONITOR-194). It offers exactly three choices, and the set of three is a fixed contract while the wording of each is the implementation's: keep waiting, which resolves the wait as a retry and returns the status to `running`; cancel the run, which takes the ordinary cancellation path (REQ-MONITOR-127, REQ-MONITOR-129); and change model now, which opens a model picker offering the fallback candidates of REQ-MONITOR-193, listing excluded pairs with their reason rather than hiding them (REQ-MONITOR-194), and which on selection applies the run's model switch (REQ-MONITOR-142) and resolves the wait as a retry on the chosen model. The surface must not block the rest of the application: while it is open the transcript keeps updating, other sessions keep running, and every other control stays operable. Dismissing it without choosing leaves the wait exactly as it was and does not answer it; while the session's status is `waiting` the surface must remain reachable again from the run header, so a dismissed decision is never a lost one. At most one such surface exists per waiting session, and a session that leaves `waiting` for any reason closes its own.
+  > **Narrowed by [`PD-MONITOR-004`](../product/directives.md#pd-monitor-004), 2026-10-06.** Keep waiting resolves the
+  > wait as a retry, at once, only where automatic resume is not allowed (an out-of-quota pair, retried as an explicit
+  > choice of it, which clears its exclusion). Where automatic resume is allowed it acknowledges and changes nothing, and
+  > the timer resolves the wait as a retry when the interval elapses. Every other obligation is as stated.
 
 > **Narrowed by [`PD-MONITOR-004`](../product/directives.md#pd-monitor-004), 2026-10-06.** The change-model picker lists
 > every configured model key, alphabetically, the waiting model included, with an out-of-quota pair annotated and

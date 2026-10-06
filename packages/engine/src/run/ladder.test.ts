@@ -136,6 +136,13 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   const timeline = (sid: SessionId) => dal.timelineOf(sid).map((t) => t.name);
   const issues = (sid: SessionId) => dal.issuesOf(sid).map((i) => i.kind);
   const lastWait = (pub: ReturnType<typeof recorder>) => pub.snapshots.at(-1)?.wait ?? null;
+  /**
+   * OQ-185's ruling (R-071, PD-MONITOR-003): a switch from the run header or the inspector holds for the rest of its own run,
+   * and its row says so — the composer's model and reasoning chips choose the next run's. Until 2026-10-06 the row said "it
+   * applies from the next iteration", untrue when the run had no next iteration of its own.
+   */
+  const SWITCH_ROW = (key: string) => `Entry model switched to ${key}; it applies for the rest of this run, after the iteration in flight. The next run starts on the composer's model.`;
+  const REASONING_ROW = (level: string) => `Entry reasoning level switched to ${level}; it applies for the rest of this run, after the iteration in flight. The next run starts at the composer's reasoning level.`;
 
   it('a 429 with retry-after 2 s: the run waits (status waiting, the record carries the wait), auto-resumes on the timer and completes; no transient budget spent', async () => {
     const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(rateLimit(2)) : answer('after the wait')));
@@ -439,6 +446,39 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect((await sessions.running(sid)!).status).toBe('completed');
     expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
     expect(lastWait(pub)).toBeNull();
+  });
+
+  /*
+   * OQ-188's ruling (R-071, PD-MONITOR-004): the wait record names the waiting pair's key, and keep waiting in the wait that
+   * never auto-resumes sends `setModel` with it — the explicit choice of the waiting pair, which clears its exclusion and
+   * retries it now, no override persisted. A timed wait names its key too; the header sends nothing for it (`keepWaitingAction`).
+   */
+  it('OQ-188 / PD-MONITOR-004: a quota wait names the waiting pair\'s key, and keep waiting (setModel with it) retries the pair now, its exclusion cleared', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, [])];
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('after the top-up')), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    const wait = lastWait(pub)!;
+    expect(wait).toMatchObject({ provider: 'a', model: 'a1', resumeAt: null, excluded: ['a1'], modelKey: 'a1' });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: wait.modelKey! } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1']);
+    const timeline = dal.timelineOf(sid);
+    expect(timeline.filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata) as Record<string, unknown>)).toEqual([
+      expect.objectContaining({ provider: 'a', model: 'a1' }),
+      expect.objectContaining({ provider: 'a', model: 'a1', cleared: true }),
+    ]);
+    expect(timeline.some((t) => t.name === 'model_override')).toBe(false);
+    expect(dal.issuesOf(sid).some((i) => i.kind === 'model_override_rejected')).toBe(false);
+  });
+  it('OQ-188: a timed wait names its pair\'s key as well', async () => {
+    const { sessions, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(rateLimit(2)) : answer('after the wait')));
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', modelKey: 'a1' });
+    expect(lastWait(pub)!.resumeAt).not.toBeNull();
+    clock.advance(2000);
+    expect((await sessions.running(sid)!).status).toBe('completed');
   });
 
   // Until OQ-177 (2026-10-02) the switch onto a1 recorded `rebuilds: false` and the fallback stood
@@ -1238,7 +1278,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   /*
    * REQ-CHAT-006 / REQ-SESSION-026 / REQ-NOTIFY-089: the record says which configured key a session-wide override replaces and
    * the key it runs on, so the composer's model chip and the inspector name what the next run starts with. Before it the chips
-   * read the configured key (docs/defects/the-model-chips-show-the-configured-model-while-a-session-wide-override-is-in-force.md).
+   * read the configured key (docs/defects/fixed/the-model-chips-show-the-configured-model-while-a-session-wide-override-is-in-force.md).
    */
   it('REQ-CHAT-006 / REQ-SESSION-026: the record names the override in force — in this process, and after a fresh one opens the session', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
@@ -2624,7 +2664,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect((await sessions.running(sid)!).status).toBe('completed');
       expect(dal.iterationsOf(sid)).toHaveLength(2);
       expect(rootModels(client)).toEqual(['a1', 'b1', 'a1']);
-      expect(systemRows(sid)).toContain('Entry model switched to a1; it applies from the next iteration.');
+      expect(systemRows(sid)).toContain(SWITCH_ROW('a1'));
     });
 
     it('a switch back to the configured key after an unresponsive-model fallback rebuilds the root on it at the next iteration (REQ-ORCH-090)', async () => {
@@ -2641,7 +2681,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       gate.open();
       expect((await sessions.running(sid)!).status).toBe('completed');
       expect(rootModels(client)).toEqual(['a1', 'f1', 'a1']);
-      expect(systemRows(sid)).toContain('Entry model switched to a1; it applies from the next iteration.');
+      expect(systemRows(sid)).toContain(SWITCH_ROW('a1'));
     });
 
     it('a reasoning switch reaches the next iteration\'s requests, on the model the root has, and the row says so', async () => {
@@ -2656,7 +2696,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect((await sessions.running(sid)!).status).toBe('completed');
       // A reasoning switch is not a model switch: the same-tier move stands, and only the level changes.
       expect(client.requests.filter(isRoot).map((r) => [r.model.modelId, r.thinking])).toEqual([['a1', 'unset'], ['b1', 'unset'], ['b1', 'high']]);
-      expect(systemRows(sid)).toContain('Entry reasoning level switched to high; it applies from the next iteration.');
+      expect(systemRows(sid)).toContain(REASONING_ROW('high'));
     });
 
     it('the iteration in flight finishes on the model it had: a root resumed after its child in the same iteration is not moved by a switch', async () => {
@@ -2683,7 +2723,13 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(JSON.stringify(roots[2]!.messages.at(-1))).toContain('[Background task completed]');
     });
 
-    it('a switch onto a pair an earlier wait moved for the rest of the session says the entry agent stays on that choice (REQ-ORCH-091 d)', async () => {
+    /*
+     * OQ-177's ruling (R-071, PD-ORCH-006): every explicit switch wins. A switch onto a pair an earlier wait choice overrode
+     * takes that override back, as the quota-wait surface's own choice does (`takeBackOverrideOf`), so the entry agent runs on
+     * the pair chosen from the next iteration, the record replays the take-back, and the autopsy reader prints the key the
+     * root ran on. Until 2026-10-06 the override stood and only the row said so: the third root call went to c1.
+     */
+    it('a switch onto a pair an earlier wait moved for the rest of the session takes that override back, and the entry agent runs on the pair chosen (OQ-177, PD-ORCH-006)', async () => {
       const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
       const gate = held();
       const { sessions, client, pub } = sessionsWith((p, turn) => (p !== 'orchestrator' ? answer('{"summary":"done"}') : turn === 1 ? failing(quota()) : turn === 2 ? hanging(gate.p) : answer(`iteration ${turn}`)), { catalogue });
@@ -2697,10 +2743,22 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
       gate.open();
       expect((await sessions.running(sid)!).status).toBe('completed');
-      expect(rootModels(client)).toEqual(['a1', 'c1', 'c1']);
+      expect(rootModels(client)).toEqual(['a1', 'c1', 'a1']);
       const row = systemRows(sid).find((b) => b.startsWith('Entry model switched to a1'))!;
-      expect(row).toBe('Entry model switched to a1, but c1, chosen for a/a1 during an earlier wait, stands for the rest of the session: the entry agent runs on c1 from the next iteration.');
-      expect(row).not.toContain('it applies from the next iteration');
+      expect(row).toBe(SWITCH_ROW('a1'));
+      const timeline = dal.timelineOf(sid);
+      const overrides = timeline.filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+      expect(overrides).toHaveLength(2);
+      expect(overrides[1]).toMatchObject({ provider: 'a', model: 'a1', cleared: true, cause: 'superseded', root_cell: 'followed' });
+      // The take-back is written before the switch, and the session's memory replays to no override.
+      expect(timeline.map((t) => t.name).filter((n) => n === 'model_override' || n === 'entry_model_switched')).toEqual(['model_override', 'model_override', 'entry_model_switched']);
+      const replayed = ResilienceMemory.rehydrate(timeline, (k) => { const e = catalogue.find((c) => c.key === k); return e ? { model: e.model, thinking: e.thinking } : null; });
+      expect(replayed.overrideCount).toBe(0);
+      // The exclusion of a1 is cleared by the explicit choice (REQ-MONITOR-194), so the next iteration's call is not parked.
+      expect(replayed.isExhausted('a', 'a1')).toBe(false);
+      const models = { a1: { provider: 'a', model_id: 'a1' }, c1: { provider: 'c', model_id: 'c1' } };
+      const audit = JSON.stringify({ session_id: sid, config_snapshot: { default_persona: 'orchestrator', personas: { orchestrator: { model: 'a1' } }, models } });
+      expect(entryModelKeys(audit, timeline, childModelKeys(dal.childrenOf(sid)))).toEqual(['a1', 'c1', 'a1']);
     });
   });
   /*

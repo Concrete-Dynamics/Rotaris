@@ -172,6 +172,16 @@ export function sameTierCandidates(failing: { readonly provider: string; readonl
  * insufficient quota for it in this session" rather than hiding. A discovered model is no key a selector lists; a pair no
  * configured key reaches names nothing.
  */
+/**
+ * OQ-188's ruling (R-071, PD-MONITOR-004): the model key that names a pair — the first configured entry in declaration order,
+ * else the first discovered one — or null when none does. The wait record carries it so the header's keep waiting can choose
+ * the waiting pair itself (`setModel` with it), which is the existing retry path of an explicit choice (REQ-MONITOR-194/303).
+ */
+export function keyOfPair(catalogue: readonly CatalogueEntry[], provider: string, modelId: string): string | null {
+  const matching = catalogue.filter((e) => e.provider === provider && e.model.modelId === modelId);
+  return (matching.find((e) => e.origin === 'configured') ?? matching[0])?.key ?? null;
+}
+
 export function excludedModelKeys(catalogue: readonly CatalogueEntry[], exhausted: ReadonlySet<string>): string[] {
   const out: string[] = [];
   for (const e of catalogue) {

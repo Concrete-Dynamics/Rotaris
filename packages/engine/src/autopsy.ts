@@ -288,10 +288,12 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  *   the target's key printed for it, which the root never ran on.
  * A store recording no `supersedes` reads each switch as applied; one recording no `switch_pending` reads each move and
  * each child's choice where it is recorded, until a switch that supersedes places it.
- * A switch is held on its run alone (`entryOverride`; a continuation is a new `Run`), and whether it should reach the next
- * run is OQ-185's open question (an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation). A continuation
- * whose snapshot names the entry model says which it ran on; one recording none, after a switch onto another key than the
- * last snapshot's, prints `ENTRY_KEY_UNDETERMINED` until a record names a key, so neither answer is printed as fact (since
+ * A switch is held on its run alone (`entryOverride`; a continuation is a new `Run`), and since OQ-185's ruling (R-071,
+ * PD-MONITOR-003, 2026-10-06) that is the product: a switch ends with its run, and the next run starts on the configured
+ * model, which the composer's chip chooses. A continuation whose snapshot names the entry model says which it ran on; one
+ * recording none, after a switch onto another key than the last snapshot's, prints `ENTRY_KEY_UNDETERMINED` until a record
+ * names a key — the switch did not reach it, but the configuration it was built from may have been changed by the composer
+ * since the last snapshot, and nothing it records says (since
  * 2026-10-02; until then the switched key was kept, and a move such a run's fresh cell ended was read as ending on it:
  * the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot). With no such switch the last
  * snapshot's key is kept, as before. One reading stays coarse: an entry naming a child alive at its instant is that
@@ -342,11 +344,10 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
   const fromSnapshot = (s: State, snapshot: unknown): void => {
     const e = snapshotEntry(snapshot);
     if (!e) {
-      // A switch recorded since the last snapshot naming an entry model, onto another key: whether it reaches this new run
-      // or ended with its own (`entryOverride` is held per `Run`) is OQ-185's open question
-      // (an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation), and this snapshot does not say which
-      // model the run was configured with, so the key is undetermined until a record names one (the repair of
-      // the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot; revisit when it is ruled).
+      // A switch recorded since the last snapshot naming an entry model, onto another key: it ended with its own run
+      // (`entryOverride` is held per `Run`; OQ-185's ruling, PD-MONITOR-003), but this snapshot does not say which model the
+      // new run was configured with — the composer may have changed it since — so the key is undetermined until a record
+      // names one (the repair of the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot).
       if (s.configured !== null && s.configured.label !== s.snapshotLabel) {
         s.base = s.configured = { label: ENTRY_KEY_UNDETERMINED, pair: null };
         s.fellBack = false;

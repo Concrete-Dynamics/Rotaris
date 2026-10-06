@@ -104,7 +104,8 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * and a root move or a child's wait choice recording `switch_pending: true` is read before the pending switch, which
  * applies after it (the engine's copy says why; a store recording neither reads each record where it stands). A
  * continuation recording no snapshot after a switch onto another key than the last snapshot's prints `undetermined`,
- * since whether the switch reaches the new run is OQ-185's open question (the engine's copy says so; until 2026-10-02 the
+ * since the switch ended with its run (OQ-185's ruling, PD-MONITOR-003) but the snapshot does not say which model the new run
+ * was configured with (the engine's copy says so; until 2026-10-02 the
  * switched key was kept: the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot); and an
  * entry naming a child alive at its instant is that child's, even where a root of the same name was alive too (OQ-158).
  */
@@ -140,7 +141,7 @@ export function entryModelKeys(launchAuditPayload, timeline, children) {
   const fromSnapshot = (s, snapshot) => {
     const e = snapshotEntry(snapshot);
     if (!e) {
-      // A switch onto another key since the last snapshot naming one: whether it reaches this run is OQ-185's open question, and
+      // A switch onto another key since the last snapshot naming one: it ended with its run (OQ-185's ruling, PD-MONITOR-003), and
       // the snapshot does not say which model the run was configured with — undetermined until a record names one.
       if (s.configured !== null && s.configured.label !== s.snapshotLabel) {
         s.base = s.configured = { label: ENTRY_KEY_UNDETERMINED, pair: null };

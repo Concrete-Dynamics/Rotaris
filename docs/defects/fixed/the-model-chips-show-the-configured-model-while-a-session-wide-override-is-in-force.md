@@ -67,3 +67,13 @@ reach the session's next run?" (OQ-185 on `origin/main` since that bundle's merg
 reading built there, a switch ends with its run, so the chips naming the configured key (or the override in force) after
 it are consistent with what the next run does; if a ruling makes the switch reach the next run, the chips owe it too, and
 this note stays open for that.
+
+## Outcome — 2026-10-06 (plan fin21, under [R-071](../../product/requests.md#r-071)): the open part ruled as built
+
+The part left open waited on OQ-185, which the owner ruled as recommended: a mid-run switch from the run header or the
+inspector **ends with its run** and does not reach the session's next run
+([`PD-MONITOR-003`](../../product/directives.md#pd-monitor-003)). The composer's model chip therefore names what the next run
+starts with when it names the configured key or the session-wide override in force, which is what it does since the
+repair above; no chip owes a mid-run switch. Nothing further changed for this note; the session-wide override part stays
+repaired as recorded above, and `resilience-proof`'s `override` scenario still reads `beta` on the chip after the
+change-model resolution (2026-10-06).

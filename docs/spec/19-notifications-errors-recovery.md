@@ -263,6 +263,9 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 **REQ-NOTIFY-088** — A structured provider quota-exhaustion error — `insufficient_quota` or `insufficient-quota`, or plain-language exhaustion such as an exceeded current quota or a direction to check plan and billing — marks that provider and model exhausted for the rest of the session. Auto-resume onto it is refused, and recovery requires a different eligible model or an explicit choice by the user.
 
 **REQ-NOTIFY-089** — A model chosen by hand during a wait is kept for the rest of the session and overrides the tier whose quota was exhausted, so later calls in that session do not return to the exhausted model.
+  > **Narrowed by [`PD-ORCH-006`](../product/directives.md#pd-orch-006), 2026-10-06.** The model chosen during a wait
+  > is kept for the rest of the session unless the user later chooses the exhausted model explicitly for the entry agent;
+  > that choice takes the override back, and later calls may then return to the model chosen.
 
 **REQ-NOTIFY-090** — Quota recovery leaves inspectable evidence: a timeline entry for a quota-driven model change; a warning-severity diagnostics issue naming the requested model, the fallback model and whether the provider is exhausted; and, where a wait is entered, a diagnostics issue recording the attempt number, the model, the computed wait in seconds, whether auto-resume is allowed and whether the provider is exhausted.
 

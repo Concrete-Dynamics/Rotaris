@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Sixty-six.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Sixty-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -4591,6 +4591,139 @@ writes no row is never seen to begin.
 > **Narrows:** REQ-CHAT-158
 
 *Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-200.*
+
+---
+
+<a id="pd-orch-006"></a>
+
+### PD-ORCH-006 — an explicit choice of the entry model wins over an earlier wait's override of that model
+
+When the user explicitly chooses a model for the run's entry agent — a switch of the entry model from the run header or
+the inspector (REQ-MONITOR-142), or a choice made on the quota-wait decision surface (REQ-MONITOR-303) — and a
+session-wide override that an earlier change-model resolution of a wait set (REQ-ORCH-091 (d), REQ-NOTIFY-089) replaces the
+chosen provider-and-model pair, that override SHALL be taken back for the chosen pair, recorded in the session record so
+that a reload and every reader of the record replay it, and the entry agent SHALL run on the pair chosen from the moment
+the choice applies: the run's next iteration for a switch from the run header or the inspector, at once for a choice on the
+wait surface. A switch from the run header or the inspector SHALL also end an automatic move the ladder made of the entry
+agent (REQ-ORCH-090, REQ-ORCH-091 (b)); the ladder's once-per-agent budgets are not reset by it.
+
+Every other override in force stands for the rest of the session as REQ-ORCH-091 (d) says. An agent that had already
+followed the override taken back stays on the model it moved to; an agent that calls the chosen pair from then on calls it.
+A reasoning-level switch is not a model choice and takes nothing back.
+
+**Why, and what it costs.** Before this directive the model the user picked from the run header could quietly fail to run:
+the switch ended a ladder move but left an earlier wait's override of the same pair standing, so the entry agent went on
+calling the override's model and only a transcript row said so — while a choice made on the wait surface already took such
+an override back. The owner ruled that every explicit choice wins (OQ-177). What it costs: REQ-ORCH-091 (d) and
+REQ-NOTIFY-089 keep a hand-chosen model "for the rest of the session", and a later explicit choice of the replaced pair now
+ends that override early, so later calls in the session may return to a pair the provider once reported out of quota. The
+user chose it explicitly, which REQ-MONITOR-194 already lets them do, and a further insufficient-quota answer records it
+out of quota again.
+
+> **Narrows:** REQ-ORCH-091, REQ-NOTIFY-089
+
+*Raised by the owner, 2026-10-06, ruling OQ-177 as recommended; logged as [R-071](requests.md#r-071).*
+
+> **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (plan fin21):** `Run.setEntryModel` takes the
+> override back on the header path through the same `takeBackOverrideOf` the wait path uses — a `model_override` entry
+> carrying `cleared: true`, `cause: 'superseded'` and `root_cell`, written before the switch's `entry_model_switched`, which
+> `ResilienceMemory.rehydrate` and both autopsy readers already replay — and the row's second form, "Entry model switched
+> to X, but Y, chosen for P/M during an earlier wait, stands for the rest of the session", is gone because no switch leaves
+> such an override standing. It found nothing the record had not said: the readers needed no change. **Measured:**
+> `packages/engine/src/run/ladder.test.ts` (a wait choice of c1 over the exhausted a1, then a header switch to a1 while a
+> second task is queued: the next iteration's root calls a1, the take-back precedes the switch, the replayed memory holds
+> no override and no exclusion of a1, and `entryModelKeys` reads a1, c1, a1 — red before, the third call on c1), and
+> `resilience-proof`'s driven `switch-over-override` scenario on the built app (alpha refused on quota, beta chosen in the
+> wait, a follow-up queued and the entry model switched back to alpha from the run header: calls alpha, beta, alpha; two
+> `model_override` entries, the second the take-back). The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-monitor-003"></a>
+
+### PD-MONITOR-003 — a switch of the entry model or reasoning level from the run header holds for its own run
+
+A switch of the run's entry model, or of its entry reasoning level, made from the run header or the inspector while a run
+is live (REQ-MONITOR-142) SHALL apply from the run's next iteration for the rest of **that run** only. It SHALL NOT be
+carried into the session's next run, and it is not the session-wide runtime model override of REQ-SESSION-026: the next run
+starts on the model and reasoning level the composer's selectors choose (REQ-MONITOR-146, REQ-CHAT-006), which name any
+session-wide override in force. The system transcript row each switch appends SHALL state the new model or reasoning level,
+that it applies for the rest of this run after the iteration in flight, and that the next run starts on the composer's
+choice; it SHALL NOT say only that it applies from the next iteration.
+
+A change-model resolution of a provider wait (REQ-ORCH-091 (d)) is not such a switch: its override is session-wide and
+reaches every later run, as REQ-SESSION-026 and REQ-NOTIFY-089 say.
+
+**Why, and what it costs.** A switch reaching the next run would sit beside the composer's next-run model chip with no rule
+for which wins; one place that chooses the next run's model is simpler, and the build already ended a switch with its run.
+The fault was one sentence: the row said the switch "applies from the next iteration", untrue when the run had nothing left
+queued, because the user's next prompt starts a new run. The owner ruled the switch stays scoped to its run and the row says
+so (OQ-185). What it costs: a user who switches the model in the last iteration of a run and wants it for the next run sets
+it again in the composer.
+
+> **Narrows:** REQ-MONITOR-142, REQ-SESSION-026
+
+*Raised by the owner, 2026-10-06, ruling OQ-185 as recommended; logged as [R-071](requests.md#r-071).*
+
+> **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (plan fin21):** the rows read "Entry model switched
+> to X; it applies for the rest of this run, after the iteration in flight. The next run starts on the composer's model."
+> and "Entry reasoning level switched to L; it applies for the rest of this run, after the iteration in flight. The next run
+> starts at the composer's reasoning level." (`Run.setEntryModel`, `Run.setEntryReasoning`). Nothing else changed: the
+> switch was already held on its `Run` (`entryOverride`) and a continuation is a new `Run` built from the configuration, so
+> the scope the directive states is the one built since fin8. The autopsy readers keep printing `undetermined` for a
+> continuation whose snapshot names no entry model after such a switch: the switch did not reach it, but the composer may
+> have changed the configuration since the last snapshot, and nothing it records says. **Measured:** the three row cases of
+> `ladder.test.ts` (red before, the old sentence), and `resilience-proof`'s `switch-back` and `switch-over-override` on the
+> built app reading the new row. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-monitor-004"></a>
+
+### PD-MONITOR-004 — keep waiting retries an out-of-quota wait now, and acknowledges a timed one
+
+On the quota-wait decision surface (REQ-MONITOR-303, REQ-NOTIFY-263), **keep waiting** SHALL depend on the wait's variant:
+
+1. Where automatic resume is **not** allowed — a provider-and-model pair recorded out of quota (REQ-MONITOR-194) — keep
+   waiting SHALL resolve the wait as a retry of the same pair at once and return the status to `running`. It is an explicit
+   choice of that pair: it clears the pair's out-of-quota exclusion as REQ-MONITOR-194 says, persists no override, and takes
+   back an earlier override of the pair (`PD-ORCH-006`). A further insufficient-quota answer records the pair again and
+   parks the run in a new wait. As every resolution of a wait does, it resumes every agent parked at that moment, an agent
+   parked on another pair resuming on the waiting pair.
+2. Where automatic resume **is** allowed, keep waiting SHALL acknowledge the choice and change nothing: the wait goes on
+   and its timer resolves it as a retry when the interval elapses (REQ-MONITOR-192, REQ-NOTIFY-087).
+
+Neither adds an operation to REQ-MONITOR-004's enumeration: the retry is the switch of the run's entry model naming the
+waiting pair's model key, which the session record's wait carries. Where no configured model key names the waiting pair,
+keep waiting acknowledges in both variants; change model and cancel the run remain.
+
+**Why, and what it costs.** REQ-MONITOR-303 says keep waiting resolves the wait as a retry; the build had read it as the
+absence of a decision, so in the out-of-quota wait the button did nothing and a user who had topped up the account had no
+obvious way to resume short of choosing the same model in the change-model picker. Retrying a timed wait early would only
+meet the provider's limit again before its interval ends. The owner ruled the retry for the out-of-quota wait and the
+acknowledgement for the timed one (OQ-188). What it costs: in the timed wait keep waiting departs from REQ-MONITOR-303's
+"resolves the wait as a retry", and the user who wants to try before the interval ends has no control for it.
+
+> **Narrows:** REQ-MONITOR-303
+
+*Raised by the owner, 2026-10-06, ruling OQ-188 as recommended; logged as [R-071](requests.md#r-071).*
+
+> **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (plan fin21):** the record's `wait` gained `modelKey`
+> (`keyOfPair`, `packages/engine/src/run/resilience.ts`: the first configured key naming the pair, else the first discovered
+> one, else null), and the wait header's Keep waiting reads `keepWaitingAction` (`packages/ui/src/WorkspaceView.tsx`): with
+> `resumeAt` null and a key it sends `setModel` with that key and says "Retrying <key> now.", reaching
+> `Run.setEntryModel`'s existing quota-retry branch; otherwise "Still waiting." and nothing sent. The field was first named
+> `key`, and ADR-0030's credential-shape test (`providers.test.ts`, consequence 2) refused it as a field named like a
+> credential; it is `modelKey`, beside the record's `entryModelKey`. It also found the clause about
+> other parked agents, which the existing branch already did (`overrideWaitingPairs`) and which the directive now states.
+> **Measured:** `ladder.test.ts` (a quota wait's record names `modelKey: 'a1'`, and `setModel` with it completes the run on a1,
+> a1 recorded then cleared, no override, no refusal; a timed wait names its key too), `ui.test.ts` (`keepWaitingAction`:
+> retry in the out-of-quota wait, acknowledgement in the timed one, with no key, or with no `setModel` — red before, the
+> function absent), and `resilience-proof`'s driven `keep-waiting` scenario on the built app (alpha refused on quota, Keep
+> waiting pressed: calls alpha, alpha; `model_exhausted` recorded then cleared; no `model_override`). Not driven: the timed
+> variant's acknowledgement in the built app, which is the unchanged behaviour. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

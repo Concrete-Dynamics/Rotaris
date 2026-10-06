@@ -9250,7 +9250,15 @@ fallback "tried once per child by rebuilding the agent and transparently re-runn
 same-tier automatic model fallback per child", and (d), a manual model change "persists the override in session state for
 the rest of the session"; REQ-MONITOR-194, a pair chosen explicitly is "eligible again". Raised 2026-10-02 by the repair of
 [`an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md`](../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md),
-as OQ-176, and renumbered OQ-177 at its merge because `origin/main` had taken OQ-176 meanwhile. Open.)*
+as OQ-176, and renumbered OQ-177 at its merge because `origin/main` had taken OQ-176 meanwhile. Open until 2026-10-06; ruled that day by the owner, and built.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** every explicit switch wins — a switch of the
+entry model from the run header or the inspector ends an automatic fallback, as built, and also takes back any earlier
+quota-wait override of the chosen pair, as the quota-wait surface already does, so the entry agent runs on the pair chosen
+from the next iteration; an agent that had already followed the override stays where it moved. Minted as
+[`PD-ORCH-006`](../product/directives.md#pd-orch-006), narrowing REQ-ORCH-091 (d) and REQ-NOTIFY-089, and built the same
+day (`Run.setEntryModel` calls `takeBackOverrideOf` on the header path; plan fin21). The reading below is kept as the build
+proceeded under it until then.
 
 After the ladder moves the entry agent off its configured model — to the role's fallback when the model is unresponsive
 (REQ-ORCH-090), or to a same-tier model on another provider after a rate-limit or quota response (REQ-ORCH-091 b) — the
@@ -9587,9 +9595,15 @@ saying "it applies from the next iteration"; REQ-MONITOR-143, after the loop has
 override"; REQ-SESSION-026, "A mid-session runtime model override (active model key and runtime model configurations) MUST
 persist across calls and across reloads of the session"; REQ-MONITOR-146, "Composer-side model, persona, and reasoning
 choices apply to the next prompt". Raised 2026-10-02 by
-[`an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md`](../defects/an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md)
+[`an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md`](../defects/fixed/an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md)
 (fin8, ladder-overrides, task 2), as OQ-183, and renumbered OQ-185 at its merge because `origin/main` had taken OQ-183
-and OQ-184 meanwhile. Open.)*
+and OQ-184 meanwhile. Open until 2026-10-06; ruled that day by the owner, and built.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** keep the switch scoped to its own run, as built,
+and reword its row to say it applies for the rest of this run (after the iteration in flight), leaving the composer's model
+chip — and, read the same way, its reasoning chip — as the one control for the next run; a reasoning switch is ruled with
+the model switch. Minted as [`PD-MONITOR-003`](../product/directives.md#pd-monitor-003), narrowing REQ-MONITOR-142 (the
+row's words) and REQ-SESSION-026 (a header switch is not the session-wide override), and built the same day (plan fin21).
 
 A switch of the entry model or reasoning level from the run header or the inspector (`setModel`, `setReasoning`) is held
 on its `Run` (`entryOverride`). When the iteration in flight is the run's last, the next iteration is a continuation —
@@ -9699,8 +9713,15 @@ plan gate.
 which fixes the three choices and "what each does"; REQ-NOTIFY-263's three choices; REQ-MONITOR-192 and REQ-NOTIFY-087, the
 auto-resume variant ending by itself when its interval elapses; REQ-MONITOR-004's closed enumeration of twenty-two operations;
 REQ-MONITOR-194. Raised 2026-10-02 by task 1 of plan fin10's `fin10-quota-exclusions-and-choices` bundle, recording
-[`keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`](../defects/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md).
-Open; owner-only, as every question this round raises.)*
+[`keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`](../defects/fixed/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md).
+Open; owner-only, as every question this round raises. Ruled 2026-10-06 by the owner, and built.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** keep waiting retries the same model at once in
+the out-of-quota wait (the variant that never auto-resumes), clearing its out-of-quota mark through the existing retry path
+— read onto the existing switch of the entry model, which the header sends with the waiting pair's key, now carried on the
+record's `wait` as `modelKey`, so REQ-MONITOR-004's twenty-two operations are unchanged — and stays a plain acknowledgement in
+the timed wait, whose timer already retries. Minted as [`PD-MONITOR-004`](../product/directives.md#pd-monitor-004),
+narrowing REQ-MONITOR-303, and built the same day (plan fin21).
 
 ADR-0010's third execution (2026-09-05) read keep waiting as "the absence of a decision": the header acknowledges ("Still
 waiting.") and sends nothing, so the wait goes on as it was — the exhausted variant until a person decides, the auto-resume

@@ -445,8 +445,21 @@ export function waitModelOptions(models: readonly string[], excluded: readonly s
 }
 
 /**
+ * OQ-188's ruling (R-071, PD-MONITOR-004): what the wait header's keep waiting does. In the wait that never auto-resumes
+ * (`resumeAt` null: a pair the provider reported out of quota) it retries the waiting pair now — `setModel` with its key, the
+ * explicit choice of it that clears its exclusion and resolves the wait as a retry (REQ-MONITOR-194/303) — where a key names
+ * it and the header can send one. In the timed wait it acknowledges and sends nothing: its timer retries when the provider's
+ * interval ends (REQ-MONITOR-192, REQ-NOTIFY-087), and an earlier retry would meet the same limit. Until 2026-10-06 it
+ * acknowledged in both, so an out-of-quota wait stayed parked until the user changed model or cancelled.
+ */
+export function keepWaitingAction(wait: NonNullable<SessionRecord['wait']>, canSend: boolean): { readonly kind: 'retry'; readonly key: string } | { readonly kind: 'acknowledge' } {
+  return wait.resumeAt === null && wait.modelKey !== null && canSend ? { kind: 'retry', key: wait.modelKey } : { kind: 'acknowledge' };
+}
+
+/**
  * The wait as the user sees it (REQ-NOTIFY-263, REQ-ORCH-091 d): the header and its exactly three choices, here and on no
- * other surface — keep waiting (the absence of a decision: the control acknowledges and changes nothing), change model
+ * other surface — keep waiting (`keepWaitingAction`: in the out-of-quota wait a retry of the waiting pair now, through
+ * `setModel` with its key, saying "Retrying <key> now."; in the timed wait an acknowledgement that changes nothing), change model
  * (every configured model, pinned through `setModel`, REQ-NOTIFY-089; the pairs held out of quota annotated,
  * `waitModelOptions`, REQ-MONITOR-194/303), cancel the run — the confirmed
  * "Cancel the run?", which sends the reserved run id, the explicit cancel, never the stop (PD-ORCH-005 clause 15).
@@ -455,7 +468,8 @@ export function waitModelOptions(models: readonly string[], excluded: readonly s
 function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<SessionRecord['wait']>; models: readonly string[]; onSetModel?: WorkspaceViewProps['onSetModel']; onCancel?: (() => void) | undefined }) {
   const [now, setNow] = useState(() => Date.now());
   const [choosing, setChoosing] = useState(false);
-  const [acknowledged, setAcknowledged] = useState(false);
+  // The keep-waiting line: "Still waiting." for an acknowledgement, "Retrying <key> now." for a retry sent (OQ-188); null before.
+  const [acknowledged, setAcknowledged] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -470,18 +484,24 @@ function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<
         <span className="wait-header__timing mono">{text.timing}</span>
         {wait.reason && <span className="wait-header__reason text-secondary">{wait.reason}</span>}
         {wait.rejection && <span className="wait-header__rejection" role="alert">{wait.rejection}</span>}
-        {acknowledged && !wait.rejection && <span className="wait-header__ack text-secondary">Still waiting.</span>}
+        {acknowledged && !wait.rejection && <span className="wait-header__ack text-secondary">{acknowledged}</span>}
         {error && <span className="composer__error" role="alert">{error}</span>}
       </div>
       <div className="wait-header__actions" aria-label="Wait choices">
-        <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(true); setChoosing(false); }}>Keep waiting</DesignButton>
+        <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => {
+          setChoosing(false);
+          const action = keepWaitingAction(wait, onSetModel !== undefined);
+          if (action.kind === 'acknowledge' || onSetModel === undefined) { setAcknowledged('Still waiting.'); return; }
+          setAcknowledged(`Retrying ${action.key} now.`);
+          void onSetModel(action.key).then((r) => { setError(r.ok ? null : r.reason); if (!r.ok) setAcknowledged(null); });
+        }}>Keep waiting</DesignButton>
         {onSetModel && models.length > 0 && (choosing ? (
           <DesignSearchableSelect className="input select" ariaLabel="Change model" value="" autoFocus
             filterPlaceholder="Filter models…"
             options={waitModelOptions(models, wait.excluded)}
             onChange={(v) => { if (v !== '') void onSetModel(v).then((r) => { setError(r.ok ? null : r.reason); setChoosing(false); }); }} />
         ) : (
-          <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(false); setChoosing(true); }}>Change model</DesignButton>
+          <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(null); setChoosing(true); }}>Change model</DesignButton>
         ))}
         {onCancel && <DesignButton type="button" className="btn btn-danger btn-compact" onClick={onCancel}>Cancel the run</DesignButton>}
       </div>

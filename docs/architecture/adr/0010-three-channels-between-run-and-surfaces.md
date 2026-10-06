@@ -527,11 +527,18 @@ cannot be applied answers `{ok: false}` as REQ-MONITOR-005 allows and the *reaso
 
 *Questioned 2026-10-02 (fin10, OQ-188):* reading (a) predates REQ-MONITOR-303, which says keep waiting "resolves the wait as a
 retry and returns the status to `running`" in both variants. The reading stands as built until the owner rules; the gap is
-recorded in [`keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`](../../defects/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md),
+recorded in [`keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`](../../defects/fixed/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md),
 with what a retry must then count as since the ladder reads the exclusion before every call (REQ-MONITOR-194).
 
+*Ruled 2026-10-06 (OQ-188, [R-071](../../product/requests.md#r-071), [`PD-MONITOR-004`](../../product/directives.md#pd-monitor-004)),
+reported back in place:* reading (a) now holds for the timed wait alone — the header acknowledges, sends nothing, and the timer
+retries. In the wait that never auto-resumes, keep waiting is read onto (b): the header sends `setModel` with the waiting
+pair's key, which the record's `wait` now carries (`modelKey`), and the run's existing quota-retry branch resolves the wait as a
+retry on that pair, its exclusion cleared as an explicit choice clears it. No operation was added; the contracts test still
+pins twenty-two. Shown by `resilience-proof`'s `keep-waiting` scenario (2026-10-06).
+
 **The wait state on the record, not in a column.** `SessionRecordSchema.wait` (provider, model, exhausted, resumeAt, attempt,
-reason, agent, rejection) is derived from the live run at every snapshot — ADR-0043's rule that adding a field to the record
+reason, agent, rejection; since 2026-10-02 `excluded` and since 2026-10-06 `modelKey`, the waiting pair's model key) is derived from the live run at every snapshot — ADR-0043's rule that adding a field to the record
 adds it to the payload — and the persisted status is REQ-SESSION-073's own `waiting`, presented as `running` (REQ-NOTIFY-049),
 so the sessions list and the browser show a waiting session from the status alone; no store migration was written (the plan's
 shared-file rule) and no new column exists for it.

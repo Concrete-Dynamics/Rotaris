@@ -12,13 +12,15 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
  * (REQ-MONITOR-117..119), and since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
- * Twenty-one scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
+ * Twenty-three scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
  * REQ-NOTIFY-064's notice, `auth-fallback` the first failure's automatic fallback and its re-authentication prompt,
  * `auth-fallback-dialog` the two together, `auth-fallback-revise` a failed revise cycle restarted as the same revise; and
  * `quota-retry`, REQ-MONITOR-194's explicit choice of the waiting pair clearing its exclusion; since fin10 `two-waits`, one
  * choice resolving two waits on two pairs and persisting both overrides across a reload; and `next-run-choice`, the
  * composer's next-run model chip clearing the exclusion of the pair it chooses; since 2026-10-03 `child-timeout-inspector`,
- * the inspector naming a child's REQ-ORCH-088 fallback and measuring its ring against it, REQ-MONITOR-052/049), each
+ * the inspector naming a child's REQ-ORCH-088 fallback and measuring its ring against it, REQ-MONITOR-052/049; since
+ * 2026-10-06 `keep-waiting`, OQ-188's ruling — Keep waiting retrying the out-of-quota pair now, and `switch-over-override`,
+ * OQ-177's — an entry switch taking back an earlier wait's override of the pair chosen), each
  * asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
@@ -217,6 +219,8 @@ const probes = (log, label) => [...log.matchAll(new RegExp(`capture: ${label} (.
 const modelCalls = (log) => [...log.matchAll(/scripted model call: ([^\s]+) \((\w[\w-]*)\)/g)].map((m) => ({ model: m[1], who: m[2] }));
 const results = {};
 const expect = (cond, message) => { if (!cond) throw new Error(message); };
+/** OQ-185's ruling (R-071, PD-MONITOR-003): the row an entry switch appends — it holds for the rest of its own run. */
+const SWITCH_ROW = (key) => `Entry model switched to ${key}; it applies for the rest of this run, after the iteration in flight. The next run starts on the composer's model.`;
 /** One scenario, run to its end: a failure is recorded under its name and the next scenario still runs. */
 const failures = [];
 /** `--only=<name>[,<name>…]` runs the named scenarios alone (the others are skipped and say so); absent, all of them run. */
@@ -458,7 +462,9 @@ await scenarioRun('switch-back', async () => {
   expect(list.some((t) => t.name === 'quota_fallback_model'), `no same-tier move: ${list.map((t) => t.name).join(',')}`);
   const switched = list.find((t) => t.name === 'entry_model_switched');
   expect(switched !== undefined && JSON.parse(switched.metadata).model === 'alpha', `the switch was not recorded: ${list.map((t) => t.name).join(',')}`);
-  expect(rows.includes('Entry model switched to alpha; it applies from the next iteration.'), `no row for the switch: ${rows.join(' | ')}`);
+  // OQ-185's ruling (R-071, PD-MONITOR-003): the row says the switch holds for the rest of this run; until 2026-10-06 it said
+  // "it applies from the next iteration".
+  expect(rows.includes(SWITCH_ROW('alpha')), `no row for the switch: ${rows.join(' | ')}`);
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   // Iteration 1: alpha refused, beta held then answered; iteration 2: alpha.
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/beta,scripted/alpha', `the next iteration did not run on the switched-to model: ${JSON.stringify(calls)}`);
@@ -550,6 +556,92 @@ await scenarioRun('quota-retry', async () => {
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/alpha,scripted-b/beta', `the calls were not alpha, alpha (the retry), beta: ${JSON.stringify(calls)}`);
   expect(kinds.filter((i) => i.kind === 'model_wait').length === 2, 'the retry did not park the run a second time');
   results.quotaRetry = { status: row.execution_status, exhausted, overrides, calls, headerDuringSecondWait: r.value.during[0]?.text ?? null, png: r.png, elapsedMs: r.elapsedMs };
+});
+
+// 4d. `keep-waiting` — OQ-188's ruling (R-071, PD-MONITOR-004): in the wait that never auto-resumes, the header's Keep waiting
+// retries the waiting pair now — `setModel` with the wait's `key`, the explicit choice of the waiting pair, which clears its
+// exclusion (REQ-MONITOR-194) and resolves the wait as a retry (REQ-MONITOR-303). Alpha refuses on quota, Keep waiting is
+// pressed, and the retry on alpha answers: the run completes on alpha with no override. Until 2026-10-06 Keep waiting said
+// "Still waiting." and sent nothing, so this run stayed parked
+// (`docs/defects/fixed/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`).
+const s4d = scenario('keep-waiting', []);
+await scenarioRun('keep-waiting', async () => {
+  const r = await drivenLaunch('keep-waiting', s4d, { ROTARIS_SCRIPT: 'fail:quota,answer' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('quota, then keep waiting', { enter: true }));
+    await step('the wait header', d.waitFor('.wait-header', { timeoutMs: 60_000 }));
+    const during = await step('the header during the wait', d.probe('.wait-header'));
+    await step('the waiting picture', d.screenshot(join(output, 'keep-waiting-waiting.png')));
+    await step('Keep waiting', d.click('.wait-header .btn-secondary', { text: 'Keep waiting' }));
+    const row = await step('the run settled', until(() => { const db = open(s4d); try { return session(db); } finally { db.close(); } }, (x) => x !== undefined && SETTLED.has(x.execution_status), { timeoutMs: 90_000, what: 'the session settling after Keep waiting', signal }));
+    const after = await step('the header after the retry', d.probe('.wait-header'));
+    return { during, row, after };
+  });
+  const db = open(s4d);
+  const row = session(db);
+  const list = names(db, row.session_id);
+  const kinds = issues(db, row.session_id);
+  const rows = systemRows(db, row.session_id);
+  db.close();
+  const header = r.value.during[0];
+  expect(header !== undefined && /Resumes only when you decide\./.test(header.text), `the wait was not the one that never auto-resumes: ${JSON.stringify(header)}`);
+  expect(row.execution_status === 'completed', `the run did not complete after Keep waiting: ${JSON.stringify(row)}`);
+  expect(!kinds.some((i) => i.kind === 'model_override_rejected'), `the retry was refused: ${kinds.filter((i) => i.kind === 'model_override_rejected').map((i) => i.message).join(' | ')}`);
+  const exhausted = list.filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata));
+  expect(exhausted.length === 2 && exhausted[0].cleared === undefined && exhausted[1].cleared === true && exhausted[1].model === 'alpha', `the exclusion was not recorded and then cleared: ${JSON.stringify(exhausted)}`);
+  expect(!list.some((t) => t.name === 'model_override'), `Keep waiting persisted an override: ${list.filter((t) => t.name === 'model_override').map((t) => t.metadata).join(' | ')}`);
+  expect(rows.some((b) => b.includes('alpha chosen during the wait on scripted/alpha: it is no longer treated as out of quota')), `no system row for the retry: ${rows.join(' | ')}`);
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
+  expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/alpha', `the calls were not alpha, then alpha retried: ${JSON.stringify(calls)}`);
+  results.keepWaiting = { status: row.execution_status, exhausted, calls, headerDuringWait: header.text, png: r.png, elapsedMs: r.elapsedMs };
+});
+
+// 4e. `switch-over-override` — OQ-177's ruling (R-071, PD-ORCH-006): every explicit switch wins. Alpha refuses on quota and
+// beta is chosen in the wait (the override alpha → beta, for the rest of the session); while iteration 1 holds on beta a
+// follow-up is queued and the entry model is switched back to alpha from the run header. The switch takes the override back,
+// so iteration 2 runs on alpha. Until 2026-10-06 the override stood and iteration 2 ran on beta, the row saying "but beta,
+// chosen for scripted/alpha during an earlier wait, stands for the rest of the session".
+const s4e = scenario('switch-over-override', []);
+await scenarioRun('switch-over-override', async () => {
+  const r = await drivenLaunch('switch-over-override', s4e, { ROTARIS_SCRIPT: 'fail:quota,wait:12000,answer,answer' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('quota, beta in the wait, then back to alpha', { enter: true }));
+    await step('the wait header', d.waitFor('.wait-header', { timeoutMs: 60_000 }));
+    await step('Change model', d.click('.wait-header .btn-secondary', { text: 'Change model' }));
+    await step('the chooser → beta', choose(d, '.wait-header button[aria-label="Change model"]', 'beta'));
+    await step('the wait ended', until(() => d.eval(`document.querySelector('.wait-header') === null`), (v) => v === true, { timeoutMs: 30_000, what: 'the wait header closing', signal }));
+    await step('the composer again', d.waitFor('.composer__input'));
+    await step('Ctrl+L again', d.chord('Ctrl+L'));
+    await step('the caret in the composer again', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the follow-up', d.type('a second task', { enter: true }));
+    await step('the follow-up queued', until(() => { const db = open(s4e); try { const row = session(db); return row === undefined ? 0 : db.prepare("SELECT COUNT(*) AS n FROM transcript_rows WHERE session_id = ? AND kind = 'user'").get(row.session_id).n; } finally { db.close(); } }, (n) => n >= 2, { timeoutMs: 10_000, what: 'the follow-up reaching the store', signal }).catch(() => 'not seen as a user row'));
+    await step('the switch → alpha', choose(d, 'button[aria-label="Active run model"]', 'alpha'));
+    const row = await step('the run settled', until(() => { const db = open(s4e); try { return session(db); } finally { db.close(); } }, (x) => x !== undefined && SETTLED.has(x.execution_status), { timeoutMs: 90_000, what: 'the session settling after the switch', signal }));
+    return { row };
+  });
+  const db = open(s4e);
+  const row = session(db);
+  const list = names(db, row.session_id);
+  const rows = systemRows(db, row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed' && row.iterations_completed === 2, `the run did not complete two iterations: ${JSON.stringify(row)}`);
+  const overrides = list.filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata));
+  expect(overrides.length === 2 && overrides[0].model_key === 'beta' && overrides[1].cleared === true && overrides[1].cause === 'superseded' && overrides[1].model === 'alpha', `the override was not set, then taken back by the switch: ${JSON.stringify(overrides)}`);
+  const order = list.map((t) => t.name).filter((n) => n === 'model_override' || n === 'entry_model_switched');
+  expect(order.join(',') === 'model_override,model_override,entry_model_switched', `the take-back is not recorded before the switch: ${order.join(',')}`);
+  expect(rows.includes(SWITCH_ROW('alpha')), `no row for the switch, or the old "stands for the rest of the session" row: ${rows.join(' | ')}`);
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
+  // Iteration 1: alpha refused, beta (chosen in the wait) held then answered; iteration 2: alpha, as the switch chose.
+  expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted-b/beta,scripted/alpha', `the next iteration did not run on the model switched to: ${JSON.stringify(calls)}`);
+  results.switchOverOverride = { status: row.execution_status, iterations: row.iterations_completed, overrides, calls, row: rows.find((b) => b.startsWith('Entry model switched')), png: r.png, elapsedMs: r.elapsedMs };
 });
 
 // 4c. REQ-ORCH-091 (d) / REQ-SESSION-026 (the repair of a-wait-choice-persists-the-override-for-the-shown-wait-alone): two

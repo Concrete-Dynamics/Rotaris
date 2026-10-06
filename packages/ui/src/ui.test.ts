@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRecord, CheckpointListPayload, SessionListItemPayload } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
-import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, statePhrase, branchLineFloor, branchColumnFit, tableFit, branchFitKey, stateFitKey, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
+import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, statePhrase, branchLineFloor, branchColumnFit, tableFit, branchFitKey, stateFitKey, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, keepWaitingAction, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
 import type { GitViewState, GitWorktreeRow } from '@rotaris/contracts';
 import { resolveTheme, isBusy, presentationStatus, EXECUTION_STATUSES, PRESENTATION_STATUSES } from '@rotaris/contracts';
 
 describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
-  const wait = { provider: 'openrouter', model: 'gpt-x', exhausted: false, resumeAt: '2026-09-05T10:00:42.000Z', attempt: 1, reason: 'Provider openrouter is rate limiting model gpt-x. Wait 42 s before retrying.', agent: 'orchestrator', rejection: null, excluded: [] };
+  const wait = { provider: 'openrouter', model: 'gpt-x', exhausted: false, resumeAt: '2026-09-05T10:00:42.000Z', attempt: 1, reason: 'Provider openrouter is rate limiting model gpt-x. Wait 42 s before retrying.', agent: 'orchestrator', rejection: null, excluded: [], modelKey: 'gpt-x' };
   it('names the provider and the model, states the exhausted mark, and counts down against the surface clock', () => {
     const at = Date.parse('2026-09-05T10:00:00.000Z');
     expect(waitHeaderText(wait, at)).toEqual({ headline: 'Waiting on a provider limit: openrouter / gpt-x (orchestrator) — provider not marked exhausted, attempt 1.', timing: 'Resumes automatically in 0:42.', remainingS: 42 });
@@ -31,6 +31,20 @@ describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
     ]);
     // A key the list does not carry is not added: the list is the configured keys (OQ on which list the picker offers).
     expect(waitModelOptions(['beta'], ['alpha']).map((o) => o.value)).toEqual(['', 'beta']);
+  });
+  /*
+   * OQ-188's ruling (R-071, PD-MONITOR-004): keep waiting retries the waiting pair now in the wait that never auto-resumes
+   * (an out-of-quota pair), through `setModel` with its key, and stays an acknowledgement in the timed wait, whose timer
+   * retries. Until 2026-10-06 it acknowledged in both (`keep-waiting-on-the-quota-wait-header-sends-nothing-…`).
+   */
+  it('OQ-188 / PD-MONITOR-004: keep waiting retries the out-of-quota pair now, and acknowledges a timed wait', () => {
+    const exhausted = { ...wait, exhausted: true, resumeAt: null, excluded: ['gpt-x'] };
+    expect(keepWaitingAction(exhausted, true)).toEqual({ kind: 'retry', key: 'gpt-x' });
+    // The timed wait: its timer retries when the provider's interval ends; keep waiting sends nothing.
+    expect(keepWaitingAction(wait, true)).toEqual({ kind: 'acknowledge' });
+    // No key names the waiting pair, or the header cannot send one: an acknowledgement, as before.
+    expect(keepWaitingAction({ ...exhausted, modelKey: null }, true)).toEqual({ kind: 'acknowledge' });
+    expect(keepWaitingAction(exhausted, false)).toEqual({ kind: 'acknowledge' });
   });
   it('a waiting session is busy and presents as running, so the composer stays locked (REQ-NOTIFY-050/051)', () => {
     expect(presentationStatus('waiting')).toBe('running');

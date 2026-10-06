@@ -186,7 +186,10 @@ export const WORKTREE_BRANCH_NOTE = 'It belongs to the isolated worktree the act
  * REQ-GIT-122/161: the status strip's branch item — the focused session's worktree branch when set, else the
  * workspace's checked-out branch with `↑<n>` when ahead; a detached checkout and a non-repository are each conveyed
  * in words distinct from a branch name and from each other; an unread repository takes the empty value. Those three
- * states follow REQ-GIT-161, where REQ-WORKSPACE-020 would render the item empty with no tooltip (OQ-193, open).
+ * states follow REQ-GIT-161, where REQ-WORKSPACE-020 would render the item empty with no tooltip (OQ-193, ruled as built
+ * 2026-10-06; PD-WORKSPACE-007). An unborn or unreadable branch is not among them and still owes REQ-WORKSPACE-020's empty
+ * item; the last line draws it as a branch named `—`, recorded in
+ * docs/defects/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md.
  *
  * REQ-WORKSPACE-020: a worktree branch is "rendered exactly as any other branch name is" — its ` ↑{n}` and its sentences are
  * the base checkout's, the count read against THAT branch's upstream (the snapshot row's `upstreamAhead`, never the base

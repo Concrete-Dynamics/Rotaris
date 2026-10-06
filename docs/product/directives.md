@@ -4405,7 +4405,10 @@ template of those three, so it gains the full stop and never renders its "(s)". 
 REQ-GIT-122 still governs, the worktree branch's included.
 
 **As built.** `branchStripItem` and `branchSentence` (`packages/ui/src/GitView.tsx`), placed by `stripItems`
-(`packages/ui/src/composer.ts`).
+(`packages/ui/src/composer.ts`). An unborn branch and a repository whose branch could not be read are not among the states
+above: REQ-WORKSPACE-020's empty item still governs them, and the build departs from it there, drawing the branch icon, `—`
+and "Branch this workspace is on: —." (recorded in
+[`the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md`](../defects/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md)).
 
 **Why, and what it costs.** OQ-193: REQ-GIT-161 requires a detached checkout and a non-repository to be conveyed, each
 distinct from a branch name and from the other, and REQ-WORKSPACE-020 requires the item to be empty in exactly those cases.

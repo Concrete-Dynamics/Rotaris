@@ -51,3 +51,13 @@ variable or no directory is refused. The first three were red before the repair.
 tests print what the command's loop prints rather than running it: **the Windows run is owed** (the PD-TOOLS-001
 PowerShell cases in `terminal.test.ts` that run only on Windows, and a hard-timeout reset under a long `Path` at a narrow
 display).
+
+**Corrected the same day after the first verification** (fin21's verifier). The claim above that a decode which does not
+open with the tag is refused "(or, read as POSIX, refused for its directory not starting with `/`)" was true only when
+the fragment did not happen to resume at a `/`: `parseSnapshot` did not know which backend had run the capture, so a
+PowerShell capture that lost its top rows and resumed inside a URL or a POSIX-style path in a value passed as a POSIX
+capture. `parseSnapshot` now takes the backend's kind (`ForegroundSession.captureState` passes its own), and a
+PowerShell read without the tag is refused whatever follows. Pinned by "a PowerShell capture that lost its top rows and
+resumes at a `/` is refused, never read as a POSIX capture" (a value whose `/` lands on byte 48, so the rows after the
+first decode to `/usr/bin\0B=two\0`): red before the change ("expected { cwd: '/usr/bin', env: { B: 'two' } } to be
+null").

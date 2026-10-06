@@ -854,11 +854,15 @@ function encodedSnapshot(output: string): string | null {
  * PD-TOOLS-001: the decoded capture — the directory, then `NAME=value` entries, each NUL-terminated; PowerShell's opens
  * with `PS_SNAPSHOT_TAG`'s field.
  */
-function parseEncodedSnapshot(encoded: string): ShellState | null {
+function parseEncodedSnapshot(encoded: string, kind: ShellBackend['kind']): ShellState | null {
   const decoded = Buffer.from(encoded, 'base64').toString('utf8');
   if (!decoded.endsWith('\0')) return null;
   const fields = decoded.slice(0, -1).split('\0');
-  const powershell = fields[0] === PS_SNAPSHOT_TAG;
+  const powershell = kind === 'powershell';
+  // PowerShell's capture is whole only when it opens with its tag. The backend decides which rule applies, never the
+  // capture: read without it, a PowerShell capture that lost its top rows and happened to resume at a `/` (inside a URL
+  // or a POSIX-style path in a value) passed as a POSIX one.
+  if (powershell && fields[0] !== PS_SNAPSHOT_TAG) return null;
   const [cwd, ...entries] = powershell ? fields.slice(1) : fields;
   const env: Record<string, string> = {};
   for (const entry of entries) {
@@ -877,12 +881,13 @@ function parseEncodedSnapshot(encoded: string): ShellState | null {
 
 /**
  * PD-TOOLS-001's parse, both backends: the encoded capture's rows, joined across the screen's wraps, decoded; null when
- * there is none or it is not whole (`encodedSnapshot`, `parseEncodedSnapshot`).
+ * there is none or it is not whole (`encodedSnapshot`, `parseEncodedSnapshot`). `kind` is the backend that ran the
+ * capture, which decides how a whole one is told.
  */
-export function parseSnapshot(output: string): ShellState | null {
+export function parseSnapshot(output: string, kind: ShellBackend['kind'] = 'posix'): ShellState | null {
   const encoded = encodedSnapshot(output);
   if (encoded === null || encoded === '') return null;
-  return parseEncodedSnapshot(encoded);
+  return parseEncodedSnapshot(encoded, kind);
 }
 
 function psQuote(s: string): string {
@@ -1839,7 +1844,7 @@ export class ForegroundSession {
     try {
       const r = await this.runRaw(snapshotCommand(this.deps.backend), SNAPSHOT_TIMEOUT_MS);
       if (r.exitCode !== 0) return null;
-      return parseSnapshot(r.output);
+      return parseSnapshot(r.output, this.deps.backend.kind);
     } catch {
       return null;
     }

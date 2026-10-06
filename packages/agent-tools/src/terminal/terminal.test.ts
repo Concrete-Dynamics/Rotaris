@@ -617,25 +617,25 @@ describe('PD-TOOLS-001: the PowerShell shell-state capture survives a screen tha
     expect(command).not.toContain('__rot_b64__:');
     expect(command).toContain('[System.Text.Encoding]::UTF8.GetBytes');
     expect(command).toContain('$__i += 64');
-    expect(parseSnapshot(`PS C:\\> ${command}\n`)).toBeNull();
+    expect(parseSnapshot(`PS C:\\> ${command}\n`, 'powershell')).toBeNull();
   });
 
   it('reads the directory and every variable back exactly off an emulated screen at every width the display may give it', async () => {
     expect(env.Path.length).toBeGreaterThan(240);
     expect(cwd.length).toBeGreaterThan(240);
     const out = `PS C:\\> ${snapshotCommand(ps)}\n${powershellCapture(cwd, env)}\n`;
-    expect(parseSnapshot(out)).toEqual({ cwd, env });
+    expect(parseSnapshot(out, 'powershell')).toEqual({ cwd, env });
     for (const cols of [20, 33, 40, 64, 75, 76, 77, 240]) {
       const screen = xtermEmulatorFactory({ cols, rows: 50, scrollback: 5_000 });
       try {
         await screen.write(out.replace(/\n/g, '\r\n'));
-        expect({ cols, snap: parseSnapshot(screen.text()) }).toEqual({ cols, snap: { cwd, env } });
+        expect({ cols, snap: parseSnapshot(screen.text(), 'powershell') }).toEqual({ cols, snap: { cwd, env } });
       } finally { screen.dispose(); }
     }
   });
 
   it('the restore built from the read sets the long Path whole, with no newline in it, and the directory last', () => {
-    const snap = parseSnapshot(powershellCapture(cwd, env));
+    const snap = parseSnapshot(powershellCapture(cwd, env), 'powershell');
     expect(snap).not.toBeNull();
     const plan = restoreCommand(ps, snap!, { cwd: 'C:\\', env: { Path: 'C:\\Windows', USERPROFILE: 'C:\\Users\\probe' } });
     expect(plan?.line).toContain(`Set-Item -LiteralPath 'Env:Path' -Value '${env.Path}'`);
@@ -646,11 +646,21 @@ describe('PD-TOOLS-001: the PowerShell shell-state capture survives a screen tha
   it('refuses a capture that lost its top rows, one that lost a row\'s continuation, and one with no variable or no directory', () => {
     const rows = powershellCapture(cwd, env).split('\n');
     expect(rows.length).toBeGreaterThan(3);
-    expect(parseSnapshot(rows.slice(1).join('\n'))).toBeNull();
+    expect(parseSnapshot(rows.slice(1).join('\n'), 'powershell')).toBeNull();
     // A row whose continuation was lost: the rows no longer carry 64 characters each.
-    expect(parseSnapshot(rows.map((r, i) => (i === 1 ? r.slice(0, 40) : r)).join('\n'))).toBeNull();
-    expect(parseSnapshot(powershellCapture(cwd, {}))).toBeNull();
-    expect(parseSnapshot(powershellCapture('', env))).toBeNull();
+    expect(parseSnapshot(rows.map((r, i) => (i === 1 ? r.slice(0, 40) : r)).join('\n'), 'powershell')).toBeNull();
+    expect(parseSnapshot(powershellCapture(cwd, {}), 'powershell')).toBeNull();
+    expect(parseSnapshot(powershellCapture('', env), 'powershell')).toBeNull();
+  });
+
+  it('a PowerShell capture that lost its top rows and resumes at a `/` is refused, never read as a POSIX capture', () => {
+    // The tag, NUL, `C:\w` and NUL are 16 bytes and `X=` two more, so a value of 30 characters puts its `/` at byte 48:
+    // the first 64-character row is exactly 48 bytes, and the rows after it decode to `/usr/bin\0B=two\0`, a POSIX
+    // directory and one variable.
+    const rows = powershellCapture('C:\\w', { X: `${'a'.repeat(30)}/usr/bin`, B: 'two' }).split('\n');
+    const lost = rows.slice(1).join('\n');
+    expect(parseSnapshot(lost, 'posix')).toEqual({ cwd: '/usr/bin', env: { B: 'two' } });
+    expect(parseSnapshot(lost, 'powershell')).toBeNull();
   });
 });
 

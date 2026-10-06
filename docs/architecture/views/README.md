@@ -1311,8 +1311,9 @@ paragraph says so. No package, edge, process, channel, message kind or store col
 `onToolStarted`, and `ConversationRecord` gains `everRecorded`, which a resumed child reads so that its one corrective
 message stays one per task. The watch writes a `stall` issue at every stall evaluation; the wait on tools, the recovery
 and the corrective message are session-log lines through the run's `warn`, since REQ-ORCH-139's vocabulary has no
-timeline word for them (OQ-127). The **runtime view**'s §4 names it. No package, edge, process, channel,
-command or store table changes.
+timeline word for them (OQ-127). *(2026-10-06: OQ-127 ruled — the issue only with the throttled warning
+(PD-MONITOR-005 revision 2), the three facts timeline entries, the waits and the recovery at INFO; see that date's entry
+above.)* The **runtime view**'s §4 names it. No package, edge, process, channel, command or store table changes.
 
 **A child settled without its turn gets its report (REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-108, 2026-09-29, R-067).**
 The scheduler's blocking cascade stores each blocked child's `blocked` report and artifact before its parent is told.

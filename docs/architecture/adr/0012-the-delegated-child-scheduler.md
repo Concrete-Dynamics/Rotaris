@@ -546,8 +546,9 @@ not a child's. The badge the callback exists for is not wired to any host. The r
 each throttled warning, on the reasoning that an issue every 5 s would evict the session's other issues from
 REQ-SESSION-133's ring. That reasoning narrowed REQ-MONITOR-119's "every stall evaluation", whose throttle
 (REQ-MONITOR-120) bounds only "the warning itself", so it is kept here as the falsified reason: the issue is now
-written at every evaluation, and the eviction is left to a ruling in OQ-127. The same round recorded in OQ-127 that
-three of the timeline words the watch and the recovery write are outside REQ-ORCH-139's closed vocabulary.
+written at every evaluation, and the eviction is left to a ruling in OQ-127 *(ruled 2026-10-06: the issue is written
+with the warning again, by PD-MONITOR-005 revision 2; see the pointer at this section's end)*. The same round recorded
+in OQ-127 that three of the timeline words the watch and the recovery write are outside REQ-ORCH-139's closed vocabulary.
 
 **Corrected in place by the verifier's second round, 2026-09-29.** Two claims above were narrower than they read.
 "Once per child … state the execution keeps across attempts" is true of REQ-ORCH-088's retry and false of PD-ORCH-005's
@@ -557,7 +558,8 @@ reads started again only at the attempt's start, a tool result and the correctiv
 own children past the window was blamed for the wait; every turn the run starts for the child now starts it again.
 Neither changes the decision: the watch still reads only the clock port and the child's own events. The three timeline
 words are no longer written: they are session-log lines through the run's `warn`, as OQ-76's are, the reason for
-minting them (that the log was out of reach without editing `Run.turn`) having been false. `children.test.ts` now has
+minting them (that the log was out of reach without editing `Run.turn`) having been false. *(2026-10-06: they are timeline
+entries again, under OQ-127's ruling; see the pointer at this section's end.)* `children.test.ts` now has
 nine cases, `stall.test.ts` twelve, and `record.test.ts` one more.
 
 **Repaired in place by acceptance finding A7, 2026-09-30.** The watch's own evaluation still read the time since the
@@ -569,6 +571,20 @@ watch and `stall.test.ts` fourteen, each new one failing with the limb reverted.
 execution resumed into waiting (PD-ORCH-005 clause 4) ends no turn before its wait, so the turn's end never marked it and
 the wait was still counted; `execute` now marks such an execution between turns as its watch is armed, and
 `children.test.ts` has eleven cases for the watch.
+
+*(2026-10-06, [R-071](../../product/requests.md#r-071): OQ-127 ruled as recommended, and two statements of the verifier's
+rounds above, kept as they were written, no longer describe the build. The issue:
+[`PD-MONITOR-005`](../../product/directives.md#pd-monitor-005) revision 2 (narrowing REQ-MONITOR-119) writes the `stall`
+issue only beside the throttled warning — at entry, then no sooner than REQ-MONITOR-120's throttle — so the reason the
+first round kept as falsified, the eviction from REQ-SESSION-133's ring, is now the owner's rule; the callback still
+fires at every evaluation. The three facts: the wait on tools, the recovery and the corrective message are the `waiting_on_tools`,
+`stall_recovered` and `corrective_message` timeline entries, words of [`PD-ORCH-014`](../../product/directives.md#pd-orch-014)
+given under OQ-157, each beside its session-log line; the wait on tools and the recovery are intended states logged at
+`INFO` through the run's `info`, and only the stall warning and the corrective-message line stay at `WARNING`.
+`stallRecords` and `recordCorrectiveMessage` in `children/stall.ts` are the one writer for a child's watch and the
+root's. The decision is unchanged: the watch still reads only the clock port and the agent's own events, and cancels
+nothing. Pinned by `stall.test.ts` ("OQ-127's ruling …") and `children.test.ts` ("PD-MONITOR-005 revision 2 …", and the
+wait and recovery cases for a child and the root).)*
 
 ## First execution of the process-wide count — 2026-09-30: the cap was one iteration's
 

@@ -25,6 +25,7 @@ whatever the agent ended as), REQ-ORCH-088 (the retry).
 ## Relevant files
 
 - `packages/engine/src/children/orchestration.ts` — the attempt loop's `live` and `spent`, and the settle's `toolCalls`.
+- `packages/engine/src/run/turn.ts` — `toolCallCount`, the count a replay joins without being dispatched (`onToolCounted` since repair round 1).
 - `packages/engine/src/run/ladder.test.ts` — the OQ-116 fallback-retry case beside which the repair's cases stand.
 
 ## Outcome
@@ -40,3 +41,14 @@ with the root's delegate.
 Pinned by two cases in `packages/engine/src/run/ladder.test.ts`: the raising attempt with the retry's replay (red on the code
 before: the child read 1) and the replaced attempt's own unfinished call alone (the `spent` limb; green before and after).
 `PD-ORCH-008`'s first-execution report carries the correction in place.
+
+**Repair round 1 (fin22's verifier).** The repair above still lost a call in two shapes, reproduced by the bundle's verifier
+and pinned here before the change: a raised attempt's own replay (attempt 1 completes `g1`, then asks for `g1` again beside
+`boom`, which raises after the ceiling — `onToolStarted` never fires for a replay, so the child read 2 where 3 were made),
+and an attempt whose outcome was kept from its first turn while a REQ-ORCH-095 re-prompt (or OQ-127 corrective turn) that
+raised added completed calls to `attemptLive` (the re-prompt completes `g1`, then `boom` raises — 1 where 2). The reason the
+first repair gave, "the calls it dispatched less those it completed", is falsified for both and kept above beside its
+replacement: `unfinished()` is now every call the attempt's turns counted (`attemptCounted`, told by the turn's new
+`TurnDeps.onToolCounted` at the point it counts a call, a replay included) less those it completed, whether or not the
+attempt left an outcome. Pinned by two more cases in `ladder.test.ts` ("a raised attempt's own replayed call…" and "a call
+the re-prompt started and never completed…"), each red on the first repair (2 against 3, 1 against 2).

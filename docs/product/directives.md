@@ -3378,6 +3378,15 @@ per pass, and one more counter on the session's row for a plan cycle's root, whi
 > it dispatched less those it completed (`unfinished` in `IterationChildren.execute`). Two cases in `run/ladder.test.ts`:
 > the raising attempt and the retry's replay (red on the code before), and the replaced attempt's own unfinished call (the
 > `spent` limb alone, green before and after).
+>
+> **Corrected again 2026-10-06 (fin22, repair round 1).** That repair's remainder still lost a call in two shapes, both
+> reproduced by the bundle's verifier: a raised attempt's calls were read from `onToolStarted`, which a call answered from a
+> replay never fires (attempt 1 completes `g1`, asks for `g1` again beside `boom`, and `boom` raises: 2 counted where 3 were
+> made), and an attempt with an outcome kept its first turn's count while its completed calls took in a REQ-ORCH-095
+> re-prompt's or OQ-127 corrective turn's that then raised (the re-prompt completes `g1` and `boom` raises: 1 where 2). The
+> remainder is now every call the attempt's turns counted, a replay included (`attemptCounted`, told by the turn's new
+> `onToolCounted` as it counts each call), less those it completed, with or without an outcome. Two more cases in
+> `run/ladder.test.ts`, one per shape, red on the first repair.
 
 ---
 

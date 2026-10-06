@@ -51,8 +51,9 @@ so the run's later saves on the way to rest no longer write `running` again. The
 package, edge, process, channel, command or store column changed.
 
 **A child's unfinished calls are counted per attempt (`PD-ORCH-008`; fin22).** `IterationChildren.execute`'s settle counts
-each attempt's calls started and never completed (`unfinished`: the outcome's count less the attempt's completed calls, or
-its dispatched calls less them when it raised), so an attempt REQ-ORCH-088's fallback replaced no longer hides the retry's.
+each attempt's calls started and never completed (`unfinished`: every call the attempt's turns counted, a replay included,
+told by the new `TurnDeps.onToolCounted`, less those it completed, with or without an outcome), so an attempt REQ-ORCH-088's
+fallback replaced no longer hides the retry's, and a re-prompt that raised loses none of its own.
 The **runtime view**'s `entryToolCalls` paragraph says so. No package, edge, process, channel, command or store column
 changed.
 

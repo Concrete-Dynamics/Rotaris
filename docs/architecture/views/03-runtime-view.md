@@ -819,8 +819,11 @@ derives it as the total less the children's (`runLevelAgent`). A root's calls jo
 (`countRootCall` in `Run.turn`, `countCall` in `IterationChildren.execute`; a plan cycle's root on `sessions.plan_root_tool_calls`,
 store v32, without releasing it), and the pass's end adds only what was not counted as it completed — so the live root's
 uncounted calls are those in flight. A child's remainder is taken per attempt (fin22): each attempt's calls started and never
-completed — its outcome's count less its completed calls, or its dispatched calls less them when it raised — so an attempt
-REQ-ORCH-088's fallback replaced never hides the retry's unfinished call behind the calls it completed. It is the
+completed — every call its turns counted, a replay included (`attemptCounted`, from `TurnDeps.onToolCounted`, which the turn
+fires as it counts a call), less its completed calls, whether or not it left an outcome — so an attempt REQ-ORCH-088's
+fallback replaced never hides the retry's unfinished call behind the calls it completed, and a re-prompt or corrective turn
+that raised loses none of its own. (fin22's first repair read a raised attempt's calls from `onToolStarted`, which a replay
+never fires, and an attempt with an outcome from that outcome alone; both lost a call.) It is the
 agent's own count (REQ-MONITOR-044/052), not REQ-MONITOR-101's aggregate run count for the synthetic root; which of the two
 the run-level agent shows was **OQ-159**, ruled 2026-10-06 as built ([`PD-MONITOR-003`](../../product/directives.md#pd-monitor-003)):
 the figure is the agent's own, and the run's aggregate is REQ-MONITOR-102's displayed total. **`SessionRecord.compressions`**

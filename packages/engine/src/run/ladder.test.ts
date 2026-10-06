@@ -2342,6 +2342,58 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   });
 
   /*
+   * The fin22 verifier's two shapes of the same finding: the remainder of an attempt that raised was its dispatched calls
+   * (`onToolStarted`) less those it completed, and a replayed call is never dispatched; and an attempt whose re-prompt
+   * raised kept its first turn's outcome while its completed calls included the re-prompt's. Each attempt's remainder is
+   * now every call its turns counted, a replay included, less those it completed — with or without an outcome.
+   */
+  it('PD-ORCH-008: a raised attempt\'s own replayed call is counted beside the call it started and never completed', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    let fail!: () => void;
+    const failing = new Promise<void>((r) => { fail = r; });
+    const tool: TestTool = (name) => (name === 'boom' ? failing.then(() => { throw new Error('the port raised'); }) : undefined);
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer('finished');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      // Attempt 1 completes g1; its next step asks for g1 again (the replay) and boom, which raises after the ceiling.
+      if (turn === 1) return toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Looking.');
+      if (turn === 2) return toolCalls([{ callId: 'g1', name: 'grep', args: {} }, { callId: 'b1', name: 'boom', args: {} }], 'Trying.');
+      return answer('I did it on the fallback.');
+    };
+    const s = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true, tool });
+    const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    clock.advance(10_000);
+    fail();
+    await tick();
+    expect((await s.sessions.running(sid)!).status).toBe('completed');
+    expect(timeline(sid)).toContain('fallback_model');
+    expect(issues(sid)).toContain('child_exception');
+    // g1, its replay and boom: three calls, all in the attempt the retry replaced. Before the repair the replay was lost (2).
+    expect(dal.childrenOf(sid)[0]).toMatchObject({ state: 'succeeded', tool_calls: 3 });
+    expect(dal.getSession(sid)!.tool_calls).toBe(4);
+  });
+
+  it('PD-ORCH-008: a call the re-prompt started and never completed is counted when the re-prompt raises', async () => {
+    const tool: TestTool = (name) => (name === 'boom' ? Promise.reject(new Error('the port raised')) : undefined);
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quiet', task: 'TASK: be quiet' } }]) : answer('finished');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      // The child answers nothing, so REQ-ORCH-095's re-prompt is due; the re-prompt completes g1, then boom raises.
+      if (turn === 1) return answer('');
+      if (turn === 2) return toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Looking.');
+      return toolCalls([{ callId: 'b1', name: 'boom', args: {} }], 'Trying.');
+    };
+    const s = sessionsWith(script, { delegation: true, tool });
+    const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await s.sessions.running(sid)!).status).toBe('completed');
+    expect(issues(sid)).toContain('child_exception');
+    // g1 completed and boom started: two calls. Before the repair the first turn's outcome (0) less the completed g1 hid boom (1).
+    expect(dal.childrenOf(sid)[0]).toMatchObject({ state: 'failed', tool_calls: 2 });
+    expect(dal.getSession(sid)!.tool_calls).toBe(3);
+  });
+
+  /*
    * PD-ORCH-004 on REQ-ORCH-088's own path: the parts of the progress rule that only the timeout's machinery can
    * exercise — the fallback retry, the landing grace and the role's window. Each child here runs under a 10 s limit.
    */

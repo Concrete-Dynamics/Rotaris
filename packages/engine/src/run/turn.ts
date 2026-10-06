@@ -182,6 +182,12 @@ export interface TurnDeps {
   readonly onToolCompleted?: ((call: PortToolCall, result: PortToolResult) => void) | undefined;
   /** REQ-ORCH-089: every tool call this agent dispatches, as it starts; `onToolCompleted` reports its end. The children's stall watch reads both. */
   readonly onToolStarted?: ((call: PortToolCall) => void) | undefined;
+  /**
+   * PD-ORCH-008: every call this turn counts in its `toolCallCount`, as it counts it — a call it dispatches and one answered
+   * from a replay (REQ-ORCH-141) alike, and before either. A turn that raises returns no count, so the children's settle
+   * reads an attempt's calls from this, and counts what it never completed (fin22's repair round).
+   */
+  readonly onToolCounted?: (() => void) | undefined;
   /** REQ-ORCH-089: every part each model step streams, by its kind (`TurnSink.event`) — the stall watch's "model event or token". */
   readonly onModelEvent?: ((kind: string) => void) | undefined;
   /**
@@ -407,6 +413,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
         continue;
       }
       toolCallCount += 1;
+      deps.onToolCounted?.();
       deps.supervisor?.observe({ kind: 'tool', name: c.name, args: c.args });
       const prior = deps.dispatched.get(c.callId);
       if (prior !== undefined) {

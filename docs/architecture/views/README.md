@@ -51,11 +51,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 (`records_kept`); a whole ring's count reads plain. The live run's reader (`lib/summary-sections.mjs`) reads either form. The
 **runtime view**'s `summary.md` paragraph says so. No package, edge, process, channel, command or store column changed.
 
-**No control accepted after the teardown wrote the run's end writes over it (REQ-SESSION-186, REQ-SESSION-094, OQ-165; finacc3 F05).**
-`Run.endWritten` (`ended`, or `cancelWindowClosed`, set just before the terminal transaction with nothing awaited between)
-refuses the stop (`acceptsStop`, which `Sessions.control`'s `cancel` reads before raising it), the pause, the mode change and
-the todo edits, and `saveRunning` writes nothing from there; a stop accepted while the teardown forwarded the terminal pair
-or ran the hooks advisory had saved `cancelling` over the run's end. The **runtime view**'s control table says so. No package,
+**No control accepted after the run's end is written writes over it (REQ-SESSION-186, REQ-SESSION-094, OQ-165; finacc3 F05).**
+`Run.endWritten` (`ended`; `cancelWindowClosed`, set just before the teardown's terminal transaction with nothing awaited
+between; or `restWritten`, set straight after the message-limit pause's or the plan gate's park's rest transaction) refuses
+the stop (`acceptsStop`, which `Sessions.control`'s `cancel` reads before raising it), the root's explicit cancel, the pause,
+the mode change and the todo edits, and `saveRunning` writes nothing from there; a stop accepted while the teardown forwarded
+the terminal pair or ran the hooks advisory, or while a rest was forwarded or its `session_end` hooks ran, had saved
+`cancelling` over the run's end or rest. The **runtime view**'s control table says so. No package,
 edge, process, channel, command or store column changed.
 
 **Undoing a `write_file` create removes only the file it made (REQ-TOOLS-132, REQ-TOOLS-135; fin26).** A create's `UndoEntry`

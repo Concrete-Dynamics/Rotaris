@@ -38,3 +38,26 @@ teardown wrote the run's end saves an active status over it" (red before: the pa
 record reading `running`). `pnpm composer-proof` and `pnpm mission-proof` (the stop and cancel controls on the built app, the
 run at rest `paused` / `user_cancelled`) pass on the repaired build; neither can place a press inside the teardown's window,
 which only the unit tests reach.
+
+**The same window on the run's two other ends (found by the repair's first verifier, repaired in the same bundle).** The
+message-limit pause (`pauseAtLimit`, `writer.pauseAtLimit`) and the plan gate's park (`parkAtPlanGate`,
+`writer.openPlanGate`) write a rest that is not a termination (`paused_message_limit`, `awaiting_plan_decision`) and then
+forward it (`drain`) and run the `session_end` hooks — a wider window than the teardown's, user hook commands running there
+— before `ended`. `cancelWindowClosed` was set only in the teardown, so a stop accepted there was answered `ok` and saved
+`cancelling` over the rest (the verifier's reproductions: `paused_message_limit` → `cancelling`, `awaiting_plan_decision` →
+`cancelling`, each held after the run returned at rest); the root's `cancelAgent` and the pause did the same. The repair
+treated the teardown only, a symptom of the root: the guard named one of the three ends. `Run.restWritten`, set straight
+after each of the two rest transactions (once it succeeded, with nothing awaited between), now folds into `endWritten`
+beside `ended` and `cancelWindowClosed`, and the root's `cancelAgent` reads `endWritten` rather than `cancelWindowClosed`. So
+the stop, the root cancel, the pause, the mode change and the todo edits are refused from each rest's write, and
+`saveRunning` writes nothing over it; the rest's own cancel (`continueSession(…, 'cancel')`, `planDecision(…, 'cancel')`)
+answers once the run has ended, as before. Pinned by "no control accepted after the message-limit pause wrote its rest saves
+an active status over it" in `packages/engine/src/control.test.ts` (red before: the pause, the stop and the root cancel each
+`{ ok: true }`, the record `cancelling`) and "no stop accepted after the park wrote the hold saves `cancelling` over it" in
+`packages/engine/src/run/plan-gate.test.ts` (red before: both `{ ok: true }`, the record `cancelling`), each holding the
+rest's forwarding with a blocking bus consumer.
+
+A todo edit sent inside any of the three windows is refused (`{ ok: false }`): `Sessions.control` routes `editTodo` to the
+stored path (`editStoredTodo`) only once the run has ended, and the run refuses it once its end is written, so the same edit
+sent an instant later, after `ended`, succeeds through the stored path. That is the price of the window being short and
+the edit being re-sendable; no status is written either way.

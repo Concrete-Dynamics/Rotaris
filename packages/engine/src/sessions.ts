@@ -1951,8 +1951,9 @@ export class Sessions {
     const text = (key: string): string | null => { const v = req.args[key]; return typeof v === 'string' && v.trim() !== '' ? v : null; };
     switch (req.op) {
       case 'cancel': {
-        // finacc3 F05: refused once the run's teardown has written its end, as the explicit cancel is; before, the stop was
-        // answered `ok` there and saved `cancelling` over the terminal status.
+        // finacc3 F05: refused once the run's end is written — the teardown's terminal status, or the rest the message-limit
+        // pause or the plan gate's park wrote — as the explicit cancel is; before, the stop was answered `ok` there and saved
+        // `cancelling` over that end. The rest's own cancel (`continueSession`, `planDecision`) answers it once the run has ended.
         if (!run.acceptsStop) return { ok: false };
         // REQ-SESSION-186: a second activation while the stop is pending forces.
         const force = req.args['force'] === true || run.stop.requested;

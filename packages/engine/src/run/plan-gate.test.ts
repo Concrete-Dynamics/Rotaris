@@ -143,6 +143,34 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('steering_'))).toEqual([]);
   });
 
+  /**
+   * The repair of `docs/defects/fixed/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md`
+   * (finacc3 F05, found by its first verifier): the park writes `awaiting_plan_decision` and then forwards it and runs the
+   * `session_end` hooks before the run has ended. A stop or a root cancel accepted in that window saved `cancelling` over
+   * the hold, which nothing wrote again, so the record claimed a stop in flight with the gate open. Both are refused there;
+   * the gate's own cancel answers the hold.
+   */
+  it('REQ-SESSION-186 / REQ-MONITOR-127/130 with OQ-165 (finacc3 F05): no stop accepted after the park wrote the hold saves `cancelling` over it', async () => {
+    let release!: () => void;
+    const parkHold = new Promise<void>((r) => { release = r; });
+    let parking = false;
+    const sessions = sessionsWith(scripted([answer('Step 1: do it.')]).backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    sessions.bus.attach(sid, { mode: 'blocking', deliver: () => { if (dal.timelineOf(sid).some((t) => t.name === 'plan_gate_opened')) { parking = true; return parkHold; } return undefined; } });
+    await vi.waitFor(() => { expect(parking).toBe(true); });
+    expect(sessions.run(sid)!.isEnded).toBe(false);
+    expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+    const seen = [
+      sessions.control({ op: 'cancel', sessionId: sid, args: {} }),
+      sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } }),
+    ];
+    expect([...seen, dal.getSession(sid)!.execution_status]).toEqual([{ ok: false }, { ok: false }, 'awaiting_plan_decision']);
+    release();
+    expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+    expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+    expect(sessions.planDecision(sid, 'cancel').ok).toBe(true);
+  });
+
   /*
    * Found by the fourth review of the same repair: the park's close sat before the two branches that end the run instead
    * of parking it, so a steer pending when the plan cycle was stopped, quit, or ended by its failed turn was recorded as

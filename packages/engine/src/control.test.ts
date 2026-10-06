@@ -231,6 +231,44 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     expect(dal.residentRows(sid).filter((r) => r.kind === 'system').map((r) => r.body)).toContain(steering[1]!.message);
   });
 
+  /**
+   * The repair of `docs/defects/fixed/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md`
+   * (finacc3 F05, found by its first verifier): the message-limit pause writes the run's rest and then forwards it and runs
+   * the `session_end` hooks before the run has ended. A stop, a root cancel or a pause accepted in that window saved
+   * `cancelling` or `pausing` over `paused_message_limit`, and nothing wrote the rest again. Each is refused there, as at
+   * the teardown's end.
+   */
+  it('REQ-SESSION-186 / REQ-MONITOR-123/127/130 with OQ-165 (finacc3 F05): no control accepted after the message-limit pause wrote its rest saves an active status over it', async () => {
+    let release!: () => void;
+    const pauseHold = new Promise<void>((r) => { release = r; });
+    let atPause = false;
+    const sessions = makeSessions(many(6), { messageLimit: 1 });
+    const started = sessions.start(dal, 'C:/ws', 'limited');
+    if (!started.ok) throw new Error(started.error.reason);
+    const sid = started.value;
+    sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'more work' } });
+    // REQ-EVENTS-165: the pause's drain waits on this consumer once the rest is recorded, before the run has ended.
+    sessions.bus.attach(sid, { mode: 'blocking', deliver: () => {
+      if (dal.timelineOf(sid).some((t) => t.name === 'run_paused_message_limit')) { atPause = true; return pauseHold; }
+      return undefined;
+    } });
+    await vi.waitFor(() => { expect(atPause).toBe(true); });
+    expect(sessions.run(sid)!.isEnded).toBe(false);
+    expect(dal.getSession(sid)!.execution_status).toBe('paused_message_limit');
+    const seen = [
+      sessions.control({ op: 'pause', sessionId: sid, args: {} }),
+      sessions.control({ op: 'cancel', sessionId: sid, args: {} }),
+      sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } }),
+    ];
+    expect([...seen, dal.getSession(sid)!.execution_status]).toEqual([{ ok: false }, { ok: false }, { ok: false }, 'paused_message_limit']);
+    release();
+    expect((await sessions.running(sid))?.execution_status).toBe('paused_message_limit');
+    expect(dal.getSession(sid)).toMatchObject({ execution_status: 'paused_message_limit', paused_at_count: 1, message_limit: 1 });
+    expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('run_pause_requested');
+    // The rest's own cancel is unchanged: it still ends the paused session.
+    expect(sessions.continueSession(sid, 'cancel')).toEqual({ ok: true, value: { resumed: false, messageLimit: 1 } });
+  });
+
   it('cancel at the limit sets paused with stop reason message_limit_reached; a null limit cannot resume and warns (REQ-SESSION-110)', async () => {
     const notices: RunNotice[] = [];
     const sessions = makeSessions(many(4), { messageLimit: 1, notice: (n) => { notices.push(n); } });

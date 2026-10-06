@@ -519,9 +519,17 @@ export class Run {
   /**
    * PD-ORCH-005 clause 3: teardown has passed the point where the explicit cancel can still close anything. Set just before
    * the terminal transaction writes the run's end, with nothing awaited between, so it also marks the end as written: from
-   * here no control of the run is accepted and no save of it writes a non-terminal status over that end (`endWritten`).
+   * here no control of the run is accepted and no save of it writes a non-terminal status over that end (`endWritten`). The
+   * teardown is one of the run's three ends; the two rests that are not terminations mark theirs with `restWritten`.
    */
   private cancelWindowClosed = false;
+  /**
+   * finacc3 F05 (its first verifier): the run's rest is written — the message-limit pause's (`pauseAtLimit`) or the plan
+   * gate's park (`parkAtPlanGate`) — set straight after the writer's transaction with nothing awaited between. Like
+   * `cancelWindowClosed` at the teardown, it marks the end as written (`endWritten`) while the rest is still forwarded and
+   * the `session_end` hooks run, before `ended`.
+   */
+  private restWritten = false;
   private pausedAtLimit: { count: number; limit: number | null } | null = null;
   /**
    * REQ-ORCH-153: whether this run is held at the plan gate. Settled once, after the pre-flight and before the
@@ -2277,14 +2285,15 @@ export class Run {
     return true;
   }
   /**
-   * REQ-SESSION-094 with OQ-165 (finacc3 F05): the teardown has written the run's end, or is about to with nothing awaited
-   * before it. `ended` is set only in the teardown's last `finally`, after it forwarded the terminal pair and ran the hooks
-   * advisory; a control accepted between the two saved `cancelling`, `pausing` or `running` over the terminal status, and
-   * nothing wrote the end again
+   * REQ-SESSION-094 with OQ-165 (finacc3 F05): the run's end is written — the teardown's terminal status (or about to be,
+   * with nothing awaited before it), or a rest that is not a termination: `paused_message_limit` or
+   * `awaiting_plan_decision`. `ended` is set only after each of the three forwarded what it wrote and ran the `session_end`
+   * hooks (and, at the teardown, the hooks advisory); a control accepted between the write and `ended` saved `cancelling`,
+   * `pausing` or `running` over that end, and nothing wrote it again
    * (`docs/defects/fixed/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md`).
    */
   private get endWritten(): boolean {
-    return this.ended || this.cancelWindowClosed;
+    return this.ended || this.cancelWindowClosed || this.restWritten;
   }
   /** REQ-SESSION-186: whether the stop control is still accepted — refused, as the explicit cancel is, once the end is written. */
   get acceptsStop(): boolean {
@@ -2678,6 +2687,8 @@ export class Run {
     this.sampleTokens(false);
     writer.pauseAtLimit(count, limit, { ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), iterations_completed: count, todo: this.todoJson(), progress: JSON.stringify(this.progress()) });
     if (writer.failed) return this.teardown('agent_session_aborted');
+    // finacc3 F05: the rest is written; no control accepted from here saves an active status over it (`endWritten`).
+    this.restWritten = true;
     owner.flushPending();
     try { await this.drain(); } catch (cause) { this.deps.warn(`forwarding the pause failed on ${this.sessionId}: ${String(cause)}`); }
     const usage = this.aggregates.usagePayload();
@@ -2783,6 +2794,8 @@ export class Run {
       ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), todo: this.todoJson(), progress: JSON.stringify(this.progress()),
     });
     if (!opened.ok || writer.failed) return this.teardown('agent_session_aborted');
+    // finacc3 F05: the hold is written; no control accepted from here saves an active status over it (`endWritten`).
+    this.restWritten = true;
     owner.flushPending();
     try { await this.drain(); } catch (cause) { this.deps.warn(`forwarding the plan gate failed on ${this.sessionId}: ${String(cause)}`); }
     // REQ-HOOKS-126: the attachment goes the way it does at a pause; the hook engine withheld every command this
@@ -2844,8 +2857,10 @@ export class Run {
   cancelAgent(taskId: string): boolean {
     if (this.ended) return false;
     if (this.isRootAgent(taskId)) {
-      // Clause 3: a cancel that lands after teardown can no longer close what the rest left open is refused, not lost.
-      if (this.cancelWindowClosed) return false;
+      // Clause 3: a cancel that lands after teardown can no longer close what the rest left open is refused, not lost; so is
+      // one that lands after the message-limit pause or the park wrote its rest (finacc3 F05), which the rest's own cancel
+      // (`continueSession`, `planDecision`) answers once the run has ended.
+      if (this.endWritten) return false;
       this.stop.request('user_cancelled', false, true);
       // OQ-103's last question, ruled (R-067): the cancel is made durable when it is accepted, so a host that dies before
       // this run carries it out leaves the next repair or continue to end its agents `cancelled`, never to resume them.
@@ -2870,7 +2885,7 @@ export class Run {
    * (`docs/defects/fixed/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md`).
    */
   stopAccepted(): boolean {
-    // finacc3 F05: refused once the teardown has written the run's end, as the explicit cancel is (`cancelAgent`).
+    // finacc3 F05: refused once the run's end is written — the teardown's, or a rest's — as the explicit cancel is (`cancelAgent`).
     if (this.endWritten) return false;
     this.cancelSaved = true;
     this.saveRunning({});

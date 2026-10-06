@@ -9146,7 +9146,10 @@ the wait ends however it ends); an evaluation past the threshold then reports no
 so no `stall` issue is written and no stalled seconds reach the record. The silence is logged at REQ-MONITOR-118's
 informational level, in its manner, as `… waiting on a provider limit: …` (or `a retry backoff`, `a context
 compression`), at entry and at each repeat the throttle allows, to the session log through the run's `warn`, as OQ-127
-reads for the wait on tools; no timeline word is minted. A stall under way when such a wait begins is over, and not
+reads for the wait on tools; no timeline word is minted. *(Since OQ-127's ruling, 2026-10-06, [R-071](../product/requests.md#r-071):
+through the run's `info`, at `INFO`, by `stallRecords` in `packages/engine/src/children/stall.ts` — the `warn` channel
+above no longer holds; still no timeline word for this wait. This is a correction of the build's state, not a ruling of
+this question.)* A stall under way when such a wait begins is over, and not
 recovered (OQ-153). The wait's end restarts the silence, as a tool call's result does, so the next step is counted from
 it, and so is REQ-NOTIFY-112's window. The root's watch and each child's are wired alike (`Run.turn`, `execute`; tests
 in `stall.test.ts`, `ladder.test.ts` and `compression.test.ts`; `resilience-proof`'s `quota-wait` scenario).

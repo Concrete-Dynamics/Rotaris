@@ -247,8 +247,9 @@ sandbox meaningful.
 
 The one part of the specification's own vocabulary this topology does not settle is the queued-prompt
 service, which `REQ-CHAT-041` scopes to windows and runs "sharing the same process". It is placed in the
-run host, where prompts are consumed and where session ownership is enforced, and that placement is
-carried as open question **OQ-1**.
+run host, where prompts are consumed and where session ownership is enforced, and that placement ~~is
+carried as open question **OQ-1**~~ was carried as **OQ-1**, closed 2026-09-07: `REQ-CHAT-041` now scopes the queue to
+the application instance and session ID, with the run host its authoritative owner.
 
 ---
 
@@ -1816,7 +1817,8 @@ out whether anything is still waiting on a person: **nothing is.**
    holding a gate about mechanism for material no mechanism depends on delays every unrelated decision and
    improves none. But the other half of that finding is acted on too — **no screen can be built without
    it** — and it is recorded as **IC-2** in `implementation-conditions.md` rather than left as an
-   observation. OQ-30's theme palettes and token values stay open and stay the reference's, with the
+   observation. OQ-30's theme palettes and token values ~~stay open and~~ stay the reference's *(OQ-30 closed
+   2026-09-04 by the IC-2 implementation; IC-2 still bounds `REQ-SHELL-128`'s other two themes)*, with the
    information architecture of the seven views, the benchmark and diagnostics layouts, and
    `REQ-SHELL-149`'s glyph vocabulary.
 

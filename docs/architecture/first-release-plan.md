@@ -21,7 +21,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 | In the first release | Where it stands | Section |
 |---|---|---|
 | Skills — discovery, the catalog, load modes, the Settings tab, skill commands, `/skill <path>` | built 2026-09-15 (ADR-0063; `pnpm skills-proof`) | §2 |
-| Skills — `/skills`, REQ-CHAT-162's listing | ~~**not built** (`SKILLS_LISTING_NOT_BUILT`, `packages/ui/src/slash/skills.ts`)~~ **built 2026-09-27** (`pnpm skills-proof`, launches 1c and 1d); OQ-67 open against its reach from Settings | §2 |
+| Skills — `/skills`, REQ-CHAT-162's listing | ~~**not built** (`SKILLS_LISTING_NOT_BUILT`, `packages/ui/src/slash/skills.ts`)~~ **built 2026-09-27** (`pnpm skills-proof`, launches 1c and 1d); OQ-67 on its reach from Settings ruled 2026-10-06 as built ([R-071](../product/requests.md#r-071)): the Skills tab's table is that reach | §2 |
 | Skills — ESC-37, ESC-38, ESC-39 | **ruled 2026-09-27** as recommended ([R-052](../product/requests.md#r-052)); amended | §2 |
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
 | Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **built 2026-09-27** (`pnpm injection-proof`); the bound **met on Linux**, the Windows gate-class reading **owed**; OQ-64 **ruled 2026-09-27**; OQ-68 raised | §3 |
@@ -34,9 +34,10 @@ record already decides, and every ruling it needs is named as the owner's rather
   PKCE authenticators, Git integration and merge, the manual compression part, and persona memory.
 - The open notes in `../defects/`. *Since 2026-09-29 ([R-067](../product/requests.md#r-067)) the owner has ruled the
   decisions five of them waited on — ESC-42's floor, OQ-103's cancel in flight, REQ-LIBRARY-092's fallback (OQ-113),
-  `delegate`'s `session_id` (OQ-66; built 2026-09-29, its note in `fixed/`, OQ-131 open on the readings built) and the graceful stop's status (OQ-96, whose note is settled) — and has directed that
+  `delegate`'s `session_id` (OQ-66; built 2026-09-29, its note in `fixed/`, OQ-131 ~~open on~~ on the readings built, ratified 2026-10-06 by [R-071](../product/requests.md#r-071) in `PD-ORCH-005` clause 37) and the graceful stop's status (OQ-96, whose note is settled) — and has directed that
   this workflow repair the open notes and the live runs' findings. Each note stays open until its repair lands; OQ-114 to
-  OQ-116 are open against the live runs' figures and block nothing in this plan.*
+  OQ-116 ~~are open~~ stood against the live runs' figures and blocked nothing in this plan; all three were ruled
+  2026-10-06 ([R-071](../product/requests.md#r-071)).*
 - The ~~four~~ red proofs: ~~`transcript-proof`,~~ `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section
   (OQ-56). *`transcript-proof` was recorded as passing on 2026-09-28 (REQ-CHAT-055's measurement round under R-062) and
   reopened the same day: its fix round passed four runs of six, never three in a row, on Linux, and fix round 2 two of six (nine passes in fifteen); ~~the per-increment cost
@@ -142,7 +143,8 @@ Each changed what §2.2 builds, so they came before it.
   *Recommended: suffixed, with REQ-CHAT-034's clause amended to cite REQ-SHELL-056.*
 
 Each recommendation is what is built, so ruling all three as recommended costs an amendment round and no code.
-OQ-58 and OQ-59 are also open against the same feature. Neither blocks the release, and both are named here so
+OQ-58 and OQ-59 ~~are also open~~ were raised against the same feature, and both were ruled 2026-10-06 ([R-071](../product/requests.md#r-071)): OQ-58
+confirmed as built, OQ-59 by the requirement's amendment to the file chooser as built (`PD-WORKSPACE-003`). Neither blocks the release, and both are named here so
 that the release notes do not have to find them later.
 
 **2.2 `/skills`, REQ-CHAT-162's listing.**
@@ -186,7 +188,7 @@ held as written, the reason it was not built held, and building it found one def
   any `skill`-kind holder as its own earlier work — so a skill named `skill` took `/skill <path>`'s name or lost its
   own, depending on which React effect ran first (REQ-SHELL-056, both halves). Repaired with it:
   [`a-skill-named-skill-takes-the-skill-command.md`](../defects/fixed/a-skill-named-skill-takes-the-skill-command.md).
-- *The open question.* [OQ-67](open-questions.md): REQ-CHAT-162 wants the listing reachable from the settings
+- *The question, since ruled.* [OQ-67](open-questions.md) (ruled 2026-10-06 as built, [R-071](../product/requests.md#r-071)): REQ-CHAT-162 wants the listing reachable from the settings
   surface, and REQ-WORKSPACE-067 fixes that tab's header actions at two, so no action was added — the tab's table
   already shows every fact the listing carries; and `/skills` from a window following no session has no transcript
   to save a row into, so it is refused with a stated reason rather than creating a session.

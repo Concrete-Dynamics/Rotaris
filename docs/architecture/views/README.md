@@ -769,7 +769,8 @@ ADR-0035, ADR-0064).** On POSIX each code-intelligence setup step now leads a pr
 go to the group. The run host's `shutdown` ends a setup under way with a 2 s grace (`McpHost.endSetup`) before it exits.
 The initialization coordinator says a cancellation undelivered at a quit at `info`, reading `QuitState`. See the process
 view, `mcp.setup` and `initialization.*`, and the runtime view's paragraph on the application's end; the 2 s grace
-overrides REQ-MCP-099's 5 s at a close, the build's reading of OQ-172. This repairs
+overrides REQ-MCP-099's 5 s at a close, the build's reading of OQ-172 *(ruled 2026-10-06, [R-071](../../product/requests.md#r-071): every stop of a
+setup step gets the 2 s grace)*. This repairs
 `an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`. No package, edge,
 process, message kind, channel, command or store column changed.
 
@@ -800,7 +801,8 @@ command or store column changed (the todo column's JSON gains the phase's `id`).
 live session, every run of this process that parked without closing its tool ports (`Live.portsOpen`); a continue passes
 `ownCallsMayRun` while any of them has its ports open, and a run leaves the set once it has closed them. Before, only the
 session's current run was read. This repairs residual 2 of `a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`,
-which stays open for residuals 1 and 3 (OQ-170). The **runtime view**'s §2 crash paragraph says so. No package, edge,
+which ~~stays open for residuals 1 and 3 (OQ-170)~~ stayed open for residuals 1 and 3 until OQ-170 was ruled and the note
+closed (fin21, 2026-10-06: "A parked run closes its tool ports" above). The **runtime view**'s §2 crash paragraph says so. No package, edge,
 process, message kind, channel, command or store column changed.
 
 **One fact, one emitter in the application log (PD-MONITOR-002, live-run finding a71-9).** Main's `repository.read` and
@@ -815,7 +817,8 @@ REQ-HOOKS-003, REQ-ORCH-133, OQ-154, R-067).** `Run`'s teardown calls `Iteration
 the outside hooks (`childCompletionsSettled`) and before it fires `session_end`; from then `completedOutside` queues none,
 so the user's cancel of one paused child, still accepted until the run has ended, ends it `cancelled` with no hook after
 `session_end` — OQ-154's built reading, recorded there as its fifth path. The defect note
-`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md` stays open for the ruling. The **runtime
+`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md` ~~stays open for the ruling~~ stayed open for the
+ruling; OQ-154 was ruled 2026-10-06 (R-071) as built and the note is in `fixed/`. The **runtime
 view**'s hooks paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
 
 **A child the explicit cancel's grace gave up on is counted (REQ-MONITOR-102, REQ-SESSION-092, REQ-SESSION-094,
@@ -964,7 +967,7 @@ process, message kind, channel, command or store column changed.
 it as the session's total less the children's, and a root's calls join the total only when its turn returns, so the meta
 line read `0 tool calls` beside the root's used chips. `SessionRecord.entryToolCalls` now carries it: the roots' share of
 the persisted total plus the live root's calls not yet counted (`entryToolCallsOf`, `Run.entryUncountedToolCalls`) — the
-agent's own count, where REQ-MONITOR-101 gives the synthetic root the run's aggregate; **OQ-159** asks which, open. This
+agent's own count, where REQ-MONITOR-101 gives the synthetic root the run's aggregate; **OQ-159** asked which, ~~open~~ ruled 2026-10-06 ([R-071](../../product/requests.md#r-071)) as built: the run-level agent carries its own count. This
 repairs `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md` (acceptance A20). The **runtime view**'s §3
 entry-record paragraph and the **state-ownership view**'s tool-call row say so. One `SessionRecord` field was added on the
 existing snapshot channel; no package, edge, process, message kind, channel, command or store column changed.

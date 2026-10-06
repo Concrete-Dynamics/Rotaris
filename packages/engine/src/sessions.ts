@@ -2490,9 +2490,14 @@ export class Sessions {
    * refusal is returned, so the session is left on the model it had (REQ-NOTIFY-070's last sentence).
    *
    * Main keeps the "first failure of the session" bookkeeping (`apps/desktop/src/main/auth-fallback.ts`); this answers for one restart.
-   * The restart re-submits the prompt as `prompt` does, so the transcript shows it sent again; the last prompt's
-   * attachments are not re-sent (OQ-182's reading), though `lastSubmittedPrompt` — the reading it shares with the retry,
-   * over released rows too — returns them, and the retry (`retry`) does re-send them.
+   * The restart re-submits the prompt as `prompt` does, so the transcript shows it sent again — with its images: since
+   * OQ-182's ruling (2026-10-06, R-071) `lastPromptOf` reads them back by path and digest through the retry's read-back
+   * (`readBackAttachments`), and an image that cannot be read back refuses the restart by name, before anything is
+   * pinned. So does a fallback model that declares no image input when the prompt carries images (REQ-CHAT-171,
+   * `session.image-input-unsupported`), which main reads as REQ-NOTIFY-072's "no usable fallback" and answers with the
+   * model dialog. Until 2026-10-06 this read: "the last prompt's attachments are not re-sent (OQ-182's reading), though
+   * `lastSubmittedPrompt` — the reading it shares with the retry, over released rows too — returns them, and the retry
+   * (`retry`) does re-send them." — falsified by the ruling, which re-sends them as the retry does.
    */
   restartOnFallback(sessionId: SessionId): Result<AuthFallbackRestart, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);

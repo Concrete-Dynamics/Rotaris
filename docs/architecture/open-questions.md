@@ -9452,7 +9452,11 @@ runs on (the fallback, or the model chosen in the dialog) that declares no image
 by name rather than restarting with less than was sent, so the restart cannot begin, nothing is pinned, and main publishes
 the generic notice; a last prompt of images alone is restarted with its images. REQ-NOTIFY-070's "the same prompt" reads so;
 no requirement's text is departed from, so the ruling alone settles it. Built the same day (`Sessions.lastPromptOf`, plan
-fin21). The reading below is kept as the build proceeded under it until then.
+fin21). Corrected the same day at the build's verification: the automatic restart's fallback that declares no image input
+does not end at the generic notice — for this prompt it is REQ-NOTIFY-072's "no usable fallback" (`NO_USABLE_FALLBACK`,
+`apps/desktop/src/main/auth-fallback.ts`), so main opens the recovery dialog, where a model that takes images can be
+chosen; an image that can no longer be read back, and a model chosen in the dialog that takes no image input, still end
+at the generic notice. The reading below is kept as the build proceeded under it until then.
 
 Three things the requirements leave to the build:
 

@@ -92,9 +92,11 @@ export const pairLabel = (pair: Pick<ModelPair, 'provider' | 'model'>): string =
 /**
  * The run host's refusals that mean the session has NO USABLE FALLBACK — REQ-NOTIFY-072's "a first one with no usable
  * fallback": none is configured, the fallback is the model that failed, or the run did not record which model failed (a
- * failure that was no root model call's), so no fallback can be said to differ from it.
+ * failure that was no root model call's), so no fallback can be said to differ from it — and, since OQ-182's ruling
+ * (2026-10-06, R-071) re-sends the prompt's images with the restart, a fallback that declares no image input when the
+ * last prompt carries images (REQ-CHAT-171): it cannot receive the prompt, so the dialog offers a model that can.
  */
-export const NO_USABLE_FALLBACK: ReadonlySet<string> = new Set(['session.no-fallback', 'session.fallback-failed', 'session.no-model-failure']);
+export const NO_USABLE_FALLBACK: ReadonlySet<string> = new Set(['session.no-fallback', 'session.fallback-failed', 'session.no-model-failure', 'session.image-input-unsupported']);
 /** The run host's refusal that means a run of the session is active again: the failure was superseded. */
 export const RUN_ACTIVE = 'session.run-active';
 

@@ -154,7 +154,8 @@ the away transition ends it through `PendingApprovals.endAway` (a new `away` out
 **An authentication restart re-sends the prompt's images (REQ-NOTIFY-070/074/076, REQ-CHAT-171; OQ-182 ruled by R-071,
 fin21).** `Sessions.lastPromptOf` reads the last prompt's images back by path and digest (`readBackAttachments`, the retry's
 read-back) and the restarts re-submit them with the text; an image that cannot be read back, or a restart model declaring no
-image input, refuses the restart before anything is pinned. `AuthFallbackRestart` gains `images`. The **runtime view**'s
+image input, refuses the restart before anything is pinned; the automatic fallback's image refusal opens REQ-NOTIFY-072's
+recovery dialog (`NO_USABLE_FALLBACK`). `AuthFallbackRestart` gains `images`. The **runtime view**'s
 fallback paragraph says so. No package, edge, process, channel, command or store column changed.
 
 **The run completes only when the coordinator's own plan agrees (REQ-ORCH-029, REQ-ORCH-075, REQ-ORCH-078; fin18).**

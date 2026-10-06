@@ -1410,7 +1410,9 @@ replays on every later run and after a reload (REQ-SESSION-026); then ~~`prompt`
 failed run's launch is relaunched (`Sessions.relaunchAfterAuthFailure`, the fourth repair round): the last user prompt
 re-submitted — *since 2026-10-06 (OQ-182 ruled, R-071)* with its images, read back by path and digest as the retry reads
 them (`Sessions.lastPromptOf`, `readBackAttachments`), an image that cannot be read back or a restart model that declares no
-image input (REQ-CHAT-171) refusing the restart before anything is pinned — a new run on the fallback — or, where a plan decision launched the failed run (`Live.planLaunch`, kept with
+image input (REQ-CHAT-171) refusing the restart before anything is pinned (the automatic fallback's image refusal,
+`session.image-input-unsupported`, is one of main's `NO_USABLE_FALLBACK` codes, so it opens the recovery dialog rather
+than the generic notice) — a new run on the fallback — or, where a plan decision launched the failed run (`Live.planLaunch`, kept with
 that run), the same decision again (`relaunchPlanDecision`, REQ-ORCH-154: approve's plan as the user left it, revise's
 cycle, plan and changes; nothing re-submitted; the todo's own rule decides whether the request is appended) — and a system
 row says so, written by the `beginning` hook once every refusal has passed, just before the launch, so a restart that

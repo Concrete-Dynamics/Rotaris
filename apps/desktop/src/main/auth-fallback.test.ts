@@ -73,6 +73,13 @@ describe('main/auth-fallback — the first authentication failure\'s automatic f
     }
   });
 
+  it('OQ-182 (ruled 2026-10-06): a fallback that takes no image input, for a prompt with images, is no usable fallback — the dialog offers a model that can take them', async () => {
+    const h = harness(refused('session.image-input-unsupported', 'The last prompt carries an image, and the fallback model p/text-only does not declare image input support.'));
+    expect(await h.fallback.onAuthenticationFailure('S1', AUTH)).toEqual({ kind: 'dialog', reason: 'The last prompt carries an image, and the fallback model p/text-only does not declare image input support.' });
+    expect(h.published).toEqual([]);
+    expect(h.fallback.firstFailureSpent('S1')).toBe(true);
+  });
+
   it('REQ-NOTIFY-069/070: a missing configuration service, a missing run channel or a restart that cannot begin is the generic notice\'s, the bookkeeping cleared', async () => {
     for (const [answer, configured] of [[refused('session.restart-failed', 'the disk is full'), true], [refused('session.configuration', 'the configuration no longer loads'), true], [refused('session.no-prompt'), true], [new Error('the run host is gone'), true], [RESTARTED, false]] as const) {
       const h = harness(answer, configured);

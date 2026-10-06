@@ -132,7 +132,8 @@ describe('REQ-MONITOR-128: a confirmed cancel of one agent is shown at once', ()
  * Mission view and a persona window do not show a confirmed run cancel as cancelling"). On confirmation the session's status
  * is shown `cancelling`; a refusal restores the record's own; an accepted cancel is shown until the run's record leaves the
  * active statuses, because the engine writes no `cancelling` for the explicit cancel and its records keep reading `running`
- * through the graceful stop (OQ-165).
+ * through the graceful stop (OQ-165). Since OQ-165 was ruled (2026-10-06) the engine does save `cancelling`, and the overlay
+ * also ends at the first record reading it (the handover case below).
  */
 describe('REQ-MONITOR-127: a confirmed cancel of the run is shown cancelling at once', () => {
   const RUN = '2026-09-29T09:58:00.000Z';
@@ -169,6 +170,30 @@ describe('REQ-MONITOR-127: a confirmed cancel of the run is shown cancelling at 
     const next = record({ runStartedAt: '2026-09-29T10:01:00.000Z' });
     expect(shownSession(next, store.getState())).toBe(next);
     expect(shownSession(record({ id: 's2', runStartedAt: RUN }), store.getState())!.executionStatus).toBe('running');
+  });
+
+  /**
+   * OQ-165, ruled 2026-10-06 (R-071): the engine saves `cancelling` when it accepts the run's cancel, so the window's own
+   * display hands over to that record. Before, the overlay laid `cancelling` over every active record of the run until the
+   * run rested, whatever the engine wrote meanwhile.
+   */
+  it('hands over to the engine\'s own `cancelling`: a record taken after it is shown as the engine wrote it (OQ-165)', () => {
+    const store = createCancelOverlayStore();
+    const s = record({ runStartedAt: RUN });
+    const token = store.getState().beginRun(s, AT)!;
+    const lagging = record({ runStartedAt: RUN, updatedAt: '2026-09-29T10:00:01.000Z' });
+    store.getState().witness(lagging);
+    store.getState().accept(token, lagging);
+    const saved = record({ runStartedAt: RUN, executionStatus: 'cancelling', updatedAt: '2026-09-29T10:00:02.000Z' });
+    store.getState().witness(saved);
+    // The engine's record is shown as it is: it already says `cancelling`.
+    expect(shownSession(saved, store.getState())).toBe(saved);
+    // A record taken after it is the engine's to say, not the overlay's.
+    const after = record({ runStartedAt: RUN, executionStatus: 'running', updatedAt: '2026-09-29T10:00:03.000Z' });
+    store.getState().witness(after);
+    expect(shownSession(after, store.getState())).toBe(after);
+    // What a lagging reader still draws from before the handover stays covered (REQ-SHELL-076's coalesced copy).
+    expect(shownSession(lagging, store.getState())!.executionStatus).toBe('cancelling');
   });
 
   it('once the run has rested, its next run is shown as the engine writes it, though it carries the same runStartedAt through its pre-flight', () => {

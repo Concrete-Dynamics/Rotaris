@@ -8615,7 +8615,19 @@ final cancel; OQ-129, the same question for one agent's cancel. Raised 2026-10-0
 by the repair of
 [`the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md`](../defects/fixed/the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md),
 acceptance finding A35. Raised on its branch as OQ-158 and renumbered OQ-165 at the merge, origin/main's OQ-158 keeping its
-number. Open.)*
+number. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the engine saves `cancelling` when it accepts
+the explicit run cancel, as the stop already does, and the window's own optimistic display hands over to that saved status.
+Read with it: the saved `cancelling` holds until the teardown writes the run's end, a later save of the run on the way there
+keeping it (over a pause accepted before it, the cancel being final); the overlay ends at the first record of the session
+reading `cancelling`, as it ends at a record at rest, so a lagging reader's earlier record stays covered; a refusal still
+restores the record's own status. The requirements leave the engine's write open, so no directive is minted. Built the same
+day (`Run.cancelAgent` and `saveRunning`'s `cancelSaved` in `packages/engine/src/run/run.ts`; `witness` in
+`packages/ui/src/cancel-overlay.ts`; cases in `run/turn.test.ts` and `cancel-overlay.test.ts`). Found beside it: a stop's own
+saved `cancelling` reads `running` again at the run's next save
+([`a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md`](../defects/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md)),
+recorded and not repaired.
 
 The requirement sets an optimistic status and its rollback. It does not say what overwrites it, and the engine gives it
 nothing to be overwritten by: the explicit cancel (the reserved run id's `cancelAgent`, `Run.cancelAgent`) raises the final

@@ -312,8 +312,9 @@ const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    mo
 }
 
 // 4b. Cancel the run from the Mission view (acceptance A35, REQ-MONITOR-127/130/296): the run row selected, "Cancel selection",
-// confirmed. The session is shown `cancelling` from the confirmation — the engine writes no `cancelling` for the explicit
-// cancel, so its records read `running` until the run's end (OQ-165) — and no sample from the confirm to the run's end
+// confirmed. The session is shown `cancelling` from the confirmation — first by the window's own overlay, then, since OQ-165
+// was ruled (2026-10-06), by the record itself, the engine saving `cancelling` when it accepts the explicit cancel and keeping
+// it to the run's end (before the ruling its records read `running` until the run's end) — and no sample from the confirm to the run's end
 // reads `Running`, in the subtitle or the run row (the status strip names no run state since 2026-10-02, REQ-SHELL-038). Before the repair only the Workspace set anything, and the Mission view read `Running` throughout.
 const s4b = scenario('cancel-run', ['personas:', '  lead:', '    name: lead', '    model: scripted', "    purpose: 'Delegates the work, then waits for it.'", "    system_prompt: 'You are a lead. Delegate the work, then wait for it.'", '    tools: [delegate, read_file, todo]']);
 {

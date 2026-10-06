@@ -85,6 +85,13 @@ its head. The **runtime view**'s children paragraph says so. No package, edge, p
 coordinating prompt becomes its direct-work form, a configured prompt gains the statement after it, and a turn the plan gate
 holds keeps the persona's prompt (`Run`'s root turn). The **runtime view**'s system-prompt paragraph and its entry-port
 sentence say so. No package, edge, process, channel, command or store column changed.
+
+**A confirmed run cancel is saved `cancelling` by the engine (OQ-165 ruled 2026-10-06, R-071; fin21).** `Run.cancelAgent`
+saves the accepted explicit cancel `cancelling` and `saveRunning` keeps it until the run's end, so every window reads it from
+the record; the confirming window's run overlay hands over to the first record reading it (`witness`). The **runtime view**'s
+`cancelAgent` row and the **state-ownership view**'s overlay row say so. No package, edge, process, channel, command or store
+column changed.
+
 **A setup banner names its project; every stop of a setup step gets 2 s (PD-WORKSPACE-003, PD-MCP-001; OQ-171, OQ-172
 ruled 2026-10-06; fin21).** The initialization coordinator's two banners stay application notices and name the project they
 concern (`namedBanner`: `{headline}: {the folder's name}`, the detail area opening on the folder). A setup step is

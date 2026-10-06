@@ -448,6 +448,8 @@ export class Run {
   get intentClassifying(): boolean { return this.classifying; }
   /** REQ-MONITOR-123: a graceful pause requested; honoured at the next model step and at the iteration boundary. */
   private pauseRequested = false;
+  /** OQ-165 (ruled 2026-10-06): the explicit cancel was accepted and saved `cancelling`, which every later save keeps. */
+  private cancelSaved = false;
   /**
    * PD-ORCH-005 clause 2 / REQ-ORCH-134: aborted when the pause's tool deadline passes, cutting every tool call still in
    * flight in every agent; the timer that aborts it is armed when the pause is accepted.
@@ -2625,6 +2627,13 @@ export class Run {
       // OQ-103's last question, ruled (R-067): the cancel is made durable when it is accepted, so a host that dies before
       // this run carries it out leaves the next repair or continue to end its agents `cancelled`, never to resume them.
       this.markCancelAccepted();
+      // OQ-165, ruled 2026-10-06 (R-071): the accepted cancel is saved `cancelling`, as the stop's control saves it, so every
+      // window reads it from the session record (REQ-MONITOR-127, REQ-MONITOR-130) and a window's own optimistic overlay
+      // hands over to it. Before, the record read `running` (or `waiting`) through the graceful stop until the teardown
+      // wrote the run's end, and only the window that sent the cancel showed `cancelling`. It holds until then
+      // (`saveRunning`).
+      this.cancelSaved = true;
+      this.saveRunning({});
       return true;
     }
     return this.children?.cancel(taskId) ?? false;
@@ -2744,7 +2753,9 @@ export class Run {
   private saveRunning(extra: { run_started_at?: string | null; permission_mode?: string; sandboxed?: number; sandbox_backend?: string }, status: 'running' | 'waiting' = this.waits.size > 0 ? 'waiting' : 'running'): void {
     // REQ-MONITOR-124: an accepted pause reads `pausing` until the run has come to rest — a wait the pause releases, or any
     // other save on the way to rest, does not read `running` again (found by phase 3's second review).
-    const r = this.deps.writer.save(this.pauseRequested ? 'pausing' : status, {
+    // OQ-165: an accepted explicit cancel reads `cancelling` until the teardown writes the run's end, over a pause accepted
+    // before it, since the cancel is final (PD-ORCH-005 clause 3).
+    const r = this.deps.writer.save(this.cancelSaved ? 'cancelling' : this.pauseRequested ? 'pausing' : status, {
       ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), iterations_completed: this.iterationsCompleted,
       todo: this.todoJson(), progress: JSON.stringify(this.progress()),
       ...(extra.run_started_at === undefined ? {} : { run_started_at: extra.run_started_at }),

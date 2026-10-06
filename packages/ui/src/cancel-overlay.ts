@@ -1,5 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import { isBusy, RUN_AGENT_ID, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
+import { isBusy, presentationStatus, RUN_AGENT_ID, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { cancelCascade } from './agents.js';
 
 /**
@@ -47,6 +47,12 @@ import { cancelCascade } from './agents.js';
  * (`restedAt`): it covers active records taken before that one and none taken after. Before it, a record taken after the
  * confirmation is the run being cancelled whatever key it carries (a session runs one run at a time), so a run confirmed
  * during its pre-flight is still covered once it writes its own key.
+ *
+ * OQ-165, ruled 2026-10-06 (R-071): the engine now saves `cancelling` when it accepts the run's cancel and keeps it until the
+ * run's end, so every window reads it from the record. The overlay is the confirming window's display until then: the first
+ * record of its session reading `cancelling` ends it as the record at rest does (`restedAt`), and a record taken after that
+ * one is shown as the engine wrote it. Before the ruling the overlay ran to the run's end, the build's reading while the
+ * question was open, since no record before the end said `cancelling`.
  */
 export interface CancelOverlay {
   readonly token: number;
@@ -70,7 +76,10 @@ export interface CancelOverlay {
     readonly startedAt: string;
     /** The number of the record held at the confirmation: a record taken after it, before the rest, is of this run. */
     readonly confirmedAt: number;
-    /** The number of the first record of the session at rest taken after the confirmation; nothing taken after it is covered. */
+    /**
+     * The number of the first record of the session at rest — or, since OQ-165's ruling, reading the engine's own
+     * `cancelling` — taken after the confirmation; nothing taken after it is covered.
+     */
     readonly restedAt?: number;
   };
 }
@@ -183,7 +192,11 @@ export function createCancelOverlayStore(): CancelOverlayStore {
     // away and will not take that run's final read, and on its return every record it takes is newer than the confirmation,
     // so a run started meanwhile would read `cancelling` until it rested. It is shown as the engine writes it instead, as a
     // window that never confirmed the cancel shows it (the verifier's optional finding on A35, OQ-165).
-    const ends = (o: CancelOverlay): o is CancelOverlay & { readonly run: NonNullable<CancelOverlay['run']> } => o.run !== undefined && o.run.restedAt === undefined && (o.sessionId === session.id ? !isBusy(session.executionStatus) : true);
+    //
+    // OQ-165, ruled 2026-10-06 (R-071): the engine saves `cancelling` when it accepts the run's cancel, so a record of the
+    // session reading `cancelling` is the authoritative read the overlay hands over to — from it on, every window shows the
+    // engine's own status, and the overlay covers only what a lagging reader still draws from before it.
+    const ends = (o: CancelOverlay): o is CancelOverlay & { readonly run: NonNullable<CancelOverlay['run']> } => o.run !== undefined && o.run.restedAt === undefined && (o.sessionId === session.id ? !isBusy(session.executionStatus) || presentationStatus(session.executionStatus) === 'cancelling' : true);
     const { overlays } = store.getState();
     if (overlays.some(ends)) store.setState({ overlays: overlays.map((o) => (ends(o) ? { ...o, run: { ...o.run, restedAt: n } } : o)) });
   };

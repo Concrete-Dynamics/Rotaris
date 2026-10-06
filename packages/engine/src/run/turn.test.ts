@@ -211,6 +211,43 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     release();
   });
 
+  /**
+   * OQ-165, ruled 2026-10-06 (R-071): the engine saves `cancelling` when it accepts the explicit cancel, as the stop does, so
+   * every window reads it from the session record, not only the one that sent it through its local overlay. Before, the
+   * record kept reading `running` through the graceful stop until the teardown wrote the run's end. The status holds until
+   * then: a save on the way to the end (here a permission-mode change's) does not read `running` again.
+   */
+  it('OQ-165: the explicit cancel saves `cancelling` when it is accepted, and holds it until the run ends (REQ-MONITOR-127, REQ-MONITOR-130)', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { port } = fakePort({ hold, holdOn: 'write_file' });
+    const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'write_file', args: { path: 'a' } }]), answer('never')], port);
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 400 && !dal.residentRows(sid).some((r) => r.kind === 'tool'); i += 1) await new Promise((r) => setTimeout(r, 2));
+    expect(dal.getSession(sid)!.execution_status).toBe('running');
+    expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } })).toEqual({ ok: true });
+    expect(dal.getSession(sid)!.execution_status).toBe('cancelling');
+    expect(sessions.control({ op: 'setPermissionMode', sessionId: sid, args: { mode: 'autonomous' } })).toEqual({ ok: true });
+    expect(dal.getSession(sid)!.execution_status).toBe('cancelling');
+    release();
+    await sessions.running(sid)!;
+    expect(dal.getSession(sid)!.execution_status).not.toBe('cancelling');
+  });
+
+  it('OQ-165: cancelling one child saves no `cancelling` for the run', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { port } = fakePort({ hold, holdOn: 'write_file' });
+    const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'write_file', args: { path: 'a' } }]), answer('never')], port);
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 400 && !dal.residentRows(sid).some((r) => r.kind === 'tool'); i += 1) await new Promise((r) => setTimeout(r, 2));
+    expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'no-such-child' } })).toEqual({ ok: false });
+    expect(dal.getSession(sid)!.execution_status).toBe('running');
+    sessions.control({ op: 'cancel', sessionId: sid, args: { force: true } });
+    release();
+    await sessions.running(sid)!;
+  });
+
   it('REQ-MONITOR-150..153 / REQ-TOOLS-082: setPermissionMode applies to the next call, writes the audit entry and the system row; empty mode refused', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });

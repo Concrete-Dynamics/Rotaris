@@ -70,7 +70,7 @@ credentials     → main, and main alone
 | Session artifact bodies | files beside the session's other files | the run host | the run host, the Library |
 | `agents.yaml`, `models.yml` — global (`%LOCALAPPDATA%/rotaris/rotaris/`) and per workspace (`<ws>/.rotaris/`) | the filesystem | **the workspace service only** | the run host at every run start |
 | `project_settings.yaml` — the discovery snapshot, configuration layer 3 | `%LOCALAPPDATA%/rotaris/rotaris/` | main (upsert, remove) and the workspace service | the run host at every load |
-| `preferences.json` | `ROTARIS_PREFERENCES_ROOT` → config home → per-user | **main only** | main; renderers reach the allow-listed subset through `prefs.get/set` |
+| `preferences.json` | `ROTARIS_PREFERENCES_ROOT` → config home (`XDG_CONFIG_HOME`, Linux alone, OQ-33) → per-user | **main only** | main; renderers reach the allow-listed subset through `prefs.get/set` |
 | The waved-off update version — `updates/dismissedVersion`, one string, never a list (REQ-STARTUP-116/117/146) | `preferences.json` | **main only**, when the update-offer notice is dismissed and before it is cleared | main, at every check; no renderer (absent from the allow-list) |
 | The compiled-in release-verification key set (REQ-STARTUP-167/168) | `main/updater/keys.ts`, in main's bundle — empty until O-2 | **the build**, and only the build: nothing at run time adds to, replaces or disables it | main, at every install |
 | `tokens/<provider_id>.json` (+ `.lock`), owner and SYSTEM only | `%LOCALAPPDATA%/rotaris/data/` | **main only**, under the adjacent lock | main; the run host is **leased bearers**, never the file |

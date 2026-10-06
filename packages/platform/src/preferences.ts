@@ -175,18 +175,22 @@ export type PreferenceValue<K extends PreferenceKey> = K extends keyof typeof PR
 
 export interface PreferenceRootEnv { readonly platform: NodeJS.Platform; readonly env: Readonly<Record<string, string | undefined>>; readonly home: string; }
 
-/** ADR-0042: benchmark override, configuration home, then the platform's machine-local settings location. */
+/**
+ * ADR-0042: benchmark override, configuration home, then the platform's machine-local settings location. The configuration
+ * home (`XDG_CONFIG_HOME`, REQ-UIBENCH-039) is honoured on Linux alone, as OQ-33 was ruled (R-071): on Windows and macOS
+ * the benchmark-private variable carries the same job. That is the branch `resolveUserDirs` reads it on, so the preference
+ * store and the rest of the per-user state never part. Until fin22 it was read before the platform branch, on every platform
+ * (`docs/defects/fixed/the-preference-root-honours-xdg-config-home-on-every-platform.md`).
+ */
 export function resolvePreferenceRoot(e: PreferenceRootEnv = { platform: process.platform, env: process.env, home: homedir() }): string {
   // The platform is a PARAMETER, so the separator comes from IT and not from the host — the same rule
   // `canonicalPath` and `resolveUserDirs` follow, and for the same reason.
   const { join } = e.platform === 'win32' ? win32 : posix;
   const overridden = e.env['ROTARIS_PREFERENCES_ROOT'];
   if (overridden) return overridden;
-  const configHome = e.env['XDG_CONFIG_HOME'];
-  if (configHome) return join(configHome, 'Rotaris', 'Rotaris');
   if (e.platform === 'win32') return join(e.env['LOCALAPPDATA'] ?? join(e.home, 'AppData', 'Local'), 'Rotaris', 'Rotaris');
   if (e.platform === 'darwin') return join(e.home, 'Library', 'Application Support', 'Rotaris', 'Rotaris');
-  return join(e.home, '.config', 'Rotaris', 'Rotaris');
+  return join(e.env['XDG_CONFIG_HOME'] || join(e.home, '.config'), 'Rotaris', 'Rotaris');
 }
 
 type DocumentShape = Partial<Record<PreferenceKey, unknown>>;

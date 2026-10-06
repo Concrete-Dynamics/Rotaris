@@ -217,6 +217,14 @@ coercion. Main resolves the root once before its first read and records it. The 
 `ROTARIS_PREFERENCES_ROOT`, then `XDG_CONFIG_HOME/Rotaris/Rotaris`, then the platform per-user settings root;
 Windows resolves to `%LOCALAPPDATA%\Rotaris\Rotaris`.
 
+> **Corrected 2026-10-06 (fin22), after OQ-33's ruling (R-071).** The order above read `XDG_CONFIG_HOME` on every
+> platform, which the decision never restricted. OQ-33 was ruled Linux-only: the configuration home is honoured on Linux
+> alone, and the benchmark-private variable carries its job on Windows and macOS. The implemented order is now
+> `ROTARIS_PREFERENCES_ROOT`, then on Linux `XDG_CONFIG_HOME/Rotaris/Rotaris` (else `~/.config/Rotaris/Rotaris`), on Windows
+> `%LOCALAPPDATA%\Rotaris\Rotaris` and on macOS `~/Library/Application Support/Rotaris/Rotaris`, the same platforms
+> `resolveUserDirs` honours the variable on
+> (`docs/defects/fixed/the-preference-root-honours-xdg-config-home-on-every-platform.md`).
+
 The theme write uses `replaceDocumentSync`, including the file flush and directory flush supplied by the
 atomic document primitive, before the command returns. Tests established that an unknown stored theme resolves
 to Rotaris Dim while leaving the file byte-identical, ordinary registered values round-trip, and the isolated

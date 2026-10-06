@@ -34,7 +34,7 @@ flowchart LR
   WS["workspace service<br/>utilityProcess, one per open workspace<br/>identifier · store open/migrate<br/>backup · restore · config Tier A"]
   DB[("workspace.db<br/>SQLite, WAL<br/>%LOCALAPPDATA%/rotaris/data/workspaces/&lt;id&gt;/")]
   FILES[["agents.yaml · models.yml<br/>global: %LOCALAPPDATA%/rotaris/rotaris/<br/>workspace: &lt;ws&gt;/.rotaris/"]]
-  PREFS[["preferences.json<br/>ROTARIS_PREFERENCES_ROOT →<br/>config home → per-user"]]
+  PREFS[["preferences.json<br/>ROTARIS_PREFERENCES_ROOT →<br/>config home (Linux) → per-user"]]
   TOKENS[["tokens/&lt;provider_id&gt;.json (+ .lock)<br/>%LOCALAPPDATA%/rotaris/data/<br/>protected: owner + SYSTEM only"]]
   SNAP[["project_settings.yaml<br/>%LOCALAPPDATA%/rotaris/rotaris/<br/>the discovery snapshot (layer 3)"]]
   MODEL(("model endpoint<br/>base_url · leased bearer or api_key_env"))

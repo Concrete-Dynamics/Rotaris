@@ -311,6 +311,26 @@ describe('platform — desktop preferences (ADR-0042)', () => {
     expect(resolvePreferenceRoot({ platform: 'win32', env: { LOCALAPPDATA: 'X:\\local' }, home: 'X:\\home' })).toBe(win32.join('X:\\local', 'Rotaris', 'Rotaris'));
   });
 
+  it('honours the configuration-home variable on Linux alone, as OQ-33 was ruled (REQ-UIBENCH-039, ADR-0042)', () => {
+    // Until fin22 `XDG_CONFIG_HOME` was read before the platform branch, so a Windows or macOS environment that set it moved
+    // the preference store under it while `resolveUserDirs` kept the rest of the per-user state where it was.
+    const xdg = { XDG_CONFIG_HOME: '/x/cfg' };
+    expect(resolvePreferenceRoot({ platform: 'linux', env: xdg, home: '/home/me' })).toBe('/x/cfg/Rotaris/Rotaris');
+    expect(resolvePreferenceRoot({ platform: 'linux', env: {}, home: '/home/me' })).toBe('/home/me/.config/Rotaris/Rotaris');
+    expect(resolvePreferenceRoot({ platform: 'win32', env: { ...xdg, LOCALAPPDATA: 'X:\\local' }, home: 'X:\\home' })).toBe(win32.join('X:\\local', 'Rotaris', 'Rotaris'));
+    expect(resolvePreferenceRoot({ platform: 'darwin', env: xdg, home: '/Users/me' })).toBe('/Users/me/Library/Application Support/Rotaris/Rotaris');
+    // The benchmark-private variable carries the same job on every platform, and wins over the configuration home.
+    expect(resolvePreferenceRoot({ platform: 'darwin', env: { ...xdg, ROTARIS_PREFERENCES_ROOT: '/bench' }, home: '/Users/me' })).toBe('/bench');
+    expect(resolvePreferenceRoot({ platform: 'linux', env: { ...xdg, ROTARIS_PREFERENCES_ROOT: '/bench' }, home: '/home/me' })).toBe('/bench');
+    // The preference store and the configuration directory honour the variable on the same platforms.
+    for (const platform of ['linux', 'win32', 'darwin'] as const) {
+      const env = { ...xdg, LOCALAPPDATA: 'X:\\local' };
+      const home = platform === 'win32' ? 'X:\\home' : '/home/me';
+      const dirs = resolveUserDirs({ platform, env, home });
+      expect(resolvePreferenceRoot({ platform, env, home }).startsWith('/x/cfg')).toBe(dirs.config.startsWith('/x/cfg'));
+    }
+  });
+
   it('reads defaults without creating a file, preserves a stale theme, and flushes a theme write synchronously', () => {
     const root = join(dir, 'preferences');
     const store = new PreferenceStore(root);

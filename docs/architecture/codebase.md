@@ -667,7 +667,7 @@ only. The `normal` cell no longer stands in: the BUDGET slot clamps.
 mathematics and static contrast assertions live beside the data because main needs the dark flag and window
 ground before first paint. UI projects the selected theme to `--rt-*` custom properties. The preference store
 is a typed closed registry in `packages/platform/src/preferences.ts`, rooted by
-`ROTARIS_PREFERENCES_ROOT`, then the standard configuration home, then the platform per-user settings location.
+`ROTARIS_PREFERENCES_ROOT`, then the standard configuration home on Linux alone (OQ-33, since fin22), then the platform per-user settings location.
 The theme write is synchronous and flushed. `ROTARIS_CAPTURE_THEME`, `ROTARIS_CAPTURE_SCALE` and
 `ROTARIS_THEME_PROOF_DIR` are verification seams.
 

@@ -62,6 +62,11 @@ log at `INFO`). The **runtime view**'s stall-watch paragraph and its `timeline` 
 REQ-MONITOR-120's "logged" is met when the session log keeps its default `WARNING` level. No package, edge, process,
 channel, command or store column changed.
 
+**The preference root reads the configuration home on Linux alone (REQ-UIBENCH-039; OQ-33 ruled by R-071, fin22).**
+`resolvePreferenceRoot` reads `XDG_CONFIG_HOME` in its Linux branch, as `resolveUserDirs` does, rather than before the
+platform branch. The **process view**'s files diagram and the **state-ownership view**'s `preferences.json` row say so. No
+package, edge, process, channel, command or store column changed.
+
 **An unborn or unreadable branch is the strip's empty branch item (REQ-WORKSPACE-020, REQ-GIT-161; fin22).**
 `branchStripItem` answers state `empty` — no text, no tooltip, no description — where a repository's snapshot carries no
 branch name and no detached HEAD, and `StatusStripItem` draws no `title` and no `aria-description` for an empty string; until

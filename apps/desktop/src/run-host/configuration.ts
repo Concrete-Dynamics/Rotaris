@@ -405,7 +405,7 @@ export function improvementCollectorOf(cfg: LoadedConfiguration, scripted: boole
 }
 
 /**
- * OQ-189's ruling (R-071, PD-MONITOR-008): the post-run analyst's model once the session has had its say — the collector's
+ * OQ-189's ruling (R-071, PD-MONITOR-007): the post-run analyst's model once the session has had its say — the collector's
  * slot with the session's overrides followed (its key the override's, so the artifact names the model that ran), or not
  * `ok` where the pair it ends on is held out of quota, and then the analysis is skipped. Until 2026-10-06 the configured
  * model was called, and a provider that had refused it reported the analysis failed.

@@ -134,7 +134,7 @@ export function createRunHost() {
   // Each active run retains its setup through deferred preflight and tool creation.
   const configuredRuns = new Map<string, ConfiguredRun>();
   const runBearers = new Map<string, Readonly<Record<string, string>>>();
-  // `analyst`: the post-run pass's model as the session's overrides left it at capture (OQ-189, PD-MONITOR-008).
+  // `analyst`: the post-run pass's model as the session's overrides left it at capture (OQ-189, PD-MONITOR-007).
   const improvementContexts = new Map<string, { run: ConfiguredRun; analyst?: { readonly model: ModelRef; readonly thinking: ThinkingLevel } }>();
   const missingCollectorNotified = new Set<string>();
   const improvementControllers = new Map<string, AbortController>();
@@ -377,11 +377,11 @@ export function createRunHost() {
         }
         return;
       }
-      // OQ-189's ruling (R-071, PD-MONITOR-008): the analyst's model with the session's overrides followed; where that pair
+      // OQ-189's ruling (R-071, PD-MONITOR-007): the analyst's model with the session's overrides followed; where that pair
       // is held out of quota the analysis is skipped — no job captured, no call made — and the log says why. Until
       // 2026-10-06 the configured model was called, and a provider that had refused it reported the analysis failed.
       const analyst = postRunAnalystOf(collector, helperModel);
-      if (!analyst.ok) { log(`improvement analysis: skipped for session ${sessionId}: the analyst's model ${analyst.reason} (PD-MONITOR-008)`, 'warn'); return; }
+      if (!analyst.ok) { log(`improvement analysis: skipped for session ${sessionId}: the analyst's model ${analyst.reason} (PD-MONITOR-007)`, 'warn'); return; }
       const locatedStore = [...stores.entries()].find(([, candidate]) => candidate.root === run.cfg.workspaceRoot && candidate.dal !== null);
       if (!locatedStore?.[1].dal) return;
       const [workspaceId, store] = locatedStore;
@@ -456,7 +456,7 @@ export function createRunHost() {
         // REQ-EVENTS-053: each classification is a request of the run, counted against it.
         backend: meteredBackend(run.model.backend, countUsage), runModel: run.model.config.model, thinking: run.model.config.thinking, credentialFor: run.model.config.credentialFor,
         memory: rungMemory, configuredModel: modelRefOf(run.cfg, cb.model, run.scripted), slots: classifierSlotsOf(run.cfg, run.scripted, runBearers.get(sessionId), (m) => log(m, 'warn')), modelTimeoutMs: timeoutMs,
-        // OQ-189 (PD-MONITOR-008): the session's overrides followed at each classification; none made on a pair out of quota.
+        // OQ-189 (PD-MONITOR-007): the session's overrides followed at each classification; none made on a pair out of quota.
         helperModel,
       });
       return classifier ? {

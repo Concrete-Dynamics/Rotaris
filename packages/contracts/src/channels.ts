@@ -333,7 +333,7 @@ export const SessionRecordSchema = z.object({
      */
     excluded: z.array(z.string()),
     /**
-     * OQ-188's ruling (R-071, PD-MONITOR-007): the configured model key of the waiting pair — a configured key before a
+     * OQ-188's ruling (R-071, PD-MONITOR-004 revision 2): the configured model key of the waiting pair — a configured key before a
      * discovered one, the first in declaration order — or null when no key names it. In the wait that never auto-resumes
      * (`resumeAt` null, an out-of-quota pair) the header's keep waiting sends `setModel` with it, marked `keepWaiting` and
      * naming this wait's `agent` and `attempt` (`Run.keepWaiting`): a retry of the agents parked on the waiting pair, which

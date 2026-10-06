@@ -160,7 +160,7 @@ image input, refuses the restart before anything is pinned; the automatic fallba
 recovery dialog (`NO_USABLE_FALLBACK`). `AuthFallbackRestart` gains `images`. The **runtime view**'s
 fallback paragraph says so. No package, edge, process, channel, command or store column changed.
 
-**Helper model calls follow the session's override and stay off a pair held out of quota (PD-MONITOR-008; OQ-189, ruled
+**Helper model calls follow the session's override and stay off a pair held out of quota (PD-MONITOR-007; OQ-189, ruled
 2026-10-06; plan fin21).** `helperChoiceOf` (`run/resilience.ts`) and `Run.helperModel` resolve a helper's configured model
 through the session's memory at each call. `Sessions` passes the reader to the run host as `PreflightContext.helperModel`,
 the `supervisor` factory's fourth argument and `onRunResult`'s third. The intent and loop classifiers make no call on an
@@ -169,7 +169,7 @@ summariser falls back to the child's (`ReportInput.agentModel`). The **runtime v
 compression paragraph say so. No package, edge, process, channel, command, timeline name or store column changed.
 
 **An explicit switch of the entry model wins, holds for its own run, and keep waiting retries an out-of-quota wait
-(PD-ORCH-013, PD-MONITOR-006, PD-MONITOR-007; OQ-177, OQ-185 and OQ-188, ruled 2026-10-06; plan fin21).** `Run.setEntryModel`
+(PD-ORCH-013, PD-MONITOR-006, PD-MONITOR-004 revision 2; OQ-177, OQ-185 and OQ-188, ruled 2026-10-06; plan fin21).** `Run.setEntryModel`
 takes back an earlier wait's override of the pair chosen on the header path too (`takeBackOverrideOf`, now given where the
 choice was made); the switch rows say the switch applies for the rest of this run and that the next run starts on the
 composer's choice; the record's `wait` gains `modelKey` (`keyOfPair`), and the wait header's Keep waiting (`keepWaitingAction`)

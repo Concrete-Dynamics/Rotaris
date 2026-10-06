@@ -367,7 +367,7 @@ in `configuration.ts`'s header.)
    fallback; per-model `timeout` and `num_retries` (the dispatch layer's retries, which come before the ladder's — ruled
 2026-09-29, OQ-110; each one it absorbs is a WARNING line in the session log, `ModelRequest.onRetry` → `TurnSink.retried`
 → `dispatchRetryLine`, and an exhausted budget hands the ladder the last attempt's error, built the same day). The record's `wait` and the Workspace header that counts down and
-   offers keep waiting (no operation; since 2026-10-06, PD-MONITOR-007, `setModel` with the record's `wait.modelKey` marked
+   offers keep waiting (no operation; since 2026-10-06, PD-MONITOR-004 revision 2, `setModel` with the record's `wait.modelKey` marked
    `keepWaiting` with the wait's agent and attempt in the wait that never auto-resumes, `Run.keepWaiting`: a retry of the
    agents parked on the waiting pair alone), change model (`setModel`) and cancel — REQ-MONITOR-004's
    enumeration stays at twenty-two. `pnpm resilience-proof` drives nine launches through scripted fault steps. **Found — four defects in
@@ -1211,10 +1211,10 @@ Since 2026-10-02 a `switch-back` scenario follows the same-tier move with a swit
 configured key from the run header, and a follow-up queued beside it: iteration 2 runs on the configured model, as the
 switch's REQ-MONITOR-142 row says (OQ-177;
 [note](../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md)); since
-2026-10-06 (plan fin21) `keep-waiting` drives PD-MONITOR-007's retry of an out-of-quota pair from the wait header (pressed
+2026-10-06 (plan fin21) `keep-waiting` drives PD-MONITOR-004 revision 2's retry of an out-of-quota pair from the wait header (pressed
 twice in one frame since that plan's repair round 1: one retry, no switch of the entry model) and
 `switch-over-override` PD-ORCH-013's take-back of an earlier wait's override by a header switch, the switch rows reading
-PD-MONITOR-006's "for the rest of this run"; `same-tier` and `two-waits` read PD-MONITOR-008's helper calls (the
+PD-MONITOR-006's "for the rest of this run"; `same-tier` and `two-waits` read PD-MONITOR-007's helper calls (the
 classifier and the analyst following the override, and making no call on a pair held out of quota); and
 `--only=<name>[,<name>…]` runs the named scenarios alone. **Since 2026-10-02 the authentication class (the 401 note's four
 parts) is the proof's.** A failed run is classified in REQ-NOTIFY-060's order by main (`main/failure-class.ts`) and published

@@ -508,7 +508,7 @@ then compresses on the model chosen at its trigger; a manual pass in the span ca
 `compression-proof`'s `excluded-before-pass` scenario (red before: a pass at alpha's 600-token trigger; after: none, the root
 on beta, whose trigger is 60,000).
 
-*Ruled 2026-10-06 (OQ-189, [R-071](../../product/requests.md#r-071), [`PD-MONITOR-008`](../../product/directives.md#pd-monitor-008)),
+*Ruled 2026-10-06 (OQ-189, [R-071](../../product/requests.md#r-071), [`PD-MONITOR-007`](../../product/directives.md#pd-monitor-007)),
 reported back in place; the sentence above that a configured `compressor.model` "is still called as configured" is kept as it
 was written and no longer holds.* A configured compressing model is now a helper call: it is resolved through the session's
 overrides at each pass (`Run.helperModel`, `helperChoiceOf`), and where the pair it ends on is held out of quota the pass

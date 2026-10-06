@@ -43,7 +43,7 @@ export interface ChildReport {
 }
 
 export interface ReportInput {
-  /** OQ-189 (PD-MONITOR-008): the model the agent ran on at its end, the summariser's fallback when its own is out of quota. */
+  /** OQ-189 (PD-MONITOR-007): the model the agent ran on at its end, the summariser's fallback when its own is out of quota. */
   readonly agentModel?: { readonly model: ModelRef; readonly thinking: ThinkingLevel } | undefined;
   readonly agentName: string;
   readonly role: string;
@@ -76,7 +76,7 @@ export interface SummariserDeps {
    * a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced). Absent means `model` and `thinking` as given.
    */
   /**
-   * OQ-189's ruling (R-071, PD-MONITOR-008): `agent` is the model the summarised agent ran on, which the summariser falls back
+   * OQ-189's ruling (R-071, PD-MONITOR-007): `agent` is the model the summarised agent ran on, which the summariser falls back
    * to where its own pair is held out of quota; `withheld` is no call at all, the report the fallback one with that reason.
    */
   readonly resolve?: (choice: { readonly model: ModelRef; readonly thinking: ThinkingLevel }, agent?: { readonly model: ModelRef; readonly thinking: ThinkingLevel }) => { readonly model: ModelRef; readonly thinking: ThinkingLevel } | { readonly withheld: string };

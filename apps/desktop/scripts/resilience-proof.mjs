@@ -337,7 +337,7 @@ await scenarioRun('same-tier', async () => {
   expect(!kinds.some((i) => i.kind === 'model_wait'), 'the run waited although a candidate existed');
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/beta', `the calls did not move to beta: ${JSON.stringify(calls)}`);
-  // OQ-189's ruling (R-071, PD-MONITOR-008): the post-run analyst's slot (medium, alpha) is held out of quota with nothing
+  // OQ-189's ruling (R-071, PD-MONITOR-007): the post-run analyst's slot (medium, alpha) is held out of quota with nothing
   // replacing it, so the analysis is skipped and says so; before, the analyst (`child` to the scripted client) called alpha.
   const helperAlpha = modelCalls(r.log).filter((c) => c.who !== 'orchestrator' && c.who !== 'classifier' && c.model === 'scripted/alpha');
   expect(helperAlpha.length === 0, `a helper call went to alpha after the session held it out of quota: ${JSON.stringify(modelCalls(r.log))}`);
@@ -358,7 +358,7 @@ await scenarioRun('same-tier', async () => {
   const moves = list2.filter((t) => t.name === 'quota_fallback_model').map((t) => JSON.parse(t.metadata));
   expect(moves.length === 2 && moves[0].pre_call === undefined && moves[1].pre_call === true && moves[1].from_model === 'alpha' && moves[1].to_model === 'beta', `the second prompt's move was not made before its call: ${JSON.stringify(moves)}`);
   expect(list2.filter((t) => t.name === 'model_exhausted').length === 1, `the move without a call recorded a second exclusion: ${list2.map((t) => t.name).join(',')}`);
-  // OQ-189 (PD-MONITOR-008): no call of the relaunch goes to alpha — the intent classifier (small, alpha) makes none, and the
+  // OQ-189 (PD-MONITOR-007): no call of the relaunch goes to alpha — the intent classifier (small, alpha) makes none, and the
   // analyst is skipped again. Before: the classifier and the analyst called alpha.
   const all2 = modelCalls(again.log);
   expect(all2.every((c) => c.model !== 'scripted/alpha'), `a call of the relaunch went to the pair held out of quota: ${JSON.stringify(all2)}`);
@@ -570,7 +570,7 @@ await scenarioRun('quota-retry', async () => {
   results.quotaRetry = { status: row.execution_status, exhausted, overrides, calls, headerDuringSecondWait: r.value.during[0]?.text ?? null, png: r.png, elapsedMs: r.elapsedMs };
 });
 
-// 4d. `keep-waiting` — OQ-188's ruling (R-071, PD-MONITOR-007): in the wait that never auto-resumes, the header's Keep waiting
+// 4d. `keep-waiting` — OQ-188's ruling (R-071, PD-MONITOR-004 revision 2): in the wait that never auto-resumes, the header's Keep waiting
 // retries the waiting pair now — `setModel` with the wait's `modelKey`, marked `keepWaiting` and naming the wait's agent and
 // attempt (`Run.keepWaiting`), which clears the pair's exclusion (REQ-MONITOR-194) and resolves the wait as a retry
 // (REQ-MONITOR-303), moving no other agent and persisting no override. Alpha refuses on quota, Keep waiting is pressed TWICE in
@@ -701,7 +701,7 @@ await scenarioRun('two-waits', async () => {
   const calls2 = modelCalls(ended < 0 ? again.log : again.log.slice(0, ended)).filter((c) => c.who === 'orchestrator' || c.who === 'child');
   expect(calls2.some((c) => c.who === 'child') && calls2.some((c) => c.who === 'orchestrator'), `the relaunch did not call both the root and a child: ${JSON.stringify(calls2)}`);
   expect(calls2.every((c) => c.model === 'scripted-c/gamma'), `an agent returned to a pair the choice replaced after the reload: ${JSON.stringify(calls2)}`);
-  // OQ-189's ruling (R-071, PD-MONITOR-008): the helper calls follow the override too — the intent classifier and the post-run
+  // OQ-189's ruling (R-071, PD-MONITOR-007): the helper calls follow the override too — the intent classifier and the post-run
   // analyst, configured on alpha, call gamma; before, both called alpha (the fin10 first-executions row).
   const helpers2 = modelCalls(again.log).filter((c) => c.who !== 'orchestrator');
   expect(helpers2.some((c) => c.who === 'classifier') && helpers2.every((c) => c.model === 'scripted-c/gamma'), `a helper call of the relaunch did not follow the override to gamma: ${JSON.stringify(helpers2)}`);

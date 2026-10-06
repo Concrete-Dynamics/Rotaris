@@ -210,7 +210,7 @@ export interface SessionsDeps {
   readonly sessionFilesDir: (dal: StoreDal, sessionId: SessionId) => string;
   /** REQ-SESSION-186: the terminal result, presented once. Reached through the bus, in process (REQ-EVENTS-178). */
   /**
-   * `helperModel` (OQ-189's ruling, PD-MONITOR-008): what the post-run analyst calls in place of its slot's model — the
+   * `helperModel` (OQ-189's ruling, PD-MONITOR-007): what the post-run analyst calls in place of its slot's model — the
    * session's overrides followed, or not `ok` where that pair is held out of quota and the analysis is skipped.
    */
   readonly onRunResult?: (sessionId: SessionId, result: RunResult, helperModel: HelperModel) => void;
@@ -266,7 +266,7 @@ export interface SessionsDeps {
   /** REQ-ORCH-005: the pre-flight, built by the root; absent means the fallback intent and no playbook. */
   readonly preflight?: (ctx: PreflightContext) => Promise<Preflight>;
   /** REQ-ORCH-107: absence means supervision was intentionally disabled and constructs nothing. */
-  /** `helperModel` (OQ-189's ruling, PD-MONITOR-008): the loop classifier's model, read at each classification. */
+  /** `helperModel` (OQ-189's ruling, PD-MONITOR-007): the loop classifier's model, read at each classification. */
   readonly supervisor?: ((workspaceRoot: string, sessionId: SessionId, countUsage: CountUsage, helperModel: HelperModel) => { readonly config: SupervisorConfig; readonly classifier: LoopClassifier } | null) | undefined;
   readonly isProcessAlive?: ((pid: number) => boolean) | undefined;
   /**
@@ -1498,7 +1498,7 @@ export class Sessions {
     const runRef: { run?: Run } = {};
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };
-    // OQ-189's ruling (R-071, PD-MONITOR-008): the helper calls' model, read from the run's memory at each call.
+    // OQ-189's ruling (R-071, PD-MONITOR-007): the helper calls' model, read from the run's memory at each call.
     const helperModel: HelperModel = (choice) => runRef.run?.helperModel(choice) ?? { ok: true, model: choice.model, thinking: choice.thinking };
     const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage, helperModel) ?? null;
     const supervisors = supervisorSetup
@@ -1799,7 +1799,7 @@ export class Sessions {
     const restatesUnfinished = (openIteration === 'decline' || openIteration.message === null) && judged !== null && judged.holdsUnfinished(prompt, open ? { iteration: open.iteration, taskId: open.todo_task_id } : null);
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };
-    // OQ-189's ruling (R-071, PD-MONITOR-008): the helper calls' model, read from the run's memory at each call.
+    // OQ-189's ruling (R-071, PD-MONITOR-007): the helper calls' model, read from the run's memory at each call.
     const helperModel: HelperModel = (choice) => runRef.run?.helperModel(choice) ?? { ok: true, model: choice.model, thinking: choice.thinking };
     const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage, helperModel) ?? null;
     const supervisors = supervisorSetup ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks.timers) : null;
@@ -2038,7 +2038,7 @@ export class Sessions {
       }
       case 'setModel': {
         const key = text('model');
-        // OQ-188's ruling (PD-MONITOR-007): the wait header's keep waiting travels on this operation, marked and naming the wait
+        // OQ-188's ruling (PD-MONITOR-004 revision 2): the wait header's keep waiting travels on this operation, marked and naming the wait
         // it answers; it is a retry of that wait's pair, never a switch (`Run.keepWaiting`), so REQ-MONITOR-004 keeps 22.
         if (req.args['keepWaiting'] === true) {
           const agent = text('agent');

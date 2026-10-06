@@ -51,7 +51,7 @@ export interface LoopClassifierDeps {
   readonly slots: ClassifierSlots;
   readonly modelTimeoutMs: number;
   /**
-   * OQ-189's ruling (R-071, PD-MONITOR-008): the selected model with the session's overrides followed, read at each
+   * OQ-189's ruling (R-071, PD-MONITOR-007): the selected model with the session's overrides followed, read at each
    * classification; not `ok` where that pair is held out of quota, and then no request is sent — the classification fails
    * with the reason, and the supervisor reads it as an unanswered one (its raw-count fallback). Absent: as configured.
    */
@@ -75,7 +75,7 @@ export function createLoopClassifier(deps: LoopClassifierDeps): LoopClassifier |
         const report = await deps.backend.runTurn({
           persona: 'loop-supervisor', systemPrompt: SYSTEM_PROMPT,
           messages: [{ role: 'user', content: [{ kind: 'text', text: `${prompt}\n\n${INSTRUCTION[rung]}` }] }], tools: [], model: selected.model,
-          // The helper's level: the override's model at its own configured level, as `helperChoiceOf` resolves it (PD-MONITOR-008).
+          // The helper's level: the override's model at its own configured level, as `helperChoiceOf` resolves it (PD-MONITOR-007).
           thinking: helper.thinking, timeoutMs: deps.modelTimeoutMs, retries: 0, resolveCredential,
           ...(output ? { output } : {}),
         }, { delta: () => undefined, reasoning: () => undefined, usage: () => undefined }, signal);

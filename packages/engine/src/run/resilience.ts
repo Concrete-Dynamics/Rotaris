@@ -173,7 +173,7 @@ export function sameTierCandidates(failing: { readonly provider: string; readonl
  * configured key reaches names nothing.
  */
 /**
- * OQ-189's ruling (R-071, PD-MONITOR-008): what a helper call — the intent classifier, the loop classifier, a configured
+ * OQ-189's ruling (R-071, PD-MONITOR-007): what a helper call — the intent classifier, the loop classifier, a configured
  * compressor, the summariser, the post-run analyst — makes in place of the model its slot configures. `ok` with the model
  * and level to call: the configured choice with the session's overrides followed (REQ-ORCH-091 d), as every agent's cell
  * follows them, the level the override's own where one moved it. Not `ok` when the pair it ends on is held out of quota
@@ -198,7 +198,7 @@ export function helperChoiceOf(memory: ResilienceMemory, catalogue: readonly Cat
 }
 
 /**
- * OQ-188's ruling (R-071, PD-MONITOR-007): the model key that names a pair — the first configured entry in declaration order,
+ * OQ-188's ruling (R-071, PD-MONITOR-004 revision 2): the model key that names a pair — the first configured entry in declaration order,
  * else the first discovered one — or null when none does. The wait record carries it so the header's keep waiting can name
  * the waiting pair (`setModel` with it, marked `keepWaiting`: `Run.keepWaiting`, a retry that clears the pair's exclusion as an
  * explicit choice does, REQ-MONITOR-194/303, and moves no other agent).

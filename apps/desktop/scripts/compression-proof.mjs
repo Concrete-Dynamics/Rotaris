@@ -287,7 +287,7 @@ const s6 = scenario('root-and-child', ['  threshold_percentage: 60', '  preserve
 // beta's trigger, so the next step compresses first, with beta's figures in the entry. Before the repair the trigger was
 // alpha's, captured when the turn started, and no pass ran. The compressing model is the configured `compressor.model` — its
 // default, the `small_model` alias, alpha here — which REQ-MONITOR-080 lets win over the agent's own; with none configured it
-// is the cell's (ladder.test.ts pins that). Since OQ-189's ruling (PD-MONITOR-008, 2026-10-06) a configured compressor held
+// is the cell's (ladder.test.ts pins that). Since OQ-189's ruling (PD-MONITOR-007, 2026-10-06) a configured compressor held
 // out of quota yields to the agent's own model, so the pass runs on beta, which is asserted; until then it was reported only
 // and went to alpha.
 const s7 = scenario('after-a-move', ['  threshold_percentage: 60', '  preserve_recent_turns: 1'], { alphaInputTokens: 10_000, beta: true });
@@ -307,7 +307,7 @@ const s7 = scenario('after-a-move', ['  threshold_percentage: 60', '  preserve_r
   const calls = modelCalls(r.log);
   const compressor = calls.filter((c) => c.who === 'compressor').map((c) => c.model);
   expect(compressor.length === 1, `not exactly one pass reached the compressing model: ${JSON.stringify(calls)}`);
-  // OQ-189's ruling (R-071, PD-MONITOR-008): the configured compressor (alpha) is held out of quota with nothing replacing it,
+  // OQ-189's ruling (R-071, PD-MONITOR-007): the configured compressor (alpha) is held out of quota with nothing replacing it,
   // so the pass compresses on the root's own model, beta; until 2026-10-06 it went to alpha, as configured.
   expect(/\/beta$/.test(compressor[0] ?? ''), `the pass did not compress on the root's own model: ${JSON.stringify(compressor)}`);
   results.afterAMove = { status: row.execution_status, move: JSON.parse(moved.metadata), metadata: meta, compressorModel: compressor[0], calls, png: r.png, elapsedMs: r.elapsedMs };

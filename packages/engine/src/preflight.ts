@@ -41,7 +41,7 @@ export interface PreflightContext {
   /** REQ-EVENTS-053: the run's counter for the classification requests the pre-flight makes (`meteredBackend`). */
   readonly countUsage?: CountUsage | undefined;
   /**
-   * OQ-189's ruling (R-071, PD-MONITOR-008): the model the classification call makes in place of its slot's — the session's
+   * OQ-189's ruling (R-071, PD-MONITOR-007): the model the classification call makes in place of its slot's — the session's
    * overrides followed — or not `ok` where that pair is held out of quota, and then no call is made.
    */
   readonly helperModel?: HelperModel | undefined;

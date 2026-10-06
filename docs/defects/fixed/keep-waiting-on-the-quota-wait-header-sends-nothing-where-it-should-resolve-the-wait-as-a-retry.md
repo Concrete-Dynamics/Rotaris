@@ -43,7 +43,7 @@ keep waiting sends nothing, and the wait ends only by a change of model (which c
 
 ## Outcome — 2026-10-06 (plan fin21, under [R-071](../../product/requests.md#r-071)): ruled and repaired
 
-OQ-188 was ruled by the owner as recommended ([`PD-MONITOR-007`](../../product/directives.md#pd-monitor-007), narrowing
+OQ-188 was ruled by the owner as recommended ([`PD-MONITOR-004`](../../product/directives.md#pd-monitor-004) revision 2, narrowing
 REQ-MONITOR-303): in the wait that never auto-resumes, Keep waiting retries the waiting pair at once through the existing
 retry path; in the timed wait it stays an acknowledgement and the timer retries.
 
@@ -69,4 +69,4 @@ retry of its own wait alone: the header sends `setModel` marked `keepWaiting` wi
 (`onKeepWaiting`), once per wait drawn (`keepWaitingAction`'s `sent`), and `Run.keepWaiting` refuses a press naming no
 outstanding out-of-quota wait and otherwise resumes the agents parked on that pair alone (`WaitRegistry.retryOn`), no
 override persisted. Pinned by three `ladder.test.ts` cases on two parked agents and a `ui.test.ts` case, each red before;
-`resilience-proof`'s `keep-waiting` presses twice in one frame. `PD-MONITOR-007` clause 1 states it.
+`resilience-proof`'s `keep-waiting` presses twice in one frame. `PD-MONITOR-004` revision 2 clause 1 states it.

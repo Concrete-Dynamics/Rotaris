@@ -9720,8 +9720,8 @@ Open; owner-only, as every question this round raises. Ruled 2026-10-06 by the o
 the out-of-quota wait (the variant that never auto-resumes), clearing its out-of-quota mark through the existing retry path
 — read onto the existing switch of the entry model, which the header sends with the waiting pair's key, now carried on the
 record's `wait` as `modelKey`, so REQ-MONITOR-004's twenty-two operations are unchanged — and stays a plain acknowledgement in
-the timed wait, whose timer already retries. Minted as [`PD-MONITOR-007`](../product/directives.md#pd-monitor-007),
-narrowing REQ-MONITOR-303, and built the same day (plan fin21). The reading taken where the ruling leaves a detail open, as
+the timed wait, whose timer already retries. Written as [`PD-MONITOR-004`](../product/directives.md#pd-monitor-004)'s revision 2 (minted on its branch as a
+directive of its own and folded in at the landing rebase), narrowing REQ-MONITOR-303, and built the same day (plan fin21). The reading taken where the ruling leaves a detail open, as
 corrected in that plan's repair round 1: "retry the same model" moves no other agent — keep waiting resumes only the agents
 parked out of quota on the waiting pair and persists no override, an agent parked on another pair keeping its own wait — and
 the press is marked as keep waiting and names the wait it answers, so a second press for a wait already retried is refused
@@ -9765,7 +9765,7 @@ summariser already did; where the pair it reaches is held out of quota with noth
 calling agent's current model, and the classifiers and the analyst make no call. The summariser, which the ruling does not
 name, is read as the condensing call it is beside compression: it summarises the child on the model the child ran on, and
 writes the fallback report where that is held out of quota too; and a configured `compressor.model` yields to the exclusion
-of its pair. Minted as [`PD-MONITOR-008`](../product/directives.md#pd-monitor-008), narrowing REQ-MONITOR-080, REQ-ORCH-009,
+of its pair. Minted as [`PD-MONITOR-007`](../product/directives.md#pd-monitor-007), narrowing REQ-MONITOR-080, REQ-ORCH-009,
 REQ-ORCH-114, REQ-ORCH-100, REQ-CONFIG-065 and REQ-LIBRARY-037, and built the same day (plan fin21).
 
 The run's auxiliary calls — the intent classifier and the pre-flight, the loop classifier, a configured compressor, the

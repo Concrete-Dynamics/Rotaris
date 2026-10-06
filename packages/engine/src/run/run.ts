@@ -777,7 +777,7 @@ export class Run {
    * REQ-MONITOR-303: with it, the model keys the session holds out of quota (`excludedModelKeys`), read from the memory at
    * every snapshot, so the change-model picker lists them annotated with the reason rather than as any other model; and the
    * waiting pair's own key (`keyOfPair`), which the header's keep waiting chooses in the out-of-quota wait (OQ-188's ruling,
-   * PD-MONITOR-007).
+   * PD-MONITOR-004 revision 2).
    */
   get currentWait(): (WaitState & { readonly excluded: string[]; readonly modelKey: string | null }) | null {
     const wait = this.waits.current();
@@ -1486,7 +1486,7 @@ export class Run {
     const c = this.deps.compression;
     if (!c) return undefined;
     /*
-     * OQ-189's ruling (R-071, PD-MONITOR-008): a configured `compression.model` is followed through the session's overrides,
+     * OQ-189's ruling (R-071, PD-MONITOR-007): a configured `compression.model` is followed through the session's overrides,
      * and where the pair it ends on is held out of quota the pass compresses on the agent's own model — the model its cell
      * calls next. Until 2026-10-06 the configured model was called as configured, a pair the provider had refused included.
      */
@@ -1507,7 +1507,7 @@ export class Run {
        * REQ-MONITOR-194 with REQ-MONITOR-080: the agent's own pair, when the session holds it out of quota, is not called to
        * compress. The turn settles the cell before its automatic check (`settleBeforeCall`), so this answers only in the
        * span before the agent's next call — a manual pass while it awaits a tool or a child. Since OQ-189's ruling
-       * (PD-MONITOR-008, 2026-10-06) a configured `compression.model` held out of quota yields to the agent's own model
+       * (PD-MONITOR-007, 2026-10-06) a configured `compression.model` held out of quota yields to the agent's own model
        * (`compressing`), so this is read for whichever model the pass would call; until then a configured one was called as
        * configured.
        */
@@ -1585,7 +1585,7 @@ export class Run {
   private summariserDeps(): SummariserDeps | null {
     const s = this.deps.summariser ?? null;
     if (s === null) return null;
-    // OQ-189's ruling (R-071, PD-MONITOR-008): where the pair the summariser's model ends on is held out of quota, the child's
+    // OQ-189's ruling (R-071, PD-MONITOR-007): where the pair the summariser's model ends on is held out of quota, the child's
     // report is summarised on the model the child itself ran on — the calling agent's, as a compression pass falls back to
     // it — and where that one is held out of quota too, no call is made and the report is the fallback one, saying why.
     return {
@@ -1601,7 +1601,7 @@ export class Run {
   }
 
   /**
-   * OQ-189's ruling (R-071, PD-MONITOR-008): what a helper call configured on `choice` makes — the session's overrides
+   * OQ-189's ruling (R-071, PD-MONITOR-007): what a helper call configured on `choice` makes — the session's overrides
    * followed, or not `ok` where the pair it ends on is held out of quota (`helperChoiceOf`). Read at each call, from the
    * session's memory as it stands then. The intent classifier, the loop classifier and the post-run analyst reach it
    * through the session (`Sessions`), the compressor and the summariser here.
@@ -2482,7 +2482,7 @@ export class Run {
     return true;
   }
   /**
-   * OQ-188's ruling (R-071, PD-MONITOR-007 clause 1): the wait header's keep waiting in a wait that never auto-resumes — a retry
+   * OQ-188's ruling (R-071, PD-MONITOR-004 revision 2 clause 1): the wait header's keep waiting in a wait that never auto-resumes — a retry
    * of the model the wait shows, not a change of model. The wait is named by its agent and attempt, as the header drew it, and
    * `key` must name its pair; a press that names no outstanding out-of-quota wait — a timed one, one already retried (a second
    * click before the next snapshot), a key of another pair — is refused and changes nothing, so it can never fall through to a

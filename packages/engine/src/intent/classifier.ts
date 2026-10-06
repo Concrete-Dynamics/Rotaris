@@ -59,7 +59,7 @@ export interface ClassifyDeps {
   readonly warn: (message: string) => void;
   readonly timeoutMs?: number;
   /**
-   * OQ-189's ruling (R-071, PD-MONITOR-008): the slot's model with the session's overrides followed; not `ok` where that pair
+   * OQ-189's ruling (R-071, PD-MONITOR-007): the slot's model with the session's overrides followed; not `ok` where that pair
    * is held out of quota, and then no request is sent and the run proceeds on the fallback intent, saying why. Absent: the
    * slot's model as configured.
    */

@@ -389,10 +389,10 @@ describe('a resting session reads the catalogue a run would, as a read (REQ-CHAT
 });
 
 /*
- * OQ-189's ruling (R-071, PD-MONITOR-008): the post-run analyst follows the session's override — the artifact naming the
+ * OQ-189's ruling (R-071, PD-MONITOR-007): the post-run analyst follows the session's override — the artifact naming the
  * override's key — and is skipped where its pair is held out of quota. Until 2026-10-06 the configured model was called.
  */
-describe('run-host/configuration — the post-run analyst\'s model (REQ-LIBRARY-037, OQ-189, PD-MONITOR-008)', () => {
+describe('run-host/configuration — the post-run analyst\'s model (REQ-LIBRARY-037, OQ-189, PD-MONITOR-007)', () => {
   const ref = (id: string) => ({ providerId: 'p', modelId: id, dialect: 'chat' as const });
   const collector = { key: 'medium', model: ref('medium'), thinking: 'high' as const };
   it('as configured when the session leaves the pair alone; the override\'s model and key where one replaced it', () => {

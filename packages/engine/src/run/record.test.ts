@@ -378,7 +378,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
 /**
  * PD-ORCH-005 clause 14: each agent's record keeps a fingerprint of the instructions and the tools it started with; a
  * resumed agent runs with its persona's current ones, and when they differ the run states, as a warning, which agent
- * resumed under changed instructions. OQ-105 as ruled (R-071, `PD-ORCH-005` revision 6): the fingerprint is taken of the
+ * resumed under changed instructions. OQ-105 as ruled (R-071, `PD-ORCH-005` revision 7): the fingerprint is taken of the
  * persona's own definition, and a change is stated once.
  */
 describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {

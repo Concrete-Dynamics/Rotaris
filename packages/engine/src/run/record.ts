@@ -39,7 +39,7 @@ export class ConversationRecord {
   }
 
   /**
-   * PD-ORCH-005 clause 14 with OQ-105 as ruled (R-071, `PD-ORCH-005` revision 6): the check one execution of an agent makes
+   * PD-ORCH-005 clause 14 with OQ-105 as ruled (R-071, `PD-ORCH-005` revision 7): the check one execution of an agent makes
    * at its first model step, taken of its persona's own definition (`definition`). An agent with no fingerprint recorded has
    * it recorded — what it started with. An agent that has one is being resumed (a task id is never executed twice
    * otherwise), and when either digest differs the run states, as a warning, which agent resumed under changed
@@ -120,7 +120,7 @@ export function conversationOf(rows: readonly AgentMessageRow[]): ChatMessage[] 
 export type FingerprintCheck = () => void;
 
 /**
- * OQ-105 as ruled (R-071, `PD-ORCH-005` revision 6 clause 14): what an agent's fingerprint is taken of — its persona's
+ * OQ-105 as ruled (R-071, `PD-ORCH-005` revision 7 clause 14): what an agent's fingerprint is taken of — its persona's
  * own definition, and nothing the run adds around it. `instructions` is the persona's own system prompt, before the
  * playbook (REQ-ORCH-019), the context units (REQ-WORKSPACE-060) and the MCP section (REQ-MCP-101) are appended; `tools` is
  * its own tool declaration — the declared tools (REQ-CONFIG-102), `tool_restrictions` (REQ-CONFIG-103) and the two flags

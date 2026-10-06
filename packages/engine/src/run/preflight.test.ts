@@ -161,7 +161,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
   });
 
   /**
-   * OQ-162 and OQ-105 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): a continue resumes the paused iteration with the
+   * OQ-162 and OQ-105 as ruled (R-071, `PD-ORCH-005` revision 7 clause 40): a continue resumes the paused iteration with the
    * intent and tools it started with. The pre-flight the stub stands in for honours a carried intent as the run host's
    * does (`runPreflight`): no classification, the grant and the playbook resolved for that intent.
    */
@@ -251,7 +251,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       expect(dal.issuesOf(sid).filter((i) => i.kind === 'resumed_under_changed_instructions')).toEqual([]);
     });
 
-    it('OQ-202 with OQ-162 (PD-ORCH-006, PD-ORCH-005 revision 6 clause 23): a resumed coordinator keeps the instructions of the grant it started with; a message\'s direct-work grant tells the next iteration\'s root to do the work itself', async () => {
+    it('OQ-202 with OQ-162 (PD-ORCH-006, PD-ORCH-005 revision 7 clause 40): a resumed coordinator keeps the instructions of the grant it started with; a message\'s direct-work grant tells the next iteration\'s root to do the work itself', async () => {
       // The launch coordinates (`none`); the continue's message classifies `explicit_trivial` with the direct-work bundle.
       // The resumed iteration runs under the carried grant, so its root keeps the coordinating prompt that agrees with the
       // tools it is offered; only the next iteration's root is told to do the work itself (found by fin20's verifier).

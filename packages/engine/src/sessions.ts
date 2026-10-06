@@ -594,7 +594,7 @@ function previousIntent(dal: StoreDal, sessionId: SessionId): IntentCategory | n
 }
 
 /**
- * OQ-162 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): the intent a continue carries without classifying — the
+ * OQ-162 as ruled (R-071, `PD-ORCH-005` revision 7 clause 40): the intent a continue carries without classifying — the
  * intent in effect, fallback or not, restated as carried over (REQ-ORCH-014's continued-from-previous-run suffix). Null
  * when none is recorded, and the continue then classifies as before, since an intent must be in effect (REQ-ORCH-005).
  */
@@ -1666,7 +1666,7 @@ export class Sessions {
    * the message a continue by message delivers to its root, which clause 17 also appends as a task the resumed iteration
    * holds — or decline it. Every route resumes unless told to decline.
    *
-   * `intentFrom` is OQ-162 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): `carry` for the Continue action and the
+   * `intentFrom` is OQ-162 as ruled (R-071, `PD-ORCH-005` revision 7 clause 40): `carry` for the Continue action and the
    * message-limit resolution, which bring nothing new to classify — the run carries the intent in effect and makes no
    * classification call; `classify` for every route that brings a request (a continue by message, a plan decision), whose
    * pre-flight classifies as before. Either way an iteration this run resumes keeps the intent it started with, and a new
@@ -1774,7 +1774,7 @@ export class Sessions {
     const capFor = runtime?.modelCapFor ?? (() => cap);
     const preflight = this.deps.preflight;
     /*
-     * OQ-162 as ruled (R-071, PD-ORCH-005 revision 6 clause 23): the Continue action carries the intent in effect for the
+     * OQ-162 as ruled (R-071, PD-ORCH-005 revision 7 clause 40): the Continue action carries the intent in effect for the
      * whole run; any other continue that resumes the open iteration classifies its request for the run's next iteration
      * and carries the intent in effect for the resumed one. Where nothing is recorded to carry, the continue classifies.
      */

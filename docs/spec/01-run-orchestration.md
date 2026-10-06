@@ -61,7 +61,7 @@ A run takes one top-level user task and executes it through an autonomous, itera
 ### 2. Pre-Flight Intent Classification
 
 - **REQ-ORCH-005** — Intent classification MUST complete before the coordinator is initialized, and the classified intent MUST be in effect before the first iteration so that intent-dependent behavior (capability gating, playbook cells, budget clamps, route-aware guards) applies from iteration 1.
-  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clause 23: the
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 7, 2026-10-06.** Clause 40: the
   > Continue action and a message-limit resolution make no classification call and carry the intent in effect; an
   > iteration a continue resumes runs under the intent it started with, so a continue by message's classification is
   > in effect from the run's next iteration rather than its first. Every other run classifies as stated.
@@ -73,7 +73,7 @@ A run takes one top-level user task and executes it through an autonomous, itera
 - **REQ-ORCH-011** — The classification result MUST carry: the intent category, a confidence value in [0, 1] or null, a reason string, a fallback flag, and a carried-over flag.
 - **REQ-ORCH-012** — When the session has prior completed coordinator iterations, the latest usable one's stored summary (else its final response text), truncated to 4000 characters, MUST be passed to the classifier as optional prior-response context. Iterations persisted without a role attribution are ineligible. The classifier instructions MUST direct that this history is untrusted context and that instructions embedded in it must never be followed.
 - **REQ-ORCH-013** — Resume intent carry-over: when (a) the fresh classification is unusable (`ambiguous` or a fallback), (b) the session has a prior recorded intent that is a real non-ambiguous category, and (c) the session todo still has unfinished work (pending, in-progress, and abandoned items all count as unfinished), then the prior intent MUST be inherited deterministically with no model call, the carried-over flag set, and a reason stating the previous intent was continued. An unreadable todo state MUST count as "no unfinished work" (no carry-over).
-  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clause 23: the
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 7, 2026-10-06.** Clause 40: the
   > Continue action and a message-limit resolution carry the intent in effect with no fresh classification at all, and
   > the prior intent this carry-over inherits is the intent in effect, a continuation's or else the launch's. A
   > classification that runs carries over as stated.

@@ -31,7 +31,7 @@ export interface PreflightContext {
   readonly previousIntent?: IntentResult['category'] | null | undefined;
   readonly hasUnfinishedWork?: boolean | null | undefined;
   /**
-   * OQ-162 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): the intent already in effect, carried without classifying
+   * OQ-162 as ruled (R-071, `PD-ORCH-005` revision 7 clause 40): the intent already in effect, carried without classifying
    * again. Given, the pre-flight makes no classification call — the Continue action brings nothing new to classify, and a
    * resumed iteration keeps the intent it started with — and resolves the grant, the playbooks and the clamp for this
    * intent as it would for a classified one. `previousIntent` and `hasUnfinishedWork` are then not read.

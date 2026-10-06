@@ -2372,10 +2372,13 @@ earlier text is replaced, but two earlier clauses are qualified, and each carrie
 sentence ("settled as before") no longer holds for the agents a crash left, which clause 23 presents `paused` before the
 crash is recorded; and clause 15's "whichever surface asks it" no longer holds on one surface, a persona window on the
 run's own instance while the session rests, where clause 24 refuses the run's cancel.*
-*Revision 6 (2026-10-06, [R-071](requests.md#r-071)) — **two rulings on what the build left open**: clause 14 is replaced
-(the fingerprint is of the persona's own definition, and a change is stated once, OQ-105) and clause 23 is added (a continue
+
+*Revision 7 (2026-10-06, [R-071](requests.md#r-071)) — **two rulings on what the build left open**: clause 14 is replaced
+(the fingerprint is of the persona's own definition, and a change is stated once, OQ-105) and clause 40 is added (a continue
 resumes the paused iteration with the intent and tools it started with, OQ-162); `REQ-ORCH-005` and `REQ-ORCH-013` join the
-Narrows list. The owner took both recommendations.*
+Narrows list. The owner took both recommendations. Built as revision 6, with clause 23, on its branch,
+and renumbered before landing, when the ratification of the readings OQ-100 to OQ-149 recorded took revision 6 and
+clauses 23 to 39 on `main` first.*
 
 *Revision 5 (2026-09-29, [R-067](requests.md#r-067)) — **two rulings on what the build left open**: clause 21 (the
 status a stop persists, OQ-96) and clause 22 (a follow-up by `session_id` resumes a settled child, OQ-66's open part)
@@ -2469,14 +2472,14 @@ to the run's outcome for display; every other unfinished agent of a session at r
 > *Qualified by clause 23 (revision 6): the agents a crash left present `paused`, by `crash`, before the crash is recorded,
 > and are not "settled as before".*
 
-**(14) What the record keeps beside the conversation — revision 6.** Each agent's record SHALL also keep a fingerprint
+**(14) What the record keeps beside the conversation — revision 7.** Each agent's record SHALL also keep a fingerprint
 of its persona's own definition: the persona's instructions, before anything the run adds to them (a playbook, the
 session's context units, the MCP section), and the persona's tool declaration, not the listing a request offers. A
 resumed agent runs with its persona's current instructions and tools; when its persona's definition differs from the
 fingerprint, the run SHALL state, as a warning, which agent resumed under changed instructions, and the fingerprint then
 becomes the definition it resumed under, so that each change is stated once.
 
-> Revision 5 said, and no longer governs, clause (14): "**(14) What the record keeps beside the conversation (revision
+> Revisions 4 to 6 said, and no longer govern, clause (14): "**(14) What the record keeps beside the conversation (revision
 > 4).** Each agent's record SHALL also keep a fingerprint of the system instructions and the tool definitions the agent
 > started with. A resumed agent runs with its persona's current instructions and tools; when they differ from the
 > fingerprint, the run SHALL state, as a warning, which agent resumed under changed instructions." The build took "the
@@ -2662,7 +2665,8 @@ is offered first to the other sessions, in the order they joined, and then to th
 `starting`, `running` or `summarizing` SHALL keep its slot while its session rests and resume into it, in place of
 REQ-MONITOR-020's "only running and summarizing agents count" and REQ-CONFIG-094's "currently running". A session paused
 by an earlier process holds no place until a run of it starts in this one, and a resting session's places do not lapse.
-**(23) A continue resumes the paused iteration with the intent and tools it started with (revision 6).** An iteration a
+
+**(40) A continue resumes the paused iteration with the intent and tools it started with (revision 7, OQ-162).** An iteration a
 continue resumes SHALL run under the intent in effect when it was left open — the newest intent the session recorded, a
 continuation's or else the launch's — with that intent's grant to the entry role, the entry role's instructions as that
 grant fits them (PD-ORCH-006), its playbook and its budget clamp, for its root and every agent it resumes or delegates.
@@ -2708,23 +2712,6 @@ What it costs:
 
 Until they are built, the product behaves as the readings in OQ-94 to OQ-99 recorded.
 
-**Why revision 6, and what it costs.** The owner ruled two questions the build had left open ([R-071](requests.md#r-071)).
-Every continue classified the intent again, the Continue action on the session's last prompt, which added up to 12 s to a
-continue that brought nothing new; and the new classification governed the iteration it resumed, so the coordinator's
-tools or playbook changed in the middle of its iteration (24 tools to 29 in the live run of 2026-10-01, finding a71-3;
-three playbook lines in that of 2026-10-06, finding G1). Clause 14's fingerprint, taken of the whole system prompt and
-the listing, then warned that the agent had resumed under changed instructions although no persona had been edited. What
-it costs:
-- `REQ-ORCH-005` asks that classification complete before the coordinator starts and be in effect from the first
-  iteration; the Continue action classifies nothing, and a continue by message's first iteration runs under the intent it
-  resumes, so the directive names it;
-- `REQ-ORCH-013` carries the prior intent over only when a fresh classification was unusable; the Continue action carries
-  it with no fresh classification at all;
-- a persona whose definition is unchanged is never named, even when what it was instructed with changed — a workspace
-  instruction file its own run edited, a skill loaded since, another MCP server — since those are the run's, not the
-  persona's;
-- a change is stated once, so a session resumed many times under a changed persona does not repeat the warning.
-
 **Why revision 5, and what it costs.** The owner ruled two questions the build had left to the record ([R-067](requests.md#r-067)).
 REQ-SESSION-186 has a graceful, clean stop persist `stopped`, and REQ-SESSION-073's vocabulary glosses `stopped` with
 that stop, while clause 3 has a stop leave the state a pause leaves, and REQ-MONITOR-029 and REQ-SESSION-093 persist
@@ -2753,6 +2740,23 @@ finds this directive. Nothing in the product changes. What the readings cost, no
 - an ask in the quit's gap announces a `timeout_seconds` it is not held to;
 - the iteration a recorded cancel closes has no checkpoint of its own;
 - a board run caught by the quit is resumable rather than cancelled.
+
+**Why revision 7, and what it costs.** The owner ruled two questions the build had left open ([R-071](requests.md#r-071)).
+Every continue classified the intent again, the Continue action on the session's last prompt, which added up to 12 s to a
+continue that brought nothing new; and the new classification governed the iteration it resumed, so the coordinator's
+tools or playbook changed in the middle of its iteration (24 tools to 29 in the live run of 2026-10-01, finding a71-3;
+three playbook lines in that of 2026-10-06, finding G1). Clause 14's fingerprint, taken of the whole system prompt and
+the listing, then warned that the agent had resumed under changed instructions although no persona had been edited. What
+it costs:
+- `REQ-ORCH-005` asks that classification complete before the coordinator starts and be in effect from the first
+  iteration; the Continue action classifies nothing, and a continue by message's first iteration runs under the intent it
+  resumes, so the directive names it;
+- `REQ-ORCH-013` carries the prior intent over only when a fresh classification was unusable; the Continue action carries
+  it with no fresh classification at all;
+- a persona whose definition is unchanged is never named, even when what it was instructed with changed — a workspace
+  instruction file its own run edited, a skill loaded since, another MCP server — since those are the run's, not the
+  persona's;
+- a change is stated once, so a session resumed many times under a changed persona does not repeat the warning.
 
 > Revision 1 said, and no longer governs, clause (1):
 > **(1) The interruption is recorded on each unfinished child.** When a run comes to rest with children that have not
@@ -2804,7 +2808,7 @@ finds this directive. Nothing in the product changes. What the readings cost, no
 
 *Raised by the owner, 2026-09-27; logged as [R-058](requests.md#r-058) and ruled as drafted, every fork as recommended,
 by [R-059](requests.md#r-059). Revision 2 logged as [R-060](requests.md#r-060), revision 3 as [R-061](requests.md#r-061),
-revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-067), revision 6 as
+revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-067), revisions 6 and 7 as
 [R-071](requests.md#r-071).*
 
 > **First execution of revisions 2 and 3, 2026-09-27, ruled by [R-060](requests.md#r-060) and
@@ -3096,15 +3100,16 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 
-> **First execution of revision 6, 2026-10-06, ruled by [R-071](requests.md#r-071) and built on branch
-> `fin20-continue-and-continuation`:** clauses 14 and 23 were built as written. The text met the code in these places:
+> **First execution of revision 7, 2026-10-06, ruled by [R-071](requests.md#r-071) and built on branch
+> `fin20-continue-and-continuation`:** clauses 14 and 40 were built as written (as clauses 14 and 23 of a revision 6, renumbered
+> before landing). The text met the code in these places:
 > - **Where the carried intent comes from.** "The intent in effect" is the newest `run_continuation_intent` entry's, else the
 >   launch audit's — the reading REQ-ORCH-014's status already took (`intentPayloadOf`). It is carried restated as carried
 >   over (`carriedIntent`), so a fallback launch intent is carried as the category it fell back to, conveyed as continued
 >   from the previous run, not as a fallback. A session with nothing recorded to carry classifies, since an intent must be
 >   in effect (REQ-ORCH-005). An `ambiguous` intent in effect is carried as it stands: REQ-ORCH-013(b) carries over only a
 >   category that is not `ambiguous`, but that clause decides what replaces an unusable new classification, and the Continue
->   makes none — clause 23 narrows it to "the intent in effect", whatever that is (stated at the verifier's review).
+>   makes none — clause 40 narrows it to "the intent in effect", whatever that is (stated at the verifier's review).
 > - **The status does not read `classifying` for a carried intent.** REQ-ORCH-014 ties that phase to the classification
 >   call, and the Continue action makes none, so the run is told its pre-flight carries (`RunDeps.preflightCarries`) and
 >   publishes `classifying` only when it does not (found at the verifier's review; the Continue-action case pins it).
@@ -3128,7 +3133,7 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 >   landing). The root's instructions now read `Run.preflightInEffect`'s grant, as its tools, playbook and clamp do, so the
 >   clause names the instructions with them; the next iteration's root is the first given the message's. The fingerprint
 >   stays the persona's prompt as written, never its grant-fitted form, so the change of form between iterations is no
->   change of definition and warns nothing. Clause 23 also said "a continue that brings a request — a message, or a plan
+>   change of definition and warns nothing. Clause 40 also said "a continue that brings a request — a message, or a plan
 >   decision — classifies it"; a plan decision is not classified, its relaunch classifies the session's last request, so
 >   the clause now says that (the same review).
 > - **The persona's definition** is its own system prompt and its tool declaration (declared tools, `tool_restrictions`,

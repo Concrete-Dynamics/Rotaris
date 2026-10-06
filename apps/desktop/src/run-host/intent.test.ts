@@ -8,7 +8,7 @@ import type { AgentBackend, ModelRef } from '@rotaris/model';
 import { runPreflight, type PreflightDeps } from './intent.js';
 
 /**
- * The run host's pre-flight (REQ-ORCH-005) with OQ-162 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): an intent
+ * The run host's pre-flight (REQ-ORCH-005) with OQ-162 as ruled (R-071, `PD-ORCH-005` revision 7 clause 40): an intent
  * carried in is in effect as it stands — no classification call — and the grant and the playbooks are resolved for it.
  */
 describe('run-host/intent — the pre-flight', () => {

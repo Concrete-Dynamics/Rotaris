@@ -5046,7 +5046,7 @@ definition alone — its instructions before a playbook, the context units and t
 declaration rather than the listing a request offered — and a change is warned once: the fingerprint is then replaced by
 the definition the agent resumed under. When and where the warning is stated (a `resumed_under_changed_instructions`
 warning issue and one transcript line, at the resumed execution's first model step) stays as built. By
-[`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, clause 14.
+[`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 7, clause 14.
 
 Clause 14 has each agent's record keep "a fingerprint of the system instructions and the tool definitions the agent
 started with", and has the run state, as a warning, which agent resumed under changed instructions when its persona's
@@ -8423,7 +8423,7 @@ with the intent and tools it started with. The Continue action, and a message-li
 either, make no classification call and carry the intent in effect; a continue that brings a message classifies it, and
 that classification takes effect from the run's next iteration, once the resumed one has closed. The intent in effect —
 the newest continuation's, else the launch's — is what the status shows and what REQ-ORCH-013 carries over. By
-[`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, clause 23.
+[`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 7, clause 40.
 
 The directive resumes an iteration "where it stood" and runs a resumed agent with its persona's current instructions and
 tools. It does not say whether the run's classification is taken again. REQ-ORCH-005 places the classification before
@@ -10090,7 +10090,7 @@ a turn the plan gate holds, which REQ-ORCH-153 denies the bundle's writing tools
 2026-10-06 (fin20):** `entryInstructionsFor` (`packages/engine/src/children/personas.ts`) read by the root turn in
 `packages/engine/src/run/run.ts`; cases in `children/personas.test.ts`, `run/preflight.test.ts` and `run/plan-gate.test.ts`;
 `pnpm fetch-proof` reads the instructions its `explicit_trivial` launch received. *Since OQ-162's ruling was built beside
-it (`PD-ORCH-005` revision 6 clause 23, fin20, before landing):* the grant the instructions are fitted to is the one the
+it (`PD-ORCH-005` revision 7 clause 40, fin20, before landing):* the grant the instructions are fitted to is the one the
 iteration runs under (`Run.preflightInEffect`), so an iteration a continue by message resumes keeps the instructions of the
 grant it started with, and the message's grant fits them from the next iteration; pinned by the fourth "OQ-162 as ruled"
 case in `run/preflight.test.ts`.

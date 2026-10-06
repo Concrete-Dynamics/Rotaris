@@ -33,7 +33,7 @@ export interface PreflightDeps {
 export async function runPreflight(ctx: PreflightContext, deps: PreflightDeps): Promise<Preflight> {
   const warnings: string[] = [];
   const warn = (m: string) => { warnings.push(m); ctx.warn(m); };
-  // OQ-162 as ruled (R-071, PD-ORCH-005 revision 6 clause 23): an intent carried in is in effect as it stands, unclassified.
+  // OQ-162 as ruled (R-071, PD-ORCH-005 revision 7 clause 40): an intent carried in is in effect as it stands, unclassified.
   const intent = ctx.intent ?? carryOver(await classifyIntent(
     { prompt: ctx.prompt, metadata: { entrypoint: 'desktop', workspace_hash: String(ctx.workspaceRoot.length) } },
     deps.slots,

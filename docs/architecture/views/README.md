@@ -55,7 +55,7 @@ paragraph on the root's follow-up and its child-timeout paragraph say so. No pac
 store column changed.
 
 **A continue resumes the paused iteration with the intent and tools it started with, and the fingerprint is the persona's
-(OQ-162, OQ-105; `PD-ORCH-005` revision 6, R-071; fin20).** The Continue action and a message-limit resolution hand the
+(OQ-162, OQ-105; `PD-ORCH-005` revision 7, R-071; fin20).** The Continue action and a message-limit resolution hand the
 pre-flight the intent in effect (`PreflightContext.intent`), which `runPreflight` resolves with no classification call; a
 continue by message that resumes an open iteration runs it under the carried pre-flight (`RunDeps.resumedPreflight`,
 `Run.preflightInEffect`, which the entry turn's grant-fitted instructions of `PD-ORCH-006` read too) and records its own

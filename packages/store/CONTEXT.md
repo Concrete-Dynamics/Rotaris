@@ -44,7 +44,7 @@ transcript clears the record of closed iterations only. Beside the conversation 
 a digest of its persona's own definition — the persona's own prompt, before the playbook, the context units and the MCP
 section are added, and its tool declaration — taken when it first steps. A resumed agent runs with its persona's current
 definition, and when that differs the run states, as a warning, which agent resumed under changed instructions; the
-fingerprint is then replaced by the current one, so each change is stated once. — `PD-ORCH-005` (revision 6 clause 14)
+fingerprint is then replaced by the current one, so each change is stated once. — `PD-ORCH-005` (revision 7 clause 14)
 _Avoid_: transcript (the transcript is the rows a surface draws), log, "history" alone (the event history is REQ-EVENTS')
 
 **Open iteration**:

@@ -142,8 +142,8 @@ is a separate defect: `docs/defects/fixed/a-continuations-run-timing-starts-afte
 ## Repaired: ruled and built (2026-10-06)
 
 The owner ruled [OQ-162](../../architecture/open-questions.md) and OQ-105 as recommended on 2026-10-06
-([R-071](../../product/requests.md#r-071)), by [`PD-ORCH-005`](../../product/directives.md#pd-orch-005) revision 6 (clauses 14
-and 23), and the ruling is built on branch `fin20-continue-and-continuation`:
+([R-071](../../product/requests.md#r-071)), by [`PD-ORCH-005`](../../product/directives.md#pd-orch-005) revision 7 (clauses 14
+and 40; built as revision 6, clauses 14 and 23, and renumbered before landing), and the ruling is built on branch `fin20-continue-and-continuation`:
 
 - **The Continue action classifies nothing.** It, and the message-limit resolution, carry the intent in effect (the newest
   continuation's, else the launch's) into the pre-flight (`PreflightContext.intent`), which resolves the grant, the

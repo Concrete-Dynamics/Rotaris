@@ -222,14 +222,14 @@ export interface RunDeps {
   /** REQ-ORCH-005: classify, grant, resolve the playbooks — before the coordinator exists. Absent: the fallback intent, no playbook. */
   readonly preflight?: ((signal: AbortSignal) => Promise<Preflight>) | undefined;
   /**
-   * OQ-162 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): the pre-flight of the intent the iteration this run
+   * OQ-162 as ruled (R-071, `PD-ORCH-005` revision 7 clause 40): the pre-flight of the intent the iteration this run
    * resumes started with, carried and unclassified. Given, it governs that iteration — its root's and its children's
    * grant, playbook and clamp — and `preflight`'s classification governs from the run's next iteration. Absent, `preflight`
    * governs every iteration. Read only by a run that resumes an open iteration.
    */
   readonly resumedPreflight?: ((signal: AbortSignal) => Promise<Preflight>) | undefined;
   /**
-   * OQ-162 as ruled (clause 23): `preflight` carries the intent in effect and classifies nothing (the Continue action), so
+   * OQ-162 as ruled (clause 40): `preflight` carries the intent in effect and classifies nothing (the Continue action), so
    * the status never reads `classifying` for it — REQ-ORCH-014 ties that phase to the classification call.
    */
   readonly preflightCarries?: boolean | undefined;
@@ -993,7 +993,7 @@ export class Run {
         try { this.preflight = await this.deps.preflight(this.abort.signal); } catch (cause) { this.deps.warn(`the pre-flight raised and the run continues on the fallback intent: ${String(cause)}`); }
         finally { this.classifying = false; }
       }
-      // OQ-162 as ruled (R-071, PD-ORCH-005 revision 6 clause 23): the iteration this run resumes keeps the intent it started with.
+      // OQ-162 as ruled (R-071, PD-ORCH-005 revision 7 clause 40): the iteration this run resumes keeps the intent it started with.
       if (this.deps.resumedPreflight && this.resumeFrom !== null) {
         try { this.resumedPreflight = await this.deps.resumedPreflight(this.abort.signal); } catch (cause) { this.deps.warn(`the resumed iteration's pre-flight raised and it continues on this run's intent: ${String(cause)}`); }
       }
@@ -1132,7 +1132,7 @@ export class Run {
   }
 
   /**
-   * OQ-162 as ruled (R-071, PD-ORCH-005 revision 6 clause 23): the resumed iteration closed, so the intent this run's
+   * OQ-162 as ruled (R-071, PD-ORCH-005 revision 7 clause 40): the resumed iteration closed, so the intent this run's
    * request was classified as comes into effect for the run's next iteration — recorded as a continuation intent with its
    * row, so the status (REQ-ORCH-014) and REQ-ORCH-013's prior intent read it from here on. An iteration a rest left open
    * again keeps its carried intent, and this is not reached.
@@ -1738,7 +1738,7 @@ export class Run {
     const compression = this.compressionFor(() => this.callsOn(rootResilience.cell), () => this.plannerTodoLines());
     // PD-ORCH-005 revision 4 clause 14: one check per execution of the root, at its first model step.
     // OQ-105 as ruled (R-071): taken of the entry persona's own definition — its instructions and its tool declaration.
-    // The definition is the persona's prompt as written, never the grant-fitted form below (PD-ORCH-005 revision 6 clause 14).
+    // The definition is the persona's prompt as written, never the grant-fitted form below (PD-ORCH-005 revision 7 clause 14).
     const entryPersona = (this.deps.personas ? this.deps.personas.resolve(config.persona) : resolveRole(config.persona))?.persona;
     const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration, personaDefinitionOf(config.systemPrompt, entryPersona));
     /*
@@ -1746,7 +1746,7 @@ export class Run {
      * do the work itself, so its instructions agree with the tools it is offered; every other entry keeps its own prompt.
      * While the plan gate holds the run, REQ-ORCH-153 withholds the bundle's writing and command tools, so the held turn
      * keeps the prompt it had before the ruling (`turnFn` reads the hold per turn, as the supervisor below does).
-     * OQ-162 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): the grant read is the one the iteration runs under —
+     * OQ-162 as ruled (R-071, `PD-ORCH-005` revision 7 clause 40): the grant read is the one the iteration runs under —
      * a resumed iteration's carried intent, never the classification a continue's message brought for the next one —
      * so a resumed coordinator's instructions agree with the carried tools and do not change partway through it.
      */

@@ -479,7 +479,8 @@ export function formatDuration(seconds: number): string {
  * new streaming segment is a distinct row, REQ-CHAT-054), so the value does restart per call and does rise
  * while a call is slow, which is what the requirement asks a reader to be able to see. It is NOT the instant
  * the call was issued, and a call that has produced nothing yet counts from the end of the step before it.
- * Publishing the true boundary needs a field on the record, and that is recorded as owed rather than faked here.
+ * Publishing the true boundary would need a field on the record; the owner confirmed this reading as built (OQ-200,
+ * ruled 2026-10-06; PD-CHAT-008 narrows REQ-CHAT-158 to it), so no such field is owed.
  */
 export function modelCallStartedAt(rows: readonly { readonly at: string; readonly settled: boolean }[]): string | null {
   for (let i = rows.length - 1; i >= 0; i -= 1) if (!rows[i]!.settled) return rows[i]!.at;

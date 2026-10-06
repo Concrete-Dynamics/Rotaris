@@ -4483,9 +4483,10 @@ REQ-SESSION-030's listing record SHALL hold, beside its twelve fields, three mor
 `tokens_input` plus its `tokens_output`), the **start time of its latest run** (`run_started_at`), and its **workspace path**
 (`workspace_root`). They are what the Overview's sessions card draws as REQ-MONITOR-171's token label, duration label and
 detail caption. The duration label is the latest run's duration, counted from that start, so for a session paused and
-continued it counts the continuation alone. Building the list still reads one stored row per session and nothing else of
-the session's (REQ-SESSION-042), and every other clause of REQ-SESSION-030 still governs. `checkpoint_count` is a count over
-the session's checkpoint rows in the same store, as ADR-0039 derives it.
+continued it counts the continuation alone. The three are read from the same stored session row the listing record is
+read from, and reading them opens nothing else of the session's (REQ-SESSION-042); every other clause of REQ-SESSION-030
+still governs. `checkpoint_count` stays what it was before this directive: a count over the session's checkpoint rows in
+the same store, as ADR-0039 derives it.
 
 **As built.** `Sessions.list` (`packages/engine/src/sessions.ts`) reads the three from the session row the listing record is
 read from; the card is `packages/ui/src/OverviewView.tsx`.

@@ -82,6 +82,24 @@ manager: exit 0 in 135 ms, `bytes=4700`) and `live.longCommandGridShowsNoCarrier
 exit 124 after 20,025 ms, output `>`.
 
 **Not shown:** macOS's cap is reasoned, not measured (no macOS host). PowerShell is unchanged: whether ConPTY or PSReadLine
-caps a submitted line is not measurable on a Linux host and is owed to the first Windows run. A live run should show a
+caps a submitted line is not measurable on a Linux host and is owed to the first Windows run. ~~A live run should show a
 long heredoc or one-line command through the terminal tool ending on its own status with its output, never a soft pause
-with `>`.
+with `>`.~~ Shown live on 2026-10-06 (below).
+
+## Shown live — 2026-10-06 (finacc3, acceptance round 1)
+
+Final acceptance finding F03 found this note's repair landed (`43dd8ef`, `9789070`, `54bae3a`) but never shown by a live
+run, since the requirements scenario's long heredoc was the model's own choice and no scenario asked for one again. The
+`terminal` scenario of `apps/desktop/scripts/live-run.mjs` now replays the shape off Windows: `long-command` in
+`apps/desktop/scripts/lib/terminal-shapes.mjs`, a 56-row here-document read by `wc -c`, 4,667 bytes before any wrapper.
+`longCommandReading` credits the carrier only where the command the model sent was itself past 4,096 bytes (a shorter copy
+is a NOTE), fails M1's signature (a soft pause, exit −1, or the whole no-output window), and passes only exit 0 with the
+byte count of the here-document the command carried; `terminal-shapes.test.ts` pins the shape's length, the count a real
+`/bin/sh` prints for it, and the reading of the signature.
+
+`timeout 1800 xvfb-run -a -s "-screen 0 1600x1000x24" /opt/node24/bin/node <worktree>/apps/desktop/scripts/live-run.mjs
+--confirm --skip-build --only=terminal` against the registered self-hosted endpoint `katalyst`, on `a74887d` (pack
+`.live-run/runs/2026-10-06T21-22-49-851Z/`, git-ignored): the model sent the command whole, 4,667 bytes; it ended at exit
+0 in 90 ms, `outcome success`, printing `4648`, the here-document's own count. Every other check of the scenario passed,
+and `live-run PASSED`. The same day, at a load of 2.4 to 2.9 on four CPUs, `pnpm terminal-proof` passed 122 of 122 with
+`live.longCommand` at 4,796 bytes, exit 0 in 50 ms, `bytes=4700`.

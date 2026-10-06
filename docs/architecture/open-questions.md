@@ -10546,7 +10546,7 @@ and never holds inside itself"; REQ-LIBRARY-090, that document's rendering; REQ-
 submitted body unchanged, whose `key_findings` is that same body"; REQ-LIBRARY-094, REQ-LIBRARY-099 and REQ-LIBRARY-134, which
 read and write the one or the other; REQ-SESSION-002, the per-session files. Raised 2026-10-06 by finacc3's acceptance round 1
 (finding F16), repairing
-[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../defects/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
+[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
 the artifact store's first execution (Part U) said it raised this tension, in `packages/engine/src/artifacts/sidecar.ts` and in
 [ADR-0003](adr/0003-files-are-the-system-of-record.md)'s execution note ("Open question, not a settled reading"), and no entry
 was ever written, so the owner was never asked. Open, the owner's.)*
@@ -10572,7 +10572,7 @@ most once and persists"; REQ-LIBRARY-093, whose `created_by` names "the publishi
 than by its persona, so two instances sharing a persona stay distinguishable in every artifact listing"; REQ-MONITOR-044,
 REQ-MONITOR-052 and REQ-MONITOR-069, whose received-artifact links read the consumers. Raised 2026-10-06 by finacc3's
 acceptance round 1 (finding F16), repairing
-[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../defects/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
+[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
 `ArtifactStore.markConsumed`'s comment (`packages/engine/src/artifacts/store.ts`) said this was "raised as an open question
 rather than settled here", and no entry was ever written. Open, the owner's.)*
 
@@ -10597,7 +10597,7 @@ declare, `artifact_write` among them; REQ-TOOLS-004, which removes `artifact_wri
 handed the tool; REQ-TOOLS-007; REQ-ORCH-016, whose direct-work bundle names `artifact_read` and `artifact_list` and not
 `artifact_write`; REQ-ORCH-028's role vocabulary, which names the built-in roles and not their tools; REQ-LIBRARY-097 and
 REQ-LIBRARY-101. Raised 2026-10-06 by finacc3's acceptance round 1 (finding F16), repairing
-[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../defects/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
+[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
 `packages/contracts/src/roles.ts` said "that no built-in persona does is recorded as an open question", and no entry was ever
 written. Open, the owner's.)*
 

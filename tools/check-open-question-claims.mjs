@@ -1,0 +1,224 @@
+#!/usr/bin/env node
+// An open question is the owner's: the build raises it and proceeds under a stated reading until the owner rules
+// (`CLAUDE.md`, "A question the specification leaves open is raised, never ruled by you"). Two kinds of sentence
+// outlived that rule's bookkeeping, and nothing read either (acceptance finding F16 of finacc3, 2026-10-06,
+// `docs/defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`):
+//
+//   - a claim that a question is OPEN — "OQ-37 stays open", "OQ-114 to OQ-116 are open", "OQ-67 open against …",
+//     "the build's reading, asked as OQ-120", "carried as open question OQ-1" — about a question the owner has ruled,
+//     closed or withdrawn. After R-071 ruled every question then standing, a dozen such sentences stood in the code
+//     and the record;
+//   - a claim that a question was RAISED — "raised as an open question rather than settled here" — naming no
+//     question. Three comments said so of questions `open-questions.md` never had, so the owner was never asked.
+//
+// This gate reads `docs/architecture/open-questions.md` for each question's state (`questionStates`) and fails on
+// either kind of sentence (`claimsIn`) in the code (comments, tests and proofs under `apps/`, `packages/` and
+// `tools/`) and in the parts of the record that describe the build as it stands: the architecture views,
+// `codebase.md`, `first-release-plan.md` and the architecture README. History that says a question WAS open passes
+// when it says so: the sentence is struck through (`~~…~~`), or the words after the claim, up to the paragraph's
+// end and at most 240 characters, say it was ruled, closed, confirmed, withdrawn or deferred, or "while it was open".
+// A question still open, or deferred by the owner, may be called open. `open-questions.md` itself, the ADRs and the
+// defect notes keep their history as written and are not read.
+//
+// Runs as part of `pnpm lint`. Reads the tree; costs no subprocess. The pure parts are exported for the test beside
+// this file.
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// ---------------------------------------------------------------- the questions
+
+/** A question's entry opens a line: `**OQ-<n> — …`. */
+const ENTRY = /^\*\*OQ-(\d+)\b/;
+/** The owner deferred it: still to be ruled, so it may be called open. */
+const DEFERRED = /\*\*Deferred 20\d\d-\d\d-\d\d/;
+/** The owner ruled, closed or withdrew it, or the specification resolved it. */
+const SETTLED = /\*\*(?:Ruled|RULED|Closed|CLOSED|Withdrawn|WITHDRAWN|Resolved|RESOLVED)\b|~~Open|\b(?:Ruled|Closed|Withdrawn|Resolved) 20\d\d-\d\d-\d\d|\bCLOSED\b|\bRULED\b|\bRESOLVED\b|\*Resolved\b|— Resolved\b|Decision closed|\(20\d\d-\d\d-\d\d\): closed\b/;
+
+/**
+ * Each question's state, read from its entry: from its opening line up to the next entry or heading. `deferred`
+ * where the owner deferred it, else `settled` where it was ruled, closed, withdrawn or resolved, else `open`.
+ * @param {string} text the open-questions record
+ * @returns {Map<number, 'open' | 'settled' | 'deferred'>}
+ */
+export function questionStates(text) {
+  const lines = text.split('\n');
+  /** @type {Map<number, 'open' | 'settled' | 'deferred'>} */
+  const states = new Map();
+  for (let i = 0; i < lines.length; i++) {
+    const m = ENTRY.exec(lines[i]);
+    if (!m) continue;
+    let end = i + 1;
+    while (end < lines.length && !ENTRY.test(lines[end]) && !/^#{1,6} /.test(lines[end])) end++;
+    const body = lines.slice(i, end).join('\n');
+    const n = Number(m[1]);
+    // A question with two entries (one of them a later note) takes the more settled reading of the two.
+    const state = DEFERRED.test(body) ? 'deferred' : SETTLED.test(body) ? 'settled' : 'open';
+    const before = states.get(n);
+    if (before === undefined || before === 'open') states.set(n, state);
+  }
+  return states;
+}
+
+// ---------------------------------------------------------------- the claims
+
+/** One question reference: `OQ-12`, `**OQ-12**`, `[OQ-12](open-questions.md)`. */
+const REF = String.raw`\[?\*{0,2}OQ-\d+\*{0,2}\]?(?:\([^)\s]*\))?`;
+/** A list of them: `OQ-58 and OQ-59`, `OQ-114 to OQ-116`, `OQ-1, OQ-2 and OQ-3`. */
+const LIST = String.raw`${REF}(?:(?:\s*,\s*|\s+(?:and|to)\s+)${REF})*`;
+/** The sentences that call a question open. */
+const OPEN_CLAIMS = [
+  new RegExp(String.raw`(${LIST})(?:'s)?\s+(?:is|are|stays?|remains?)(?:\s+(?:also|still))?\s+open\b`, 'g'),
+  new RegExp(String.raw`(${LIST})\s+open\s+(?:against|on)\b`, 'g'),
+  new RegExp(String.raw`\b(?:asked|carried)\s+as\s+(?:an?\s+)?(?:open\s+question\s+)?(${LIST})`, 'gi'),
+  new RegExp(String.raw`\bopen question\.?\*?\s+(${LIST})`, 'gi'),
+  new RegExp(String.raw`(${LIST})\s+asks\b[^.\n]{0,40},\s*open\b`, 'g'),
+  new RegExp(String.raw`(${LIST})'s\s[^.]{0,60}?\bstay\s+open\b`, 'g'),
+  new RegExp(String.raw`\bstays?\s+open\b[^.\n]{0,60}?\((${LIST})\)`, 'g'),
+  new RegExp(String.raw`(${LIST})\b[^.]{0,240}?\buntil the owner rules\b`, 'g'),
+];
+/** The sentences that say a question was raised. */
+const RAISED_CLAIM = /\b(?:raised|recorded|carried|left)\s+as\s+an?\s+open\s+question\b|\ban open question rather than\b|\bOpen question, not a settled reading\b/gi;
+/** What, after an open claim, says it is history. */
+const HISTORY = /\b(?:ruled|closed|confirmed|withdrawn|deferred|resolved)\b|while it was open/i;
+
+/** The question numbers a reference list names, ranges expanded. */
+export function numbersOf(list) {
+  const parts = [...list.matchAll(/OQ-(\d+)|\bto\b/g)];
+  /** @type {number[]} */
+  const out = [];
+  for (let k = 0; k < parts.length; k++) {
+    if (parts[k][1] === undefined) continue;
+    const n = Number(parts[k][1]);
+    const prev = out[out.length - 1];
+    if (k >= 2 && parts[k - 1][0] === 'to' && prev !== undefined && n > prev && n - prev < 50) {
+      for (let x = prev + 1; x <= n; x++) out.push(x);
+    } else out.push(n);
+  }
+  return out;
+}
+
+/** The paragraph's end after `from`: a blank line, or the text's end. */
+function paragraphEnd(text, from) {
+  const m = /\n[ \t]*(?:\*|\/\/)?[ \t]*\n/.exec(text.slice(from));
+  return m ? from + m.index : text.length;
+}
+
+/** Where the words that may annotate a claim at `at` end: its paragraph's end, or in a table row the row's own end. */
+function claimEnd(text, at) {
+  const lineStart = text.lastIndexOf('\n', at) + 1;
+  if (/^\s*\|/.test(text.slice(lineStart, at + 1))) {
+    const eol = text.indexOf('\n', at);
+    return eol < 0 ? text.length : eol;
+  }
+  return paragraphEnd(text, at);
+}
+
+/** Whether `at` sits inside a struck-through span `~~…~~` of its paragraph. */
+function struck(text, at) {
+  const start = text.lastIndexOf('\n\n', at);
+  const before = text.slice(start < 0 ? 0 : start, at);
+  return ((before.match(/~~/g) ?? []).length % 2) === 1;
+}
+
+/** The sentence around [from, to): back to the last sentence end, on to the next. */
+function sentenceAround(text, from, to) {
+  const head = text.slice(Math.max(0, from - 400), from);
+  const ends = [...head.matchAll(/[.!?](?:\*|\)|`)*\s/g)];
+  const start = ends.length > 0 ? from - head.length + ends[ends.length - 1].index + ends[ends.length - 1][0].length : Math.max(0, from - 400);
+  const tail = text.slice(to, to + 400);
+  const next = /[.!?](?:\*|\)|`)*(?:\s|$)/.exec(tail);
+  return text.slice(start, next ? to + next.index + 1 : to + tail.length);
+}
+
+/**
+ * Every claim in one text that the questions' states refute: `{ line, kind, numbers, text }`. `kind` is `open` for a
+ * settled question called open, `unraised` for a question said to be raised that names none.
+ * @param {string} text
+ * @param {Map<number, 'open' | 'settled' | 'deferred'>} states
+ */
+export function claimsIn(text, states) {
+  /** @type {{ line: number, kind: 'open' | 'unraised', numbers: number[], text: string }[]} */
+  const found = [];
+  const lineOf = (at) => text.slice(0, at).split('\n').length;
+  const seen = new Set();
+  for (const re of OPEN_CLAIMS) {
+    re.lastIndex = 0;
+    for (const m of text.matchAll(re)) {
+      const at = m.index ?? 0;
+      const numbers = numbersOf(m[1]).filter((n) => states.get(n) === 'settled');
+      if (numbers.length === 0 || struck(text, at)) continue;
+      const after = text.slice(at + m[0].length, Math.min(claimEnd(text, at), at + m[0].length + 240));
+      if (HISTORY.test(after)) continue;
+      const key = `${lineOf(at)}:${numbers.join(',')}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      found.push({ line: lineOf(at), kind: 'open', numbers, text: m[0].replace(/\s+/g, ' ') });
+    }
+  }
+  RAISED_CLAIM.lastIndex = 0;
+  for (const m of text.matchAll(RAISED_CLAIM)) {
+    const at = m.index ?? 0;
+    if (struck(text, at)) continue;
+    if (/OQ-\d+/.test(sentenceAround(text, at, at + m[0].length))) continue;
+    found.push({ line: lineOf(at), kind: 'unraised', numbers: [], text: m[0] });
+  }
+  return found.sort((a, b) => a.line - b.line);
+}
+
+// ---------------------------------------------------------------- the tree
+
+const CODE_ROOTS = ['apps', 'packages', 'tools'];
+const CODE_EXT = /\.(?:ts|tsx|mts|cts|js|mjs|cjs)$/;
+const SKIP_DIRS = new Set(['node_modules', 'out', 'dist', 'generated', 'release', '.vite', 'coverage']);
+/** This gate and its test name the claims they look for. */
+const SELF = new Set(['tools/check-open-question-claims.mjs', 'tools/check-open-question-claims.test.ts']);
+
+function walk(dir, keep, out = []) {
+  if (!existsSync(dir)) return out;
+  for (const name of readdirSync(dir)) {
+    if (SKIP_DIRS.has(name) || name.startsWith('.')) continue;
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) walk(full, keep, out);
+    else if (keep(name)) out.push(full);
+  }
+  return out;
+}
+
+/** The files read: the code under the three roots, and the record that describes the build as it stands. */
+export function filesOf(root) {
+  const code = CODE_ROOTS.flatMap((r) => walk(join(root, r), (n) => CODE_EXT.test(n)));
+  const record = [
+    ...walk(join(root, 'docs', 'architecture', 'views'), (n) => n.endsWith('.md')),
+    join(root, 'docs', 'architecture', 'codebase.md'),
+    join(root, 'docs', 'architecture', 'first-release-plan.md'),
+    join(root, 'docs', 'architecture', 'README.md'),
+  ].filter((f) => existsSync(f));
+  return [...code, ...record].filter((f) => !SELF.has(relative(root, f).split(sep).join('/')));
+}
+
+/** Every refuted claim in the tree, `{ file, line, kind, numbers, text }`. */
+export function checkTree(root) {
+  const states = questionStates(readFileSync(join(root, 'docs', 'architecture', 'open-questions.md'), 'utf8'));
+  const problems = [];
+  for (const file of filesOf(root)) {
+    for (const c of claimsIn(readFileSync(file, 'utf8'), states)) problems.push({ file: relative(root, file).split(sep).join('/'), ...c });
+  }
+  return problems;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+  const problems = checkTree(root);
+  for (const p of problems) {
+    const what = p.kind === 'open'
+      ? `calls ${p.numbers.map((n) => `OQ-${n}`).join(', ')} open, and open-questions.md records ${p.numbers.length > 1 ? 'them' : 'it'} settled`
+      : 'says a question was raised and names none: raise it in open-questions.md and cite its number';
+    console.error(`${p.file}:${p.line}: "${p.text}" ${what}`);
+  }
+  if (problems.length > 0) {
+    console.error(`check-open-question-claims: ${problems.length} claim(s) the open-questions record refutes`);
+    process.exit(1);
+  }
+  console.log(`check-open-question-claims: ${filesOf(root).length} files read, no claim the open-questions record refutes`);
+}

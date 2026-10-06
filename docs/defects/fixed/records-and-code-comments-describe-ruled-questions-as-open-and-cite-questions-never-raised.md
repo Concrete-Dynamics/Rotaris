@@ -1,6 +1,6 @@
 ## Records and code comments describe ruled questions as open, and cite questions that were never raised
 
-After the owner's ruling of 2026-10-06 ([R-071](../product/requests.md#r-071)) closed every open question then
+After the owner's ruling of 2026-10-06 ([R-071](../../product/requests.md#r-071)) closed every open question then
 standing, the code and the record kept saying otherwise in two ways.
 
 **Ruled questions presented as the build's reading or as asked.** Four comments still describe a question the owner has
@@ -43,3 +43,33 @@ None contradicted: the code behaves as ruled. The record misstates what the owne
 - `docs/architecture/codebase.md`, `docs/architecture/first-release-plan.md`, `docs/architecture/README.md`,
   `docs/architecture/views/README.md`, `docs/architecture/first-executions.md`: the record's lines.
 - `docs/architecture/open-questions.md`: each ruling, and where the three missing questions belong.
+
+## Outcome
+
+Repaired 2026-10-06 by finacc3's acceptance repair (bundle `finacc3-accept1-3`).
+
+- **The three questions never raised are raised**, each with the reading the build proceeds under, in
+  `docs/architecture/open-questions.md`: [OQ-210](../../architecture/open-questions.md) (a publish's `body_markdown` is the
+  rendered document and the submitted body is kept twice), OQ-211 (an artifact's consumer is the reading instance's
+  canonical name) and OQ-212 (no built-in persona declares `artifact_write`). The three comments and ADR-0003's execution
+  note cite them; ADR-0003's "Open question, not a settled reading" is struck and kept. Raising OQ-212 found
+  [`can-publish-artifacts-is-read-and-never-gates-artifact-write.md`](../can-publish-artifacts-is-read-and-never-gates-artifact-write.md),
+  recorded and not repaired here.
+- **The four comments** name OQ-103 (with `PD-ORCH-005` clause 26), OQ-120, OQ-125 and OQ-146 as ruled on 2026-10-06.
+- **The record**: `codebase.md` (OQ-37, OQ-56), `first-release-plan.md` (OQ-58, OQ-59, OQ-67 twice, OQ-114 to OQ-116,
+  OQ-131), the architecture README (OQ-1, OQ-30) and the views' change log (OQ-154's and OQ-170's notes, OQ-159, OQ-172)
+  strike or annotate each claim with its ruling, the history kept; `first-executions.md`'s 2026-10-06 POSIX row says the
+  PowerShell note was repaired that day, its Windows run owed.
+- **Pinned by a gate**: `tools/check-open-question-claims.mjs`, a step of `pnpm lint`, reads each question's state from
+  `open-questions.md` and fails on a sentence in the code, the views, `codebase.md`, `first-release-plan.md` or the
+  architecture README that calls a settled question open, unless struck or followed by its ruling, and on a claim that a
+  question was raised that names none. `tools/check-open-question-claims.test.ts` runs it over the tree and over fixtures
+  (the forms above, a range, a table row, struck history, an open and a deferred question). On the tree before this repair
+  (`7eee460`) the gate named fifteen claims: the three unraised ones, `report.ts`'s "asked as OQ-120", and every record
+  line above but three, the views' OQ-154 note (its sentence names no question), their OQ-172 line ("the build's reading
+  of OQ-172", a form it does not read, below) and `first-executions.md`, which it does not read; after it, none. The other
+  three comments said "OQ-<n>'s reading", the form below, and were found by reading, not by the gate.
+- **Not repaired here, and why.** Code comments that call a ruled behaviour "OQ-<n>'s reading" without saying "the build's
+  reading" or "asked" (some forty, OQ-22, OQ-38, OQ-82, OQ-145, OQ-147, OQ-165 and others) name the behaviour the
+  question settled and do not claim the question open; the gate does not read them, nor ADRs, the defect notes or
+  `open-questions.md` itself, whose history stays as written.

@@ -258,6 +258,60 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     expect(dal.getSession(sid)!.execution_status).toBe('paused');
   });
 
+  /**
+   * `docs/defects/fixed/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md` (finacc3 F05): a
+   * stop accepted after the teardown wrote the run's end, while it forwarded the terminal pair or ran the hooks advisory, was
+   * answered `ok` and saved `cancelling` over the terminal status, which nothing wrote again. It is refused, as the explicit
+   * cancel is, and no later save of the run writes a non-terminal status over its end.
+   */
+  it('REQ-SESSION-186 with OQ-165: a stop accepted after the teardown wrote the run\'s end is refused and leaves the terminal status (REQ-MONITOR-130)', async () => {
+    let sessionsRef!: Sessions;
+    let sid!: SessionId;
+    const seen: unknown[] = [];
+    const hooks: HookPort = {
+      auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+      fireLifecycle: async () => [], toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      // The hooks advisory runs after the terminal transaction and the terminal pair's forwarding, before the run has ended.
+      advisory: () => {
+        seen.push(dal.getSession(sid)!.execution_status);
+        seen.push(sessionsRef.control({ op: 'cancel', sessionId: sid, args: {} }));
+        seen.push(dal.getSession(sid)!.execution_status);
+        return '';
+      },
+    };
+    const { port } = fakePort();
+    const { sessions } = sessionsWith([answer('done')], port, { hooks });
+    sessionsRef = sessions;
+    sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(seen).toEqual(['completed', { ok: false }, 'completed']);
+    expect(dal.getSession(sid)!.execution_status).toBe('completed');
+  });
+
+  it('REQ-SESSION-094 with REQ-MONITOR-123/150 (finacc3 F05): no control accepted after the teardown wrote the run\'s end saves an active status over it', async () => {
+    let sessionsRef!: Sessions;
+    let sid!: SessionId;
+    const seen: unknown[] = [];
+    const hooks: HookPort = {
+      auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+      fireLifecycle: async () => [], toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      advisory: () => {
+        seen.push(sessionsRef.control({ op: 'pause', sessionId: sid, args: {} }));
+        seen.push(sessionsRef.control({ op: 'setPermissionMode', sessionId: sid, args: { mode: 'autonomous' } }));
+        seen.push(sessionsRef.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', id: 'x', text: 'late' } }).ok);
+        seen.push(dal.getSession(sid)!.execution_status);
+        return '';
+      },
+    };
+    const { port } = fakePort();
+    const { sessions } = sessionsWith([answer('done')], port, { hooks });
+    sessionsRef = sessions;
+    sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(seen).toEqual([{ ok: false }, { ok: false }, false, 'completed']);
+    expect(dal.getSession(sid)!.execution_status).toBe('completed');
+  });
+
   it('OQ-165: cancelling one child saves no `cancelling` for the run', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });

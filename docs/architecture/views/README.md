@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**No control accepted after the teardown wrote the run's end writes over it (REQ-SESSION-186, REQ-SESSION-094, OQ-165; finacc3 F05).**
+`Run.endWritten` (`ended`, or `cancelWindowClosed`, set just before the terminal transaction with nothing awaited between)
+refuses the stop (`acceptsStop`, which `Sessions.control`'s `cancel` reads before raising it), the pause, the mode change and
+the todo edits, and `saveRunning` writes nothing from there; a stop accepted while the teardown forwarded the terminal pair
+or ran the hooks advisory had saved `cancelling` over the run's end. The **runtime view**'s control table says so. No package,
+edge, process, channel, command or store column changed.
+
 **Undoing a `write_file` create removes only the file it made (REQ-TOOLS-132, REQ-TOOLS-135; fin26).** A create's `UndoEntry`
 keeps the SHA-256 of what it wrote, and its undo removes the file only while the file's bytes still have that digest; a file
 another writer rewrote since is left in place and the undo refused, its entry kept. The **runtime view**'s file-tools

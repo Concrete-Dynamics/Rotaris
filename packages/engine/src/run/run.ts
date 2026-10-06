@@ -516,7 +516,11 @@ export class Run {
    * would have resumed (found by phase 4's review).
    */
   private restedIteration: number | null;
-  /** PD-ORCH-005 clause 3: teardown has passed the point where the explicit cancel can still close anything. */
+  /**
+   * PD-ORCH-005 clause 3: teardown has passed the point where the explicit cancel can still close anything. Set just before
+   * the terminal transaction writes the run's end, with nothing awaited between, so it also marks the end as written: from
+   * here no control of the run is accepted and no save of it writes a non-terminal status over that end (`endWritten`).
+   */
   private cancelWindowClosed = false;
   private pausedAtLimit: { count: number; limit: number | null } | null = null;
   /**
@@ -2261,7 +2265,7 @@ export class Run {
    * and stops every child from starting (clause 2); each agent then stops before its next model step.
    */
   pause(): boolean {
-    if (this.ended || this.stop.requested || this.pauseRequested || this.planHeld) return false;
+    if (this.endWritten || this.stop.requested || this.pauseRequested || this.planHeld) return false;
     this.pauseRequested = true;
     this.deps.writer.save('pausing');
     this.deps.writer.appendTimeline('run_pause_requested', 'user', 'The user asked the run to pause; the current step finishes first.', {});
@@ -2271,6 +2275,20 @@ export class Run {
     this.toolDeadline = this.deps.clocks.timers.after(this.deps.pauseToolDeadlineMs ?? PAUSE_TOOL_DEADLINE, () => this.toolCut.abort());
     this.children?.beginRest();
     return true;
+  }
+  /**
+   * REQ-SESSION-094 with OQ-165 (finacc3 F05): the teardown has written the run's end, or is about to with nothing awaited
+   * before it. `ended` is set only in the teardown's last `finally`, after it forwarded the terminal pair and ran the hooks
+   * advisory; a control accepted between the two saved `cancelling`, `pausing` or `running` over the terminal status, and
+   * nothing wrote the end again
+   * (`docs/defects/fixed/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md`).
+   */
+  private get endWritten(): boolean {
+    return this.ended || this.cancelWindowClosed;
+  }
+  /** REQ-SESSION-186: whether the stop control is still accepted — refused, as the explicit cancel is, once the end is written. */
+  get acceptsStop(): boolean {
+    return !this.endWritten;
   }
   get isPausedByUser(): boolean {
     return this.pauseRequested;
@@ -2293,7 +2311,7 @@ export class Run {
 
   /** REQ-CHAT-088/090/091: edits follow the source the visible plan names. */
   editTodo(op: 'add' | 'update' | 'remove', id: string, text: string, source: 'child' | 'agent' | 'planner' = 'planner', ownerId: string | null = null, phaseId = 'main'): { changed: boolean; id?: string } {
-    if (this.ended) return { changed: false };
+    if (this.endWritten) return { changed: false };
     let result: { changed: boolean; id?: string } = { changed: false };
     if (source === 'planner') {
       // REQ-CHAT-089: an added task takes the backend's id, never one the caller sent (a temporary id is never recorded).
@@ -2398,7 +2416,7 @@ export class Run {
   }
 
   replaceAgentTodo(ownerId: string | null, root: boolean, document: AgentTodoDocument): boolean {
-    if (this.ended) return false;
+    if (this.endWritten) return false;
     if (root) this.agentTodo = document;
     else if (!this.storeChildTodo(ownerId, document)) return false;
     this.saveRunning({});
@@ -2851,10 +2869,12 @@ export class Run {
    * again, so every window read `running` for the rest of the graceful stop
    * (`docs/defects/fixed/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md`).
    */
-  stopAccepted(): void {
-    if (this.ended) return;
+  stopAccepted(): boolean {
+    // finacc3 F05: refused once the teardown has written the run's end, as the explicit cancel is (`cancelAgent`).
+    if (this.endWritten) return false;
     this.cancelSaved = true;
     this.saveRunning({});
+    return true;
   }
 
   /**
@@ -2930,7 +2950,7 @@ export class Run {
    */
   setPermissionMode(mode: string, source = 'user'): { ok: true; effective: PermissionPreset } | { ok: false } {
     const all = [...this.ports, ...(this.deps.tools && !this.ports.has(this.deps.tools) ? [this.deps.tools] : [])];
-    if (all.length === 0 || this.ended) return { ok: false };
+    if (all.length === 0 || this.endWritten) return { ok: false };
     // REQ-TOOLS-030/073: every live agent of the session receives the new preset; the first port's change is reported.
     const changes = all.map((p) => p.setMode(mode, source));
     const change = changes[0]!;
@@ -2969,6 +2989,9 @@ export class Run {
   }
 
   private saveRunning(extra: { run_started_at?: string | null; permission_mode?: string; sandboxed?: number; sandbox_backend?: string }, status: 'running' | 'waiting' = this.waits.size > 0 ? 'waiting' : 'running'): void {
+    // finacc3 F05: nothing of the run writes an active status over the end its teardown wrote (`endWritten`); the terminal
+    // transaction's own patch carries what a save from here would have.
+    if (this.endWritten) return;
     // REQ-MONITOR-124: an accepted pause reads `pausing` until the run has come to rest — a wait the pause releases, or any
     // other save on the way to rest, does not read `running` again (found by phase 3's second review).
     // OQ-165: an accepted explicit cancel reads `cancelling` until the teardown writes the run's end, over a pause accepted

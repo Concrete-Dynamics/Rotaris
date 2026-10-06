@@ -1951,6 +1951,9 @@ export class Sessions {
     const text = (key: string): string | null => { const v = req.args[key]; return typeof v === 'string' && v.trim() !== '' ? v : null; };
     switch (req.op) {
       case 'cancel': {
+        // finacc3 F05: refused once the run's teardown has written its end, as the explicit cancel is; before, the stop was
+        // answered `ok` there and saved `cancelling` over the terminal status.
+        if (!run.acceptsStop) return { ok: false };
         // REQ-SESSION-186: a second activation while the stop is pending forces.
         const force = req.args['force'] === true || run.stop.requested;
         run.stop.request('user_cancelled', force);

@@ -183,7 +183,7 @@ function agentLine(a: SummaryAgent): string {
 function slowestLines(m: SessionMetrics): string[] {
   const slowest = m.slowest_tool_calls.slice(0, SUMMARY_SLOWEST);
   if (slowest.length === 0) return ['- none recorded'];
-  return slowest.map((t, i) => `${i + 1}. ${t.tool_name} — ${Math.round(t.elapsed_ms ?? 0)} ms (${t.agent_name}, ${t.status})`);
+  return slowest.map((t, i) => `${i + 1}. ${t.tool_name} — ${t.elapsed_ms === null ? NA : `${Math.round(t.elapsed_ms)} ms`} (${t.agent_name}, ${t.status})`);
 }
 
 /** The closing inspection note: where the rest of the record is obtained (REQ-SESSION-199, REQ-SESSION-142). */

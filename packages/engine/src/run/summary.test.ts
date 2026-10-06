@@ -115,6 +115,12 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
     expect(section(md, 'Agents')).toEqual(['- Ada (orchestrator) — iteration 1 root, closed (completed); tool calls: 3', '- Bo (orchestrator) — iteration 2 root, open; tool calls: n/a']);
     expect(section(renderSummary(factsOf(rowOf())), 'Agents')).toEqual(['- none recorded']);
   });
+
+  it('a slowest call with no elapsed time reads n/a, never 0 ms (the renderer keeps the rule, whatever the metrics pass it)', () => {
+    const row = rowOf();
+    const metrics = { ...sessionMetrics(row, [], [], [], 0, 0, 0), slowest_tool_calls: [{ tool_name: 'grep', agent_name: 'Ada', call_id: 'c1', elapsed_ms: null, status: 'failed' }] };
+    expect(section(renderSummary(factsOf(row, { metrics })), 'Slowest Tools')).toEqual(['1. grep — n/a (Ada, failed)']);
+  });
 });
 
 describe('run/summary — summaryFactsOf reads one session\'s record (REQ-SESSION-140, REQ-SESSION-139)', () => {

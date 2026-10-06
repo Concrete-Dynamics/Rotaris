@@ -223,6 +223,13 @@ describe('REQ-MCP-082/083/087/088/090 — secrets and the environment', () => {
     expect(d.value.unresolved).toEqual(['MISSING']);
     expect(d.diagnostics[0]).toMatchObject({ severity: 'info', scope: 'process', channels: 'log', key: 'mcp.url-unresolved.web_search.MISSING' });
     expect(d.diagnostics.filter((x) => x.severity === 'warning')).toEqual([]);
+    // REQ-CONFIG-465: a disabled entry is unavailable because it is switched off; a resolved key would not change that,
+    // so its line says so and promises nothing (docs/defects/fixed/a-disabled-servers-unresolved-placeholder-line-says-a-key-would-make-it-available.md).
+    expect(d.diagnostics[0]!.message).toMatch(/could not be resolved/);
+    expect(d.diagnostics[0]!.message).toContain("disabled by its configured 'enabled: false'");
+    expect(d.diagnostics[0]!.message).not.toMatch(/unavailable until/);
+    // An enabled entry's warning keeps its sentence: there the placeholder is what holds it back.
+    expect(u.diagnostics[0]!.message).toMatch(/unavailable until it is/);
   });
 });
 

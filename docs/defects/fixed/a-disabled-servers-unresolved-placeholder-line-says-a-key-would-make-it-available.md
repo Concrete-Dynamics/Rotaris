@@ -34,3 +34,16 @@ sentence is not.
 
 Noticed 2026-10-06 by the autopsy of the default live run at `27a5127`; confirmed by fin18 (bundle
 `fin18-rail-label-and-observations`).
+
+## Repaired — 2026-10-06
+
+`resolveRemoteUrl` (`packages/config/src/mcp/environment.ts`) now chooses the sentence's consequence by the entry's
+`enabled`, as it already chose the severity: an enabled entry still reads "the server is configured but unavailable until
+it is"; a disabled one reads "the server is disabled by its configured 'enabled: false' (REQ-CONFIG-465), so nothing
+connects to it, and enabling it will also need the placeholder resolved". Severity, scope, channel and key are unchanged,
+so the line stays informational and once per process.
+
+Pinned by `packages/config/src/mcp/mcp.test.ts`, "a remote url substitutes substrings, secret before environment, and
+warns on an unresolved one": the disabled entry's message names the switch and does not say "unavailable until", and the
+enabled entry's keeps "unavailable until it is" (red before the repair: the message did not contain "disabled by its
+configured 'enabled: false'"). The next default live run shows it in any scenario's `app.log`.

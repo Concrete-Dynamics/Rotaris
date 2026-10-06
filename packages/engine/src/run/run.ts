@@ -228,6 +228,11 @@ export interface RunDeps {
    * governs every iteration. Read only by a run that resumes an open iteration.
    */
   readonly resumedPreflight?: ((signal: AbortSignal) => Promise<Preflight>) | undefined;
+  /**
+   * OQ-162 as ruled (clause 23): `preflight` carries the intent in effect and classifies nothing (the Continue action), so
+   * the status never reads `classifying` for it — REQ-ORCH-014 ties that phase to the classification call.
+   */
+  readonly preflightCarries?: boolean | undefined;
   readonly pid: number;
   readonly host: MachineId;
   readonly readSession: () => SessionRow | undefined;
@@ -968,7 +973,7 @@ export class Run {
       // REQ-SESSION-087, in order and observably. PD-ORCH-005 clause 17: the todo with it, so a continue's message task
       // survives a process that dies during the pre-flight, as the message itself does in the resumed root's record.
       // REQ-ORCH-014: set before the save that publishes `starting`, so that snapshot already reads `classifying`.
-      this.classifying = this.deps.preflight !== undefined;
+      this.classifying = this.deps.preflight !== undefined && this.deps.preflightCarries !== true;
       writer.save('starting', { todo: this.todoJson() });
       this.startedAt = clocks.monotonic.now();
       /*

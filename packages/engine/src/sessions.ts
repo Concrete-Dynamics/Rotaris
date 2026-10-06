@@ -1820,6 +1820,7 @@ export class Sessions {
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
       ...(preflight ? { preflight: (signal: AbortSignal) => preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, ...(runCarries ? { intent: carried } : { previousIntent: priorIntent, hasUnfinishedWork: true }) }) } : {}),
+      ...(preflight && runCarries ? { preflightCarries: true } : {}),
       ...(preflight && resumedCarries ? { resumedPreflight: (signal: AbortSignal) => preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, intent: carried }) } : {}),
       ...(this.deps.tools ? {
         // REQ-LIBRARY-093: a publish records the instance's canonical name — the root's comes apart from its agent name, its persona.

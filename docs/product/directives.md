@@ -3101,7 +3101,12 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 >   launch audit's — the reading REQ-ORCH-014's status already took (`intentPayloadOf`). It is carried restated as carried
 >   over (`carriedIntent`), so a fallback launch intent is carried as the category it fell back to, conveyed as continued
 >   from the previous run, not as a fallback. A session with nothing recorded to carry classifies, since an intent must be
->   in effect (REQ-ORCH-005).
+>   in effect (REQ-ORCH-005). An `ambiguous` intent in effect is carried as it stands: REQ-ORCH-013(b) carries over only a
+>   category that is not `ambiguous`, but that clause decides what replaces an unusable new classification, and the Continue
+>   makes none — clause 23 narrows it to "the intent in effect", whatever that is (stated at the verifier's review).
+> - **The status does not read `classifying` for a carried intent.** REQ-ORCH-014 ties that phase to the classification
+>   call, and the Continue action makes none, so the run is told its pre-flight carries (`RunDeps.preflightCarries`) and
+>   publishes `classifying` only when it does not (found at the verifier's review; the Continue-action case pins it).
 > - **The pre-flight still runs for a carried intent**, with no classification call: the run host resolves the grant, the
 >   playbooks and the clamp for it (`PreflightContext.intent`, `runPreflight`), so a playbook override edited since is read
 >   again, as every run reads it.
@@ -3110,7 +3115,10 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 >   classification, since it holds before the first new iteration (PD-ORCH-003 revision 2). The resumed iteration's entry
 >   records the message's classification beside its own (`next_run_intent`), and once that iteration closes the
 >   classification is recorded as a further entry and row (`nextIntentInEffect`). A plan decision resumes nothing and
->   classifies as before.
+>   classifies as before. A resumed iteration left open again (paused once more) keeps its carried intent, and the
+>   message's classification is not taken up: the "run's next iteration" the clause names is this run's, and a later
+>   Continue carries the intent in effect, which is still the one the iteration started with. A later continue by message
+>   classifies afresh.
 > - **The persona's definition** is its own system prompt and its tool declaration (declared tools, `tool_restrictions`,
 >   the `coordinatorOnly` and `readOnly` flags); the root's is the entry persona's. Digests are marked `persona:`, so a
 >   fingerprint recorded before the ruling, of the whole request, is told apart and replaced with nothing stated. A

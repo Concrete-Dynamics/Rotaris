@@ -41,9 +41,10 @@ agent's task id: each message the model was sent and answered, each tool call wi
 compression is written into it as a replacement, so a resume sends the compressed conversation while the full history
 stays. It belongs to its session and is deleted with it; paging the transcript never touches it, and clearing the
 transcript clears the record of closed iterations only. Beside the conversation it keeps the agent's **fingerprint**:
-a digest of the system instructions and the tool definitions the agent started with. A resumed agent runs with its
-persona's current ones, and when they differ the run states, as a warning, which agent resumed under changed
-instructions. — `PD-ORCH-005` (revision 4 clause 14)
+a digest of its persona's own definition — the persona's own prompt, before the playbook, the context units and the MCP
+section are added, and its tool declaration — taken when it first steps. A resumed agent runs with its persona's current
+definition, and when that differs the run states, as a warning, which agent resumed under changed instructions; the
+fingerprint is then replaced by the current one, so each change is stated once. — `PD-ORCH-005` (revision 6 clause 14)
 _Avoid_: transcript (the transcript is the rows a surface draws), log, "history" alone (the event history is REQ-EVENTS')
 
 **Open iteration**:

@@ -845,12 +845,11 @@ export class StoreDal {
   agentFingerprintOf(id: SessionId, taskId: string): AgentFingerprintRow | undefined {
     return this.stmts['agentFingerprintOf']!.get(id, taskId) as AgentFingerprintRow | undefined;
   }
-  /** Clause 12: the fingerprints of every closed iteration's agents removed, an open iteration's kept; the count removed. */
   /** OQ-105 as ruled (R-071): the agent's fingerprint replaced in place, its iteration kept. False when it has none. */
   replaceAgentFingerprint(id: SessionId, taskId: string, instructions: string, tools: string, at: string): boolean {
     return this.stmts['replaceAgentFingerprint']!.run(instructions, tools, at, id, taskId).changes === 1;
   }
-
+  /** Clause 12: the fingerprints of every closed iteration's agents removed, an open iteration's kept; the count removed. */
   clearClosedAgentFingerprints(id: SessionId): number {
     return this.stmts['clearClosedAgentFingerprints']!.run(id, id).changes;
   }

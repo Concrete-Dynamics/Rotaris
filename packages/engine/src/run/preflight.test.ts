@@ -182,17 +182,22 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       const ports: ToolPortContext[] = [];
       let release!: () => void;
       const held = new Promise<void>((r) => { release = r; });
+      const snapshots: { intent: unknown }[] = [];
+      const publisher: Publisher = { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } };
       const { sessions, client } = sessionsWith([pausedMidTurn(held), answer('done')],
         (ctx) => { if (ctx.intent) { carried.push(ctx.intent); return resolvedFor(ctx.intent); } classifications.push(ctx.prompt); return answers.shift()!; },
-        (ctx) => { if (ctx.persona === 'orchestrator') ports.push(ctx); });
+        (ctx) => { if (ctx.persona === 'orchestrator') ports.push(ctx); }, undefined, publisher);
       const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
       for (let i = 0; i < 40 && dal.getSession(sid)!.execution_status !== 'running'; i++) await new Promise((r) => setTimeout(r, 5));
       expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
       release();
       await sessions.running(sid)!;
       expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+      const beforeContinue = snapshots.length;
       expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
       expect((await sessions.running(sid)!).status).toBe('completed');
+      // REQ-ORCH-014: no classification call, so the status never read `classifying` while the Continue started.
+      expect(snapshots.slice(beforeContinue).filter((p) => (p.intent as { phase?: string } | null)?.phase === 'classifying')).toEqual([]);
       // One classification, the launch's; the Continue carried the intent in effect in.
       expect(classifications).toEqual(['fix the typo']);
       expect(carried).toMatchObject([{ category: 'moderate_feature', carried_over: true, fallback: false }]);

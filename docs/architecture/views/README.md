@@ -84,10 +84,12 @@ changed.
 **An MCP call is checked against the input schema the model was handed (REQ-TOOLS-032, REQ-SESSION-136; fin18, live-run
 finding G3).** `advertisedSchemaCheck` (`agent-tools/advertised-schema.ts`) gives the gate a zod schema that checks a JSON
 Schema without rewriting the call, and `McpHost.executorsFor` uses it for every MCP executor's `schema` in place of
-`z.record(z.string(), z.unknown())`; a schema it cannot compile keeps the object check and is said once at info. A pattern
-is read with the `u` flag (checked by the module where zod would read it without), an integer has no 2^53 bound, and the
-gate's array repair wraps a field only where the schema expects an array (`repairArrayFields`; repair round 1). The
-**runtime view**'s `toolSpec` paragraph says so. No package, edge, process, channel, command or store column changed.
+`z.record(z.string(), z.unknown())`; a schema it cannot compile keeps the object check and is said once at info. The gate's
+array repair wraps a field only where the schema expects an array (`repairArrayFields`; repair round 1). Since repair round
+2 the check is ajv 8.20.0 (the engine the MCP SDK bundles), declared by `agent-tools` and `apps/desktop`, in place of zod's
+`z.fromJSONSchema`, whose reading of JSON Schema differed keyword by keyword (patterns, integers, `enum`/`const`, `oneOf`).
+The **runtime view**'s `toolSpec` paragraph and the **component view**'s new `agent-tools` validator section say so. No
+package, edge, process, channel, command or store column changed.
 
 **Settings adopts a reload in one update of the whole form, and a permission mode written elsewhere wins (REQ-CONFIG-419,
 REQ-CONFIG-423; fin13).** The Settings hook holds the saved and pending values as one form (`SettingsForm`) and folds each

@@ -1,3 +1,6 @@
+import { Ajv, type ErrorObject, type Options, type ValidateFunction } from 'ajv';
+import { Ajv2019 } from 'ajv/dist/2019.js';
+import { Ajv2020 } from 'ajv/dist/2020.js';
 import { z } from 'zod';
 
 /**
@@ -8,42 +11,44 @@ import { z } from 'zod';
  * and a call missing three required properties was sent to the server (live-run finding G3,
  * docs/defects/fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md).
  *
- * **The validator is zod's own `z.fromJSONSchema`.** zod is the one validation library the workspace already ships
- * (`apps/desktop` declares it, ADR-0016's executors are written in it), and its 4.x line carries a JSON Schema reader; the
- * only JSON Schema validators in the lockfile (`ajv` 6 and 8) are there for eslint and electron-builder, development tools
- * that never reach the packaged app, so using one would add a runtime dependency where none is needed. zod calls the reader
- * semi-experimental; the lockfile pins zod exactly, and the tests beside this module and the MCP executor pin the behaviour
- * the gate relies on.
+ * **The validator is ajv 8, the JSON Schema engine the MCP SDK itself bundles and validates with.** ADR-0033 leaves schema
+ * validation to the SDK; `@modelcontextprotocol/client` 2.0.0 carries ajv 8 inside its own bundle (its
+ * `AjvJsonSchemaValidator`), but that validator hands back one flattened error string and the SDK does not export its
+ * 2020-12 engine — its documentation says to declare `ajv` to construct one. The gate needs each violation's location (the
+ * refusal names it, and REQ-TOOLS-032's array repair asks whether the schema refuses one field), so this package declares
+ * `ajv` 8.20.0, the version the lockfile already carried, and builds the engines as the SDK does: the dialect from
+ * `$schema` (none or 2020-12 → `Ajv2020`, 2019-09 → `Ajv2019`, draft-07 or draft-06 → the draft-07 `Ajv`, any other not
+ * compiled), `strict: false`, `validateSchema: false`, `allErrors: true` — every violation in one refusal, so one re-issue
+ * can repair them all.
+ *
+ * **Why not zod's `z.fromJSONSchema`, which the first two repairs used (2026-10-06).** It reads JSON Schema as zod would:
+ * each verifier round found another keyword it reads differently — a pattern compiled without the `u` flag, `integer` capped
+ * at 2^53, `enum` and `const` compared by identity instead of deep equality, a constraint dropped inside `oneOf` letting two
+ * branches match — and each was a call the server accepts, refused on every re-issue. Rewriting the schema around each
+ * difference treated symptoms; a JSON Schema validator has none of them by construction.
  *
  * **Checked, never rewritten.** The schema the gate receives is the plain object record, refined by the compiled check: its
- * output is the call's own arguments, so a valid call reaches the server exactly as the model wrote it — no `default`
- * filled in, no property the schema does not name stripped. What the server makes of them is the server's business.
+ * output is the call's own arguments (ajv runs without `useDefaults`, `coerceTypes` or `removeAdditional`), so a valid call
+ * reaches the server exactly as the model wrote it. What the server makes of them is the server's business.
  *
- * **Read as JSON Schema reads it, or not asserted.** The schema is rewritten before zod reads it wherever zod's reading
- * and JSON Schema's differ, and a keyword that cannot be read faithfully is left unasserted rather than read wrongly: a
- * refusal tells the model its call is invalid, and one for a call the server accepts is a refusal no re-issue recovers
- * from. The rewrite walks the schema by keyword position (`properties` maps names to schemas, `enum` holds data, and so on),
- * so a property NAMED `format`, `pattern` or `enum` is a property, never the keyword.
- *  - `format` is an annotation. JSON Schema 2020-12 (the dialect MCP names) makes it one unless a validator opts into
- *    assertion; zod asserts it. It is dropped before compiling.
- *  - `pattern` is an ECMA-262 regular expression with Unicode semantics, the `u` flag. zod compiles it without the flag, so
- *    `\p{L}` reads as the text "p{L}" and `.` as one UTF-16 unit; the fin18 verifier's `{name: "Zoë"}` against
- *    `^\p{L}+$` was refused although the server accepts it. A pattern zod reads exactly as the `u` flag does (printable
- *    ASCII without a property escape, a code point escape, `.`, a negated class or a negated class escape) stays zod's;
- *    any other is taken out of zod's hands and checked here with the flag wherever it binds the value unconditionally (the
- *    schema itself, `properties`, `patternProperties`, `additionalProperties`, `items`, `prefixItems`, `allOf`, a local
- *    `$ref`), and left unasserted inside `anyOf`, `oneOf`, `not`, `if`, `contains` and `propertyNames`, where it would
- *    decide a branch. A pattern that is not a valid regular expression under the flag (a Python named group, an identity
- *    escape) is not asserted either; the rest of the schema still binds.
- *  - `integer` has no bound. zod's `int()` stops at 2^53 - 1; JSON Schema's integer is any number with no fractional
- *    part, so it is read as a number that is a multiple of 1.
+ * **What is read as an annotation, or left unasserted.** A refusal tells the model its call is invalid, and one for a call
+ * the server accepts is a refusal no re-issue recovers from, so where this product cannot read a keyword as JSON Schema does,
+ * it does not assert it.
+ *  - `format` is an annotation, as JSON Schema 2020-12 (the dialect MCP names) has it unless a validator opts into assertion
+ *    (`validateFormats: false`; the SDK's own default asserts it, and that is the one setting taken differently).
+ *  - A `pattern` that is no ECMA-262 regular expression under the `u` flag (a Python named group, an identity escape) is
+ *    removed before compiling, and the rest of the schema still binds, when removing it can only widen what the schema
+ *    accepts: when the schema holds no `not`, `oneOf`, `if` or `maxContains` anywhere, each of which can refuse MORE once a
+ *    constraint beneath it is gone (two `oneOf` branches both matching, a `not` matching). Otherwise, and for a
+ *    `patternProperties` name that is no such expression (which properties it governs cannot be known), the schema is not
+ *    compiled. The walk goes by keyword position, so a property NAMED `pattern` or `oneOf` is a property, not the keyword.
  *
  * **A schema that cannot be compiled leaves the tool callable.** The MCP requirements drop a discovered tool for an empty
  * or non-string name only (REQ-MCP-052), and a persona's callable set is every granted tool that survives
- * `disabled_tools` (REQ-MCP-055, REQ-MCP-059); nothing there drops one for a schema this product's validator cannot read
- * (`if`/`then`/`else`, `dependentRequired`, an external `$ref`, a `patternProperties` name zod would read differently).
- * Such a tool keeps the object check alone — a `tools/call` carries an arguments object — and `compiled: false` with the
- * reason, so the caller can say so once.
+ * `disabled_tools` (REQ-MCP-055, REQ-MCP-059); nothing there drops one for a schema this product's validator cannot read (an
+ * external `$ref`, a dialect other than the four above, a tuple `items` in a 2020-12 schema). Such a tool keeps the object
+ * check alone — a `tools/call` carries an arguments object — and `compiled: false` with the reason, so the caller can say so
+ * once.
  */
 export interface AdvertisedSchemaCheck {
   readonly schema: z.ZodType<Record<string, unknown>>;
@@ -52,174 +57,113 @@ export interface AdvertisedSchemaCheck {
   readonly reason: string | null;
 }
 
-/** The private keyword a rewritten schema carries a Unicode pattern under, for `unicodePatternIssues`; zod keeps it as metadata. */
-const UNICODE_PATTERN = 'x-rotaris-unicode-pattern';
-
 /** Keywords whose value is one schema (`items` may also be a list, draft 7's tuple). */
 const SCHEMA_VALUED = new Set(['items', 'additionalItems', 'additionalProperties', 'not', 'contains', 'propertyNames', 'if', 'then', 'else', 'unevaluatedItems', 'unevaluatedProperties', 'contentSchema']);
-/** Keywords whose value maps names to schemas. */
-const SCHEMA_MAPS = new Set(['properties', 'patternProperties', '$defs', 'definitions', 'dependentSchemas']);
+/** Keywords whose value maps names to schemas (draft 7's `dependencies` may map a name to a list of names instead). */
+const SCHEMA_MAPS = new Set(['properties', 'patternProperties', '$defs', 'definitions', 'dependentSchemas', 'dependencies']);
 /** Keywords whose value lists schemas. */
 const SCHEMA_LISTS = new Set(['allOf', 'anyOf', 'oneOf', 'prefixItems']);
+/** Keywords that can refuse more once a constraint in a schema beneath them is removed. */
+const NOT_MONOTONE = new Set(['not', 'oneOf', 'if', 'maxContains']);
 
 type Json = Record<string, unknown>;
 const isObject = (v: unknown): v is Json => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-const compiledPatterns = new Map<string, RegExp | null>();
-
-/** The pattern under the `u` flag, compiled once per process; null when it is no regular expression under the flag. */
-function unicodeRegExp(pattern: string): RegExp | null {
-  let re = compiledPatterns.get(pattern);
-  if (re === undefined) {
-    try {
-      re = new RegExp(pattern, 'u');
-    } catch {
-      re = null;
-    }
-    compiledPatterns.set(pattern, re);
-  }
-  return re;
-}
-
-/**
- * Whether zod's `new RegExp(pattern)` matches exactly what `new RegExp(pattern, 'u')` matches. Conservative: printable ASCII
- * only, and none of the constructs whose meaning the flag changes (`\p`/`\P`, `\u`, `.`, `[^…]`, `\S`/`\W`/`\D`, which
- * count a code point outside the BMP as two characters without it), and valid both ways.
- */
-function zodReadsAsUnicode(pattern: string): boolean {
-  if (!/^[\x20-\x7e]*$/.test(pattern)) return false;
-  let inClass = false;
-  for (let i = 0; i < pattern.length; i += 1) {
-    const c = pattern[i];
-    if (c === '\\') {
-      const next = pattern[i + 1];
-      if (next === undefined || 'pPuSWD'.includes(next)) return false;
-      i += 1;
-    } else if (inClass) {
-      if (c === ']') inClass = false;
-    } else if (c === '[') {
-      if (pattern[i + 1] === '^') return false;
-      inClass = true;
-    } else if (c === '.') {
-      return false;
-    }
-  }
+function isUnicodeRegExp(pattern: string): boolean {
   try {
-    new RegExp(pattern);
+    new RegExp(pattern, 'u');
+    return true;
   } catch {
     return false;
   }
-  return unicodeRegExp(pattern) !== null;
 }
 
-function integerAsNumber(type: unknown): { type: unknown; allOf?: Json[] } {
-  if (type === 'integer') return { type: 'number', allOf: [{ type: 'number', multipleOf: 1 }] };
-  if (!Array.isArray(type) || !type.includes('integer')) return { type };
-  if (type.includes('number')) return { type: type.filter((t) => t !== 'integer') };
-  return {
-    type: type.map((t) => (t === 'integer' ? 'number' : t)),
-    allOf: [{ anyOf: type.map((t) => (t === 'integer' ? { type: 'number', multipleOf: 1 } : { type: t })) }],
-  };
-}
+interface Walk { unreadPatterns: number; notMonotone: string | null }
 
-/** One schema, rewritten for zod as the module comment says. Throws where the schema cannot be read faithfully at all. */
-function forZod(node: unknown): unknown {
-  if (!isObject(node)) return node; // `true`, `false`, or not a schema (zod decides).
+/** The schema without the patterns no `u`-flag expression reads, counted; throws for a `patternProperties` name of that kind. */
+function withoutUnreadPatterns(node: unknown, walk: Walk): unknown {
+  if (Array.isArray(node)) return node.map((n) => withoutUnreadPatterns(n, walk));
+  if (!isObject(node)) return node; // `true`, `false`, or not a schema (the validator decides).
   const out: Json = {};
   for (const [key, value] of Object.entries(node)) {
-    if (key === 'format' && typeof value === 'string') continue;
-    if (key === 'pattern' && typeof value === 'string') {
-      if (zodReadsAsUnicode(value)) out[key] = value;
-      else if (unicodeRegExp(value) !== null) out[UNICODE_PATTERN] = value;
+    if (NOT_MONOTONE.has(key)) walk.notMonotone ??= key;
+    if (key === 'pattern' && typeof value === 'string' && !isUnicodeRegExp(value)) {
+      walk.unreadPatterns += 1;
       continue;
     }
-    if (key === 'items' && Array.isArray(value)) out[key] = value.map(forZod);
-    else if (SCHEMA_VALUED.has(key)) out[key] = forZod(value);
-    else if (SCHEMA_LISTS.has(key) && Array.isArray(value)) out[key] = value.map(forZod);
+    if (SCHEMA_VALUED.has(key) || (SCHEMA_LISTS.has(key) && Array.isArray(value))) out[key] = withoutUnreadPatterns(value, walk);
     else if (SCHEMA_MAPS.has(key) && isObject(value)) {
       if (key === 'patternProperties') {
-        const unread = Object.keys(value).find((name) => !zodReadsAsUnicode(name));
-        if (unread !== undefined) throw new Error(`patternProperties name /${unread}/ is not read with Unicode semantics by the validator`);
+        const unread = Object.keys(value).find((name) => !isUnicodeRegExp(name));
+        if (unread !== undefined) throw new Error(`patternProperties name /${unread}/ is not an ECMA-262 regular expression under the u flag`);
       }
-      out[key] = Object.fromEntries(Object.entries(value).map(([name, sub]) => [name, forZod(sub)]));
+      out[key] = Object.fromEntries(Object.entries(value).map(([name, sub]) => [name, withoutUnreadPatterns(sub, walk)]));
     } else out[key] = value;
-  }
-  if (out['type'] !== undefined) {
-    const { type, allOf } = integerAsNumber(out['type']);
-    out['type'] = type;
-    if (allOf) out['allOf'] = [...(Array.isArray(out['allOf']) ? out['allOf'] : []), ...allOf];
   }
   return out;
 }
 
-function resolveLocal(root: Json, ref: string): unknown {
-  if (!ref.startsWith('#')) return undefined;
-  let at: unknown = root;
-  for (const raw of ref.slice(1).split('/').filter(Boolean)) {
-    const segment = decodeURIComponent(raw).replace(/~1/g, '/').replace(/~0/g, '~');
-    if (!isObject(at) && !Array.isArray(at)) return undefined;
-    at = (at as Json)[segment];
-  }
-  return at;
+const ENGINE_OPTIONS: Options = { strict: false, validateSchema: false, validateFormats: false, allErrors: true, unicodeRegExp: true };
+const DRAFT_2020 = ['https://json-schema.org/draft/2020-12/schema', 'http://json-schema.org/draft/2020-12/schema'];
+const DRAFT_2019 = ['https://json-schema.org/draft/2019-09/schema', 'http://json-schema.org/draft/2019-09/schema'];
+const DRAFT_07 = ['https://json-schema.org/draft-07/schema', 'http://json-schema.org/draft-07/schema', 'https://json-schema.org/draft-06/schema', 'http://json-schema.org/draft-06/schema'];
+
+/**
+ * The engine for the schema's declared dialect, by the MCP SDK's rule (its `declaredDialect`). A fresh engine per schema:
+ * ajv files every compiled schema under its `$id`, and two servers (or one server reconnected) may advertise the same `$id`.
+ */
+function engineFor(schema: Json): Ajv {
+  const declared = schema['$schema'];
+  if (typeof declared !== 'string') return new Ajv2020(ENGINE_OPTIONS);
+  const uri = declared.replace(/#$/, '');
+  if (DRAFT_2020.includes(uri)) return new Ajv2020(ENGINE_OPTIONS);
+  if (DRAFT_2019.includes(uri)) return new Ajv2019(ENGINE_OPTIONS);
+  if (DRAFT_07.includes(uri)) return new Ajv(ENGINE_OPTIONS);
+  throw new Error(`the schema declares a dialect the validator does not read ("$schema": "${declared.slice(0, 200)}")`);
 }
 
-interface PatternIssue { readonly path: PropertyKey[]; readonly message: string }
+interface Issue { readonly path: string[]; readonly message: string }
 
-/** The Unicode patterns `forZod` took out of zod's hands, checked wherever they bind the value unconditionally. */
-function unicodePatternIssues(schema: unknown, value: unknown, path: PropertyKey[], root: Json, out: PatternIssue[], depth: number): void {
-  if (!isObject(schema) || depth > 64) return;
-  if (typeof schema['$ref'] === 'string') unicodePatternIssues(resolveLocal(root, schema['$ref']), value, path, root, out, depth + 1);
-  const pattern = schema[UNICODE_PATTERN];
-  if (typeof pattern === 'string' && typeof value === 'string' && unicodeRegExp(pattern)?.test(value) === false) {
-    out.push({ path, message: `Invalid string: must match pattern /${pattern}/u` });
-  }
-  if (Array.isArray(schema['allOf'])) for (const sub of schema['allOf']) unicodePatternIssues(sub, value, path, root, out, depth + 1);
-  if (isObject(value)) {
-    const properties = isObject(schema['properties']) ? schema['properties'] : {};
-    const patterned = isObject(schema['patternProperties']) ? Object.entries(schema['patternProperties']) : [];
-    for (const [name, member] of Object.entries(value)) {
-      let named = Object.hasOwn(properties, name);
-      if (named) unicodePatternIssues(properties[name], member, [...path, name], root, out, depth + 1);
-      for (const [key, sub] of patterned) {
-        if (unicodeRegExp(key)?.test(name) !== true) continue;
-        named = true;
-        unicodePatternIssues(sub, member, [...path, name], root, out, depth + 1);
-      }
-      if (!named) unicodePatternIssues(schema['additionalProperties'], member, [...path, name], root, out, depth + 1);
-    }
-  }
-  if (Array.isArray(value)) {
-    const prefix = Array.isArray(schema['prefixItems']) ? schema['prefixItems'] : Array.isArray(schema['items']) ? schema['items'] : [];
-    const rest = Array.isArray(schema['items']) ? schema['additionalItems'] : schema['items'];
-    value.forEach((element, i) => unicodePatternIssues(i < prefix.length ? prefix[i] : rest, element, [...path, i], root, out, depth + 1));
-  }
+/** One violation, located where the model has to change the call: a missing or an unexpected property names that property. */
+function issueOf(error: ErrorObject): Issue {
+  const path = error.instancePath === '' ? [] : error.instancePath.slice(1).split('/').map((s) => s.replace(/~1/g, '/').replace(/~0/g, '~'));
+  const params = error.params as Record<string, unknown>;
+  const missing = params['missingProperty'];
+  if (error.keyword === 'required' && typeof missing === 'string') return { path: [...path, missing], message: 'required property is missing' };
+  const extra = error.keyword === 'additionalProperties' ? params['additionalProperty'] : error.keyword === 'unevaluatedProperties' ? params['unevaluatedProperty'] : undefined;
+  if (typeof extra === 'string') return { path: [...path, extra], message: 'is not a property the schema allows' };
+  return { path, message: error.message ?? `fails "${error.keyword}"` };
 }
 
 export function advertisedSchemaCheck(inputSchema: Readonly<Record<string, unknown>>): AdvertisedSchemaCheck {
   const object = z.record(z.string(), z.unknown());
-  let rewritten: Json;
-  let compiled: z.ZodType;
+  let validate: ValidateFunction;
   try {
-    rewritten = forZod(JSON.parse(JSON.stringify(inputSchema))) as Json;
-    // A registry of its own: zod files a schema's unknown keywords as metadata, and an `id` there would collide in the
-    // global registry with the same schema compiled again (a reconnect, a second persona).
-    compiled = z.fromJSONSchema(rewritten as Parameters<typeof z.fromJSONSchema>[0], { registry: z.registry() });
+    const walk: Walk = { unreadPatterns: 0, notMonotone: null };
+    const readable = withoutUnreadPatterns(JSON.parse(JSON.stringify(inputSchema)), walk) as Json;
+    if (walk.unreadPatterns > 0 && walk.notMonotone !== null) {
+      throw new Error(`a pattern is not an ECMA-262 regular expression under the u flag, and without it the schema's "${walk.notMonotone}" could refuse a valid call`);
+    }
+    validate = engineFor(readable).compile(readable);
   } catch (cause) {
     return { schema: object, compiled: false, reason: cause instanceof Error ? cause.message : String(cause) };
   }
   const schema = object.superRefine((value, ctx) => {
-    let result: ReturnType<typeof compiled.safeParse>;
-    const patterns: PatternIssue[] = [];
+    let errors: readonly ErrorObject[];
     try {
-      result = compiled.safeParse(value);
-      unicodePatternIssues(rewritten, value, [], rewritten, patterns, 0);
+      if (validate(value)) return;
+      errors = validate.errors ?? [];
     } catch {
       return; // A check that cannot run is no refusal: the object check stands, as for a schema that would not compile.
     }
-    // Each issue keeps its code (`invalid_type`, `expected: array`, …) as well as its path and message, so the gate's array
-    // repair can read where the schema expects an array (`repairArrayFields`).
-    if (!result.success) for (const issue of result.error.issues) ctx.addIssue({ ...issue, path: [...issue.path] } as Parameters<typeof ctx.addIssue>[0]);
-    for (const issue of patterns) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message });
+    const seen = new Set<string>();
+    for (const error of errors) {
+      const issue = issueOf(error);
+      const key = JSON.stringify(issue);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message, params: { keyword: error.keyword } });
+    }
   });
   return { schema, compiled: true, reason: null };
 }

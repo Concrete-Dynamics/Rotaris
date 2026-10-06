@@ -949,7 +949,7 @@ describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCh
     const r = await h.gate.dispatch(h.call('amend_note', { content: 'x', memory_name: 'm' }), new AbortController().signal);
     expect(h.sent).toEqual([]);
     expect(r).toMatchObject({ status: 'failed', isError: true });
-    expect(r.text).toBe("The arguments for 'amend_note' do not match its schema (needle: Invalid input: expected string, received undefined). Re-issue the call with corrected arguments.");
+    expect(r.text).toBe("The arguments for 'amend_note' do not match its schema (needle: required property is missing). Re-issue the call with corrected arguments.");
     expect(h.rec.settles[0]).toMatchObject({ status: 'failed', is_error: true, failure_kind: 'invalid_request' });
     expect(h.rec.issues).toEqual([expect.objectContaining({ kind: 'tool_error', severity: 'warning' })]);
     expect(h.rec.decisions).toHaveLength(0);
@@ -976,13 +976,23 @@ describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCh
   });
 
   it('a schema the validator cannot compile keeps the object check alone, and says why', async () => {
-    const h = advertisedHarness({ type: 'object', if: { required: ['a'] }, then: { required: ['b'] } });
+    const h = advertisedHarness({ $schema: 'http://json-schema.org/draft-04/schema#', type: 'object', required: ['b'] });
     expect(h.check).toMatchObject({ compiled: false });
-    expect(h.check.reason).toMatch(/if\/then\/else/);
+    expect(h.check.reason).toMatch(/dialect the validator does not read/);
     expect((await h.gate.dispatch(h.call('amend_note', { a: 1 }), new AbortController().signal)).status).toBe('ok');
     expect((await h.gate.dispatch(h.call('amend_note', '"just a string"'), new AbortController().signal)).status).toBe('failed');
     expect(h.sent).toEqual([{ a: 1 }]);
     expect(advertisedSchemaCheck({ type: 'object', properties: { a: { $ref: 'https://example.invalid/s.json' } } }).compiled).toBe(false);
+  });
+
+  it('if/then/else, dependentRequired and unevaluatedProperties compile and bind as JSON Schema 2020-12 reads them', () => {
+    const { schema, compiled } = advertisedSchemaCheck({ type: 'object', properties: { a: {}, b: {}, c: {} }, if: { required: ['a'] }, then: { required: ['b'] }, dependentRequired: { c: ['a'] }, unevaluatedProperties: false });
+    expect(compiled).toBe(true);
+    expect(schema.safeParse({ a: 1, b: 2, c: 3 }).success).toBe(true);
+    expect(schema.safeParse({ b: 2 }).success).toBe(true);
+    expect(schema.safeParse({ a: 1 }).error!.issues).toContainEqual(expect.objectContaining({ path: ['b'], message: 'required property is missing' }));
+    expect(schema.safeParse({ c: 3, b: 2 }).success).toBe(false);
+    expect(schema.safeParse({ b: 2, d: 4 }).error!.issues).toEqual([expect.objectContaining({ path: ['d'], message: 'is not a property the schema allows' })]);
   });
 
   it('local references and the usual composition keywords compile and bind', async () => {
@@ -1016,7 +1026,7 @@ describe('REQ-TOOLS-032: a call the advertised JSON Schema accepts is never refu
     expect((await dispatch(h, { name: 'Zoë' })).status).toBe('ok');
     const refused = await dispatch(h, { name: 'Zoë 2' });
     expect(refused.status).toBe('failed');
-    expect(refused.text).toContain("name: Invalid string: must match pattern /^\\p{L}+$/u");
+    expect(refused.text).toContain('name: must match pattern "^\\p{L}+$"');
     expect(h.sent).toEqual([{ name: 'Zoë' }]);
   });
 
@@ -1049,11 +1059,64 @@ describe('REQ-TOOLS-032: a call the advertised JSON Schema accepts is never refu
     expect(advertisedSchemaCheck({ type: 'object', properties: { a: { type: 'string', pattern: '[unclosed' } } }).compiled).toBe(true);
   });
 
-  it('a pattern inside anyOf the host cannot read as zod does is not asserted, rather than refusing a branch the server accepts', async () => {
+  it('a Unicode pattern inside anyOf decides its branch as the u flag reads it', async () => {
     const h = advertisedHarness({ type: 'object', properties: { v: { anyOf: [{ type: 'string', pattern: '^\\p{L}+$' }, { type: 'integer' }] } } });
     expect((await dispatch(h, { v: 'Zoë' })).status).toBe('ok');
     expect((await dispatch(h, { v: 3 })).status).toBe('ok');
+    expect((await dispatch(h, { v: 'Zoë 2' })).status).toBe('failed');
     expect((await dispatch(h, { v: false })).status).toBe('failed');
+  });
+
+  it('a pattern no u-flag expression reads, under oneOf or not, leaves the schema uncompiled rather than refusing a valid call', async () => {
+    // Removing the pattern would let both oneOf branches match 'xy', and make the `not` match every string.
+    const oneOf = advertisedHarness({ type: 'object', properties: { v: { oneOf: [{ type: 'string', pattern: '^(?P<x>a)$' }, { type: 'string', maxLength: 2 }] } } });
+    expect(oneOf.check).toMatchObject({ compiled: false });
+    expect(oneOf.check.reason).toContain('"oneOf"');
+    expect((await dispatch(oneOf, { v: 'xy' })).status).toBe('ok');
+    const not = advertisedSchemaCheck({ type: 'object', properties: { v: { type: 'string', not: { pattern: '(?P<x>a)' } } } });
+    expect(not.compiled).toBe(false);
+    expect(not.schema.safeParse({ v: 'b' }).success).toBe(true);
+    // A property NAMED oneOf is a property, not the keyword: the pattern is removed and the rest still binds.
+    const named = advertisedSchemaCheck({ type: 'object', required: ['oneOf'], properties: { oneOf: { type: 'string', pattern: '(?P<x>a)' } } });
+    expect(named.compiled).toBe(true);
+    expect(named.schema.safeParse({ oneOf: 'anything' }).success).toBe(true);
+    expect(named.schema.safeParse({}).success).toBe(false);
+  });
+
+  it('a oneOf whose branches differ by a pattern the u flag reads is decided exactly: only the branch that matches counts', async () => {
+    // The fin18 verifier's round-2 probe: under JSON Schema only the second branch matches `file:/x`, so the call is valid.
+    const h = advertisedHarness({ type: 'object', properties: { src: { oneOf: [
+      { type: 'object', required: ['url'], properties: { url: { type: 'string', pattern: '^https://.+' } } },
+      { type: 'object', required: ['url'], properties: { url: { type: 'string', pattern: '^file:' } } },
+    ] } } });
+    expect((await dispatch(h, { src: { url: 'file:/x' } })).status).toBe('ok');
+    expect((await dispatch(h, { src: { url: 'https://a' } })).status).toBe('ok');
+    expect((await dispatch(h, { src: { url: 'ftp://a' } })).status).toBe('failed');
+    expect(h.sent).toEqual([{ src: { url: 'file:/x' } }, { src: { url: 'https://a' } }]);
+    const { schema } = advertisedSchemaCheck({ type: 'object', properties: {
+      word: { oneOf: [{ type: 'string', pattern: '^\\p{L}+$' }, { type: 'string', pattern: '^[0-9]+$' }] },
+      short: { oneOf: [{ type: 'string', pattern: '^a.c$' }, { type: 'string', maxLength: 2 }] },
+    } });
+    expect(schema.safeParse({ word: '123', short: 'xy' }).success).toBe(true);
+    expect(schema.safeParse({ word: 'Zoë' }).success).toBe(true);
+    // 'abc' matches ^a.c$ and is longer than 2: exactly one branch. 'abcd' matches neither.
+    expect(schema.safeParse({ short: 'abc' }).success).toBe(true);
+    expect(schema.safeParse({ word: 'a1' }).success).toBe(false);
+    expect(schema.safeParse({ short: 'abcd' }).success).toBe(false);
+  });
+
+  it('enum and const compare by deep equality, as JSON Schema has it: an object or array value the schema lists is accepted', async () => {
+    const h = advertisedHarness({ type: 'object', properties: {
+      e: { enum: [{ x: 1 }, 2] }, l: { enum: [[1, 2], 'x'] }, c: { const: ['x'] }, o: { const: { x: [1] } },
+      m: { anyOf: [{ const: { mode: 'auto' } }, { type: 'string' }] },
+    } });
+    const valid = { e: { x: 1 }, l: [1, 2], c: ['x'], o: { x: [1] }, m: { mode: 'auto' } };
+    expect((await dispatch(h, valid)).status).toBe('ok');
+    expect(h.sent).toEqual([valid]);
+    for (const bad of [{ e: { x: 2 } }, { l: [2, 1] }, { c: ['y'] }, { c: 'x' }, { o: { x: [1, 2] } }, { m: { mode: 'manual' } }]) {
+      expect((await dispatch(h, bad)).status, JSON.stringify(bad)).toBe('failed');
+    }
+    expect(h.sent).toEqual([valid]);
   });
 
   it('an integer has no bound JSON Schema does not set: 2^60 is an integer, 1.5 is not, and a nullable integer takes null', async () => {

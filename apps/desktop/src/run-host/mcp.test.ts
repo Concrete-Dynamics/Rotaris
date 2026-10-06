@@ -443,6 +443,21 @@ describe('an MCP call checked against the input schema the model was given (REQ-
     expect(r.sent).toEqual([{ tool: 'amend_note', args: { name: 'Zoë' } }]);
   });
 
+  it('a oneOf decided by a pattern, and an enum of objects, accept the calls the server\'s schema accepts (REQ-TOOLS-032)', async () => {
+    const r = rig({ type: 'object', properties: {
+      src: { oneOf: [
+        { type: 'object', required: ['url'], properties: { url: { type: 'string', pattern: '^https://.+' } } },
+        { type: 'object', required: ['url'], properties: { url: { type: 'string', pattern: '^file:' } } },
+      ] },
+      mode: { enum: [{ kind: 'auto' }, 'off'] },
+    } });
+    expect(await r.dispatch({ src: { url: 'file:/x' }, mode: { kind: 'auto' } })).toMatchObject({ status: 'ok', text: 'edited' });
+    expect(await r.dispatch({ src: { url: 'ftp://x' } })).toMatchObject({ status: 'failed' });
+    expect(await r.dispatch({ mode: { kind: 'manual' } })).toMatchObject({ status: 'failed' });
+    expect(r.settles.slice(1)).toEqual([expect.objectContaining({ failure_kind: 'invalid_request' }), expect.objectContaining({ failure_kind: 'invalid_request' })]);
+    expect(r.sent).toEqual([{ tool: 'amend_note', args: { src: { url: 'file:/x' }, mode: { kind: 'auto' } } }]);
+  });
+
   it('an object `items` the server\'s schema names an object is sent as the object, not wrapped in an array (REQ-TOOLS-032)', async () => {
     const r = rig({ type: 'object', required: ['items'], properties: { items: { type: 'object' } } });
     const result = await r.dispatch({ items: { a: 1 } });
@@ -451,8 +466,9 @@ describe('an MCP call checked against the input schema the model was given (REQ-
   });
 
   it('a schema the product cannot compile leaves the tool callable with the object check alone, said once at info (REQ-MCP-052, REQ-MCP-055, REQ-MCP-059)', async () => {
-    const conditional = { type: 'object', properties: { path: { type: 'string' } }, if: { required: ['path'] }, then: { required: ['mode'] } };
-    const r = rig(conditional);
+    // A dialect the validator does not read (draft-04): its `required` would refuse the call, and is not asserted.
+    const draft4 = { $schema: 'http://json-schema.org/draft-04/schema#', type: 'object', properties: { path: { type: 'string' } }, required: ['path', 'mode'] };
+    const r = rig(draft4);
     const result = await r.dispatch({ path: 'a' });
     expect(result).toMatchObject({ status: 'ok', text: 'edited' });
     expect(r.sent).toEqual([{ tool: 'amend_note', args: { path: 'a' } }]);

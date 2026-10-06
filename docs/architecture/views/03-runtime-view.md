@@ -556,15 +556,17 @@ ADR-0034 supplies one, otherwise the zod schema converted **as an input** (`io: 
 be made, in which a field carrying a `.default()` is optional as the parser treats it. Converted as an output, which was
 the default until 2026-09-16, such a field is advertised as required and the product states a contract it does not
 enforce. The gate checks a call against the schema the model was handed, so an MCP executor's `schema` is
-`advertisedSchemaCheck(inputSchema)` (`agent-tools/advertised-schema.ts`): the object record refined by zod's
-`z.fromJSONSchema` reading of the server's schema, rewritten first wherever zod's reading and JSON Schema's differ: `format`
-is an annotation, `integer` has no 2^53 bound, and a `pattern` zod would read without the `u` flag is checked by the module
-itself with the flag where it binds unconditionally, and left unasserted where it would decide an `anyOf`/`oneOf` branch
-or is no regular expression under the flag. A call that fails it is refused at the gate exactly as a built-in tool's schema
+`advertisedSchemaCheck(inputSchema)` (`agent-tools/advertised-schema.ts`): the object record refined by ajv 8's reading
+of the server's schema, the engine the MCP SDK bundles, with the dialect taken from `$schema` as the SDK takes it (none or
+2020-12, 2019-09, draft-07/06). `format` is an annotation; a `pattern` that is no regular expression under the `u` flag is
+removed where removing it can only widen what the schema accepts (no `not`, `oneOf`, `if` or `maxContains` in the schema),
+and otherwise the schema is not compiled. A call that fails it is refused at the gate exactly as a built-in tool's schema
 failure is (REQ-TOOLS-032; `invalid_request`, a `tool_error` issue) and never sent; a valid call is sent as written,
 nothing filled in or stripped. A schema the reader cannot compile leaves the tool callable under the object check alone,
 said once per process at info (REQ-MCP-052/055/059 drop no tool for its schema). Until 2026-10-06 the MCP `schema` was
-`z.record(z.string(), z.unknown())` and every object passed (live-run finding G3). REQ-TOOLS-032's array repair is the
+`z.record(z.string(), z.unknown())` and every object passed (live-run finding G3); the first two repairs read the schema
+with zod's `z.fromJSONSchema`, which reads patterns without the `u` flag, bounds `integer`, compares `enum`/`const` by
+identity, and refused valid calls each time a rewrite around one of those dropped a constraint inside `oneOf`. REQ-TOOLS-032's array repair is the
 schema's to decide for every tool (`repairArrayFields`, `agent-tools/gate.ts`): one of the five fields holding an object is
 wrapped only where the schema refuses the object there and not the one-element array; until 2026-10-06 `repairPayload`
 wrapped all five unconditionally.

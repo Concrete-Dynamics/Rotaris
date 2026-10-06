@@ -122,5 +122,58 @@ a local `$ref` with their paths; a Python named group and a `u`-invalid identity
 -1 under `minimum: 0`, and 7 under `multipleOf: 5` refused, and `["integer", "null"]` taking null and 7 but not 1.5; a
 `format` inside properties named `enum` and `default` not asserted. All seven were red on the round-0 module. In
 `apps/desktop/src/run-host/mcp.test.ts`, the verifier's `\p{L}` probe through `McpHost.executorsFor` and a real gate: "Zoë"
-sent unchanged, "Zoë 2" refused as `invalid_request` and not sent (red before). `pnpm mcp-proof` and `pnpm code-intel-proof`
-were run again on this head; their results are in the bundle's report.
+sent unchanged, "Zoë 2" refused as `invalid_request` and not sent (red before). `pnpm mcp-proof --skip-build` passed on
+2026-10-06 at 03:55–03:58 UTC on `1db233a` (load average 12 to 15 on 4 CPUs), 04:16–04:19 on the merge `361fe1c` (9 to 10)
+and 04:35–04:38 on `ea31a8d` (5 to 10): `echo` without `text` refused (`invalid_request`, the gate's text, nothing
+reaching the fixture), the valid call received as written. `pnpm code-intel-proof --skip-build` passed at 03:58–04:08 on
+`1db233a` (about 10 to 15) and 04:19–04:28 on `361fe1c` (6 to 10), with no "could not be compiled" line in its logs.
+
+## Corrected — 2026-10-06 (fin18, repair round 2)
+
+The fin18 verifier found the round-1 check still refusing calls the server's own schema accepts. The claims it falsified,
+kept as written above, beside what replaced them:
+
+- "left unasserted inside `anyOf`, `oneOf`, `not`, `if` and the like, where it would decide a branch" called leaving a
+  pattern out lenient. For `anyOf` it is; for `oneOf` it is not: with a constraint gone two branches can match, and
+  `oneOf` then refuses. `{src: {url: "file:/x"}}` against a `oneOf` of `^https://.+` and `^file:` branches was refused
+  ("more than one option matched") although only the second branch matches; so were `"123"` against `^\p{L}+$` /
+  `^[0-9]+$` and `"xy"` against `^a.c$` / `maxLength: 2`. (`not` and `if` have the same property: a dropped constraint
+  inside them refuses more, not less.)
+- The module comment's "read as JSON Schema reads it, or not asserted" did not hold for `enum` and `const`, which zod's
+  reader compares by identity (or misreads, for an array `const`), where JSON Schema compares by deep equality: `{x: 1}`
+  against `enum: [{x: 1}, 2]`, `[1, 2]` against `enum: [[1, 2], "x"]`, `["x"]` against `const: ["x"]`, `{x: [1]}` against
+  `const: {x: [1]}` and `{mode: "auto"}` against `anyOf: [{const: {mode: "auto"}}, {type: "string"}]` were all refused.
+- The round-0 choice of validator, "zod's own reader … using [ajv] would have added a runtime dependency", rested on two
+  readings that do not hold: that zod's reader reads JSON Schema as JSON Schema does (four keywords in two rounds showed
+  otherwise, and each rewrite around one was a new place to be wrong), and that ajv never reaches the packaged app
+  (`@modelcontextprotocol/client` 2.0.0, a runtime dependency since ADR-0033, carries ajv 8 inside its own bundle as its
+  `AjvJsonSchemaValidator`).
+
+**The root cause** was the validator, not any one keyword: zod's `z.fromJSONSchema` converts JSON Schema into zod, and
+reads it as zod would. `advertisedSchemaCheck` now validates with **ajv 8.20.0**, the engine the MCP SDK bundles,
+declared by `packages/agent-tools` and `apps/desktop` (ADR-0056's rule) at the version the lockfile already carried. It is
+declared directly because the SDK's validator returns one flattened error string and does not export its 2020-12 engine,
+and the gate's refusal and REQ-TOOLS-032's array repair need each violation's location. The engines are built as the SDK
+builds them (the dialect from `$schema`: none or 2020-12, 2019-09, draft-07/06; any other is not compiled; `strict: false`,
+`validateSchema: false`, `allErrors: true`), with `validateFormats: false` so `format` stays an annotation. Patterns
+carry the `u` flag, `enum` and `const` compare by deep equality, `integer` has no bound, `oneOf` is decided exactly, and
+`if`/`then`/`else`, `dependentRequired` and `unevaluatedProperties` now bind instead of leaving the schema uncompiled. The
+round-1 rewrites (the pattern split, the integer rewrite, the `format` stripper, the private registry) are gone. One walk
+remains: a `pattern` that is no regular expression under the `u` flag is removed when removing it can only widen what the
+schema accepts (no `not`, `oneOf`, `if` or `maxContains` anywhere in it), and otherwise the schema is not compiled (object
+check alone); a `patternProperties` name of that kind leaves it uncompiled too. A refusal now names a missing property as
+"<name>: required property is missing" and an unexpected one as "<name>: is not a property the schema allows"; other
+violations carry ajv's own message (`must match pattern "^file:"`, `must be equal to one of the allowed values`).
+
+Pinned by tests that fail on the round-1 module:
+
+- `packages/agent-tools/src/gate.test.ts`, "REQ-TOOLS-032: a call the advertised JSON Schema accepts is never refused": the
+  verifier's three `oneOf` probes accepted, with `ftp://a`, `a1` and `abcd` still refused; an object `enum`, an array
+  `enum`, an array `const`, an object `const` and a `const` object inside `anyOf` accepted, and their near misses refused;
+  a pattern no `u`-flag expression reads under `oneOf` or `not` leaving the schema uncompiled (the valid call sent), while
+  under a property NAMED `oneOf` it is removed and `required` still binds. In "REQ-TOOLS-032 for a tool advertised by JSON
+  Schema": `if`/`then`/`else`, `dependentRequired` and `unevaluatedProperties` binding; a draft-04 schema uncompiled.
+- `apps/desktop/src/run-host/mcp.test.ts`: probe 1 and an object `enum` through `McpHost.executorsFor` and a real gate,
+  the valid call sent unchanged and the near misses refused as `invalid_request`; the uncompiled case now a draft-04 schema.
+- Every round-0 and round-1 test passes unchanged against the new check except for the refusal wording (the required
+  property, the pattern message) and the uncompilable example (`if`/`then`/`else` now compiles).

@@ -314,6 +314,16 @@ which imports both, holds the two lists equal and every shipped archive under on
 fallback key is refused as an archive key. The notices generator reads it as its manifest since 2026-09-28, by a copy of the field names rather than an import. **Edges
 unchanged**: `config` gains the `zod` dependency `contracts` already carries; no package edge moves.
 
+### `agent-tools`' JSON Schema validator (2026-10-06; fin18, live-run finding G3)
+
+`agent-tools/advertised-schema.ts` checks an MCP call against the input schema its server advertised (REQ-TOOLS-032), and
+validates with **`ajv` 8.20.0**, pinned exactly and declared by `agent-tools` and, so that electron-vite externalises it
+and the installer carries it (ADR-0056's rule), by `apps/desktop`. It is the engine `@modelcontextprotocol/client` 2.0.0
+bundles and validates with (ADR-0033 leaves schema validation to the SDK), declared directly because the SDK's validator
+returns one flattened error string and does not export its 2020-12 engine, and the gate needs each violation's location.
+The lockfile already carried 8.20.0 (beneath electron-builder). **Edges unchanged**: a third-party dependency; no package
+edge moves.
+
 ### `ui/design-system` (2026-09-12)
 
 The adopted design language's **one** implementation, and the only place in `ui` where a design-equivalent control

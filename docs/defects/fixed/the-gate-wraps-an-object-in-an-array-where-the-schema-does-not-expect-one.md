@@ -44,6 +44,11 @@ Read from the schema's own issues, it holds alike for a built-in tool's zod and 
 built-in tool's recorded arguments are the wrapped ones exactly as before. The verifier's probe now sends `{"items":
 {"a": 1}}` as written.
 
+*Corrected in repair round 2 (2026-10-06):* "passes each issue on with its code and path" described the zod reader the
+check used then. It now validates with ajv (see the G3 note's round-2 section) and passes each violation on with its path
+(a missing or unexpected property located at that property) and the failing keyword; `repairArrayFields` reads the path
+alone, so the repair is unchanged, and its tests above pass unchanged against the new check.
+
 Pinned by tests that fail without the repair:
 
 - `packages/agent-tools/src/gate.test.ts`, "REQ-TOOLS-032: a call the advertised JSON Schema accepts is never refused": an

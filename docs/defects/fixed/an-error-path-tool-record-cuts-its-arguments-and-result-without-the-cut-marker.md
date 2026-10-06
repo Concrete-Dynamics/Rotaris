@@ -58,8 +58,31 @@ a call that succeeded is never cut; and a cut never splits a surrogate pair (red
 `packages/engine/src/run/cut.test.ts`, "cutArguments": the longest value is cut first, an escaped character counts at its
 JSON length, nothing under a path, identifier or timestamp key is cut, and the key is read by its last word.
 
-**Not shown:** no proof drives an error-path tool record through the built app; a live run should show each error-path
+**Not shown** (as written at the repair; the live run below has since shown the result half): no proof drives an error-path tool record through the built app; a live run should show each error-path
 record whose result passed 2,000 characters ending with `...`, its length 2,000, and each whose arguments passed 2,000
 characters of JSON text still an object of at most 2,000, its long free text ending `...` and its `path` whole. The live-run harness's
 create-shaped test that reads such arguments (`createShaped`, live-run finding M2) is outside this repair; since cut
 arguments now stay an object, it reads them as it reads whole ones.
+
+## Shown by a live run — 2026-10-06 (finacc3, `finacc3-accept1-10`)
+
+Acceptance finding F09 of finacc3 found the repair unlanded at `760394c`; it had landed on `origin/main` (`1441033`,
+`8b7f9e6`) by the time the bundle was cut from `784b15e`. Confirmed there: the five error-path tests in
+`session-writer.test.ts` go red against the writer as it stood at `489b44b` and green at `784b15e`.
+
+The live run now reads the cut itself. `apps/desktop/scripts/lib/error-record-cuts.mjs` (`errorRecordCuts`, pinned by
+`error-record-cuts.test.ts` against this note's three ordinals and the shapes the writer stores since the repair) sorts every
+error-path record of every session the run keeps (`runWideReadings`): a result over 2,000 characters, a result of exactly
+2,000 with no closing `...`, or arguments stored as a string is a FAILURE; arguments that pass 2,000 with what is never cut are
+a NOTE under OQ-209's reading. The `frictions` scenario also makes one launch of its own (`frictions-cut`) whose command fails
+on purpose with about 5,000 characters of output, so the cut is asked every run rather than by chance.
+
+`pnpm live-run --confirm --skip-build --only=frictions,requirements` against the registered self-hosted default, pack
+`.live-run/runs/2026-10-06T23-32-08-556Z/` of the bundle's worktree (git-ignored), PASSED: `frictions-cut` ordinal 1
+(`terminal`, `failed`, `is_error` true) holds a result of 2,000 characters ending `xxxxxxxxx...`, and the run-wide reading found
+two cut results, both marked (`requirements` #51 and `frictions-cut` #1), and no unmarked or overlong result and no string
+arguments. No error-path record's arguments passed the cap in that run, so the argument half is still shown by the unit tests
+alone. A first launch the same evening (`2026-10-06T23-23-38-541Z`) asked for the failing command as a third step of the
+`frictions` prompt: it showed the same marked cut (`frictions` #10) but made that run delegate each step, and the delegated
+tester stopped its timer with `kill -INT` instead of the terminal's `send_signal`, failing the SIGINT probe; the command was
+moved to its own launch for that reason.

@@ -19,6 +19,7 @@
  */
 import { realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { errorRecordCuts } from './error-record-cuts.mjs';
 import { refusalIssues } from './refusal-issues.mjs';
 
 /** The fields only another operation reads: any of them present, whatever its value, and the product infers nothing. */
@@ -213,11 +214,14 @@ export function outsideFence(root, path) {
  * preserved: `sessions` is `[{ scenario, calls, issues, fenceRoot? }]`, each call tagged with its scenario in what comes
  * back. `read` names the scenarios read, so a NOTE that nothing arose can say where it looked. A path is judged against the
  * session's own fence (`fenceRoot`, from `fenceRootOf`) by `outside(path, session)`, which defaults to `outsideFence` on it
- * and to nothing being outside where a session names no root.
+ * and to nothing being outside where a session names no root. `errorCuts` is `errorRecordCuts` (REQ-SESSION-136's error-path
+ * cut under REQ-SESSION-194's marker, live-run finding M3) over the same sessions, each list tagged the same way.
  */
 export function runWideReadings(sessions, { outside = (path, session) => (typeof session.fenceRoot === 'string' ? outsideFence(session.fenceRoot, path) : false) } = {}) {
   const tag = (scenario, list) => list.map((call) => ({ ...call, scenario }));
   const out = { read: sessions.map((s) => s.scenario), refused: [], unfiled: [], inferred: [], refusedInferable: [], refusedFenced: [], severalActive: [], phantoms: [] };
+  // REQ-SESSION-136's error-path cut under REQ-SESSION-194's marker (live-run finding M3; `./error-record-cuts.mjs`).
+  const errorCuts = { errors: [], markedResults: [], unmarkedResults: [], overlongResults: [], markedArgs: [], stringArgs: [], overCapArgs: [], failures: [] };
   for (const session of sessions) {
     const { scenario, calls, issues } = session;
     const { refused, unfiled } = refusalIssues(calls, issues);
@@ -230,6 +234,8 @@ export function runWideReadings(sessions, { outside = (path, session) => (typeof
     out.refusedFenced.push(...tag(scenario, writes.refusedFenced));
     out.severalActive.push(...tag(scenario, todo.severalActive));
     out.phantoms.push(...tag(scenario, todo.phantoms));
+    const cuts = errorRecordCuts(calls);
+    for (const key of Object.keys(errorCuts)) errorCuts[key].push(...tag(scenario, cuts[key]));
   }
-  return out;
+  return { ...out, errorCuts };
 }

@@ -57,6 +57,9 @@
  *                 the store rather than from the model's report. Red by design until the fixes land; the
  *                 exit-trace friction is recorded but not inducible on demand. Its root's requests, read from the
  *                 traffic, also carry the entry role's ROUTE wording (K3 of the default live run at c2fdd6a).
+ *                 Then, in a launch of its own (`frictions-cut`), a command that fails with output past
+ *                 REQ-SESSION-136's 2,000-character error-path cut, whose record must end with REQ-SESSION-194's
+ *                 marker (live-run finding M3).
  *   7. faults    — the ENDPOINT misbehaves, on purpose, through the recording proxy: a 429 and a 500 on
  *                 named calls (does the ladder wait, fall back and finish?), then a stream that stops
  *                 mid-answer with the socket held open (is that reported as a user cancellation, which is
@@ -828,7 +831,7 @@ function readToolCalls(sessionId) {
         try { entry = JSON.parse(call.entry); } catch { /* a row that will not parse is still a call that happened */ }
         // `elapsed_ms` is the call's own duration and `timestamp` its end, both as the product recorded them.
         // `call_id` and `failure_kind` are what an issue's `evidence_ref` and REQ-SESSION-136's mapping read (a71-6).
-        return { ...call, args: entry.args ?? {}, result: String(entry.result ?? ''), callId: typeof entry.call_id === 'string' ? entry.call_id : null, failureKind: typeof entry.failure_kind === 'string' ? entry.failure_kind : null, elapsedMs: typeof entry.elapsed_ms === 'number' ? entry.elapsed_ms : null, endedAt: typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : null };
+        return { ...call, args: entry.args ?? {}, result: String(entry.result ?? ''), isError: entry.is_error === true, callId: typeof entry.call_id === 'string' ? entry.call_id : null, failureKind: typeof entry.failure_kind === 'string' ? entry.failure_kind : null, elapsedMs: typeof entry.elapsed_ms === 'number' ? entry.elapsed_ms : null, endedAt: typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : null };
       });
   } finally { db.close(); }
 }
@@ -863,7 +866,7 @@ function readFenceRoot(sessionId) {
 
 /**
  * The tool-call record of EVERY session the run preserved, read once at the end (`lib/tool-frictions.mjs`'s
- * `runWideReadings`), for three rulings:
+ * `runWideReadings`), for four rulings:
  *
  * - **REQ-SESSION-136 for the tool gate's own refusals** (live-run finding a71-6): every call the gate refused as
  *   `invalid_request` — an unknown tool, unreadable arguments, a schema violation — is a failure in the record, and files a
@@ -873,6 +876,8 @@ function readFenceRoot(sessionId) {
  *   the session writer cuts an error-path record's long arguments to. A path the fence refuses is the directive's own
  *   refusal, reported and not failed.
  * - **PD-TOOLS-008** (R-071): a `todo` `replace` marking two tasks in progress refused without naming an id it never stored.
+ * - **REQ-SESSION-136 under REQ-SESSION-194** (live-run finding M3): an error-path record cut to 2,000 characters ends with
+ *   the `...` marker, and its arguments stay an object (`lib/error-record-cuts.mjs`).
  *
  * Until fin23 these read the `frictions` and `duress` sessions alone and their NOTEs spoke for the whole run, while the
  * requirements session held a refusal and the resume session the first inferred create
@@ -896,6 +901,14 @@ function checkToolRecord() {
   if (r.inferred.length === 0 && r.refusedInferable.length === 0) noted('no write_file call left out its operation for a path inside its session\'s fence', `PD-TOOLS-007's inferred create was not asked in ${where}${fenced}`);
   else check(r.refusedInferable.length === 0, 'every write_file call with a path and content and no operation was read as a create, or refused because its file exists or its path is fenced (PD-TOOLS-007)', r.refusedInferable.length === 0 ? `${r.inferred.length} read as a create: ${r.inferred.map((c) => `${at(c)} (${c.agent_name ?? '?'})`).join(', ')}${fenced}` : `${r.refusedInferable.length} refused for want of an operation: ${r.refusedInferable.map((c) => `${at(c)} (${c.agent_name ?? '?'})`).join(', ')}`);
   check(r.phantoms.length === 0, 'no todo call was sent to a task id a refusal named but never stored (PD-TOOLS-008)', r.phantoms.length === 0 ? `${r.severalActive.length} replace(s) refused for marking more than one task in progress, in ${where}` : `${at(r.phantoms[0])}: ${JSON.stringify(String(r.phantoms[0].result).slice(0, 100))}`);
+  // REQ-SESSION-136's cut under REQ-SESSION-194's marker (live-run finding M3). The `frictions-cut` launch asks for one failing
+  // command whose output passes the cap; a run that cut nothing asked nothing, which is a NOTE.
+  const e = r.errorCuts;
+  const seen = e.markedResults.length + e.markedArgs.length + e.failures.length;
+  const list = (calls) => calls.map((c) => `${at(c)} (${c.tool_name})`).join(', ');
+  if (seen === 0) noted('no error-path tool record was long enough to be cut', `REQ-SESSION-194's marker on REQ-SESSION-136's 2,000-character cut was not observed in ${where} (${e.errors.length} error-path record(s))`);
+  else check(e.failures.length === 0, "every error-path tool record cut to 2,000 characters ends with REQ-SESSION-194's marker and keeps its arguments an object (REQ-SESSION-136)", e.failures.length === 0 ? `${e.markedResults.length} result(s) cut and marked${e.markedResults.length === 0 ? '' : ` (${list(e.markedResults)})`}; ${e.markedArgs.length} argument object(s) with a marked value${e.markedArgs.length === 0 ? '' : ` (${list(e.markedArgs)})`}` : [e.overlongResults.length === 0 ? '' : `result over 2,000: ${list(e.overlongResults)}`, e.unmarkedResults.length === 0 ? '' : `result of 2,000 with no marker: ${list(e.unmarkedResults)}`, e.stringArgs.length === 0 ? '' : `arguments stored as a string: ${list(e.stringArgs)}`].filter((x) => x !== '').join('; '));
+  if (e.overCapArgs.length > 0) noted("error-path arguments passed 2,000 characters with what is never cut (OQ-209's reading)", list(e.overCapArgs));
 }
 
 /**
@@ -1677,6 +1690,31 @@ if (wanted.includes('frictions')) {
   noted('the exit-trace gap is not covered here', 'it needs a crash; the observed shape is recorded in docs/defects/fixed/process-exit-left-no-diagnosable-trace.md');
   results.scenarios.frictions = { status: read?.session.execution_status, tools: names, writeOpRefusals: writeOp.map((call) => call.ordinal), sigintRefusals: sigint.map((call) => call.ordinal) };
   if (read) preserveRun('frictions', read.session.session_id);
+  await budgetGate();
+  /*
+   * Live-run finding M3 (docs/defects/fixed/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md):
+   * one command that fails on purpose with about 5,000 characters of output, so its record is an error-path record whose
+   * result REQ-SESSION-136 cuts to 2,000 characters and REQ-SESSION-194 marks with a closing `...` (before fin23, the bare
+   * 2,000-character head). Its own launch, `frictions-cut`: asked as a third step of the probe above (2026-10-06, run
+   * `2026-10-06T23-23-38-541Z`), it made that run delegate each step, and the delegated tester stopped the timer with
+   * `kill -INT` rather than the terminal's `send_signal`, so the SIGINT probe and the root's ROUTE reading went unasked.
+   * `checkToolRecord` reads every session's error-path records the same way at the end.
+   */
+  const cutLog = await launch('frictions-cut', {
+    ROTARIS_CAPTURE_PROMPT: 'Run `node -e "for (let i = 1; i <= 120; i++) console.log(i, Array(40).join(String.fromCharCode(120))); process.exit(3)"` in the terminal once. It fails on purpose, so do not repeat or repair it. Reply DONE when it has finished.',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
+  }, RUN_WAIT_MS + 90_000);
+  check(!/capture: wait for result timed out/.test(cutLog), 'the failing long-output run reached its result inside the wait');
+  const cutRead = readSession();
+  checkPricing('frictions-cut', cutRead?.session);
+  const longFail = cutRead ? readToolCalls(cutRead.session.session_id).filter((call) => call.tool_name === 'terminal' && typeof call.args?.command === 'string' && call.args.command.includes('process.exit(3)')) : [];
+  if (longFail.length === 0) noted('the failing long-output command was not run, so the error-path cut was not observed in its own launch', cutRead ? `${cutRead.session.execution_status} (${cutRead.session.stop_reason})` : 'no session');
+  else {
+    const c = longFail[0];
+    check(c.isError && c.result.length === 2000 && c.result.endsWith('...'), "the failing long-output command's record is cut to 2,000 characters ending with REQ-SESSION-194's marker (REQ-SESSION-136)", `ordinal ${c.ordinal} (${c.agent_name}): ${c.status}, is_error ${c.isError}, ${c.result.length} characters ending ${JSON.stringify(c.result.slice(-12))}`);
+  }
+  results.scenarios['frictions-cut'] = { status: cutRead?.session.execution_status, cutOrdinals: longFail.map((call) => call.ordinal) };
+  if (cutRead) preserveRun('frictions-cut', cutRead.session.session_id);
   await budgetGate();
 }
 

@@ -128,6 +128,11 @@ force-killed 2 s after any stop — Cancel, a switch's cancellation, an exhauste
 and a budget had REQ-MCP-099's 5 s (`SETUP_TERMINATE_GRACE_MS`). The **process view**'s `mcp.setup` paragraph and the
 **runtime view**'s application end say so. No package, edge, process, channel, command or store column changed.
 
+**A board run that stops at its iteration limit rests in Blocked (REQ-TRACE-477/482/463; OQ-180 ruled by R-071,
+fin21).** Main's coordinator classifies `stopped` as `failed` (`outcomeOf`), so the card is held with a `run-failure`
+blocker and automatic scheduling no longer restarts it; only `cancelling` ends `cancelled`. The **sequences view**'s board
+passage says so. No package, edge, process, channel, command or store column changed.
+
 **An update action that closes the windows asks the active-run confirmation first (REQ-STARTUP-046, REQ-STARTUP-119,
 REQ-STARTUP-121; OQ-86 ruled by R-071, fin21).** `UpdaterDeps.confirmClose` is asked by `Restart now`, and by `Update now`
 on the installer flavour, before anything starts; main answers it from the run host's `runs.active` and a message box whose

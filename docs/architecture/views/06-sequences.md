@@ -324,8 +324,14 @@ sequenceDiagram
   launch (undisclosed), and on the queue's release, which records the disclosure "Disclose and start" carries and arms
   the card. A tree that cannot be taken over is stated on the entry as the last start's stall, and the claim still
   refuses the card (REQ-TRACE-472/482/464, REQ-TRACE-463; 2026-10-02).
-- **A card's next unit is provisioned at the claim.** A reject, or a run ending `cancelled` (stopped at its iteration
-  limit), rests a card in `ready` on a unit no run-starting action provisioned. The launch held for the finished unit
+- **A run that stops at its iteration limit rests the card in `blocked`** (*since 2026-10-06, OQ-180 ruled by R-071*):
+  `outcomeOf` reads `stopped` — REQ-MONITOR-029's `max_iterations`, the iteration or the time limit — as `failed`, so
+  `recordRunEnded` holds the card with a `run-failure` blocker returning to `ready`, as a user's stop (`paused`) already
+  did, and a person's resume provisions the next unit. Only an explicit cancel (`cancelling`) still ends `cancelled`.
+  Until the ruling `stopped` ended `cancelled` into `ready`, and under `automatic` the dispatch after every run's end
+  started the next unit at once, without bound.
+- **A card's next unit is provisioned at the claim.** A reject, or a run ending `cancelled` (~~stopped at its iteration
+  limit~~ an explicit cancel, since OQ-180's ruling), rests a card in `ready` on a unit no run-starting action provisioned. The launch held for the finished unit
   is spent: the queue names the card's current unit, and its disclosure carries over. The claim — the system's
   dispatch, under both modes — provisions that unit when the store records no tree for it, and writes the row at once
   (`recordWorktreeProvisioned`), so a restart before the start takes it over. The read pass, the queue's release and the

@@ -9344,7 +9344,16 @@ next candidate as capacity becomes available"; REQ-TRACE-463; REQ-TRACE-476, "wi
 Raised 2026-10-02 by the repair of
 [`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](../defects/fixed/a-rejected-card-back-in-ready-can-never-start-its-next-unit.md),
 bundle `fin9-queue-dispatch-and-disclosure`, as OQ-179, and renumbered OQ-180 when the bundle merged `origin/main`,
-which had taken OQ-179 meanwhile. Open.)*
+which had taken OQ-179 meanwhile. Open until 2026-10-06; ruled that day by the owner, and built.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** an iteration-limit stop is a failure — the
+card moves to Blocked with a `run-failure` blocker, as a user's stop already does, so a person decides when to resume it
+(the blocker's resume provisions the next unit), and automatic scheduling never restarts it on its own. Read, where the
+ruling leaves it open, as covering every run that persists `stopped` — REQ-MONITOR-029's `max_iterations`, which a time
+limit (REQ-ORCH-069) reaches as well, the coordinator reading the persisted status alone — while an explicit cancel
+(`cancelling`) still rests the card in Ready. The requirements were silent on this ending, so the ruling alone settles it.
+Built the same day (`outcomeOf`, `apps/desktop/src/main/requirements-runs.ts`; plan fin21). The reading below is kept as
+the build proceeded under it until then.
 
 A board run that reaches its iteration limit persists `stopped`; main's coordinator classifies `stopped` and `cancelling`
 as `cancelled` (`outcomeOf`, `apps/desktop/src/main/requirements-runs.ts`), and a `cancelled` ending rests the card in

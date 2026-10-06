@@ -191,9 +191,23 @@ describe('the run\'s lifetime (REQ-TRACE-466/476/477)', () => {
     expect(names.slice(3)).toEqual(['requirements.run.ended', 'requirements.run.claim']);
     expect(h.sent[3]).toMatchObject({ command: { name: 'requirements.run.ended', sessionId: 'sess-1', outcome: 'completed', detail: 'Done.' } });
     expect(h.runs.live()).toEqual([]);
-    expect(outcomeOf('stopped')).toBe('cancelled');
+    expect(outcomeOf('cancelling')).toBe('cancelled');
     expect(outcomeOf('failed')).toBe('failed');
     expect(outcomeOf('interrupted')).toBe('failed');
+  });
+  /*
+   * OQ-180, ruled 2026-10-06 by the owner (R-071): a board run that stops at its iteration limit (`stopped`) ends as a
+   * failure — the card rests in Blocked with a run-failure blocker, as a user's stop already does — never `cancelled` into
+   * Ready, where automatic scheduling started its next unit at once and a requirement that kept reaching the limit kept running.
+   */
+  it('a run that stopped at its iteration limit settles as failed, so the card rests in Blocked rather than Ready', async () => {
+    expect(outcomeOf('stopped')).toBe('failed');
+    const h = harness({ claims: [CLAIM] });
+    await h.runs.dispatch();
+    h.event(result('stopped', 'The run stopped after reaching its iteration limit (20).'));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(h.sent.find((r) => r.kind === 'requirements.command' && r.command.name === 'requirements.run.ended')).toMatchObject({ command: { name: 'requirements.run.ended', sessionId: 'sess-1', outcome: 'failed', detail: 'The run stopped after reaching its iteration limit (20).' } });
   });
   /**
    * Defect note `a-board-run-is-settled-against-the-focused-windows-workspace-not-its-own.md` (REQ-TRACE-477/466/476):

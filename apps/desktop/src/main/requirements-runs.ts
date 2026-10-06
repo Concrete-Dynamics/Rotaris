@@ -57,10 +57,17 @@ const BOUND_SERVICE = millis(60_000);
 const BOUND_START = millis(30_000);
 const BOUND_SHORT = millis(5_000);
 
-/** REQ-TRACE-477: the run host's terminal `execution_status`, classified for the row. */
+/**
+ * REQ-TRACE-477: the run host's terminal `execution_status`, classified for the row. `stopped` is the status a run that
+ * reached its iteration limit persists (REQ-MONITOR-029's `max_iterations`, which its time limit shares): since OQ-180's
+ * ruling (2026-10-06, R-071) it is a failure, so the card rests in Blocked with a run-failure blocker — as a user's stop,
+ * which persists `paused`, already does — and a person decides when to resume it. Until then it was `cancelled`, which
+ * rested the card in Ready, and under automatic scheduling the dispatch after every run's end started its next unit at
+ * once, without bound. Only an explicit cancel (`cancelling`) still rests it in Ready.
+ */
 export function outcomeOf(executionStatus: string): RunOutcome {
   if (executionStatus === 'completed') return 'completed';
-  if (executionStatus === 'stopped' || executionStatus === 'cancelling') return 'cancelled';
+  if (executionStatus === 'cancelling') return 'cancelled';
   return 'failed';
 }
 

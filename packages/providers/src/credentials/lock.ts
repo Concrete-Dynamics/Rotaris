@@ -41,6 +41,19 @@ export const LOCK_BUSY = 'The credential store is being updated; try the action 
 export const lockUnavailable = (lockPath: string, cause: string): string =>
   `Nothing was changed: the lock file ${lockPath} could not be created. ${cause.replace(/\.?$/, '.')}`;
 
+/**
+ * A lock left by a process that is no longer running is reclaimed (REQ-PROVIDER-152), but `force` excuses only a file
+ * that is already gone: a stale lock in a folder the account may not write into (`EACCES`), or one another process holds
+ * open on Windows (`EPERM`, `EBUSY`), refuses the removal. That is reported as a value naming the lock file and the cause,
+ * by the same reading as the create's refusal, never thrown out of `withLock` past the `Result` its four writers answer
+ * (ADR-0044). Until 2026-10-06 it threw
+ * (docs/defects/fixed/the-credential-lock-throws-when-a-lock-file-cannot-be-removed.md).
+ */
+export const lockNotReclaimed = (lockPath: string, cause: string): string =>
+  `Nothing was changed: the lock file ${lockPath}, left by a process that is no longer running, could not be removed. ${cause.replace(/\.?$/, '.')}`;
+
+const remove = (path: string): void => { rmSync(path, { force: true }); };
+
 /** The lock existed when the create was refused and was gone before its holder could be read: released, so try again. */
 function releasedMeanwhile(e: Failure): boolean {
   return e.code === 'document.exclusive.read' && (e.cause as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
@@ -76,7 +89,12 @@ export async function withLock<T>(lockPath: string, deps: LockDeps, fn: () => Pr
     // A malformed record names no pid: it is reclaimed, since no live holder can be identified from it.
     const dead = holder === null || probe(holder.pid) === 'dead' || holder.pid === deps.pid;
     if (dead) {
-      rmSync(lockPath, { force: true });
+      try {
+        remove(lockPath);
+      } catch (cause) {
+        const text = cause instanceof Error ? cause.message : String(cause);
+        return err(failure('credential.lock.reclaim', lockNotReclaimed(lockPath, text), text, cause));
+      }
       continue;
     }
     if (deps.monotonic.now() - start >= bound) return err(failure('credential.lock', LOCK_BUSY, `the lock at ${lockPath} is held by pid ${holder.pid}`));
@@ -85,7 +103,12 @@ export async function withLock<T>(lockPath: string, deps: LockDeps, fn: () => Pr
   try {
     return await fn();
   } finally {
+    // Best effort, like the document primitive's `discard`: the operation's own result is the one reported
+    // (REQ-PROVIDER-018). A lock the release could not remove keeps this process's pid, so the next operation reclaims
+    // it as its own; a throw here replaced a saved credential's success with an exception until 2026-10-06.
     const now = readHolder(lockPath);
-    if (now && now.pid === deps.pid) rmSync(lockPath, { force: true });
+    if (now && now.pid === deps.pid) {
+      try { remove(lockPath); } catch { /* left for the next operation to reclaim */ }
+    }
   }
 }

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import type * as fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, err, failure, millis, ok } from '@rotaris/kernel';
@@ -17,10 +18,21 @@ vi.mock('@rotaris/platform', async (importOriginal) => {
   return { ...real, exclusiveCreate: vi.fn(real.exclusiveCreate) };
 });
 
+/** Lock paths whose removal is refused, as a stale lock in a folder the account may not write into would be (`EACCES`). */
+const refuseRemoval = new Set<string>();
+vi.mock('node:fs', async (importOriginal) => {
+  const real = await importOriginal<typeof fs>();
+  const rmSync: typeof real.rmSync = (path, options) => {
+    if (refuseRemoval.has(String(path))) throw Object.assign(new Error(`EACCES: permission denied, unlink '${String(path)}'`), { code: 'EACCES' });
+    real.rmSync(path, options);
+  };
+  return { ...real, rmSync, default: { ...real, rmSync } };
+});
+
 let dir: string;
 let clock: FakeClock;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rotaris-lock-')); clock = new FakeClock(); });
-afterEach(() => { rmSync(dir, { recursive: true, force: true }); vi.mocked(platform.exclusiveCreate).mockClear(); });
+afterEach(() => { refuseRemoval.clear(); rmSync(dir, { recursive: true, force: true }); vi.mocked(platform.exclusiveCreate).mockClear(); });
 
 const lockDeps = (over: Partial<LockDeps> = {}): LockDeps => ({ pid: process.pid, startedAt: '2026-10-06T00:00:00.000Z', timers: clock, monotonic: clock, ...over });
 
@@ -105,5 +117,49 @@ describe('a lock file that cannot be created is not a busy store (REQ-PROVIDER-1
       expect(r.error.headline).not.toBe(LOCK_BUSY);
       expect(r.error.headline).toContain(`${path}.lock`);
     }
+  });
+});
+
+describe('a lock file that cannot be removed is reported, never thrown (REQ-PROVIDER-152, REQ-PROVIDER-018, ADR-0044)', () => {
+  // docs/defects/fixed/the-credential-lock-throws-when-a-lock-file-cannot-be-removed.md
+  it('a dead holder\'s lock the reclaim cannot remove: refused at once as a value naming the lock and the cause', async () => {
+    const lock = join(dir, 'd.lock');
+    writeFileSync(lock, JSON.stringify({ pid: process.pid + 1, started_at: 'then' }));
+    refuseRemoval.add(lock);
+    let ran = false;
+    const r = await withLock(lock, lockDeps({ probe: () => 'dead' }), async () => { ran = true; return ok('ran'); });
+    expect(ran).toBe(false);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.code).toBe('credential.lock.reclaim');
+      expect(r.error.headline).toContain('Nothing was changed');
+      expect(r.error.headline).toContain(lock);
+      expect(r.error.headline).not.toBe(LOCK_BUSY);
+      expect(r.error.detail).toContain('EACCES');
+    }
+    expect(existsSync(lock)).toBe(true);
+    expect(clock.now()).toBe(0);
+  });
+
+  it('a release the removal refuses keeps the operation\'s own result, and the next operation reclaims the lock as its own', async () => {
+    const lock = join(dir, 'r.lock');
+    const r = await withLock(lock, lockDeps(), async () => { refuseRemoval.add(lock); return ok('saved'); });
+    expect(r).toEqual({ ok: true, value: 'saved' });
+    expect(existsSync(lock)).toBe(true);
+    refuseRemoval.clear();
+    const again = await withLock(lock, lockDeps(), async () => ok('again'));
+    expect(again).toEqual({ ok: true, value: 'again' });
+    expect(existsSync(lock)).toBe(false);
+  });
+
+  it('the provider snapshot over a dead holder\'s lock the reclaim cannot remove: the upsert answers the failure, never rejects', async () => {
+    const path = join(dir, 'project_settings.yaml');
+    writeFileSync(`${path}.lock`, JSON.stringify({ pid: process.pid + 1, started_at: 'then' }));
+    refuseRemoval.add(`${path}.lock`);
+    const s = new ProjectSettingsStore({ path, lock: lockDeps({ probe: () => 'dead' }), timers: clock, warn: () => {} });
+    const r = await s.upsertProvider({ id: 'p', display_name: 'P', authenticated: true, discovered_at: '2026-10-06T00:00:00.000Z', models: [] });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe('credential.lock.reclaim');
+    expect(existsSync(path)).toBe(false);
   });
 });

@@ -13,7 +13,7 @@
   behind with this process's pid in it (the next operation reclaims it, since the pid is its own).
 
 Noticed on 2026-10-06 (finacc2, acceptance finding A5) while repairing
-[the busy headline for a lock file that cannot be created](fixed/the-credential-lock-reports-a-busy-store-when-the-lock-file-cannot-be-created.md).
+[the busy headline for a lock file that cannot be created](the-credential-lock-reports-a-busy-store-when-the-lock-file-cannot-be-created.md).
 Recorded, not repaired. Not reproduced: this host runs as root, which `EACCES` does not reach, and has no Windows
 sharing violations; the throw is read from the code and from `fs.rmSync`'s documented `force`.
 
@@ -33,3 +33,23 @@ sharing violations; the throw is read from the code and from `fs.rmSync`'s docum
   await `withLock`.
 - `packages/platform/src/document.ts`: `discard`, the best-effort removal the document primitive already uses for the
   same shape.
+
+## Repaired — 2026-10-06 (fin21, bundle `fin21-leftover-notes`)
+
+`withLock` (`packages/providers/src/credentials/lock.ts`) no longer lets either removal throw:
+
+- **Reclaim.** A dead holder's lock the removal refuses is answered at once as a value, code `credential.lock.reclaim`,
+  headline `lockNotReclaimed`: "Nothing was changed: the lock file <path>, left by a process that is no longer running,
+  could not be removed. <cause>." The operation does not run. This is the reading the note proposed for
+  REQ-PROVIDER-152's silence, the same as the create's refusal; it is not the busy headline, since no retry cures it.
+- **Release.** The removal is best-effort, as the document primitive's `discard` is: the operation's own result is
+  returned (REQ-PROVIDER-018), and a lock left behind carries this process's pid, so the next operation reclaims it as
+  its own.
+
+Pinned by `packages/providers/src/credentials/lock.test.ts`, "a lock file that cannot be removed is reported, never
+thrown": a dead holder's lock whose removal is refused with `EACCES` (the test mocks `node:fs`'s `rmSync` for the named
+path, since this host runs as root) answers `credential.lock.reclaim` naming the lock and the cause, at once; a refused
+release keeps the operation's `ok('saved')` and the next `withLock` reclaims and removes the lock; and
+`ProjectSettingsStore.upsertProvider` over such a lock answers the failure rather than rejecting. All three were red
+before the repair (each rejected with "EACCES: permission denied, unlink …"). Not reproduced against a real refusal:
+`EACCES` does not reach root, and a Windows sharing violation needs a Windows host.

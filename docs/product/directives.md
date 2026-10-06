@@ -1693,13 +1693,13 @@ stopped on the terms that requirement states. The decision source is `headless-p
 state that the user is treated as away because an earlier approval in this run went unanswered for `<N>`
 seconds, where `<N>` is the timeout that expired; it SHALL NOT claim that no approval UI is available.
 
-**The question tool's own approval (revision 2).** The one ask the away state SHALL NOT resolve is the approval
+**The question tool's own approval — revision 2.** The one ask the away state SHALL NOT resolve is the approval
 the public `ask_questions` tool's own call needs — under the `ask` preset that call is not in REQ-TOOLS-007's read-only
 class, so it asks. That ask SHALL be put to the user and wait as it would were they present, and once approved the
 question itself prompts and waits (below). Nothing else is exempt: the preset's decision on the call still stands, a
 rule's decision still governs it, and a tool offered under that name that is not the public tool is not exempt.
 
-**Waits already outstanding (revision 2).** When the run marks its user away, every approval wait of that run still
+**Waits already outstanding — revision 2.** When the run marks its user away, every approval wait of that run still
 outstanding — shown, or queued unshown behind another dialog — SHALL end at once and be resolved exactly as an ask
 made while the user is away is (the headless policy, source `headless-policy`, the same reason naming the timeout that
 expired), its dialog withdrawn; it is not counted cancelled, and its own expiry is never a second transition. The

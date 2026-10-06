@@ -148,7 +148,7 @@ function metricsLines(f: SummaryFacts): string[] {
 /**
  * REQ-SESSION-140's Warnings, every kind it names on its own line. The three whose record this store does not keep read
  * `n/a`, never `0`: stale-input drops (the model-input record), report downgrades (the report-validation record), and
- * mostly-elided artifacts, which no requirement defines and no record measures (OQ-205: the build proceeds under `n/a`).
+ * mostly-elided artifacts, which no requirement defines and no record measures (OQ-206: the build proceeds under `n/a`).
  */
 function warningLines(m: SessionMetrics): string[] {
   return [

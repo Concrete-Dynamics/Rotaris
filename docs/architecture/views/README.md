@@ -59,7 +59,7 @@ changed.
 
 **`summary.md` carries REQ-SESSION-140's sections (fin22).** `renderSummary` renders `SummaryFacts`, read by `summaryFactsOf`
 (`run/summary.ts`) in one read transaction: the task line from `StoreDal.firstPromptRow`, the stop reason only where one is
-recorded, Metrics with `n/a` for what is unavailable, Warnings (mostly-elided artifacts read `n/a` while OQ-205 is open, its note left open; the denials name the permission audit on every count, and `timeouts` is labelled as every tool call that timed out), Agents, Slowest
+recorded, Metrics with `n/a` for what is unavailable, Warnings (mostly-elided artifacts read `n/a` while OQ-206 is open, its note left open; the denials name the permission audit on every count, and `timeouts` is labelled as every tool call that timed out), Agents, Slowest
 Tools and the inspection note; the counts are `sessionMetrics` (`export.ts`, which the metrics document now wraps), over
 `StoreDal.toolCallDigestOf` and `auditDigestOf`, two new statements over the existing tables. `SummaryWriter.rebuild` guards
 every read and skips a superseded rebuild; `costLabelOf` moved to `run/cost-label.ts` and is re-exported where it was. The

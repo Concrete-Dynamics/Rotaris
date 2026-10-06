@@ -1558,7 +1558,7 @@ of §5 and none a channel: each is a request answered once.
   `summaryFactsOf`, one read transaction over the row, the correction entry, the first submitted prompt
   (`StoreDal.firstPromptRow`), the tool-call record and the permission audit read without their serialised entries
   (`toolCallDigestOf`, `auditDigestOf`), the issues, the iterations, plan roots and children; its counts are the metrics
-  document's (`sessionMetrics` in `export.ts`). Its Warnings line for mostly-elided artifacts reads `n/a` while OQ-205 is
+  document's (`sessionMetrics` in `export.ts`). Its Warnings line for mostly-elided artifacts reads `n/a` while OQ-206 is
   open, and its Agents line for a plan cycle's root counts the retained tool-call record, which the ring cap trims (both
   recorded open in `docs/defects/`). Every rebuild — a run's saves, a continuation's, the repair's — reads it so;
   each read sits inside `SummaryWriter`'s guard (a throw is a warning, the chain never rejects), and a rebuild a newer one is

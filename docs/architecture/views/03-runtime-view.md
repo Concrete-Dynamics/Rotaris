@@ -244,9 +244,12 @@ flowchart TB
 **An entry role that wrote no answer is asked once more (PD-ORCH-006, OQ-199 as ruled; since 2026-10-06).** The same
 `followUp` first asks whether the root's turn returned `succeeded` with empty text — its last step wrote nothing, and a
 step with a tool call never ends a turn — while the run is not stopping, pausing or coming to rest (`correctionDue`); if so
-it sends `ANSWER_REPROMPT` once per execution of the root, before any plan correction. A turn still silent after it writes
-"The run ended without an answer: …" as a `system` row and an `incomplete_execution` warning issue, and the iteration goes
-on as it would have. A plan cycle's root is not asked. With no children (no tool port's delegation) the same loop runs
+it sends `ANSWER_REPROMPT` once per execution of the root, before any plan correction. When the turn the re-prompt led to
+is still silent, and the root's turn returns so, the iteration closes as it would have and the run keeps it as
+`Run.unanswered`; `tellUnanswered` then writes a `system` row and an `incomplete_execution` warning issue where what follows
+is known — "Iteration <n> ended without an answer: …" before the loop takes up another iteration, parks at the plan gate or
+pauses at the message limit, and at the teardown either "The run ended without an answer: …" or, for a run only paused or
+cancelled (`interrupted`), the iteration's row. A plan cycle's root is not asked. With no children (no tool port's delegation) the same loop runs
 around `firstTurn`.
 
 **The coordinator's own plan and the task's completion (REQ-ORCH-029, REQ-ORCH-075, REQ-ORCH-078; since 2026-10-06,

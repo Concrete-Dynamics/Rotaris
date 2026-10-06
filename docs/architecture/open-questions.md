@@ -9985,7 +9985,11 @@ returns empty text writes "The run ended without an answer: <role> ended its tur
 once more." as a `system` row and an `incomplete_execution` warning issue. Pinned by
 `packages/engine/src/run/answerless.test.ts` (two of its three cases red before). `slice-proof`'s answerless rerun
 (`answerlessCompletion`) is unchanged: an answerless run is now one whose root stayed silent after the re-prompt too, and
-its transcript says so.
+its transcript says so. *Corrected before landing (the verifier's review):* the row is written where what follows the
+iteration is known (`Run.tellUnanswered`) — "The run ended without an answer: …" only when the run ends after it, and
+"Iteration <n> ended without an answer: …" when the run goes on, parks or only pauses — and only the turn the re-prompt led
+to is read, so a later plan correction's silent turn does not count; pinned by two more cases in `answerless.test.ts` and
+one in `coordinator-plan.test.ts`, each red on the first form (PD-ORCH-006's first-execution report).
 
 **OQ-200 — Which model call does the run timer count while a run has more than one?** *(REQ-CHAT-158, the run-timing
 indicator counts "the time spent inside the model call currently in flight" and restarts "each time the run moves on to

@@ -81,6 +81,49 @@ describe('PD-ORCH-006: the entry role is asked once more for an answer it did no
     expect(rows.indexOf(noAnswerRows(sid)[0]!.body)).toBeLessThan(rows.length - 1);
   });
 
+  /*
+   * The verifier's finding on PD-ORCH-006's first form: the row said the run ended after any silent iteration, also one the
+   * run went on from. A queued prompt, created while the first root's read is held, gives the run a second iteration.
+   */
+  function heldFirst(rest: ScriptedCall[]) {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const first: ScriptedCall = { parts: [{ hold }, ...read('r1').parts] };
+    return { ...sessionsWith([first, ...rest]), release };
+  }
+  const queue = (sid: SessionId, content: string) => dal.insertQueuedPrompt(sid, '9f1c2d3e-0000-4000-8000-000000000001', content, '2026-10-06T12:00:00.000Z');
+  const told = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'system' && r.body.includes('ended without an answer')).map((r) => r.body);
+
+  it('an iteration the run goes on from is said to have ended without an answer — the run is not', async () => {
+    const { sessions, client, release } = heldFirst([silent(), silent(), answer('The workspace holds README.md.')]);
+    const sid = (sessions.start(dal, 'C:/ws', QUESTION) as { value: SessionId }).value;
+    await Promise.resolve();
+    queue(sid, 'Now list the files in this workspace.');
+    release();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(dal.iterationsOf(sid)).toHaveLength(2);
+    expect(client.requests).toHaveLength(4);
+    expect(told(sid)).toEqual(['Iteration 1 ended without an answer: orchestrator ended its turn without writing one, even when asked once more.']);
+    expect(answerlessIssues(sid)).toMatchObject([{ severity: 'warning', message: 'Iteration 1 ended without an answer: orchestrator ended its turn without writing one, even when asked once more.' }]);
+    expect(answerlessIssues(sid).map((i) => JSON.parse(i.metadata) as unknown)).toMatchObject([{ iteration: 1, run_ended: false }]);
+    expect(dal.residentRows(sid).some((r) => r.body.includes('The workspace holds README.md.'))).toBe(true);
+  });
+
+  it('a run whose last iteration is silent too ended without an answer, said once for each iteration', async () => {
+    const { sessions, client, release } = heldFirst([silent(), silent(), silent(), silent()]);
+    const sid = (sessions.start(dal, 'C:/ws', QUESTION) as { value: SessionId }).value;
+    await Promise.resolve();
+    queue(sid, 'Now list the files in this workspace.');
+    release();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests).toHaveLength(5);
+    expect(told(sid)).toEqual([
+      'Iteration 1 ended without an answer: orchestrator ended its turn without writing one, even when asked once more.',
+      'The run ended without an answer: orchestrator ended its turn without writing one, even when asked once more.',
+    ]);
+    expect(answerlessIssues(sid).map((i) => JSON.parse(i.metadata) as unknown)).toMatchObject([{ iteration: 1, run_ended: false }, { iteration: 2, run_ended: true }]);
+  });
+
   it('a root that answers is not asked again, and nothing is said', async () => {
     const { sessions, client } = sessionsWith([read('r1'), answer('The first heading is "Rotaris".')]);
     const sid = (sessions.start(dal, 'C:/ws', QUESTION) as { value: SessionId }).value;

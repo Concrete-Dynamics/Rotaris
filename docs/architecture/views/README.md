@@ -48,7 +48,8 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 **An entry role that wrote no answer is asked once more; a continuation's parent is told it starts with no memory; the
 landing's 30 s is written down (OQ-199, OQ-114, OQ-196; `PD-ORCH-006` and `PD-ORCH-004` revision 5, R-071; fin20).**
 `Run.turn`'s follow-up sends `ANSWER_REPROMPT` once to a root whose turn returned no text, and a root still silent is
-reported in a `system` row and an `incomplete_execution` issue. The continuation offer (`cutOffReport`) and `delegate`'s
+reported in a `system` row and an `incomplete_execution` issue where what follows it is known (`Run.tellUnanswered`): the
+run's end, or only that iteration's when the run goes on, parks or pauses. The continuation offer (`cutOffReport`) and `delegate`'s
 description carry the no-memory sentence. `CHILD_LANDING_GRACE` is unchanged. The **runtime view**'s loop diagram, its
 paragraph on the root's follow-up and its child-timeout paragraph say so. No package, edge, process, channel, command or
 store column changed.

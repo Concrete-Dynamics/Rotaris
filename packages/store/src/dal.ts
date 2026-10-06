@@ -596,10 +596,11 @@ export class StoreDal {
       settleToolCall: db.prepare('UPDATE tool_calls SET status = ?, elapsed_ms = ?, is_error = ?, entry = ? WHERE session_id = ? AND ordinal = ? AND status = \'running\''),
       oldestToolCall: db.prepare('DELETE FROM tool_calls WHERE session_id = ? AND ordinal = (SELECT min(ordinal) FROM tool_calls WHERE session_id = ?)'),
       toolCallsOf: db.prepare('SELECT * FROM tool_calls WHERE session_id = ? ORDER BY ordinal'),
-      // REQ-SESSION-140: the summary's reading of the record — the columns and two fields of the entry, never the entry.
+      // REQ-SESSION-140: the summary's reading of the record — the columns and two fields of the entry, never the entry; a
+      // field that is not a string reads NULL, as `toolCallFactsOf` reads it.
       toolCallDigestOf: db.prepare(`SELECT ordinal, call_id, agent_name, tool_name, status, elapsed_ms, is_error,
-        CASE WHEN json_valid(entry) THEN json_extract(entry, '$.outcome_kind') END AS outcome_kind,
-        CASE WHEN json_valid(entry) THEN json_extract(entry, '$.failure_kind') END AS failure_kind
+        CASE WHEN json_valid(entry) AND json_type(entry, '$.outcome_kind') = 'text' THEN json_extract(entry, '$.outcome_kind') END AS outcome_kind,
+        CASE WHEN json_valid(entry) AND json_type(entry, '$.failure_kind') = 'text' THEN json_extract(entry, '$.failure_kind') END AS failure_kind
         FROM tool_calls WHERE session_id = ? ORDER BY ordinal`),
       // REQ-MONITOR-167: per-tool totals across the agents of one session, most-called first.
       toolCallCounts: db.prepare('SELECT tool_name, COUNT(*) AS count, COUNT(DISTINCT agent_name) AS agents FROM tool_calls WHERE session_id = ? GROUP BY tool_name ORDER BY count DESC, tool_name'),

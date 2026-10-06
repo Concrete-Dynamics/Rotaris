@@ -35,7 +35,10 @@ cut to 240 characters under REQ-SESSION-194, `—` where none was submitted; `- 
 OQ-60's Outcome block, kept as ruled, after it; Metrics, in which tokens of a session with no usage and a cost whose price was
 not established read `n/a`; Warnings, one line per kind REQ-SESSION-140 lists (a denial names the permission audit;
 stale-input drops and report downgrades read `n/a` for the records this store does not keep, and mostly-elided artifacts read
-`n/a` under [OQ-205](../../architecture/open-questions.md), which asks what the requirement means by one); Agents (each
+`n/a` under [OQ-205](../../architecture/open-questions.md), which asks what the requirement means by one — that one kind is
+**not** built, and stays open in
+[`summary-md-counts-no-mostly-elided-artifacts-until-oq-205-is-ruled.md`](../summary-md-counts-no-mostly-elided-artifacts-until-oq-205-is-ruled.md)
+until the question is ruled); Agents (each
 iteration's root, each plan cycle's root, each child, and any name only the tool-call record carries, with its counted calls,
 `n/a` where none is held); Slowest Tools, the top five by `elapsed_ms`; and the closing inspection note naming Export records…
 and `session.log`. The counts are `sessionMetrics` (`packages/engine/src/export.ts`), the metrics document's own figures, read
@@ -51,3 +54,11 @@ cost, the Warnings lines, the Agents lines, `summaryFactsOf` over a real store, 
 before, and by `packages/store/src/store.test.ts` (the digest and the first prompt). `pnpm sessions-proof` reads the seeded
 session's `summary.md` for the sections in order, the stop-reason line, `n/a` and a slowest call, and keeps it as
 `seed-summary.md` beside `repaired-summary.md`.
+
+**Repair round 1 (fin22's verifier).** The Warnings line for mostly-elided artifacts was split out into its own open note,
+linked above, citing OQ-205 and the `n/a` reading, since the requirement is not met for that kind until the question is
+ruled. The same round names the permission audit on the denials line whatever its count, labels the metrics document's
+`timeouts` as every tool call that timed out (`- Timeouts:`, not `- Terminal timeouts:`, since it counts more than the
+terminal's), and reads a non-string `outcome_kind` or `failure_kind` as NULL in `toolCallDigestOf` (`json_type`), as
+`toolCallFactsOf` does. A plan cycle root's Agents line read from the capped record is recorded in
+[`summary-md-reads-a-plan-cycle-roots-calls-from-the-capped-tool-call-record.md`](../summary-md-reads-a-plan-cycle-roots-calls-from-the-capped-tool-call-record.md).

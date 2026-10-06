@@ -771,8 +771,9 @@ describe('store — v4: the evidence rings (ADR-0024, REQ-SESSION-133/135/136/13
     const insert = (callId: string, entry: string) => dal.transaction(() => dal.ringInsert('tool_calls', sid, (o) => dal.insertToolCall({ session_id: sid, ordinal: o, call_id: callId, agent_name: 'a', tool_name: 'terminal', status: 'failed', started_at: 't', elapsed_ms: 9, is_error: 1, entry })));
     insert('c1', JSON.stringify({ outcome_kind: 'shell_failure', failure_kind: 'exit', args: { command: 'x'.repeat(5000) } }));
     insert('c2', '{not json');
+    insert('c3', JSON.stringify({ outcome_kind: 7, failure_kind: { kind: 'exit' } }));
     const digest = dal.toolCallDigestOf(sid);
-    expect(digest.map((d) => [d.call_id, d.outcome_kind, d.failure_kind])).toEqual([['c1', 'shell_failure', 'exit'], ['c2', null, null]]);
+    expect(digest.map((d) => [d.call_id, d.outcome_kind, d.failure_kind])).toEqual([['c1', 'shell_failure', 'exit'], ['c2', null, null], ['c3', null, null]]);
     expect(Object.keys(digest[0]!)).not.toContain('entry');
     dal.appendRow(sid, 0, 'user', true, '   ');
     dal.appendRow(sid, 1, 'user', true, 'first');

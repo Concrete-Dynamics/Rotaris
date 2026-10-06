@@ -10450,8 +10450,10 @@ started outside any window — the desktop's logout above all — asks it.
 Warnings section, which covers "stale-input drops, mostly-elided artifacts, report downgrades, permission denials …, tool
 errors, and terminal failures, suspicious successes and timeouts"; REQ-SESSION-139, REQ-SESSION-133. Raised 2026-10-06 by
 fin22 (bundle `fin22-summary-and-counts`) while repairing
-[`summary-md-carries-none-of-the-sections-its-requirement-lists.md`](../defects/fixed/summary-md-carries-none-of-the-sections-its-requirement-lists.md).
-Open, the owner's.)*
+[`summary-md-carries-none-of-the-sections-its-requirement-lists.md`](../defects/fixed/summary-md-carries-none-of-the-sections-its-requirement-lists.md);
+the one gap it leaves stays open in
+[`summary-md-counts-no-mostly-elided-artifacts-until-oq-205-is-ruled.md`](../defects/summary-md-counts-no-mostly-elided-artifacts-until-oq-205-is-ruled.md)
+until this is ruled. Open, the owner's.)*
 
 Every other kind the Warnings section names has a definition and a record: a permission denial is an audit entry
 (REQ-SESSION-137), a tool error and the three terminal outcomes are tool-call outcomes and issues (REQ-SESSION-136), and a

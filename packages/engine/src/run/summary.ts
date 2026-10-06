@@ -155,11 +155,12 @@ function warningLines(m: SessionMetrics): string[] {
     `- Stale-input drops: ${NA} (the model-input record is ${NOT_KEPT})`,
     `- Mostly-elided artifacts: ${NA} (no record measures how much of an artifact was elided)`,
     `- Report downgrades: ${NA} (the report-validation record is ${NOT_KEPT})`,
-    `- Permission denials: ${m.permission_denials}${m.permission_denials > 0 ? ' — each is an entry of the permission audit' : ''}`,
+    `- Permission denials: ${m.permission_denials} (counted from the permission audit, where each is an entry)`,
     `- Tool errors: ${m.tool_outcomes['tool_error'] ?? 0}`,
     `- Terminal failures: ${m.terminal_shell_failures}`,
     `- Terminal suspicious successes: ${m.suspicious_successes}`,
-    `- Terminal timeouts: ${m.timeouts}`,
+    // The metrics document's `timeouts`: every tool call that timed out, the terminal's among them, or the terminal's issues.
+    `- Timeouts: ${m.timeouts} (tool calls that timed out, a terminal's among them)`,
   ];
 }
 

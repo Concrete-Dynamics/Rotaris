@@ -90,19 +90,21 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
     expect(spent).toContain('- Cost: 0.12 reported by the provider');
   });
 
-  it('Warnings names every kind REQ-SESSION-140 lists; the three no record measures read n/a, a denial names the permission audit', () => {
+  it('Warnings names every kind REQ-SESSION-140 lists; the three no record measures read n/a, the denials name the permission audit', () => {
     const row = rowOf();
     const metrics = sessionMetrics(row, [], [{ kind: 'decision', decision: 'deny', source: 'rule' }, { kind: 'decision', decision: 'allow', source: 'rule' }], [{ kind: 'terminal_timeout' }, { kind: 'terminal_shell_failure' }], 0, 0, 0);
     expect(section(renderSummary(factsOf(row, { metrics })), 'Warnings')).toEqual([
       '- Stale-input drops: n/a (the model-input record is not kept by this store)',
       '- Mostly-elided artifacts: n/a (no record measures how much of an artifact was elided)',
       '- Report downgrades: n/a (the report-validation record is not kept by this store)',
-      '- Permission denials: 1 — each is an entry of the permission audit',
+      '- Permission denials: 1 (counted from the permission audit, where each is an entry)',
       '- Tool errors: 0',
       '- Terminal failures: 1',
       '- Terminal suspicious successes: 0',
-      '- Terminal timeouts: 1',
+      "- Timeouts: 1 (tool calls that timed out, a terminal's among them)",
     ]);
+    // The audit is named whatever the count, a session with no denial included (the fin22 verifier's optional finding).
+    expect(section(renderSummary(factsOf(row, { metrics: sessionMetrics(row, [], [], [], 0, 0, 0) })), 'Warnings')).toContain('- Permission denials: 0 (counted from the permission audit, where each is an entry)');
   });
 
   it('Agents lists each agent with its counted calls, n/a where the record holds no count', () => {

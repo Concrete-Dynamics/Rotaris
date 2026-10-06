@@ -143,6 +143,33 @@ export function entryInstructionsFor(systemPrompt: string, grant: IntentGrant | 
   return systemPrompt === '' ? DIRECT_WORK_INSTRUCTION : `${systemPrompt}\n\n${DIRECT_WORK_INSTRUCTION}`;
 }
 
+/**
+ * REQ-ORCH-025: the one effect of a `swarm` run override — instruction text demanding maximum parallel delegation, with
+ * REQ-ORCH-028's overlapping-ownership rule restated, since the override does not lift it. Nothing else changes: the
+ * grant (REQ-ORCH-016: `swarm` is not an input to the mapping), the tools and the coordinating status are the run's as
+ * they would be without it.
+ */
+export const SWARM_INSTRUCTION = 'Run override `swarm`: delegate as widely and in parallel as the work allows. Split the task into as many independent work items as it truly has, hand each to its own specialist at once rather than one after another, and wait only where one item needs another\'s result. Overlapping ownership stays forbidden: never hold two implementation delegations for the same todo item at once.';
+
+/**
+ * REQ-ORCH-025: the run override as the final layer of the entry role's instructions, after the role's own instructions
+ * and its playbook ("placed after everything else and taking precedence over the matrix cell"). Only `swarm` renders text:
+ * `single` is a capability change the grant and the withheld `delegate` carry, never advice. The text is given to an entry
+ * role that declares `delegate`, so it is never a demand the role has no tool to meet.
+ *
+ * The reason this exists, kept beside it: until 2026-10-06 (finacc3, finding F07) no reader of the instructions read the
+ * override, so a `swarm` run was the same run as an `orchestrator` one
+ * (`docs/defects/the-swarm-run-override-changes-no-instruction-text.md`).
+ *
+ * On a run the mapping grants the direct-work bundle, `PD-ORCH-006` tells the entry role to do the work itself, and which of
+ * that and the `swarm` demand such a run is told is OQ-205, open. Until it is ruled the build proceeds under the reading
+ * OQ-205 records: the direct-work statement alone, no `swarm` text beside it.
+ */
+export function withRunOverride(instructions: string, override: 'single' | 'swarm' | null, grant: IntentGrant | null, role: Pick<Persona, 'tools'> | null): string {
+  if (override !== 'swarm' || grant === 'direct-work' || role?.tools.includes('delegate') !== true) return instructions;
+  return instructions === '' ? SWARM_INSTRUCTION : `${instructions}\n\n${SWARM_INSTRUCTION}`;
+}
+
 const ROUTING = 'Route work to specialists: an ambiguous or under-specified request → requirements-engineer; a question about the repository as it stands → codebase-analyst; a question answerable only from outside the repository → librarian; design → architect; an ordered plan → planner; implementation → coding-agent; testing → tester; documentation → docs-writer; behaviour-preserving restructuring → refactorer; final acceptance → verifier.';
 
 export const BUILT_IN_PERSONAS: Readonly<Record<RoleName, Persona>> = Object.freeze({

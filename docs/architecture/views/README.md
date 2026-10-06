@@ -208,6 +208,12 @@ coordinating prompt becomes its direct-work form, a configured prompt gains the 
 holds keeps the persona's prompt (`Run`'s root turn). The **runtime view**'s system-prompt paragraph and its entry-port
 sentence say so. No package, edge, process, channel, command or store column changed.
 
+**A `swarm` run is told to delegate as widely as it can (REQ-ORCH-025; finacc3, finding F07).** `withRunOverride`
+(`children/personas.ts`) adds `SWARM_INSTRUCTION` to the entry turn's instructions after its playbook when the run override is
+`swarm`, the grant is not the direct-work bundle and the entry role declares `delegate`; `RuntimePosture.runOverride` reaches
+the run as `RunDeps.runOverride` beside `coordinating`. A run granted the bundle carries no `swarm` text until OQ-205 is ruled.
+The **runtime view**'s system-prompt paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **A confirmed run cancel is saved `cancelling` by the engine (OQ-165 ruled 2026-10-06, R-071; fin21).** `Run.cancelAgent`
 saves the accepted explicit cancel `cancelling` and `saveRunning` keeps it until the run's end, so every window reads it from
 the record; the confirming window's run overlay hands over to the first record reading it (`witness`). The **runtime view**'s

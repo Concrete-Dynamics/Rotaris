@@ -26,7 +26,7 @@ import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
 import { clampBudget, storeChildReport, writeCancelledTeardown } from '../children/ledger.js';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
-import { entryInstructionsFor, resolveRole, type Persona, type PersonaResolver } from '../children/personas.js';
+import { entryInstructionsFor, resolveRole, withRunOverride, type Persona, type PersonaResolver } from '../children/personas.js';
 import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
 import { entryOf, excludedModelKeys, helperChoiceOf, isLoaderCopyKey, keyOfPair, overridesInForce, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type HelperModel, type ModelChoice } from './resilience.js';
 import { WaitRegistry, type WaitState } from './waits.js';
@@ -271,6 +271,12 @@ export interface RunDeps {
    * override, where it is the worker. Absent means it does. Read by `Run.iterate` for REQ-ORCH-029's completion constraint.
    */
   readonly coordinating?: boolean | undefined;
+  /**
+   * REQ-ORCH-025: the run override chosen where the run is started (`rotaris.delegation_strategy`). `single` reaches the run
+   * through `coordinating` and the grant; `swarm` changes the entry role's instruction text only (`withRunOverride`).
+   * Absent means none.
+   */
+  readonly runOverride?: 'single' | 'swarm' | null | undefined;
   /** REQ-ORCH-085: the host told the run paused at the limit, with the count and the limit. */
   readonly onPaused?: ((info: { count: number; limit: number | null; tokens: { input: number; output: number } }) => void) | undefined;
   /**
@@ -1828,7 +1834,8 @@ export class Run {
       // ROUTE slot says the request came from the user rather than that a coordinator routed it here (K3, c2fdd6a).
       // REQ-WORKSPACE-060 (ADR-0063): then the session's always-active context units, read at THIS construction
       // so a skill force-loaded since the last turn reaches this agent (REQ-CONFIG-166).
-      systemPrompt: withContextUnits(withPlaybook(this.planHeld ? config.systemPrompt : entryInstructions, this.preflightInEffect?.playbookFor(config.persona, true) ?? ''), this.deps.contextUnits?.() ?? []), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
+      // REQ-ORCH-025: the run override is the final layer, after the playbook (`withRunOverride`; OQ-205 holds a granted run's).
+      systemPrompt: withContextUnits(withRunOverride(withPlaybook(this.planHeld ? config.systemPrompt : entryInstructions, this.preflightInEffect?.playbookFor(config.persona, true) ?? ''), this.deps.runOverride ?? null, this.preflightInEffect?.grant ?? null, entryPersona ?? null), this.deps.contextUnits?.() ?? []), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
       // PD-ORCH-001: no supervision while the plan gate holds the run. The hold withholds every writing tool,
       // so the only work left is reading the same region repeatedly — REQ-ORCH-101's first trigger, fired by the

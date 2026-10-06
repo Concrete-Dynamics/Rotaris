@@ -22,6 +22,18 @@ build proceeds under: the bundle granted, the direct-work statement, and no `swa
 `swarm` text on the other intents can be built whichever way OQ-205 is ruled, and what it says on a granted intent waits on
 the ruling.
 
+**Repaired in part, 2026-10-06 (finacc3, acceptance finding F07): the `swarm` text on every intent the mapping does not grant
+the bundle.** `withRunOverride` (`packages/engine/src/children/personas.ts`) adds `SWARM_INSTRUCTION` — maximum parallel
+delegation, overlapping ownership of one todo item still forbidden — to the entry turn's instructions as their final layer,
+after the playbook, when the run override is `swarm`, the grant is not the direct-work bundle, and the entry role declares
+`delegate`; `Sessions` hands `RuntimePosture.runOverride` to the run as `RunDeps.runOverride`. `single` renders no text (a
+capability change). Pinned by `run/preflight.test.ts` ("REQ-ORCH-025: a `swarm` run is told to delegate as widely as it
+can…", red on the code before: the `swarm` run's instructions were the `orchestrator` run's, character for character) and four
+cases in `children/personas.test.ts`; shown in the built app by two scripted launches of a `moderate_feature` run reading the
+instructions the model port received (`ROTARIS_CAPTURE_MODEL_REQUESTS`): `delegation_strategy: orchestrator` and `swarm` differ
+by that paragraph alone, after the playbook. **Still open** on the other half: what a `swarm` run on a granted intent is told
+waits on OQ-205, and until it is ruled such a run is told PD-ORCH-006's statement with no `swarm` text beside it.
+
 ## Specs
 
 - REQ-ORCH-025: "A `swarm` override demands maximum parallel delegation (overlapping ownership of the same work slice

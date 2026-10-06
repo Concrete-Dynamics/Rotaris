@@ -69,7 +69,11 @@ bundle is told to do the work itself, `entryInstructionsFor`, OQ-202 as ruled, `
 keeps the persona's prompt) take its playbook (`withPlaybook`, REQ-ORCH-019; the entry turn the entry role's form,
 `Preflight.playbookFor(persona, true)`, whose ROUTE slot is the catalogue's `entry` variant where its row resolves `routed`,
 `entryCell`, while a delegated child of the same role reads `routed` — since 2026-10-06, K3 of the default live run at
-`c2fdd6a`; the launch audit records the entry role's cell in that form — the entry role being the persona the root runs on, `PreflightDeps.entryRole` from `run.model.config.persona`, which also names the BUDGET row; an entry persona with no row clamps nothing) and then the session's
+`c2fdd6a`; the launch audit records the entry role's cell in that form — the entry role being the persona the root runs on, `PreflightDeps.entryRole` from `run.model.config.persona`, which also names the BUDGET row; an entry persona with no row clamps nothing), for the entry turn the run override's text as
+the final layer (`withRunOverride`, `children/personas.ts`, REQ-ORCH-025: a `swarm` run's demand for maximum parallel
+delegation, `SWARM_INSTRUCTION`, given to an entry role that declares `delegate`; none under `single`, a capability change,
+and none on a run granted the direct-work bundle, OQ-205's reading; `RunDeps.runOverride` from `RuntimePosture.runOverride`),
+and then the session's
 **always-active context units** (`withContextUnits`, REQ-WORKSPACE-060), in that requirement's order: workspace
 context → the skill catalog → the force-loaded skill bodies → persona memory. **One of the four is not built**
 (persona memory) and is an empty slot in the list rather than a shape a later part must re-cut.

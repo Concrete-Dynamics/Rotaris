@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
-import { BUILT_IN_PERSONAS, DIRECT_WORK_INSTRUCTION, intentPayloadOf, intentStatusOf, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type Publisher, type ToolPort, type ToolPortContext } from '../index.js';
+import { BUILT_IN_PERSONAS, DIRECT_WORK_INSTRUCTION, SWARM_INSTRUCTION, intentPayloadOf, intentStatusOf, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type Publisher, type ToolPort, type ToolPortContext } from '../index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -31,7 +31,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       playbookFor: (role, asEntry) => (role === 'orchestrator' ? (asEntry ? 'PLAYBOOK\nROUTE: entry text' : 'PLAYBOOK\nROUTE: routed text') : ''), budgetCell: { maxActive: 2, maxTotal: 6, maxDepth: 2 }, warnings: [],
     };
   }
-  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | ((ctx: PreflightContext) => Preflight | Promise<Preflight>) | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void, publisher: Publisher = NONE, systemPrompt?: string) {
+  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | ((ctx: PreflightContext) => Preflight | Promise<Preflight>) | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void, publisher: Publisher = NONE, systemPrompt?: string, runOverride?: 'single' | 'swarm' | null) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
     const seen: string[] = [];
@@ -40,7 +40,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       clocks: clock, publisher, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => `P${++n}`,
       model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', ...(systemPrompt === undefined ? {} : { systemPrompt }) } }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       tools: (ctx) => { onTools?.(ctx); return port; }, attended: () => true,
-      runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' },
+      runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', ...(runOverride === undefined ? {} : { runOverride }) },
       ...(preflight ? { preflight: async (ctx) => { seen.push(ctx.prompt); onPreflight?.(ctx); return typeof preflight === 'function' ? preflight(ctx) : preflight; } } : {}),
     });
     return { sessions, client, seen };
@@ -84,6 +84,29 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     const coordinated = systemOf(held.client);
     expect(coordinated).toContain('you do not modify files or run commands yourself');
     expect(coordinated).not.toContain(DIRECT_WORK_INSTRUCTION);
+  });
+  it('REQ-ORCH-025: a `swarm` run is told to delegate as widely as it can, after its playbook, where the coordinator coordinates; an `orchestrator` run is not (the-swarm-run-override-changes-no-instruction-text.md, the half OQ-205 does not hold)', async () => {
+    const coordinating = BUILT_IN_PERSONAS.orchestrator.systemPrompt;
+    const systemOf = (client: ScriptedModelClient) => client.requests[0]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+    const promptOf = async (grant: 'direct-work' | 'none', category: 'single_file_change' | 'whole_project', override: 'swarm' | null) => {
+      const run = sessionsWith([answer('done')], preflightOf(grant, category), undefined, undefined, NONE, coordinating, override);
+      const sid = (run.sessions.start(dal, 'C:/ws', 'build the whole thing') as { value: SessionId }).value;
+      expect((await run.sessions.running(sid)!).status).toBe('completed');
+      return systemOf(run.client);
+    };
+    const swarm = await promptOf('none', 'whole_project', 'swarm');
+    const orchestrator = await promptOf('none', 'whole_project', null);
+    expect(swarm).not.toBe(orchestrator);
+    expect(swarm).toContain(SWARM_INSTRUCTION);
+    expect(orchestrator).not.toContain(SWARM_INSTRUCTION);
+    // The final layer: after the role's instructions and its playbook (REQ-ORCH-025 "placed after everything else").
+    expect(swarm).toBe(`${orchestrator}\n\n${SWARM_INSTRUCTION}`);
+    expect(swarm.indexOf(SWARM_INSTRUCTION)).toBeGreaterThan(swarm.indexOf('PLAYBOOK\nROUTE: routed text'));
+    // OQ-205's reading, until it is ruled: a run the mapping grants the direct-work bundle is told to do the work itself and
+    // carries no `swarm` demand beside it (PD-ORCH-006).
+    const granted = await promptOf('direct-work', 'single_file_change', 'swarm');
+    expect(granted).toContain(DIRECT_WORK_INSTRUCTION);
+    expect(granted).not.toContain(SWARM_INSTRUCTION);
   });
   it('with no pre-flight the fallback intent is recorded, no playbook is appended, and the port sees no grant', async () => {
     const ctxs: ToolPortContext[] = [];

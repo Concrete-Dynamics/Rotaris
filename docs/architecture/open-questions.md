@@ -10405,6 +10405,11 @@ coordinating status in REQ-ORCH-025's sense: it is not a `single` run, so `coord
 instructions are `PD-ORCH-006`'s, the direct-work statement, and no `swarm` text is rendered beside them, since the
 build renders that text on no run (`entryInstructionsFor`, `packages/engine/src/children/personas.ts`, reads no run
 override; the defect note above). On every other intent a `swarm` run is today the same run as an `orchestrator` one.
+*(Corrected 2026-10-06, finacc3, finding F07: the last two sentences no longer describe the build. On every intent the mapping
+does not grant the bundle a `swarm` run is now told REQ-ORCH-025's demand, after its playbook (`withRunOverride`,
+`SWARM_INSTRUCTION`); on a granted intent the build still renders no `swarm` text beside the direct-work statement, by a
+deliberate check in `withRunOverride` rather than because no run reads the override. That is the reading this question
+holds open.)*
 
 **What a ruling decides.** Whether a `swarm` override on a granted intent keeps the bundle and is told to do the work
 itself (REQ-ORCH-025's coordination-only tool set and delegation demand yield on those intents, as built, carried by a

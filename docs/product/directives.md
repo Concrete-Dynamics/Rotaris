@@ -3266,7 +3266,10 @@ open. The build proceeds under the reading OQ-205 records: the run holds the bun
 coordinating status in REQ-ORCH-025's sense (it is not a `single` run, so nothing is withheld), and is told that it does
 the work itself. No `swarm` demand stands beside that statement, since the build renders REQ-ORCH-025's `swarm` text on
 no run (`packages/engine/src/children/personas.ts` reads no run override;
-[the defect recorded for it](../defects/the-swarm-run-override-changes-no-instruction-text.md)).
+[the defect recorded for it](../defects/the-swarm-run-override-changes-no-instruction-text.md)). *(The reason, corrected
+2026-10-06, finacc3, finding F07: the build now renders the `swarm` text on every run the mapping does not grant the bundle,
+`withRunOverride`, and withholds it on a granted run by a check of its own, OQ-205's reading; the outcome on a granted run is
+unchanged.)*
 
 **Which todo items the success clause ranges over (revision 2).** On every run, coordinating or granted the bundle,
 REQ-ORCH-029's constraint "it does not report the run successful while a todo item is non-terminal" SHALL range over the

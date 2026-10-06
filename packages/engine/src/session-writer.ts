@@ -614,7 +614,9 @@ export class SessionWriter {
    *
    * REQ-SESSION-134: the entry's `id` is minted here and its `severity` defaults to `info`. A caller passes another
    * only where a requirement names one — `REQ-HOOKS-119`'s `hook_run` (warning where the outcome carried one) and
-   * `REQ-NOTIFY-268`'s `notice` entry (the notice's own severity) — because a severity nothing requires is a
+   * `REQ-NOTIFY-268`'s `notice` entry (the notice's own severity) — and where a ruling does: OQ-127's keeps
+   * REQ-NOTIFY-111's corrective-message line at `WARNING` since a failed step precedes it, and its `corrective_message`
+   * entry carries the same severity (`recordCorrectiveMessage`) — because a severity nothing requires is a
    * judgement this writer is not entitled to make about another domain's entry.
    */
   appendTimeline(name: string, actor: string, message: string, metadata: Record<string, unknown>, severity: TimelineSeverity = 'info'): Result<number, WriteFailure> {

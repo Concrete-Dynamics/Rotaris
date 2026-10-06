@@ -214,6 +214,11 @@ sentence say so. No package, edge, process, channel, command or store column cha
 the run as `RunDeps.runOverride` beside `coordinating`. A run granted the bundle carries no `swarm` text until OQ-205 is ruled.
 The **runtime view**'s system-prompt paragraph says so. No package, edge, process, channel, command or store column changed.
 
+**A corrective message's timeline entry is a warning, as its line is (OQ-127's ruling; finacc3, finding F11).**
+`recordCorrectiveMessage` (`engine/children/stall.ts`) writes the `corrective_message` entry at severity `warning`, the
+`WARNING` its session-log line carries; it took the writer's default, `info`, before. The **runtime view**'s stall-watch
+paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **A confirmed run cancel is saved `cancelling` by the engine (OQ-165 ruled 2026-10-06, R-071; fin21).** `Run.cancelAgent`
 saves the accepted explicit cancel `cancelling` and `saveRunning` keeps it until the run's end, so every window reads it from
 the record; the confirming window's run overlay hands over to the first record reading it (`witness`). The **runtime view**'s

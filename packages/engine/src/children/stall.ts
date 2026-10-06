@@ -388,11 +388,15 @@ export function stallRecords(ports: StallRecordPorts, who: StallRecordSubject): 
  * REQ-NOTIFY-111: that a child was given its one corrective message — a session-log line at `WARNING` (it follows a failed
  * step) and a `corrective_message` timeline entry (OQ-127, OQ-157). The message itself is in the child's conversation
  * record (REQ-ORCH-140).
+ *
+ * The entry carries the line's severity, `warning`, for the reason OQ-127's ruling keeps the line at `WARNING`: a failed
+ * model step precedes it. Until 2026-10-06 (finacc3, finding F11) it took the writer's default, `info`, so one fact read
+ * as a warning in the session log and as informational on the timeline.
  */
 export function recordCorrectiveMessage(ports: StallRecordPorts, agentName: string, taskId: string, quietS: number, windowS: number, failure: string): void {
   const message = correctiveMessageLine(agentName, taskId, quietS, failure);
   ports.warn(message);
-  ports.writer.appendTimeline('corrective_message', agentName, message, { task_id: taskId, quiet_seconds: quietS, window_seconds: windowS, failure });
+  ports.writer.appendTimeline('corrective_message', agentName, message, { task_id: taskId, quiet_seconds: quietS, window_seconds: windowS, failure }, 'warning');
 }
 
 /** REQ-NOTIFY-112's stuck condition this build detects: the child produced no output within the window before it failed. */

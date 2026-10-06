@@ -1483,11 +1483,11 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(childAsked[1]).toContain('TASK: be quiet');
       expect(childAsked[1]).toContain('[Corrective message] You produced no output for 90 seconds (the stall window, runtime.child_stall_timeout, is 90 seconds), and your last model request then failed: the stream ended with no answer.');
       // OQ-127's ruling: the session log says it was sent, at WARNING (it follows a failed step), and the timeline records
-      // it as a `corrective_message` entry (OQ-157's word).
+      // it as a `corrective_message` entry (OQ-157's word) of the same severity (finding F11: `info` until 2026-10-06).
       const line = `child corrective message: quiet (${child(sid).task_id}) produced no output for 90 seconds and its model request then failed (the stream ended with no answer); it was given its one corrective message and resumes (REQ-NOTIFY-111)`;
       expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toEqual([line]);
       const entries = dal.timelineOf(sid).filter((t) => t.name === 'corrective_message');
-      expect(entries.map((t) => [t.actor, t.message, t.severity])).toEqual([['quiet', line, 'info']]);
+      expect(entries.map((t) => [t.actor, t.message, t.severity])).toEqual([['quiet', line, 'warning']]);
       expect(JSON.parse(entries[0]!.metadata)).toEqual({ task_id: child(sid).task_id, quiet_seconds: 90, window_seconds: 90, failure: 'the stream ended with no answer' });
       expect(child(sid).state).toBe('succeeded');
       expect(JSON.parse(child(sid).report!)).toMatchObject({ status: 'succeeded' });

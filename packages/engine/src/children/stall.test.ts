@@ -225,16 +225,18 @@ describe('OQ-127\'s ruling (2026-10-06, R-071): what a stall watch\'s reports wr
     const timeline: { name: string; actor: string; message: string; metadata: Record<string, unknown> }[] = [];
     const warned: string[] = [];
     const informed: string[] = [];
+    /** Each timeline entry's severity, by name; `info` where the caller passed none (the writer's default). */
+    const severities: [string, string][] = [];
     const ports: StallRecordPorts = {
       writer: {
         recordIssue: (i) => { issues.push(i); return { ok: true, value: `i${issues.length}` } as const; },
-        appendTimeline: (name, actor, message, metadata) => { timeline.push({ name, actor, message, metadata }); return { ok: true, value: timeline.length } as const; },
+        appendTimeline: (name, actor, message, metadata, severity = 'info') => { timeline.push({ name, actor, message, metadata }); severities.push([name, severity]); return { ok: true, value: timeline.length } as const; },
       },
       warn: (m) => warned.push(m),
       info: (m) => informed.push(m),
     };
     const watch = new StallWatch(clock, millis(90_000), { ...stallRecords(ports, { subject: 'child', agentName: 'build', taskId: 'bg_0000000a', live }), evaluated: () => undefined });
-    return { clock, watch, ports, issues, timeline, warned, informed };
+    return { clock, watch, ports, issues, timeline, warned, informed, severities };
   }
 
   it('PD-MONITOR-005 revision 2: the `stall` issue is written with each throttled warning and only then — not at every evaluation', () => {
@@ -273,6 +275,8 @@ describe('OQ-127\'s ruling (2026-10-06, R-071): what a stall watch\'s reports wr
     expect(r.timeline.at(-1)).toEqual({ name: 'stall_recovered', actor: 'build', message: recovered, metadata: { task_id: 'bg_0000000a' } });
     // The stall itself stays a warning: REQ-MONITOR-119 says "log a warning".
     expect(r.warned).toEqual([stallWarning('build', 'bg_0000000a', 90)]);
+    // The intended states are informational on the timeline as in the log.
+    expect(r.severities).toEqual([['waiting_on_tools', 'info'], ['stall_recovered', 'info']]);
   });
 
   it('OQ-173\'s wait the run imposes is REQ-MONITOR-118\'s manner: a line at INFO, and no timeline word was ruled for it', () => {
@@ -300,6 +304,8 @@ describe('OQ-127\'s ruling (2026-10-06, R-071): what a stall watch\'s reports wr
     const line = 'child corrective message: build (bg_0000000a) produced no output for 92 seconds and its model request then failed (the stream ended); it was given its one corrective message and resumes (REQ-NOTIFY-111)';
     expect(r.warned).toEqual([line]);
     expect(r.timeline).toEqual([{ name: 'corrective_message', actor: 'build', message: line, metadata: { task_id: 'bg_0000000a', quiet_seconds: 92, window_seconds: 90, failure: 'the stream ended' } }]);
+    // The entry is a warning as its line is (finding F11): one fact, one severity, in the log and on the timeline.
+    expect(r.severities).toEqual([['corrective_message', 'warning']]);
   });
 });
 

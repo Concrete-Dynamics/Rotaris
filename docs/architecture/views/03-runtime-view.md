@@ -1122,8 +1122,9 @@ log at `INFO` and to `SessionsDeps.log`; absent, `warn`), since each records an 
 default `WARNING` level (REQ-SESSION-142) therefore keeps neither the waits nor the recovery: REQ-MONITOR-120's "logged"
 is met by the `INFO` line, which the application log keeps (`PD-MONITOR-002`) as does a session log set to `INFO`, beside
 the `stall_recovered` entry the timeline keeps at any level. The corrective message
-below is a `corrective_message` timeline entry and a `child corrective message: …` line at `WARNING`
-(`recordCorrectiveMessage`), since a failed step precedes it. *(Until 2026-10-06 every one of these lines went through
+below is a `corrective_message` timeline entry of severity `warning` and a `child corrective message: …` line at `WARNING`
+(`recordCorrectiveMessage`), since a failed step precedes it (the entry took the writer's default, `info`, until 2026-10-06,
+finacc3 finding F11). *(Until 2026-10-06 every one of these lines went through
 `warn`, and none was a timeline entry, because REQ-ORCH-139's closed vocabulary had no word for them; OQ-127 and OQ-157
 were ruled together that day.)*
 

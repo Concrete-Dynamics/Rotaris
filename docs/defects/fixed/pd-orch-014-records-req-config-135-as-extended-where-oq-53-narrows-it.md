@@ -27,3 +27,18 @@ requirement's text is not touched.
 - `docs/product/directives.md` — `PD-ORCH-014`'s disposition block.
 - `docs/spec/15-settings-configuration.md` — the back-pointer under `REQ-CONFIG-135`.
 - `packages/kernel/src/generated/requirements.ts` — generated from both: `EXTENDED_BY['REQ-CONFIG-135']`.
+
+## Repaired — 2026-10-06
+
+`PD-ORCH-014`'s disposition block now reads `> **Extends:** REQ-ORCH-139, REQ-NOTIFY-268` and
+`> **Narrows:** REQ-CONFIG-135`, with a line beneath saying what it read before and why it changed, and the back-pointer
+under REQ-CONFIG-135 in `docs/spec/15-settings-configuration.md` reads **Narrowed by**. The requirement's text and the
+note's body are unchanged. `pnpm symbols` now writes `NARROWED_BY['REQ-CONFIG-135'] = 'PD-ORCH-014'` (164 narrowed, 46
+extended, from 163 and 47).
+
+Pinned by `tools/symbol-artifact/back-pointers.test.ts`, which reads every back-pointer in `docs/spec/` against the
+generated `SUPERSEDED_BY`, `NARROWED_BY` and `EXTENDED_BY`: its F15 case fails on the old labels (`expected undefined to
+be 'PD-ORCH-014'`), and its general case fails on any note whose verb is not the register's disposition. Reading every
+note found six more that name a directive whose disposition does not name their requirement, recorded and not repaired
+here:
+[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement`](../six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md).

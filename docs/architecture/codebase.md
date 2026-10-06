@@ -89,6 +89,10 @@ plain process with no React and the restore run against a fake run host with a c
   FOLLOWED BY DIGITS on the VT-stripped stream, never the first occurrence of the marker text, because the
   echoed wrapper carries that text (ADR-0020 first-execution note). `node-pty` loads from its prebuilds under
   Node and Electron alike and is externalised beside `better-sqlite3`.
+- **A PTY caps the line it hands the shell** — a POSIX wrapper longer than `POSIX_LINE_BYTES` (1,000 bytes) is never
+  written to the PTY: the canonical-mode line discipline keeps 4,095 characters of a line on Linux and 1,024 on macOS, and
+  a cut wrapper left the shell on its continuation prompt (live-run M1). `ForegroundSession.carry` stages such a command
+  in a script under the OS temporary directory and wraps `. '<script>'` instead (ADR-0020's report-back of 2026-10-06).
 - **The engine owns the `ToolPort` and `GateSink` interfaces; the run-host root fills them** — `engine` never
   imports `agent-tools` and `agent-tools` never imports `engine`, so the boundaries matrix has no edge between
   them to police.

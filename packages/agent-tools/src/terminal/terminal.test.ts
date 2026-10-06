@@ -1,12 +1,12 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
-import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, posixShellArgs, printsMarker, processIdentity, restoreCommand, shellHoldsTerminal, snapshotCommand, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
+import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, POSIX_LINE_BYTES, posixShellArgs, printsMarker, processIdentity, restoreCommand, shellHoldsTerminal, snapshotCommand, stagedScript, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
 import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
 import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
@@ -526,6 +526,49 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     pwsh.s.sendInput('x');
     await pwsh.s.run('$true', { timeoutMs: 5_000 });
     expect(pwsh.lines().every((w) => w.startsWith('$global:LASTEXITCODE'))).toBe(true);
+  });
+  // docs/defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md (live-run M1).
+  it('REQ-TOOLS-096 (live-run M1): a POSIX command too long for one PTY line is staged in a script the line dot-sources; a short one keeps its line', async () => {
+    const session = (backend: ShellBackend) => {
+      const writes: string[] = [];
+      let emit: (d: string) => void = () => undefined;
+      const factory: PtyFactory = {
+        spawn: () => ({
+          // Never disposed: `dispose` signals the pid's process group, and this PTY has no process behind it.
+          pid: 2 ** 30, onData: (cb) => { emit = cb; }, onExit: () => undefined, resize: () => undefined, kill: () => undefined,
+          write: (data) => {
+            writes.push(data);
+            const nonce = /__rot_([0-9a-f]+)_s/.exec(data)?.[1];
+            if (nonce) setImmediate(() => emit(`__rot_${nonce}_s\r\n__rot_${nonce}_e:0\r\n`));
+          },
+        }),
+      };
+      const s = new ForegroundSession({ factory, backend, cwd: root, env: {}, monotonic: clocks.monotonic, timers: clocks.timers, emulator: xtermEmulatorFactory, warn: () => undefined });
+      return { s, lines: () => writes.filter((w) => w.includes('__rot_') && !w.includes('__rot_b64__')) };
+    };
+    const long = `cat > /dev/null <<'EOF'\n${"it's \\ $x\n".repeat(400)}EOF`;
+    const posix = session({ kind: 'posix', file: '/bin/sh' });
+    await posix.s.run('true', { timeoutMs: 5_000 });
+    expect(posix.lines()[0]).toBe(wrapCommand({ kind: 'posix', file: '/bin/sh' }, 'true', /__rot_[0-9a-f]+_s/.exec(posix.lines()[0]!)![0], /__rot_[0-9a-f]+_e/.exec(posix.lines()[0]!)![0]) + '\r');
+    const before = posix.lines().length;
+    await posix.s.run(long, { timeoutMs: 5_000 });
+    const line = posix.lines()[before]!;
+    expect(Buffer.byteLength(line)).toBeLessThanOrEqual(POSIX_LINE_BYTES);
+    expect(line).toMatch(/^printf '%s\\n' '__rot_[0-9a-f]+_s'; command eval '\. '\\''[^']+\/1\.sh'\\'''; printf '__rot_[0-9a-f]+_e:%s\\n' "\$\?"\r$/);
+    const file = /'\\''([^']+\/1\.sh)'\\''/.exec(line)![1]!;
+    // The script holds the command as written, after the line that removes the script; only its user may read it.
+    expect(readFileSync(file, 'utf8')).toBe(stagedScript(file, long));
+    expect(readFileSync(file, 'utf8')).toBe(`command rm -f -- '${file}' 2>/dev/null; ${long}\n`);
+    if (process.platform !== 'win32') expect(statSync(file).mode & 0o077).toBe(0);
+    // The nonce is never part of the script's name: its echo would read as the marker printed.
+    expect(file).not.toContain('__rot_');
+    rmSync(join(file, '..'), { recursive: true, force: true });
+    // PowerShell keeps its one base64 line: no Windows host here measures whether ConPTY caps a line (ADR-0020's M1 note).
+    const pwsh = session({ kind: 'powershell', file: 'pwsh' });
+    await pwsh.s.run(long, { timeoutMs: 5_000 });
+    const psLine = pwsh.lines().find((w) => w.includes('FromBase64String'))!;
+    const payload = /FromBase64String\('([^']+)'\)/.exec(psLine)![1]!;
+    expect(Buffer.from(payload, 'base64').toString('utf8')).toBe(`${long}\n$global:${/__rot_[0-9a-f]+_e/.exec(psLine)![0]}_ok = $?`);
   });
 });
 
@@ -1317,8 +1360,10 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   // bash reads its input through readline, which on a `dumb` terminal scrolls a line wider than the screen sideways on one
   // row instead of wrapping it. The shell now starts with its line editor off (`posixShellArgs`), so the echo is the line
   // discipline's again, and a row an editor still draws is dropped (`ECHOED_POSIX_END`).
-  const wideEchoCase = async (t: Awaited<ReturnType<typeof tool>>): Promise<void> => {
-    const wide = 'Q'.repeat(300);
+  // `width` past `POSIX_LINE_BYTES` makes the next call's wrapper several physical lines (live-run M1), and the shell's
+  // continuation prompt, printed once per line, stands between their echo and the next call's start marker.
+  const wideEchoCase = async (t: Awaited<ReturnType<typeof tool>>, width = 300): Promise<void> => {
+    const wide = 'Q'.repeat(width);
     await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
     // Road one: the paused command ends on its own, behind the wide call.
     expect(diag((await t.execute(args({ command: `${SH.sleep(3)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
@@ -1458,6 +1503,59 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     // A single-line command keeps today's wrapper, byte for byte.
     expect(wrapCommand({ kind: 'powershell', file: 'pwsh' }, 'git status', 'S', 'E')).toContain("Write-Output 'S'; git status; Write-Output ('E:'");
   }, 60_000);
+
+  // docs/defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md (live-run M1, 2026-10-06):
+  // the POSIX wrapper was ONE physical line of any length, and the shell reads it through the PTY's canonical-mode line
+  // discipline, which keeps 4,095 characters of a line on Linux (termios(3)) and 1,024 on macOS. A 3,700-character heredoc
+  // wrapped to about 4,304 bytes reached the shell cut with its `'%b'` quote open: the shell stood on its continuation
+  // prompt, the command never ran, and the call read as a soft pause, exit −1, with `>` for its output.
+  // Where this test's session staged its long commands (`ForegroundSession.carry`), read off the session.
+  let stagedAt: string | null = null;
+  const staging = (m: TerminalManager): string | null => {
+    stagedAt = (m.session(`${ctx().sessionId}:${ctx().agentName}`, root) as unknown as { stagingDir: string | null }).stagingDir;
+    return stagedAt;
+  };
+  const longCase = async (m: TerminalManager, t: Awaited<ReturnType<typeof tool>>, label: string) => {
+    const file = join(root, `long-${label}.txt`);
+    // Quotes, backslashes, `$`, a `%`, and multi-byte characters, so a cut inside an escape or a character would show.
+    const body = Array.from({ length: 90 }, (_, i) => `line ${String(i).padStart(2, '0')}: it's \\ "q" $HOME % é 中 ${'x'.repeat(10)}`);
+    const text = `${body.join('\n')}\n`;
+    const heredoc = `cat > '${file}' <<'EOF'\n${text}EOF\nrotLong='${label}-kept'\nwc -c < '${file}'`;
+    expect(Buffer.byteLength(wrapCommand({ kind: 'posix', file: '/bin/sh' }, heredoc, '__rot_0123456789abcdef01234567_s', '__rot_0123456789abcdef01234567_e'))).toBeGreaterThan(4_096);
+    const multi = await t.execute(args({ command: heredoc, timeout: 15 }), ctx());
+    expect(diag(multi.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+    expect(readFileSync(file, 'utf8')).toBe(text);
+    expect(output(multi.text)).toBe(String(Buffer.byteLength(text)));
+    expect(multi.text).not.toContain('__rot_');
+    // The staged script removed itself once the shell had read it.
+    expect(readdirSync(staging(m)!)).toEqual([]);
+    // The single-line path has the same cap: a one-line command past it.
+    const wide = `${'y'.repeat(2_500)}'${'z'.repeat(2_500)}`;
+    const single = await t.execute(args({ command: `printf '%s' '${wide.replace(/'/g, `'\\''`)}' | wc -c`, timeout: 15 }), ctx());
+    expect(diag(single.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+    expect(output(single.text)).toBe(String(wide.length));
+    // What the long command set persists into the next call, and its own status still comes out of it.
+    expect(output((await t.execute(args({ command: 'printf \'[%s]\\n\' "$rotLong"', timeout: 15 }), ctx())).text)).toBe(`[${label}-kept]`);
+    const failing = await t.execute(args({ command: `: '${'w'.repeat(5_000)}'\n(exit 7)`, timeout: 15 }), ctx());
+    expect(diag(failing.text)['exit_code']).toBe(7);    // A long call queued behind a soft-paused one: neither road's poll of the paused call carries a row of its echo or of
+    // the continuation prompts its lines put before its start marker.
+    await wideEchoCase(t, 6_000);
+  };
+  it.skipIf(PS)('REQ-TOOLS-096/098/179 (live-run M1): a command whose wrapper is longer than the PTY\'s input line reaches the shell whole', async () => {
+    const { m, t } = await posixSession(shell!.file);
+    try { await longCase(m, t, 'sh'); } finally { await m.dispose(); }
+    // The staging directory goes with the session.
+    expect(stagedAt).not.toBeNull();
+    expect(existsSync(stagedAt!)).toBe(false);
+  }, 90_000);
+  it.runIf(bashAsSh !== null)('REQ-TOOLS-096/098/179 (live-run M1): under bash as `/bin/sh`, a command whose wrapper is longer than the PTY\'s input line reaches the shell whole', async () => {
+    const { m, t } = await posixSession(bashAsSh!);
+    try { await longCase(m, t, 'bash'); } finally { await m.dispose(); }
+  }, 90_000);
+  it.skipIf(PS)('REQ-TOOLS-096 (live-run M1): at the display\'s 20-column floor, a long command\'s capture carries no echo of its wrapper', async () => {
+    const { m, t } = await posixSession(shell!.file, { cols: 20 });
+    try { await longCase(m, t, 'narrow'); } finally { await m.dispose(); }
+  }, 90_000);
 
   it('ADR-0021 / REQ-TOOLS-097/113: the capture is the emulated screen, not a VT strip', async () => {
     const t = await tool();

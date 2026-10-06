@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**A terminal command too long for one PTY line is staged in a script (REQ-TOOLS-096, ADR-0020; fin23, live-run M1).** A POSIX
+wrapper longer than `POSIX_LINE_BYTES` reached the shell cut at the PTY's canonical line cap; `ForegroundSession.carry` now
+writes such a command to `<os temp>/rotaris-command-<random>/<n>.sh` and wraps `. '<script>'` instead. The **process view**'s
+files-on-disk table carries the staging directory. No package, edge, process, channel, command or store column changed.
+
 **`summary.md`'s Tool errors line is the issues record's (REQ-SESSION-140, REQ-SESSION-136; fin23).** `warningLines`
 (`run/summary.ts`) reads `issues_by_kind.tool_error`, the figure the Metrics section's Issues line prints, where it read the
 tool-outcomes histogram's `tool_error` bucket. The histogram is unchanged (REQ-SESSION-139; its `mcp` bucket is OQ-208's).

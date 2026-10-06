@@ -615,6 +615,24 @@ app.whenReady().then(async () => {
     const sizeDone = await Promise.race([sizeRun.done, pause(15_000).then(() => null)]);
     live.resize = { reported: lastGeometry, process: sizeDone?.result.output ?? null };
     expect('live.processReportsGridSize', sizeDone !== null && lastGeometry && sizeDone.result.output.includes(`cols=${lastGeometry.cols} rows=${lastGeometry.rows}`), live.resize);
+    // ── REQ-TOOLS-096 (live-run M1): a command longer than the PTY's input line reaches the shell whole ──────────────
+    // The POSIX wrapper was one physical line, and a canonical-mode PTY keeps 4,095 characters of a line on Linux: a
+    // 3,700-character heredoc came back a soft pause with `>` for its output and never ran
+    // (docs/defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md). This one is
+    // longer than that, with quotes, a backslash, a `$` and a multi-byte character in it; it must end on its own status, at
+    // once, with the byte count of what it wrote, and the window's grid must show that count and nothing of the carrier.
+    const longBody = Array.from({ length: 100 }, (_, i) => `long ${String(i).padStart(3, '0')}: it's \\ "q" $HOME é ${'x'.repeat(16)}`).join('\n');
+    const longBytes = Buffer.byteLength(longBody) + (PS ? 0 : 1);
+    const longCommand = PS
+      ? `$t = @'\n${longBody}\n'@\nWrite-Output ('bytes=' + [Text.Encoding]::UTF8.GetByteCount($t))`
+      : `cat > long-command.txt <<'EOF'\n${longBody}\nEOF\nprintf 'bytes=%s\\n' "$(wc -c < long-command.txt | tr -d ' ')"`;
+    const longRun = run(longCommand, { timeout: 20 });
+    const longDone = await Promise.race([longRun.done, pause(30_000).then(() => null)]);
+    await until(async () => ((await state(LIVE)).stream.grid?.lines ?? []).some((l) => l.includes(`bytes=${longBytes}`)) ? true : null, 5_000, 50);
+    const longGrid = trimmed((await state(LIVE)).stream.grid?.lines ?? []);
+    live.longCommand = { commandBytes: Buffer.byteLength(longCommand), expected: `bytes=${longBytes}`, exitCode: longDone?.result.exitCode ?? null, elapsedMs: longDone?.result.elapsedMs ?? null, output: longDone?.result.output ?? null, gridTail: longGrid.slice(-3) };
+    expect('live.longCommandReachesTheShellWhole', longDone !== null && Buffer.byteLength(longCommand) > 4_096 && longDone.result.exitCode === 0 && longDone.result.output === `bytes=${longBytes}` && longDone.result.elapsedMs < 10_000, live.longCommand);
+    expect('live.longCommandGridShowsNoCarrier', longGrid.some((l) => l.includes(`bytes=${longBytes}`)) && !longGrid.some((l) => l.includes('__rot_') || l.includes('rotaris-command-') || l.includes('long 0')), longGrid.slice(-6));
     // ── Part T2 — REQ-SHELL-102 IN MOTION: the three surfaces sampled WHILE output arrives, not only at rest ──────
     // Wave 2 measured the equality after the closing frame (`live.threeSurfacesIdentical`, below). REQ-SHELL-102 is
     // stated at the same time — "show the same thing at the same time … Moving between the two never shows the user

@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readlinkSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { MonotonicClock, Timers, TimerHandle, Millis } from '@rotaris/kernel';
 import { stripVt } from './classify.js';
 import type { EmulatorFactory, ScreenEmulator } from './emulator.js';
@@ -758,10 +760,35 @@ export function wrapCommand(backend: ShellBackend, command: string, start: strin
   // nonzero status and the shell goes on to the end frame — dash reports 2. This is the posix twin of the PowerShell
   // branch's `try`. The command reaches `eval` single-quoted, one physical line either way, and still runs in THIS
   // shell, so what it sets persists as before.
+  //
+  // FALSIFIED, kept beside its replacement (live-run finding M1, 2026-10-06): "ONE physical line" carries any command. The
+  // shell reads the line through the PTY's canonical-mode line discipline, which keeps 4,095 characters of a line on Linux
+  // (termios(3)); a 3,700-character heredoc wrapped to about 4,304 bytes reached `sh` cut inside its `'%b'` quote, the shell
+  // stood on its continuation prompt, and the call read as a soft pause with `>` for its output. This function still
+  // builds the one line; `ForegroundSession.carry` stages a command whose line is longer than `POSIX_LINE_BYTES` in a
+  // script and wraps `. '<script>'` here instead.
   const payload = command.includes('\n')
     ? `"$(printf '%b' '${command.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/'/g, `'\\''`)}')"`
     : `'${command.replace(/'/g, `'\\''`)}'`;
   return `printf '%s\\n' '${start}'; command eval ${payload}; printf '${end}:%s\\n' "$?"`;
+}
+
+/**
+ * The longest line the POSIX wrapper may be, its CR included, before the command is staged instead (live-run finding M1,
+ * docs/defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md). The shell reads
+ * the wrapper through the PTY's canonical-mode line discipline, which keeps 4,095 characters of one line on Linux and
+ * discards the rest up to the line end (termios(3)); macOS keeps `MAX_CANON`, 1,024. This stays under both.
+ */
+export const POSIX_LINE_BYTES = 1_000;
+
+/**
+ * Live-run finding M1: the script a POSIX command too long for one line is staged in, at `file`, which the session's shell
+ * dot-sources through the ordinary wrapper (`command eval '. <file>'`). Its first line removes the file before the
+ * command runs (the shell holds it open; `command` and the redirect keep a missing `rm` silent), so a staged command
+ * leaves nothing behind once the shell has read it, and the command keeps its own line numbers: it starts on line 1.
+ */
+export function stagedScript(file: string, command: string): string {
+  return `command rm -f -- ${shQuote(file)} 2>/dev/null; ${command}\n`;
 }
 
 /**
@@ -998,6 +1025,12 @@ export class ForegroundSession {
    * was running, the poll that hands the paused command over, or the next call.
    */
   private shellEnded = false;
+  /**
+   * Live-run finding M1: the private directory a POSIX command too long for one PTY line is staged in (`carry`), made on
+   * the first such command and removed with the session; `staged` numbers its scripts.
+   */
+  private stagingDir: string | null = null;
+  private staged = 0;
 
   constructor(private readonly deps: SessionDeps, id?: string) {
     this.id = id ?? `ts_${randomBytes(4).toString('hex')}`;
@@ -1475,7 +1508,7 @@ export class ForegroundSession {
     if (!queuedBehind) this.pendingText = '';
     const region = new CommandRegion(start, end);
     this.region = region;
-    this.submit(p, wrapCommand(this.deps.backend, command, start, end));
+    this.submit(p, this.carry(command, start, end));
     const outcome = await done;
     // Only a soft-paused command keeps writing to its stream; after any other outcome what the PTY carries is the
     // product's own — the snapshot, the reset, the restore — and none of it is the command's (live-run L9).
@@ -1818,6 +1851,25 @@ export class ForegroundSession {
   }
 
   /**
+   * The wrapped line that carries `command` to the shell (`wrapCommand`). A POSIX line longer than `POSIX_LINE_BYTES`
+   * never reaches the shell whole (live-run finding M1): the command is written to a script of its own instead
+   * (`stagedScript`), in a directory only this user can read, and the line carries `. '<script>'`, which the ordinary
+   * wrapper runs in THIS shell under `command eval` as before. What the command sets persists, its status is `$?` at the end
+   * frame, and an error in it is the script's nonzero status, as on the one line.
+   */
+  private carry(command: string, start: string, end: string): string {
+    const line = wrapCommand(this.deps.backend, command, start, end);
+    if (this.deps.backend.kind !== 'posix' || Buffer.byteLength(line) + 1 <= POSIX_LINE_BYTES) return line;
+    this.stagingDir ??= mkdtempSync(join(tmpdir(), 'rotaris-command-'));
+    this.staged += 1;
+    // Named by a count, never by the call's nonce: the echo of a line that carried the marker followed by anything but a
+    // quote would read as the marker printed (`printedAt`).
+    const file = join(this.stagingDir, `${this.staged}.sh`);
+    writeFileSync(file, stagedScript(file, command), { mode: 0o600 });
+    return wrapCommand(this.deps.backend, `. ${shQuote(file)}`, start, end);
+  }
+
+  /**
    * One wrapped line, submitted. Keystrokes written with no line end after them (REQ-TOOLS-096) wait in the shell's input
    * as a partial line when nothing reads them — a soft-paused `sleep` does not — and the wrapped line was APPENDED to
    * them: `xy` + `printf '%s\n' '<start>'; …` ran `xyprintf`, which is not found, so the start marker never printed; the
@@ -1928,7 +1980,7 @@ export class ForegroundSession {
       };
       this.pendingText = '';
       this.active = { start, end, onEnd: (code) => finish(code), onKill: (reset) => { cut = { kind: 'kill', reset }; finish(-1, false); }, closer: null, onShellExit: () => finish(-1, false) };
-      this.submit(p, wrapCommand(this.deps.backend, line, start, end));
+      this.submit(p, this.carry(line, start, end));
       if (signal?.aborted) onAbort(); else signal?.addEventListener('abort', onAbort, { once: true });
     });
   }
@@ -1944,6 +1996,8 @@ export class ForegroundSession {
     this.pausedAhead = [];
     this.pausedEnded = [];
     if (old) { killTree(old.pid, true); try { old.kill(); } catch { /* */ } }
+    // Live-run finding M1: a staged script its shell never read (a line an interrupt discarded) goes with the session.
+    if (this.stagingDir !== null) { try { rmSync(this.stagingDir, { recursive: true, force: true }); } catch { /* */ } this.stagingDir = null; }
   }
 }
 

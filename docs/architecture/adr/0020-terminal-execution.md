@@ -309,6 +309,36 @@ carrier. The command still runs in THIS shell, so what it sets persists. The too
 shell the host runs — `/bin/sh`, a POSIX shell that may not be bash — where it named only Windows' shell.
 Pinned by "REQ-TOOLS-097/098/179 (live-run L1): …" in `terminal.test.ts`, red on the unguarded wrapper.*
 
+*Reported back 2026-10-06, from the final default live run at `c2a9444`
+([`a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole`](../../defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md),
+live-run finding M1): **"carried across as ONE physical line" is FALSIFIED for a long command, and kept here beside its
+replacement.** The shell runs with its line editor off, so it reads the wrapper through the PTY's canonical-mode line
+discipline, and that discipline caps a line: on Linux it keeps 4,095 characters and discards the rest up to the line end
+(termios(3), "Canonical and noncanonical mode"); macOS's `MAX_CANON` is 1,024. A 3,700-character heredoc wrapped to about
+4,304 bytes reached `sh` cut inside its `'%b'` quote; the shell stood on its continuation prompt, the command never ran,
+and the call read as a soft pause, exit −1, with `>` for its output. Measured on this host through node-pty: a 5,069-byte
+wrapper answered `>` under dash and under bash, at any wait. **The carrier now depends on the line's length.** A wrapper
+of at most `POSIX_LINE_BYTES` (1,000 bytes, its CR included; under both caps) is written as before, byte for byte. A
+longer one is never written: `ForegroundSession.carry` stages the command, as written, in a script of its own
+(`<os temp>/rotaris-command-<random>/<n>.sh`, the directory only its user may read, the file mode 0600) and wraps
+`. '<script>'` in the ordinary single-line wrapper, so the line the PTY carries is short and the command still runs in
+THIS shell under `command eval`: what it sets persists, `$?` at the end frame is its own status, and an error in it is the
+script's nonzero status (`dash: 3: …/1.sh: Bad substitution`, exit 2, measured). The script's first statement removes it
+(the shell holds it open), so nothing is left once the shell has read it; one an interrupt discarded unread goes with the
+session's directory at `dispose`. The script's name is a count, never the call's nonce, whose echo would read as the
+marker printed. The same path carries a PD-TOOLS-001 restore line longer than one PTY line.
+**Tried first and rejected, measured:** the payload cut across physical lines the shell joins (`'…'\<CR>'…'`, POSIX line
+continuation). The shell rebuilt the command whole, but a long command queued behind a soft-paused one (A10) overran the
+discipline's 4,096-byte input buffer while nothing read it, so its echo arrived in two parts on either side of the paused
+command's own output, and neither part could be dropped as the wrapper's echo: the paused call's poll carried
+`QQQ…done-later`. **PowerShell is unchanged and unmeasured:** its multi-line path is still one base64 line; whether ConPTY
+or PSReadLine caps a submitted line is not measurable on a Linux host, and is owed to the first Windows run, as the rest
+of the PowerShell branch is. Pinned by "REQ-TOOLS-096/098/179 (live-run M1): …" in `terminal.test.ts` (dash, bash as
+`sh`, and the 20-column floor; a soft-paused road included), red on the one-line carrier with exit 124 after its 15 s
+timeout; "REQ-TOOLS-096 (live-run M1): a POSIX command too long for one PTY line is staged …" pins the line, the script
+and PowerShell's line; and `pnpm terminal-proof`'s `live.longCommandReachesTheShellWhole` and
+`live.longCommandGridShowsNoCarrier`, red on the one-line carrier with exit 124 and `>`.*
+
 **A second defect, from the same first execution, in the CLEANING rather than the wrapper.** `cleanLines`
 found the start of the captured region by looking for a row that was **exactly** the marker. The marker's row
 can carry the shell's PROMPT in front of it: the line discipline echoes what we write as soon as it arrives,

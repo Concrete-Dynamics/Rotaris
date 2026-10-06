@@ -6518,8 +6518,14 @@ that REQ-SHELL-044's "anywhere" excepts a tool's result, or the tool row draws t
 *(REQ-TOOLS-135, which names `operation` as `write_file`'s selector; REQ-TOOLS-032, which requires three repairs before
 schema validation and refuses a payload that is still invalid after them. Raised 2026-09-29 by the partial repair of live-run
 finding WF1 under [R-067](../product/requests.md#r-067),
-[`write-files-first-use-refusal-recurred-under-duress.md`](../defects/write-files-first-use-refusal-recurred-under-duress.md).
-Open.)*
+[`write-files-first-use-refusal-recurred-under-duress.md`](../defects/fixed/write-files-first-use-refusal-recurred-under-duress.md).
+Open until 2026-10-06; ruled then, below.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** as recommended, a `write_file` call with a path
+and content, no `operation` and no field only another operation reads (`old_string`, `new_string`, `insert_line`, a true
+`replace_all`) is read as a `create` when its file does not exist, and its result says so; a call naming an existing file
+is refused as before, saying the file exists. Minted as [`PD-TOOLS-007`](../product/directives.md#pd-tools-007), which
+extends REQ-TOOLS-032, and built under it (fin21).
 
 The refusal names the field and gives an example. Since this repair the tool's description does too, and the schema
 sent to the model has always marked `operation` required. Even so, the 2026-09-30 duress run had a child send `path` and
@@ -8244,9 +8250,14 @@ wholesale state changes; the violation message is `Only one task can be IN_PROGR
 Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`"; REQ-TOOLS-146, whose rejection "with the
 message of REQ-TOOLS-145" covers a `replace` that marks another task `IN_PROGRESS` "while a protected active task exists".
 Raised 2026-10-01 from the live-run autopsy at 71ad8e8 finding a71-7,
-[`a-rejected-todo-replace-names-an-active-task-it-never-stored.md`](../defects/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
-Open. Raised as OQ-162 on its branch and renumbered OQ-163 before it reached `main`, where OQ-160 had been taken
+[`a-rejected-todo-replace-names-an-active-task-it-never-stored.md`](../defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
+Open until 2026-10-06; ruled then, below. Raised as OQ-162 on its branch and renumbered OQ-163 before it reached `main`, where OQ-160 had been taken
 meanwhile.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** as recommended, such a `replace` is still
+refused whole, and its message says instead that the submitted list marks more than one task in progress, naming them by
+the names sent, and that nothing was saved; it names no active task and no id. Minted as
+[`PD-TOOLS-008`](../product/directives.md#pd-tools-008), which narrows REQ-TOOLS-145, and built under it (fin21).
 
 REQ-TOOLS-146 foresees one case: an active task exists, and the incoming list marks another. It does not foresee an
 incoming list that itself marks two tasks `IN_PROGRESS` while nothing is active. REQ-TOOLS-145's single-active rule still

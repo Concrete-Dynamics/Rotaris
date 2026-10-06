@@ -582,7 +582,11 @@ with zod's `z.fromJSONSchema`, which reads patterns without the `u` flag, bounds
 identity, and refused valid calls each time a rewrite around one of those dropped a constraint inside `oneOf`. REQ-TOOLS-032's array repair is the
 schema's to decide for every tool (`repairArrayFields`, `agent-tools/gate.ts`): one of the five fields holding an object is
 wrapped only where the schema refuses the object there and not the one-element array; until 2026-10-06 `repairPayload`
-wrapped all five unconditionally.
+wrapped all five unconditionally. One repair beyond REQ-TOOLS-032's three is the tool's own (`ToolExecutor.inferArguments`,
+`PD-TOOLS-007`): for a call its schema still refuses, `write_file` reads a missing `operation` as `create` when the call
+carries only a path and content and its file does not exist; the gate validates the answer and dispatches it in the call's
+place before the evidence record opens, so the record, the label, the approval and the hooks see the `create`, and the
+result gains a sentence saying what was read.
 
 The executors a port registers (`run-host/tools.ts`): `read_file`, `write_file`, `haet_read`, `haet_edit`/`haet`, `grep`,
 `glob`, `todo`, `terminal` (by shell presence, REQ-TOOLS-104), the three delegation tools when delegation is available,

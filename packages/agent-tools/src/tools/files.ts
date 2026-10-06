@@ -408,6 +408,19 @@ const writeSchema = z.object({
   insert_line: z.number().int().min(0).optional(),
 }).refine((a) => a.path !== undefined || a.file_path !== undefined, { message: 'path is required' });
 
+/**
+ * PD-TOOLS-007: the target of a `write_file` call whose arguments are only those `create` reads — a path (or `file_path`)
+ * and `content` as strings, and none of `old_string`, `new_string`, `insert_line` or a true `replace_all` — when the
+ * fence lets it be written; null for any other call, whose operation cannot be read from its arguments alone.
+ */
+function createOnlyTarget(fence: FenceConfig, args: Readonly<Record<string, unknown>>): { resolved: string; rel: string } | null {
+  const path = args['path'] ?? args['file_path'];
+  if (typeof path !== 'string' || path === '' || typeof args['content'] !== 'string') return null;
+  if (args['old_string'] !== undefined || args['new_string'] !== undefined || args['insert_line'] !== undefined || args['replace_all'] === true) return null;
+  const t = readTarget(fence, path, 'write');
+  return t.ok ? { resolved: t.resolved, rel: t.rel } : null;
+}
+
 export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExecutor<z.infer<typeof writeSchema>> {
   return {
     name: 'write_file',
@@ -417,8 +430,8 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
      * whole file: the schema they were sent names the field, but the sentence they acted on listed the
      * operations as verbs and never said they were the values of a required selector. REQ-TOOLS-135 names the
      * selector `operation` and nothing fixes this wording (recorded as
-     * docs/defects/write-files-first-use-refusal-recurred-under-duress.md). The duress run after it still had 1 of 4
-     * children omit the field; reading the selector from the call instead is a fourth REQ-TOOLS-032 repair, so it is OQ-139's.
+     * docs/defects/fixed/write-files-first-use-refusal-recurred-under-duress.md). The duress run after it still had 1 of 4
+     * children omit the field; reading the selector from the call is the fourth repair PD-TOOLS-007 allows (`inferArguments`).
      */
     description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path}. Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it.',
     schema: writeSchema,
@@ -431,7 +444,10 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
      */
     validationError: (args, detail) => {
       if (args['operation'] === undefined) {
-        return errorObservation(`write_file requires an operation: one of create, edit, overwrite, insert, undo. Example: {"operation": "edit", "path": "notes.txt", "old_string": "a", "new_string": "b"}. (${detail})`);
+        // PD-TOOLS-007 reads a missing selector as `create` only for a file that does not exist; say why this one was not.
+        const target = createOnlyTarget(fence, args);
+        const exists = target !== null && existsSync(target.resolved) ? ` ${target.rel} already exists, so the call was not read as a create; name 'overwrite' or 'edit'.` : '';
+        return errorObservation(`write_file requires an operation: one of create, edit, overwrite, insert, undo. Example: {"operation": "edit", "path": "notes.txt", "old_string": "a", "new_string": "b"}.${exists} (${detail})`);
       }
       const op = String(args['operation']);
       const fields: Record<string, string> = {
@@ -442,6 +458,20 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
         undo: 'undo reads `path`.',
       };
       return errorObservation(`The arguments for '${op}' do not match the write_file schema (${detail}). ${fields[op] ?? 'The operations are create, edit, overwrite, insert, undo.'}`);
+    },
+    /*
+     * PD-TOOLS-007 (OQ-139, ruled by the owner under R-071): a call with a path and content, no `operation` and no field
+     * only another operation reads, aimed at a file that does not exist, can only be a create, so it is read as one and
+     * its result says so. A file that exists is never inferred into: such a call is refused as REQ-TOOLS-032 says, and
+     * `execute`'s create still refuses a file that appeared since, so no inference can overwrite. The duress runs refused
+     * 1 to 4 children's first write this way, each then resending its whole file
+     * (docs/defects/fixed/write-files-first-use-refusal-recurred-under-duress.md).
+     */
+    inferArguments: (args) => {
+      if (args['operation'] !== undefined) return null;
+      const target = createOnlyTarget(fence, args);
+      if (target === null || existsSync(target.resolved)) return null;
+      return { args: { ...args, operation: 'create' }, note: `No operation was given, so this call was read as 'create': ${target.rel} did not exist. Name the operation on every write_file call.` };
     },
     label: (a) => `write_file ${a.operation} ${a.path ?? a.file_path ?? ''}`,
     execute: async (a) => {

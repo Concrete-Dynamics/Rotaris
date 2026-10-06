@@ -419,6 +419,33 @@ describe('todo (REQ-TOOLS-144..147)', () => {
     expect(list.render()).toContain('[PENDING] fresh');
   });
 
+  /*
+   * PD-TOOLS-008 (OQ-163): the default live run's `frictions` orchestrator opened with a `replace` marking two tasks
+   * IN_PROGRESS over an empty list, was told "Active task: 3c55ec35 (Create friction-probe.txt)" — an id the rejected list
+   * minted and never stored — and its `update 3c55ec35` was refused "Unknown task id" (live-run finding a71-7,
+   * docs/defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
+   */
+  it('a replace whose own list marks two tasks IN_PROGRESS while none is active is refused, saying so and that nothing was saved (PD-TOOLS-008)', async () => {
+    const list = new TodoList();
+    const t = todoTool(list);
+    const r = await t.execute({ operation: 'replace', phases: [{ name: 'Friction probe', tasks: [{ name: 'Create friction-probe.txt', state: 'IN_PROGRESS' }, { name: 'Run and SIGINT the node timer', state: 'IN_PROGRESS' }, { name: 'Report', state: 'PENDING' }] }] }, ctx());
+    expect(r.isError).toBe(true);
+    expect(r.text).toBe("Only one task can be IN_PROGRESS at a time. The submitted list marks 2 tasks IN_PROGRESS ('Create friction-probe.txt', 'Run and SIGINT the node timer'), so the replace was rejected and nothing was saved. Send it again with at most one task IN_PROGRESS.");
+    expect(r.text).not.toMatch(/Active task|[0-9a-f]{8}/);
+    expect(list.phases).toEqual([]);
+    // With a task active, REQ-TOOLS-146's case still answers in REQ-TOOLS-145's own sentence, naming the stored task.
+    const p = await t.execute({ operation: 'add_phase', name: 'main' }, ctx());
+    const phaseId = /\(([0-9a-f]{8})\)/.exec(p.text)![1]!;
+    const a = await t.execute({ operation: 'add_task', phase_id: phaseId, name: 'active one', state: 'IN_PROGRESS' }, ctx());
+    const active = /\(([0-9a-f]{8})\)/.exec(a.text)![1]!;
+    const other = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ name: 'x', state: 'IN_PROGRESS' }, { name: 'y', state: 'IN_PROGRESS' }] }] }, ctx());
+    expect(other.text).toBe(`Only one task can be IN_PROGRESS at a time. Active task: ${active} (active one). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`);
+    // And the list it refused can be sent again with one task in progress.
+    expect((await t.execute({ operation: 'update', task_id: active, state: 'COMPLETED' }, ctx())).isError).toBe(false);
+    const again = await t.execute({ operation: 'replace', phases: [{ name: 'Friction probe', tasks: [{ name: 'Create friction-probe.txt', state: 'IN_PROGRESS' }, { name: 'Run and SIGINT the node timer', state: 'PENDING' }] }] }, ctx());
+    expect(again.isError).toBe(false);
+  });
+
   /**
    * Observed live 2026-09-16 (run `a26918e8`): a run sent five phases to `add_phase` — a call the advertised
    * schema accepts, since `phases` is one of its fields — and read back the six words `add_phase requires a

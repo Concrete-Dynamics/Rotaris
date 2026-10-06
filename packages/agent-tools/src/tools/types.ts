@@ -44,6 +44,14 @@ export interface ToolExecutor<A = unknown> {
   readonly schema: z.ZodType<A>;
   /** Product-specific diagnostics for schema refusal, before permissions or execution. */
   validationError?(args: Readonly<Record<string, unknown>>, detail: string): Observation;
+  /**
+   * A repair beyond REQ-TOOLS-032's three that a product directive lets this tool make (PD-TOOLS-007, `write_file`'s
+   * missing `operation`): given a call its schema refuses after those three, the arguments to dispatch in its place and
+   * the sentence its result carries saying what was read, or null when the call is not one the directive covers. The
+   * gate validates what it returns as it validates any call, before the permission, so the approval, the hooks and the
+   * record all see the repaired call.
+   */
+  inferArguments?(args: Readonly<Record<string, unknown>>): { readonly args: Record<string, unknown>; readonly note: string } | null;
   execute(args: A, ctx: ToolContext): Promise<Observation>;
   /** REQ-TOOLS-105 etc.: how the call renders in a row header; defaults to the sorted argument keys. */
   label?(args: A): string;

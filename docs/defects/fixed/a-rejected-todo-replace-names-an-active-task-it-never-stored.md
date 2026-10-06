@@ -14,7 +14,7 @@ to work out that the list was empty.
 Live-run finding: a71-7
 
 What the refusal should say when no task is active is not stated by REQ-TOOLS-145 or REQ-TOOLS-146. It is raised as
-[OQ-163](../architecture/open-questions.md). Recorded, not repaired.
+[OQ-163](../../architecture/open-questions.md). Recorded, not repaired.
 
 ## Specs
 
@@ -55,3 +55,18 @@ IN_PROGRESS at a time. Active task: e6482926 (Implement clearCompleted in src/to
 stored; #13 `update 71a2b58c PENDING` was refused "Unknown task id '71a2b58c'. Available phases: (none)"; row 23 reads
 "The replace failed entirely? … so maybe nothing was applied"; #17 re-issued the replace and it succeeded. Cost: two
 failed calls, two `tool_error` issues, about 10 s. No code changed: the note waits on the owner's ruling.
+
+## Repaired — 2026-10-06, under the owner's ruling of OQ-163 (fin21)
+
+The owner ruled [OQ-163](../../architecture/open-questions.md) on 2026-10-06 as recommended
+([R-071](../../product/requests.md#r-071)), minted as [`PD-TOOLS-008`](../../product/directives.md#pd-tools-008), which
+narrows REQ-TOOLS-145 for this case. Such a `replace` is still refused whole, in a sentence of its own: `Only one task can
+be IN_PROGRESS at a time. The submitted list marks 2 tasks IN_PROGRESS ('Create friction-probe.txt', 'Run and SIGINT the
+node timer'), so the replace was rejected and nothing was saved. Send it again with at most one task IN_PROGRESS.` It names
+no active task and no id (`listMarksSeveralActive`, `packages/agent-tools/src/tools/todo.ts`). REQ-TOOLS-146's case, a list
+marking another task while a stored task is active, still answers in REQ-TOOLS-145's sentence.
+
+Pinned by "a replace whose own list marks two tasks IN_PROGRESS while none is active is refused, saying so and that nothing
+was saved (PD-TOOLS-008)" in `packages/agent-tools/src/tools/tools.test.ts`, red on the code before the repair. `pnpm
+live-run`'s `frictions` and `duress` scenarios now check that no `todo` call is sent to an id a refusal named and never
+stored (`apps/desktop/scripts/lib/tool-frictions.mjs`); no live run has met the case since.

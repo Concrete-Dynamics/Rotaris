@@ -128,7 +128,7 @@ A read-only autopsy of every session in both packs re-checked the repaired live-
 L1 to L14 that the evidence reaches. None of them recurred. Its new findings were recorded on 2026-10-01 as ten notes
 and OQ-161 to OQ-164 (merge `c34fa70`). WF1 was only partly repaired: since 2026-09-29 `write_file`'s description
 names `operation`, and the run carried that. Its note,
-[`write-files-first-use-refusal-recurred-under-duress.md`](../write-files-first-use-refusal-recurred-under-duress.md),
+[`write-files-first-use-refusal-recurred-under-duress.md`](write-files-first-use-refusal-recurred-under-duress.md),
 stays open under OQ-139, and the run hit it again: 2 of 5 first uses were refused. That evidence is added to the note and
 to OQ-139. *(Corrected 2026-10-01 in the verification's fix round: the text first read "WF1 was never repaired", which
 the note's section "Partly repaired — 2026-09-29 under R-067; still open" contradicts.)*

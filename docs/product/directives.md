@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Thirty-one.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Thirty-three.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -2946,6 +2946,108 @@ per pass, and one more counter on the session's row for a plan cycle's root, whi
 > a pass open long enough to read the total mid-pass; the orchestrator's duress live run should show `sessions.tool_calls`
 > equal to the completed `tool_calls` rows at its deadline. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-tools-007"></a>
+
+### PD-TOOLS-007 — a `write_file` call with no operation is read as a create when its file does not exist
+
+Beside REQ-TOOLS-032's three repairs, the product SHALL make a fourth, and only this one. A `write_file` call (REQ-TOOLS-135)
+that the schema refuses after the three, and that
+
+- names no `operation`,
+- carries a path (`path`, or its alias `file_path`) and a `content`, each a string, and
+- carries none of the fields only another operation reads: no `old_string`, no `new_string`, no `insert_line`, and no
+  `replace_all` set true,
+
+SHALL be read as a `create` when the path it names, resolved and fenced as a write is (REQ-TOOLS-129), does not exist.
+The call is then dispatched as an ordinary call with `operation: create`: the tool-call record, the row, the permission
+request, a session approval's match (`PD-TOOLS-004`) and the tool hooks all see the `create`. Its result SHALL carry, after
+what the create itself reports, the sentence `No operation was given, so this call was read as 'create': <path> did not
+exist. Name the operation on every write_file call.`
+
+A call that names an existing file, or one that does not meet all three conditions, is NOT repaired: it is refused as
+REQ-TOOLS-032 states, naming the missing field with an example, and where the path names an existing file the refusal
+also says `<path> already exists, so the call was not read as a create; name 'overwrite' or 'edit'.` The inference never
+overwrites: a file that appears between the reading and the write is refused by the create itself (`File already exists`).
+
+Everything else REQ-TOOLS-032 fixes still governs: its three repairs, their order before schema validation, and the
+recoverable refusal of every other call still invalid after them. REQ-TOOLS-135's operations, its refusals and its
+success messages are unchanged.
+
+**Why, and what it costs.** The intent of such a call is unambiguous, and no existing file can be overwritten by reading
+it. Wording could not make a first use succeed: the description and the refusal both name the field, and the schema
+marks it required, yet the duress runs refused 1 of 4, 2 of 5 and, on 2026-10-06, 4 of 6 children's first `write_file` for
+want of it, each child then regenerating its whole file. One run's two refusals cost about 77 seconds and 7,000 output
+tokens, the last one's five about 179 seconds and 17,000. What is given up: the product now acts on a call the model got
+wrong, rather than telling it so first. The result says what was read, so the model is still told, after the fact.
+
+> **Extends:** REQ-TOOLS-032
+
+*Raised by the owner, 2026-10-06, ruling OQ-139 as recommended; logged as [R-071](requests.md#r-071).*
+
+> **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (fin21):** the rule held as written. The repair
+> is the tool's, offered to the gate as `inferArguments` on the executor (`packages/agent-tools/src/tools/{types,files}.ts`)
+> because only the tool holds the fence its path is resolved through; the gate (`gate.ts`) asks it only for a call the
+> schema still refuses after REQ-TOOLS-032's repairs, validates what it returns, and carries the sentence into the result.
+> It runs before the evidence record opens, so the record, the row's label and the approval all read the `create`.
+> **Readings taken where the text leaves room:** a `replace_all: false` sent explicitly does not bar the reading, since
+> false is the field's default and says nothing of another operation; an argument outside the tool's fields is not
+> checked, since the schema strips it; a path the fence refuses is not read as anything, and is refused as before. **What
+> was measured.** Four cases in `gate.test.ts` through the real tool and a real temporary directory — the duress run's
+> shape created with the sentence, `file_path` too; an existing file refused, saying so, its content untouched; seven
+> shapes not inferred; the inferred call's approval asked for the `create` and a session approval of it covering a later
+> edit of the path — three of them red on the code before the build (the fourth, the negatives, holds either way). Two
+> earlier cases sent the run's shape expecting the refusal, and now send a shape the directive does not cover. **What was
+> not measured.** No live run has met the shape since: `pnpm live-run`'s `frictions` and `duress` scenarios now check that
+> no create-shaped call was refused for want of an operation (`lib/tool-frictions.mjs`), and that is their next run's to
+> show. The note is repaired:
+> [`write-files-first-use-refusal-recurred-under-duress.md`](../defects/fixed/write-files-first-use-refusal-recurred-under-duress.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-tools-008"></a>
+
+### PD-TOOLS-008 — a todo list that itself marks two tasks in progress is refused without naming an active task
+
+When a `todo` `replace` is rejected under REQ-TOOLS-145's single-active rule because **the submitted list itself** marks
+more than one task `IN_PROGRESS` while no task is active, the violation message SHALL NOT be REQ-TOOLS-145's sentence,
+which names an "Active task" that does not exist in that case. It SHALL be:
+
+`Only one task can be IN_PROGRESS at a time. The submitted list marks <n> tasks IN_PROGRESS ('<name>', '<name>', …), so the
+replace was rejected and nothing was saved. Send it again with at most one task IN_PROGRESS.`
+
+naming each task the list marked `IN_PROGRESS` by the name it was sent with, in the list's order, and no task id. The list
+is still rejected whole and nothing of it is stored.
+
+Everything else REQ-TOOLS-145 fixes still governs: at most one task is `IN_PROGRESS`, enforced when marking a task and on
+wholesale state changes, and every other violation — an `add_task` or `update` that would make a second task active, and
+REQ-TOOLS-146's `replace` that marks another task while a protected active task exists — still answers in REQ-TOOLS-145's
+own sentence, naming the stored active task.
+
+**Why, and what it costs.** In the default live run of 2026-10-01 the orchestrator's first call was such a `replace`, and
+REQ-TOOLS-145's sentence named "Active task: 3c55ec35 (Create friction-probe.txt)", an id the rejected list had minted and
+never stored. The orchestrator did as the message said, `update 3c55ec35 COMPLETED`, was told the id was unknown, and spent
+a turn working out that its list was empty; the run of 2026-10-03 repeated it with two failed calls. What is given up: the
+message is no longer the one sentence REQ-TOOLS-145 fixes for every violation, so a caller matching that sentence meets a
+second one in this case.
+
+> **Narrows:** REQ-TOOLS-145
+
+*Raised by the owner, 2026-10-06, ruling OQ-163 as recommended; logged as [R-071](requests.md#r-071).*
+
+> **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (fin21):** the rule held as written. The case it
+> names is exactly the second of `todo`'s two `replace` checks (`packages/agent-tools/src/tools/todo.ts`): the first
+> answers REQ-TOOLS-146's case whenever a protected active task exists and the list marks another, so the second meets
+> only a list whose own tasks are the two. **What was measured.** One case in `tools.test.ts`, red on the code before the
+> build: the live run's list refused in the new sentence with nothing stored and no id named, REQ-TOOLS-146's case still
+> answered in REQ-TOOLS-145's sentence, and the list accepted when re-sent with one task in progress. **What was not
+> measured.** No live run has met the case since; `pnpm live-run`'s `frictions` and `duress` scenarios now check that no
+> `todo` call was sent to an id a refusal named and never stored (`lib/tool-frictions.mjs`). The note is repaired:
+> [`a-rejected-todo-replace-names-an-active-task-it-never-stored.md`](../defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

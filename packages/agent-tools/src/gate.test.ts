@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -437,8 +437,9 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     const q = await h.gate.dispatch(h.call('ask_questions', { questions: [{ id: 'a', title: 'A' }] }), new AbortController().signal);
     expect(q.status).toBe('failed');
     expect(q.text).toMatch(/takes `steps`, not `questions`/);
-    // Ordinal 121/266: `write_file` without `operation`.
-    const w = await h.gate.dispatch(h.call('write_file', { path: 'notes.txt', content: 'x' }), new AbortController().signal);
+    // Ordinal 121/266: `write_file` without `operation`. Since PD-TOOLS-007 the run's own shape, a path and content for a
+    // file that does not exist, is read as a create; one whose fields belong to another operation is still refused.
+    const w = await h.gate.dispatch(h.call('write_file', { path: 'notes.txt', old_string: 'a', new_string: 'b' }), new AbortController().signal);
     expect(w.status).toBe('failed');
     expect(w.text).toMatch(/write_file requires an operation/);
     // Ordinal 159: `haet_edit` without `path`.
@@ -461,8 +462,9 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     // run's two schema-invalid `write_file` calls were failures in the record that no issue referenced.
     const h = harness({ preset: 'autonomous', extraExecutors: [['write_file', writeFileReal()]] });
     const cases: [ToolCall, RegExp][] = [
-      // The schema refusal with the tool's own diagnostic — the duress run's `write_file` without `operation`.
-      [h.call('write_file', { path: 'notes.txt', content: 'x' }), /write_file requires an operation/],
+      // The schema refusal with the tool's own diagnostic — a `write_file` without `operation` that PD-TOOLS-007 does not
+      // read as a create (the duress run's own shape, a path and content for a new file, now is).
+      [h.call('write_file', { path: 'notes.txt', content: 'x', insert_line: 0 }), /write_file requires an operation/],
       // The schema refusal with the gate's generic text.
       [{ ...h.call('todo', { operation: 5 }), callId: 'c-todo-schema' }, /do not match its schema/],
       // Arguments that cannot be read as JSON even after repair.
@@ -925,6 +927,84 @@ describe('PD-TOOLS-005: after one unanswered approval, a run treats the user as 
     const h = harness({ attended: false, presence: p });
     const r = await write(h, 'a.txt');
     expect(r.blockedReason).toBe(`${ASKED} No approval UI is available in this host, so the request was denied.`);
+  });
+});
+
+/**
+ * PD-TOOLS-007 (OQ-139, ruled by the owner under R-071): a `write_file` call with a path and content and no `operation`, for
+ * a file that does not exist, is read as a create and says so. The duress runs refused 1 to 4 children's first write this
+ * way, and each resent its whole file (docs/defects/fixed/write-files-first-use-refusal-recurred-under-duress.md).
+ */
+describe('PD-TOOLS-007: a write_file call with no operation is read as a create when its file does not exist', () => {
+  let dir: string;
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rotaris-gate-infer-')); });
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+  function inferHarness(preset = 'autonomous') {
+    const w = writeFileTool(new FileToolState(), { workspaceRoot: dir, allowOutsideWorkspace: false, additionalReadOnlyRoots: [] });
+    return harness({ preset, root: dir, resolvePath: (p) => realPathOf(p.startsWith('/') ? p : join(dir, p)), extraExecutors: [['write_file', w]] });
+  }
+  const signal = () => new AbortController().signal;
+
+  it('the duress run\'s shape creates the file, and the result, the record and the label all name the create', async () => {
+    const h = inferHarness();
+    const r = await h.gate.dispatch(h.call('write_file', { path: 'docs/decisions.md', content: '# Decisions\n' }), signal());
+    expect(r).toMatchObject({ status: 'ok', isError: false, label: 'write_file create docs/decisions.md' });
+    expect(r.args).toEqual({ path: 'docs/decisions.md', content: '# Decisions\n', operation: 'create' });
+    expect(readFileSync(join(dir, 'docs/decisions.md'), 'utf8')).toBe('# Decisions\n');
+    expect(r.text).toMatch(/^Created docs\/decisions\.md: 1 line created\. \(sha256 [0-9a-f]{64}\)\nNo operation was given, so this call was read as 'create': docs\/decisions\.md did not exist\. Name the operation on every write_file call\.$/);
+    expect(h.rec.opens[0]).toMatchObject({ args: { operation: 'create' } });
+    expect(h.rec.settles[0]).toMatchObject({ status: 'ok', result: r.text });
+    expect(h.rec.issues).toEqual([]);
+    // `file_path`, REQ-TOOLS-135's alias, is read the same way.
+    const alias = await h.gate.dispatch(h.call('write_file', { file_path: 'b.txt', content: '' }), signal());
+    expect(alias.status).toBe('ok');
+    expect(existsSync(join(dir, 'b.txt'))).toBe(true);
+  });
+
+  it('a file that exists is never inferred into: the call is refused as REQ-TOOLS-032 says, saying why, and the file is untouched', async () => {
+    writeFileSync(join(dir, 'notes.txt'), 'keep\n');
+    const h = inferHarness();
+    const r = await h.gate.dispatch(h.call('write_file', { path: 'notes.txt', content: 'lost\n' }), signal());
+    expect(r).toMatchObject({ status: 'failed', isError: true });
+    expect(r.text).toMatch(/^write_file requires an operation: .* notes\.txt already exists, so the call was not read as a create; name 'overwrite' or 'edit'\. \(operation: /);
+    expect(readFileSync(join(dir, 'notes.txt'), 'utf8')).toBe('keep\n');
+    expect(h.rec.decisions).toHaveLength(0);
+  });
+
+  it('a call carrying a field only another operation reads, no content, or a path outside the fence is not inferred', async () => {
+    const h = inferHarness();
+    const cases: Record<string, unknown>[] = [
+      { path: 'a.txt', content: 'x', insert_line: 0 },
+      { path: 'a.txt', content: 'x', old_string: 'x' },
+      { path: 'a.txt', content: 'x', new_string: 'y' },
+      { path: 'a.txt', content: 'x', replace_all: true },
+      { path: 'a.txt' },
+      { path: 'a.txt', content: 5 },
+      { path: '../outside.txt', content: 'x' },
+    ];
+    for (const args of cases) {
+      const r = await h.gate.dispatch(h.call('write_file', args), signal());
+      expect(r.status, JSON.stringify(args)).toBe('failed');
+      expect(r.text, JSON.stringify(args)).toMatch(/^write_file requires an operation/);
+    }
+    expect(existsSync(join(dir, 'a.txt'))).toBe(false);
+    expect(existsSync(join(dir, '..', 'outside.txt'))).toBe(false);
+  });
+
+  it('the inferred call is what the user is asked to approve and what a session approval of it covers (PD-TOOLS-004)', async () => {
+    const h = inferHarness('ask');
+    const pending = h.gate.dispatch(h.call('write_file', { path: 'a.txt', content: 'x' }), signal());
+    await vi.waitFor(() => expect(h.rec.requested).toHaveLength(1));
+    expect(h.rec.requested[0]).toMatchObject({ tool_name: 'write_file', summary: expect.stringMatching(/operation/) });
+    h.approvals.resolve(String(h.rec.requested[0]!['request_id']), 'session');
+    expect((await pending).status).toBe('ok');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'user-session', summary: expect.stringMatching(/operation/) });
+    // A later write of the same path from the same persona is covered by that session approval, whatever its operation:
+    // the edit is refused by the tool (the file holds no `z`), not held for a person.
+    const again = await h.gate.dispatch(h.call('write_file', { operation: 'edit', path: 'a.txt', old_string: 'z', new_string: 'y' }), signal());
+    expect(h.rec.requested).toHaveLength(1);
+    expect(h.rec.decisions[1]).toMatchObject({ source: 'session-rule' });
+    expect(again.status).toBe('failed');
   });
 });
 

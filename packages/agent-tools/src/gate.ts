@@ -268,7 +268,22 @@ export class Gate {
     const executor = deps.executors.get(call.name) ?? deps.executors.get(call.name.toLowerCase());
     const isMeta = META_TOOL_NAMES.has(call.name.toLowerCase());
     const readable = repairPayload(call.rawArgs, isMeta);
-    const repaired = readable !== null && executor !== undefined ? repairArrayFields(readable, executor.schema) : readable;
+    let repaired = readable !== null && executor !== undefined ? repairArrayFields(readable, executor.schema) : readable;
+    // PD-TOOLS-007: the one repair beyond REQ-TOOLS-032's three, made by the tool it concerns and only for a call its
+    // schema still refuses. What it returns is the call from here on — the record, the label, the approval, the hooks.
+    let inferredNote: string | null = null;
+    if (repaired !== null && executor?.inferArguments !== undefined && !executor.schema.safeParse(repaired).success) {
+      let inferred: ReturnType<NonNullable<ToolExecutor['inferArguments']>> = null;
+      try {
+        inferred = executor.inferArguments(repaired);
+      } catch {
+        inferred = null; // A repair that cannot be made is no repair: the refusal below answers the call as sent.
+      }
+      if (inferred !== null && executor.schema.safeParse(inferred.args).success) {
+        repaired = inferred.args;
+        inferredNote = inferred.note;
+      }
+    }
     const argsForGate: Readonly<Record<string, unknown>> = repaired ?? {};
     const open = { call_id: call.callId, agent_name: call.agentName, tool_name: call.name, args: argsForGate };
     const label = executor?.label?.(argsForGate) ?? defaultLabel(call.name, argsForGate);
@@ -426,14 +441,15 @@ export class Gate {
     }
     // (4) post-execution hooks: for a call that ran, errors included (REQ-HOOKS-005); feedback rides in the same result
     // message, or follows as a user message when the call produced no observation (REQ-HOOKS-074).
-    let text = obs.text;
+    // PD-TOOLS-007: the result says what the gate read the call as, whatever came of it.
+    let text = inferredNote === null ? obs.text : `${obs.text}\n${inferredNote}`;
     let followUp: string | undefined;
     // PD-ORCH-005 clause 9: a question withdrawn by the rest was never run, so no post-execution hook sees it.
     if (hooks && obs.withdrawnBy === undefined) {
       const post = await hooks.postTool({ ...hookCall, results: [{ kind: obs.isError ? 'error' : 'observation', text: obs.text }] });
       if (post.feedback !== '') {
         if (obs.isError) followUp = post.feedback;
-        else text = `${obs.text}\n${post.feedback}`;
+        else text = `${text}\n${post.feedback}`;
       }
     }
     // (5) diagnostics.

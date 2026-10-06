@@ -9,7 +9,7 @@ children's first calls went without it.
 
 Live-run finding: WF1 (live runs of 2026-09-29)
 
-It recurred from [`a-first-use-schema-guess-failed-without-an-example.md`](fixed/a-first-use-schema-guess-failed-without-an-example.md),
+It recurred from [`a-first-use-schema-guess-failed-without-an-example.md`](a-first-use-schema-guess-failed-without-an-example.md),
 whose repair gave the refusal an example.
 
 ## Specs
@@ -44,7 +44,7 @@ That was not enough. `pnpm live-run --confirm --only=frictions` (pack `.live-run
 frictions had passed it too, so frictions does not tell the two apart. `--only=duress` (pack
 `.live-run/runs/2026-09-30T03-33-01-241Z`) is where the defect was seen. That run was swept by a concurrent live run
 before it could print a check
-([`a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`](fixed/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md)). Its
+([`a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`](a-live-run-sweeps-a-concurrent-live-runs-sandbox.md)). Its
 `model-traffic.jsonl` held every call, though. 179 requests carried the new description. There were five `write_file`
 calls from four children, and three first uses succeeded (`docs/api.md`, `docs/overview.md`, `docs/decisions.md`).
 Child `b`'s first call, for `test/extra.test.js`, again sent only `path` and `content`. It was refused, and `b` resent
@@ -52,7 +52,7 @@ the whole 224-line file with `operation: "create"`. That is 1 of 4 first uses re
 found this. The schema the child was sent marked `operation` required.
 
 Only reading the missing selector from the call can make a first use succeed. That is a fourth repair beyond
-REQ-TOOLS-032's three, so it is raised as [OQ-139](../architecture/open-questions.md) and not built. The note stays open
+REQ-TOOLS-032's three, so it is raised as [OQ-139](../../architecture/open-questions.md) and not built. The note stays open
 until that is ruled.
 
 ## Seen again 2026-10-01, on merged `main` `71ad8e8`; still open
@@ -80,7 +80,7 @@ This adds evidence and changes no code. The reading the build proceeds under is 
 call is refused as REQ-TOOLS-032 says. Only reading the missing selector from the call could make a first use succeed,
 and that waits on OQ-139's ruling, which is the owner's. Since `1303184` (merged at `33316bb`, after this run), such a
 refusal also files a `tool_error` issue
-([`fixed/a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md`](fixed/a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md)).
+([`fixed/a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md`](a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md)).
 The model still regenerates its file all the same.
 
 ## Seen again 2026-10-06, on `main` `27a5127`, at its highest rate; still open
@@ -102,3 +102,20 @@ The rate was 2 of 5 at `71ad8e8` and at `1763f7f`, and 1 of 4 on 2026-09-30. Rec
 The reading the build proceeds under is still OQ-139's, "May a `write_file` call with no `operation` be read as the one
 operation its other arguments allow?" — no inference, the call refused as REQ-TOOLS-032 says — and the ruling is the
 owner's.
+
+## Repaired — 2026-10-06, under the owner's ruling of OQ-139 (fin21)
+
+The owner ruled [OQ-139](../../architecture/open-questions.md) on 2026-10-06 as recommended
+([R-071](../../product/requests.md#r-071)), minted as [`PD-TOOLS-007`](../../product/directives.md#pd-tools-007), which
+extends REQ-TOOLS-032 with this one repair. A `write_file` call with a path and content, no `operation` and no field only
+another operation reads is read as a `create` when its file does not exist, and its result says so: `No operation was
+given, so this call was read as 'create': <path> did not exist. Name the operation on every write_file call.` A call
+naming an existing file is refused as before, and the refusal now says the file exists. The tool offers the repair to the
+gate (`inferArguments`, `packages/agent-tools/src/tools/files.ts`); the gate asks for it only for a call its schema still
+refuses after REQ-TOOLS-032's three, validates what comes back, and carries the sentence into the result
+(`packages/agent-tools/src/gate.ts`). The record, the row's label and any approval read the `create`.
+
+Pinned by the four `PD-TOOLS-007` cases in `packages/agent-tools/src/gate.test.ts`, three of them red on the code before
+the repair. A live run has not yet met the shape: `pnpm live-run`'s `frictions` and `duress` scenarios now check that no
+create-shaped call was refused for want of an operation (`apps/desktop/scripts/lib/tool-frictions.mjs`), and their next
+run is the first to show it on a real model.

@@ -123,6 +123,7 @@ import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { refusalIssues } from './lib/refusal-issues.mjs';
+import { todoActiveReadings, writeSelectorReadings } from './lib/tool-frictions.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
@@ -852,6 +853,20 @@ function checkRefusalIssues(scenario, sessionId, calls) {
 }
 
 /**
+ * The two tool frictions the owner ruled on 2026-10-06 (R-071), read from the tool-call record (`lib/tool-frictions.mjs`):
+ * PD-TOOLS-007, a `write_file` with a path and content and no `operation` for a new file read as a create, and
+ * PD-TOOLS-008, a `todo` `replace` marking two tasks in progress refused without naming an id it never stored. A run in
+ * which neither shape arose asked nothing, which is a NOTE.
+ */
+function checkToolFrictions(scenario, calls) {
+  const { inferred, refusedInferable } = writeSelectorReadings(calls);
+  if (inferred.length === 0 && refusedInferable.length === 0) noted(`${scenario}: no write_file call left out its operation`, 'PD-TOOLS-007\'s inferred create was not asked this run');
+  else check(refusedInferable.length === 0, `${scenario}: every write_file call with a path and content and no operation was read as a create, or refused because its file exists (PD-TOOLS-007)`, refusedInferable.length === 0 ? `${inferred.length} read as a create, e.g. ordinal ${inferred[0].ordinal} (${inferred[0].agent_name ?? '?'})` : `${refusedInferable.length} refused for want of an operation, e.g. ordinal ${refusedInferable[0].ordinal} (${refusedInferable[0].agent_name ?? '?'})`);
+  const { severalActive, phantoms } = todoActiveReadings(calls);
+  check(phantoms.length === 0, `${scenario}: no todo call was sent to a task id a refusal named but never stored (PD-TOOLS-008)`, phantoms.length === 0 ? `${severalActive.length} replace(s) refused for marking more than one task in progress` : `ordinal ${phantoms[0].ordinal}: ${JSON.stringify(String(phantoms[0].result).slice(0, 100))}`);
+}
+
+/**
  * The three records the run-autopsy skill asks for and this harness used to destroy.
  *
  * `.agents/skills/run-autopsy/SKILL.md` names its inputs — a launch log, the session store, a session id — and
@@ -1555,7 +1570,11 @@ if (wanted.includes('frictions')) {
   const resultOf = (call) => String(entryOf(call).result ?? '');
   const argsOf = (call) => entryOf(call).args ?? {};
   const writeOp = calls.filter((call) => call.tool_name === 'write_file' && call.status !== 'ok' && resultOf(call).includes('requires an operation'));
-  if (read) checkRefusalIssues('frictions', read.session.session_id, readToolCalls(read.session.session_id));
+  if (read) {
+    const recorded = readToolCalls(read.session.session_id);
+    checkRefusalIssues('frictions', read.session.session_id, recorded);
+    checkToolFrictions('frictions', recorded);
+  }
   check(writeOp.length === 0, 'write_file needed no operation repair on first use', writeOp.length === 0 ? 'no refusal in the record' : `${writeOp.length} refusal(s), e.g. ordinal ${writeOp[0].ordinal} (${writeOp[0].agent_name})`);
   // Live-run finding L6: `probe-ok\n` was reported "2 line(s) created". A final newline ends a line, so every create
   // reports the lines its content holds as `wc -l` counts them, plus an unterminated last line.
@@ -2180,6 +2199,7 @@ if (wanted.includes('duress')) {
     else check(aggregate === compressed, 'the compressions aggregate counted what the timeline recorded', `aggregate ${aggregate} against ${compressed} timeline entr${compressed === 1 ? 'y' : 'ies'}`);
 
     checkRefusalIssues('duress', sessionId, calls);
+    checkToolFrictions('duress', calls);
 
     const leaked = calls.filter((call) => call.tool_name === 'terminal' && /__rot_/.test(call.result));
     check(leaked.length === 0, 'no end marker leaked into what the model read', leaked.length === 0 ? 'no __rot_ in any terminal result' : `${leaked.length} call(s), e.g. ordinal ${leaked[0].ordinal}`);

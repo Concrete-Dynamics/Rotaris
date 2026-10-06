@@ -54,6 +54,17 @@ export class TodoList {
 
 const singleActive = (id: string, name: string) => `Only one task can be IN_PROGRESS at a time. Active task: ${id} (${name}). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`;
 
+/**
+ * PD-TOOLS-008 (OQ-163, ruled by the owner under R-071): a `replace` whose own list marks more than one task `IN_PROGRESS`
+ * while no task is active is still refused, but REQ-TOOLS-145's sentence names an "Active task" that does not exist. Until
+ * fin21 it named the first of the list's tasks under the id the rejected `replace` minted, and the agent's `update` of that
+ * id was refused "Unknown task id" (live-run finding a71-7,
+ * docs/defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md). This sentence says what the list did
+ * and that nothing was saved, and names the tasks by the names the agent sent, since no id of theirs was ever stored.
+ */
+const listMarksSeveralActive = (names: readonly string[]) =>
+  `Only one task can be IN_PROGRESS at a time. The submitted list marks ${names.length} tasks IN_PROGRESS (${names.map((n) => `'${n}'`).join(', ')}), so the replace was rejected and nothing was saved. Send it again with at most one task IN_PROGRESS.`;
+
 const taskInput = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
@@ -150,8 +161,10 @@ export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema
             const phase = next[Math.min(prot.phaseIndex, Math.max(0, next.length - 1))] ?? (next.push({ id: hexId(), name: 'main', tasks: [] }), next[0]!);
             phase.tasks.splice(Math.min(prot.taskIndex, phase.tasks.length), 0, { ...prot.task });
           }
+          // No task is active here (the REQ-TOOLS-146 rejection above answers a list that marks another beside one), so the
+          // second IN_PROGRESS can only come from the submitted list itself: PD-TOOLS-008's sentence, not REQ-TOOLS-145's.
           const actives = next.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS'));
-          if (actives.length > 1) return errorObservation(singleActive(actives[0]!.id, actives[0]!.name));
+          if (actives.length > 1) return errorObservation(listMarksSeveralActive(actives.map((t) => t.name)));
           list.phases.splice(0, list.phases.length, ...next);
           return done(`Replaced the todo list: ${countNoun(next.length, 'phase')}, ${countNoun(next.reduce((n, p) => n + p.tasks.length, 0), 'task')}.`);
         }

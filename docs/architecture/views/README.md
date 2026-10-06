@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**A `write_file` call with no operation is read as a create when its file does not exist (PD-TOOLS-007, OQ-139; fin21).**
+`ToolExecutor` gains an optional `inferArguments`, which `Gate.dispatch` asks only for a call its schema still refuses after
+REQ-TOOLS-032's repairs; `write_file` answers it, and the gate dispatches the answer in the call's place and appends the
+tool's sentence to the result. The **runtime view**'s `toolSpec` paragraph says so. No package, edge, process, channel,
+command or store column changed.
+
 **An advertised schema's `$async` is not honoured (REQ-TOOLS-032; fin21).** `advertisedSchemaCheck` drops ajv's own `$async`
 keyword before compiling and reads the validator's answer as a boolean only, so a server schema carrying it is checked
 synchronously and refuses an invalid call. The **runtime view**'s `toolSpec` paragraph says so. No package, edge, process,

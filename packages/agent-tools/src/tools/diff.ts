@@ -11,7 +11,7 @@ export interface Change { readonly line: number; readonly sign: '+' | '-'; reado
 
 /** Bound on the LCS table's cells, so a large change does not cost O(n·m) memory beyond reason. */
 const LCS_CELLS = 4_000_000;
-/** Bound on the changed lines the shortest-edit search looks for past the table's bound: O(D²) memory, O((n+m)·D) time. */
+/** Bound on the changed lines the shortest-edit search looks for past the table's bound: O(D²) memory for its trace. */
 const EDIT_DISTANCE_BOUND = 2_000;
 
 type Op = '=' | '-' | '+';
@@ -19,22 +19,34 @@ type Op = '=' | '-' | '+';
 /**
  * Myers' shortest edit script (1986), for a changed region past the table's bound: the same number of added and removed
  * lines the LCS gives, found in time and memory that grow with the lines changed rather than with the region's area. Null
- * when more than `bound` lines changed.
+ * when more than `bound` lines changed, or when the search would cost more than `budget` units of work: a line compared
+ * or a diagonal stepped onto is one each. The edit-distance bound alone left the runs of matching lines it follows along
+ * each diagonal unbounded, O((n+m)·D) in all, and a large region of repeated lines kept the tool call waiting more than a
+ * second (docs/defects/fixed/the-edit-diffs-shortest-edit-search-has-no-bound-on-its-total-work.md). Exported for the tests.
  */
-function shortestEdit(before: readonly string[], after: readonly string[], bound: number): Op[] | null {
+export function shortestEdit(before: readonly string[], after: readonly string[], bound: number, budget: number): Op[] | null {
   const n = before.length;
   const m = after.length;
   const offset = n + m + 1;
   const v = new Int32Array(2 * offset + 1);
   const trace: Int32Array[] = [];
   let found = -1;
+  let work = 0;
   for (let d = 0; d <= Math.min(n + m, bound) && found < 0; d += 1) {
     // The furthest x on each diagonal after step d − 1, for k in [−d − 1, d + 1].
     trace.push(v.slice(offset - d - 1, offset + d + 2));
     for (let k = -d; k <= d; k += 2) {
+      work += 1;
       let x = k === -d || (k !== d && v[offset + k - 1]! < v[offset + k + 1]!) ? v[offset + k + 1]! : v[offset + k - 1]! + 1;
       let y = x - k;
-      while (x < n && y < m && before[x] === after[y]) { x += 1; y += 1; }
+      while (x < n && y < m) {
+        work += 1;
+        if (work > budget) return null;
+        if (before[x] !== after[y]) break;
+        x += 1;
+        y += 1;
+      }
+      if (work > budget) return null;
       v[offset + k] = x;
       if (x >= n && y >= m) { found = d; break; }
     }
@@ -81,8 +93,9 @@ function changesOf(ops: readonly Op[], before: readonly string[], after: readonl
  * 2000 lines a side) every line read as removed and added: a one-line edit to a 2,001-line file drew `+2001 -2001` and
  * the file's first 50 lines (docs/defects/fixed/an-edit-diff-row-of-a-file-past-2000-lines-counts-every-line-as-added-and-removed.md).
  * A changed region still past the table's bound (changes far apart in a large file) is diffed by the shortest edit
- * script instead, and only a region with more than `EDIT_DISTANCE_BOUND` changed lines falls back to its own lines as
- * removed and added, never the file's.
+ * script instead, and only a region with more than `EDIT_DISTANCE_BOUND` changed lines, or whose search would compare
+ * more lines than the table may hold cells plus one pass over the region, falls back to its own lines as removed and
+ * added, never the file's.
  */
 function lcsChanges(before: readonly string[], after: readonly string[]): Change[] {
   let head = 0;
@@ -94,7 +107,9 @@ function lcsChanges(before: readonly string[], after: readonly string[]): Change
   const n = b.length;
   const m = a.length;
   if (n * m > LCS_CELLS) {
-    const ops = shortestEdit(b, a, EDIT_DISTANCE_BOUND);
+    // The search may compare as many lines as the table may hold cells, and one more pass over the region, so a long run
+    // the two sides share between two changes is never what sends it to the fallback.
+    const ops = shortestEdit(b, a, EDIT_DISTANCE_BOUND, LCS_CELLS + n + m);
     if (ops !== null) return changesOf(ops, b, a, head);
     return [...b.map((t, i) => ({ line: head + i + 1, sign: '-' as const, text: t })), ...a.map((t, i) => ({ line: head + i + 1, sign: '+' as const, text: t }))];
   }

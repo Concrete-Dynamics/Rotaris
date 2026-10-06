@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
 import { checkFence, realPathOf, type FenceConfig } from './fence.js';
-import { diffChanges as lineChangesOf, renderDiff } from './diff.js';
+import { diffChanges as lineChangesOf, renderDiff, shortestEdit } from './diff.js';
 import { FileToolState, haetEditTool, haetReadTool, matchEdit, readFileTool, sha256, writeFileTool } from './files.js';
 import { globToRegExp, globTool, grepTool, parseGitignore, ignoredBy } from './search.js';
 import { TodoList, todoTool } from './todo.js';
@@ -225,6 +225,41 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
       const kept = (lines: string[], gone: Set<number>) => lines.filter((_, i) => !gone.has(i + 1));
       expect(kept(['x', ...after, 'y'], added)).toEqual(kept(['x', ...before, 'y'], removed));
     }
+  });
+  // docs/defects/fixed/the-edit-diffs-shortest-edit-search-has-no-bound-on-its-total-work.md: the search past the table
+  // bounded its edit distance but not its line comparisons, O((n+m)·D) on the tool path. Many repeated lines with a few
+  // hundred to two thousand changes keep every diagonal's run long: 13 million comparisons for the region below.
+  const repeated = (n: number, p: number, seed: number): { before: string[]; after: string[] } => {
+    let s = seed;
+    const rand = (): number => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
+    const side = (): string[] => Array.from({ length: n }, () => (rand() < p ? '    other();' : '    return value;'));
+    return { before: side(), after: side() };
+  };
+  it('REQ-CHAT-050: the shortest-edit search compares no more lines than its budget, and answers null past it', () => {
+    const { before, after } = repeated(20_000, 0.02, 11);
+    let reads = 0;
+    const counted = new Proxy(before, { get: (t, k, r) => { if (typeof k === 'string' && /^\d+$/.test(k)) reads += 1; return Reflect.get(t, k, r); } });
+    // unbounded, this pair takes about 1.4 million comparisons and finds a script of some 800 changes
+    expect(shortestEdit(counted, after, 2_000, 200_000)).toBeNull();
+    expect(reads).toBeLessThanOrEqual(200_000);
+    // within its budget the same search still finds the least script
+    reads = 0;
+    const ops = shortestEdit(counted, after, 2_000, 10_000_000);
+    expect(ops).not.toBeNull();
+    expect(reads).toBeGreaterThan(200_000);
+    const kept = ops!.filter((o) => o === '=').length;
+    expect(ops!.filter((o) => o === '-').length).toBe(before.length - kept);
+    expect(ops!.filter((o) => o === '+').length).toBe(after.length - kept);
+  });
+  it('REQ-CHAT-050: a region whose search would pass its budget is drawn as its own lines removed and added, never the file\'s', () => {
+    // 100,000 lines a side between a shared head and tail, about 1,950 changed: past the budget of 4,000,000
+    // comparisons plus one pass over the region, so the row falls back as it did before the search existed.
+    const { before, after } = repeated(100_000, 0.01, 11);
+    const changes = lineChangesOf(['head', 'x', ...before, 'y', 'tail'].join('\n'), ['head', 'p', ...after, 'q', 'tail'].join('\n'));
+    expect(changes.filter((c) => c.sign === '-')).toHaveLength(before.length + 2);
+    expect(changes.filter((c) => c.sign === '+')).toHaveLength(after.length + 2);
+    expect(changes[0]).toEqual({ line: 2, sign: '-', text: 'x' });
+    expect(changes.at(-1)).toEqual({ line: after.length + 3, sign: '+', text: 'q' });
   });
   it('REQ-TOOLS-135: write_file\'s description names its required `operation` field, each value, and the fields each reads', () => {
     // Live run 2026-09-29 (WF1): two children's first write_file omitted `operation` and regenerated their whole file

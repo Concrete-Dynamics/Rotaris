@@ -165,6 +165,12 @@ export const REPLACED_ERROR = 'the command replaced the session\'s shell';
 const KILLED_ERROR = 'the command was killed from the terminal window';
 /** The error a call carries when its run cancelled it (the tool context's signal). */
 const CANCELLED_ERROR = 'the call was cancelled';
+/**
+ * Live-run M1 (the fin23 verifier's optional finding): the error a call carries when its command was too long for one PTY
+ * line and could not be staged in a script (`carry`): an unwritable temporary directory, a full disk. Nothing was written
+ * to the shell, so the session is left as it was and the next call runs normally.
+ */
+export const STAGING_FAILED_ERROR = 'the command is too long for one terminal line and could not be staged in a script';
 /** OQ-144 (the shell-exit case): the error a call carries when its command ended the session's shell. */
 export const SHELL_ENDED_ERROR = 'the command ended the session\'s shell';
 /** OQ-144 (the shell-exit case): the error a poll carries when the soft-paused command ended the session's shell. */
@@ -1408,6 +1414,15 @@ export class ForegroundSession {
     const nonce = randomBytes(12).toString('hex');
     const start = `__rot_${nonce}_s`;
     const end = `__rot_${nonce}_e`;
+    // Staged BEFORE any of the call's state exists (a listener, `region`, `active`): a staging that throws leaves the session
+    // exactly as it was, the call an `execution_error` that never ran, rather than a call whose state was set and never cleared.
+    let carried: string;
+    try {
+      carried = this.carry(command, start, end);
+    } catch (cause) {
+      this.state = 'idle';
+      return withRespawn({ output: '', exitCode: null, timedOut: false, softPaused: false, killStatus: null, error: `${STAGING_FAILED_ERROR}: ${cause instanceof Error ? cause.message : String(cause)}`, sessionReinitialized: reinit, truncated: false, restore: { status: 'none' } });
+    }
     const screen = this.newScreen();
     // The chunks are HELD and given to the screen in ONE write when the call ends, not fed as they arrive.
     // Fed as they arrived — `writes = writes.then(() => screen.write(chunk))` — each awaited write cost a whole
@@ -1508,7 +1523,7 @@ export class ForegroundSession {
     if (!queuedBehind) this.pendingText = '';
     const region = new CommandRegion(start, end);
     this.region = region;
-    this.submit(p, this.carry(command, start, end));
+    this.submit(p, carried);
     const outcome = await done;
     // Only a soft-paused command keeps writing to its stream; after any other outcome what the PTY carries is the
     // product's own — the snapshot, the reset, the restore — and none of it is the command's (live-run L9).
@@ -1941,6 +1956,9 @@ export class ForegroundSession {
     const nonce = randomBytes(12).toString('hex');
     const start = `__rot_${nonce}_s`;
     const end = `__rot_${nonce}_e`;
+    // Staged before the round trip's state exists, as `execute` does; a staging that throws is this promise's rejection.
+    let carried: string;
+    try { carried = this.carry(line, start, end); } catch (cause) { return Promise.reject(cause instanceof Error ? cause : new Error(String(cause))); }
     return new Promise((resolve, reject) => {
       let settled = false;
       let cut: RawCut | undefined;
@@ -1980,7 +1998,7 @@ export class ForegroundSession {
       };
       this.pendingText = '';
       this.active = { start, end, onEnd: (code) => finish(code), onKill: (reset) => { cut = { kind: 'kill', reset }; finish(-1, false); }, closer: null, onShellExit: () => finish(-1, false) };
-      this.submit(p, this.carry(line, start, end));
+      this.submit(p, carried);
       if (signal?.aborted) onAbort(); else signal?.addEventListener('abort', onAbort, { once: true });
     });
   }

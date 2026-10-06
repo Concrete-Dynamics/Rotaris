@@ -71,6 +71,11 @@ replacement, with a row in `docs/architecture/first-executions.md`.
 - "REQ-TOOLS-096 (live-run M1): a POSIX command too long for one PTY line is staged …" pins the line under the cap, the
   script's content and mode, the nonce kept out of its name, a short command's unchanged line, and PowerShell's
   unchanged base64 line.
+- "REQ-TOOLS-096 (live-run M1): a long command that cannot be staged is an execution_error and leaves the session usable"
+  (the verifier's review, 2026-10-06): with the temporary directory missing, the call is an `execution_error` that never
+  ran and the next short and long calls succeed. Red before: the `mkdtemp` error was thrown out of the call after its
+  state was set. A run host killed before its shell read a staged script leaves its directory behind, unreaped (ADR-0020,
+  the process view).
 
 **Shown by** `pnpm terminal-proof`: `live.longCommandReachesTheShellWhole` (a 4,796-byte heredoc through the real terminal
 manager: exit 0 in 135 ms, `bytes=4700`) and `live.longCommandGridShowsNoCarrier`. Both were red on the one-line carrier:

@@ -326,7 +326,13 @@ THIS shell under `command eval`: what it sets persists, `$?` at the end frame is
 script's nonzero status (`dash: 3: …/1.sh: Bad substitution`, exit 2, measured). The script's first statement removes it
 (the shell holds it open), so nothing is left once the shell has read it; one an interrupt discarded unread goes with the
 session's directory at `dispose`. The script's name is a count, never the call's nonce, whose echo would read as the
-marker printed. The same path carries a PD-TOOLS-001 restore line longer than one PTY line.
+marker printed. The same path carries a PD-TOOLS-001 restore line longer than one PTY line. Two consequences a reader meets
+(the fin23 verifier's review): a shell error in a staged command names the script's temporary path where the one line
+named `eval` (`/bin/sh: 2: /tmp/rotaris-command-…/5.sh: Syntax error`, harmless, the status the same); and a run host
+killed before its shell read a staged script leaves that directory behind, the unredacted command in it at mode 0600, and
+nothing reaps it at the next start, since another instance's session may own a directory of the same shape. A staging
+that fails (an unwritable temporary directory, a full disk) writes nothing to the shell: the call is an `execution_error`
+that never ran, and the session takes the next call as before (`STAGING_FAILED_ERROR`).
 **Tried first and rejected, measured:** the payload cut across physical lines the shell joins (`'…'\<CR>'…'`, POSIX line
 continuation). The shell rebuilt the command whole, but a long command queued behind a soft-paused one (A10) overran the
 discipline's 4,096-byte input buffer while nothing read it, so its echo arrived in two parts on either side of the paused

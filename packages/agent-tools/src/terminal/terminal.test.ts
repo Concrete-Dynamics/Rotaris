@@ -1360,8 +1360,13 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   // bash reads its input through readline, which on a `dumb` terminal scrolls a line wider than the screen sideways on one
   // row instead of wrapping it. The shell now starts with its line editor off (`posixShellArgs`), so the echo is the line
   // discipline's again, and a row an editor still draws is dropped (`ECHOED_POSIX_END`).
-  // `width` past `POSIX_LINE_BYTES` makes the next call's wrapper several physical lines (live-run M1), and the shell's
-  // continuation prompt, printed once per line, stands between their echo and the next call's start marker.
+  // `width` past `POSIX_LINE_BYTES` makes the next call one the session stages in a script (live-run M1,
+  // `ForegroundSession.carry`): what reaches the PTY is one short line, `. '<script>'` in the ordinary wrapper, written while
+  // the paused command holds the terminal, and neither road's poll may carry a row of its echo.
+  // FALSIFIED, kept beside its replacement (the rejected first carrier, 2026-10-06): "makes the next call's wrapper several
+  // physical lines, and the shell's continuation prompt, printed once per line, stands between their echo and the next
+  // call's start marker" — the backslash-continued lines overran the 4,096-byte input buffer behind the paused command and
+  // their echo leaked into its poll, which is why the shipped carrier stages the command instead.
   const wideEchoCase = async (t: Awaited<ReturnType<typeof tool>>, width = 300): Promise<void> => {
     const wide = 'Q'.repeat(width);
     await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
@@ -1537,8 +1542,10 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     // What the long command set persists into the next call, and its own status still comes out of it.
     expect(output((await t.execute(args({ command: 'printf \'[%s]\\n\' "$rotLong"', timeout: 15 }), ctx())).text)).toBe(`[${label}-kept]`);
     const failing = await t.execute(args({ command: `: '${'w'.repeat(5_000)}'\n(exit 7)`, timeout: 15 }), ctx());
-    expect(diag(failing.text)['exit_code']).toBe(7);    // A long call queued behind a soft-paused one: neither road's poll of the paused call carries a row of its echo or of
-    // the continuation prompts its lines put before its start marker.
+    expect(diag(failing.text)['exit_code']).toBe(7);
+    // A long call queued behind a soft-paused one: neither road's poll of the paused call carries a row of the staged line's
+    // echo. (The rejected continuation-line carrier also put a continuation prompt per line before its start marker; the
+    // staged line is one short line and puts none.)
     await wideEchoCase(t, 6_000);
   };
   it.skipIf(PS)('REQ-TOOLS-096/098/179 (live-run M1): a command whose wrapper is longer than the PTY\'s input line reaches the shell whole', async () => {
@@ -1556,6 +1563,32 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const { m, t } = await posixSession(shell!.file, { cols: 20 });
     try { await longCase(m, t, 'narrow'); } finally { await m.dispose(); }
   }, 90_000);
+
+  // The fin23 verifier's optional finding: a staging that throws (an unwritable temporary directory, a full disk) threw out
+  // of the call after its state was set, which could leave the session waiting on a line it never wrote. It is now an
+  // `execution_error` that never ran, and the session takes the next call as before.
+  it.skipIf(PS)('REQ-TOOLS-096 (live-run M1): a long command that cannot be staged is an execution_error and leaves the session usable', async () => {
+    const { m, t } = await posixSession(shell!.file);
+    const saved = process.env['TMPDIR'];
+    try {
+      expect(diag((await t.execute(args({ command: SH.echo('warm'), timeout: 15 }), ctx())).text)['exit_code']).toBe(0);
+      process.env['TMPDIR'] = join(root, 'no-such-temporary-directory');
+      const refused = await t.execute(args({ command: `: '${'w'.repeat(5_000)}'\nprintf 'ran\\n'`, timeout: 15 }), ctx());
+      expect(diag(refused.text)).toMatchObject({ outcome_kind: 'execution_error', failure_kind: 'execution_error' });
+      expect(refused.text).toContain('could not be staged in a script');
+      expect(output(refused.text) ?? '').not.toContain('ran');
+      if (saved === undefined) delete process.env['TMPDIR']; else process.env['TMPDIR'] = saved;
+      const next = await t.execute(args({ command: SH.echo('after'), timeout: 15 }), ctx());
+      expect(diag(next.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(output(next.text)).toBe('after');
+      const long = await t.execute(args({ command: `: '${'w'.repeat(5_000)}'\nprintf 'ran\\n'`, timeout: 15 }), ctx());
+      expect(diag(long.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(output(long.text)).toBe('ran');
+    } finally {
+      if (saved === undefined) delete process.env['TMPDIR']; else process.env['TMPDIR'] = saved;
+      await m.dispose();
+    }
+  }, 60_000);
 
   it('ADR-0021 / REQ-TOOLS-097/113: the capture is the emulated screen, not a VT strip', async () => {
     const t = await tool();

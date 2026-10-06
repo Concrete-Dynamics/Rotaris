@@ -1,5 +1,5 @@
-import { asSessionId, type Clocks, countNoun, err, formatAmount, type MachineId, millis, type Millis, ok, type Result, type SessionId, toIsoUtc } from '@rotaris/kernel';
-import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, COST_QUALIFIERS, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type CostQualifier, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
+import { asSessionId, type Clocks, countNoun, err, type MachineId, millis, type Millis, ok, type Result, type SessionId, toIsoUtc } from '@rotaris/kernel';
+import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal, type TimelineRow } from '@rotaris/store';
 import type { AgentBackend, ChatMessage, ContentPart } from '@rotaris/model';
@@ -28,7 +28,8 @@ import type { DelegationOps } from './children/delegation.js';
 import { DEFAULT_BUDGET, holdsModelSlot, storeChildReport, userCancellation, writeCancelledTeardown, type Budget } from './children/ledger.js';
 import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
-import { recoveryEntryOf, sessionOutcomeOf, SummaryWriter } from './run/summary.js';
+import { costLabelOf } from './run/cost-label.js';
+import { recoveryEntryOf, sessionOutcomeOf, summaryFactsOf, SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 import { ArtifactStore } from './artifacts/store.js';
@@ -784,31 +785,8 @@ export interface StartRefusal {
   readonly result: { status: 'error'; session_id: string; stop_reason: ''; summary: string; error: string };
 }
 
-/**
- * REQ-MONITOR-166: the cost label carries its own qualifier, so no view has to invent a description for a
- * run whose price could not be established.
- *
- * PD-MONITOR-001 revision 2 fixes four qualifiers and their labels, and the qualifier is the one the run EARNED
- * and recorded with its total (`sessions.cost_qualifier`, v21) — read back, never re-derived from the amount,
- * because since configured rates price requests a non-zero total no longer says how it was reached. The amount is
- * rendered under REQ-PROVIDER-121's rule: half-up, two decimal places, four below one hundredth, and **no
- * currency symbol**, because no figure here names a currency and the product does not pick one (the narrowing).
- *
- * Two falsified readings, kept beside their replacement: "no rate is configured in this build, so the price is
- * unknown" (revision 0), and "a total that is not zero is a reported price" (revision 1, when a provider's report
- * was the only route to a figure).
- */
-export function costLabelOf(cost: string, qualifier: string): SessionRecord['costLabel'] {
-  const unknown = { text: 'price not established', qualifier: 'unknown' } as const;
-  if (qualifier === 'unknown' || !(COST_QUALIFIERS as readonly string[]).includes(qualifier)) return unknown;
-  const amount = formatAmount(cost);
-  if (amount === null) return { text: `${cost} (price not established)`, qualifier: 'unknown' };
-  switch (qualifier as Exclude<CostQualifier, 'unknown'>) {
-    case 'incomplete': return { text: `at least ${amount}; some requests have no price`, qualifier: 'incomplete' };
-    case 'configured': return { text: `${amount} at configured rates`, qualifier: 'configured' };
-    case 'reported': return { text: `${amount} reported by the provider`, qualifier: 'reported' };
-  }
-}
+/** REQ-MONITOR-166's cost label lives in `run/cost-label.ts`, which `summary.md`'s Metrics section reads too. */
+export { costLabelOf };
 
 /**
  * REQ-ORCH-153/154: the plan cycle awaiting an answer, as the surface is given it. Read from the STORE — the run
@@ -1556,7 +1534,7 @@ export class Sessions {
       ...(model.compression ? { compression: { backend: meteredBackend(model.backend, countUsage), timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor, model: model.compression.model, timeoutMs: millis(model.compression.timeoutMs), charsPerToken: model.compression.charsPerToken, preserveRecentTurns: model.compression.preserveRecentTurns, triggerFor: model.compression.triggerFor } } : {}),
       // PD-ORCH-005: every run's store for the conversation and iteration records, with or without a tool port.
       dal, readSession: () => dal.getSession(sessionId), warn, info: (m: string) => { log?.info(m); this.deps.log?.(m); }, hooks, settledBeforeStart, checkpoints, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
-      onSaved: (g) => summary.rebuild(g, () => dal.getSession(sessionId)),
+      onSaved: (g) => summary.rebuild(g, () => summaryFactsOf(dal, sessionId)),
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, helperModel }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
@@ -1852,7 +1830,7 @@ export class Sessions {
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn, info: (m: string) => { s.log?.info(m); this.deps.log?.(m); },
       continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(appendsTask && !restatesUnfinished ? {} : { appendsTask: false }), ...(hooks ? { hooks } : {}), settledBeforeStart, checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
-      onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
+      onSaved: (generation) => summary.rebuild(generation, () => summaryFactsOf(s.dal, sessionId)),
       ...(preflight ? { preflight: (signal: AbortSignal) => preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, helperModel, ...(runCarries ? { intent: carried } : { previousIntent: priorIntent, hasUnfinishedWork: true }) }) } : {}),
       ...(preflight && runCarries ? { preflightCarries: true } : {}),
       ...(preflight && resumedCarries ? { resumedPreflight: (signal: AbortSignal) => preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, helperModel, intent: carried }) } : {}),
@@ -3086,7 +3064,7 @@ export class Sessions {
      * rebuild, a session still `running` with no Outcome. Off the path, as every rebuild is (REQ-SESSION-028); shutdown waits.
      */
     const summary = new SummaryWriter({ file: `${this.deps.sessionFilesDir(dal, sessionId)}/summary.md`, timers: this.deps.clocks.timers, warn: (m) => this.deps.warn(m) });
-    summary.rebuild(1, () => dal.getSession(sessionId), (current) => sessionOutcomeOf(current, recoveryEntryOf(dal, current)));
+    summary.rebuild(1, () => summaryFactsOf(dal, sessionId));
     const rebuilt = summary.settled();
     this.summaryRebuilds.add(rebuilt);
     void rebuilt.finally(() => this.summaryRebuilds.delete(rebuilt));
@@ -3328,16 +3306,16 @@ export class Sessions {
     return this.live.get(sessionId)?.running ?? null;
   }
 
-  /**
-   * ADR-0014 / REQ-MONITOR-255 / REQ-MONITOR-131: every run is asked to stop BEFORE any is waited
-   * on; the caller bounds the wait (the one 30 s allowance). Then every pending publication is
-   * flushed and every lock a finished session still holds is released.
-   */
   /** For tests and for shutdown: every `summary.md` a repair queued has been written. */
   async summariesSettled(): Promise<void> {
     await Promise.all([...this.summaryRebuilds]);
   }
 
+  /**
+   * ADR-0014 / REQ-MONITOR-255 / REQ-MONITOR-131: every run is asked to stop BEFORE any is waited
+   * on; the caller bounds the wait (the one 30 s allowance). Then every pending publication is
+   * flushed and every lock a finished session still holds is released.
+   */
   async closeAll(): Promise<void> {
     const waits: Promise<unknown>[] = [...this.summaryRebuilds];
     for (const s of this.live.values()) {

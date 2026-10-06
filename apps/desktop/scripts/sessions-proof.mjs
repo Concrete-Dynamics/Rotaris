@@ -6,7 +6,8 @@
  * client, scratch store, one scratch repository with checkpoints enabled and `.rotaris/` ignored. Sessions a dead process
  * would leave are PLANTED as rows straight into the store between launches — a crash leaves exactly rows. The launches:
  *
- *   1. seed             write,answer → session A completed with checkpoint 1 and its summary file.
+ *   1. seed             write,answer → session A completed with checkpoint 1 and its summary file, which carries REQ-SESSION-140's
+ *                       sections in its order (the task line, Metrics, Warnings, Agents, Slowest Tools, the inspection note).
  *   2. live             resume A + wait:20000,answer; the browser during the run: Actions → Delete… → confirm → refused with
  *                       REQ-GIT-092's first sentence; the app exits mid-run leaving A `running` behind a dead lock.
  *   3. repair-one       the browser marks A stale; Actions → Repair → the report (id, `running` → `interrupted`, the reason
@@ -164,7 +165,20 @@ const A = latestSession().session_id;
   expect(refsOf(workspace, A).length === 1, 'A has no ref');
   const files = join(dirname(dbFile()), 'sessions', A);
   expect(existsSync(join(files, 'summary.md')), `no summary.md under ${files}`);
-  results.seed = { sessionId: A, png: seed.png };
+  // REQ-SESSION-140: the file carries the requirement's sections in its order — until fin22 it carried none of the task
+  // line, Metrics, Warnings, Agents, Slowest Tools or the inspection note
+  // (`docs/defects/fixed/summary-md-carries-none-of-the-sections-its-requirement-lists.md`).
+  const seedMd = readFileSync(join(files, 'summary.md'), 'utf8');
+  writeFileSync(join(output, 'seed-summary.md'), seedMd);
+  const order = [`# Session ${A}`, '- Status: completed', '- Workspace: ', '- Created: ', '- Updated: ', '- Task: Write the notes.', '## Metrics', '## Warnings', '## Agents', '## Slowest Tools', "_The rest of this session's record"];
+  const at = order.map((line) => seedMd.indexOf(line));
+  expect(at.every((i, n) => i >= 0 && (n === 0 || i > at[n - 1])), `A's summary.md is not REQ-SESSION-140's, in its order (${JSON.stringify(at)}):\n${seedMd}`);
+  const stopReason = sessionRow(A).stop_reason;
+  expect(stopReason ? seedMd.includes(`- Stop reason: ${stopReason}`) : !seedMd.includes('Stop reason'), `A's stop-reason line (recorded: ${stopReason}):\n${seedMd}`);
+  expect(/^- Stale-input drops: n\/a/m.test(seedMd) && !/^- (Tokens|Cost): 0$/m.test(seedMd), `A's Warnings or an unavailable value:\n${seedMd}`);
+  const slowest = seedMd.slice(seedMd.indexOf('## Slowest Tools'));
+  expect(/^1\. \S+ — \d+ ms \(/m.test(slowest), `A's Slowest Tools names no call:\n${slowest}`);
+  results.seed = { sessionId: A, png: seed.png, summarySections: order.length, stopReason };
 }
 
 // 2. live — the delete refused during a run; the app exits mid-run and leaves A running behind a dead lock.
@@ -224,6 +238,7 @@ const repairOne = await launch('repair-one', {
   // OQ-60 as ruled (R-071): the repaired session's summary.md is rebuilt, its Outcome block the correction entry — not the
   // seed run's `completed` outcome, which REQ-ORCH-082's columns still hold, and not the dead live run's last rebuild.
   const summaryMd = readFileSync(join(dirname(dbFile()), 'sessions', A, 'summary.md'), 'utf8');
+  writeFileSync(join(output, 'repaired-summary.md'), summaryMd);
   expect(summaryMd.includes('- Status: interrupted') && /## Outcome\n\ninterrupted \(warning\): Session was still marked 'running' but the lock names this machine and its process \(pid \d+\) is gone; status set to 'interrupted'\./.test(summaryMd), `A's summary.md after the repair:\n${summaryMd}`);
   // The probe cuts text at 400 characters, so the three paragraphs are read one by one.
   const disclosure = atText(repairOne, 5600, '[data-testid="session-disclosure"]');

@@ -2742,7 +2742,9 @@ session starts, the columns govern again. The repair rebuilds `summary.md`, whic
 are never written by the repair. **Built 2026-10-06 (fin20):** `sessionOutcomeOf` and `recoveryEntryOf`
 (`packages/engine/src/run/summary.ts`), read by `toSessionRecord` and `renderSummary`; the rebuild in `Sessions.repairOne`;
 cases in `run/summary.test.ts` and `session-actions.test.ts`; `pnpm sessions-proof`'s repair reads the repaired session's `summary.md`. Noticed while building it, and recorded open:
-[`summary-md-carries-none-of-the-sections-its-requirement-lists.md`](../defects/summary-md-carries-none-of-the-sections-its-requirement-lists.md).
+[`summary-md-carries-none-of-the-sections-its-requirement-lists.md`](../defects/fixed/summary-md-carries-none-of-the-sections-its-requirement-lists.md),
+repaired 2026-10-06 by fin22: `summary.md` carries REQ-SESSION-140's sections, the Outcome block standing after the stop
+reason, before Metrics, and every rebuild (a run's, a continuation's, a repair's) reads the outcome through `summaryFactsOf`.
 
 **OQ-61 — May an isolated run read the repository metadata of the worktree it is working in?** *(REQ-TOOLS-132 with REQ-GIT-019/021/022 and REQ-TOOLS-001/142; raised 2026-09-16 while repairing what an isolated plan-mode run hit.)*
 
@@ -10442,3 +10444,28 @@ window is not asked; its shutdown leaves the run as `PD-ORCH-005` clause 3 says.
 (and then what it says where the close ends nothing), only on a close that ends a run (as built), or on a close of the
 window whose own workspace has a run active (which needs the run host's count keyed by workspace); and whether a quit
 started outside any window — the desktop's logout above all — asks it.
+
+**OQ-205 — What is a "mostly-elided artifact" in `summary.md`'s Warnings, and what record counts one?** *(REQ-SESSION-140's
+Warnings section, which covers "stale-input drops, mostly-elided artifacts, report downgrades, permission denials …, tool
+errors, and terminal failures, suspicious successes and timeouts"; REQ-SESSION-139, REQ-SESSION-133. Raised 2026-10-06 by
+fin22 (bundle `fin22-summary-and-counts`) while repairing
+[`summary-md-carries-none-of-the-sections-its-requirement-lists.md`](../defects/fixed/summary-md-carries-none-of-the-sections-its-requirement-lists.md).
+Open, the owner's.)*
+
+Every other kind the Warnings section names has a definition and a record: a permission denial is an audit entry
+(REQ-SESSION-137), a tool error and the three terminal outcomes are tool-call outcomes and issues (REQ-SESSION-136), and a
+stale-input drop and a report downgrade are counts REQ-SESSION-139 takes over the model-input and report-validation records
+(which this store does not keep: ADR-0024, the metrics document's `records_kept`). "Mostly-elided artifacts" appears in
+REQ-SESSION-140 and nowhere else: no requirement says what eliding an artifact is, what share of it makes it "mostly"
+elided, or which record would count one. The nearest thing the build has is a delegated child's payload, whose sibling
+index and attached artifacts can be elided to fit its budget (`sibling_index_elided`, `attached_elided` in the
+`context_injected` timeline metadata, REQ-TOOLS-152 / REQ-LIBRARY-098); that is an artifact left out of a payload, not an
+artifact mostly elided, and reading it as the warning would be inventing the definition.
+
+**What the build proceeds under.** The line is written and reads `n/a`, never `0` (REQ-SESSION-140's rule for an unavailable
+value): `- Mostly-elided artifacts: n/a (no record measures how much of an artifact was elided)`, beside the stale-input
+drops and report downgrades, which read `n/a` for the records the store does not keep (`warningLines` in
+`packages/engine/src/run/summary.ts`).
+
+**What a ruling decides.** What makes an artifact "mostly elided" (a share of its body cut from a payload or a view, and
+which), which record counts it, and whether the warning is then built or withdrawn from REQ-SESSION-140.

@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**`summary.md` carries REQ-SESSION-140's sections (fin22).** `renderSummary` renders `SummaryFacts`, read by `summaryFactsOf`
+(`run/summary.ts`) in one read transaction: the task line from `StoreDal.firstPromptRow`, the stop reason only where one is
+recorded, Metrics with `n/a` for what is unavailable, Warnings (mostly-elided artifacts read `n/a`, OQ-205), Agents, Slowest
+Tools and the inspection note; the counts are `sessionMetrics` (`export.ts`, which the metrics document now wraps), over
+`StoreDal.toolCallDigestOf` and `auditDigestOf`, two new statements over the existing tables. `SummaryWriter.rebuild` guards
+every read and skips a superseded rebuild; `costLabelOf` moved to `run/cost-label.ts` and is re-exported where it was. The
+**runtime view**'s repair paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **The timeline's vocabulary names every name the product writes (PD-ORCH-014, PD-CHAT-009, PD-TOOLS-011; OQ-157 with
 OQ-53, OQ-54, OQ-76 and OQ-127; fin20).** `tools/check-timeline-vocabulary.mjs`'s `AWAITING` is empty, every name it held
 a word cited to its directive. `UserPresence` writes `user_away` and `user_returned` through the session's writer

@@ -766,6 +766,21 @@ describe('store — v4: the evidence rings (ADR-0024, REQ-SESSION-133/135/136/13
     r.db.close();
     forgetSpelling(r.dir);
   });
+  it('the summary\'s digest reads two fields of the entry and never the entry; a malformed entry reads NULL (REQ-SESSION-140)', () => {
+    const { r, dal, sid } = open('9b');
+    const insert = (callId: string, entry: string) => dal.transaction(() => dal.ringInsert('tool_calls', sid, (o) => dal.insertToolCall({ session_id: sid, ordinal: o, call_id: callId, agent_name: 'a', tool_name: 'terminal', status: 'failed', started_at: 't', elapsed_ms: 9, is_error: 1, entry })));
+    insert('c1', JSON.stringify({ outcome_kind: 'shell_failure', failure_kind: 'exit', args: { command: 'x'.repeat(5000) } }));
+    insert('c2', '{not json');
+    const digest = dal.toolCallDigestOf(sid);
+    expect(digest.map((d) => [d.call_id, d.outcome_kind, d.failure_kind])).toEqual([['c1', 'shell_failure', 'exit'], ['c2', null, null]]);
+    expect(Object.keys(digest[0]!)).not.toContain('entry');
+    dal.appendRow(sid, 0, 'user', true, '   ');
+    dal.appendRow(sid, 1, 'user', true, 'first');
+    dal.appendRow(sid, 2, 'user', true, 'second');
+    expect(dal.firstPromptRow(sid)?.body).toBe('first');
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
   it('the ring reads and the settle are served by the primary key — no index is declared and none is scanned (spike 8)', () => {
     const { r, dal, sid } = open('95');
     for (const sql of ['SELECT * FROM permission_audit WHERE session_id = ? ORDER BY ordinal', 'SELECT * FROM tool_calls WHERE session_id = ? ORDER BY ordinal', 'SELECT * FROM issues WHERE session_id = ? ORDER BY ordinal']) {

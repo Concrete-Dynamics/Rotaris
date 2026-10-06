@@ -97,30 +97,76 @@ function auditEntry(r: AuditRow): JsonValue {
   return parseJson(r.entry) ?? { raw: r.entry };
 }
 
+/**
+ * A tool-call record as the metrics classify it: its columns and the two fields of its entry they read. The export
+ * decodes them from the stored entry; `summary.md`'s rebuild reads them from the store without the entry
+ * (`StoreDal.toolCallDigestOf`), so both readings classify one record the same way.
+ */
+export interface ToolCallFacts {
+  readonly call_id: string;
+  readonly agent_name: string;
+  readonly tool_name: string;
+  readonly status: string;
+  readonly elapsed_ms: number | null;
+  readonly is_error: number;
+  readonly outcome_kind: string | null;
+  readonly failure_kind: string | null;
+}
+
+/** The export's reading: the two fields decoded from the stored entry. */
+export function toolCallFactsOf(t: ToolCallRow): ToolCallFacts {
+  const entry = parseJson(t.entry) as { outcome_kind?: unknown; failure_kind?: unknown } | undefined;
+  const field = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+  return { call_id: t.call_id, agent_name: t.agent_name, tool_name: t.tool_name, status: t.status, elapsed_ms: t.elapsed_ms, is_error: t.is_error, outcome_kind: field(entry?.outcome_kind), failure_kind: field(entry?.failure_kind) };
+}
+
 /** REQ-SESSION-139: `outcome_kind` when the record carries one, else derived from `status` and `is_error` into the four buckets. */
-function outcomeOf(t: ToolCallRow, entry: { outcome_kind?: unknown } | undefined): string {
-  if (typeof entry?.outcome_kind === 'string' && entry.outcome_kind !== '') return entry.outcome_kind;
+function outcomeOf(t: ToolCallFacts): string {
+  if (t.outcome_kind !== null && t.outcome_kind !== '') return t.outcome_kind;
   if (t.status === 'blocked' || t.status === 'denied' || t.status === 'rejected') return 'rejected';
   if (t.is_error === 1 || t.status === 'error' || t.status === 'failed') return 'tool_error';
   if (t.status === 'completed' || t.status === 'ok' || t.status === 'success') return 'success';
   return 'unknown';
 }
 
+/** One of the slowest calls, as both the metrics document and `summary.md` list it. */
+export type SlowCall = { tool_name: string; agent_name: string; call_id: string; elapsed_ms: number | null; status: string };
+
 /**
- * REQ-SESSION-139 / REQ-SESSION-193: the metrics document, rebuilt from the session row and the evidence records as
- * they stand after the caps — a capped record's counts describe what is stored. Every figure the requirement lists
- * is a key named by its words; the record kinds this store does not keep (model inputs, context selections, report
- * validations, memory snapshots — REQ-SESSION-133 names them, no writer exists) count zero, stated in `records_kept`.
+ * REQ-SESSION-139's figures, typed: what the metrics document carries and what `summary.md`'s Metrics, Warnings, Agents and
+ * Slowest Tools sections read (REQ-SESSION-140), computed once so the two never disagree about a count.
  */
-export function metricsDocument(row: SessionRow, toolCalls: readonly ToolCallRow[], audit: readonly AuditRow[], issues: readonly IssueRow[], auditDropped: number, issuesDropped: number, toolCallsDropped: number): JsonValue {
+export type SessionMetrics = {
+  session_id: string; status: string; updated_at: string;
+  tool_calls: number; tokens: { input: number; output: number; total: number }; cost: string; compressions: number;
+  per_agent: { [name: string]: { tool_calls: number; tool_errors: number } };
+  tool_call_records: number;
+  tool_outcomes: { [bucket: string]: number };
+  terminal_shell_failures: number; suspicious_successes: number; timeouts: number;
+  slowest_tool_calls: SlowCall[];
+  model_input_records: number; stale_drops: number; context_selections: number; report_validations: number; report_downgrades: number;
+  permission_decisions: number; permission_denials: number; permission_sources: { [source: string]: number }; mode_changes: number;
+  issues_total: number; issues_by_kind: { [kind: string]: number };
+  records_kept: {
+    permission_audit: { retained: number; dropped: number }; issues: { retained: number; dropped: number }; tool_calls: { retained: number; dropped: number };
+    model_inputs: string; context_selections: string; report_validations: string; memory_snapshots: string;
+  };
+};
+
+/**
+ * REQ-SESSION-139 / REQ-SESSION-193: the metrics, rebuilt from the session row and the evidence records as they stand
+ * after the caps — a capped record's counts describe what is stored. Every figure the requirement lists is a key named by
+ * its words; the record kinds this store does not keep (model inputs, context selections, report validations, memory
+ * snapshots — REQ-SESSION-133 names them, no writer exists) count zero, stated in `records_kept`.
+ */
+export function sessionMetrics(row: SessionRow, toolCalls: readonly ToolCallFacts[], audit: readonly Pick<AuditRow, 'kind' | 'decision' | 'source'>[], issues: readonly Pick<IssueRow, 'kind'>[], auditDropped: number, issuesDropped: number, toolCallsDropped: number): SessionMetrics {
   const outcomes: { [bucket: string]: number } = { success: 0, tool_error: 0, rejected: 0, unknown: 0 };
   let shellFailures = 0; let suspicious = 0; let timeouts = 0;
   const perAgent = new Map<string, { tool_calls: number; tool_errors: number }>();
   for (const t of toolCalls) {
-    const entry = parseJson(t.entry) as { outcome_kind?: unknown; failure_kind?: unknown } | undefined;
-    const bucket = outcomeOf(t, entry);
+    const bucket = outcomeOf(t);
     outcomes[bucket] = (outcomes[bucket] ?? 0) + 1;
-    const failure = typeof entry?.failure_kind === 'string' ? entry.failure_kind : '';
+    const failure = t.failure_kind ?? '';
     if (bucket === 'shell_failure') shellFailures += 1;
     if (bucket === 'suspicious_success') suspicious += 1;
     if (bucket === 'timeout' || failure === 'timeout') timeouts += 1;
@@ -158,9 +204,17 @@ export function metricsDocument(row: SessionRow, toolCalls: readonly ToolCallRow
     issues_total: issues.length, issues_by_kind: issuesByKind,
     records_kept: {
       permission_audit: { retained: audit.length, dropped: auditDropped }, issues: { retained: issues.length, dropped: issuesDropped }, tool_calls: { retained: toolCalls.length, dropped: toolCallsDropped },
-      model_inputs: 'not kept by this store', context_selections: 'not kept by this store', report_validations: 'not kept by this store', memory_snapshots: 'not kept by this store',
+      model_inputs: NOT_KEPT, context_selections: NOT_KEPT, report_validations: NOT_KEPT, memory_snapshots: NOT_KEPT,
     },
   };
+}
+
+/** How `records_kept` names a record kind REQ-SESSION-133 lists and this store has no writer for. */
+export const NOT_KEPT = 'not kept by this store';
+
+/** REQ-SESSION-139: the metrics document — `sessionMetrics` over the export's full records. */
+export function metricsDocument(row: SessionRow, toolCalls: readonly ToolCallRow[], audit: readonly AuditRow[], issues: readonly IssueRow[], auditDropped: number, issuesDropped: number, toolCallsDropped: number): JsonValue {
+  return sessionMetrics(row, toolCalls.map(toolCallFactsOf), audit, issues, auditDropped, issuesDropped, toolCallsDropped);
 }
 
 export interface RecordsExport {

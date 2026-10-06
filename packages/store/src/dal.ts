@@ -220,6 +220,24 @@ export interface AuditRow {
   readonly source: string;
 }
 export interface ToolCallCountRow { readonly tool_name: string; readonly count: number; readonly agents: number }
+/**
+ * REQ-SESSION-140 / REQ-SESSION-139: a tool-call record without its serialised entry — the columns, and the two fields of
+ * the entry the metrics classify by (`outcome_kind`, `failure_kind`; NULL where the entry holds none). Read for the summary
+ * every save rebuilds, which must not carry every call's arguments and result into the process to count them.
+ */
+export interface ToolCallDigestRow {
+  readonly ordinal: number;
+  readonly call_id: string;
+  readonly agent_name: string;
+  readonly tool_name: string;
+  readonly status: string;
+  readonly elapsed_ms: number | null;
+  readonly is_error: number;
+  readonly outcome_kind: string | null;
+  readonly failure_kind: string | null;
+}
+/** REQ-SESSION-140: a permission-audit entry's index columns, without the serialised entry. */
+export type AuditDigestRow = Pick<AuditRow, 'ordinal' | 'kind' | 'decision' | 'source'>;
 export interface ToolCallRow {
   readonly session_id: string;
   readonly ordinal: number;
@@ -541,6 +559,9 @@ export class StoreDal {
       // REQ-NOTIFY-045/069, REQ-SESSION-192: the newest submitted prompt, resident or released — text, or images alone.
       lastPromptRow: db.prepare(`SELECT * FROM transcript_rows WHERE session_id = ? AND kind = 'user'
         AND (trim(body, char(32, 9, 10, 13)) <> '' OR attachments <> '[]') ORDER BY row_index DESC LIMIT 1`),
+      // REQ-SESSION-140: the first submitted prompt, resident or released — `summary.md`'s task line.
+      firstPromptRow: db.prepare(`SELECT * FROM transcript_rows WHERE session_id = ? AND kind = 'user'
+        AND (trim(body, char(32, 9, 10, 13)) <> '' OR attachments <> '[]') ORDER BY row_index LIMIT 1`),
       rowsBefore: db.prepare('SELECT * FROM transcript_rows WHERE session_id = ? AND row_index < ? ORDER BY row_index DESC LIMIT ?'),
       minRowIndex: db.prepare('SELECT min(row_index) AS m FROM transcript_rows WHERE session_id = ?'),
       // Part AO — REQ-CHAT-084: every row of the session, whichever page holds it, in one statement.
@@ -569,11 +590,17 @@ export class StoreDal {
         VALUES (@session_id, @ordinal, @recorded_at, @kind, @entry, @agent_id, @persona, @tool_name, @decision, @rule_id, @source)`),
       oldestAudit: db.prepare('DELETE FROM permission_audit WHERE session_id = ? AND ordinal = (SELECT min(ordinal) FROM permission_audit WHERE session_id = ?)'),
       auditOf: db.prepare('SELECT * FROM permission_audit WHERE session_id = ? ORDER BY ordinal'),
+      auditDigestOf: db.prepare('SELECT ordinal, kind, decision, source FROM permission_audit WHERE session_id = ? ORDER BY ordinal'),
       insertToolCall: db.prepare(`INSERT INTO tool_calls (session_id, ordinal, call_id, agent_name, tool_name, status, started_at, elapsed_ms, is_error, entry)
         VALUES (@session_id, @ordinal, @call_id, @agent_name, @tool_name, @status, @started_at, @elapsed_ms, @is_error, @entry)`),
       settleToolCall: db.prepare('UPDATE tool_calls SET status = ?, elapsed_ms = ?, is_error = ?, entry = ? WHERE session_id = ? AND ordinal = ? AND status = \'running\''),
       oldestToolCall: db.prepare('DELETE FROM tool_calls WHERE session_id = ? AND ordinal = (SELECT min(ordinal) FROM tool_calls WHERE session_id = ?)'),
       toolCallsOf: db.prepare('SELECT * FROM tool_calls WHERE session_id = ? ORDER BY ordinal'),
+      // REQ-SESSION-140: the summary's reading of the record — the columns and two fields of the entry, never the entry.
+      toolCallDigestOf: db.prepare(`SELECT ordinal, call_id, agent_name, tool_name, status, elapsed_ms, is_error,
+        CASE WHEN json_valid(entry) THEN json_extract(entry, '$.outcome_kind') END AS outcome_kind,
+        CASE WHEN json_valid(entry) THEN json_extract(entry, '$.failure_kind') END AS failure_kind
+        FROM tool_calls WHERE session_id = ? ORDER BY ordinal`),
       // REQ-MONITOR-167: per-tool totals across the agents of one session, most-called first.
       toolCallCounts: db.prepare('SELECT tool_name, COUNT(*) AS count, COUNT(DISTINCT agent_name) AS agents FROM tool_calls WHERE session_id = ? GROUP BY tool_name ORDER BY count DESC, tool_name'),
       insertIssue: db.prepare(`INSERT INTO issues (session_id, ordinal, id, recorded_at, kind, severity, actor, message, evidence_ref, metadata)
@@ -905,6 +932,10 @@ export class StoreDal {
   auditOf(id: SessionId): AuditRow[] {
     return this.stmts['auditOf']!.all(id) as AuditRow[];
   }
+  /** REQ-SESSION-140: the audit's index columns in write order, without the serialised entries. */
+  auditDigestOf(id: SessionId): AuditDigestRow[] {
+    return this.stmts['auditDigestOf']!.all(id) as AuditDigestRow[];
+  }
   insertToolCall(row: Omit<ToolCallRow, 'session_id'> & { readonly session_id: SessionId }): void {
     this.stmts['insertToolCall']!.run(row);
   }
@@ -914,6 +945,10 @@ export class StoreDal {
   }
   toolCallsOf(id: SessionId): ToolCallRow[] {
     return this.stmts['toolCallsOf']!.all(id) as ToolCallRow[];
+  }
+  /** REQ-SESSION-140: every retained tool-call record as `ToolCallDigestRow`, in ordinal order. */
+  toolCallDigestOf(id: SessionId): ToolCallDigestRow[] {
+    return this.stmts['toolCallDigestOf']!.all(id) as ToolCallDigestRow[];
   }
   /** REQ-MONITOR-167: `{ tool_name, count, agents }` per tool, most-called first (ties by name). */
   toolCallCounts(id: SessionId): ToolCallCountRow[] {
@@ -1164,6 +1199,10 @@ export class StoreDal {
    */
   lastPromptRow(id: SessionId): TranscriptRowRecord | undefined {
     return this.stmts['lastPromptRow']!.get(id) as TranscriptRowRecord | undefined;
+  }
+  /** REQ-SESSION-140: the session's first submitted prompt, whichever page holds it; undefined where none was submitted. */
+  firstPromptRow(id: SessionId): TranscriptRowRecord | undefined {
+    return this.stmts['firstPromptRow']!.get(id) as TranscriptRowRecord | undefined;
   }
   // Part AO
   /**

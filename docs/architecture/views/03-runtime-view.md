@@ -1549,7 +1549,13 @@ of §5 and none a channel: each is a request answered once.
   (`SummaryWriter`, awaited at shutdown). **OQ-60 as ruled (R-071, 2026-10-06):** REQ-ORCH-082's columns are left as they
   are, and while the session is `interrupted` its readers present the latest correction entry in their place
   (`sessionOutcomeOf`, `recoveryEntryOf` in `run/summary.ts`): the record's `summary`, which the agents view's activity line
-  reads, and `summary.md`'s Outcome block. `repair(all)` walks the listing rows of
+  reads, and `summary.md`'s Outcome block. **`summary.md` itself (REQ-SESSION-140; fin22, 2026-10-06)** is rendered from
+  `summaryFactsOf`, one read transaction over the row, the correction entry, the first submitted prompt
+  (`StoreDal.firstPromptRow`), the tool-call record and the permission audit read without their serialised entries
+  (`toolCallDigestOf`, `auditDigestOf`), the issues, the iterations, plan roots and children; its counts are the metrics
+  document's (`sessionMetrics` in `export.ts`). Every rebuild — a run's saves, a continuation's, the repair's — reads it so;
+  each read sits inside `SummaryWriter`'s guard (a throw is a warning, the chain never rejects), and a rebuild a newer one is
+  queued behind is skipped. `repair(all)` walks the listing rows of
   the workspace; `checkpointListing`'s REQ-GIT-094 repair is the same unit. A loaded, idle session repairs through its
   own live writer and its projection republishes — under the lock `withWriter` claims for it (below).
 - **Delete** (REQ-SESSION-166, REQ-GIT-069) in this order: (1) `prepareDelete` loads the row, refuses a live or

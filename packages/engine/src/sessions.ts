@@ -459,7 +459,7 @@ interface PlanDecisionLaunch {
  * run that parked without closing its tool ports. The current run joins the set (it is not running when a continue
  * launches, so it either tore down or parked) and every run that has closed its ports since leaves it.
  */
-function ownCallsMayRunOf(s: Live): boolean {
+export function ownCallsMayRunOf(s: Pick<Live, 'run' | 'portsOpen'>): boolean {
   if (s.run !== null) s.portsOpen.add(s.run);
   for (const r of s.portsOpen) if (r.closedItsPorts) s.portsOpen.delete(r);
   return s.portsOpen.size > 0;

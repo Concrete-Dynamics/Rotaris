@@ -9,7 +9,7 @@ import { RUN_AGENT_ID, type ApprovalPayload, type SessionRecord } from '@rotaris
 import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type CheckpointPort, type Publisher, type RunConfig, type ToolPort } from '../index.js';
 import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 import { ACCEPTED_CANCEL_REPORT, recordCrash } from './crash.js';
-import { cancelLeftOf, crashLeftOf, resumableOf, toAgentRecord, type ToolPortContext } from '../sessions.js';
+import { cancelLeftOf, crashLeftOf, ownCallsMayRunOf, resumableOf, toAgentRecord, type ToolPortContext } from '../sessions.js';
 import { conversationOf } from './record.js';
 import { interruptedResult } from './interruption.js';
 import type { HookPort } from '../hooks-port.js';
@@ -1663,6 +1663,26 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => id, isProcessAlive: () => true,
       model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s), tools: (ctx) => closingPort(ctx, closes),
       runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', ...runtime },
+    });
+
+    /*
+     * The guard `Live.portsOpen` is kept should a run ever end without closing its ports (OQ-170's ruling closes them at
+     * every park and at teardown, so no path of today reaches it): such a run holds back the ring settle until it closes
+     * them, and so does an earlier one after a later run tore down.
+     */
+    it('the ring settle is held back by any run of this process whose ports are still open, and only until it closes them', () => {
+      const run = (closed: boolean) => ({ closedItsPorts: closed }) as unknown as NonNullable<Parameters<typeof ownCallsMayRunOf>[0]['run']>;
+      const open = run(false);
+      const live = { run: open, portsOpen: new Set<typeof open>() };
+      expect(ownCallsMayRunOf(live)).toBe(true);
+      expect(live.portsOpen.has(open)).toBe(true);
+      // A later run that closed its ports does not re-arm the settle over the earlier open one.
+      const later = run(true);
+      expect(ownCallsMayRunOf({ ...live, run: later })).toBe(true);
+      (open as unknown as { closedItsPorts: boolean }).closedItsPorts = true;
+      expect(ownCallsMayRunOf({ ...live, run: later })).toBe(false);
+      expect(live.portsOpen.size).toBe(0);
+      expect(ownCallsMayRunOf({ run: null, portsOpen: new Set() })).toBe(false);
     });
 
     it('a park at the plan gate closes its run\'s ports: the call still open settles `failed` at the park, never left `running`', async () => {

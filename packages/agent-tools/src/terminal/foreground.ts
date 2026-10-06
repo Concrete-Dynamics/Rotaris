@@ -782,9 +782,10 @@ const SNAPSHOT_MARK = '__rot_b64__';
 const SNAPSHOT_ROW = 64;
 
 /**
- * PD-TOOLS-001's capture line: the shell's own cwd plus every exported variable, one per line. The
- * marker literals are assembled through variables (`$__p`, `$P`) rather than written inline, so the
- * PTY's echo of this command can never itself match the parse below however the screen wraps it.
+ * PD-TOOLS-001's capture line: the shell's own cwd plus every exported variable. The marker is never written next to the
+ * colon that follows it in the command itself: PowerShell assembles it through variables (`$__p`, `$__q`), and POSIX
+ * assigns it to `Q` and prints it as `$Q:`, so in the PTY's echo the marker is followed by `'`, never `:`, and the echo
+ * can never itself match the parse below however the screen wraps it.
  */
 export function snapshotCommand(backend: ShellBackend): string {
   if (backend.kind === 'powershell') {
@@ -814,7 +815,7 @@ export function snapshotCommand(backend: ShellBackend): string {
  * last 1 to 64, the whole is valid padded base64, and its decoded text ends with the NUL `env -0` writes after each entry.
  */
 function encodedSnapshot(output: string): string | null {
-  const joined = output.split('\n').join('');
+  const joined = joinedRows(output.split('\n')).text;
   if (!joined.includes(`${SNAPSHOT_MARK}:`)) return null;
   const rows = [...joined.matchAll(new RegExp(`${SNAPSHOT_MARK}:([A-Za-z0-9+/=]*)`, 'g'))].map((m) => m[1]!);
   if (rows.length === 0) return null;
@@ -836,7 +837,10 @@ function parseEncodedSnapshot(encoded: string): ShellState | null {
   }
   // A capture with no variables is a shell that could not list them (no `env -0`), never an empty environment:
   // restoring it would unset every variable the fresh shell has, so it is refused and the previous capture kept.
-  if (cwd === undefined || cwd === '' || Object.keys(env).length === 0) return null;
+  // `$PWD` is always absolute, so a directory that does not start with `/` is a capture that lost whole rows from its top
+  // (the emulator's scrollback overflowed under a very large environment at a narrow width): every row still carries 64
+  // characters, so the checks in `encodedSnapshot` pass, and the decode starts mid-entry. It is refused the same way.
+  if (cwd === undefined || !cwd.startsWith('/') || Object.keys(env).length === 0) return null;
   return { cwd, env };
 }
 

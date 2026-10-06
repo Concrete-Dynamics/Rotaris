@@ -25,6 +25,13 @@ decodes it. No captured line reaches the screen's width, and NUL separates entri
 A capture that names no variable (a shell without `env -0`) is refused and the previous capture kept, because restoring
 an empty environment would unset everything the fresh shell has.
 
+*Falsified 2026-10-06, kept as written above:* "No captured line reaches the screen's width" is not true. A row is the
+12-column `__rot_b64__:` marker plus 64 characters, 76 columns, and the display narrows the PTY to as few as 20
+(REQ-TOOLS-128). Below 76 columns the screen wraps every row. The parse kept only the rows that began with the marker,
+so it dropped each continuation and decoded the pieces into a spliced environment. The parse now joins the rows back
+and refuses a capture that does not add up
+([the note](the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md)).
+
 Evidence: `terminal.test.ts`, two new cases run the real capture line through `/bin/sh` with a 600-character value and
 a value holding a newline, and refuse a capture with no variables. The whole terminal suite passes on Linux, three runs
 out of three.

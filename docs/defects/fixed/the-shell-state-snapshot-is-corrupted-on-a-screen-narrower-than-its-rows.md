@@ -61,3 +61,10 @@ variable whole" (the reset reads "were restored", and the next call reads the va
 `HOME` back and finds `sleep`). Re-measured after the repair with the same `captureState` call at 10, 20, 30, 40, 75,
 76, 80 and 240 columns: every capture identical to the 240-column one, every host variable back but `TERM` (which the
 session sets to `dumb`) and `_`, and `PROBE_VAR` whole.
+
+**Added in the repair round (2026-10-06).** The checks above do not catch a WHOLE row lost from the top of the capture
+(the emulator's scrollback overflowing under a very large environment at a narrow width): every row left still carries
+64 characters, and the decode starts mid-entry. `$PWD` is always absolute, so `parseEncodedSnapshot` now refuses a
+directory that does not start with `/`; pinned by "refuses a capture that lost whole rows from its top", red without the
+check. The earlier repair's claim that "no captured line reaches the screen's width" is marked falsified in place in
+[its note](a-long-variable-comes-back-from-a-timeout-reset-with-a-newline-in-it.md).

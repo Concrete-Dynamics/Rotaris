@@ -576,6 +576,15 @@ describe.skipIf(process.platform === 'win32')('PD-TOOLS-001: the POSIX shell-sta
     expect(parseSnapshot([rows[0], '[1]+ Done   sleep 5', ...rows.slice(1)].join('\n'))?.env).toEqual(parseSnapshot(out)?.env);
   });
 
+  it('refuses a capture that lost whole rows from its top, whose decode starts mid-entry, rather than restoring it', () => {
+    const encoded = Buffer.from(`/w\0A=${'x'.repeat(120)}\0B=two\0`, 'utf8').toString('base64');
+    const rows = (encoded.match(/.{1,64}/g) ?? []).map((r) => `__rot_b64__:${r}`);
+    expect(rows.length).toBeGreaterThan(2);
+    expect(parseSnapshot(rows.join('\n'))).toEqual({ cwd: '/w', env: { A: 'x'.repeat(120), B: 'two' } });
+    // The first row scrolled off the emulator's screen: every row left is still 64 characters and decodes, from `xxx…`.
+    expect(parseSnapshot(rows.slice(1).join('\n'))).toBeNull();
+  });
+
   it('refuses a capture that names no variable, rather than restoring an empty environment over the fresh shell', () => {
     const cwdOnly = Buffer.from(`${root}\0`, 'utf8').toString('base64');
     expect(parseSnapshot(`__rot_b64__:${cwdOnly}\n`)).toBeNull();

@@ -779,6 +779,40 @@ describe('undo puts the path back as it was before the write: a create is undone
     expect(await w.execute({ operation: 'undo', path: 'notes.txt', replace_all: false }, ctx())).toMatchObject({ isError: true, text: 'No edit history for notes.txt.' });
   });
 
+  it('an untouched create is removed by its undo: the file still holds exactly what the create wrote', async () => {
+    const w = writeFileTool(state, fence);
+    await w.execute({ operation: 'create', path: 'kept-as-written.txt', content: 'mine\n', replace_all: false }, ctx());
+    // rewritten by another writer to the very same bytes is still what the create wrote
+    writeFileSync(join(root, 'kept-as-written.txt'), 'mine\n');
+    expect(await w.execute({ operation: 'undo', path: 'kept-as-written.txt', replace_all: false }, ctx())).toMatchObject({ isError: false, text: 'Removed kept-as-written.txt: it did not exist before the create this undoes (1 line removed).' });
+    expect(exists('kept-as-written.txt')).toBe(false);
+  });
+
+  it('a created file another writer has rewritten since is left in place: the undo refuses, names the path, and quotes nothing', async () => {
+    const w = writeFileTool(state, fence);
+    await w.execute({ operation: 'create', path: 'shared/out.txt', content: 'mine\n', replace_all: false }, ctx());
+    // a terminal command or another agent writes over it outside the file tools
+    writeFileSync(join(root, 'shared', 'out.txt'), 'someone else\nwrote\n');
+    const u = await w.execute({ operation: 'undo', path: 'shared/out.txt', replace_all: false }, ctx());
+    expect(u).toMatchObject({ isError: true, text: 'Cannot undo the create of shared/out.txt: the file changed since it was created, so it was left in place. Read it again before changing it.' });
+    expect(u.text).not.toContain('someone else');
+    expect(readFileSync(join(root, 'shared', 'out.txt'), 'utf8')).toBe('someone else\nwrote\n');
+    // the refusal changed nothing, so the create stays on the stack: refused again while the other content stands ...
+    expect((await w.execute({ operation: 'undo', path: 'shared/out.txt', replace_all: false }, ctx())).text).toMatch(/^Cannot undo the create of shared\/out\.txt:/);
+    // ... and undoable once the file holds what the create wrote again, the directory it made going with it
+    writeFileSync(join(root, 'shared', 'out.txt'), 'mine\n');
+    expect((await w.execute({ operation: 'undo', path: 'shared/out.txt', replace_all: false }, ctx())).text).toBe('Removed shared/out.txt: it did not exist before the create this undoes (1 line removed). Also removed the empty directory shared/ the create made.');
+    expect(exists('shared')).toBe(false);
+  });
+
+  it.skipIf(process.platform === 'win32')('the directory the answer names is the platform\'s parent of the path, so a backslash in a POSIX name is not a separator', async () => {
+    const w = writeFileTool(state, fence);
+    await w.execute({ operation: 'create', path: 'we\\ird/x.txt', content: 'x', replace_all: false }, ctx());
+    expect(exists('we\\ird/x.txt')).toBe(true);
+    expect((await w.execute({ operation: 'undo', path: 'we\\ird/x.txt', replace_all: false }, ctx())).text).toBe('Removed we\\ird/x.txt: it did not exist before the create this undoes (1 line removed). Also removed the empty directory we\\ird/ the create made.');
+    expect(exists('we\\ird')).toBe(false);
+  });
+
   it('a create read from a call with no operation (PD-TOOLS-007) is undone the same way', async () => {
     const w = writeFileTool(state, fence);
     const inferred = w.inferArguments?.({ path: 'inferred.txt', content: 'i\n' });

@@ -25,10 +25,13 @@ export const UNDO_DEPTH = 10;
  * One write's entry on REQ-TOOLS-132's undo stack: what the path held before it. `previous` is null when the write made the
  * file (a create), and `madeDir` is then the first directory that write made for it, absolute, so its undo can take away
  * the directories it made as well as the file. A create into a directory that was already there leaves `madeDir` unset.
+ * `written` is a create's SHA-256 of the content it wrote: its undo removes the file only while the file's bytes still have
+ * that digest, so content another writer put there since (a terminal command, another agent) is never removed with it.
  */
 export interface UndoEntry {
   readonly previous: string | null;
   readonly madeDir?: string;
+  readonly written?: string;
 }
 
 /**
@@ -59,10 +62,10 @@ export class FileToolState {
   wasRead(resolved: string): boolean {
     return this.read.has(this.key(resolved));
   }
-  pushUndo(resolved: string, previous: string | null, madeDir?: string): void {
+  pushUndo(resolved: string, entry: UndoEntry): void {
     const k = this.key(resolved);
     const stack = this.undo.get(k) ?? [];
-    stack.push(madeDir === undefined ? { previous } : { previous, madeDir });
+    stack.push(entry);
     while (stack.length > UNDO_DEPTH) stack.shift();
     this.undo.set(k, stack);
   }
@@ -515,14 +518,16 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
       if (!t.ok) return t.obs;
       const { resolved, rel } = t;
       const exists = existsSync(resolved);
-      const current = exists ? decodeText(readFileSync(resolved)) : null;
+      const bytes = exists ? readFileSync(resolved) : null;
+      const current = bytes === null ? null : decodeText(bytes);
       if (current?.binary) return errorObservation(`Binary file. Cannot edit ${rel}.`);
       const before = current?.text ?? null;
       const mustHaveRead = () => (!state.wasRead(resolved) ? errorObservation(`You must read ${rel} before editing it. Call read_file(path="${rel}") first, then retry your edit.`) : null);
       const commit = (after: string, message: string): Observation => {
         // The directory a create had to make is known only once it is made, so the entry is completed after the write.
         const madeDir = atomicWrite(resolved, after);
-        state.pushUndo(resolved, before, before === null ? madeDir : undefined);
+        if (before !== null) state.pushUndo(resolved, { previous: before });
+        else state.pushUndo(resolved, madeDir === undefined ? { previous: null, written: sha256(after) } : { previous: null, madeDir, written: sha256(after) });
         state.markRead(resolved);
         return observation(`${message} (sha256 ${sha256(after)})`, { diff: renderDiff(rel, before, after) });
       };
@@ -595,18 +600,32 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
              * (docs/defects/fixed/undoing-a-create-leaves-an-empty-file.md). A file gone since is not written back.
              */
             if (before === null) return observation(`${rel} did not exist before the create this undoes, and it does not exist now: nothing to remove.`, { diff: `${rel} +0 -0` });
+            /*
+             * Only the file the create made is the create's to remove. Until fin26 (2026-10-06) the undo removed whatever the
+             * path held, so content a terminal command or another agent wrote over the created file was lost with it
+             * (docs/defects/fixed/undoing-a-create-removes-another-writers-content.md). The file's bytes are compared with the
+             * digest the create kept; a file that differs is left in place, the refusal names the path and quotes nothing (the
+             * shape of REQ-TOOLS-189's changed-since refusal), and the entry goes back, since nothing changed.
+             */
+            if (entry.written !== undefined && bytes !== null && sha256(bytes) !== entry.written) {
+              state.pushUndo(resolved, entry);
+              return errorObservation(`Cannot undo the create of ${rel}: the file changed since it was created, so it was left in place. Read it again before changing it.`);
+            }
             let dirs: string[];
             try {
               dirs = removeCreated(resolved, entry.madeDir);
             } catch (cause) {
               // Nothing changed, so the write stays undoable.
-              state.pushUndo(resolved, entry.previous, entry.madeDir);
+              state.pushUndo(resolved, entry);
               return errorObservation(`Could not remove ${rel}: ${cause instanceof Error ? cause.message : String(cause)}`);
             }
             const outermost = dirs[dirs.length - 1];
-            // The directory's own spelling is `rel`'s, less the segments between it and the file.
+            // The directory's own spelling is `rel`'s parent once per segment between it and the file, taken by the
+            // platform's path module: on POSIX a backslash is part of a name, never a separator.
             const depth = outermost === undefined ? 0 : relative(outermost, resolved).split(sep).length;
-            const also = outermost === undefined ? '' : ` Also removed the empty directory ${rel.split(/[\\/]/).slice(0, -depth).join('/')}/ the create made.`;
+            let dirRel = rel;
+            for (let i = 0; i < depth; i += 1) dirRel = dirname(dirRel);
+            const also = outermost === undefined ? '' : ` Also removed the empty directory ${dirRel}/ the create made.`;
             return observation(`Removed ${rel}: it did not exist before the create this undoes (${countNoun(lineCount(before), 'line')} removed).${also}`, { diff: renderDiff(rel, before, '') });
           }
           const after = entry.previous;
@@ -698,7 +717,7 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
         after = applyMatch(before, lines, m, a.old_string, a.new_string);
         message = replacementMessage(rel, before, after, a.old_string, start);
       }
-      state.pushUndo(resolved, before);
+      state.pushUndo(resolved, { previous: before });
       atomicWrite(resolved, after);
       state.markRead(resolved);
       return observation(`${message} content_hash: ${sha256(after)}`, { diff: renderDiff(rel, before, after) });

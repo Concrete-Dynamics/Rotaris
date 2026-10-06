@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**Undoing a `write_file` create removes only the file it made (REQ-TOOLS-132, REQ-TOOLS-135; fin26).** A create's `UndoEntry`
+keeps the SHA-256 of what it wrote, and its undo removes the file only while the file's bytes still have that digest; a file
+another writer rewrote since is left in place and the undo refused, its entry kept. The **runtime view**'s file-tools
+paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **An error-path tool record marks the cut it makes (REQ-SESSION-194, REQ-SESSION-136; fin23, live-run M3).**
 `SessionWriter.settleToolCall` cuts an error's `args` and `result` with `run/cut.ts`, so a cut value ends with `...` inside
 its 2,000 characters where it was a bare `slice`; the arguments keep their shape (`cutArguments`: only free-text values cut,

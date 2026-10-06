@@ -71,5 +71,10 @@ directory the first of them made, undoing the first create before the second lea
 held the second file then), and the second create's undo, which made no directory, then leaves it empty. Undone in the
 other order, the directory goes with the first create's undo.
 
+An undone create also leaves its path in the read record (`FileToolState.read`, `REQ-TOOLS-133`): the create's write
+recorded it as read, and the undo takes nothing out. And until fin26 the undo of a create removed the file whatever it held
+by then, another writer's content included; the repair and its own limits are in
+`docs/defects/fixed/undoing-a-create-removes-another-writers-content.md`.
+
 Not shown by a live run yet: an undone create in a run should leave no file behind, answer "Removed …", and its diff row
 should read `+0 -<n>`.

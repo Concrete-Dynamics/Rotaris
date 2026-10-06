@@ -9685,3 +9685,42 @@ keeps REQ-GIT-105's count.
 **What a ruling decides.** What each of the card's two figures counts — in particular whether an untracked path is
 uncommitted on the card as it is in the Git view, and whether the card's read applies REQ-GIT-003's exclusion — so that
 one window never shows two different "uncommitted" counts for one tree.
+
+**OQ-202 — On an `explicit_trivial` or `single_file_change` run, may the coordinator use the direct-work bundle REQ-ORCH-016
+grants it, or does REQ-ORCH-029 forbid every file-modifying call and every work item it does not delegate?**
+*(REQ-ORCH-016, "Exactly the two simplest intents (`explicit_trivial`, `single_file_change`) grant the entry role the
+direct-work bundle", which includes "every tool the public tool-name registry declares as … writing workspace files, or
+running commands"; REQ-ORCH-029, which binds the entry role "while it acts as coordinator, which is every run except one taken
+under a `single` override": "it makes no file-modifying tool call … every work item it takes on reaches a specialist through a
+`delegate` call", constraints that "MUST hold no matter what playbook cell or instruction text is in force" and are
+"externally checkable from the run's own records"; REQ-ORCH-025, under which only `single` ends the coordinating status.
+Raised 2026-10-06 from finding G2 of the orchestrator's final default live run at `27a5127` (fin18, bundle
+`fin18-run-record-truth`; raised there as OQ-200 and renumbered OQ-202 when origin/main, which had taken OQ-200 and OQ-201,
+was merged in). Open, the owner's.)*
+
+Under REQ-ORCH-016 an `explicit_trivial` or `single_file_change` run grants the entry role `write_file`, `terminal` and the
+rest of the direct-work bundle; no `single` override is in force, so by REQ-ORCH-025 and REQ-ORCH-029 the entry role is still
+the coordinator, and the coordinator makes no file-modifying call and delegates every work item. The two requirements give it
+the tools and forbid their use at once. The orchestrator's built-in instructions state REQ-ORCH-029's side ("You coordinate:
+you do not modify files or run commands yourself — every work item reaches a specialist through the delegate tool",
+`packages/engine/src/children/personas.ts`) while its listing carries REQ-ORCH-016's. Neither requirement names the other,
+and no directive governs either.
+
+In the default live run's `frictions` scenario (pack `.live-run/runs/2026-10-06T01-30-08-282Z/`, session `dc010fce`, the
+self-hosted endpoint) the intent was `explicit_trivial` (0.98) and the orchestrator was offered 29 tools, `write_file`,
+`terminal` and `haet_edit` among them (`frictions/model-traffic.jsonl` #1). Its first turn reasoned about the contradiction
+("the guardrail says 'You do not modify files or run commands yourself' … Given the tension … do it directly", transcript
+row 1): that request took 14,495 ms and 1,034 output tokens of a 32.0 s run, the longest of the run. It then made the
+file-modifying call itself (#1 `write_file`) and four `terminal` calls, records REQ-ORCH-029 says must show no such call. The
+same shape is in the `frictions` and `terminal` scenarios at `1763f7f` (2026-10-03), both `explicit_trivial`.
+
+**What the build proceeds under** (the code as it stands; nothing changed for this question): REQ-ORCH-016's grant is
+applied (`apps/desktop/src/run-host/tools.ts`, the entry port's `directWork`), the orchestrator's instructions keep
+REQ-ORCH-029's sentence, and nothing refuses or flags the coordinator's use of a granted tool. A model that uses the bundle
+is not stopped, and one that delegates is not either.
+
+**What a ruling decides.** Which requirement gives way on the two simplest intents: whether the bundle's grant ends the
+coordinating status for that run as `single` does (REQ-ORCH-029's exemption widened, and the instructions told so where the
+bundle is granted), or whether the coordinator keeps it and the bundle is narrowed to what REQ-ORCH-029 allows (REQ-ORCH-016
+amended); and, either way, whether the instructions the coordinator is given should name the case so it does not spend a turn
+on the contradiction.

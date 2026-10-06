@@ -2407,7 +2407,7 @@ export class Run {
   /**
    * REQ-MONITOR-142: applies from the next iteration, for the rest of this run (PD-MONITOR-003, OQ-185: it ends with its run,
    * and its row says so); a system row states the switch. It ends a ladder move and takes back an override an earlier wait
-   * choice set from the pair chosen (PD-ORCH-006, OQ-177). During a wait (REQ-ORCH-091 d,
+   * choice set from the pair chosen (PD-ORCH-009, OQ-177). During a wait (REQ-ORCH-091 d,
    * REQ-NOTIFY-089/263) it is the change-model resolution: the parked agent rebuilds and re-runs at once, and the
    * override is persisted (`model_override` timeline entry) so later calls of the session never return to the
    * exhausted pair. A choice that cannot be applied is never discarded silently: `model_override_rejected` is
@@ -2457,7 +2457,7 @@ export class Run {
       return true;
     }
     this.clearChosenExclusion(key, providerIdentity(this.catalogue, resolved.choice.model), resolved.choice.model.modelId);
-    // OQ-177's ruling (R-071, PD-ORCH-006): every explicit switch wins. It ends a ladder move (`pendingEntrySwitch`), and it
+    // OQ-177's ruling (R-071, PD-ORCH-009): every explicit switch wins. It ends a ladder move (`pendingEntrySwitch`), and it
     // takes back an override an earlier wait choice set FROM the pair chosen (REQ-ORCH-091 d), as the quota-wait surface's
     // own choice does, so the entry agent runs on the pair chosen from the next iteration. Until 2026-10-06 the override
     // stood and the row said "but <key>, chosen for <pair> during an earlier wait, stands for the rest of the session".
@@ -2523,7 +2523,7 @@ export class Run {
   /**
    * REQ-ORCH-091 (d) with REQ-MONITOR-303 and REQ-MONITOR-194: the user's newest explicit choice of a pair in a wait — a
    * change of model, or the waiting pair itself chosen for a retry — supersedes any override an earlier choice set FROM
-   * that pair, so the agent resumes on the pair chosen, as the wait's row says. Since OQ-177's ruling (R-071, PD-ORCH-006,
+   * that pair, so the agent resumes on the pair chosen, as the wait's row says. Since OQ-177's ruling (R-071, PD-ORCH-009,
    * 2026-10-06) a switch of the entry model from the run header or the inspector does the same (`where`: "as the entry
    * model"), so every explicit choice wins. The override is taken back in the memory
    * and as a `model_override` entry carrying `cleared: true`, `cause: 'superseded'` (fin6's shape for a taken-back pin),

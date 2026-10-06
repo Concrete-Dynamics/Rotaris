@@ -9256,7 +9256,7 @@ as OQ-176, and renumbered OQ-177 at its merge because `origin/main` had taken OQ
 entry model from the run header or the inspector ends an automatic fallback, as built, and also takes back any earlier
 quota-wait override of the chosen pair, as the quota-wait surface already does, so the entry agent runs on the pair chosen
 from the next iteration; an agent that had already followed the override stays where it moved. Minted as
-[`PD-ORCH-006`](../product/directives.md#pd-orch-006), narrowing REQ-ORCH-091 (d) and REQ-NOTIFY-089, and built the same
+[`PD-ORCH-009`](../product/directives.md#pd-orch-009), narrowing REQ-ORCH-091 (d) and REQ-NOTIFY-089, and built the same
 day (`Run.setEntryModel` calls `takeBackOverrideOf` on the header path; plan fin21). The reading below is kept as the build
 proceeded under it until then.
 

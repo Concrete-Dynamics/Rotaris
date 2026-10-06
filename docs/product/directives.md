@@ -4594,9 +4594,9 @@ writes no row is never seen to begin.
 
 ---
 
-<a id="pd-orch-006"></a>
+<a id="pd-orch-009"></a>
 
-### PD-ORCH-006 — an explicit choice of the entry model wins over an earlier wait's override of that model
+### PD-ORCH-009 — an explicit choice of the entry model wins over an earlier wait's override of that model
 
 When the user explicitly chooses a model for the run's entry agent — a switch of the entry model from the run header or
 the inspector (REQ-MONITOR-142), or a choice made on the quota-wait decision surface (REQ-MONITOR-303) — and a
@@ -4623,6 +4623,9 @@ out of quota again.
 > **Narrows:** REQ-ORCH-091, REQ-NOTIFY-089
 
 *Raised by the owner, 2026-10-06, ruling OQ-177 as recommended; logged as [R-071](requests.md#r-071).*
+
+*Numbered PD-ORCH-009: first written as PD-ORCH-006 on its branch, but fin20's directives reached `main` first and took
+PD-ORCH-006 to PD-ORCH-008, so this entry takes the next free number.*
 
 > **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (plan fin21):** `Run.setEntryModel` takes the
 > override back on the header path through the same `takeBackOverrideOf` the wait path uses — a `model_override` entry
@@ -4688,7 +4691,7 @@ On the quota-wait decision surface (REQ-MONITOR-303, REQ-NOTIFY-263), **keep wai
 1. Where automatic resume is **not** allowed — a provider-and-model pair recorded out of quota (REQ-MONITOR-194) — keep
    waiting SHALL resolve the wait as a retry of the same pair at once and return the status to `running`. It is an explicit
    choice of that pair: it clears the pair's out-of-quota exclusion as REQ-MONITOR-194 says, persists no override, and takes
-   back an earlier override of the pair (`PD-ORCH-006`). A further insufficient-quota answer records the pair again and
+   back an earlier override of the pair (`PD-ORCH-009`). A further insufficient-quota answer records the pair again and
    parks the run in a new wait. As every resolution of a wait does, it resumes every agent parked at that moment, an agent
    parked on another pair resuming on the waiting pair.
 2. Where automatic resume **is** allowed, keep waiting SHALL acknowledge the choice and change nothing: the wait goes on

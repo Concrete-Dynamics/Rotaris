@@ -2821,12 +2821,12 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     });
 
     /*
-     * OQ-177's ruling (R-071, PD-ORCH-006): every explicit switch wins. A switch onto a pair an earlier wait choice overrode
+     * OQ-177's ruling (R-071, PD-ORCH-009): every explicit switch wins. A switch onto a pair an earlier wait choice overrode
      * takes that override back, as the quota-wait surface's own choice does (`takeBackOverrideOf`), so the entry agent runs on
      * the pair chosen from the next iteration, the record replays the take-back, and the autopsy reader prints the key the
      * root ran on. Until 2026-10-06 the override stood and only the row said so: the third root call went to c1.
      */
-    it('a switch onto a pair an earlier wait moved for the rest of the session takes that override back, and the entry agent runs on the pair chosen (OQ-177, PD-ORCH-006)', async () => {
+    it('a switch onto a pair an earlier wait moved for the rest of the session takes that override back, and the entry agent runs on the pair chosen (OQ-177, PD-ORCH-009)', async () => {
       const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
       const gate = held();
       const { sessions, client, pub } = sessionsWith((p, turn) => (p !== 'orchestrator' ? answer('{"summary":"done"}') : turn === 1 ? failing(quota()) : turn === 2 ? hanging(gate.p) : answer(`iteration ${turn}`)), { catalogue });

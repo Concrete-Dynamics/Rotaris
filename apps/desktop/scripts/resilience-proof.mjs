@@ -612,7 +612,7 @@ await scenarioRun('keep-waiting', async () => {
   results.keepWaiting = { status: row.execution_status, exhausted, calls, headerDuringWait: header.text, png: r.png, elapsedMs: r.elapsedMs };
 });
 
-// 4e. `switch-over-override` — OQ-177's ruling (R-071, PD-ORCH-006): every explicit switch wins. Alpha refuses on quota and
+// 4e. `switch-over-override` — OQ-177's ruling (R-071, PD-ORCH-009): every explicit switch wins. Alpha refuses on quota and
 // beta is chosen in the wait (the override alpha → beta, for the rest of the session); while iteration 1 holds on beta a
 // follow-up is queued and the entry model is switched back to alpha from the run header. The switch takes the override back,
 // so iteration 2 runs on alpha. Until 2026-10-06 the override stood and iteration 2 ran on beta, the row saying "but beta,

@@ -45,11 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
-**The run completes only when the coordinator's own plan agrees (REQ-ORCH-029, REQ-ORCH-068; fin18).** `Run.iterate`
+**The run completes only when the coordinator's own plan agrees (REQ-ORCH-029, REQ-ORCH-075; fin18).** `Run.iterate`
 returns a task whose root answered `succeeded` with an item of its own plan open to the pending queue, names the open items
-in `iteration.end` and tells the next iteration's root; `RuntimePosture.runOverride` reaches the run as
-`RunDeps.coordinating`, false under `single`. The **runtime view**'s loop diagram and its new paragraph say so. No package,
-edge, process, channel, command or store column changed.
+in `iteration.end` and tells the same task's next root (`planLeftOpen`, keyed by task id); a task answers only for items
+not already open at its first take-up in the run (`planExcused`, OQ-203), so a given-up task's or an earlier run's item
+passes to no later task. `RuntimePosture.runOverride` reaches the run as `RunDeps.coordinating`, false under `single`. The
+**runtime view**'s loop diagram and its paragraph say so. No package, edge, process, channel, command or store column
+changed.
 
 **A continuation's run starts at its `starting` save (REQ-CHAT-158, REQ-SESSION-154; fin18).** `Run.start()` reads the
 row's `updated_at` back right after the `starting` save and writes that as `run_started_at` with the `running` save, where it

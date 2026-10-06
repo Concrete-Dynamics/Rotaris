@@ -6,7 +6,7 @@ import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { Committed, SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
-import { classifyStop, openPlanItems, planNotDoneSummary, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
+import { classifyStop, openPlanIds, openPlanItems, planCarryText, planNotDoneSummary, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { mintTodoId, taskLine, Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
@@ -534,10 +534,18 @@ export class Run {
    */
   private takenUp: { readonly text: string; readonly message: boolean } | null = null;
   /**
-   * REQ-ORCH-068 with REQ-ORCH-029: the items of the root's own plan an iteration closed with open — its task returned to
-   * the pending queue — told to the next iteration's fresh root as the continuation (`planLeftOpen` → `planCarry`).
+   * REQ-ORCH-075 with REQ-ORCH-029 and REQ-ORCH-067 (OQ-203), per planner task id: the ids of the root's plan items already
+   * open when the task was first taken up in this run, which are not held against it (`openRootPlan`). An iteration this
+   * run resumed rather than began finds none recorded: what its task found open was held by the run that began it, so
+   * every open item is held against it.
    */
-  private planLeftOpen: readonly string[] = [];
+  private readonly planExcused = new Map<string, ReadonlySet<string>>();
+  /**
+   * REQ-ORCH-075 / REQ-ORCH-076, per planner task id: the items of the root's own plan the task's last iteration closed
+   * with open — the task returned to the pending queue — told to that same task's next fresh root (`planCarry`), never to
+   * another task's. Dropped when the task completes or is given up on.
+   */
+  private readonly planLeftOpen = new Map<string, readonly string[]>();
   private planCarry: readonly string[] = [];
   private appliedEntryModel: ModelRef | null = null;
   /**
@@ -1093,9 +1101,10 @@ export class Run {
     // for a continue's message). The run's own task is the launch content's request. A resumed root carries on from its
     // record and is sent no launch content, so for it this is never read.
     this.takenUp = task.id !== this.deps.taskId && task.text !== (this.deps.taskLabel ?? this.deps.task) ? { text: task.text, message: task.message === true } : null;
-    // REQ-ORCH-068: the items of its plan the previous iteration closed with open reach this iteration's fresh root.
-    this.planCarry = resume ? [] : this.planLeftOpen;
-    this.planLeftOpen = [];
+    // REQ-ORCH-075 (OQ-203): what the task's first take-up in this run finds open is not held against it; the items its own
+    // previous iteration closed with open reach this iteration's fresh root, and no other task's.
+    if (!this.planExcused.has(task.id)) this.planExcused.set(task.id, resume ? new Set() : openPlanIds(this.coordinatorPlan()));
+    this.planCarry = resume ? [] : (this.planLeftOpen.get(task.id) ?? []);
     if (resume) {
       writer.recordIterationInterruption(iteration, null);
       writer.appendTimeline('iteration_resumed', 'rotaris', `Iteration ${iteration}, left open by ${interruptionPhrase(resume.interruption ?? '')}, resumed.`, { iteration, interruption: resume.interruption, root_task_id: resume.root_task_id });
@@ -1131,18 +1140,18 @@ export class Run {
         this.todo.releaseHeld(iteration, false);
         summary = 'the run paused at the user\'s request before the agent finished';
         if (this.rootRecord) this.rootRecord.state = 'cancelled';
-      } else if (report.status === 'succeeded' && this.openRootPlan().length > 0) {
+      } else if (report.status === 'succeeded' && this.openRootPlan(task.id).length > 0) {
         /*
          * REQ-ORCH-029: the coordinator does not report the run successful while an item of its plan is non-terminal, and
-         * REQ-ORCH-069 / REQ-ORCH-082 read success off the planner's tasks — so this task is not marked complete. REQ-ORCH-068's
-         * pending return, with the open items told to the next iteration's root; at the retry limit it is given up on, and
-         * the run reads failed rather than completed (live-run finding G5).
+         * REQ-ORCH-069 / REQ-ORCH-082 read success off the planner's tasks — so this task is not marked complete. REQ-ORCH-075's
+         * re-queue of the same task, with the open items told to its next iteration's root; at REQ-ORCH-077's retry limit it
+         * is given up on, and the run reads failed rather than completed (live-run finding G5).
          */
-        const open = this.openRootPlan();
+        const open = this.openRootPlan(task.id);
         outcome = this.todo.requeue(task) === 'abandoned' ? 'abandoned' : 'partial';
         this.todo.releaseHeld(iteration, false);
         summary = planNotDoneSummary(open);
-        this.planLeftOpen = open;
+        this.planLeftOpen.set(task.id, open);
         this.deps.warn(`iteration ${iteration}: ${summary}; its task is ${outcome === 'abandoned' ? 'given up on at the retry limit' : 'returned to the pending queue'} (REQ-ORCH-029)`);
         if (outcome === 'abandoned') { this.lastFailure = summary; this.failedModel = null; }
         if (this.rootRecord) this.rootRecord.state = outcome === 'abandoned' ? 'failed' : 'succeeded';
@@ -1182,6 +1191,8 @@ export class Run {
       }
     }
     if (this.iterationRest !== null) return await this.leaveIterationOpen(iteration, this.iterationRest);
+    // REQ-ORCH-075: a task completed or given up on carries nothing further, to its own iterations or any other task's.
+    if (task.state === 'complete' || task.state === 'abandoned') { this.planLeftOpen.delete(task.id); this.planExcused.delete(task.id); }
     // PD-ORCH-005 clause 1: `iteration.end` and the iteration's record closing with its outcome, in one transaction — with
     // the todo its task and held messages were just closed in, so no death before the save below strands them in progress.
     writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome, this.todoJson());
@@ -2099,12 +2110,17 @@ export class Run {
     return mintTodoId(taken);
   }
 
-  /** The tool port calls these for the exact root or child conversation it belongs to. */
-  /** REQ-ORCH-029: the open items of the root's own plan while the entry role acts as coordinator; none under `single`. */
-  private openRootPlan(): string[] {
-    return this.deps.coordinating === false ? [] : openPlanItems(this.agentTodo);
+  /** REQ-ORCH-029: the root's own plan while the entry role acts as coordinator; none under `single` (REQ-ORCH-025). */
+  private coordinatorPlan(): AgentTodoDocument | null {
+    return this.deps.coordinating === false ? null : this.agentTodo;
   }
 
+  /** REQ-ORCH-029 / REQ-ORCH-075 (OQ-203): the open items of the root's own plan held against the planner task `taskId`. */
+  private openRootPlan(taskId: string): string[] {
+    return openPlanItems(this.coordinatorPlan(), this.planExcused.get(taskId));
+  }
+
+  /** The tool port calls these for the exact root or child conversation it belongs to. */
   agentTodoFor(ownerId: string | null, root: boolean): AgentTodoDocument | null {
     if (root) return this.agentTodo;
     if (!ownerId || !this.deps.dal) return null;
@@ -2787,11 +2803,6 @@ export function settleClosedIterations(todo: Todo, dal: StoreDal, sessionId: Ses
  * REQ-ORCH-135). A continue's message is told in PD-ORCH-005 clause 17's words ("so the next iteration takes it up",
  * OQ-102). Attachments are not carried: a task holds its text only (OQ-102).
  */
-/** REQ-ORCH-068 with REQ-ORCH-029: what a fresh root is told of the items of its plan the previous iteration left open. */
-function planCarryText(open: readonly string[]): string {
-  return `The previous iteration on this task ended with ${open.length === 1 ? 'this item' : 'these items'} of your plan not done, so the task is not complete:\n${open.map((name) => `- ${name}`).join('\n')}\nFinish ${open.length === 1 ? 'it' : 'each of them'}, or record ${open.length === 1 ? 'its' : 'each one\'s'} true state in your plan, before you report.`;
-}
-
 function takenUpText(task: { readonly text: string; readonly message: boolean }): string {
   if (task.message) return `The task for this iteration is an earlier message from the user, which the iteration it was sent to did not finish. Work on it now; the latest user request above is a separate task.\n\n${task.text}`;
   return `The task for this iteration is the task below, from the session's todo. Work on it now. What precedes it is what this run was launched with: read it as context, and leave any other work it asks for to its own task.\n\n${task.text}`;

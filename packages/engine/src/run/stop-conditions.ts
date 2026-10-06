@@ -89,22 +89,47 @@ export function stopCondition(s: StopInputs): StopReason | null {
   return null;
 }
 
+/** A plan in REQ-TOOLS-144's shape, as far as the completion constraint reads it. */
+export interface PlanItems { readonly phases: readonly { readonly tasks: readonly { readonly id: string; readonly name: string; readonly state: string }[] }[] }
+
+const terminalPlanState = (state: string): boolean => state === 'COMPLETED' || state === 'ABANDONED';
+
+/** The ids of the plan's items that are not terminal (`openPlanItems`'s test): what a task's first take-up finds open. */
+export function openPlanIds(plan: PlanItems | null): Set<string> {
+  return new Set(plan === null ? [] : plan.phases.flatMap((phase) => phase.tasks).filter((task) => !terminalPlanState(task.state)).map((task) => task.id));
+}
+
 /**
- * REQ-ORCH-029: the items of the coordinator's own plan (REQ-TOOLS-144's states) that are not terminal — `PENDING` and
- * `IN_PROGRESS`, and any state outside the vocabulary (REQ-CHAT-088 shows it open); `COMPLETED` and `ABANDONED` are terminal.
- * The coordinator "does not report the run successful while a todo item is non-terminal", and REQ-ORCH-069 (1) and
- * REQ-ORCH-082 read success off the planner's tasks alone, so an iteration whose root answers with one of these open does
- * not mark its planner task complete (`Run.iterate`, REQ-ORCH-068: it is returned to the pending queue). The repair of
+ * REQ-ORCH-029 / REQ-ORCH-075: the items of the coordinator's own plan (REQ-TOOLS-144's states) that are not terminal —
+ * `PENDING` and `IN_PROGRESS`, and any state outside the vocabulary (REQ-CHAT-088 shows it open); `COMPLETED` and
+ * `ABANDONED` are terminal — less the items in `excused`. The coordinator "does not report the run successful while a todo
+ * item is non-terminal", and REQ-ORCH-069 (1) and REQ-ORCH-082 read success off the planner's tasks alone, so an iteration
+ * whose root answers with one of these open does not mark its planner task complete (`Run.iterate`: REQ-ORCH-075's
+ * re-queue). `excused` is what was already open when the task was first taken up in the run (OQ-203): an item a given-up
+ * task or an earlier run left open is not held against a task REQ-ORCH-067 confines to its own work. The repair of
  * `docs/defects/fixed/the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` (live-run finding G5).
  */
-export function openPlanItems(plan: { readonly phases: readonly { readonly tasks: readonly { readonly name: string; readonly state: string }[] }[] } | null): string[] {
+export function openPlanItems(plan: PlanItems | null, excused: ReadonlySet<string> = new Set()): string[] {
   if (plan === null) return [];
-  return plan.phases.flatMap((phase) => phase.tasks).filter((task) => task.state !== 'COMPLETED' && task.state !== 'ABANDONED').map((task) => task.name);
+  return plan.phases.flatMap((phase) => phase.tasks).filter((task) => !terminalPlanState(task.state) && !excused.has(task.id)).map((task) => task.name);
 }
 
 /** REQ-ORCH-067's iteration summary for a task returned to the queue because the coordinator's plan was left open. */
 export function planNotDoneSummary(open: readonly string[]): string {
   return `the coordinator answered with ${countNoun(open.length, 'item')} of its plan not done: ${open.join('; ')}`;
+}
+
+/**
+ * REQ-ORCH-075's continuation marker: what the same task's next fresh root is told after its task when its last iteration
+ * declared success with items of its plan open — how many, naming up to the first five, and to continue from its plan and
+ * not end its turn until every remaining item is complete or recorded in its true state (REQ-ORCH-029). It is a part of
+ * that iteration's first message alone, never appended to the task's text, so markers do not pile up across re-queues
+ * (REQ-ORCH-076). No background child is enumerated: an iteration's children are settled when it closes (REQ-ORCH-052).
+ */
+export function planCarryText(open: readonly string[]): string {
+  const shown = open.slice(0, 5);
+  const more = open.length - shown.length;
+  return `The previous iteration on this task declared success with ${countNoun(open.length, 'item')} of your plan not complete, so the task is not complete:\n${shown.map((name) => `- ${name}`).join('\n')}${more > 0 ? `\n(and ${more} more)` : ''}\nContinue from your plan, and do not end your turn until every remaining item is complete or recorded in its true state.`;
 }
 
 export type SummarySeverity = 'information' | 'warning' | 'error';

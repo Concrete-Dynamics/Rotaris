@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Aggregates } from './aggregates.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
-import { classifyStop, EXECUTION_STATUSES, isBusy, openPlanItems, planNotDoneSummary, presentationStatus, resultFromStatus, statusForResult, stopCondition, STOP_REASONS, summarise, TERMINAL_RESULTS } from './stop-conditions.js';
+import { classifyStop, EXECUTION_STATUSES, isBusy, openPlanIds, openPlanItems, planCarryText, planNotDoneSummary, presentationStatus, resultFromStatus, statusForResult, stopCondition, STOP_REASONS, summarise, TERMINAL_RESULTS } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { Todo } from './todo.js';
 
@@ -84,11 +84,26 @@ describe('engine/run — the closed vocabularies and their total mappings', () =
 });
 
 describe('engine/run — the coordinator\'s own plan and the run\'s completion (REQ-ORCH-029, live-run finding G5)', () => {
-  const plan = (...states: string[]) => ({ phases: [{ tasks: states.slice(0, 2).map((state, i) => ({ name: `a${i}`, state })) }, { tasks: states.slice(2).map((state, i) => ({ name: `b${i}`, state })) }] });
+  const plan = (...states: string[]) => ({ phases: [{ tasks: states.slice(0, 2).map((state, i) => ({ id: `a${i}`, name: `a${i}`, state })) }, { tasks: states.slice(2).map((state, i) => ({ id: `b${i}`, name: `b${i}`, state })) }] });
   it('PENDING, IN_PROGRESS and a state outside REQ-TOOLS-144\'s vocabulary are open; COMPLETED and ABANDONED are terminal; in plan order', () => {
     expect(openPlanItems(plan('COMPLETED', 'PENDING', 'IN_PROGRESS', 'ABANDONED', 'BLOCKED'))).toEqual(['a1', 'b0', 'b2']);
     expect(openPlanItems(plan('COMPLETED', 'ABANDONED'))).toEqual([]);
     expect(openPlanItems(null)).toEqual([]);
+  });
+  it('OQ-203: what a task\'s first take-up found open is excused by id; the ids it found open are the open items\' ids', () => {
+    const before = plan('COMPLETED', 'IN_PROGRESS');
+    expect([...openPlanIds(before)]).toEqual(['a1']);
+    expect(openPlanIds(null).size).toBe(0);
+    expect(openPlanItems(plan('COMPLETED', 'IN_PROGRESS', 'PENDING'), openPlanIds(before))).toEqual(['b0']);
+    expect(openPlanItems(plan('COMPLETED', 'IN_PROGRESS', 'COMPLETED'), openPlanIds(before))).toEqual([]);
+  });
+  it('REQ-ORCH-075\'s continuation marker counts the open items, names up to the first five, and says to continue from the plan', () => {
+    const one = planCarryText(['Report each command\'s outcome in one line']);
+    expect(one).toBe('The previous iteration on this task declared success with 1 item of your plan not complete, so the task is not complete:\n- Report each command\'s outcome in one line\nContinue from your plan, and do not end your turn until every remaining item is complete or recorded in its true state.');
+    const seven = planCarryText(['i1', 'i2', 'i3', 'i4', 'i5', 'i6', 'i7']);
+    expect(seven).toContain('with 7 items of your plan');
+    expect(seven).toContain('- i5\n(and 2 more)');
+    expect(seven).not.toContain('- i6');
   });
   it('the iteration summary counts and names the open items', () => {
     expect(planNotDoneSummary(['Report each command\'s outcome in one line'])).toBe('the coordinator answered with 1 item of its plan not done: Report each command\'s outcome in one line');

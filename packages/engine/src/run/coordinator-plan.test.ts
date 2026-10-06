@@ -14,6 +14,8 @@ import { decodeStoredTodo, projectSessionTodos, type AgentTodoDocument } from '.
  * root answers with an item of its own plan still open returns its task to the pending queue (REQ-ORCH-068) rather than
  * marking it complete, so REQ-ORCH-069 and REQ-ORCH-082 do not read success off it; the next iteration is told which items
  * were left open. Under a `single` override the entry role is the worker (REQ-ORCH-025) and the constraint does not bind.
+ * REQ-ORCH-075's re-queue is of the same task, and a task answers only for items not already open at its first take-up in the
+ * run (OQ-203): an item a given-up task or an earlier run left open passes to no later task.
  */
 const HOST = mintMachineId('0000000000000000000000000000000f') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -38,7 +40,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  function sessionsWith(calls: ScriptedCall[], runOverride: 'single' | 'swarm' | null = null) {
+  function sessionsWith(calls: ScriptedCall[], runOverride: 'single' | 'swarm' | null = null, gate?: (callId: string) => Promise<void>) {
     const client = new ScriptedModelClient(calls);
     const runtime: RuntimePosture = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runOverride };
     // The `todo` tool as the run host's is to the run: it writes the root's plan through the context's `writeTodo`.
@@ -46,6 +48,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
       specs: () => [{ name: 'todo', description: 'the plan', parameters: { type: 'object' } }],
       dispatch: async (call) => {
         const args = JSON.parse(call.rawArgs) as { states: Parameters<typeof plan>[0] };
+        await gate?.(call.callId);
         const written = ctx.writeTodo?.(plan(args.states)) ?? false;
         return { text: written ? 'Plan updated.' : 'not written', isError: !written, status: written ? 'ok' : 'failed', durationMs: 0, label: 'todo', args };
       },
@@ -96,6 +99,70 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     // REQ-ORCH-082 rule 4 over the abandoned task: the session reads failed, naming the plan left open.
     expect(dal.getSession(sid)).toMatchObject({ execution_status: 'failed', summary_status: 'failed', summary_text: 'The run failed: the coordinator answered with 1 item of its plan not done: Report each command\'s outcome in one line' });
     expect(dal.getSession(sid)!.stop_reason).not.toBe('tasks_complete');
+  });
+
+  it('REQ-ORCH-075 / REQ-ORCH-067 (OQ-203): an item a given-up task left open is not carried to, nor held against, the next task — which still answers for an item it opens itself', async () => {
+    const calls: ScriptedCall[] = [];
+    // Task A: the coordinator leaves its second item in progress three times, and A is given up at the retry limit.
+    for (let i = 0; i < 3; i++) calls.push(writePlan(`a${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'));
+    // Task B, a queued prompt (REQ-CHAT-040): it opens an item of its own and leaves it pending, then finishes it.
+    calls.push(writePlan('b0', ['COMPLETED', 'IN_PROGRESS', 'PENDING']), answer('B done.'));
+    calls.push(writePlan('b1', ['COMPLETED', 'IN_PROGRESS', 'COMPLETED']), answer('B done; its item is complete.'));
+    const { sessions, client } = sessionsWith(calls);
+    const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+    expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'write the changelog' } } as never)).toMatchObject({ ok: true });
+    await sessions.running(sid)!;
+    // Without the scope, B was returned to the queue and given up on too — [partial, partial, abandoned, partial, partial, abandoned].
+    expect(outcomes(sid)).toEqual(['partial', 'partial', 'abandoned', 'partial', 'succeeded']);
+    const ends = dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; outcome: string; summary: string });
+    // B answers only for the item it opened, never for the one A left open.
+    expect(ends[3]).toMatchObject({ iteration: 4, outcome: 'partial', summary: 'the coordinator answered with 1 item of its plan not done: A third item' });
+    // B's first root is told nothing of A's plan: the continuation reaches the same task's next iteration alone.
+    const bFirst = firstUser(client.requests[6]!);
+    expect(bFirst).toContain('write the changelog');
+    expect(bFirst).not.toContain('Report each command');
+    expect(bFirst).not.toContain('The previous iteration on this task');
+    const bSecond = firstUser(client.requests[8]!);
+    expect(bSecond).toContain('A third item');
+    expect(bSecond).not.toContain('Report each command');
+    // The item A left open stays open in the plan the Todo pane counts: the record does not call it done.
+    expect(agentStates(sid)).toEqual(['COMPLETED', 'IN_PROGRESS', 'COMPLETED']);
+  });
+
+  it('REQ-ORCH-075 (OQ-203): an item an earlier run left open is not held against a later run\'s task', async () => {
+    const calls: ScriptedCall[] = [];
+    for (let i = 0; i < 3; i++) calls.push(writePlan(`a${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'));
+    calls.push(answer('Changelog written.'));
+    const { sessions, client } = sessionsWith(calls);
+    const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(outcomes(sid)).toEqual(['partial', 'partial', 'abandoned']);
+    expect(sessions.prompt(sid, 'write the changelog').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(outcomes(sid)).toEqual(['partial', 'partial', 'abandoned', 'succeeded']);
+    const next = firstUser(client.requests[6]!);
+    expect(next).not.toContain('The previous iteration on this task');
+  });
+
+  it('REQ-ORCH-075 (OQ-203): an iteration a continue resumes holds every open item against its task — one its root opened before the pause included', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let entered!: () => void;
+    const reached = new Promise<void>((resolve) => { entered = resolve; });
+    const { sessions } = sessionsWith([
+      writePlan('c1', ['COMPLETED', 'PENDING']), answer('Here is each command\'s outcome.'),
+      writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
+    ], null, async (callId) => { if (callId === 'c1') { entered(); await held; } });
+    const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+    await reached;
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    expect((await sessions.running(sid)!).status).toBe('interrupted');
+    expect(dal.iterationsOf(sid).map((r) => r.state)).toEqual(['open']);
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    // The resumed iteration's root answered with the item it had opened before the pause still pending: not complete.
+    expect(outcomes(sid)).toEqual(['partial', 'succeeded']);
   });
 
   it('an item ABANDONED is terminal: the run completes', async () => {

@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Sixty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Sixty-six.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -4256,6 +4256,52 @@ ladder itself would try, in an order that says nothing about which the ladder pr
 > **Narrows:** REQ-MONITOR-303, REQ-NOTIFY-263
 
 *Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-186.*
+
+---
+
+<a id="pd-monitor-005"></a>
+
+### PD-MONITOR-005 — the stall watch counts the silence of the agent's own model steps, and a wait the run holds it in is not that silence
+
+The silence REQ-MONITOR-118 and REQ-MONITOR-119 count SHALL be the silence of a model step the agent has in flight. Three
+waits are **outside** an agent's stall watch, though the agent has no model event, no token and no tool call in flight
+through them:
+
+1. **Between its turns**: from the end of a turn until the run starts its next — the wait on its own children, a resume into
+   that wait (PD-ORCH-005 clause 4), or the end of its execution. An evaluation there reports no stall and no wait, logs
+   nothing, and invokes the stall callback with *not stalled*; each child it waits on is watched for its own silence.
+2. **A wait the run imposes between two model steps**: the retry backoff of REQ-ORCH-092 and the suspended wait on a
+   provider limit of REQ-ORCH-091 (c).
+3. **A compression's own model call** (REQ-MONITOR-076, REQ-ORCH-093), automatic or on a rejection.
+
+Through 2 and 3, an evaluation past the stall timeout emits no `stall` issue and no stall warning, and invokes the stall
+callback with *not stalled*; it logs, in REQ-MONITOR-118's manner, a line naming the wait (`… waiting on a retry backoff`,
+`a provider limit` or `a context compression`) where REQ-MONITOR-118's line names the number of active tool calls, at entry
+and at each repeat REQ-MONITOR-120's throttle allows, to the session log and with no timeline word. The wait's end restarts
+the silence, as a tool call's result does, and so does the next turn the run starts. A stall under way when such a wait
+begins, or when the turn ends, is over; it is logged recovered only on REQ-MONITOR-120's terms as OQ-153 reads them, when
+the agent was active after the evaluation that last found it stalled.
+
+The provider library's own short internal retries inside one model step are **not** such a wait: they stay counted as the
+ordinary silence of that step, and REQ-MONITOR-119 governs them as written. Every other clause of REQ-MONITOR-118 and
+REQ-MONITOR-119 still governs.
+
+**As built.** `StallWatch.betweenTurns` and `StallWatch.imposedWait` (`packages/engine/src/children/stall.ts`), marked by
+`execute` and `Run.turn` (`packages/engine/src/children/orchestration.ts`, `packages/engine/src/run/run.ts`), by
+`resilientStep`'s backoff and provider-limit wait (`packages/engine/src/run/ladder.ts`) and by `runTurn`'s `compressing`
+(`packages/engine/src/run/turn.ts`); the line is `stallImposedWaitLine`.
+
+**Why, and what it costs.** OQ-155 and OQ-173: REQ-MONITOR-118 tells a wait from a stall only by tool calls in flight, so
+read literally each of these waits is "the same silence with no tool call in flight", and REQ-MONITOR-119 would have every
+evaluation warn that a child waiting as designed on its own children "appears stalled", or that an agent the run itself
+holds in a backoff, a provider limit or a compression is stalled, beside the wait's own notice (REQ-NOTIFY-083 to
+REQ-NOTIFY-087). The owner confirmed both as built. What it costs: an agent held in one of these waits for longer than it
+should be — a compression whose call is slow to answer, an exhausted provider's indefinite wait — is never reported stalled
+by this watch; the wait's own bound and its notice are what speak for it.
+
+> **Narrows:** REQ-MONITOR-118, REQ-MONITOR-119
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the rulings of OQ-155 and OQ-173.*
 
 ---
 

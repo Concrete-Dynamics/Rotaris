@@ -1044,7 +1044,7 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
   REQ-NOTIFY-112's recovery reads (`quietFor`);
 - the end of each of those turns (`betweenTurns`, when the turn's promise settles): until the run starts the next, the
   child is waiting on its own children or ending, and an evaluation counts no silence — no stall, no wait on tools, the
-  callback *not stalled* — so a wait on its own children is not reported as its stall (OQ-155; the repair of
+  callback *not stalled* — so a wait on its own children is not reported as its stall (OQ-155, ruled as built in `PD-MONITOR-005`; the repair of
   [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md)).
   Each child it waits on is watched by its own watch;
 - the start of an execution resumed into waiting (PD-ORCH-005 clause 4, `execute`, as the watch is armed): the child
@@ -1052,7 +1052,7 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
   bullet above was first read as covering this path too, but no turn settles before such a wait, so it was counted as
   silence.)
 - each wait the run itself holds the agent in between two model steps (`StallWatch.imposedWait`, through
-  `TurnDeps.onImposedWait` and `LadderDeps.imposedWait`; OQ-173, the repair of
+  `TurnDeps.onImposedWait` and `LadderDeps.imposedWait`; OQ-173, ruled as built in `PD-MONITOR-005`; the repair of
   [`a-provider-wait-or-a-compression-is-counted-as-a-stall.md`](../../defects/fixed/a-provider-wait-or-a-compression-is-counted-as-a-stall.md),
   2026-10-01): `resilientStep`'s transient or validation backoff and its suspended wait on a provider limit, and a
   context compression's own model call, automatic or on a rejection (`runTurn`'s `compressing`). While one is held, an

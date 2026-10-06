@@ -9751,9 +9751,18 @@ timer to retry; and whether either is a new operation or a reading of an existin
 which reads the exclusion as governing automatic behaviour; REQ-ORCH-091 (d), the override "for the rest of the session";
 REQ-MONITOR-080, a configured compression model used, else the agent's own; REQ-ORCH-114, the classifier's slot order.
 Raised 2026-10-03 by task 2 of plan fin10's `fin10-quota-exclusions-and-choices` bundle, recording
-[`a-configured-model-slot-is-called-on-a-pair-the-session-replaced-or-holds-out-of-quota.md`](../defects/a-configured-model-slot-is-called-on-a-pair-the-session-replaced-or-holds-out-of-quota.md).
+[`a-configured-model-slot-is-called-on-a-pair-the-session-replaced-or-holds-out-of-quota.md`](../defects/fixed/a-configured-model-slot-is-called-on-a-pair-the-session-replaced-or-holds-out-of-quota.md).
 Numbered 189, the next free on the branch after its OQ-188; renumbered at the merge if taken meanwhile. Open; owner-only, as
-every question this round raises.)*
+every question this round raises. Ruled 2026-10-06 by the owner, and built.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** every helper call — the intent and loop
+classifiers, a configured compressor, the summariser and the post-run analyst — follows the session's model override as the
+summariser already did; where the pair it reaches is held out of quota with nothing replacing it, a compression runs on the
+calling agent's current model, and the classifiers and the analyst make no call. The summariser, which the ruling does not
+name, is read as the condensing call it is beside compression: it summarises the child on the model the child ran on, and
+writes the fallback report where that is held out of quota too; and a configured `compressor.model` yields to the exclusion
+of its pair. Minted as [`PD-MONITOR-005`](../product/directives.md#pd-monitor-005), narrowing REQ-MONITOR-080, REQ-ORCH-009,
+REQ-ORCH-114, REQ-ORCH-100, REQ-CONFIG-065 and REQ-LIBRARY-037, and built the same day (plan fin21).
 
 The run's auxiliary calls — the intent classifier and the pre-flight, the loop classifier, a configured compressor, the
 post-run analyst, and the summariser — take configured slots. Since fin10 an agent's own calls — its model steps, and a

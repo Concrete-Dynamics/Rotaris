@@ -41,6 +41,22 @@ describe('REQ-ORCH-005..013 the classifier', () => {
     expect(r).toMatchObject({ category: 'moderate_feature', fallback: true, carried_over: false });
     expect(r.reason).toMatch(/no small model is configured/);
   });
+  /*
+   * OQ-189's ruling (R-071, PD-MONITOR-005): the selected slot's model follows the session's override, and where the pair it
+   * ends on is held out of quota no request is sent and the run proceeds on the fallback intent, saying why. Until 2026-10-06
+   * the slot was called as configured, and a provider that had refused it made the classifier fall back on its error.
+   */
+  it('OQ-189 / PD-MONITOR-005: the slot follows the session override, and a slot held out of quota sends no request', async () => {
+    const moved = backend(() => ok('{"intent":"question"}'));
+    const r = await classifyIntent({ prompt: 'p', metadata: {} }, SLOTS, { ...deps(moved.b, new FakeClock()), helperModel: (c) => (c.model.modelId === 'small' ? { ok: true, model: M('override'), thinking: 'unset' } : { ok: true, model: c.model, thinking: c.thinking }) }, new AbortController().signal);
+    expect(moved.inputs.map((i) => i.model.modelId)).toEqual(['override']);
+    expect(r).toMatchObject({ category: 'question', fallback: false });
+    const held = backend(() => ok('{"intent":"question"}'));
+    const skipped = await classifyIntent({ prompt: 'p', metadata: {} }, SLOTS, { ...deps(held.b, new FakeClock()), helperModel: () => ({ ok: false, reason: 'p/small is held out of quota for this session' }) }, new AbortController().signal);
+    expect(held.inputs).toEqual([]);
+    expect(skipped).toMatchObject({ category: 'moderate_feature', fallback: true });
+    expect(skipped.reason).toContain('p/small is held out of quota for this session; no classification call was made');
+  });
   it('A2: independently bounds prompt and untrusted prior response while preserving historical code', async () => {
     const { b, inputs } = backend(() => ok('{"intent":"question"}'));
     const code = 'const historical = true;\n';

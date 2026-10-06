@@ -1460,7 +1460,10 @@ export class IterationChildren implements DelegationOps {
     this.controllers.set(row.task_id, summarising);
     const onRunAbortWhileSummarising = () => { if ((deps.restCause?.() ?? null) !== null) summarising.abort(); };
     deps.runSignal.addEventListener('abort', onRunAbortWhileSummarising, { once: true });
-    const reportInput: ReportInput = { agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors, task: row.task };
+    // OQ-189 (PD-MONITOR-005): the model the child ran on at its end — its cell, the session's overrides followed — which the
+    // summariser falls back to where its own pair is held out of quota.
+    const agentModel = resilience ? resilience.memory.effective(resilience.cell.model, resilience.catalogue) : configured;
+    const reportInput: ReportInput = { agentModel: { model: agentModel.model, thinking: agentModel.thinking }, agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors, task: row.task };
     let produced: Awaited<ReturnType<typeof produceReport>>;
     try {
       produced = await produceReport(reportInput, cancelled || this.resting ? null : deps.summariser, summarising.signal, this.resting && !cancelled ? 'the run was coming to rest, so no summarising call was made' : undefined, () => this.resting);

@@ -18,7 +18,7 @@ import { cut } from './run/cut.js';
 export { offersToldIn, openOffersText } from './run/offers.js';
 import { planSection } from './run/plan-text.js';
 export { planRequestSection, planSection } from './run/plan-text.js';
-import { entryOf, excludedModelKeys, overridesInForce, pairKey, providerIdentity, ResilienceMemory, withSettings, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
+import { entryOf, excludedModelKeys, overridesInForce, pairKey, providerIdentity, ResilienceMemory, withSettings, type CatalogueEntry, type HelperModel, type ModelChoice } from './run/resilience.js';
 import type { ResolvedTrigger } from './run/compression.js';
 import { SessionLog, type LogLevel } from './session-log.js';
 import { UserPresence } from './run/presence.js';
@@ -209,7 +209,11 @@ export interface SessionsDeps {
   /** Where a session's files live (summary.md), from the store's layout. */
   readonly sessionFilesDir: (dal: StoreDal, sessionId: SessionId) => string;
   /** REQ-SESSION-186: the terminal result, presented once. Reached through the bus, in process (REQ-EVENTS-178). */
-  readonly onRunResult?: (sessionId: SessionId, result: RunResult) => void;
+  /**
+   * `helperModel` (OQ-189's ruling, PD-MONITOR-005): what the post-run analyst calls in place of its slot's model — the
+   * session's overrides followed, or not `ok` where that pair is held out of quota and the analysis is skipped.
+   */
+  readonly onRunResult?: (sessionId: SessionId, result: RunResult, helperModel: HelperModel) => void;
   /** REQ-ORCH-085: the run paused at the message limit — the host is told the count and the limit. */
   readonly onRunPaused?: ((sessionId: SessionId, info: { count: number; limit: number | null; tokens: { input: number; output: number } }) => void) | undefined;
   /**
@@ -262,7 +266,8 @@ export interface SessionsDeps {
   /** REQ-ORCH-005: the pre-flight, built by the root; absent means the fallback intent and no playbook. */
   readonly preflight?: (ctx: PreflightContext) => Promise<Preflight>;
   /** REQ-ORCH-107: absence means supervision was intentionally disabled and constructs nothing. */
-  readonly supervisor?: ((workspaceRoot: string, sessionId: SessionId, countUsage: CountUsage) => { readonly config: SupervisorConfig; readonly classifier: LoopClassifier } | null) | undefined;
+  /** `helperModel` (OQ-189's ruling, PD-MONITOR-005): the loop classifier's model, read at each classification. */
+  readonly supervisor?: ((workspaceRoot: string, sessionId: SessionId, countUsage: CountUsage, helperModel: HelperModel) => { readonly config: SupervisorConfig; readonly classifier: LoopClassifier } | null) | undefined;
   readonly isProcessAlive?: ((pid: number) => boolean) | undefined;
   /**
    * ADR-0036/0037: the run's configuration, resolved at run start from the files with the live state on top
@@ -1493,7 +1498,9 @@ export class Sessions {
     const runRef: { run?: Run } = {};
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };
-    const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage) ?? null;
+    // OQ-189's ruling (R-071, PD-MONITOR-005): the helper calls' model, read from the run's memory at each call.
+    const helperModel: HelperModel = (choice) => runRef.run?.helperModel(choice) ?? { ok: true, model: choice.model, thinking: choice.thinking };
+    const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage, helperModel) ?? null;
     const supervisors = supervisorSetup
       ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks.timers)
       : null;
@@ -1551,7 +1558,7 @@ export class Sessions {
       dal, readSession: () => dal.getSession(sessionId), warn, hooks, settledBeforeStart, checkpoints, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
       onSaved: (g) => summary.rebuild(g, () => dal.getSession(sessionId)),
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
-      ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
+      ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, helperModel }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
         // REQ-LIBRARY-093: a publish records the instance's canonical name — the root's comes apart from its agent name, its persona.
         toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, ...(parentPersona === undefined ? {} : { parentPersona }), modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: canonicalName ?? agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
@@ -1567,7 +1574,7 @@ export class Sessions {
     live.run = run;
     if (this.deps.onRunResult) {
       const onRunResult = this.deps.onRunResult;
-      this.bus.attach(sessionId, { mode: 'blocking', deliver: (e) => { if (e.event === 'result' && run.outcome) onRunResult(sessionId, run.outcome); } });
+      this.bus.attach(sessionId, { mode: 'blocking', deliver: (e) => { if (e.event === 'result' && run.outcome) onRunResult(sessionId, run.outcome, helperModel); } });
     }
     // REQ-CONFIG-094: counted with every other session in this process (`modelSlotsFor`); its end settles what it held.
     live.running = run.start().finally(() => { this.settleModelSlots(sessionId, dal, runRef); delete entry.run; log?.info(`run ended ${run.outcome?.status ?? 'unknown'}`); log?.close(); });
@@ -1792,7 +1799,9 @@ export class Sessions {
     const restatesUnfinished = (openIteration === 'decline' || openIteration.message === null) && judged !== null && judged.holdsUnfinished(prompt, open ? { iteration: open.iteration, taskId: open.todo_task_id } : null);
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };
-    const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage) ?? null;
+    // OQ-189's ruling (R-071, PD-MONITOR-005): the helper calls' model, read from the run's memory at each call.
+    const helperModel: HelperModel = (choice) => runRef.run?.helperModel(choice) ?? { ok: true, model: choice.model, thinking: choice.thinking };
+    const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage, helperModel) ?? null;
     const supervisors = supervisorSetup ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks.timers) : null;
     const budget = runtime?.childBudget ?? DEFAULT_BUDGET;
     const cap = runtime?.modelConcurrencyCap ?? null;
@@ -1844,9 +1853,9 @@ export class Sessions {
       continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(appendsTask && !restatesUnfinished ? {} : { appendsTask: false }), ...(hooks ? { hooks } : {}), settledBeforeStart, checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
-      ...(preflight ? { preflight: (signal: AbortSignal) => preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, ...(runCarries ? { intent: carried } : { previousIntent: priorIntent, hasUnfinishedWork: true }) }) } : {}),
+      ...(preflight ? { preflight: (signal: AbortSignal) => preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, helperModel, ...(runCarries ? { intent: carried } : { previousIntent: priorIntent, hasUnfinishedWork: true }) }) } : {}),
       ...(preflight && runCarries ? { preflightCarries: true } : {}),
-      ...(preflight && resumedCarries ? { resumedPreflight: (signal: AbortSignal) => preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, intent: carried }) } : {}),
+      ...(preflight && resumedCarries ? { resumedPreflight: (signal: AbortSignal) => preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, helperModel, intent: carried }) } : {}),
       ...(this.deps.tools ? {
         // REQ-LIBRARY-093: a publish records the instance's canonical name — the root's comes apart from its agent name, its persona.
         toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, ...(parentPersona === undefined ? {} : { parentPersona }), modeOverride: modeOverride.value, grant: inEffect()?.grant ?? 'none', intent: inEffect()?.intent.category, artifacts: artifactOps(artifacts, { canonicalName: canonicalName ?? agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
@@ -1860,7 +1869,7 @@ export class Sessions {
     s.run = run;
     if (this.deps.onRunResult) {
       const onRunResult = this.deps.onRunResult;
-      this.bus.attach(sessionId, { mode: 'blocking', deliver: (event) => { if (event.event === 'result' && run.outcome) onRunResult(sessionId, run.outcome); } });
+      this.bus.attach(sessionId, { mode: 'blocking', deliver: (event) => { if (event.event === 'result' && run.outcome) onRunResult(sessionId, run.outcome, helperModel); } });
     }
     // REQ-CONFIG-094: counted with every other session in this process (`modelSlotsFor`); its end settles what it held.
     s.running = run.start().finally(() => { this.settleModelSlots(sessionId, s.dal, runRef); if (s.commitTarget) delete s.commitTarget.run; s.log?.info(`continued run ended ${run.outcome?.status ?? 'unknown'}`); s.log?.close(); });

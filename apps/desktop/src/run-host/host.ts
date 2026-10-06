@@ -3,6 +3,7 @@ import { millis, toIsoUtc, type Millis } from '@rotaris/kernel';
 import { dataLayout, environmentWithout, installedProductVersion, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import type { PromptLists, StoreDal, StoreHandle } from '@rotaris/store';
 import { meteredBackend, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
+import type { ModelRef, ThinkingLevel } from '@rotaris/model';
 import { ConfinementService, PresenterRegistry, renderUnavailability, spawnTrial, type AvailabilityVerdict, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { createTerminalHost } from './terminal.js';
@@ -15,7 +16,7 @@ import { CHECKPOINTS_DEFAULTS, INSTRUCTIONS_DEFAULTS, loadConfiguration, RUNTIME
 import { codeIntelligenceLaunchFor } from './code-intelligence-launch.js';
 import { SkillHost } from './skills.js'; // ADR-0063
 import { captureAfterRun, dalWhileOpen } from './improvement-capture.js';
-import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, restingCatalogueOf, type ConfiguredRun } from './configuration.js';
+import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, postRunAnalystOf, restingCatalogueOf, type ConfiguredRun } from './configuration.js';
 import { leaseForContinuation, LeaseReportLog } from './launch.js';
 import { randomUUID } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
@@ -133,7 +134,8 @@ export function createRunHost() {
   // Each active run retains its setup through deferred preflight and tool creation.
   const configuredRuns = new Map<string, ConfiguredRun>();
   const runBearers = new Map<string, Readonly<Record<string, string>>>();
-  const improvementContexts = new Map<string, { run: ConfiguredRun }>();
+  // `analyst`: the post-run pass's model as the session's overrides left it at capture (OQ-189, PD-MONITOR-005).
+  const improvementContexts = new Map<string, { run: ConfiguredRun; analyst?: { readonly model: ModelRef; readonly thinking: ThinkingLevel } }>();
   const missingCollectorNotified = new Set<string>();
   const improvementControllers = new Map<string, AbortController>();
   // ADR-0034 (Part S): the one MCP holder of the application — discovery memo, probes, session connections, the override, the sink.
@@ -361,7 +363,7 @@ export function createRunHost() {
       increment: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'publish.increment', payload } }),
       snapshot: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'publish.snapshot', payload } }),
     },
-    onRunResult: (sessionId, result) => {
+    onRunResult: (sessionId, result, helperModel) => {
       const run = configuredRuns.get(sessionId);
       configuredRuns.delete(sessionId);
       runBearers.delete(sessionId);
@@ -375,6 +377,11 @@ export function createRunHost() {
         }
         return;
       }
+      // OQ-189's ruling (R-071, PD-MONITOR-005): the analyst's model with the session's overrides followed; where that pair
+      // is held out of quota the analysis is skipped — no job captured, no call made — and the log says why. Until
+      // 2026-10-06 the configured model was called, and a provider that had refused it reported the analysis failed.
+      const analyst = postRunAnalystOf(collector, helperModel);
+      if (!analyst.ok) { log(`improvement analysis: skipped for session ${sessionId}: the analyst's model ${analyst.reason} (PD-MONITOR-005)`, 'warn'); return; }
       const locatedStore = [...stores.entries()].find(([, candidate]) => candidate.root === run.cfg.workspaceRoot && candidate.dal !== null);
       if (!locatedStore?.[1].dal) return;
       const [workspaceId, store] = locatedStore;
@@ -382,13 +389,13 @@ export function createRunHost() {
       // await, which a quit may have closed it under (`improvement-capture.ts`).
       void captureAfterRun({
         stopReason: result.stop_reason,
-        input: { workspaceId, workspaceRoot: run.cfg.workspaceRoot, sessionId, generatedAt: toIsoUtc(clocks.wall.instant()), timeoutSeconds: run.cfg.runtime.improvement_collector_timeout, collectorModel: collector.key },
+        input: { workspaceId, workspaceRoot: run.cfg.workspaceRoot, sessionId, generatedAt: toIsoUtc(clocks.wall.instant()), timeoutSeconds: run.cfg.runtime.improvement_collector_timeout, collectorModel: analyst.key },
         history: () => ask({ kind: 'improvements.command', workspaceRoot: run.cfg.workspaceRoot, command: { action: 'list' } }, millis(10_000)),
         currentDal: () => dalWhileOpen(stores.get(workspaceId), store),
         log,
       }).then((job) => {
         if (job === null) return;
-        improvementContexts.set(job.artifact_id, { run });
+        improvementContexts.set(job.artifact_id, { run, analyst: { model: analyst.model, thinking: analyst.thinking } });
         send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'improvement.job', job } });
       });
     },
@@ -439,7 +446,7 @@ export function createRunHost() {
     // failure notices with a COPYABLE detail block (REQ-MONITOR-094, REQ-NOTIFY-037/038) through main's one persistent slot.
     acknowledge: (kind, title, body) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'acknowledgement.publish', kindOf: kind, title, ...(body === undefined ? {} : { body }) } }),
     report: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', severity: n.severity, title: n.title, message: n.message, detail: n.detail, sessionId: n.sessionId, persistent: true } }),
-    supervisor: (_workspaceRoot, sessionId, countUsage) => {
+    supervisor: (_workspaceRoot, sessionId, countUsage, helperModel) => {
       const run = configuredRuns.get(sessionId);
       if (!run) return null;
       const cb = run.cfg.circuitBreaker;
@@ -449,6 +456,8 @@ export function createRunHost() {
         // REQ-EVENTS-053: each classification is a request of the run, counted against it.
         backend: meteredBackend(run.model.backend, countUsage), runModel: run.model.config.model, thinking: run.model.config.thinking, credentialFor: run.model.config.credentialFor,
         memory: rungMemory, configuredModel: modelRefOf(run.cfg, cb.model, run.scripted), slots: classifierSlotsOf(run.cfg, run.scripted, runBearers.get(sessionId), (m) => log(m, 'warn')), modelTimeoutMs: timeoutMs,
+        // OQ-189 (PD-MONITOR-005): the session's overrides followed at each classification; none made on a pair out of quota.
+        helperModel,
       });
       return classifier ? {
         config: {

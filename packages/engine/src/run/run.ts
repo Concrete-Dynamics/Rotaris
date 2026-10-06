@@ -28,7 +28,7 @@ import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
 import { entryInstructionsFor, resolveRole, type Persona, type PersonaResolver } from '../children/personas.js';
 import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
-import { entryOf, excludedModelKeys, isLoaderCopyKey, keyOfPair, overridesInForce, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
+import { entryOf, excludedModelKeys, helperChoiceOf, isLoaderCopyKey, keyOfPair, overridesInForce, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type HelperModel, type ModelChoice } from './resilience.js';
 import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
@@ -1485,25 +1485,37 @@ export class Run {
   private readonly compressionFor = (current: () => ModelChoice, todoLines: () => readonly string[]): TurnCompression | undefined => {
     const c = this.deps.compression;
     if (!c) return undefined;
+    /*
+     * OQ-189's ruling (R-071, PD-MONITOR-005): a configured `compression.model` is followed through the session's overrides,
+     * and where the pair it ends on is held out of quota the pass compresses on the agent's own model — the model its cell
+     * calls next. Until 2026-10-06 the configured model was called as configured, a pair the provider had refused included.
+     */
+    const compressing = (): ModelChoice => {
+      const agent = current();
+      if (!c.model) return agent;
+      const h = this.helperModel(c.model);
+      return h.ok ? { model: h.model, thinking: h.thinking } : agent;
+    };
     return {
       // OQ-156: the compressing model is given the history it condenses up to its own threshold (REQ-MONITOR-078).
       compressor: () => {
-        const chosen = c.model ?? current();
+        const chosen = compressing();
         return { backend: c.backend, model: chosen.model, thinking: chosen.thinking, timers: c.timers, credentialFor: c.credentialFor, timeoutMs: c.timeoutMs, inputTokens: c.triggerFor(chosen.model).tokens };
       },
       trigger: () => c.triggerFor(current().model), charsPerToken: c.charsPerToken, preserveRecentTurns: c.preserveRecentTurns, todoLines,
       /**
        * REQ-MONITOR-194 with REQ-MONITOR-080: the agent's own pair, when the session holds it out of quota, is not called to
        * compress. The turn settles the cell before its automatic check (`settleBeforeCall`), so this answers only in the
-       * span before the agent's next call — a manual pass while it awaits a tool or a child. A configured
-       * `compression.model` is a configured slot and is called as configured (OQ-189).
+       * span before the agent's next call — a manual pass while it awaits a tool or a child. Since OQ-189's ruling
+       * (PD-MONITOR-005, 2026-10-06) a configured `compression.model` held out of quota yields to the agent's own model
+       * (`compressing`), so this is read for whichever model the pass would call; until then a configured one was called as
+       * configured.
        */
       withheld: () => {
-        if (c.model) return null;
-        const chosen = current();
+        const chosen = compressing();
         const provider = providerIdentity(this.catalogue, chosen.model);
         if (!this.memory.isExhausted(provider, chosen.model.modelId)) return null;
-        return `${provider}/${chosen.model.modelId}, the model this agent runs on, is held out of quota for this session; no compressing call is made on it, and the agent's next call moves it to another model first`;
+        return `${provider}/${chosen.model.modelId}, the model this agent runs on, is held out of quota for this session${c.model ? ', as is the configured compressing model' : ''}; no compressing call is made on it, and the agent's next call moves it to another model first`;
       },
       // Part AO: every turn of this run — the root's and each child's — registers its conversation for the manual pass.
       registry: this.conversations,
@@ -1573,8 +1585,28 @@ export class Run {
   private summariserDeps(): SummariserDeps | null {
     const s = this.deps.summariser ?? null;
     if (s === null) return null;
-    return { ...s, resolve: (c) => { const e = this.memory.effective(withSettings(this.catalogue, c), this.catalogue); return { model: e.model, thinking: e.thinking }; } };
+    // OQ-189's ruling (R-071, PD-MONITOR-005): where the pair the summariser's model ends on is held out of quota, the child's
+    // report is summarised on the model the child itself ran on — the calling agent's, as a compression pass falls back to
+    // it — and where that one is held out of quota too, no call is made and the report is the fallback one, saying why.
+    return {
+      ...s,
+      resolve: (c, agent) => {
+        const h = this.helperModel(c);
+        if (h.ok) return { model: h.model, thinking: h.thinking };
+        const own = agent === undefined ? null : this.helperModel(agent);
+        if (own?.ok) return { model: own.model, thinking: own.thinking };
+        return { withheld: `the summarising model ${h.reason}${own ? ', and so is the model the agent ran on' : ''}; no summarising call was made` };
+      },
+    };
   }
+
+  /**
+   * OQ-189's ruling (R-071, PD-MONITOR-005): what a helper call configured on `choice` makes — the session's overrides
+   * followed, or not `ok` where the pair it ends on is held out of quota (`helperChoiceOf`). Read at each call, from the
+   * session's memory as it stands then. The intent classifier, the loop classifier and the post-run analyst reach it
+   * through the session (`Sessions`), the compressor and the summariser here.
+   */
+  readonly helperModel: HelperModel = (choice) => helperChoiceOf(this.memory, this.catalogue, choice);
 
   /**
    * REQ-MONITOR-080: the model an agent's cell calls next — its pair with the session's overrides followed, as the ladder

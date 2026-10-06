@@ -1,4 +1,4 @@
-import { firstJsonObject, isRungRejection, selectSlot, type ClassifierSlots, type LoopActivation, type RungMemory, type LoopClassification, type LoopClassifier, type Rung } from '@rotaris/engine';
+import { firstJsonObject, isRungRejection, selectSlot, type ClassifierSlots, type HelperModel, type LoopActivation, type RungMemory, type LoopClassification, type LoopClassifier, type Rung } from '@rotaris/engine';
 import type { AgentBackend, ModelRef, OutputSpec, ThinkingLevel } from '@rotaris/model';
 
 const LOOP_SCHEMA: Readonly<Record<string, unknown>> = {
@@ -50,16 +50,25 @@ export interface LoopClassifierDeps {
   readonly configuredModel: ModelRef | null;
   readonly slots: ClassifierSlots;
   readonly modelTimeoutMs: number;
+  /**
+   * OQ-189's ruling (R-071, PD-MONITOR-005): the selected model with the session's overrides followed, read at each
+   * classification; not `ok` where that pair is held out of quota, and then no request is sent — the classification fails
+   * with the reason, and the supervisor reads it as an unanswered one (its raw-count fallback). Absent: as configured.
+   */
+  readonly helperModel?: HelperModel | undefined;
 }
 
 /** REQ-ORCH-100/103: the small-slot classifier behind the engine's port. */
 export function createLoopClassifier(deps: LoopClassifierDeps): LoopClassifier | null {
-  const selected = deps.configuredModel ? { model: deps.configuredModel, slot: 'small_model' as const } : selectSlot(deps.slots);
-  if (!selected) return null;
-  const resolveCredential = deps.credentialFor(selected.model);
+  const configured = deps.configuredModel ? { model: deps.configuredModel, slot: 'small_model' as const } : selectSlot(deps.slots);
+  if (!configured) return null;
 
   return {
     async classify(activation: LoopActivation, signal: AbortSignal): Promise<LoopClassification> {
+      const helper = deps.helperModel?.({ model: configured.model, thinking: deps.thinking }) ?? { ok: true as const, model: configured.model };
+      if (!helper.ok) throw new Error(`the loop classifier's model ${helper.reason}; no classification call was made`);
+      const selected = { ...configured, model: helper.model };
+      const resolveCredential = deps.credentialFor(selected.model);
       const prompt = `Trigger: ${activation.trigger} (${activation.reason}).\n<conversation_excerpt>\n${activation.excerpt}\n</conversation_excerpt>`;
       for (const rung of deps.memory.ladder(selected.model.modelId)) {
         const output = outputFor(rung);

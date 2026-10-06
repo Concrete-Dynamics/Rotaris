@@ -5,7 +5,7 @@ import { countNoun, err, ok } from '@rotaris/kernel';
 import { declaredToolsOf, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
 import { compressionTrigger, effectivePricing, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type HelperModel, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
 
 /**
@@ -402,6 +402,17 @@ export function improvementCollectorOf(cfg: LoadedConfiguration, scripted: boole
     model,
     thinking: configuredThinking && configuredThinking !== 'auto' ? configuredThinking : thinkingOf(cfg.models[name]),
   };
+}
+
+/**
+ * OQ-189's ruling (R-071, PD-MONITOR-005): the post-run analyst's model once the session has had its say — the collector's
+ * slot with the session's overrides followed (its key the override's, so the artifact names the model that ran), or not
+ * `ok` where the pair it ends on is held out of quota, and then the analysis is skipped. Until 2026-10-06 the configured
+ * model was called, and a provider that had refused it reported the analysis failed.
+ */
+export function postRunAnalystOf(collector: { readonly key: string; readonly model: ModelRef; readonly thinking: ThinkingLevel }, helperModel: HelperModel): { readonly ok: true; readonly key: string; readonly model: ModelRef; readonly thinking: ThinkingLevel } | { readonly ok: false; readonly reason: string } {
+  const h = helperModel({ model: collector.model, thinking: collector.thinking });
+  return h.ok ? { ok: true, key: h.key ?? collector.key, model: h.model, thinking: h.thinking } : h;
 }
 
 /**

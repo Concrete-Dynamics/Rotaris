@@ -585,7 +585,17 @@ with the model it was sent to; `countUsage` prices it at that model's catalogue 
 does) and passes it to `onRequestUsage`. `Sessions` wraps the compressor's and the summariser's backends itself and
 hands its `countUsage` to the run host's two classifiers, through `PreflightContext.countUsage` and the
 `supervisor` factory's third argument, which wrap their own. The improvement analyst runs after the run has ended
-and has no run totals to join. Until 2026-09-27 these four calls discarded their usage.
+and has no run totals to join. Until 2026-09-27 these four calls discarded their usage. **Which model they call
+(PD-MONITOR-005, OQ-189, ruled 2026-10-06).** Every one of these helper calls, the analyst's included, resolves its
+configured model through the session's memory at the call (`helperChoiceOf`, `run/resilience.ts`; `Run.helperModel`):
+the overrides followed, and not `ok` where the pair it ends on is held out of quota. `Sessions` hands the reader to the run
+host as `PreflightContext.helperModel`, the `supervisor` factory's fourth argument and `onRunResult`'s third; the intent
+classifier (`classifyIntent`'s `helperModel`) and the loop classifier (`createLoopClassifier`'s, read at each
+classification) then make no call and proceed as on a failed classification, the analyst is skipped with a log line
+(`postRunAnalystOf`; a captured job keeps the model resolved at its capture), a configured compressor compresses on the
+agent's own model (`compressing` in `Run.compressionFor`), and the summariser summarises a child on the model the child
+ran on (`ReportInput.agentModel`), else writes the fallback report saying why. Until then only the summariser followed an
+override, and none read the exclusion.
 
 What the model is handed for each of them is `toolSpec` (`run-host/tools.ts`): an MCP tool's own input schema where
 ADR-0034 supplies one, otherwise the zod schema converted **as an input** (`io: 'input'`) — the shape of a call about to
@@ -717,7 +727,9 @@ unresponsive fallback, a wait's choice, an override followed — takes the compr
 automatic check comes **after** the cell is settled (`settleBeforeCall`), so it never reads, nor calls, a pair the session
 holds out of quota; a pass that would call the agent's own excluded pair — a manual one while the agent awaits a tool or a
 child — is withheld (`TurnCompression.withheld`): no call, a failure naming the reason (since the repair round of
-2026-10-03; a configured `compressor.model` is called as configured, OQ-189).
+2026-10-03; until 2026-10-06 a configured `compressor.model` was called as configured — since PD-MONITOR-005, OQ-189's ruling,
+it follows the session's overrides and, where its pair is held out of quota, yields to the agent's own model, so this reads
+whichever model the pass would call).
 **Recovery** (REQ-ORCH-093), in the ladder's `context_window` arm: condense and retry, **at most twice for one
 call**, the original rejection surfaced unchanged when the condensation itself fails; the issue is
 `llm_bad_request`, or `parent_resume_bad_request` on the first call of a turn resumed with child reports. A

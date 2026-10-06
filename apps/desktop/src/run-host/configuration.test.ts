@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import { authProvidersOf, classifierSlotsOf, configureRun, restingCatalogueOf, contextLimitsOf, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
+import { authProvidersOf, classifierSlotsOf, configureRun, postRunAnalystOf, restingCatalogueOf, contextLimitsOf, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
 import { childModelKey } from '@rotaris/engine';
 import { nodeClocks } from '@rotaris/platform';
 import { loadConfiguration, type ModelEntry } from '@rotaris/config';
@@ -385,5 +385,21 @@ describe('a resting session reads the catalogue a run would, as a read (REQ-CHAT
     mkdirSync(join(dir, 'config'), { recursive: true });
     writeFileSync(join(dir, 'config', 'agents.yaml'), 'models: [this is: not a map');
     expect(restingCatalogueOf(join(dir, 'ws'), deps({}))).toBeNull();
+  });
+});
+
+/*
+ * OQ-189's ruling (R-071, PD-MONITOR-005): the post-run analyst follows the session's override — the artifact naming the
+ * override's key — and is skipped where its pair is held out of quota. Until 2026-10-06 the configured model was called.
+ */
+describe('run-host/configuration — the post-run analyst\'s model (REQ-LIBRARY-037, OQ-189, PD-MONITOR-005)', () => {
+  const ref = (id: string) => ({ providerId: 'p', modelId: id, dialect: 'chat' as const });
+  const collector = { key: 'medium', model: ref('medium'), thinking: 'high' as const };
+  it('as configured when the session leaves the pair alone; the override\'s model and key where one replaced it', () => {
+    expect(postRunAnalystOf(collector, (c) => ({ ok: true, model: c.model, thinking: c.thinking }))).toEqual({ ok: true, key: 'medium', model: ref('medium'), thinking: 'high' });
+    expect(postRunAnalystOf(collector, () => ({ ok: true, model: ref('other'), thinking: 'unset', key: 'other' }))).toEqual({ ok: true, key: 'other', model: ref('other'), thinking: 'unset' });
+  });
+  it('not ok, with the reason, where the pair is held out of quota', () => {
+    expect(postRunAnalystOf(collector, () => ({ ok: false, reason: 'p/medium is held out of quota for this session' }))).toEqual({ ok: false, reason: 'p/medium is held out of quota for this session' });
   });
 });

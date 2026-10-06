@@ -38,7 +38,7 @@ export async function runPreflight(ctx: PreflightContext, deps: PreflightDeps): 
     { prompt: ctx.prompt, metadata: { entrypoint: 'desktop', workspace_hash: String(ctx.workspaceRoot.length) } },
     deps.slots,
     // REQ-EVENTS-053: the classification requests are the run's, counted against it where the engine hands a counter.
-    { backend: ctx.countUsage ? meteredBackend(deps.backend, ctx.countUsage) : deps.backend, timers: deps.clocks.timers, credentialFor: deps.credentialFor, modelTimeoutMs: deps.modelTimeoutMs, memory: deps.memory, warn },
+    { backend: ctx.countUsage ? meteredBackend(deps.backend, ctx.countUsage) : deps.backend, timers: deps.clocks.timers, credentialFor: deps.credentialFor, modelTimeoutMs: deps.modelTimeoutMs, memory: deps.memory, warn, helperModel: ctx.helperModel },
     ctx.signal,
   ), ctx.previousIntent ?? null, ctx.hasUnfinishedWork ?? null);
   deps.log(`intent: ${intent.category}${intent.fallback ? ` (fallback: ${intent.reason})` : intent.confidence === null ? '' : ` (${intent.confidence})`}${intent.rung ? ` via ${intent.rung}` : ''}`);

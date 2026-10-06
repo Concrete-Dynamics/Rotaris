@@ -38,3 +38,29 @@ model slot call when the session holds its pair out of quota or has replaced it?
 - `packages/engine/src/run/run.ts` — `compressionFor` (a configured `compressor.model` wins over the cell) and
   `summariserDeps` (overrides followed, the exclusion not read).
 - `packages/engine/src/run/resilience.ts` — `ResilienceMemory`, which none of these calls consults for the exclusion.
+
+## Outcome — 2026-10-06 (plan fin21, under [R-071](../../product/requests.md#r-071)): ruled and repaired
+
+OQ-189 was ruled by the owner as recommended ([`PD-MONITOR-005`](../../product/directives.md#pd-monitor-005)): every helper
+call follows the session's model override, and where its pair is held out of quota with nothing replacing it, a compression
+runs on the calling agent's model and the classifiers and the analyst make no call; the summariser, read beside compression,
+summarises the child on the model the child ran on.
+
+- **One reader.** `helperChoiceOf` (`packages/engine/src/run/resilience.ts`) resolves a configured choice through the
+  session's memory — the overrides followed, not `ok` with the reason where the pair reached is excluded — and `Run.helperModel`
+  reads it at each call.
+- **In the run.** `Run.compressionFor`'s `compressing`: a configured `compressor.model` followed through the overrides, else
+  the agent's own model; `withheld` reads whichever the pass would call. `Run.summariserDeps`' `resolve` takes the child's
+  model (`ReportInput.agentModel`, `children/orchestration.ts`) and answers `withheld` where both are excluded, and
+  `produceReport` then writes the fallback report with the reason.
+- **In the run host.** `Sessions` hands the reader through `PreflightContext.helperModel` (`classifyIntent`: no request, the
+  fallback intent with the reason), the `supervisor` factory's fourth argument (`createLoopClassifier`: read at each
+  classification, no request on an excluded pair) and `onRunResult`'s third (`postRunAnalystOf`: the analysis skipped with a
+  log line; a captured job keeps the model resolved at capture, its artifact naming the override's key).
+
+Pinned by `packages/engine/src/run/ladder.test.ts` (four cases: the configured compressor after a move and after an
+override, the summariser on the child's model, the reader itself — each red on `37f7a98`),
+`packages/engine/src/intent/intent.test.ts`, `apps/desktop/src/run-host/loop.test.ts` and
+`apps/desktop/src/run-host/configuration.test.ts` (red before: no reader). Shown by `compression-proof`'s `after-a-move` (the
+pass on beta) and `resilience-proof`'s `same-tier` (the analyst skipped; the relaunch calling nothing on alpha) and
+`two-waits` (the relaunch's classifier and analyst on gamma) on the built app (2026-10-06).

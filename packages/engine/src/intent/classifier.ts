@@ -1,6 +1,7 @@
 import { FALLBACK_INTENT, INTENT_CATEGORIES, isIntentCategory, type IntentCategory, type IntentResult } from '@rotaris/contracts';
 import { millis, type Timers } from '@rotaris/kernel';
 import type { AgentBackend, ModelError, ModelRef, OutputSpec } from '@rotaris/model';
+import type { HelperModel } from '../run/resilience.js';
 
 /**
  * REQ-ORCH-005..012: pre-flight intent classification. One bounded call (12.0 s, ESC-35) to the first configured
@@ -57,6 +58,12 @@ export interface ClassifyDeps {
   readonly memory: RungMemory;
   readonly warn: (message: string) => void;
   readonly timeoutMs?: number;
+  /**
+   * OQ-189's ruling (R-071, PD-MONITOR-005): the slot's model with the session's overrides followed; not `ok` where that pair
+   * is held out of quota, and then no request is sent and the run proceeds on the fallback intent, saying why. Absent: the
+   * slot's model as configured.
+   */
+  readonly helperModel?: HelperModel | undefined;
 }
 
 export interface ClassifyInput {
@@ -205,8 +212,11 @@ function fallback(reason: string): IntentResult {
 }
 
 export async function classifyIntent(input: ClassifyInput, slots: ClassifierSlots, deps: ClassifyDeps, signal: AbortSignal): Promise<IntentResult> {
-  const selected = selectSlot(slots);
-  if (!selected) return fallback('no small model is configured (small_model, fallback_model and default_summary_model are all unset)');
+  const slot = selectSlot(slots);
+  if (!slot) return fallback('no small model is configured (small_model, fallback_model and default_summary_model are all unset)');
+  const helper = deps.helperModel?.({ model: slot.model, thinking: 'unset' }) ?? { ok: true as const, model: slot.model };
+  if (!helper.ok) return fallback(`the classifier's model ${helper.reason}; no classification call was made`);
+  const selected = { ...slot, model: helper.model };
   const controller = new AbortController();
   const onAbort = () => controller.abort();
   signal.addEventListener('abort', onAbort, { once: true });

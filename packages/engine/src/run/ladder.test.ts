@@ -6,7 +6,7 @@ import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId }
 import { migrateStore, openStore, RESIDENT_ROW_CAP, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRef, type ScriptedCall } from '@rotaris/model';
-import { BUILT_IN_PERSONAS, ResilienceMemory, RUN_CONFIG_DEFAULTS, Sessions, toSessionRecord, type CatalogueEntry, type DelegationOps, type ModelChoice, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
+import { BUILT_IN_PERSONAS, helperChoiceOf, ResilienceMemory, RUN_CONFIG_DEFAULTS, Sessions, toSessionRecord, type CatalogueEntry, type DelegationOps, type HelperModel, type ModelChoice, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
 import { persistAttachments } from '../attachments.js';
 import { childModelKeys, entryModelKeys } from '../autopsy.js';
@@ -96,6 +96,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     roleModels?: Record<string, ModelRef>;
     /** REQ-MONITOR-078: each model's compression trigger in tokens, by model id (absent: never reached). */
     triggerTokens?: Record<string, number>;
+    /** REQ-MONITOR-080: a configured `compressor.model` (absent: the agent's own). */
+    compressorModel?: ModelRef;
   }
 
   function sessionsWith(script: (persona: string, turn: number, req: Parameters<ScriptedModelClient['stream']>[0]) => ScriptedCall, opts: Opts = {}) {
@@ -118,19 +120,22 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const backend = new DefaultAgentBackend(client);
     const results: string[] = [];
     const restingReads: string[] = [];
+    // OQ-189 (PD-MONITOR-005): the helper-model readers the session hands its post-run analyst and its loop supervisor.
+    const helpers: { onRunResult: HelperModel[]; supervisor: HelperModel[] } = { onRunResult: [], supervisor: [] };
     let configured = 0;
     const sessions = new Sessions({
       clocks: clock, publisher: pub, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++minted}`,
-      model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: (_sid, r) => results.push(r.status),
+      model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: (_sid, r, helper) => { results.push(r.status); helpers.onRunResult.push(helper); },
+      supervisor: (_root, _sid, _count, helper) => { helpers.supervisor.push(helper); return null; },
       configure: () => (++configured >= (opts.configureRefusesFrom ?? Infinity) ? { ok: false as const, error: { reason: 'the configuration no longer loads' } } : { ok: true, value: {
-        model: { backend, config, ...(opts.inputLimits === undefined && opts.triggerTokens === undefined ? {} : { compression: { model: null, timeoutMs: 120_000, charsPerToken: 4, preserveRecentTurns: 1, triggerFor: (m: ModelRef) => ({ tokens: opts.triggerTokens?.[m.modelId] ?? 10_000_000, thresholdPercentage: 60, capacity: opts.inputLimits?.[m.modelId] ?? 1000, advertisedInputLimit: opts.inputLimits?.[m.modelId] ?? null, defaultThreshold: 265_000 }) } }) }, models, personas,
+        model: { backend, config, ...(opts.inputLimits === undefined && opts.triggerTokens === undefined ? {} : { compression: { model: opts.compressorModel ? { model: opts.compressorModel, thinking: 'unset' } : null, timeoutMs: 120_000, charsPerToken: 4, preserveRecentTurns: 1, triggerFor: (m: ModelRef) => ({ tokens: opts.triggerTokens?.[m.modelId] ?? 10_000_000, thresholdPercentage: 60, capacity: opts.inputLimits?.[m.modelId] ?? 1000, advertisedInputLimit: opts.inputLimits?.[m.modelId] ?? null, defaultThreshold: 265_000 }) } }) }, models, personas,
         runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.runStartMode === undefined ? {} : { runStartMode: opts.runStartMode }), ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }), ...(opts.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: opts.childStallTimeoutMs }) },
         resilience: { catalogue, fallbackModel: opts.fallbackModel ?? null },
       } }),
       ...(opts.restingCatalogue ? { restingCatalogue: (root: string) => { restingReads.push(root); return opts.restingCatalogue!; } } : {}),
       ...(opts.delegation ? { tools: (ctx) => (ctx.delegation ? delegationPort(ctx.delegation, ctx.parentId ?? 'root', opts.tool) : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false }) } : {}),
     });
-    return { sessions, client, pub, counts, results, configures: () => configured, restingReads };
+    return { sessions, client, pub, counts, results, configures: () => configured, restingReads, helpers };
   }
   const tick = () => new Promise((r) => setTimeout(r, 5));
   const timeline = (sid: SessionId) => dal.timelineOf(sid).map((t) => t.name);
@@ -1745,6 +1750,98 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
    * has its own trigger: a1 1,000 tokens (capacity 2,000), b1 and c1 100 (capacity 200); a step reporting 500 prompt tokens is
    * over the second and under the first.
    */
+  /*
+   * OQ-189's ruling (R-071, PD-MONITOR-005): every helper call follows the session's model override, and where the pair it
+   * ends on is held out of quota with nothing replacing it, a compression or a child's summary runs on the calling agent's
+   * own model and the classifiers and the analyst make no call. Until 2026-10-06 a configured compressor and the analyst were
+   * called as configured, the classifiers too, and the summariser followed an override but called an excluded pair.
+   */
+  describe('OQ-189 / PD-MONITOR-005: helper calls follow the override and stay off a pair held out of quota', () => {
+    const limits = { inputLimits: { a1: 2000, b1: 200, c1: 200 }, triggerTokens: { a1: 1000, b1: 100, c1: 100 } };
+    const glob: TestTool = (name) => (name === 'glob' ? Promise.resolve({ text: 'README.md', isError: false, status: 'ok', durationMs: 1, label: 'glob', args: {} }) : undefined);
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const modelsOf = (client: ScriptedModelClient, pattern: RegExp) => client.requests.filter((r) => pattern.test(systemOf(r))).map((r) => r.model.modelId);
+    const COMPRESSOR = /^You condense an agent conversation/;
+    const SUMMARISER = /summarise a finished agent transcript/i;
+
+    it('a configured compressor held out of quota yields to the agent\'s own model: the root moved a1 → b1 compresses on b1', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona !== 'orchestrator') return answer('done');
+        if (turn === 1) return failing(quota());
+        if (turn === 2) return toolCalls([{ callId: 'g1', name: 'glob', args: {} }], 'looking', { input: 20, output: 5 });
+        if (turn === 3) return toolCalls([{ callId: 'g2', name: 'glob', args: {} }], 'looking again', { input: 500, output: 5 });
+        return answer('done');
+      };
+      const { sessions, client } = sessionsWith(script, { catalogue, delegation: true, tool: glob, compressorModel: A1, ...limits });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Before: ['a1'] — the configured compressor, which the session had recorded out of quota.
+      expect(modelsOf(client, COMPRESSOR)).toEqual(['b1']);
+      expect(dal.issuesOf(sid).some((i) => i.kind === 'compression_failed')).toBe(false);
+    });
+
+    it('a configured compressor follows the session\'s override: a child\'s wait choice of c1 over a1 sends the root\'s pass to c1', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }], 'delegating', { input: 20, output: 5 });
+          if (turn === 2) return answer('waiting on the child', { input: 500, output: 5 });
+          return answer(`root ${turn}`);
+        }
+        return turn === 1 ? failing(quota()) : answer('I did it.');
+      };
+      const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 600_000, compressorModel: A1, ...limits });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 60 && lastWait(pub) === null; i++) await tick();
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Before: ['a1'] — the configured compressor, which the override replaced and the session held out of quota.
+      expect(modelsOf(client, COMPRESSOR)).toEqual(['c1']);
+    });
+
+    it('a summariser held out of quota summarises a child on the model the child ran on (b1); its helpers say so', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"the child did it"}');
+        if (persona === 'orchestrator') {
+          if (turn === 1) return failing(quota());
+          if (turn === 2) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]);
+          return answer(`root ${turn}`);
+        }
+        return answer('I did it.');
+      };
+      const { sessions, client, helpers } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 600_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // The summariser's slot is the entry model, a1, which the root's quota answer put out of quota with no override.
+      // Before: ['a1'].
+      expect(modelsOf(client, SUMMARISER)).toEqual(['b1']);
+      expect(client.requests.slice(1).map((r) => r.model.modelId)).not.toContain('a1');
+      // The analyst's and the loop classifier's reader: a1 is held out of quota, so neither would call it; b1 is as configured.
+      const after = helpers.onRunResult[0]!;
+      expect(after({ model: A1, thinking: 'unset' })).toEqual({ ok: false, reason: 'a/a1 is held out of quota for this session' });
+      expect(after({ model: B1, thinking: 'high' })).toEqual({ ok: true, model: B1, thinking: 'high' });
+      expect(helpers.supervisor[0]!({ model: A1, thinking: 'unset' })).toMatchObject({ ok: false });
+    });
+
+    it('the helpers\' reader follows an override to its key, and refuses an override whose target is held out of quota too', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+      const { sessions, pub, helpers } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer(`after ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const reader = helpers.onRunResult[0]!;
+      expect(reader({ model: A1, thinking: 'unset' })).toEqual({ ok: true, model: C1, thinking: 'unset', key: 'c1' });
+      const memory = new ResilienceMemory();
+      memory.setOverride('a', 'a1', { key: 'c1', choice: { model: C1, thinking: 'unset' } });
+      memory.exhausted.add('c|c1');
+      expect(helperChoiceOf(memory, catalogue, { model: A1, thinking: 'unset' })).toEqual({ ok: false, reason: "c/c1, which the session's override puts in place of a/a1, is held out of quota for this session" });
+    });
+  });
+
   describe('REQ-MONITOR-078/080: compression follows the model the agent\'s cell is on', () => {
     const limits = { inputLimits: { a1: 2000, b1: 200, c1: 200 }, triggerTokens: { a1: 1000, b1: 100, c1: 100 } };
     const glob: TestTool = (name) => (name === 'glob' ? Promise.resolve({ text: 'README.md', isError: false, status: 'ok', durationMs: 1, label: 'glob', args: {} }) : undefined);

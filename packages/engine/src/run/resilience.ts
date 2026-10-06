@@ -173,6 +173,31 @@ export function sameTierCandidates(failing: { readonly provider: string; readonl
  * configured key reaches names nothing.
  */
 /**
+ * OQ-189's ruling (R-071, PD-MONITOR-005): what a helper call — the intent classifier, the loop classifier, a configured
+ * compressor, the summariser, the post-run analyst — makes in place of the model its slot configures. `ok` with the model
+ * and level to call: the configured choice with the session's overrides followed (REQ-ORCH-091 d), as every agent's cell
+ * follows them, the level the override's own where one moved it. Not `ok` when the pair it ends on is held out of quota
+ * for the session (REQ-MONITOR-194): the caller does what the directive says for its kind — the compressor and the
+ * summariser fall back to the calling agent's own model, the classifiers and the analyst make no call — and `reason` says
+ * why. Until 2026-10-06 only the summariser followed an override, and none of them read the exclusion.
+ */
+export type HelperChoice = { readonly ok: true; readonly model: ModelRef; readonly thinking: ThinkingLevel; /** The key of the override followed, when one moved it. */ readonly key?: string } | { readonly ok: false; readonly reason: string };
+export type HelperModel = (choice: { readonly model: ModelRef; readonly thinking: ThinkingLevel }) => HelperChoice;
+
+export function helperChoiceOf(memory: ResilienceMemory, catalogue: readonly CatalogueEntry[], choice: { readonly model: ModelRef; readonly thinking: ThinkingLevel }): HelperChoice {
+  const base = withSettings(catalogue, { model: choice.model, thinking: choice.thinking });
+  const e = memory.effective(base, catalogue);
+  const moved = !sameRef(e.model, choice.model);
+  const provider = providerIdentity(catalogue, e.model);
+  if (memory.isExhausted(provider, e.model.modelId)) {
+    const from = moved ? `, which the session's override puts in place of ${providerIdentity(catalogue, choice.model)}/${choice.model.modelId},` : '';
+    return { ok: false, reason: `${provider}/${e.model.modelId}${from} is held out of quota for this session` };
+  }
+  const key = moved ? memory.overrideReaching(base, catalogue)?.key : undefined;
+  return { ok: true, model: e.model, thinking: moved ? e.thinking : choice.thinking, ...(key === undefined ? {} : { key }) };
+}
+
+/**
  * OQ-188's ruling (R-071, PD-MONITOR-004): the model key that names a pair — the first configured entry in declaration order,
  * else the first discovered one — or null when none does. The wait record carries it so the header's keep waiting can choose
  * the waiting pair itself (`setModel` with it), which is the existing retry path of an explicit choice (REQ-MONITOR-194/303).

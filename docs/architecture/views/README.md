@@ -160,6 +160,14 @@ image input, refuses the restart before anything is pinned; the automatic fallba
 recovery dialog (`NO_USABLE_FALLBACK`). `AuthFallbackRestart` gains `images`. The **runtime view**'s
 fallback paragraph says so. No package, edge, process, channel, command or store column changed.
 
+**Helper model calls follow the session's override and stay off a pair held out of quota (PD-MONITOR-005; OQ-189, ruled
+2026-10-06; plan fin21).** `helperChoiceOf` (`run/resilience.ts`) and `Run.helperModel` resolve a helper's configured model
+through the session's memory at each call. `Sessions` passes the reader to the run host as `PreflightContext.helperModel`,
+the `supervisor` factory's fourth argument and `onRunResult`'s third. The intent and loop classifiers make no call on an
+excluded pair, the analyst is skipped (`postRunAnalystOf`), a configured compressor yields to the agent's own model, and the
+summariser falls back to the child's (`ReportInput.agentModel`). The **runtime view**'s metered-requests paragraph and its
+compression paragraph say so. No package, edge, process, channel, command, timeline name or store column changed.
+
 **An explicit switch of the entry model wins, holds for its own run, and keep waiting retries an out-of-quota wait
 (PD-ORCH-006, PD-MONITOR-003, PD-MONITOR-004; OQ-177, OQ-185 and OQ-188, ruled 2026-10-06; plan fin21).** `Run.setEntryModel`
 takes back an earlier wait's override of the pair chosen on the header path too (`takeBackOverrideOf`, now given where the

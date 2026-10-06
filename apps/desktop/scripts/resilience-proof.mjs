@@ -20,7 +20,8 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * composer's next-run model chip clearing the exclusion of the pair it chooses; since 2026-10-03 `child-timeout-inspector`,
  * the inspector naming a child's REQ-ORCH-088 fallback and measuring its ring against it, REQ-MONITOR-052/049; since
  * 2026-10-06 `keep-waiting`, OQ-188's ruling — Keep waiting retrying the out-of-quota pair now, and `switch-over-override`,
- * OQ-177's — an entry switch taking back an earlier wait's override of the pair chosen), each
+ * OQ-177's — an entry switch taking back an earlier wait's override of the pair chosen; and in `same-tier` and `two-waits`,
+ * OQ-189's — the helper calls following the override and making no call on a pair held out of quota), each
  * asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
@@ -336,7 +337,12 @@ await scenarioRun('same-tier', async () => {
   expect(!kinds.some((i) => i.kind === 'model_wait'), 'the run waited although a candidate existed');
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/beta', `the calls did not move to beta: ${JSON.stringify(calls)}`);
-  results.sameTier = { status: row.execution_status, fallback: meta, calls, png: r.png, elapsedMs: r.elapsedMs };
+  // OQ-189's ruling (R-071, PD-MONITOR-005): the post-run analyst's slot (medium, alpha) is held out of quota with nothing
+  // replacing it, so the analysis is skipped and says so; before, the analyst (`child` to the scripted client) called alpha.
+  const helperAlpha = modelCalls(r.log).filter((c) => c.who !== 'orchestrator' && c.who !== 'classifier' && c.model === 'scripted/alpha');
+  expect(helperAlpha.length === 0, `a helper call went to alpha after the session held it out of quota: ${JSON.stringify(modelCalls(r.log))}`);
+  expect(/improvement analysis: skipped for session [0-9a-f-]+: the analyst's model scripted\/alpha is held out of quota for this session/.test(r.log), 'the analyst was not skipped with its reason in the log');
+  results.sameTier = { status: row.execution_status, fallback: meta, calls, allCalls: modelCalls(r.log), png: r.png, elapsedMs: r.elapsedMs };
   // REQ-MONITOR-194 (the repair of an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it): a
   // second prompt, in a relaunch that resumes the session. Its root is built on the configured alpha, which the session holds
   // out of quota (no override replaces it); it moves to beta BEFORE calling (`pre_call`), and alpha is never called. Before
@@ -352,7 +358,13 @@ await scenarioRun('same-tier', async () => {
   const moves = list2.filter((t) => t.name === 'quota_fallback_model').map((t) => JSON.parse(t.metadata));
   expect(moves.length === 2 && moves[0].pre_call === undefined && moves[1].pre_call === true && moves[1].from_model === 'alpha' && moves[1].to_model === 'beta', `the second prompt's move was not made before its call: ${JSON.stringify(moves)}`);
   expect(list2.filter((t) => t.name === 'model_exhausted').length === 1, `the move without a call recorded a second exclusion: ${list2.map((t) => t.name).join(',')}`);
-  results.sameTierResume = { calls: calls2, session: row2, moves, png: again.png, elapsedMs: again.elapsedMs };
+  // OQ-189 (PD-MONITOR-005): no call of the relaunch goes to alpha — the intent classifier (small, alpha) makes none, and the
+  // analyst is skipped again. Before: the classifier and the analyst called alpha.
+  const all2 = modelCalls(again.log);
+  expect(all2.every((c) => c.model !== 'scripted/alpha'), `a call of the relaunch went to the pair held out of quota: ${JSON.stringify(all2)}`);
+  // The fresh classification sends nothing (the continuation then carries the previous intent over, REQ-ORCH-012).
+  expect(!all2.some((c) => c.who === 'classifier'), `the intent classifier made a call in the relaunch: ${JSON.stringify(all2)}`);
+  results.sameTierResume = { calls: calls2, allCalls: all2, session: row2, moves, png: again.png, elapsedMs: again.elapsedMs };
 });
 
 // 3c. REQ-MONITOR-194 / REQ-MONITOR-146 (the repair of a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion):
@@ -679,12 +691,16 @@ await scenarioRun('two-waits', async () => {
   const calls = modelCalls(r.log);
   // The relaunch: the session resumed from the browser, a further prompt delegating again — every call on gamma.
   const again = await launch('two-waits-resume', s4c, { ROTARIS_SCRIPT: 'delegate:coding-agent:again,answer', ROTARIS_CHILD_SCRIPT: 'answer', ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PROMPT: 'delegate again after the reload', ROTARIS_CAPTURE_PROBE: '[data-testid="chip-model"]', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '60000', ROTARIS_CAPTURE_AFTER_MS: '800' }, { timeout: 150_000 });
-  // The run's own agents, up to its end: the intent classifier and the post-run analyst take configured slots and follow no
-  // override (a residual recorded on its own note), and the scripted client names the analyst `child` as well.
+  // The run's own agents, up to its end (the scripted client names the post-run analyst `child` as well; since OQ-189's
+  // ruling the helper calls follow the override, read below).
   const ended = again.log.search(/run [0-9a-f-]+ ended /);
   const calls2 = modelCalls(ended < 0 ? again.log : again.log.slice(0, ended)).filter((c) => c.who === 'orchestrator' || c.who === 'child');
   expect(calls2.some((c) => c.who === 'child') && calls2.some((c) => c.who === 'orchestrator'), `the relaunch did not call both the root and a child: ${JSON.stringify(calls2)}`);
   expect(calls2.every((c) => c.model === 'scripted-c/gamma'), `an agent returned to a pair the choice replaced after the reload: ${JSON.stringify(calls2)}`);
+  // OQ-189's ruling (R-071, PD-MONITOR-005): the helper calls follow the override too — the intent classifier and the post-run
+  // analyst, configured on alpha, call gamma; before, both called alpha (the fin10 first-executions row).
+  const helpers2 = modelCalls(again.log).filter((c) => c.who !== 'orchestrator');
+  expect(helpers2.some((c) => c.who === 'classifier') && helpers2.every((c) => c.model === 'scripted-c/gamma'), `a helper call of the relaunch did not follow the override to gamma: ${JSON.stringify(helpers2)}`);
   const db2 = open(s4c);
   const row2 = session(db2);
   db2.close();

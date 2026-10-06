@@ -1212,7 +1212,9 @@ switch's REQ-MONITOR-142 row says (OQ-177;
 [note](../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md)); since
 2026-10-06 (plan fin21) `keep-waiting` drives PD-MONITOR-004's retry of an out-of-quota pair from the wait header and
 `switch-over-override` PD-ORCH-006's take-back of an earlier wait's override by a header switch, the switch rows reading
-PD-MONITOR-003's "for the rest of this run"; and `--only=<name>[,<name>…]` runs the named scenarios alone. **Since 2026-10-02 the authentication class (the 401 note's four
+PD-MONITOR-003's "for the rest of this run"; `same-tier` and `two-waits` read PD-MONITOR-005's helper calls (the
+classifier and the analyst following the override, and making no call on a pair held out of quota); and
+`--only=<name>[,<name>…]` runs the named scenarios alone. **Since 2026-10-02 the authentication class (the 401 note's four
 parts) is the proof's.** A failed run is classified in REQ-NOTIFY-060's order by main (`main/failure-class.ts`) and published
 through the focus gate (`main/run-failure-notice.ts`, which also holds a failed run's class publication until its session
 is followed by a main window, REQ-NOTIFY-030/032, and since 2026-10-02 raises REQ-NOTIFY-031's notice naming the session for

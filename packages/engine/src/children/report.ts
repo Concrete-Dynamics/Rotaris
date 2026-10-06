@@ -43,6 +43,8 @@ export interface ChildReport {
 }
 
 export interface ReportInput {
+  /** OQ-189 (PD-MONITOR-005): the model the agent ran on at its end, the summariser's fallback when its own is out of quota. */
+  readonly agentModel?: { readonly model: ModelRef; readonly thinking: ThinkingLevel } | undefined;
   readonly agentName: string;
   readonly role: string;
   readonly status: ReportStatus;
@@ -73,7 +75,11 @@ export interface SummariserDeps {
    * the session's overrides, read at the attempt, so a pair a wait's choice replaced is not called again (the repair of
    * a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced). Absent means `model` and `thinking` as given.
    */
-  readonly resolve?: (choice: { readonly model: ModelRef; readonly thinking: ThinkingLevel }) => { readonly model: ModelRef; readonly thinking: ThinkingLevel };
+  /**
+   * OQ-189's ruling (R-071, PD-MONITOR-005): `agent` is the model the summarised agent ran on, which the summariser falls back
+   * to where its own pair is held out of quota; `withheld` is no call at all, the report the fallback one with that reason.
+   */
+  readonly resolve?: (choice: { readonly model: ModelRef; readonly thinking: ThinkingLevel }, agent?: { readonly model: ModelRef; readonly thinking: ThinkingLevel }) => { readonly model: ModelRef; readonly thinking: ThinkingLevel } | { readonly withheld: string };
 }
 
 function cut(s: string, n: number): string {
@@ -387,7 +393,9 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
     const timer = s.timers.after(timeout, () => controller.abort());
     try {
       const ask = `Condense the transcript below into a JSON object with exactly these keys: "summary" (one paragraph), "key_findings" (an array of short strings), "next_actions" (array of strings), "edited_files" (array of paths), "tags" (from: research, planning, implementation, review, verification, errors). Report only what happened; do not continue the task. The facts below are the run's own record of what the agent did, taken from its whole transcript: your summary must agree with them and never deny them. The transcript keeps its start (the task as given) and its most recent part; where its middle is marked omitted, what is not shown there is not evidence that it did not happen.${complaint ? `\n\nYour previous attempt was unusable: ${complaint}` : ''}\n\nFacts:\n${facts}\n\nTranscript:\n${transcript}`;
-      const choice = s.resolve ? s.resolve({ model: s.model, thinking: s.thinking }) : { model: s.model, thinking: s.thinking };
+      const resolved = s.resolve ? s.resolve({ model: s.model, thinking: s.thinking }, input.agentModel) : { model: s.model, thinking: s.thinking };
+      if ('withheld' in resolved) return fallbackReport(input, resolved.withheld);
+      const choice = resolved;
       const r = await s.backend.runTurn(
         { persona: 'summariser', systemPrompt: 'You summarise a finished agent transcript. Output JSON only.', messages: [{ role: 'user', content: [{ kind: 'text', text: ask }] }], tools: [], model: choice.model, thinking: choice.thinking, timeoutMs: timeout, retries: 0, resolveCredential: s.credentialFor(choice.model) },
         { delta: () => undefined, reasoning: () => undefined, usage: () => undefined },

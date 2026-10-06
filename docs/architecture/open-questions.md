@@ -1834,7 +1834,7 @@ fail-closed direction, but one that will surprise corporate users and **should b
 rather than a library default**.
 
 **OQ-39 — A presenter that is registered and never answers. *Premise stale on one side; the record's
-answer is strengthened; the window is still unanchored. MEASURED 2026-09-02 AND EXPLICITLY NOT CLOSED.***
+answer is strengthened; the window is still unanchored. MEASURED 2026-09-02 AND EXPLICITLY ~~NOT CLOSED~~. Ruled 2026-10-06.***
 *(ADR-0019; not blocking. Constraints T-41, T-31.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the poll and the window are accepted as built — a gap-based liveness poll every 250 ms, a registration lapsing after 3 s without a reply (`PresenterRegistry`, `DEFAULT_POLL_MS`, `DEFAULT_LAPSE_MS`), revoking every registration and routing later asks to the headless policy without a timer on the user's wait. The amendment the owner asked for, REQ-SANDBOX-101 defining attendedness as REQ-TOOLS-053 does, **is already in the requirement's text**: it now reads attendedness as "a test of capability, not of registration", under which "a session whose presenter is present but wedged is unattended", and the sentence this entry quotes ("Only the presence of that channel is tested") is no longer there. Nothing further is minted; `PD-TOOLS-002`'s narrowing of the requirement is unchanged. The window stays sized by the spike's floor and not by a product-load measurement.
@@ -1897,7 +1897,7 @@ while main's event loop was otherwise **idle**, and observed the wedged-main sta
 `0` and a specification change.
 
 **OQ-40 — The maximum supported transcript viewport height. *Premise now measured rather than argued;
-still open, and the choice has a scale.*** *(ADR-0045; not blocking.)* The transcript's slot pool must be
+~~still open~~, ruled 2026-10-06, and the choice has a scale.*** *(ADR-0045; not blocking.)* The transcript's slot pool must be
 a fixed capacity or `REQ-UIBENCH-054`'s element-count invariant has no meaning, but nothing in the
 specification bounds the viewport: `REQ-SHELL-022` fixes the opening (1440×900) and minimum (1000×680)
 window sizes and **no maximum**. ADR-0045 declares a product constant `H_max` and sizes the pool at
@@ -2343,7 +2343,7 @@ disputed and is reachable now that it is accepted.** It becomes an escalation on
 the notice vocabulary `REQ-NOTIFY-044` and `REQ-NOTIFY-048` to `REQ-NOTIFY-050` close.
 
 **OQ-47 — Two concurrently open workspaces presenting one identifier. *NOT closed by ESC-26, and ADR-0058
-now says so explicitly (2026-09-02).*** *(ADR-0058, ADR-0002; constraints W-19, W-01, W-27.)*
+now says so explicitly (2026-09-02). Ruled 2026-10-06.*** *(ADR-0058, ADR-0002; constraints W-19, W-01, W-27.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** ADR-0058's behaviour is ratified: the identifier is claimed once per instance, and a second concurrently open workspace presenting one opens without a store, reporting it in REQ-SESSION-089's vocabulary and naming both paths; a sequential open is not detected. For the first release the remedy for a copied folder or a corrupt identifier file stays the user's hand edit of that file, and no product action is added.
 

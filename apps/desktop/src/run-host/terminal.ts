@@ -1,4 +1,4 @@
-import { bytesFor, CONTRACT_SCHEMA_VERSION, type ProcessMessage, type ProcessReply, type TerminalCommand, type TerminalRefusal } from '@rotaris/contracts';
+import { type AuditDecision, type AuditDecisionSource, bytesFor, CONTRACT_SCHEMA_VERSION, type ProcessMessage, type ProcessReply, type TerminalCommand, type TerminalRefusal } from '@rotaris/contracts';
 import { asSessionId, redact, toIsoUtc, type Clocks } from '@rotaris/kernel';
 import type { StreamSettings, TerminalManager, TerminalStreams } from '@rotaris/agent-tools';
 import type { Sessions } from '@rotaris/engine';
@@ -38,6 +38,9 @@ const HEADLINES: Readonly<Record<TerminalRefusal, string>> = {
   'streaming-disabled': 'Live terminal streaming is switched off (runtime.terminal_stream_enabled).',
 };
 export const AUDIT_REASON = 'The user acted in the terminal directly; no policy applies.';
+/** REQ-SHELL-107's `decision` and `source` for a user's own terminal action, members of the audit's vocabularies (PD-TOOLS-011, OQ-54). */
+export const USER_TERMINAL_DECISION: AuditDecision = 'user-input';
+export const USER_TERMINAL_SOURCE: AuditDecisionSource = 'user';
 
 /** REQ-SHELL-107's detail sentences, one per entry kind. */
 export type TerminalAuditEntry = Extract<TerminalCommand, { kind: 'terminal.audit' }>['entry'];
@@ -116,7 +119,7 @@ export function createTerminalHost(deps: TerminalHostDeps): TerminalHost {
           const summary = redact(`terminal ${req.streamId}: ${auditDetail(req.entry)} (in: ${meta.command ?? ''})`);
           const r = writer.recordDecision({
             timestamp: toIsoUtc(deps.clocks.wall.instant()), session_id: meta.sessionId, agent_id: meta.agentId ?? '', persona: meta.displayName, tool_name: 'terminal',
-            decision: 'user-input', rule_id: '', source: 'user', summary, reason: AUDIT_REASON,
+            decision: USER_TERMINAL_DECISION, rule_id: '', source: USER_TERMINAL_SOURCE, summary, reason: AUDIT_REASON,
           });
           if (!r.ok) return { kind: 'refused', code: `terminal.audit.${r.error.code}`, headline: 'The audit entry could not be written', detail: 'reason' in r.error ? r.error.reason : r.error.code };
           return ack;

@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**The timeline's vocabulary names every name the product writes (PD-ORCH-014, PD-CHAT-009, PD-TOOLS-011; OQ-157 with
+OQ-53, OQ-54, OQ-76 and OQ-127; fin20).** `tools/check-timeline-vocabulary.mjs`'s `AWAITING` is empty, every name it held
+a word cited to its directive. `UserPresence` writes `user_away` and `user_returned` through the session's writer
+(`UserPresenceDeps.writer`), and the terminal's audit entry takes `user-input` and `user` from the audit's own vocabularies
+(`AUDIT_DECISIONS`, `AUDIT_DECISION_SOURCES` in `contracts/tools.ts`). The **runtime view**'s away paragraph and `timeline`
+row and the **state-ownership view**'s away-mark row say so. No package, edge, process, channel, command or store column
+changed.
+
 **The stall watch files one issue per throttled warning, and records its facts on the timeline (PD-MONITOR-005 revision 2,
 OQ-127's ruling; fin20).** `stallRecords` and `recordCorrectiveMessage` (`engine/children/stall.ts`) are the one writer for
 a child's watch and the root's: the `stall` issue beside each throttled warning only, `waiting_on_tools`, `stall_recovered`

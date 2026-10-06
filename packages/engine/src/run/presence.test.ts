@@ -51,4 +51,18 @@ describe('the run\'s away state (PD-TOOLS-005)', () => {
     presence.markAway(5);
     expect(heard).toEqual(['a:300', 'a:5']);
   });
+
+  it('OQ-76\'s ruling (PD-TOOLS-011): each transition is also a timeline entry, `user_away` and `user_returned`, with its line and the expired timeout', () => {
+    const lines: string[] = [];
+    const entries: { name: string; actor: string; message: string; metadata: Record<string, unknown> }[] = [];
+    const presence = new UserPresence({ record: (m) => lines.push(m), writer: { appendTimeline: (name, actor, message, metadata) => { entries.push({ name, actor, message, metadata }); return { ok: true, value: entries.length }; } } });
+    presence.markAway(300);
+    presence.markAway(300);
+    presence.returned();
+    presence.returned();
+    expect(entries).toEqual([
+      { name: 'user_away', actor: 'rotaris', message: lines[0], metadata: { after_seconds: 300 } },
+      { name: 'user_returned', actor: 'user', message: lines[1], metadata: { after_seconds: 300 } },
+    ]);
+  });
 });

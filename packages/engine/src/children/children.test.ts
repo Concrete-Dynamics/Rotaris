@@ -1296,6 +1296,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(asks).toEqual([{ agent: 'orchestrator', away: null }, { agent: 'implement', away: { afterSeconds: 5 } }]);
       // The transition is in the session log's words, once.
       expect(warnings.filter((w) => w.startsWith('user away: an approval in this run went unanswered for 5 seconds'))).toHaveLength(1);
+      // OQ-76's ruling (PD-TOOLS-011): and on the timeline, as `user_away`, the run's own entry.
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'user_away').map((t) => [t.actor, JSON.parse(t.metadata)])).toEqual([['rotaris', { after_seconds: 5 }]]);
       // The run ended: the holder is the run's, and a later run of this session starts present (below).
       expect(root.presence!.away()).toEqual({ afterSeconds: 5 });
     });
@@ -1318,6 +1320,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(sessions.control({ op: 'setPermissionMode', sessionId: sid, args: { mode: 'autonomous' } })).toEqual({ ok: true });
       expect(presence.away()).toBeNull();
       expect(warnings.filter((w) => w.startsWith('user returned:'))).toHaveLength(1);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'user_returned').map((t) => [t.actor, JSON.parse(t.metadata)])).toEqual([['user', { after_seconds: 5 }]]);
       // … so does a message to the run, even one the operation then refuses (blank text) — the input is the user's.
       presence.markAway(5);
       expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: '   ' } })).toEqual({ ok: false });

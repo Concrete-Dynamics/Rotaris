@@ -75,6 +75,17 @@ export const DECISION_SOURCES = [
 ] as const;
 export type DecisionSource = (typeof DECISION_SOURCES)[number];
 
+/**
+ * PD-TOOLS-011 (OQ-54, ruled 2026-10-06): the vocabularies a permission-audit entry and its `permission.decision` event
+ * are read against. They are REQ-TOOLS-012's and REQ-TOOLS-028's with one member each for a user's own terminal action
+ * (REQ-SHELL-107): `user-input` as its decision and `user` as its source. No policy resolution yields either — `Decision`
+ * and `DecisionSource` stay the policy's own — so only that entry carries them.
+ */
+export const AUDIT_DECISIONS = [...DECISIONS, 'user-input'] as const;
+export type AuditDecision = (typeof AUDIT_DECISIONS)[number];
+export const AUDIT_DECISION_SOURCES = [...DECISION_SOURCES, 'user'] as const;
+export type AuditDecisionSource = (typeof AUDIT_DECISION_SOURCES)[number];
+
 /** REQ-TOOLS-062: the sources that may claim a request id. */
 export const APPROVAL_RESOLUTION_SOURCES: ReadonlySet<DecisionSource> = new Set<DecisionSource>([
   'user-once', 'user-session', 'user-deny', 'headless-policy', 'timeout', 'cancelled', 'presenter-error', 'fail-closed',

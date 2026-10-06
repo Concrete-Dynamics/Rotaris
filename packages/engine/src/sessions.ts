@@ -1430,7 +1430,7 @@ export class Sessions {
     });
     entry.owner = owner;
     // Part Q: the memory is rehydrated at the first continuation, when the run's model resolver exists (REQ-SESSION-196's override).
-    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null, artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn }), portsOpen: new Set() });
+    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null, artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn, writer }), portsOpen: new Set() });
     return ok({ sessionId });
   }
 
@@ -1489,7 +1489,7 @@ export class Sessions {
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
-    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory(), artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn }), portsOpen: new Set() };
+    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory(), artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn, writer }), portsOpen: new Set() };
     this.live.set(sessionId, live);
     const row = writer.appendRow('user', prompt, true, { attachments: storedAttachments.attachments });
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
@@ -1518,7 +1518,7 @@ export class Sessions {
     const modeOverride: { value: string | null } = { value: null };
     live.modeOverride = modeOverride;
     // PD-TOOLS-005: one away holder per RUN, on the same terms — reached by every agent through `baseCtx`, discarded with the run.
-    const presence = new UserPresence({ record: warn });
+    const presence = new UserPresence({ record: warn, writer });
     live.presence = presence;
     const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     // With delegation the run creates the root's port itself (its own identity); the base port exists only without it.
@@ -1739,7 +1739,7 @@ export class Sessions {
     const modeOverride: { value: string | null } = { value: null };
     s.modeOverride = modeOverride;
     // PD-TOOLS-005: a continuation is a new run, so it starts with the user present — a previous run's away stretch is not inherited.
-    const presence = new UserPresence({ record: warn });
+    const presence = new UserPresence({ record: warn, writer: s.writer });
     s.presence = presence;
     const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { s.log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     s.tools = null;

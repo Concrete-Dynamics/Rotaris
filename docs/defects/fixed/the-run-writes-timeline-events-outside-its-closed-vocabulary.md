@@ -51,10 +51,25 @@ specification so the two cannot drift. Its test (`tools/check-timeline-vocabular
 `AWAITING`'s names, and checks that each other domain's word is stated by the requirement cited for it.
 
 **Not repaired: twenty-eight names** with no word in any list, held by the gate's `AWAITING` and raised as
-[OQ-157](../architecture/open-questions.md) — whether the specification gains their words or the facts move to another
+[OQ-157](../../architecture/open-questions.md) — whether the specification gains their words or the facts move to another
 record is a ruling, not a repair: three of them are durable memory two ADRs decided and the product reads back, eight are
 `PD-ORCH-005`'s rest-and-resume record the live run's checks read, and the session log OQ-76 and OQ-127 chose would carry
-routine facts as warnings or drop them. This note stays open until that ruling is built.
+routine facts as warnings or drop them. This note stayed open until that ruling was built (2026-10-06, below).
+
+## Outcome — repaired 2026-10-06: ruled as built, the words given ([R-071](../../product/requests.md#r-071))
+
+The owner ruled OQ-157 as recommended, with OQ-53, OQ-54, OQ-76 and OQ-127: the specification gains the words, and
+nothing in the store moved or was renamed. One amendment adds every name the gate's `AWAITING` held and the five raised
+beside it: [`PD-ORCH-014`](../../product/directives.md#pd-orch-014) extends REQ-ORCH-139 with fifteen run facts, OQ-127's
+three watchdog words (`waiting_on_tools`, `stall_recovered`, `corrective_message`, written since the commit before this
+one) and the three issue kinds (`model_wait`, `validation_llm_error`, `compression_failed`), and names REQ-NOTIFY-268's
+entry `notice`; [`PD-CHAT-009`](../../product/directives.md#pd-chat-009) gives the chat domain its thirteen words for the
+user's chat controls; [`PD-TOOLS-011`](../../product/directives.md#pd-tools-011) gives domain 05 OQ-76's `user_away` and
+`user_returned`, now written by `UserPresence`, and the audit's `user-input` and `user` (OQ-54).
+`tools/check-timeline-vocabulary.mjs` cites each name to its directive in `VOCABULARY`, and its `AWAITING` is empty, so a
+name in no vocabulary fails `pnpm lint` again. Pinned by `tools/check-timeline-vocabulary.test.ts` (the empty `AWAITING`,
+each directive's names, and each directive's entry stating its words in backticks), `presence.test.ts` and
+`contracts.test.ts`.
 
 ## Specs
 

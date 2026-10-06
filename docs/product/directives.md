@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Sixty-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Seventy-two.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -4870,6 +4870,141 @@ and a run whose analyst slot is excluded produces no improvement proposals.
 > level the reader resolved with an override (`helper.thinking`; before, the slot's own), pinned in `loop.test.ts`.
 > [`adr/0060`](../architecture/adr/0060-context-compression-over-a-replaceable-conversation.md) carries the ruling in place,
 > and the engine glossary names the group (**Helper call**, `packages/engine/CONTEXT.md`).
+
+---
+
+<a id="pd-orch-014"></a>
+
+### PD-ORCH-014 — the timeline and issue vocabularies name every fact the run records
+
+The timeline-event vocabulary of domain 01's Data & Formats SHALL also hold the words below, each naming the fact
+beside it and no other:
+
+- `model_exhausted` — REQ-ORCH-091 (a)'s session-wide memory that a provider and model pair is exhausted, read back
+  when the session resumes;
+- `model_override` — REQ-ORCH-091 (d)'s session-wide override, read back when the session resumes;
+- `context_compressed` — a completed compression. It is **the event that reports the compression** REQ-CONFIG-135
+  names, "the session's event stream" read as the session's timeline (OQ-53): it carries `threshold_percentage`,
+  `capacity`, `advertised_input_limit`, `default_threshold` and `trigger_tokens` as separate fields, and
+  REQ-MONITOR-086's count is seeded from these entries;
+- `iteration_paused` and `iteration_resumed` — an iteration left open by a pause, a stop, a quit or a crash, and that
+  iteration resumed (PD-ORCH-005);
+- `child_paused` and `child_resumed` — an agent left unfinished by such a rest, and that agent resumed or a settled
+  child followed up (PD-ORCH-005);
+- `approval_withdrawn` and `question_withdrawn` — an approval or a question withdrawn by such a rest (PD-ORCH-005);
+- `run_pause_requested` and `run_pause_refused` — the user asking the run to pause, and a pause refused at the plan
+  gate (PD-ORCH-005 clause 11);
+- `run_continuation_intent` — a continuation's intent and its audit payload;
+- `loop_supervisor_activation` — a loop-supervisor activation short of escalation;
+- `context_selection` — the sibling and attached artifacts a child was given;
+- `notice` — the entry REQ-NOTIFY-268 writes for a persistent notice of severity `warning` or `error`, with the
+  notice's own severity;
+- `waiting_on_tools`, `stall_recovered` and `corrective_message` — REQ-MONITOR-118's silence with tool calls in flight,
+  REQ-MONITOR-120's recovery after a stall, and REQ-NOTIFY-111's one corrective message (OQ-127).
+
+The issue-kind vocabulary SHALL also hold `model_wait` (REQ-NOTIFY-090's wait on a provider limit),
+`validation_llm_error` (REQ-ORCH-092's validation retry) and `compression_failed` (a compression that did not complete).
+
+REQ-ORCH-139's closure is unchanged and reads over the vocabularies as extended here. Like the words other domains'
+Data & Formats fix, the timeline words of the chat domain ([`PD-CHAT-009`](#pd-chat-009)) and of domain 05
+([`PD-TOOLS-011`](#pd-tools-011)) are among those vocabularies, and a run uses no name outside them.
+
+**Why, and what it costs.** The product wrote these thirty-three names under no vocabulary's word, a recorded departure
+from REQ-ORCH-139's "MUST NOT" that a lint gate held on a closed waiting list (OQ-157). The alternative was to move the
+facts to another record, and the only candidate, the session log, is worse on every count: autopsies and exports read
+the timeline (REQ-SESSION-199) and the log is in neither; the product reads several of these entries back
+(`model_exhausted` and `model_override` on resume, ADR-0027; `context_compressed` for REQ-MONITOR-086's count,
+ADR-0060; PD-ORCH-005's rest and resume, whose checks read the metadata); and moving them would need store changes
+and lose what earlier sessions recorded. What is given up: domain 01's list alone is no longer the whole of its
+vocabulary, so a reader of the specification must follow the back-pointer to this entry to know every name a run may
+write.
+
+> **Extends:** REQ-ORCH-139, REQ-NOTIFY-268, REQ-CONFIG-135
+
+*Raised by the owner, 2026-10-06, ruling OQ-157, OQ-53 and OQ-127 as recommended; logged as [R-071](requests.md#r-071). Built as
+`PD-ORCH-006` and renumbered `PD-ORCH-014` before it landed, `main`'s `PD-ORCH-006` to `PD-ORCH-013` having landed
+meanwhile.*
+
+> **First execution, 2026-10-06, built under [R-071](requests.md#r-071):** the names were already written; the
+> directive's execution is the gate. `tools/check-timeline-vocabulary.mjs` (in `pnpm lint`) moved the thirty-three
+> names from `AWAITING` to `VOCABULARY`, each cited to this directive, `PD-CHAT-009` or `PD-TOOLS-011`, and `AWAITING`
+> is empty, so a new name fails the gate again. Its test checks that each cited directive's entry states its word in
+> backticks, as it already checked a requirement's. Nothing in the text was wrong. The issue kinds are not gated: no
+> gate reads an issue's kind, and every other kind the product writes is named by a requirement of its own domain (read
+> once, by hand, on this day). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-chat-009"></a>
+
+### PD-CHAT-009 — the user's chat controls are recorded under the chat domain's timeline words
+
+The chat domain SHALL have a timeline-event vocabulary of its own, whose words name what the user did with the
+conversation's controls and what became of it:
+
+- `steering_submitted`, `steering_injected` and `steering_not_delivered` — a steering prompt submitted by the user,
+  delivered into its agent's conversation, and one the run ended before delivering (REQ-MONITOR-133, REQ-MONITOR-134);
+- `prompt_queued`, `prompt_edited`, `prompt_removed` and `prompt_triggered` — a prompt queued for the next iteration,
+  edited, removed, and become a task (REQ-CHAT-035, REQ-CHAT-037, REQ-CHAT-038, REQ-CHAT-040);
+- `todo_edited` — a todo item added, updated or removed by the user;
+- `entry_model_switched` and `entry_reasoning_switched` — the entry model or reasoning level switched by the user;
+- `transcript_cleared` — the transcript cleared by the user (REQ-CHAT-081);
+- `run_paused_message_limit` and `pause_resolved` — the run pausing at the message limit (REQ-ORCH-087), and that pause
+  resolved by the user.
+
+Each entry is written when the fact occurs, on the session's timeline, and is among the records the session domain's
+export reaches. REQ-ORCH-139's closure over these words is [`PD-ORCH-014`](#pd-orch-014)'s.
+
+**Why, and what it costs.** These thirteen were written with no vocabulary's word (OQ-157). They are the user's own
+actions, so they belong to the domain whose controls produce them rather than to domain 01's list of what a run does. A
+person reading the export after the fact can tell what the user did from what the run did. What it costs: a second
+domain now fixes timeline words, and a reader of domain 03 has to know that this entry holds them.
+
+> **New:** no live requirement covers this.
+
+*Raised by the owner, 2026-10-06, ruling OQ-157 as recommended; logged as [R-071](requests.md#r-071). Built as `PD-CHAT-007`
+and renumbered `PD-CHAT-009` before it landed, `main`'s `PD-CHAT-007` and `PD-CHAT-008` having landed meanwhile.*
+
+> **First execution, 2026-10-06, built under [R-071](requests.md#r-071):** with `PD-ORCH-014`'s, as one gate; the
+> thirteen names were already written as stated, and the gate cites each to this entry. Nothing in the text was wrong.
+
+---
+
+<a id="pd-tools-011"></a>
+
+### PD-TOOLS-011 — a user's own terminal action and the user's presence have their words
+
+**The audit's two members.** A permission-audit entry that records a user's own terminal action (REQ-SHELL-107)
+carries the decision `user-input` and the source `user`. `user-input` SHALL be a member of the decision vocabulary that
+an audit entry and its `permission.decision` event are read against, beside REQ-TOOLS-012's three. `user` SHALL be a
+member of REQ-TOOLS-028's decision-source vocabulary, its thirteenth. No policy resolution yields either. What
+REQ-TOOLS-012 says of resolution is unchanged: it yields `allow`, `ask` or `deny`, and the dispatcher handles only
+`allow` or `deny`. Only the entry of a user's own terminal action carries the two.
+
+**The presence words.** Domain 05's timeline words SHALL also hold `user_away` and `user_returned`: the run marking its
+user away when an approval wait ended by timeout, and the user's next input to the session ending that stretch
+(PD-TOOLS-005). Each entry carries the expired timeout, in seconds, as `after_seconds`.
+
+**Why, and what it costs.** The terminal's audit entry was written with REQ-SHELL-107's two words, which neither closed
+vocabulary held, so a decision-log reader enumerating them would not recognise it (OQ-54). The presence transitions were
+session-log lines only (OQ-76), so an autopsy reading the store or the export saw a row of `permission_denied` issues and
+not the instant the user went away or came back. What it costs: the audit's vocabularies are no longer the policy's, and
+a reader must tell an audit decision from a policy outcome. The product keeps them apart in code (`AUDIT_DECISIONS` and
+`AUDIT_DECISION_SOURCES` beside `DECISIONS` and `DECISION_SOURCES` in `packages/contracts/src/tools.ts`).
+
+> **Narrows:** REQ-TOOLS-012, REQ-TOOLS-028
+
+*Raised by the owner, 2026-10-06, ruling OQ-54 and OQ-76 as recommended; logged as [R-071](requests.md#r-071). Built as
+`PD-TOOLS-007` and renumbered `PD-TOOLS-011` before it landed, `main`'s `PD-TOOLS-007` to `PD-TOOLS-010` having landed
+meanwhile.*
+
+> **First execution, 2026-10-06, built under [R-071](requests.md#r-071):** the rule held as written. The terminal's
+> audit entry takes its two words from the audit's vocabularies (`USER_TERMINAL_DECISION` and `USER_TERMINAL_SOURCE` in
+> `apps/desktop/src/run-host/terminal.ts`), and `UserPresence` writes `user_away` (actor `rotaris`) and `user_returned`
+> (actor `user`) beside its two session-log lines, which keep their `WARNING` level so the stretch's end is visible
+> wherever its start is (`packages/engine/src/run/presence.ts`). **What was measured.** `contracts.test.ts` and
+> `presence.test.ts`, each red on `37f7a98`. **What was not measured.** No built-app or live run marked a user away.
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

@@ -2564,7 +2564,9 @@ Until it is answered the tool stays on the orchestrator, which is the narrow rea
 requirement grants.
 
 **OQ-53 — Which event reports a compression, given a closed catalogue?** *(No ADR beyond ADR-0060, which ships an
-interim; raised against `REQ-CONFIG-135` by context compression's first execution, Part AH, 2026-09-08.)*
+interim; raised against `REQ-CONFIG-135` by context compression's first execution, Part AH, 2026-09-08. Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** as recommended — "the session's event stream" is read as the session's timeline, so the `context_compressed` timeline entry is the event that reports the compression and no event joins REQ-EVENTS-041's catalogue; its name is a word of domain 01's vocabulary under OQ-157's ruling ([`PD-ORCH-014`](../product/directives.md#pd-orch-014), with its back-pointer at REQ-CONFIG-135).
 
 `REQ-CONFIG-135` says that whenever a compression trigger is resolved, the four inputs that produced it and the
 resulting token number are surfaced "in exactly two places", the first being: "emitted on the session's event
@@ -2590,7 +2592,9 @@ asks to be carried is carried, in a venue it did not name. If the second reading
 event joins it — the interim is not repaired quietly. *(Added 2026-10-01: `context_compressed` is also a name
 REQ-ORCH-139's vocabulary does not have; it is held, with every other such name, by OQ-157.)*
 
-**OQ-54 — The user-terminal audit entry's `decision` and `source` fall outside the closed permission vocabularies.** *(spec 12 Data & Formats, "Permission audit entries for user terminal actions"; REQ-TOOLS-012/028. Raised by the terminal stream's first execution, Part AL, 2026-09-09.)*
+**OQ-54 — The user-terminal audit entry's `decision` and `source` fall outside the closed permission vocabularies.** *(spec 12 Data & Formats, "Permission audit entries for user terminal actions"; REQ-TOOLS-012/028. Raised by the terminal stream's first execution, Part AL, 2026-09-09. Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** as recommended — the vocabularies gain the two members: `user-input` beside REQ-TOOLS-012's three decisions and `user` as REQ-TOOLS-028's thirteenth source, carried only by the audit entry of a user's own terminal action and never yielded by a policy resolution ([`PD-TOOLS-011`](../product/directives.md#pd-tools-011), narrowing both; `AUDIT_DECISIONS` and `AUDIT_DECISION_SOURCES` in `packages/contracts/src/tools.ts`).
 
 REQ-SHELL-107 says a user's terminal action is written to the permission audit with `decision: user-input`, `source: user`. `DECISIONS` is the closed set `{allow, ask, deny}` (REQ-TOOLS-012) and `DECISION_SOURCES` the closed twelve (REQ-TOOLS-028); neither holds `user-input` or `user`. Part AL writes the entry as spec 12 words it (the writer takes the strings), so a decision-log reader that enumerates the closed vocabularies will not recognise it. Whether spec 12 mints two new members, or the audit entry is a different record from a permission decision, is the owner's call. Recorded, written as spec 12 says, not resolved.
 
@@ -3369,7 +3373,9 @@ eight of O-11's twelve reviews are for a notice or a pointer.
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
 
 **OQ-76 — Which timeline word records that a run's user went away, and came back?** *(REQ-ORCH-139, REQ-SESSION-142,
-`PD-TOOLS-005`. Raised 2026-09-28 by building `PD-TOOLS-005` under [R-062](../product/requests.md#r-062).)*
+`PD-TOOLS-005`. Raised 2026-09-28 by building `PD-TOOLS-005` under [R-062](../product/requests.md#r-062). Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** as recommended, with OQ-157 — domain 05's timeline gains `user_away` and `user_returned` ([`PD-TOOLS-011`](../product/directives.md#pd-tools-011)), written by `UserPresence` beside its two session-log lines, which keep their `WARNING` level so the stretch's end is visible wherever its start is; each entry carries the expired timeout as `after_seconds`.
 
 `PD-TOOLS-005` makes a run treat the user as away once an approval wait has expired unanswered, and present again on
 their next input to the session. An autopsy of such a run wants both instants: every approval ask between them was
@@ -6190,7 +6196,7 @@ None of them says what ends a silent child's step so that there is an outcome to
   untouched, and a line at a level that overstates it is a smaller departure than a name REQ-ORCH-139 forbids
   ("MUST NOT use any name outside those vocabularies"). The same closure is already crossed
   elsewhere in the engine
-  ([`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md)).
+  ([`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../defects/fixed/the-run-writes-timeline-events-outside-its-closed-vocabulary.md)).
 - ~~**The stall callback fires on every evaluation, and no host listens.** No badge, activity text or countdown is drawn
   ([`a-stalled-child-is-never-shown-stalled.md`](../defects/fixed/a-stalled-child-is-never-shown-stalled.md)). The run's own root agent is not watched: REQ-MONITOR-117
   says "each agent", and REQ-ORCH-089's threshold is a child's. Whether the root is watched, and against which
@@ -6382,7 +6388,7 @@ becomes of the call's other fields, or what a child with no recorded conversatio
   `child.complete` event.
 - **The timeline entry is `child_resumed`**, with `follow_up: true` and the state it left. It is not a word of
   REQ-ORCH-139's vocabulary, as the rest's own use of it is not
-  ([`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md)).
+  ([`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../defects/fixed/the-run-writes-timeline-events-outside-its-closed-vocabulary.md)).
 - **REQ-ORCH-088's fallback retry of a follow-up starts from the child's payload**, as a resumed child's retry does
   (`PD-ORCH-005`'s first execution). The retry therefore carries neither the conversation nor the follow-up's `task`.
   Whether the retry should carry the follow-up is put to the owner.
@@ -8230,8 +8236,10 @@ vocabulary has?** *(REQ-ORCH-139, "MUST NOT use any name outside those vocabular
 record alike; REQ-SESSION-134, REQ-SESSION-142, REQ-SESSION-199; REQ-ORCH-091 (a) and (d); REQ-MONITOR-086; REQ-NOTIFY-268;
 `PD-ORCH-005`; ADR-0027 and ADR-0060, which decided three of the names; OQ-53, OQ-76 and OQ-127, which raised the same gap for
 one mechanism each. Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the repair of
-[`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md),
-acceptance finding A29. Open.)*
+[`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../defects/fixed/the-run-writes-timeline-events-outside-its-closed-vocabulary.md),
+acceptance finding A29. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** as recommended — the specification gains the words, in one amendment with OQ-53's, OQ-54's, OQ-76's and OQ-127's: the fifteen run facts, OQ-127's three watchdog words and the three issue kinds join domain 01's lists ([`PD-ORCH-014`](../product/directives.md#pd-orch-014), which also names REQ-NOTIFY-268's entry `notice`), the thirteen chat controls form the chat domain's own timeline vocabulary ([`PD-CHAT-009`](../product/directives.md#pd-chat-009)), and OQ-76's two words join domain 05's ([`PD-TOOLS-011`](../product/directives.md#pd-tools-011)). The pairing the build read (one mechanism, one entry word and one issue word) stands as built, and `tools/check-timeline-vocabulary.mjs`'s `AWAITING` is empty, so the vocabulary is closed again.
 
 REQ-ORCH-139 closes the names of timeline events and of issues to the vocabularies of domain 01's Data & Formats and the
 words other domains fix (domain 07's `run_start`, `run_end`, `session.interrupted_recovered` and `issue`; domain 05's

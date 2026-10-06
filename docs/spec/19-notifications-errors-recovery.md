@@ -116,6 +116,9 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-268** — Every persistent notice of severity `warning` or `error` is, at publication, additionally recorded as an entry carrying its title, its message body and its technical detail unchanged. Where the notice carries a session identifier, or is unscoped while a run is focused, the entry is written to that session's timeline; where no session applies, it is written to the application diagnostics. Recording precedes rendering, so a notice replaced within the same event-loop turn is still recorded. The entry is therefore what a user reads after a notice was superseded before it could be acted on, and no failure or refusal becomes unreachable through replacement alone. Notices of severity `info` and `success` are not recorded by this requirement.
 
+> **Extended by [`PD-ORCH-014`](../product/directives.md#pd-orch-014), 2026-10-06.** The timeline entry this requirement
+> writes is named `notice`, a word of domain 01's timeline vocabulary, and carries the notice's own severity.
+
 ### A7. Persistent notices: where and how they are drawn
 
 **REQ-NOTIFY-034** — The application window renders the current notice as a single inline banner at the top of the window, below the title bar. A secondary or popped-out window renders its own banner, and activating an action in that banner is handled identically to activating the same action in the main window.

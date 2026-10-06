@@ -1,8 +1,8 @@
 /**
  * REQ-ORCH-139's gate over the product's own source, and over fixtures for what it must tell apart: a timeline name in no
  * vocabulary fails wherever it is written (a writer call, a sink, the store's insert, main's request), a word of a
- * vocabulary passes, a name held by OQ-157 passes until nothing writes it, and a name the gate cannot read fails unless a
- * PASS_THROUGH entry says why. Acceptance finding A29: docs/defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md.
+ * vocabulary passes, a name held by an open question passes until nothing writes it, and a name the gate cannot read fails unless a
+ * PASS_THROUGH entry says why. Acceptance finding A29: docs/defects/fixed/the-run-writes-timeline-events-outside-its-closed-vocabulary.md.
  */
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,7 +14,7 @@ import { AWAITING, checkProduct, FORBIDDEN, specVocabulary, timelineWritesIn, VO
 const repo = join(import.meta.dirname, '..');
 
 describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
-  it('every timeline name the product writes is a word of a vocabulary or held by OQ-157, and every entry still excuses one', () => {
+  it('every timeline name the product writes is a word of a vocabulary (AWAITING, empty since OQ-157\'s ruling, holds none), and every entry still excuses one', () => {
     const { problems, stale, drift } = checkProduct(repo);
     expect(problems).toEqual([]);
     expect(stale).toEqual([]);
@@ -37,11 +37,18 @@ describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
     }
   });
 
-  it('REQ-ORCH-139: each word another domain fixes is stated, in backticks, by the requirement VOCABULARY cites for it', () => {
+  it('REQ-ORCH-139: each word another domain fixes is stated, in backticks, by the requirement VOCABULARY cites for it — or, for a directive\'s word, by that directive\'s entry', () => {
     const spec = readdirSync(join(repo, 'docs', 'spec')).filter((f) => f.endsWith('.md')).flatMap((f) => readFileSync(join(repo, 'docs', 'spec', f), 'utf8').split('\n'));
+    const directives = readFileSync(join(repo, 'docs', 'product', 'directives.md'), 'utf8');
+    const entryOf = (id: string): string | undefined => {
+      const at = directives.indexOf(`<a id="${id.toLowerCase()}"></a>`);
+      if (at < 0) return undefined;
+      const end = directives.indexOf('<a id="pd-', at + 1);
+      return directives.slice(at, end < 0 ? undefined : end);
+    };
     const unstated = Object.entries(VOCABULARY as Record<string, string>).filter(([, cite]) => cite !== 'REQ-ORCH-139').filter(([word, cite]) => {
-      const line = spec.find((l) => l.startsWith(`**${cite}**`) || l.startsWith(`- **${cite}**`));
-      return line === undefined || !line.includes(`\`${word}\``);
+      const text = cite.startsWith('PD-') ? entryOf(cite) : spec.find((l) => l.startsWith(`**${cite}**`) || l.startsWith(`- **${cite}**`));
+      return text === undefined || !text.includes(`\`${word}\``);
     });
     expect(unstated).toEqual([]);
   });
@@ -52,15 +59,23 @@ describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
     expect(Object.hasOwn(AWAITING as object, 'permission_mode_downgraded')).toBe(false);
   });
 
-  it('OQ-157: AWAITING can only shrink — its names are pinned here, so adding one is a deliberate edit of this test', () => {
-    expect(Object.keys(AWAITING as Record<string, unknown>).sort()).toEqual([
-      'approval_withdrawn', 'child_paused', 'child_resumed', 'context_compressed', 'context_selection', 'corrective_message', 'entry_model_switched',
-      'entry_reasoning_switched', 'iteration_paused', 'iteration_resumed', 'loop_supervisor_activation', 'model_exhausted',
-      'model_override', 'notice', 'pause_resolved', 'prompt_edited', 'prompt_queued', 'prompt_removed', 'prompt_triggered',
-      'question_withdrawn', 'run_continuation_intent', 'run_pause_refused', 'run_pause_requested', 'run_paused_message_limit',
-      'stall_recovered', 'steering_injected', 'steering_not_delivered', 'steering_submitted', 'todo_edited', 'transcript_cleared',
-      'waiting_on_tools',
+  it('OQ-157\'s ruling (2026-10-06): AWAITING is empty — the vocabulary is closed again — and its names are pinned here, so adding one is a deliberate edit of this test', () => {
+    expect(Object.keys(AWAITING as Record<string, unknown>)).toEqual([]);
+  });
+
+  it('OQ-157, OQ-53, OQ-76 and OQ-127 ruled together: the thirty-three names once held are words, each cited to the directive that adds it', () => {
+    const byDirective = (id: string) => Object.entries(VOCABULARY as Record<string, string>).filter(([, cite]) => cite === id).map(([name]) => name).sort();
+    expect(byDirective('PD-ORCH-014')).toEqual([
+      'approval_withdrawn', 'child_paused', 'child_resumed', 'context_compressed', 'context_selection', 'corrective_message',
+      'iteration_paused', 'iteration_resumed', 'loop_supervisor_activation', 'model_exhausted', 'model_override', 'notice',
+      'question_withdrawn', 'run_continuation_intent', 'run_pause_refused', 'run_pause_requested', 'stall_recovered', 'waiting_on_tools',
     ]);
+    expect(byDirective('PD-CHAT-009')).toEqual([
+      'entry_model_switched', 'entry_reasoning_switched', 'pause_resolved', 'prompt_edited', 'prompt_queued', 'prompt_removed',
+      'prompt_triggered', 'run_paused_message_limit', 'steering_injected', 'steering_not_delivered', 'steering_submitted',
+      'todo_edited', 'transcript_cleared',
+    ]);
+    expect(byDirective('PD-TOOLS-011')).toEqual(['user_away', 'user_returned']);
   });
 
   describe('over fixtures', () => {
@@ -108,7 +123,7 @@ describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
         "apps/desktop/src/main/index.ts:1: 'notice_word' is in no timeline vocabulary (REQ-ORCH-139)",
       ]);
       expect(stale).toEqual([
-        "AWAITING 'gone_word' is written nowhere — remove it, and say so in OQ-157",
+        "AWAITING 'gone_word' is written nowhere — remove it, and say so in the open question that holds it",
         'packages/engine/src/b.ts: PASS_THROUGH `name` matches nothing — remove it',
       ]);
       expect(drift).toEqual(["domain 01's vocabulary has 'iteration_start', which VOCABULARY lacks"]);

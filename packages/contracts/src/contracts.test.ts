@@ -146,6 +146,11 @@ describe('contracts — tools vocabularies', () => {
     expect(t.PUBLIC_TOOL_NAMES).toHaveLength(19);
     expect(new Set(t.PUBLIC_TOOL_NAMES).size).toBe(19);
     expect(t.DECISION_SOURCES).toHaveLength(12);
+    // PD-TOOLS-011 (OQ-54): the audit's vocabularies are the policy's with the two members of a user's own terminal action.
+    expect(t.AUDIT_DECISIONS).toEqual(['allow', 'ask', 'deny', 'user-input']);
+    expect(t.AUDIT_DECISION_SOURCES).toEqual([...t.DECISION_SOURCES, 'user']);
+    expect(t.DECISIONS).not.toContain('user-input');
+    expect(t.DECISION_SOURCES).not.toContain('user');
     expect(t.PERMISSION_PRESETS).toEqual(['restricted', 'ask', 'autonomous']);
     expect(t.resolvePreset('')).toEqual({ preset: 'ask', warned: false });
     expect(t.resolvePreset('bogus')).toEqual({ preset: 'restricted', warned: true });

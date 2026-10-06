@@ -61,6 +61,10 @@ Both classes are stated against the capability declaration of REQ-TOOLS-001 and 
 
 **REQ-TOOLS-012** — The decision vocabulary is {`allow`, `ask`, `deny`}. Policy resolution never raises to the dispatcher, and an `ask` is always resolved through the approval flow first, so the dispatcher only ever handles `allow` or `deny`.
 
+> **Narrowed by [`PD-TOOLS-011`](../product/directives.md#pd-tools-011), 2026-10-06.** The decision vocabulary an audit
+> entry is read against also holds `user-input`, carried only by the entry of a user's own terminal action (REQ-SHELL-107).
+> What this requirement says of policy resolution and the dispatcher is unchanged.
+
 **REQ-TOOLS-013** — A `deny` does not abort the run. It is returned as a tool-result error carrying the original tool-call id so the agent can re-plan. The refusal text is exactly: `Permission denied by rule '<rule_id>'. <reason> The '<tool_name>' call was not executed. Choose a different approach or ask the user to adjust the permission policy.`
 
 **REQ-TOOLS-014** — Loop-control tool names are never gated: `finish`, `finishtool`, `think`, `thinktool`, matched case-insensitively. Such calls resolve to allow with decision source `builtin` and rule id `builtin:meta-tool`.
@@ -93,6 +97,10 @@ Both classes are stated against the capability declaration of REQ-TOOLS-001 and 
 **REQ-TOOLS-027** — Every resolved decision, allows included, is recorded to the audit sink. A raising audit sink logs a warning and never breaks dispatch.
 
 **REQ-TOOLS-028** — The decision-source vocabulary recorded in audits and events is exactly: `rule`, `session-rule`, `preset`, `builtin`, `fail-closed`, `user-once`, `user-session`, `user-deny`, `headless-policy`, `timeout`, `cancelled`, `presenter-error`.
+
+> **Narrowed by [`PD-TOOLS-011`](../product/directives.md#pd-tools-011), 2026-10-06.** The vocabulary also holds `user`,
+> its thirteenth member, carried only by the audit entry of a user's own terminal action (REQ-SHELL-107). The text above
+> states the behavioural target and is kept for that reason.
 
 **REQ-TOOLS-029** — A call that belongs to no run at all is decided by a rule-less default policy whose default decision is allow and whose preset name is reported as `unrestricted`, and a warning is logged for every decision taken under it. This default is never applied to a call that does belong to a run, and no call is ever decided under a policy belonging to a different run (REQ-TOOLS-009).
 

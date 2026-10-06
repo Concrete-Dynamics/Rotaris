@@ -139,9 +139,12 @@ plain process with no React and the restore run against a fake run host with a c
   `insertTimeline`, main's `timeline.append` — and fails on a name in no vocabulary. Its `VOCABULARY` cites the
   requirement fixing each word, and domain 01's list is read from the specification so the two cannot drift. Its
   `FORBIDDEN` fails a name a directive withdrew though the displaced requirement still states it (PD-TOOLS-002's
-  `permission_mode_downgraded`). **Owed:** twenty-eight names the product writes have no word in any list; they are held
+  `permission_mode_downgraded`). ~~**Owed:** twenty-eight names the product writes have no word in any list; they are held
   in its `AWAITING` by OQ-157 — an entry nothing writes fails the gate, and the test pins the list's names, so adding one
-  is a deliberate test edit (since 2026-10-01, acceptance A29, R-067).
+  is a deliberate test edit (since 2026-10-01, acceptance A29, R-067).~~ **Done 2026-10-06** (R-071): the owner ruled
+  OQ-157 with OQ-53, OQ-54, OQ-76 and OQ-127, and the thirty-three names (the twenty-eight, OQ-127's three watchdog words
+  and OQ-76's two) are words of `PD-ORCH-014`, `PD-CHAT-009` and `PD-TOOLS-011`, each cited in `VOCABULARY`; `AWAITING` is
+  empty and pinned so, and the gate's test checks each directive's entry states its words.
 - **A whole-session update keeps the transcript rows** — `REQ-MONITOR-216` omits the transcript from it, so
   it cannot say which rows survived; the increment after an attach or a reconcile upserts by index. The
   first run loop's status saves emptied a transcript still being written before this was so (ADR-0043

@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { codeIntelligenceDiscovered, codeIntelligenceDiscovery, codeIntelligenceStatement, discoveryFailed } from './code-intelligence-discovery.mjs';
+import { codeIntelligenceDiscovered, codeIntelligenceDiscovery, codeIntelligenceListing, codeIntelligenceStatement, discoveryFailed } from './code-intelligence-discovery.mjs';
 
 const info = '[main 2026-10-03T06:16:07.855Z] info    run host: ';
 const warning = '[main 2026-10-03T06:16:07.854Z] warning run host: ';
@@ -131,5 +131,19 @@ describe('every reader of a failed discovery reads its one form since 2026-10-03
       });
     }
     expect(stale).toEqual([]);
+  });
+});
+
+describe('code-intel-proof\'s record of the discovery (REQ-MCP-053)', () => {
+  // docs/defects/fixed/code-intel-proof-reads-the-discovery-line-without-its-project-and-records-nan.md: the proof's own
+  // patterns had no room for the line's ` (project …)`, so both values read NaN and results.json recorded null.
+  it('reads the count and the time from the line with its project, and from an older line without one', () => {
+    const log = [`${info}mcp: discovery of 'other' listed 3 tool(s) in 5 ms`, `${info}mcp: discovery of 'code_intelligence' (project ${ws}) listed 22 tool(s) in 2869 ms`, `${info}mcp: discovery of 'code_intelligence' (project ${ws}) listed 22 tool(s) in 12 ms`].join('\n');
+    expect(codeIntelligenceListing(log)).toEqual({ listed: 22, ms: 2869, project: ws });
+    expect(codeIntelligenceListing(`${info}mcp: discovery of 'code_intelligence' listed 21 tool(s) in 900 ms`)).toEqual({ listed: 21, ms: 900, project: null });
+  });
+  it('answers null where no discovery listed the tools, so the proof can refuse an empty record', () => {
+    expect(codeIntelligenceListing(`${warning}mcp code_intelligence (project ${ws}): tool discovery failed in 973 ms (boom)`)).toBeNull();
+    expect(codeIntelligenceListing('')).toBeNull();
   });
 });

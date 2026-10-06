@@ -70,6 +70,20 @@ export function codeIntelligenceDiscovery(log) {
 }
 
 /**
+ * The first discovery in the log that listed the server's tools: `{ listed, ms, project }` (`project` null on a line from
+ * before REQ-MCP-034's binding was shown, `643e17c`), or null when none did. code-intel-proof's launch 2 records these; until
+ * 2026-10-06 it matched the line without its ` (project …)` part, read nothing and recorded `NaN`
+ * (docs/defects/fixed/code-intel-proof-reads-the-discovery-line-without-its-project-and-records-nan.md).
+ */
+export function codeIntelligenceListing(log) {
+  for (const line of String(log ?? '').split(/\r?\n/)) {
+    const l = LISTED.exec(line);
+    if (l) return { listed: Number(l[2]), ms: Number(l[3]), project: l[1] ?? null };
+  }
+  return null;
+}
+
+/**
  * Whether the launch discovered the server at all — a discovery that listed its tools or one that failed, never a setup
  * step (which runs while the server is disabled: open-questions.md, "Does a `code_intelligence` entry configured
  * `enabled: false` still make `code-intelligence-setup` applicable?"). plan-gate-proof's guard that its fixture turned

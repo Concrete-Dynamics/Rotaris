@@ -31,6 +31,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, dataDirFor, electron, hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { lineRpcClient } from './lib/line-rpc-client.mjs';
+import { codeIntelligenceListing } from './lib/code-intelligence-discovery.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -286,8 +287,12 @@ if (want(2) || want(3)) {
   if (!anyLaunch.every((l) => l.includes(`${TOKEN} --`))) throw new Error(`binding: a launch line lacks the token-first form:\n${anyLaunch.join('\n')}`);
   const connected = lines(r.log, /mcp code_intelligence: connected for the session/)[0] ?? '';
   if (!/hook code_intelligence:ok/.test(connected)) throw new Error(`discovery: the binding probe did not succeed: ${connected || '(no connected line)'}\n${lines(r.log, /code_intelligence/).slice(-10).join('\n')}`);
-  const discoveryMs = Number(/discovery of 'code_intelligence' listed (\d+) tool\(s\) in (\d+) ms/.exec(r.log)?.[2]);
-  const listed = Number(/discovery of 'code_intelligence' listed (\d+) tool\(s\)/.exec(r.log)?.[1]);
+  // REQ-MCP-053's discovery time and the listing, read from the line as it is since REQ-MCP-034's binding was shown (with its
+  // project); an empty record fails the proof rather than writing null (docs/defects/fixed/code-intel-proof-reads-the-discovery-line-without-its-project-and-records-nan.md).
+  const listing = codeIntelligenceListing(r.log);
+  if (listing === null || !Number.isFinite(listing.listed) || !Number.isFinite(listing.ms)) throw new Error(`discovery: no line records the discovery's listing and time:\n${lines(r.log, /mcp: discovery of |tool discovery failed/).join('\n') || r.log.slice(-2000)}`);
+  if (listing.project !== noCode) throw new Error(`discovery: the listing line names the project ${listing.project}, not ${noCode}`);
+  const { listed, ms: discoveryMs } = listing;
   const { db, session: s } = sessionFrom(r);
   const calls = toolRows(db, s.session_id, 'list_memories');
   const children = db.prepare('SELECT canonical_name, granted_mcp FROM children WHERE session_id = ?').all(s.session_id);

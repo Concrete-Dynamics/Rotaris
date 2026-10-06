@@ -21,7 +21,7 @@ the detached, non-repository, no-git and unread states) does not name this state
 ## Specs
 
 - REQ-WORKSPACE-020: the item "SHALL render as empty text — no icon, no arrow, no tooltip — exactly when the snapshot's
-  branch name is empty, which per REQ-WORKSPACE-029 covers … an unborn branch". `PD-WORKSPACE-007` narrows that clause for a
+  branch name is empty, which per REQ-WORKSPACE-029 covers … an unborn branch". `PD-WORKSPACE-008` narrows that clause for a
   detached HEAD, a non-repository, Git unavailable and the state before the first read only, and says every other clause
   still governs and that the branch icon "stands before a branch name only"; the unborn branch is still governed by the
   empty-item clause, and the build draws an icon, a placeholder and a tooltip there.
@@ -35,4 +35,4 @@ the detached, non-repository, no-git and unread states) does not name this state
 - `packages/ui/src/composer.ts`: `stripItems`, the icon for state `branch`.
 - `packages/workspace/src/git/view.ts`: the branch read (`rev-parse --abbrev-ref HEAD`), `branch` null on a failed read.
 - `packages/ui/src/ui.test.ts`: the branch item's cases, none for this state.
-- `docs/product/directives.md` (`PD-WORKSPACE-007`), `docs/architecture/open-questions.md` (OQ-193's ruling).
+- `docs/product/directives.md` (`PD-WORKSPACE-008`), `docs/architecture/open-questions.md` (OQ-193's ruling).

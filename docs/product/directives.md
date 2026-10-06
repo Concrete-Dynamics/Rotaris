@@ -3201,7 +3201,7 @@ ranges over the task's own items, below.)*
 
 **Which todo items the success clause ranges over (revision 2).** On every run, coordinating or granted the bundle,
 REQ-ORCH-029's constraint "it does not report the run successful while a todo item is non-terminal" SHALL range over the
-items of the plan that the task in hand answers for, as [`PD-ORCH-011`](#pd-orch-011) decides them: the items not already
+items of the plan that the task in hand answers for, as [`PD-ORCH-012`](#pd-orch-012) decides them: the items not already
 open when the task was first taken up. An item a task given up on, an earlier run or anything else left open before then
 does not keep the coordinator from reporting the task's work done; it stays open in the plan. The clause's other half, a
 todo item whose recorded state disagrees with what happened, is unchanged.
@@ -4096,9 +4096,11 @@ as for any other.
 
 ---
 
-<a id="pd-orch-009"></a>
+<a id="pd-orch-010"></a>
 
-### PD-ORCH-009 — a child is never named after a root of its session
+### PD-ORCH-010 — a child is never named after a root of its session
+
+*Renumbered before landing: built as `PD-ORCH-009` on its branch, it took the next free number, `PD-ORCH-010`, when `PD-ORCH-009` (the answerless entry role, OQ-199) landed on `main` first; its citations followed.*
 
 Beside REQ-ORCH-044's rule, a delegated child at any depth SHALL NOT take as its canonical name the canonical name or the
 persona of the root it works under, nor of any root the session has recorded: each iteration's root persona and root
@@ -4129,9 +4131,11 @@ name, and the root named like an earlier child stays drawn as both until after t
 
 ---
 
-<a id="pd-orch-010"></a>
+<a id="pd-orch-011"></a>
 
-### PD-ORCH-010 — `explicit_trivial` is a small edit, and the tie-break chooses among the plausible categories
+### PD-ORCH-011 — `explicit_trivial` is a small edit, and the tie-break chooses among the plausible categories
+
+*Renumbered before landing: built as `PD-ORCH-010` on its branch, it took the next free number, `PD-ORCH-011`, when `PD-ORCH-009` (the answerless entry role, OQ-199) landed on `main` first; its citations followed.*
 
 `explicit_trivial` SHALL mean an explicitly stated, trivial **edit**: with `single_file_change`, one of the two smallest
 edits, as REQ-ORCH-021's micro group holds them. A request that changes nothing is not `explicit_trivial`, however small
@@ -4161,9 +4165,11 @@ as an edit, and `slice-proof` reports that run red where it accepted it before.
 
 ---
 
-<a id="pd-orch-011"></a>
+<a id="pd-orch-012"></a>
 
-### PD-ORCH-011 — a task answers for the plan items opened since it was first taken up
+### PD-ORCH-012 — a task answers for the plan items opened since it was first taken up
+
+*Renumbered before landing: built as `PD-ORCH-011` on its branch, it took the next free number, `PD-ORCH-012`, when `PD-ORCH-009` (the answerless entry role, OQ-199) landed on `main` first; its citations followed.*
 
 REQ-ORCH-075's "the agent's own todo list still holds pending/in-progress items" SHALL range over the items of the
 coordinator's plan that the task in hand answers for, not over the whole session plan. A task answers for every item that
@@ -4305,9 +4311,11 @@ by this watch; the wait's own bound and its notice are what speak for it.
 
 ---
 
-<a id="pd-workspace-005"></a>
+<a id="pd-workspace-006"></a>
 
-### PD-WORKSPACE-005 — a code-intelligence setup's failure reads in these words where REQ-WORKSPACE-092 and REQ-WORKSPACE-093 give none
+### PD-WORKSPACE-006 — a code-intelligence setup's failure reads in these words where REQ-WORKSPACE-092 and REQ-WORKSPACE-093 give none
+
+*Renumbered before landing: built as `PD-WORKSPACE-005` on its branch, it took the next free number, `PD-WORKSPACE-006`, when `PD-WORKSPACE-005` (the project-setup banner, OQ-171) landed on `main` first; its citations followed.*
 
 The `code-intelligence-setup` task's step details and failure SHALL read as follows. REQ-WORKSPACE-092's two fixed
 sentences for a stopped step, REQ-WORKSPACE-091's for a skipped one, REQ-WORKSPACE-093's three stage reasons and its
@@ -4352,9 +4360,11 @@ past the bound without reporting is reported failed though it may still finish.
 
 ---
 
-<a id="pd-workspace-006"></a>
+<a id="pd-workspace-007"></a>
 
-### PD-WORKSPACE-006 — the status strip's path link and flag explanations follow the shell domain
+### PD-WORKSPACE-007 — the status strip's path link and flag explanations follow the shell domain
+
+*Renumbered before landing: built as `PD-WORKSPACE-006` on its branch, it took the next free number, `PD-WORKSPACE-007`, when `PD-WORKSPACE-005` (the project-setup banner, OQ-171) landed on `main` first; its citations followed.*
 
 Where the workspace domain and the shell domain, which owns the status strip (REQ-SHELL-047), state the strip differently,
 the shell domain's statement SHALL govern:
@@ -4386,9 +4396,11 @@ bound allowed.
 
 ---
 
-<a id="pd-workspace-007"></a>
+<a id="pd-workspace-008"></a>
 
-### PD-WORKSPACE-007 — the strip's branch item names the states in which there is no branch to show
+### PD-WORKSPACE-008 — the strip's branch item names the states in which there is no branch to show
+
+*Renumbered before landing: built as `PD-WORKSPACE-007` on its branch, it took the next free number, `PD-WORKSPACE-008`, when `PD-WORKSPACE-005` (the project-setup banner, OQ-171) landed on `main` first; its citations followed.*
 
 Where REQ-WORKSPACE-020 renders the status strip's branch item as empty text with no tooltip, the item SHALL instead convey
 the state, as REQ-GIT-161 asks, in these words, each its tooltip and its accessible description:

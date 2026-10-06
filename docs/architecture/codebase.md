@@ -778,7 +778,7 @@ three of five runs on 2026-10-03 went red on what the model answered or how long
 ([note](../defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)). Each intent prompt accepts the
 categories REQ-ORCH-006 and REQ-ORCH-021 leave in reach of it, the reason written beside each (`INTENTS`). The README
 question admitted `explicit_trivial`, which was [OQ-198](open-questions.md)'s to narrow; since the owner's ruling of 2026-10-06
-([`PD-ORCH-010`](../product/directives.md#pd-orch-010), [R-071](../product/requests.md#r-071)) it accepts the answer group alone. A fallback stays a red, and one
+([`PD-ORCH-011`](../product/directives.md#pd-orch-011), [R-071](../product/requests.md#r-071)) it accepts the answer group alone. A fallback stays a red, and one
 at the 12 s bound names OQ-114. A run the product completed in which the model wrote no answer is reported as the model's
 call: it is kept as `run.attempt-1.*` (and in `.proof/slice-proof-answerless/`, which the next run does not clear) and
 scenario 3 runs once more. A second answerless run is a red ([OQ-199](open-questions.md)

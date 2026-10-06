@@ -46,12 +46,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 ## Last reconciled with the code: **2026-10-06**
 
 **The remaining confirm-as-built questions are ruled, and no code moved (R-071; fin20).** OQ-154 to OQ-203's
-confirm-as-built rulings are written into their entries, with `PD-HOOKS-001`, `PD-ORCH-009` to `PD-ORCH-011`, `PD-ORCH-006`
-revision 2, `PD-MONITOR-003` to `PD-MONITOR-005`, `PD-WORKSPACE-005` to `PD-WORKSPACE-007`, `PD-SHELL-007`, `PD-SHELL-008`,
+confirm-as-built rulings are written into their entries, with `PD-HOOKS-001`, `PD-ORCH-010` to `PD-ORCH-012`, `PD-ORCH-006`
+revision 2, `PD-MONITOR-003` to `PD-MONITOR-005`, `PD-WORKSPACE-006` to `PD-WORKSPACE-008`, `PD-SHELL-007`, `PD-SHELL-008`,
 `PD-SESSION-001`, `PD-CHAT-008` and `PD-CHAT-003` revision 2 where a ruling departs from a requirement. The **runtime
 view**'s run-level agent paragraph now calls OQ-159 ruled (`PD-MONITOR-003`), and its stall-watch bullets cite `PD-MONITOR-005` for OQ-155 and OQ-173; the notes this log names as open for those
 rulings (the cancel while `session_end` runs, OQ-154; the branch item's states, OQ-193) are closed in `docs/defects/fixed/`.
-`slice-proof` expects the answer group alone for its question (`PD-ORCH-010`). No package, edge, process, channel, command
+`slice-proof` expects the answer group alone for its question (`PD-ORCH-011`). No package, edge, process, channel, command
 or store column changed.
 
 **An entry role that wrote no answer is asked once more; a continuation's parent is told it starts with no memory; the

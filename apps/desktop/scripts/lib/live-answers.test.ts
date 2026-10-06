@@ -3,7 +3,7 @@
  * (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`): run 4's `explicit_trivial (0.99)`
  * for the README question, run 5's classification that hit the 12 s bound, and run 2's run that completed with no
  * answer. Each line below is the log line those runs wrote. A fallback, a category the taxonomy's texts leave out of
- * reach, and a missing intent line stay reds (REQ-ORCH-006, REQ-ORCH-007, REQ-ORCH-021; Part L). Since PD-ORCH-010 (the
+ * reach, and a missing intent line stay reds (REQ-ORCH-006, REQ-ORCH-007, REQ-ORCH-021; Part L). Since PD-ORCH-011 (the
  * owner's ruling of OQ-198, 2026-10-06) run 4's answer is one of those reds: `explicit_trivial` is a small edit.
  */
 import { readFileSync } from 'node:fs';
@@ -26,7 +26,7 @@ describe('the intent scenario accepts what REQ-ORCH-006 and REQ-ORCH-021 leave i
     }
   });
 
-  it('PD-ORCH-010 (OQ-198): run 4\'s explicit_trivial for the README question is a red, since explicit_trivial is a small edit', () => {
+  it('PD-ORCH-011 (OQ-198): run 4\'s explicit_trivial for the README question is a red, since explicit_trivial is a small edit', () => {
     expect(intentVerdict(RUN4_INTENTS_1, readme)).toMatchObject({ category: 'explicit_trivial', confidence: '0.99', rung: 'json_schema' });
     expect(intentVerdict(RUN4_INTENTS_1, readme).problem).toMatch(/classified as explicit_trivial, outside what REQ-ORCH-006 and REQ-ORCH-021 leave in reach of it: question, exploration$/);
   });

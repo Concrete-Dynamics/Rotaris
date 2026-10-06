@@ -16,7 +16,7 @@
  *
  * The tie-break ("when several categories are plausible the tie-break prefers `moderate_feature`") chooses among the
  * plausible categories: it never brings `moderate_feature` into reach of a prompt no build is plausible for. And
- * `explicit_trivial` is a small edit, so a request that changes nothing is out of its reach. Both are PD-ORCH-010's,
+ * `explicit_trivial` is a small edit, so a request that changes nothing is out of its reach. Both are PD-ORCH-011's,
  * the owner's ruling of OQ-198 (R-071, 2026-10-06), which narrows REQ-ORCH-006.
  */
 export const INTENTS = [
@@ -25,7 +25,7 @@ export const INTENTS = [
     accept: ['question', 'exploration'],
     why: 'a question about one file that changes nothing. `question` and `exploration` are REQ-ORCH-021\'s answer group, and '
       + 'REQ-ORCH-006 fixes `exploration` as "investigate only", which reading one file to answer is. Out of reach: '
-      + '`explicit_trivial` and `single_file_change` (PD-ORCH-010: `explicit_trivial` is a small edit, and with '
+      + '`explicit_trivial` and `single_file_change` (PD-ORCH-011: `explicit_trivial` is a small edit, and with '
       + '`single_file_change` the micro group holds the two smallest edits; the prompt asks for none; run 4 of 2026-10-03 '
       + 'answered `explicit_trivial` at 0.99, which is a red since that ruling), `problem_resolution` (diagnose AND fix: '
       + 'nothing to fix), `refactor`, the build groups, and the clarify group (the prompt is neither ambiguous nor '

@@ -82,6 +82,42 @@ describe('Part U — repair, delete and the exports', () => {
       expect(s.list(dal, WS).find((r) => r.sessionId === 'S-dead')).toMatchObject({ status: 'interrupted', stale: false });
     });
 
+    /*
+     * OQ-60 as ruled (R-071): REQ-ORCH-082 is kept, and a recovered session's readers show REQ-SESSION-062's correction
+     * entry. Before the ruling its record carried no summary (the agents view's activity line read empty) and `summary.md`
+     * kept the dead run's last rebuild, with no Outcome block — and a session an earlier run had summarised showed that
+     * run's outcome as this one's.
+     */
+    it('OQ-60 as ruled: a repaired session\'s record and summary.md present the correction entry, over an earlier run\'s summary', async () => {
+      const correction = "Session was still marked 'running' but the lock names this machine and its process (pid 4242) is gone; status set to 'interrupted'.";
+      const fresh = plant('S-first', 'running', { lock: { pid: 4242 } });
+      const earlier = plant('S-again', 'running', { lock: { pid: 4242 } });
+      dal.updateSessionRun(earlier, { summary_status: 'completed', summary_severity: 'info', summary_text: 'The run completed.' });
+      const snapshots: { id: string; summary: unknown }[] = [];
+      const s = new Sessions({
+        clocks: clock, publisher: { increment: () => undefined, snapshot: (p) => { snapshots.push({ id: p.session.id, summary: p.session.summary }); } }, pid: 500, host: HOST,
+        retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-new', model: null,
+        sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), isProcessAlive: (p) => alive.has(p),
+      });
+      expect(s.repair(dal, WS, { all: true }).repaired.map((r) => r.sessionId).sort()).toEqual(['S-again', 'S-first']);
+      await s.summariesSettled();
+      for (const sid of [fresh, earlier]) {
+        // summary.md: rebuilt by the repair, its Outcome block the entry as it was written.
+        const md = readFileSync(join(dir, 'sessions', sid, 'summary.md'), 'utf8');
+        expect(md).toContain('- Status: interrupted');
+        expect(md).toContain(`## Outcome\n\ninterrupted (warning): ${correction}`);
+        expect(md).not.toContain('The run completed.');
+        // The session record — what the agents view's activity line reads — carries the same entry as its summary.
+        expect(s.resume(dal, WS, sid).ok).toBe(true);
+        s.owner(sid)!.reconcile();
+        expect(snapshots.filter((x) => x.id === sid).at(-1)!.summary).toEqual({ status: 'interrupted', severity: 'warning', message: correction });
+      }
+      // REQ-ORCH-082's columns are left as they were: the repair writes no summary of its own.
+      expect(dal.getSession(fresh)).toMatchObject({ summary_status: null, summary_severity: null, summary_text: null });
+      expect(dal.getSession(earlier)).toMatchObject({ summary_status: 'completed', summary_text: 'The run completed.' });
+      await s.closeAll();
+    });
+
     it('a running session with no lock at all is stale for that reason; a live lock is never repaired; a terminal status is not stale', () => {
       alive.add(777);
       plant('S-nolock', 'running');

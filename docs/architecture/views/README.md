@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**A recovered session's readers present the correction entry (OQ-60, R-071; fin20).** `sessionOutcomeOf` (`run/summary.ts`)
+is what a session's record carries as its `summary` and `summary.md` as its Outcome block: REQ-ORCH-082's columns, except
+while the session is `interrupted`, when the latest `session.interrupted_recovered` entry stands in their place. The repair
+rebuilds `summary.md`. The **runtime view**'s repair paragraph says so. No package, edge, process, channel, command or store
+column changed.
+
 **A tool call joins the saved totals as it completes (OQ-116; `PD-ORCH-008`, R-071; fin20).** The root's and each child's
 `onToolCompleted` add the call to the run's aggregate and persist it with the agent's own count (`countRootCall`, `countCall`,
 `SessionWriter.countToolCalls`); store **v32** appends `sessions.plan_root_tool_calls`, the plan cycle root's counted share,

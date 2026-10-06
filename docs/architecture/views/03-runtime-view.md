@@ -1457,7 +1457,11 @@ of §5 and none a channel: each is a request answered once.
   now consumes too; REQ-SESSION-171) → the state read (unreadable = nothing to do) → an active status required → the
   writer's `save('interrupted')` at the stronger durability setting → the `session.interrupted_recovered` timeline entry (REQ-SESSION-062 exactly: `warning`, actor `rotaris`, `{previous_execution_status, execution_status, reason}`) →
   the crash record (PD-ORCH-005 clause 3, `run/crash.ts`; §2) →
-  the lock released last (ADR-0005's note: the entry is written under the lock). `repair(all)` walks the listing rows of
+  the lock released last (ADR-0005's note: the entry is written under the lock) → `summary.md` rebuilt off the path
+  (`SummaryWriter`, awaited at shutdown). **OQ-60 as ruled (R-071, 2026-10-06):** REQ-ORCH-082's columns are left as they
+  are, and while the session is `interrupted` its readers present the latest correction entry in their place
+  (`sessionOutcomeOf`, `recoveryEntryOf` in `run/summary.ts`): the record's `summary`, which the agents view's activity line
+  reads, and `summary.md`'s Outcome block. `repair(all)` walks the listing rows of
   the workspace; `checkpointListing`'s REQ-GIT-094 repair is the same unit. A loaded, idle session repairs through its
   own live writer and its projection republishes — under the lock `withWriter` claims for it (below).
 - **Delete** (REQ-SESSION-166, REQ-GIT-069) in this order: (1) `prepareDelete` loads the row, refuses a live or

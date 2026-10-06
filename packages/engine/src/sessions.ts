@@ -1,7 +1,7 @@
 import { asSessionId, type Clocks, countNoun, err, formatAmount, type MachineId, millis, type Millis, ok, type Result, type SessionId, toIsoUtc } from '@rotaris/kernel';
 import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, COST_QUALIFIERS, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type CostQualifier, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
-import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
+import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal, type TimelineRow } from '@rotaris/store';
 import type { AgentBackend, ChatMessage, ContentPart } from '@rotaris/model';
 import { conversationOf } from './run/record.js';
 import { ProjectionOwner, type Publisher } from './projection-owner.js';
@@ -28,7 +28,7 @@ import type { DelegationOps } from './children/delegation.js';
 import { DEFAULT_BUDGET, holdsModelSlot, storeChildReport, userCancellation, writeCancelledTeardown, type Budget } from './children/ledger.js';
 import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
-import { SummaryWriter } from './run/summary.js';
+import { recoveryEntryOf, sessionOutcomeOf, SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 import { ArtifactStore } from './artifacts/store.js';
@@ -798,7 +798,7 @@ export function resumableOf(dal: StoreDal, r: SessionRow): ResumablePayload | nu
   return { iteration: open.iteration, agents: 1 + unfinished };
 }
 
-export function toSessionRecord(r: SessionRow, queued: readonly { id: string; content: string; createdAt: string }[] = [], toolCalls: readonly { tool_name: string; count: number; agents: number }[] = [], planGate: PlanGatePayload | null = null, resumable: ResumablePayload | null = null): SessionRecord {
+export function toSessionRecord(r: SessionRow, queued: readonly { id: string; content: string; createdAt: string }[] = [], toolCalls: readonly { tool_name: string; count: number; agents: number }[] = [], planGate: PlanGatePayload | null = null, resumable: ResumablePayload | null = null, recovery: Pick<TimelineRow, 'severity' | 'message'> | null = null): SessionRecord {
   return {
     // REQ-MONITOR-085: derived from the live run at every snapshot; a record read from the store alone carries none.
     compression: null,
@@ -836,7 +836,8 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     improvementArtifactIds: parseList(r.improvement_artifact_ids),
     runStartedAt: r.run_started_at,
     iterationsCompleted: r.iterations_completed,
-    summary: r.summary_status && r.summary_severity && r.summary_text ? { status: r.summary_status, severity: r.summary_severity, message: r.summary_text } : null,
+    // OQ-60 as ruled (R-071): a recovered session presents REQ-SESSION-062's correction entry; every other its run's summary.
+    summary: sessionOutcomeOf(r, recovery),
     permissionMode: r.permission_mode,
     sandboxed: r.sandboxed === 1,
     sandboxBackend: r.sandboxed === 1 ? r.sandbox_backend : '',
@@ -1217,6 +1218,8 @@ function parsePending(json: string): SessionRecord['pendingApprovals'] {
 
 export class Sessions {
   private readonly live = new Map<SessionId, Live>();
+  /** OQ-60 as ruled: the `summary.md` rebuilds repairs queued, awaited at shutdown (`closeAll`) and by `summariesSettled`. */
+  private readonly summaryRebuilds = new Set<Promise<void>>();
   /** REQ-CONFIG-094: every session with a place on a model, counted together against each model's cap (acceptance A13). */
   private readonly modelSlots: ModelSlots;
   /**
@@ -1369,7 +1372,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, liveModelFor: (id) => entry.run?.childModel(id) ?? null, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), excludedModels: this.excludedModelsFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryModelKey: entry.run?.entryModelKey ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable, recoveryEntryOf(dal, current)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, liveModelFor: (id) => entry.run?.childModel(id) ?? null, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), excludedModels: this.excludedModelsFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryModelKey: entry.run?.entryModelKey ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1429,7 +1432,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, liveModelFor: (id) => entry.run?.childModel(id) ?? null, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), excludedModels: this.excludedModelsFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryModelKey: entry.run?.entryModelKey ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable, recoveryEntryOf(dal, row)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, liveModelFor: (id) => entry.run?.childModel(id) ?? null, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), excludedModels: this.excludedModelsFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryModelKey: entry.run?.entryModelKey ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -2971,6 +2974,16 @@ export class Sessions {
     });
     if (!r.ok) { this.deps.warn(`session ${sessionId} could not be marked interrupted: ${r.error.reason}`); return { repaired: null, skipped: `the correction could not be made durable (${r.error.reason}); nothing was changed` }; }
     this.live.get(sessionId)?.owner.reconcile();
+    /*
+     * OQ-60 as ruled (R-071): `summary.md` is rebuilt from the corrected record, its Outcome block the correction entry.
+     * Until the ruling no save of the repaired session rebuilt it — only a run's saves do — so it kept the dead run's last
+     * rebuild, a session still `running` with no Outcome. Off the path, as every rebuild is (REQ-SESSION-028); shutdown waits.
+     */
+    const summary = new SummaryWriter({ file: `${this.deps.sessionFilesDir(dal, sessionId)}/summary.md`, timers: this.deps.clocks.timers, warn: (m) => this.deps.warn(m) });
+    summary.rebuild(1, () => dal.getSession(sessionId), (current) => sessionOutcomeOf(current, recoveryEntryOf(dal, current)));
+    const rebuilt = summary.settled();
+    this.summaryRebuilds.add(rebuilt);
+    void rebuilt.finally(() => this.summaryRebuilds.delete(rebuilt));
     return { repaired: { sessionId, from: previous, to: 'interrupted', reason }, skipped: null };
   }
 
@@ -3214,8 +3227,13 @@ export class Sessions {
    * on; the caller bounds the wait (the one 30 s allowance). Then every pending publication is
    * flushed and every lock a finished session still holds is released.
    */
+  /** For tests and for shutdown: every `summary.md` a repair queued has been written. */
+  async summariesSettled(): Promise<void> {
+    await Promise.all([...this.summaryRebuilds]);
+  }
+
   async closeAll(): Promise<void> {
-    const waits: Promise<unknown>[] = [];
+    const waits: Promise<unknown>[] = [...this.summaryRebuilds];
     for (const s of this.live.values()) {
       if (s.run && !s.run.isEnded) { s.run.stop.request('application_shutdown'); if (s.running) waits.push(s.running.catch(() => undefined)); }
     }

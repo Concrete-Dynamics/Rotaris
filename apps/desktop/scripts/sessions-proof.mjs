@@ -221,6 +221,10 @@ const repairOne = await launch('repair-one', {
   // `session_marked_interrupted`, and OQ-46's audit corrected the product without correcting the proofs that assert
   // the invented name (`docs/defects/fixed/the-proofs-assert-a-timeline-name-the-audit-corrected.md`).
   expect(withDb((db) => db.prepare("SELECT count(*) AS c FROM timeline WHERE session_id = ? AND name = 'session.interrupted_recovered'").get(A).c) === 1, 'no session.interrupted_recovered entry');
+  // OQ-60 as ruled (R-071): the repaired session's summary.md is rebuilt, its Outcome block the correction entry — not the
+  // seed run's `completed` outcome, which REQ-ORCH-082's columns still hold, and not the dead live run's last rebuild.
+  const summaryMd = readFileSync(join(dirname(dbFile()), 'sessions', A, 'summary.md'), 'utf8');
+  expect(summaryMd.includes('- Status: interrupted') && /## Outcome\n\ninterrupted \(warning\): Session was still marked 'running' but the lock names this machine and its process \(pid \d+\) is gone; status set to 'interrupted'\./.test(summaryMd), `A's summary.md after the repair:\n${summaryMd}`);
   // The probe cuts text at 400 characters, so the three paragraphs are read one by one.
   const disclosure = atText(repairOne, 5600, '[data-testid="session-disclosure"]');
   const carried = atText(repairOne, 5600, '[data-testid="session-disclosure-carried"]');
@@ -228,7 +232,7 @@ const repairOne = await launch('repair-one', {
   expect(/does not carry its session history/.test(disclosure) && /permission audit/.test(disclosure), `the disclosure reads "${disclosure.slice(0, 200)}"`);
   expect(/repository/.test(carried) && /identifier travels with the workspace/.test(carried) && /checkpoints are objects in your repository/.test(carried), `the carried paragraph reads "${carried}"`);
   expect(/Back up store/.test(remedies) && /Restore store/.test(remedies) && /Export records/.test(remedies) && /Export trajectory/.test(remedies), `the remedies paragraph reads "${remedies}"`);
-  results.repairOne = { report, lockReleased: true, timelineEntry: true, disclosure: { opening: disclosure.slice(0, 160), carried, remedies }, png: repairOne.png, reportPng: join(output, 'repair-one-report.png') };
+  results.repairOne = { report, lockReleased: true, timelineEntry: true, summaryOutcome: 'the correction entry', disclosure: { opening: disclosure.slice(0, 160), carried, remedies }, png: repairOne.png, reportPng: join(output, 'repair-one-report.png') };
 }
 
 // 4. repair-all — two stale and one live; then nothing stale.

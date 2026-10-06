@@ -2659,7 +2659,7 @@ still produced by the path resolver.
 built), or whether the action becomes two — "Load skill file…" and "Load skill folder…" — which is the
 only way to offer both on every platform and adds a header action the requirement does not state.
 
-**OQ-60 — What summary does a session carry when the run that owned it died without a teardown?** *(REQ-ORCH-082 with REQ-SESSION-060/062 and REQ-SESSION-093; raised 2026-09-16 while repairing the plan gate's cancel path.)*
+**OQ-60 — What summary does a session carry when the run that owned it died without a teardown?** *(REQ-ORCH-082 with REQ-SESSION-060/062 and REQ-SESSION-093; raised 2026-09-16 while repairing the plan gate's cancel path. Ruled 2026-10-06.)*
 
 `REQ-ORCH-082` is "the single definition of end-of-run summarization for the whole product", and all
 five of its arms are selected by a **stop reason**. A run whose host process died recorded none: the
@@ -2681,6 +2681,18 @@ REQ-SESSION-062's correction entry is the whole of what a recovered session says
 case the three NULL columns are correct and the readers should present that entry instead. The build
 must not choose: a second place deciding a summary would contradict REQ-ORCH-082's own claim to be the
 only one.
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** REQ-ORCH-082 is kept as it is, and the three
+readers present the recovery correction entry. No requirement names what those readers show for a recovered session, so the
+ruling alone settles it and no directive is minted. The reading taken where the ruling leaves a detail open: a recovered
+session is one whose status is `interrupted`, which only the repair writes (REQ-SESSION-073); while it is, its readers present
+the latest `session.interrupted_recovered` entry — status `interrupted`, the entry's severity and message, as written — in
+place of the columns, which are NULL for a first run that died and describe an earlier run otherwise; once a later run of the
+session starts, the columns govern again. The repair rebuilds `summary.md`, which only a run's saves had rebuilt. The columns
+are never written by the repair. **Built 2026-10-06 (fin20):** `sessionOutcomeOf` and `recoveryEntryOf`
+(`packages/engine/src/run/summary.ts`), read by `toSessionRecord` and `renderSummary`; the rebuild in `Sessions.repairOne`;
+cases in `run/summary.test.ts` and `session-actions.test.ts`; `pnpm sessions-proof`'s repair reads the repaired session's `summary.md`. Noticed while building it, and recorded open:
+[`summary-md-carries-none-of-the-sections-its-requirement-lists.md`](../defects/summary-md-carries-none-of-the-sections-its-requirement-lists.md).
 
 **OQ-61 — May an isolated run read the repository metadata of the worktree it is working in?** *(REQ-TOOLS-132 with REQ-GIT-019/021/022 and REQ-TOOLS-001/142; raised 2026-09-16 while repairing what an isolated plan-mode run hit.)*
 

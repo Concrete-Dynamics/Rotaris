@@ -3462,6 +3462,10 @@ wrong, rather than telling it so first. The result says what was read, so the mo
 > a workspace path outside the worktree would have read as the old shape. Since fin25 each session is judged by the fence
 > its own record names (`fenceRootOf`, the session's `worktree` before its `workspace_root`):
 > [`the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md`](../defects/fixed/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md).
+> The same round aligned the check's create shape with the product's own (`createOnlyTarget` and the schema the gate
+> applies after it): a call carrying `replace_all: false` or a key no operation reads is create-shaped, an empty path or a
+> `file_path` that is no string is not, and a test runs both readers over the same nineteen shapes:
+> [`the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md`](../defects/fixed/the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md).
 
 ---
 

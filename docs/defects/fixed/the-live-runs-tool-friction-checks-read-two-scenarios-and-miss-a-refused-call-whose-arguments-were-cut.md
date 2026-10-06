@@ -58,6 +58,9 @@ Repaired 2026-10-06 by fin23 (bundle `fin23-summary-and-live-checks`).
   error-path cut, not landed when this was built) settles. A cut call is create-shaped when its path survived whole, its
   content began, and no key read is `operation` or another operation's field; one whose path the cut took away is not
   called create-shaped, since what it named cannot be read.
+  *fin25, 2026-10-06:* "no key read is … another operation's field" also dropped a key no operation reads and a
+  `replace_all: false`, both of which the product infers, and took an empty path, which it refuses; the shape is now the
+  product's (`docs/defects/fixed/the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md`).
 - **A fenced path.** PD-TOOLS-007's first execution reads "a path the fence refuses is not read as anything, and is refused
   as before". A refused create-shaped call whose path lies outside the run's workspace (`outsideWorkspace`) is reported
   as `refusedFenced` beside the passing check, not failed: the c2a9444 requirements session's ordinal 62 is one.

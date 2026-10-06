@@ -2,6 +2,10 @@
  * PD-TOOLS-007 and PD-TOOLS-008 as the live run reads them from the tool-call record, pinned against the shapes the
  * recorded runs held (duress at 27a5127, finding H6; default `frictions` at 71ad8e8, finding a71-7).
  */
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FileToolState, writeFileTool } from '@rotaris/agent-tools';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { argumentFields, fenceRootOf, outsideFence, runWideReadings, todoActiveReadings, writeSelectorReadings } from './tool-frictions.mjs';
@@ -66,6 +70,63 @@ describe('writeSelectorReadings (PD-TOOLS-007)', () => {
     const call = { ordinal: 62, tool_name: 'write_file', status: 'failed', args: cut({ path: '/tmp/rotaris-verify-req104.mjs', content: long }), result: refusal };
     expect(writeSelectorReadings([call], { outside })).toEqual({ inferred: [], refusedInferable: [], refusedFenced: [call] });
     expect(ords(writeSelectorReadings([call]).refusedInferable)).toEqual([62]);
+  });
+});
+
+/*
+ * The harness's create shape is the product's: the gate infers `create` for a call its schema refuses when `write_file`'s
+ * `inferArguments` (`createOnlyTarget` in packages/agent-tools/src/tools/files.ts) reads one and the schema then accepts
+ * it. Until fin25 the harness dropped a call carrying `replace_all: false` or any key beyond path, file_path and content,
+ * which the product infers, and took `path: ''`, which it refuses
+ * (docs/defects/fixed/the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md).
+ */
+describe('the create shape agrees with the product\'s inference (PD-TOOLS-007)', () => {
+  const refusal = 'write_file requires an operation: one of create, edit, overwrite, insert, undo. (operation: Invalid option)';
+  const shapes: [string, Record<string, unknown>][] = [
+    ['path and content', { path: 'a.md', content: 'x' }],
+    ['file_path and content', { file_path: 'a.md', content: 'x' }],
+    ['path wins over file_path', { path: 'a.md', file_path: 'b.md', content: 'x' }],
+    ['replace_all false', { path: 'a.md', content: 'x', replace_all: false }],
+    ['replace_all true', { path: 'a.md', content: 'x', replace_all: true }],
+    ['replace_all not a boolean', { path: 'a.md', content: 'x', replace_all: 'false' }],
+    ['a key no operation reads', { path: 'a.md', content: 'x', description: 'notes' }],
+    ['an empty path', { path: '', content: 'x' }],
+    ['an empty path beside a file_path', { path: '', file_path: 'a.md', content: 'x' }],
+    ['a null path beside a file_path', { path: null, file_path: 'a.md', content: 'x' }],
+    ['a file_path that is no string', { path: 'a.md', file_path: 7, content: 'x' }],
+    ['a path that is no string', { path: 7, content: 'x' }],
+    ['content that is no string', { path: 'a.md', content: 7 }],
+    ['no content', { path: 'a.md' }],
+    ['no path', { content: 'x' }],
+    ['old_string null', { path: 'a.md', content: 'x', old_string: null }],
+    ['new_string', { path: 'a.md', content: 'x', new_string: 'y' }],
+    ['insert_line', { path: 'a.md', content: 'x', insert_line: 0 }],
+    ['operation null', { path: 'a.md', content: 'x', operation: null }],
+  ];
+
+  it.each(shapes)('%s: the harness calls it create-shaped exactly when the product infers a create', (_name, args) => {
+    const root = mkdtempSync(join(tmpdir(), 'rotaris-frictions-'));
+    try {
+      const tool = writeFileTool(new FileToolState(), { workspaceRoot: root, allowOutsideWorkspace: false, additionalReadOnlyRoots: [] });
+      const inferred = tool.schema.safeParse(args).success ? null : tool.inferArguments?.(args) ?? null;
+      const infers = inferred !== null && tool.schema.safeParse(inferred.args).success;
+      const call = { ordinal: 1, tool_name: 'write_file', status: 'failed', args, result: refusal };
+      expect(writeSelectorReadings([call]).refusedInferable.length === 1).toBe(infers);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  const long = 'line\n'.repeat(600);
+  const cut = (args: Record<string, unknown>) => JSON.stringify(args).slice(0, 2000);
+  it('cut arguments read a literal value and go on: replace_all false is still create-shaped, true is not', () => {
+    const calls = [
+      { ordinal: 1, tool_name: 'write_file', status: 'failed', args: cut({ path: 'a.ts', replace_all: false, content: long }), result: refusal },
+      { ordinal: 2, tool_name: 'write_file', status: 'failed', args: cut({ path: 'a.ts', replace_all: true, content: long }), result: refusal },
+      { ordinal: 3, tool_name: 'write_file', status: 'failed', args: cut({ path: 'a.ts', description: 'notes', content: long }), result: refusal },
+      { ordinal: 4, tool_name: 'write_file', status: 'failed', args: cut({ path: '', content: long }), result: refusal },
+      { ordinal: 5, tool_name: 'write_file', status: 'failed', args: '{"path": "a.ts", "replace_all": fals', result: refusal },
+    ];
+    expect(ords(writeSelectorReadings(calls).refusedInferable)).toEqual([1, 3]);
+    expect(argumentFields(calls[0]!.args).fields.get('replace_all')).toEqual({ value: false, complete: true, notString: true });
   });
 });
 

@@ -21,7 +21,8 @@ import { realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { refusalIssues } from './refusal-issues.mjs';
 
-const CREATE_FIELDS = new Set(['path', 'file_path', 'content']);
+/** The fields only another operation reads: any of them present, whatever its value, and the product infers nothing. */
+const OTHER_OPERATION_FIELDS = ['old_string', 'new_string', 'insert_line'];
 
 /**
  * The fields of a recorded `args`, `{ fields: Map<key, { value, complete }>, cut }`, or null where it is no object. Until
@@ -45,7 +46,12 @@ export function argumentFields(args) {
   return prefixFields(args);
 }
 
-/** A JSON object's prefix, read key by key; null where it is no object's prefix. A non-string value ends the reading. */
+/**
+ * A JSON object's prefix, read key by key; null where it is no object's prefix. A literal value (`true`, `false`, `null`, a
+ * number) is read and the reading goes on, so a `replace_all: false` before the content does not hide it (until fin25 any
+ * non-string value ended the reading); a literal the cut may have split is read as incomplete. An object or array value
+ * still ends the reading, so a key after one is never seen.
+ */
 function prefixFields(text) {
   const fields = new Map();
   let i = 0;
@@ -78,8 +84,16 @@ function prefixFields(text) {
     if (text[i] !== ':') return null;
     i += 1;
     if (atEnd()) { fields.set(key.value, { value: undefined, complete: false }); return { fields, cut: true }; }
-    if (text[i] !== '"') { fields.set(key.value, { value: undefined, complete: false, notString: true }); return { fields, cut: true }; }
-    const value = string();
+    let value;
+    if (text[i] === '"') value = string();
+    else {
+      const literal = /^(?:true|false|null|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/.exec(text.slice(i));
+      if (literal === null) { fields.set(key.value, { value: undefined, complete: false, notString: true }); return { fields, cut: true }; }
+      i += literal[0].length;
+      // `fals` is no literal, and `12` may have been `123`: a literal the cut reached is not known.
+      if (atEnd()) { fields.set(key.value, { value: undefined, complete: false, notString: true }); return { fields, cut: true }; }
+      value = { value: JSON.parse(literal[0]), complete: true, notString: true };
+    }
     fields.set(key.value, value);
     if (!value.complete || atEnd()) return { fields, cut: true };
     if (text[i] === ',') { i += 1; space(); continue; }
@@ -89,19 +103,33 @@ function prefixFields(text) {
 }
 
 /**
- * A `write_file` call whose arguments are only those a create reads, and no `operation` — `{ path }`, or null. Read from
- * the object, or from its cut string: there the path must have survived whole and the content must have begun, and no key
- * read may be another's. A cut that took the path away (the content sent first) is not called create-shaped, since what it
- * named cannot be read.
+ * A `write_file` call the product would have read as a create, had its fence let the path be written and its file not
+ * existed — `{ path }`, or null. The product's reading is `createOnlyTarget` (`packages/agent-tools/src/tools/files.ts`)
+ * and then the schema's own (`writeSchema`, which the gate applies to the inferred call): no `operation`; none of
+ * `old_string`, `new_string` or `insert_line`, whatever its value; `replace_all` absent or `false`, since `true` is an
+ * edit's and anything else is no boolean; `path` and `file_path` each absent or a string, the target `path ?? file_path`
+ * not empty; `content` a string; any other key let through, the schema stripping it. Until fin25 this kept to path,
+ * file_path and content alone and took an empty path
+ * (docs/defects/fixed/the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md).
+ *
+ * Read from the object, or from its cut string, where the reading stops short of the product's in one way it cannot help:
+ * a key the cut took away is not seen, so a call whose `old_string` came after its content is still called create-shaped.
+ * There the target must have survived whole and the content must have begun; a cut that took the path away (the content
+ * sent first) is not called create-shaped, since what it named cannot be read.
  */
 function createShaped(args) {
   const read = argumentFields(args);
   if (read === null || read.fields.has('operation')) return null;
   const { fields } = read;
-  if (![...fields.keys()].every((key) => CREATE_FIELDS.has(key))) return null;
-  const path = fields.get('path') ?? fields.get('file_path');
+  if (OTHER_OPERATION_FIELDS.some((key) => fields.has(key))) return null;
+  const replaceAll = fields.get('replace_all');
+  if (replaceAll !== undefined && !(replaceAll.complete && replaceAll.value === false)) return null;
+  const named = [fields.get('path'), fields.get('file_path')].filter((field) => field !== undefined);
+  if (named.some((field) => typeof field.value !== 'string')) return null;
+  const path = named[0];
+  if (path === undefined || !path.complete || path.value === '') return null;
   const content = fields.get('content');
-  if (path === undefined || !path.complete || typeof path.value !== 'string' || content === undefined || content.notString) return null;
+  if (content === undefined || content.notString) return null;
   if (content.complete && typeof content.value !== 'string') return null;
   return { path: path.value };
 }

@@ -24,7 +24,13 @@ export type ApprovalOutcome =
    * the call waited on a person. The wait is released as WITHDRAWN, never as cancelled: a cancelled wait is REQ-TOOLS-052's
    * denial, and a withdrawn call is recorded as interrupted and never run, never as denied. `cause` names the rest.
    */
-  | { readonly kind: 'withdrawn'; readonly cause: string };
+  | { readonly kind: 'withdrawn'; readonly cause: string }
+  /**
+   * PD-TOOLS-005 revision 2 (OQ-78, ruled 2026-10-06): the run marked its user away while this wait was outstanding — another
+   * approval of the run went unanswered for `afterSeconds` — so the wait is ended at once and resolved as an ask made while
+   * the user is away is, under the headless approval policy with the directive's reason.
+   */
+  | { readonly kind: 'away'; readonly afterSeconds: number };
 
 interface Waiter {
   readonly payload: ApprovalPayload;
@@ -83,6 +89,10 @@ export class PendingApprovals {
   /** Waiting on an unknown id resolves cancelled immediately. */
   wait(id: string): Promise<ApprovalOutcome> {
     return this.waiters.get(id)?.promise ?? Promise.resolve({ kind: 'cancelled' });
+  }
+  /** PD-TOOLS-005 revision 2: one outstanding wait ended because its run marked the user away; false for an id not pending. */
+  endAway(id: string, afterSeconds: number): boolean {
+    return this.finish(id, { kind: 'away', afterSeconds });
   }
   /** Bulk cancel: every waiter released (run cancellation, shutdown, host teardown, a lapse). */
   cancelAll(): number {

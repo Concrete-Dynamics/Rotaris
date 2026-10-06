@@ -100,7 +100,21 @@ export interface PresencePort {
   /** Non-null while the run treats the user as away: the timeout, in seconds, that expired unanswered. */
   away(): { readonly afterSeconds: number } | null;
   markAway(afterSeconds: number): void;
+  /**
+   * PD-TOOLS-005 revision 2 (OQ-78): told when the run marks its user away, so an approval wait still outstanding is ended at
+   * once. Returns the function that unregisters the listener.
+   */
+  onAway(listener: (mark: { readonly afterSeconds: number }) => void): () => void;
 }
+
+/**
+ * PD-TOOLS-005 revision 2 (OQ-77): the one tool whose own approval ask the away state does not resolve — the question tool,
+ * whose question is the prompt the directive keeps for an away user. Its call still asks under the preset's decision.
+ */
+const AWAY_EXEMPT_TOOL = 'ask_questions';
+
+/** PD-TOOLS-005's reason clause for an ask resolved — or a wait ended — because the run treats its user as away. */
+const awayBecause = (afterSeconds: number): string => `The user is treated as away because an earlier approval in this run went unanswered for ${afterSeconds} seconds`;
 
 export interface GateDeps {
   readonly sessionId: string;
@@ -500,6 +514,7 @@ export class Gate {
     const requestId = (deps.newRequestId ?? (() => randomUUID().replace(/-/g, '')))();
     const summary = requestSummary(req);
     const base = { agent_name: call.agentName, persona: call.persona, tool_name: call.name, rule_id: asked.ruleId, summary };
+    let stopListening: (() => void) | null = null;
     try {
       if (!heldForQuit && (!attended || !deps.presenter)) {
         // REQ-TOOLS-061/064/065/066: headless — timeout null, no wait occurs.
@@ -514,10 +529,16 @@ export class Gate {
        * where the cause is stated, and it names the timeout that expired rather than claiming no approval UI exists.
        * The order matters: a session that has genuinely lost its presenter is still reported as such, above.
        */
-      const away = deps.presence?.away() ?? null;
+      /*
+       * PD-TOOLS-005 revision 2 (OQ-77, ruled 2026-10-06): the question tool's own dispatch is exempt — under the `ask` preset
+       * its call is an approval ask, and resolving it at once kept every question from an away user. It is brokered and
+       * waits as before the user went away; nothing else is exempt.
+       */
+      const awayExempt = call.name === AWAY_EXEMPT_TOOL && deps.publicTool(call.name);
+      const away = awayExempt ? null : deps.presence?.away() ?? null;
       if (away !== null) {
         deps.sink.approvalRequested({ request_id: requestId, ...base, resolver: 'headless', timeout_seconds: null, unattended_reason: 'headless-policy' });
-        return { requestId, decision: this.headless(asked, `The user is treated as away because an earlier approval in this run went unanswered for ${away.afterSeconds} seconds`) };
+        return { requestId, decision: this.headless(asked, awayBecause(away.afterSeconds)) };
       }
       const timeoutS = deps.approvalTimeoutMs > 0 ? deps.approvalTimeoutMs / 1000 : 0;
       deps.sink.approvalRequested({ request_id: requestId, ...base, resolver: 'brokered', timeout_seconds: timeoutS, unattended_reason: '' });
@@ -528,6 +549,13 @@ export class Gate {
       };
       const wait = deps.approvals.create(payload, deps.approvalTimeoutMs > 0 ? deps.approvalTimeoutMs : null);
       deps.sink.pendingChanged(deps.approvals.pending());
+      /*
+       * PD-TOOLS-005 revision 2 (OQ-78, ruled 2026-10-06): a wait still outstanding when the run marks its user away — shown,
+       * or queued unshown behind another dialog — is ended at once and resolved under the headless policy with the
+       * directive's reason, its dialog closed below as any ended wait's is, so one unanswered approval costs one timeout. A
+       * wait the quit holds is the quit's to withdraw (PD-ORCH-005 clause 9) and is left; the question tool's own is exempt.
+       */
+      stopListening = awayExempt ? null : deps.presence?.onAway((mark) => { if (deps.quitting?.() !== true) deps.approvals.endAway(requestId, mark.afterSeconds); }) ?? null;
       /*
        * PD-ORCH-005 clause 9: the quit closed the last window and its shutdown is still to come. There is nobody to show
        * the request to and nobody left the application: the request waits, unshown, in `pending_approvals`, and the quit's
@@ -572,6 +600,8 @@ export class Gate {
       deps.approvals.cancel(requestId);
       deps.sink.pendingChanged(deps.approvals.pending());
       return { requestId, decision: { decision: 'deny', ruleId: asked.ruleId, source: 'fail-closed', reason: `${asked.reason} Denied because approval resolution failed: ${String(cause instanceof Error ? cause.message : cause)}.`, description: asked.description } };
+    } finally {
+      stopListening?.();
     }
   }
 
@@ -582,6 +612,9 @@ export class Gate {
         // PD-TOOLS-005: the first unanswered wait marks the run's user away; this decision keeps REQ-TOOLS-052's own reason.
         this.deps.presence?.markAway(outcome.afterSeconds);
         return { decision: 'deny', ruleId: asked.ruleId, source: 'timeout', reason: `${asked.reason} Denied because no answer arrived within ${outcome.afterSeconds} seconds.`, description: asked.description };
+      case 'away':
+        // PD-TOOLS-005 revision 2 (OQ-78): ended because another approval of the run went unanswered — the away ask's resolution.
+        return this.headless(asked, awayBecause(outcome.afterSeconds));
       case 'cancelled':
       // A withdrawn wait never reaches here (`broker` answers it first); were it to, it would read as REQ-TOOLS-052's cancellation.
       case 'withdrawn':

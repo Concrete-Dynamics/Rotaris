@@ -27,7 +27,17 @@ export interface UserPresenceDeps {
 
 export class UserPresence {
   private mark: AwayMark | null = null;
+  private readonly listeners = new Set<(mark: AwayMark) => void>();
   constructor(private readonly deps: UserPresenceDeps) {}
+
+  /**
+   * PD-TOOLS-005 revision 2 (OQ-78): `listener` is told when this run marks its user away — an approval wait still outstanding
+   * then registers one, so it is ended at once rather than paying its own full timeout. The returned function unregisters it.
+   */
+  onAway(listener: (mark: AwayMark) => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
 
   /** The away mark, or null while the user is treated as present. Read by the gate at each ask it would prompt for. */
   away(): AwayMark | null {
@@ -41,7 +51,9 @@ export class UserPresence {
   markAway(afterSeconds: number): boolean {
     if (this.mark !== null) return false;
     this.mark = { afterSeconds };
-    this.deps.record(`user away: an approval in this run went unanswered for ${afterSeconds} seconds; until the user next sends input to this session, every further approval ask resolves at once under runtime.headless_approval_policy (PD-TOOLS-005)`);
+    this.deps.record(`user away: an approval in this run went unanswered for ${afterSeconds} seconds; until the user next sends input to this session, every further approval ask resolves at once under runtime.headless_approval_policy, and every approval still waiting is ended the same way (PD-TOOLS-005)`);
+    const mark = this.mark;
+    for (const listener of [...this.listeners]) listener(mark);
     return true;
   }
 

@@ -339,7 +339,7 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
   });
 
   it('PD-ORCH-005 clause 9 with PD-TOOLS-005: a run whose user is treated as away still resolves an ask at once in the quit\'s gap, as it would with the window open', async () => {
-    const h = harness({ attended: false, quitting: () => true, presence: { away: () => ({ afterSeconds: 300 }), markAway: () => undefined } });
+    const h = harness({ attended: false, quitting: () => true, presence: { away: () => ({ afterSeconds: 300 }), markAway: () => undefined, onAway: () => () => undefined } });
     const r = await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
     expect(r.status).toBe('blocked');
     expect(h.rec.decisions[0]).toMatchObject({ source: 'headless-policy' });
@@ -799,7 +799,14 @@ describe('write scopes at dispatch (PD-TOOLS-006)', () => {
 describe('PD-TOOLS-005: after one unanswered approval, a run treats the user as away', () => {
   const presence = () => {
     let mark: { afterSeconds: number } | null = null;
-    return { away: () => mark, markAway: (afterSeconds: number) => { mark ??= { afterSeconds }; }, returned: () => { mark = null; } };
+    const listeners = new Set<(m: { afterSeconds: number }) => void>();
+    return {
+      away: () => mark,
+      markAway: (afterSeconds: number) => { if (mark !== null) return; mark = { afterSeconds }; for (const l of [...listeners]) l(mark); },
+      returned: () => { mark = null; },
+      onAway: (l: (m: { afterSeconds: number }) => void) => { listeners.add(l); return () => { listeners.delete(l); }; },
+      listening: () => listeners.size,
+    };
   };
   const write = (h: ReturnType<typeof harness>, path: string, s = new AbortController().signal) => h.gate.dispatch(h.call('write_file', { operation: 'create', path }), s);
   const ASKED = "No rule matched; permission mode 'ask' defaults to ask.";
@@ -911,14 +918,103 @@ describe('PD-TOOLS-005: after one unanswered approval, a run treats the user as 
     expect(d.status).toBe('blocked');
     expect(h.rec.decisions.at(-1)).toMatchObject({ decision: 'deny', rule_id: 'starter:deny-recursive-delete', source: 'rule' });
     expect(h.rec.requested).toHaveLength(0);
-    // The reading taken, raised as OQ-77: `ask_questions` is outside REQ-TOOLS-007's read-only class, so under the
-    // `ask` preset its own dispatch is an APPROVAL ask, and that ask is one the away state resolves at once — the
-    // question is never put to the user. The directive's "questions still prompt" clause governs the question the
-    // executor raises, and is reachable only where the call itself is permitted.
-    const q = await h.gate.dispatch(h.call('ask_questions', { steps: [{ id: 'b', title: 'B' }] }), new AbortController().signal);
-    expect(q.status).toBe('blocked');
-    expect(q.blockedReason).toBe(`${ASKED} The user is treated as away because an earlier approval in this run went unanswered for 300 seconds, so the request was denied.`);
-    expect(questions.pending()).toHaveLength(0);
+    // OQ-77, ruled 2026-10-06 (PD-TOOLS-005 revision 2): `ask_questions` is outside REQ-TOOLS-007's read-only class, so
+    // under the `ask` preset its own dispatch is an APPROVAL ask — and that one ask is exempt from the away state: it is
+    // brokered and waits, and once approved the question itself is put to the user and waits. Until the ruling it was
+    // resolved at once with the away reason, so under the default preset no question reached an away user.
+    const q = h.gate.dispatch(h.call('ask_questions', { steps: [{ id: 'b', title: 'B', options: [{ id: 'y', label: 'Y' }] }] }), new AbortController().signal);
+    await Promise.resolve(); await Promise.resolve();
+    expect(h.rec.requested.at(-1)).toMatchObject({ tool_name: 'ask_questions', resolver: 'brokered', timeout_seconds: 300, unattended_reason: '' });
+    expect(h.approvals.size).toBe(1);
+    expect(h.approvals.resolve(String(h.rec.requested.at(-1)!['request_id']), 'once')).toBe(true);
+    for (let i = 0; i < 6 && questions.pending().length === 0; i++) await Promise.resolve();
+    expect(questions.pending()).toHaveLength(1);
+    expect(questions.resolve(questions.pending()[0]!.request_id, { b: { selected_option: 'y', freeform_text: null } })).toBe(true);
+    expect((await q).status).toBe('ok');
+    // Nothing else is exempt: the next write is still resolved at once with the away reason.
+    const w = await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'w.txt' }), new AbortController().signal);
+    expect(w.blockedReason).toBe(`${ASKED} The user is treated as away because an earlier approval in this run went unanswered for 300 seconds, so the request was denied.`);
+    // A tool offered under the question tool's name that is not the public tool (an MCP tool) is not exempt.
+    const mcp = harness({ presence: p, extraExecutors: [['ask_questions', ask]], publicTool: (n) => n !== 'ask_questions' });
+    const m = await mcp.gate.dispatch(mcp.call('ask_questions', { steps: [{ id: 'c', title: 'C' }] }), new AbortController().signal);
+    expect(m.status).toBe('blocked');
+    expect(mcp.approvals.size).toBe(0);
+  });
+
+  /*
+   * OQ-78, ruled 2026-10-06 (PD-TOOLS-005 revision 2): when the run marks its user away, every approval wait still outstanding
+   * in it ends at once — the one shown and the one queued unshown behind it alike — resolved under the headless policy with
+   * the directive's reason and its dialog closed, so one unanswered approval costs one timeout. Until the ruling a wait already
+   * running kept its own full timeout.
+   */
+  it('marking the user away ends every outstanding wait at once, shown or queued, with the directive\'s reason and its dialog closed', async () => {
+    const p = presence();
+    const closed: string[] = [];
+    let shown = 0;
+    // The first request is shown; the second waits behind it, unshown, as REQ-TOOLS-063 queues it.
+    const presenter: PresenterPort = { present: () => (++shown === 1 ? Promise.resolve({ ok: true as const }) : new Promise(() => undefined)), close: (id) => { closed.push(id); } };
+    const h = harness({ timeoutMs: 5_000, presence: p, presenter });
+    const first = write(h, 'a.txt');
+    await Promise.resolve();
+    h.clock.advance(1_000);
+    const second = write(h, 'b.txt');
+    await Promise.resolve(); await Promise.resolve();
+    h.clock.advance(1_000);
+    const third = write(h, 'c.txt');
+    await Promise.resolve(); await Promise.resolve();
+    expect(h.approvals.size).toBe(3);
+    expect(p.listening()).toBe(3);
+    // The first wait expires: REQ-TOOLS-052's timeout for it, and the two others end with it — not 1 s and 2 s later.
+    h.clock.advance(3_000);
+    const [r1, r2, r3] = await Promise.all([first, second, third]);
+    expect(h.approvals.size).toBe(0);
+    expect(p.listening()).toBe(0);
+    expect(r1.blockedReason).toBe(`${ASKED} Denied because no answer arrived within 5 seconds.`);
+    const away = `${ASKED} The user is treated as away because an earlier approval in this run went unanswered for 5 seconds, so the request was denied.`;
+    expect(r2.blockedReason).toBe(away);
+    expect(r3.blockedReason).toBe(away);
+    expect(h.rec.decisions.map((d) => d['source'])).toEqual(['timeout', 'headless-policy', 'headless-policy']);
+    // Every dialog — the expired one, and the two ended — is closed; nothing was executed.
+    expect([...closed].sort()).toEqual([String(h.rec.requested[0]!['request_id']), String(h.rec.requested[1]!['request_id']), String(h.rec.requested[2]!['request_id'])].sort());
+    expect(h.executed).toHaveLength(0);
+  });
+
+  it('under `abort` an ended wait aborts the run as an away ask does; the question tool\'s own wait and a wait the quit holds are not ended', async () => {
+    const p = presence();
+    let aborted = 0;
+    const h = harness({ timeoutMs: 5_000, presence: p, headless: 'abort', abortHook: () => { aborted += 1; } });
+    const outstanding = write(h, 'a.txt');
+    await Promise.resolve(); await Promise.resolve();
+    p.markAway(300);
+    const r = await outstanding;
+    expect(r.blockedReason).toBe(`${ASKED} The user is treated as away because an earlier approval in this run went unanswered for 300 seconds, so the request was denied and the headless approval policy aborts the run.`);
+    expect(aborted).toBe(1);
+
+    // OQ-77's exemption reaches the wait too: the question tool's own approval keeps waiting when the user is marked away.
+    const p2 = presence();
+    const questions = new PendingQuestions(new FakeClock());
+    const ask = askQuestionsTool({ pending: questions, conversationId: 'root', agentId: 'orchestrator', timeoutMs: 300_000, publish: () => true });
+    const hq = harness({ presence: p2, extraExecutors: [['ask_questions', ask]] });
+    const q = hq.gate.dispatch(hq.call('ask_questions', { steps: [{ id: 'a', title: 'A', options: [{ id: 'x', label: 'X' }] }] }), new AbortController().signal);
+    await Promise.resolve(); await Promise.resolve();
+    p2.markAway(300);
+    expect(hq.approvals.size).toBe(1);
+    hq.approvals.cancelAll();
+    expect((await q).status).toBe('blocked');
+
+    // PD-ORCH-005 clause 9: a wait the quit holds is the quit's to withdraw, never denied for an away mark.
+    const p3 = presence();
+    let quitting = false;
+    const hh = harness({ presence: p3, quitting: () => quitting });
+    const held = write(hh, 'h.txt');
+    await Promise.resolve(); await Promise.resolve();
+    quitting = true;
+    p3.markAway(300);
+    expect(hh.approvals.size).toBe(1);
+    hh.approvals.withdrawAll('the quit');
+    await held;
+    expect(hh.rec.timeline).toContain('approval_withdrawn');
+    expect(hh.rec.decisions.filter((d) => d['source'] === 'headless-policy')).toHaveLength(0);
   });
 
   it('a session with no presenter is still reported as such: REQ-TOOLS-065\'s reason, not the away one', async () => {

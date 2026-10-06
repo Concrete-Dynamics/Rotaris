@@ -33,4 +33,22 @@ describe('the run\'s away state (PD-TOOLS-005)', () => {
     expect(presence.markAway(5)).toBe(true);
     expect(presence.away()).toEqual({ afterSeconds: 5 });
   });
+
+  it('tells every listener registered when the user is marked away — once per stretch — and an unregistered one nothing (OQ-78, PD-TOOLS-005 revision 2)', () => {
+    const { presence } = holder();
+    const heard: string[] = [];
+    const stopA = presence.onAway((m) => heard.push(`a:${m.afterSeconds}`));
+    const stopB = presence.onAway((m) => heard.push(`b:${m.afterSeconds}`));
+    stopB();
+    presence.markAway(300);
+    presence.markAway(300);
+    expect(heard).toEqual(['a:300']);
+    presence.returned();
+    presence.markAway(5);
+    expect(heard).toEqual(['a:300', 'a:5']);
+    stopA();
+    presence.returned();
+    presence.markAway(5);
+    expect(heard).toEqual(['a:300', 'a:5']);
+  });
 });

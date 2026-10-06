@@ -128,6 +128,12 @@ force-killed 2 s after any stop — Cancel, a switch's cancellation, an exhauste
 and a budget had REQ-MCP-099's 5 s (`SETUP_TERMINATE_GRACE_MS`). The **process view**'s `mcp.setup` paragraph and the
 **runtime view**'s application end say so. No package, edge, process, channel, command or store column changed.
 
+**After one unanswered approval, the question tool's own ask still prompts and the waits already outstanding end
+(PD-TOOLS-005 revision 2; OQ-77 and OQ-78 ruled by R-071, fin21).** The gate's `broker` exempts the public `ask_questions`
+call's own approval from the away state; every other brokered wait registers on `UserPresence.onAway` while outstanding, and
+the away transition ends it through `PendingApprovals.endAway` (a new `away` outcome) resolved under the headless policy. The
+**runtime view**'s away paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **An authentication restart re-sends the prompt's images (REQ-NOTIFY-070/074/076, REQ-CHAT-171; OQ-182 ruled by R-071,
 fin21).** `Sessions.lastPromptOf` reads the last prompt's images back by path and digest (`readBackAttachments`, the retry's
 read-back) and the restarts re-submit them with the text; an image that cannot be read back, or a restart model declaring no

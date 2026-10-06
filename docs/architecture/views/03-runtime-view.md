@@ -1249,8 +1249,12 @@ the session that held the id. The terminal-stream operations (keystrokes, resize
 `run-host/terminal.ts` by stream id and never `Sessions`, so they do not return the user — a reading, stated in the
 directive's note. A new run installs a fresh holder, so no run starts away. Both transitions are session-log lines at `WARNING`
 (REQ-SESSION-142); the timeline vocabulary has no word for them (REQ-ORCH-139, **OQ-76**). Questions (REQ-TOOLS-158)
-still prompt and wait where the call is permitted; under the `ask` preset the question tool's own dispatch is an
-approval ask, which the away state resolves (**OQ-77**).
+still prompt and wait where the call is permitted; ~~under the `ask` preset the question tool's own dispatch is an
+approval ask, which the away state resolves (**OQ-77**)~~ *since revision 2 (2026-10-06, OQ-77 and OQ-78 ruled by R-071):*
+the public `ask_questions` tool's own approval ask is exempt (`AWAY_EXEMPT_TOOL`) and is brokered and waits while the user
+is away; and every other brokered wait registers on the run's holder (`UserPresence.onAway`) while it is outstanding, so the
+transition that marks the user away ends each one at once (`PendingApprovals.endAway`, outcome `away`), resolved through the
+same headless path with the directive's reason and its dialog closed — a wait the quit holds is skipped.
 
 A session **waiting at the plan gate** likewise has no live run. `session.planEdit {text}` records the user's own
 text and moves nothing else; `session.planDecision {decision, changes?}` carries one of exactly three answers

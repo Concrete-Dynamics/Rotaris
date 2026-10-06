@@ -3393,7 +3393,15 @@ ruling for all of them and for this one.)*
 
 **OQ-77 — Does the away state resolve the approval an `ask_questions` call itself needs under the `ask` preset?**
 *(`PD-TOOLS-005`, REQ-TOOLS-007, REQ-TOOLS-158, REQ-TOOLS-178. Raised 2026-09-28 by building `PD-TOOLS-005` under
-[R-062](../product/requests.md#r-062).)*
+[R-062](../product/requests.md#r-062). Open until 2026-10-06; ruled that day by the owner, and built.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the question tool's own dispatch is exempt from
+the away rule and nothing else is — under the `ask` preset its approval is put to the user and waits while they are away,
+the preset's decision on the call otherwise standing; read so as to cover only the public `ask_questions` tool (not a tool
+offered under its name) and to keep that approval's wait from being ended by OQ-78's ruling as well. Minted as
+[`PD-TOOLS-005`](../product/directives.md#pd-tools-005) revision 2, narrowing REQ-TOOLS-052 and REQ-TOOLS-055 as revision 1
+did, and built the same day (`AWAY_EXEMPT_TOOL` in `packages/agent-tools/src/gate.ts`; plan fin21). The reading below is
+kept as the build proceeded under it until then.
 
 The directive keeps questions prompting and waiting while the user is away: "questions put to the user (REQ-TOOLS-158,
 REQ-TOOLS-178) still prompt and wait". But `ask_questions` is outside REQ-TOOLS-007's read-only class, so under the
@@ -3415,7 +3423,15 @@ decision on the call otherwise stands.
 
 **OQ-78 — Does an approval already queued when the first wait expires still get its own full wait?**
 *(`PD-TOOLS-005`, REQ-TOOLS-052, REQ-TOOLS-055. Raised 2026-09-28 by the verification of the `PD-TOOLS-005` build under
-[R-062](../product/requests.md#r-062).)*
+[R-062](../product/requests.md#r-062). Open until 2026-10-06; ruled that day by the owner, and built.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** marking the user away also ends the waits already
+outstanding in that run — shown, or queued unshown behind another dialog — each resolved under
+`runtime.headless_approval_policy` with the directive's reason and its dialog withdrawn, so one unanswered approval costs one
+timeout; read so that the question tool's own approval wait (OQ-77) and a wait the quit holds (`PD-ORCH-005` clause 9) are
+not ended. Minted as [`PD-TOOLS-005`](../product/directives.md#pd-tools-005) revision 2, and built the same day
+(`UserPresence.onAway`, `PendingApprovals.endAway`, the `away` outcome; plan fin21). The reading below is kept as the build
+proceeded under it until then.
 
 The directive says every further approval that would prompt in the run resolves at once once one wait has ended by
 timeout. The gate consults the away state when it brokers an ask, before a wait exists. An ask brokered *before* the

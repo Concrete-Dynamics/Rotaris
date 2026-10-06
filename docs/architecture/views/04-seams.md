@@ -94,7 +94,7 @@ closes every prompt through it, REQ-NOTIFY-079), the facet `main/commands/reauth
 mounts later), the hook in `renderer/main.tsx` holding the prompts by session and choosing the followed session's
 (`reauthPromptFor`, REQ-NOTIFY-030: a recovery affordance moves with the focused session), and the surface
 `packages/ui/src/ReauthPrompt.tsx`, drawn **in flow** by the Workspace view (`WorkspaceView`'s `reauthPrompt`) as its
-own row of the view's grid, `reauth`, between the run header and the transcript (OQ-181's reading of "beside the
+own row of the view's grid, `reauth`, between the run header and the transcript (OQ-181's reading, confirmed 2026-10-06 by R-071, of "beside the
 continuing run") — so a panel open until answered overlays no control at any window size. *Corrected 2026-10-02
 (the repair rounds):* the first build sent to the one window following the session and mounted the surface beside the
 shell, `fixed` at the window's corner like `ProjectSetupDialog`; the verifier measured the session browser, the three
@@ -310,7 +310,7 @@ decides.
 REQ-SHELL-038's list, fin10, the same day). The strip's items are **values**: `stripItems(width, facts)` in
 `packages/ui/src/composer.ts` answers them left to right in REQ-SHELL-038's order — the workspace path (the one `link`,
 REQ-SHELL-039/040), the branch, a `spacer`, REQ-SHELL-041's safety flags in their fixed order (`statusStripSafetyFlags`;
-the sandbox indicator right after the file-access flag, OQ-184's build reading), the model, the tokens, the cost when there
+the sandbox indicator right after the file-access flag, OQ-184's build reading, confirmed 2026-10-06 by R-071), the model, the tokens, the cost when there
 is one, the background count — each with REQ-SHELL-038's accessible name (`STRIP_NAMES`), its tooltip as its accessible
 description, and REQ-SHELL-047's two thresholds (`STRIP_PATH_MIN_WIDTH` 1180, `STRIP_BACKGROUND_MIN_WIDTH` 1080) applied to
 the window's own width. `AppShell` (`packages/ui/src/AppShell.tsx`) only draws them, each through `StatusStripItem`

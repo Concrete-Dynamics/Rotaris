@@ -399,7 +399,7 @@ lives in `tools/release-naming`. What the build decided and found:
   repaired). The workspace root's `version` is removed. `tools/release-naming` and the other `@rotaris/*` packages keep
   `0.0.0`: they are never packed as packages, so their `0.0.0` is not a product version. A prerelease tag needs the
   declaration to match its text exactly, for example `0.1.0rc1` for step 5's `v0.1.0rc1`. With no manifest the app
-  reports `dev`, **OQ-71**'s reading of a conflict between REQ-STARTUP-004 and REQ-STARTUP-007.
+  reports `dev`, **OQ-71**'s reading of a conflict between REQ-STARTUP-004 and REQ-STARTUP-007, ruled 2026-10-06 by R-071 and stated by `PD-STARTUP-003`.
 - ~~**The setup manifest (`REQ-STARTUP-058`) does not exist, and no step of this plan builds it.**~~ The pin half reads it,
   so on the 2026-09-27 tree `pnpm release:guard v0.1.0` exited 1 on that half alone, naming `@playwright/mcp` `0.0.80`, both files
   and the missing manifest. §5's first check therefore could not pass until the manifest was built. §4.3 needs the same
@@ -411,7 +411,7 @@ lives in `tools/release-naming`. What the build decided and found:
   "The setup manifest", and in `first-executions.md`): `apps/desktop/resources/setup-manifest.json`, committed, schema
   version 1 — Git and ripgrep as `REQ-STARTUP-058` pins them, each archive's URL real and its SHA-256 taken by downloading
   the archive (the four digests and the commands are in the commit and the ADR note); `toolServerPackages` with
-  `@playwright/mcp` 0.0.80 (OQ-69's reading); the language servers character for character as `pins.json` declares them.
+  `@playwright/mcp` 0.0.80 (OQ-69's reading, confirmed 2026-10-06 by R-071); the language servers character for character as `pins.json` declares them.
   Its shape is `SetupManifestSchema` in `packages/config/src/setup-manifest.ts` (zod, strict), where both the guard and the
   product's reader may import it; `setup-manifest.test.ts` validates the shipped file, refuses each malformed shape and
   holds the language-server list equal to `pins.json` and to `CODE_INTELLIGENCE_LANGUAGE_SERVERS`, so the two files cannot

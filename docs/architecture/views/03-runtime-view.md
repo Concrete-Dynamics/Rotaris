@@ -841,7 +841,7 @@ the figure is the agent's own, and the run's aggregate is REQ-MONITOR-102's disp
 (2026-10-02) is the run-wide compression count (REQ-MONITOR-086): the live run's maintained aggregate (`Run.compressions`,
 ADR-0008) while a run is live, else the stored `sessions.compressions` (`runCompressionsOf`, `toSessionRecord`) — raised at
 the completion that raises the compressing agent's own count, a root's included. The run-level agent carries it as its
-count (OQ-159's recorded reading), and the inspector's ring caption and the persona window's context card draw it beside
+count (OQ-159's recorded reading, confirmed 2026-10-06 by R-071), and the inspector's ring caption and the persona window's context card draw it beside
 the per-agent figures (`compressionLine`, REQ-MONITOR-281); until then the run-level agent summed `SessionRecord.agents`, the
 children alone, so a root's compressions reached no surface. A LIVE run-level agent whose root port
 has not resolved yet — the pre-flight, before `Run.iterate` sets the port — lists nothing (`runLevelGrant`), never the
@@ -903,7 +903,7 @@ root is a worktree is handed the view bound to that tree's root instead (`config
 the execution root). Since `PD-MCP-002` (OQ-194, 2026-10-06) the same view moves every root the load filled in for every
 stdio server — REQ-MCP-035's filesystem fill-in and REQ-MCP-043/050's default `cwd` beside the project path — and the
 tool port hands `McpHost.executorsFor` the execution root, which `SessionConnections.connect` passes to REQ-MCP-070's
-`lsp_init`; until then those three stayed the workspace's (OQ-194's literal reading). Until
+`lsp_init`; until then those three stayed the workspace's (OQ-194's literal reading, superseded by its ruling). Until
 2026-10-03 the isolated run's server was bound to the anchoring checkout (ADR-0034, "The isolated-run binding, executed").
 The discovery and connected lines name the project the launch carried (`… (project <root>) listed …`, `…, project <root>)`);
 the grant is the persona's tier union from the manifest (12 or
@@ -1356,7 +1356,7 @@ refuse it: a run ended on a recording failure reads `not-live` too, but did not 
 crash first, in `launchContinuation` (PD-ORCH-005 clause 18, OQ-103). The strip
 keeps its one band, its two continues showing short labels as the send pill does — `Continue` and `Send`, named
 `Continue run` and `Continue with a message` (`PD-CHAT-001` revision 4) — and draws them in the send pill's place on a
-crash-left session too, which that revision prescribes only on a paused one (OQ-103's reading).
+crash-left session too, which that revision prescribes only on a paused one (OQ-103's reading, confirmed 2026-10-06 by R-071 and stated by `PD-ORCH-005` clause 26, revision 6).
 
 ## 6. End
 
@@ -1404,7 +1404,7 @@ limit's notice or its own summary. *Since repair round 1 (2026-10-02):* every no
 failed run's class publication passes the **focus gate** (`RunFailurePublisher`, REQ-NOTIFY-030/032): a session a main
 window follows (`MainWindows.followerOfSession`, no fallback to the active window) publishes at once; any other raises
 REQ-NOTIFY-032's warning — naming the session, the failure text as detail, `focus-session` — and holds the class notice, and
-for an authentication failure the automatic fallback's restart and the recovery dialog (OQ-182's reading), until a main
+for an authentication failure the automatic fallback's restart and the recovery dialog (OQ-182's reading, confirmed 2026-10-06 by R-071), until a main
 window's `session.subscribe` follows that session; a later
 ending of the session supersedes what was held. Main also keeps, by session, every provider/model pair that failed
 authentication since its provider's credentials last changed (`AuthRecovery.refusedPair`, REQ-NOTIFY-068): the dialog

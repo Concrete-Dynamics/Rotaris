@@ -197,8 +197,9 @@ appended to on resume. A continue that resumes an open iteration appends its mes
 holds beside its own, closing with it — done when it succeeds, pending on any other close and then taken up by the
 next iteration before any other pending task, which is sent the message as its task (`PD-ORCH-005` clause 17). A
 continue that states no new request appends none while the last request is still to be worked — OQ-102's reading and
-the repair of `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`, which no directive
-governs. — `REQ-ORCH-004`, `PD-ORCH-005` clause 17, OQ-102
+the repair of `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`, ~~which no directive
+governs~~ confirmed 2026-10-06 by R-071 and stated by `PD-ORCH-005` clause 25 (revision 6). — `REQ-ORCH-004`,
+`PD-ORCH-005` clauses 17 and 25, OQ-102
 _Avoid_: backlog (that is a delivery state on the requirements board), checklist
 
 ### Finishing work

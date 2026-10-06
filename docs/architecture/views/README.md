@@ -73,7 +73,7 @@ tool-outcomes histogram's `tool_error` bucket. The histogram is unchanged (REQ-S
 The scripted client gains a `badterm` step, a terminal call its schema refuses, which `sessions-proof`'s seed launch takes.
 The **runtime view**'s repair paragraph says so. No package, edge, process, channel, command or store column changed.
 
-**A stop's saved `cancelling` holds until the run rests (REQ-SESSION-186, OQ-165's reading; fin22).** The stop control
+**A stop's saved `cancelling` holds until the run rests (REQ-SESSION-186, OQ-165's reading, ruled 2026-10-06 by R-071; fin22).** The stop control
 (`op: 'cancel'`) saves the status through `Run.stopAccepted`, which sets the flag `saveRunning` keeps for the explicit cancel,
 so the run's later saves on the way to rest no longer write `running` again. The **runtime view**'s control table says so. No
 package, edge, process, channel, command or store column changed.
@@ -1592,7 +1592,7 @@ beside `paused`, and refuses a busy one whose process may still be running it (`
 whose store has failed (`store-failed`, as the continue by message is: a run ended on a recording failure is not a
 crash, OQ-42; a `paused` session under a store failure is refused the same way). The composer draws the two continues on
 it (`crashLeft`) in the send pill's place, which `PD-CHAT-001` revision 4 prescribes on a paused session only (OQ-103's
-reading), and the count and "Continue without them" wherever the session rests with an iteration open
+reading, confirmed 2026-10-06 by R-071 and stated by `PD-ORCH-005` clause 26, revision 6), and the count and "Continue without them" wherever the session rests with an iteration open
 (`resumable`, `runLevelResting`), the same count as a paused session's; either choice records the crash first, in
 `launchContinuation`. Readings in OQ-103. The **runtime view**'s §5 Continue paragraph and the **process view**'s
 `session.continue` note are updated; the command's shape does not change, and no package, edge, process or channel does.
@@ -1639,7 +1639,7 @@ records). A held message a death left stale closes as the record says its iterat
 message — the Continue action, "continue without them", and the message-limit resolution's 'continue' and 'double' —
 judges the todo after that settle, and appends no task while the todo holds the last request unfinished — a task of
 that text pending, or in progress and held by the open iteration
-(`Todo.holdsUnfinished`, `launchContinuation`): OQ-102's reading, beyond what clause 17 governs, which repairs
+(`Todo.holdsUnfinished`, `launchContinuation`): OQ-102's reading, beyond what clause 17 governs, confirmed 2026-10-06 by R-071 and stated by clause 25 (revision 6), which repairs
 `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`. `RunDeps.openIteration` gains
 `delivered`. Readings in OQ-102. The **runtime view**'s §2 gains the paragraph; the
 phase 4 paragraph below keeps "no todo task is appended" as it was built then. No package, edge, process, channel,

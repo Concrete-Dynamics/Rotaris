@@ -167,6 +167,38 @@ describe('PlanGate — the plan stays the largest part when the window is short 
     expect(floor).toBeGreaterThan(length(rule('.plan-gate__todo'), 'max-height'));
   });
 
+  it('raises the plan\'s floor above the opened revision field in both modes, and only while it is open', () => {
+    // Opened by its summary, the revision field stands at its default height: the summary's line, a step and a
+    // `textarea.input` at the adopted floor. Built, that read 102 px against the plan's 72 in preview and 80 in edit mode at
+    // 1000x680 (the bundle's verifier, repair round 2, 2026-10-06); plan-gate-proof's 2c reads both modes with it open.
+    const typography = readFileSync(new URL('../../../docs/design/system/tokens/typography.css', import.meta.url), 'utf8');
+    const token = (name: string): number => Number(new RegExp(`--rt-${name}:\\s*([\\d.]+)`).exec(typography)?.[1]);
+    const adopted = /(?:^|\})\s*textarea\.input\s*\{([^}]*)\}/.exec(components)?.[1] ?? '';
+    const textareaFloor = Number(/min-height:\s*(\d+)px/.exec(adopted)?.[1]);
+    expect(rule('.plan-gate__changes-summary')).toContain('margin-bottom: var(--rt-space-1);');
+    expect(rule('.plan-gate__changes-summary')).not.toMatch(/(?:^|[;\s])(?:height|min-height|line-height):/);
+    const openField = token('text-xs') * token('leading-body') + px('var(--rt-space-1)') + textareaFloor;
+    expect(openField).toBeGreaterThan(length(rule('.plan-gate__preview-wrap'), 'min-height'));
+    expect(openField).toBeGreaterThan(textareaFloor);
+
+    const open = '.plan-gate:has(.plan-gate__changes-details[open])';
+    const raised = rule(`${open} .plan-gate__preview-wrap, ${open} .plan-gate__plan`);
+    expect(length(raised, 'min-height')).toBeGreaterThan(openField);
+    // The raised floor applies only while the field is open: closed by default, the plan keeps its own floor.
+    const markup = renderToStaticMarkup(createElement(PlanGate, {
+      gate: { cycle: 1, openedAt: '2026-10-06T07:00:00.000Z', plan: '## Step one', edited: null, intent: 'requirements', todo: '', changes: '' },
+      collapsed: false,
+      onToggleCollapsed: () => {},
+      onEdit: async () => ({ ok: true as const }),
+      onDecide: async () => ({ ok: true as const }),
+    }));
+    expect(markup).toMatch(/<details class="plan-gate__changes-details">/);
+    expect(source).toContain('<details className="plan-gate__changes-details" open={');
+    // The field is a `textarea.input` that nothing here draws taller than the adopted floor.
+    expect(source).toContain('className="input plan-gate__changes"');
+    expect(rule('.plan-gate__changes')).not.toMatch(/(?:^|[;\s])(?:height|min-height):/);
+  });
+
   it('keeps every other part at its content height, and grows nothing but the plan', () => {
     // PD-ORCH-002 revision 2: "every other part of the gate is sized by its own content". The todo keeps its content up to
     // its cap and never yields; below the plan's floor the gate scrolls instead, its answers pinned (plan-gate-proof, 2c).

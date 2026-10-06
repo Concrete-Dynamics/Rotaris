@@ -297,7 +297,7 @@ every size from REQ-SHELL-022's minimum up (*corrected 2026-10-06*: true, but it
 of the gate, as the next sentences take it to. With a persistent notice on screen the rest at the minimum is short of the
 gate's parts, and every part but the plan kept its content height. finacc2's acceptance (A2) read the plan 18 px beside the todo's 56 at 1000x680
 with this bar and a "Session … failed" notice; repaired by a floor for the plan, every other part at its content and the
-gate scrolling below that floor with its answers pinned,
+gate scrolling below that floor with its answers pinned, the floor raised above the revision field while it is open,
 `docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md`). A bounded band (a fixed `max-height` in tokens) was the first form of this
 repair and was dropped before it was committed: weighed against the gate's parts as the proof measured them (heading,
 intent, todo, revision field and answers, about 210 px of the roughly 380 px the two rows share at 1000x680), any band that

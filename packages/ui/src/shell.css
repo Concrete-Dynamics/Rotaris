@@ -972,6 +972,15 @@
    governs. One was written here on 2026-10-06 and the bundle's verifier measured 80 px in the built app; the same rule's
    `resize: vertical` outranks the `resize: none` below, which only lets the user drag the plan taller. */
 .plan-gate__plan { flex: 1 1 auto; width: 100%; resize: none; white-space: pre; overflow-wrap: normal; overflow: auto; line-height: var(--rt-leading-body); }
+/* The revision field, once opened by its summary, is a bounded part at its default height: the summary's one line
+   (`--rt-text-xs` at `--rt-leading-body`, about 18 px), `--rt-space-1` under it and a `textarea.input` at the adopted 80 px
+   floor (it does not grow with what is typed; it scrolls), about 102 px in all. That beat both floors above, 72 in preview
+   and 80 in edit mode, so opening the field the ordinary way to Revise left the plan smaller than it at REQ-SHELL-022's
+   minimum, with or without a notice (the bundle's verifier, repair round 2, 2026-10-06: preview 72 against 102). While the
+   field is open the plan's floor rises above it in both modes; every other part keeps its content height and the gate
+   scrolls with its answers pinned. The selector outranks `textarea.input` (0,1,1), which governs edit mode's floor
+   otherwise. Only a field the user drags taller is unbounded (OQ-204). */
+.plan-gate:has(.plan-gate__changes-details[open]) .plan-gate__preview-wrap, .plan-gate:has(.plan-gate__changes-details[open]) .plan-gate__plan { min-height: calc(var(--rt-space-24) + var(--rt-space-4)); }
 /* The implied todo state is bounded so a long one cannot take the height revision 2 gives the plan; it scrolls instead. */
 .plan-gate__todo { display: flex; flex-direction: column; gap: var(--rt-space-1); max-height: var(--rt-space-16); overflow: auto; padding: var(--rt-space-2); background: color-mix(in oklch, var(--rt-surface-2) 60%, transparent); border-radius: var(--rt-radius-sm); }
 .plan-gate__todo-label { font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); color: var(--rt-text-secondary); }

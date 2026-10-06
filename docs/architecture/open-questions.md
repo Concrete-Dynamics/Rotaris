@@ -9791,16 +9791,25 @@ On a short window the gate's row is less than its parts need: at 1000x680 with a
 floor, the plan takes the whole loss (18 px beside the todo's 56 in finacc2's acceptance). The repair keeps both clauses
 for every part with a bound: the plan has a floor above the todo's cap (72 px; in edit mode the adopted `textarea.input`
 rule's 80 px), every other part keeps its content height, and the gate scrolls below that with its three answers pinned
-(at 261 px: the plan 72, the todo 56, the gate scrolling 31 px). That keeps the plan the largest of the parts that are
-bounded: the heading, the intent sentence, the todo, the closed revision field and the answers. Two parts have no bound:
-a later cycle's "You asked for" line (`.plan-gate__prior`, the whole of the changes the user stated) and the revision
-field once opened, which the user can drag taller (`resize: vertical`). On a short window either can stand taller than
-the plan's floor, and no floor fixed in advance is above a part with no bound.
+(at 261 px: the plan 72, the todo 56, the gate scrolling 31 px). The revision field opened by its summary is bounded too:
+at its default height (its summary, a step and a `textarea.input` at 80 px, which scrolls rather than grows with what is
+typed) it measures 102 px, which beat the plan's 72 (preview) and 80 (edit mode) at 1000x680 with or without a notice, on
+the ordinary path to Revise (the bundle's verifier, repair round 2). While that field is open the plan's floor rises to
+`calc(var(--rt-space-24) + var(--rt-space-4))`, 112 px, in both modes (at 261 px: the plan 112, the open field 102, the
+todo 56, the gate scrolling 151 px). That keeps the plan the largest of the parts that are bounded: the heading, the
+intent sentence, the todo, the revision field closed or open at its default height, and the answers. Two parts have no
+bound: a later cycle's "You asked for" line (`.plan-gate__prior`, the whole of the changes the user stated) and a revision
+field the user drags taller than its default (`resize: vertical`). On a short window either can stand taller than the
+plan's floor, and no floor fixed in advance is above a part with no bound. *(Corrected in repair round 2, 2026-10-06. The
+entry first read: "Two parts have no bound: a later cycle's 'You asked for' line … and the revision field once opened,
+which the user can drag taller". That put the open field at its default height among the unbounded parts; it is bounded,
+and a layout keeping both clauses for it exists, so it is repaired rather than asked.)*
 
 **What the build proceeds under.** The plan's floor is `calc(var(--rt-space-16) + var(--rt-space-2))` (edit mode:
-`textarea.input`'s 80 px), above the todo's cap, the answers' row and the heading. Every other part, the "You asked for"
-line and an opened revision field included, keeps its content height, and the gate scrolls with its three answers pinned
-to its floor; so on a short window either unbounded part may stand taller than the plan. (Until the bundle's repair round
+`textarea.input`'s 80 px), above the todo's cap, the answers' row and the heading; while the revision field is open it is
+`calc(var(--rt-space-24) + var(--rt-space-4))` in both modes, above the open field at its default height. Every other part,
+the "You asked for" line and a revision field dragged taller included, keeps its content height, and the gate scrolls with
+its three answers pinned to its floor; so on a short window either unbounded part may stand taller than the plan. (Until the bundle's repair round
 1 the reading also let the todo yield first, down to its label's line; that chose between the two clauses where a layout
 keeping both exists, and was withdrawn.)
 

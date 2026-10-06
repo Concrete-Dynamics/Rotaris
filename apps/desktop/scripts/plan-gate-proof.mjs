@@ -311,14 +311,21 @@ const NOTICE_PROBE = "(() => { const n = document.querySelector('.notice-slot');
 const OTHER_FAILED = `${JSON.stringify({ op: 'report', severity: 'warning', title: `Session ${OTHER_SESSION} failed`, message: 'The session on screen is unaffected. Open the failed session to see its recovery.', detail: 'HTTP 401 Unauthorized: the provider refused the key.', persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: OTHER_SESSION } }, sessionId: OTHER_SESSION })}`;
 const SMALL_STATE = whenReady(STATE_PROBE, 'smallState');
 const SMALL_NOTICE = whenReady(NOTICE_PROBE, 'smallNotice');
-// Edit mode, once both readings above are taken: the user's own control, then the same wait for the size and the notice.
-const EDIT_STATE = `(async () => { for (let i = 0; i < 400 && !(document.body.dataset.smallState === '1' && document.body.dataset.smallNotice === '1'); i += 1) await new Promise((r) => setTimeout(r, 100)); document.querySelector('[data-testid="plan-gate-toggle-edit"]')?.click(); for (let i = 0; i < 400 && !(document.querySelector('.plan-gate__plan') !== null && ${AT_MINIMUM_WITH_NOTICE}); i += 1) await new Promise((r) => setTimeout(r, 100)); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const field = document.querySelector('[data-testid="plan-gate-plan"]'); const g = document.querySelector('[data-testid="plan-gate"]'); const n = document.querySelector('.notice-slot'); const reach = ['plan-approve', 'plan-revise', 'plan-cancel'].map((id) => { const e = document.querySelector('[data-testid="' + id + '"]'); if (!e) return id + '=absent'; const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return id + '=' + (hit === e || e.contains(hit) ? 'ok' : 'not-hit'); }).join('|'); const read = { size: innerWidth + 'x' + innerHeight, edit: field !== null && field.classList.contains('plan-gate__plan'), fieldMin: field ? getComputedStyle(field).minHeight : null, noticeText: n ? n.innerText.slice(0, 200) : '', reach, gateScrolls: g ? g.scrollHeight - g.clientHeight : null, children: g ? [...g.children].map((c) => ({ c: [...c.classList].find((k) => k.startsWith('plan-gate__')) || c.classList[0] || c.tagName, h: Math.round(c.getBoundingClientRect().height), grow: getComputedStyle(c).flexGrow, shrink: getComputedStyle(c).flexShrink })) : null }; document.body.dataset.smallEdit = '1'; return read; })()`;
+// The readings after the first two follow one another, each started by the user's own control once the reading before it
+// is marked: edit mode, then the revision field opened by its summary (one click, nothing typed, nothing dragged) in edit
+// mode, then the same open field in preview. The open field stands at its default height: its summary and a
+// `textarea.input` whose adopted floor is 80 px, about 102 px in all, which beat the plan's 72 px floor until the plan
+// was given a higher one while the field is open (the bundle's verifier, repair round 2, 2026-10-06).
+const followingState = (after, control, ready, mark) => `(async () => { for (let i = 0; i < 400 && !(${after.map((m) => `document.body.dataset.${m} === '1'`).join(' && ')}); i += 1) await new Promise((r) => setTimeout(r, 100)); document.querySelector('${control}')?.click(); for (let i = 0; i < 400 && !((${ready}) && ${AT_MINIMUM_WITH_NOTICE}); i += 1) await new Promise((r) => setTimeout(r, 100)); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const field = document.querySelector('[data-testid="plan-gate-plan"]'); const g = document.querySelector('[data-testid="plan-gate"]'); const n = document.querySelector('.notice-slot'); const details = document.querySelector('.plan-gate__changes-details'); const reach = ['plan-approve', 'plan-revise', 'plan-cancel'].map((id) => { const e = document.querySelector('[data-testid="' + id + '"]'); if (!e) return id + '=absent'; const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return id + '=' + (hit === e || e.contains(hit) ? 'ok' : 'not-hit'); }).join('|'); const planBox = document.querySelector('.plan-gate__plan, .plan-gate__preview-wrap'); const read = { size: innerWidth + 'x' + innerHeight, edit: field !== null && field.classList.contains('plan-gate__plan'), open: details !== null && details.open, fieldMin: field ? getComputedStyle(field).minHeight : null, planMin: planBox ? getComputedStyle(planBox).minHeight : null, noticeText: n ? n.innerText.slice(0, 200) : '', reach, gateScrolls: g ? g.scrollHeight - g.clientHeight : null, children: g ? [...g.children].map((c) => ({ c: [...c.classList].find((k) => k.startsWith('plan-gate__')) || c.classList[0] || c.tagName, h: Math.round(c.getBoundingClientRect().height), grow: getComputedStyle(c).flexGrow, shrink: getComputedStyle(c).flexShrink })) : null }; document.body.dataset.${mark} = '1'; return read; })()`;
+const EDIT_STATE = followingState(['smallState', 'smallNotice'], '[data-testid="plan-gate-toggle-edit"]', "document.querySelector('.plan-gate__plan') !== null", 'smallEdit');
+const EDIT_OPEN_STATE = followingState(['smallEdit'], '.plan-gate__changes-summary', "document.querySelector('.plan-gate__plan') !== null && document.querySelector('.plan-gate__changes-details')?.open === true", 'smallEditOpen');
+const PREVIEW_OPEN_STATE = followingState(['smallEditOpen'], '[data-testid="plan-gate-toggle-preview"]', "document.querySelector('.plan-gate__preview-wrap') !== null && document.querySelector('.plan-gate__changes-details')?.open === true", 'smallPreviewOpen');
 const log2c = await launch('notice-at-minimum', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_RESIZE: '1000x680@200',
   ROTARIS_CAPTURE_NOTICES: [1500, 6000, 12000].map((at) => `${OTHER_FAILED}@${at}`).join(';;'),
-  ROTARIS_CAPTURE_EVAL_AT: `${SMALL_STATE}@2000;;${SMALL_NOTICE}@2000;;${EDIT_STATE}@2000`,
-  ROTARIS_CAPTURE_WAIT: `js:document.body.dataset.smallState === '1' && document.body.dataset.smallNotice === '1' && document.body.dataset.smallEdit === '1'`,
+  ROTARIS_CAPTURE_EVAL_AT: [SMALL_STATE, SMALL_NOTICE, EDIT_STATE, EDIT_OPEN_STATE, PREVIEW_OPEN_STATE].map((probe) => `${probe}@2000`).join(';;'),
+  ROTARIS_CAPTURE_WAIT: `js:${['smallState', 'smallNotice', 'smallEdit', 'smallEditOpen', 'smallPreviewOpen'].map((m) => `document.body.dataset.${m} === '1'`).join(' && ')}`,
   ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
   ROTARIS_CAPTURE_AFTER_MS: '1500',
 });
@@ -337,19 +344,29 @@ if (slot.reach !== 'plan-approve=ok|plan-revise=ok|plan-cancel=ok') throw new Er
 // "Every other part of the gate is sized by its own content": nothing but the plan may shrink below it.
 const shrankSmall = small.children.filter((c) => Number(c.shrink) > 0 && !/plan-gate__(preview-wrap|plan)/.test(c.c)).map((c) => c.c);
 if (shrankSmall.length > 0) throw new Error(`at 1000x680 with a notice a part other than the plan yields below its content: ${JSON.stringify(shrankSmall)}`);
-const edit = readEval(evals2c, 2000, EDIT_STATE);
-if (edit === undefined || edit === null || edit.children === null) throw new Error(`the gate was not read in edit mode at the minimum with a notice:\n${log2c}`);
-if (!edit.edit || edit.size !== '1000x680' || !edit.noticeText.includes(OTHER_SESSION)) throw new Error(`edit mode was not read at 1000x680 beside REQ-NOTIFY-032's notice: ${JSON.stringify({ edit: edit.edit, size: edit.size, noticeText: edit.noticeText })}`);
-const grewEdit = edit.children.filter((c) => Number(c.grow) > 0 && c.h > 1).map((c) => c.c);
-if (grewEdit.length !== 1 || grewEdit[0] !== 'plan-gate__plan') throw new Error(`in edit mode at 1000x680 with a notice the plan is not the only element that grows: ${JSON.stringify(grewEdit)}`);
-const tallestEdit = edit.children.reduce((a, b) => (b.h > a.h ? b : a));
-if (tallestEdit.c !== 'plan-gate__plan') throw new Error(`in edit mode at 1000x680 with a notice the plan is not the largest element of the gate (field min-height ${edit.fieldMin}): ${edit.children.map((c) => `${c.c}=${c.h}`).join('|')}`);
-const shrankEdit = edit.children.filter((c) => Number(c.shrink) > 0 && c.c !== 'plan-gate__plan').map((c) => c.c);
-if (shrankEdit.length > 0) throw new Error(`in edit mode a part other than the plan yields below its content: ${JSON.stringify(shrankEdit)}`);
-if (edit.reach !== 'plan-approve=ok|plan-revise=ok|plan-cancel=ok') throw new Error(`in edit mode at 1000x680 with a notice an answer of the gate is not reachable (REQ-SHELL-048): ${edit.reach}`);
+/** One of the readings after the first two: the plan the tallest part and the only one that grows, nothing else yielding below
+ *  its content, and the three answers hit. `label` names it in the failure. */
+const assertFollowing = (probe, label, { edit: wantEdit, open: wantOpen }) => {
+  const read = readEval(evals2c, 2000, probe);
+  if (read === undefined || read === null || read.children === null) throw new Error(`the gate was not read ${label} at the minimum with a notice:\n${log2c}`);
+  if (read.edit !== wantEdit || read.open !== wantOpen || read.size !== '1000x680' || !read.noticeText.includes(OTHER_SESSION)) throw new Error(`the gate was not read ${label} at 1000x680 beside REQ-NOTIFY-032's notice: ${JSON.stringify({ edit: read.edit, open: read.open, size: read.size, noticeText: read.noticeText })}`);
+  const plan = wantEdit ? 'plan-gate__plan' : 'plan-gate__preview-wrap';
+  const grew = read.children.filter((c) => Number(c.grow) > 0 && c.h > 1).map((c) => c.c);
+  if (grew.length !== 1 || grew[0] !== plan) throw new Error(`${label} at 1000x680 with a notice the plan is not the only element that grows: ${JSON.stringify(grew)}`);
+  const tallest = read.children.reduce((x, y) => (y.h > x.h ? y : x));
+  const others = read.children.filter((c) => c.c !== plan);
+  if (tallest.c !== plan || others.some((c) => c.h >= tallest.h)) throw new Error(`${label} at 1000x680 with a notice the plan is not the largest element of the gate (plan min-height ${read.planMin}, field min-height ${read.fieldMin}): ${read.children.map((c) => `${c.c}=${c.h}`).join('|')}`);
+  const shrank = read.children.filter((c) => Number(c.shrink) > 0 && c.c !== plan).map((c) => c.c);
+  if (shrank.length > 0) throw new Error(`${label} a part other than the plan yields below its content: ${JSON.stringify(shrank)}`);
+  if (read.reach !== 'plan-approve=ok|plan-revise=ok|plan-cancel=ok') throw new Error(`${label} at 1000x680 with a notice an answer of the gate is not reachable (REQ-SHELL-048): ${read.reach}`);
+  return { planMin: read.planMin, fieldMin: read.fieldMin, gateScrolls: read.gateScrolls, reach: read.reach, children: read.children };
+};
+const edit = assertFollowing(EDIT_STATE, 'in edit mode', { edit: true, open: false });
+const editOpen = assertFollowing(EDIT_OPEN_STATE, 'in edit mode with the revision field open', { edit: true, open: true });
+const previewOpen = assertFollowing(PREVIEW_OPEN_STATE, 'in preview with the revision field open', { edit: false, open: true });
 results.noticeAtMinimum = {
   size: slot.size, notice: slot.notice, noticeText: slot.noticeText, gate: small.gate.h, plan: small.plan.h, gateScrolls: slot.gateScrolls, reach: slot.reach, children: small.children,
-  edit: { fieldMin: edit.fieldMin, gateScrolls: edit.gateScrolls, reach: edit.reach, children: edit.children },
+  edit, editOpen, previewOpen,
 };
 
 // 3. Revise: a further cycle, carrying the changes stated, and still nothing written.

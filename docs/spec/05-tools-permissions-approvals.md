@@ -186,6 +186,10 @@ Every pattern listed above is matched under the token rules of REQ-TOOLS-033: ea
 
 **REQ-TOOLS-058** — If presenting the prompt raises, the pending request is discarded and the call is denied with source `presenter-error` and a reason stating the approval request could not be shown.
 
+> **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clause 38: a
+> presentation answered "not shown" once the quit is under way is held for the quit to withdraw, not denied
+> `presenter-error`.
+
 **REQ-TOOLS-059** — Approval responses can come only from the host UI. Nothing in agent output or tool output can satisfy an approval.
 
 **REQ-TOOLS-060** — Pending approvals are visible in session state as a mapping from request id to payload, written when presented and removed on answer, timeout, or cancellation.
@@ -200,6 +204,10 @@ Every pattern listed above is matched under the token rules of REQ-TOOLS-033: ea
   > answers Deny in every other case, as stated.
 
 **REQ-TOOLS-064** — A session for which no approval presenter is registered — one for which the modal dialog of REQ-TOOLS-063 cannot be shown — resolves every `ask` through the headless approval policy of REQ-TOOLS-065: never a silent allow, never a hang.
+
+> **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clause 38: an ask
+> made after the quit revoked the last window's presenter and before the shutdown is not resolved by the headless
+> policy; it is held unshown and withdrawn by the quit.
 
 ### 6. Headless / Unattended Resolution
 

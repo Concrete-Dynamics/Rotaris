@@ -251,6 +251,9 @@ The conversation surface belongs to the single desktop application, and is backe
   > toggle above is unchanged and remains the way to read one agent alone. The directive addresses
   > the unfiltered view instead, where colour and indentation tell concurrent agents apart without
   > switching scope at all.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clause 23: for a
+  > `paused` agent "This task" shows its state without an elapsed time, since nothing runs for it. Every other agent
+  > keeps its time.
 
 ### 11. Desktop Transcript Scrolling, Tail-Follow, and Search
 
@@ -294,6 +297,9 @@ The conversation surface belongs to the single desktop application, and is backe
 - **REQ-CHAT-092** — A structured-questions action MUST carry 1–10 ordered steps; each step has a unique id, a non-empty title, an optional description, at most 8 options (each with a non-empty label and optional description), and a freeform-allowed flag defaulting to true; a step MUST offer options or freeform (or both). Violations reject the action before anything is shown to the user.
 - **REQ-CHAT-093** — The default response timeout MUST be **300 seconds** (overridable at tool construction; the tool's own description tells agents the conversation waits up to 300 seconds). A timeout value of **zero means wait without limit**.
 - **REQ-CHAT-094** — At most one question prompt may be pending per conversation; a second concurrent request for the same conversation MUST be rejected and its tool call observes a cancelled result. If the steps cannot be published to the frontend, the pending prompt is discarded and the tool observes a cancelled result with the message "Questions could not be shown to the user.".
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clause 38: a
+  > question put in the quit's gap is recorded pending and withdrawn by the quit, not discarded as "could not be
+  > shown".
 - **REQ-CHAT-095** — Tool outcomes: cancelled → "Questions were cancelled."; timed out → "User did not respond within <N> seconds." (the model sees "User did not respond to the questions in time."); resolved → "Received answers for N step(s)." with an answers map `{step_id: {selected_option: string|null, freeform_text: string|null}}`. The model-visible content renders a "## User Answers" section with one `- **<id>**: <value>` line per step and "(no answer)" for empty answers.
 - **REQ-CHAT-096** — Answer routing MUST target the exact (conversation, prompt id) pair: a stale prompt id resolves nothing; conversation teardown cancels that conversation's pending prompt; run shutdown cancels every pending prompt; a timed-out wait cleans up its own pending entry.
 

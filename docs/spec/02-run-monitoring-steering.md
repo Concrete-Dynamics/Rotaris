@@ -66,6 +66,10 @@ While a task run is executing, a user must be able to watch what every agent is 
 
 **REQ-MONITOR-020** — Given a delegation targeting a model already at its per-model parallelism cap, the agent must be enqueued into `waiting_on_model_slot` rather than rejected. Once another agent using that model finishes, whatever its terminal state, the freed slot must promote exactly one waiting agent to `queued` for the next scheduling cycle. Only running and summarizing agents count against the per-model cap.
 
+> **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clause 39: a child
+> `paused` out of `starting`, `running` or `summarizing` keeps its slot while its session rests, and the slot
+> freed in one session is offered to the other sessions first, then to its own.
+
 **REQ-MONITOR-021** — Per-model parallelism is unbounded unless a cap applies to that model. Whether a provider's quota is consumed by concurrent calls against a single account is a declared property of that provider's catalogue entry, not a list of provider names held in this document: every model of a provider that declares it carries an automatic cap of 2 concurrent calls, applied without the user configuring anything, so that concurrency alone cannot exhaust a shared quota; every model of a provider that does not declare it is uncapped. A cap the user configures for a model replaces the automatic one entirely, whether it raises it, lowers it, or removes it. Adding a provider that declares the property therefore caps its models with no amendment here, and the cap in force for a model must be inspectable so a user can see why an agent is parked in `waiting_on_model_slot`.
 
 > **Narrowed by [`PD-PROVIDER-001`](../product/directives.md#pd-provider-001), 2026-10-06.** A provider's
@@ -180,6 +184,10 @@ While a task run is executing, a user must be able to watch what every agent is 
 
 **REQ-MONITOR-064** — When the shown agent has live (running, waiting, or queued) descendants, a cascade note states that cancelling cascades to that number of descendants; otherwise the note is empty.
 
+> **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clause 23: the
+> cascade note counts every descendant the cancel ends, live and paused, and says which ("Cancelling cascades to 2
+> live and paused descendants.").
+
 **REQ-MONITOR-065** — The inspector's context meter must be labeled as one agent's own context window, never as a session-wide usage figure. An unknown or idle agent shows an empty ring (zero used against a nominal limit) with the threshold still marked.
 
 **REQ-MONITOR-066** — Given an agent whose model has since disappeared from the catalog, the model selector must still name that model as its current value rather than showing a wrong or blank one.
@@ -278,6 +286,10 @@ While a task run is executing, a user must be able to watch what every agent is 
 
 **REQ-MONITOR-107** — Each agent's elapsed wall-clock time is measured from its spawn timestamp. While the agent is live the figure advances at least once per second on every visible surface that shows it (REQ-MONITOR-110, REQ-MONITOR-111); once the agent is terminal the figure is fixed at the difference between its completion and spawn timestamps and never changes again.
 
+> **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clause 33: the
+> figure of an agent not ended whose presentation state is running, waiting or queued advances; a `paused` agent
+> shows none.
+
 **REQ-MONITOR-108** — Live elapsed clocks — on the verification row and header, on reasoning rows, and on running tool rows — advance from a recorded start timestamp on each display tick. A tick must not alter the recorded row, must not write session state, and must not cause a transcript publication: a session whose only activity is clocks ticking produces no new persisted data and no update traffic.
 
 **REQ-MONITOR-109** — A reasoning row shows elapsed seconds and an approximate token figure obtained by dividing every reasoning character received by the configured characters-per-token ratio (default 4, REQ-MONITOR-080), including characters the row does not display. When the reasoning burst ends, a final duration is stamped on the row and both figures stop changing. A reasoning row is collapsed by default to a fixed height of 6 text lines showing the most recently received reasoning text, so a live row scrolls with the stream rather than growing without bound, and it carries an expand control that reveals every character received; expanding is display-only and changes neither figure. The elapsed and token figures are computed over all characters received whether or not the row displays them, so collapsing and expanding never change either number.
@@ -285,6 +297,9 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-110** — A one-second repaint tick (REQ-MONITOR-287) runs exactly while a visible surface displays at least one live reasoning row, one running tool row, or one live per-agent elapsed clock (REQ-MONITOR-111). With none of those present, no repaint occurs and the surface performs no periodic work at all; a hidden surface never ticks (REQ-MONITOR-039, REQ-MONITOR-297).
 
 **REQ-MONITOR-111** — Per-agent elapsed wall-clock time is shown, and advances live on the one-second tick of REQ-MONITOR-110 while the agent is live and the surface is visible, in all three places that hold a slot for it: the agent tree meta, the inspector meta, and the pop-out window's context card. The documented fallbacks apply only where the elapsed value is genuinely unknown — where no spawn timestamp was recorded — and in that case the tree falls back to the state value and the inspector and the pop-out card show an em-dash. A surface that has a spawn timestamp and shows a fallback, or that shows a frozen figure for a live agent, is a defect.
+
+> **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clause 33: a
+> `paused` agent shows its state or the fallback in place of a figure, though it has a spawn timestamp.
 
 **REQ-MONITOR-112** — The overview header shows the session duration alongside the session name and status.
 
@@ -327,6 +342,11 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-127** — On confirmation the session status is optimistically set to `cancelling` and a full cancellation is requested. Given a refusal, the status is restored to `running` and an error message states that the run is no longer cancellable.
 
 **REQ-MONITOR-128** — Cancelling one agent requires confirmation naming that agent plus one line per live descendant that will also be cancelled. On confirmation, that agent together with each of its live descendants is optimistically shown as cancelled, with an activity line stating that the user cancelled them, and the cancellation is dispatched to the run. Given a refusal, the prior state is restored and an error message states that the agent is no longer cancellable.
+
+> **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clauses 23, 24 and
+> 35: the confirmation lists, and the optimistic display shows cancelled, every descendant the cancel ends, live
+> and paused; a refusal by the store or by another process's lock states the engine's words instead of "no longer
+> cancellable".
 
 **REQ-MONITOR-129** — Cancelling a run must signal the run's graceful-stop path rather than aborting its execution, so the run still produces and reports a terminal result. A graceful stop that is not honored within 30 seconds is force-cancelled as a backstop.
 
@@ -434,6 +454,10 @@ While a task run is executing, a user must be able to watch what every agent is 
 
 **REQ-MONITOR-169** — The agents card shows the agent count, a caption of the form `depth {d} / {cap} · fan-out {n} / {limit}` against the configured delegation caps, and a monospaced detail line of running, waiting, done, and failed counts, where waiting includes queued agents and failed includes cancelled and blocked agents.
 
+> **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 6, 2026-10-06.** Clause 23: while
+> an agent is paused, the line names that count between waiting and done (`running 1 · waiting 0 · paused 2 · done
+> 1 · failed 0`). Otherwise it reads as stated.
+
 **REQ-MONITOR-170** — The cumulative token figure uses the aggregate total when available and otherwise falls back to the sum of prompt and completion tokens from the raw usage record.
 
 **REQ-MONITOR-171** — The sessions card lists sessions as a run switcher; each row carries a status dot (attached uses the run color, background uses the informational color, other busy states pulse in the run color, failed uses the failure color, otherwise idle), a session-name link with a tooltip carrying the session identifier and any requirement attribution, a requirement tag only when a requirement id exists, a focused marker, a detail caption, a continue-run link shown only when the session is not busy, the branch, a token label, and a duration label. Its empty state explains that finished and suspended runs will be listed there once they exist.
@@ -538,6 +562,8 @@ While a task run is executing, a user must be able to watch what every agent is 
   > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4, 2026-09-28.** Clause 13: a
   > session at rest never settles a `paused` agent to the run's outcome; it keeps its state and its last activity
   > until it resumes or ends. Every other running, waiting or queued agent is settled as stated.
+  > Revision 6 (2026-10-06), clause 23: the agents a crash left present `paused`, by `crash`, before the crash is
+  > recorded, and are not settled; a session a store failure left busy is settled as stated.
 
 **REQ-MONITOR-212** — The `idle` status is deliberately exempt from that reconciliation, because a run that never began has no outcome for its agents to inherit.
 
@@ -545,6 +571,7 @@ While a task run is executing, a user must be able to watch what every agent is 
   > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4, 2026-09-28.** Clause 13: every
   > surface shows a `paused` agent as `paused`, the one state REQ-MONITOR-211's reconciliation leaves as it is.
   > Every settled agent is shown as stated.
+  > Revision 6 (2026-10-06), clause 23: so is an agent a crash left before the crash is recorded, shown `paused`.
 
 ### 24. Live update transport, timing, and ordering
 

@@ -199,8 +199,9 @@ export function helperChoiceOf(memory: ResilienceMemory, catalogue: readonly Cat
 
 /**
  * OQ-188's ruling (R-071, PD-MONITOR-004): the model key that names a pair — the first configured entry in declaration order,
- * else the first discovered one — or null when none does. The wait record carries it so the header's keep waiting can choose
- * the waiting pair itself (`setModel` with it), which is the existing retry path of an explicit choice (REQ-MONITOR-194/303).
+ * else the first discovered one — or null when none does. The wait record carries it so the header's keep waiting can name
+ * the waiting pair (`setModel` with it, marked `keepWaiting`: `Run.keepWaiting`, a retry that clears the pair's exclusion as an
+ * explicit choice does, REQ-MONITOR-194/303, and moves no other agent).
  */
 export function keyOfPair(catalogue: readonly CatalogueEntry[], provider: string, modelId: string): string | null {
   const matching = catalogue.filter((e) => e.provider === provider && e.model.modelId === modelId);

@@ -571,9 +571,11 @@ await scenarioRun('quota-retry', async () => {
 });
 
 // 4d. `keep-waiting` — OQ-188's ruling (R-071, PD-MONITOR-004): in the wait that never auto-resumes, the header's Keep waiting
-// retries the waiting pair now — `setModel` with the wait's `key`, the explicit choice of the waiting pair, which clears its
-// exclusion (REQ-MONITOR-194) and resolves the wait as a retry (REQ-MONITOR-303). Alpha refuses on quota, Keep waiting is
-// pressed, and the retry on alpha answers: the run completes on alpha with no override. Until 2026-10-06 Keep waiting said
+// retries the waiting pair now — `setModel` with the wait's `modelKey`, marked `keepWaiting` and naming the wait's agent and
+// attempt (`Run.keepWaiting`), which clears the pair's exclusion (REQ-MONITOR-194) and resolves the wait as a retry
+// (REQ-MONITOR-303), moving no other agent and persisting no override. Alpha refuses on quota, Keep waiting is pressed TWICE in
+// one frame (a double-click, repair round 1: the second press once switched the entry model), and the retry on alpha answers:
+// the run completes on alpha with no override, one retry row and no `entry_model_switched`. Until 2026-10-06 Keep waiting said
 // "Still waiting." and sent nothing, so this run stayed parked
 // (`docs/defects/fixed/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`).
 const s4d = scenario('keep-waiting', []);
@@ -588,7 +590,7 @@ await scenarioRun('keep-waiting', async () => {
     await step('the wait header', d.waitFor('.wait-header', { timeoutMs: 60_000 }));
     const during = await step('the header during the wait', d.probe('.wait-header'));
     await step('the waiting picture', d.screenshot(join(output, 'keep-waiting-waiting.png')));
-    await step('Keep waiting', d.click('.wait-header .btn-secondary', { text: 'Keep waiting' }));
+    await step('Keep waiting, pressed twice in one frame', d.eval(`(() => { const b = [...document.querySelectorAll('.wait-header .btn-secondary')].find((x) => x.textContent.trim() === 'Keep waiting'); if (!b) return false; b.click(); b.click(); return true; })()`));
     const row = await step('the run settled', until(() => { const db = open(s4d); try { return session(db); } finally { db.close(); } }, (x) => x !== undefined && SETTLED.has(x.execution_status), { timeoutMs: 90_000, what: 'the session settling after Keep waiting', signal }));
     const after = await step('the header after the retry', d.probe('.wait-header'));
     return { during, row, after };
@@ -606,7 +608,9 @@ await scenarioRun('keep-waiting', async () => {
   const exhausted = list.filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata));
   expect(exhausted.length === 2 && exhausted[0].cleared === undefined && exhausted[1].cleared === true && exhausted[1].model === 'alpha', `the exclusion was not recorded and then cleared: ${JSON.stringify(exhausted)}`);
   expect(!list.some((t) => t.name === 'model_override'), `Keep waiting persisted an override: ${list.filter((t) => t.name === 'model_override').map((t) => t.metadata).join(' | ')}`);
-  expect(rows.some((b) => b.includes('alpha chosen during the wait on scripted/alpha: it is no longer treated as out of quota')), `no system row for the retry: ${rows.join(' | ')}`);
+  const retried = rows.filter((b) => b.includes('Keep waiting: alpha is retried now and is no longer treated as out of quota.'));
+  expect(retried.length === 1, `not exactly one system row for the retry: ${rows.join(' | ')}`);
+  expect(!list.some((t) => t.name === 'entry_model_switched'), `the second press switched the entry model: ${list.filter((t) => t.name === 'entry_model_switched').map((t) => t.metadata).join(' | ')}`);
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/alpha', `the calls were not alpha, then alpha retried: ${JSON.stringify(calls)}`);
   results.keepWaiting = { status: row.execution_status, exhausted, calls, headerDuringWait: header.text, png: r.png, elapsedMs: r.elapsedMs };

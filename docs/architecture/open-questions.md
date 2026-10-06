@@ -9721,7 +9721,11 @@ the out-of-quota wait (the variant that never auto-resumes), clearing its out-of
 — read onto the existing switch of the entry model, which the header sends with the waiting pair's key, now carried on the
 record's `wait` as `modelKey`, so REQ-MONITOR-004's twenty-two operations are unchanged — and stays a plain acknowledgement in
 the timed wait, whose timer already retries. Minted as [`PD-MONITOR-004`](../product/directives.md#pd-monitor-004),
-narrowing REQ-MONITOR-303, and built the same day (plan fin21).
+narrowing REQ-MONITOR-303, and built the same day (plan fin21). The reading taken where the ruling leaves a detail open, as
+corrected in that plan's repair round 1: "retry the same model" moves no other agent — keep waiting resumes only the agents
+parked out of quota on the waiting pair and persists no override, an agent parked on another pair keeping its own wait — and
+the press is marked as keep waiting and names the wait it answers, so a second press for a wait already retried is refused
+rather than read as a switch of the entry model.
 
 ADR-0010's third execution (2026-09-05) read keep waiting as "the absence of a decision": the header acknowledges ("Still
 waiting.") and sends nothing, so the wait goes on as it was — the exhausted variant until a person decides, the auto-resume

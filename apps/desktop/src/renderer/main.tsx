@@ -333,6 +333,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     onSetRunStartMode={(mode) => setRunStartMode(mode)}
     onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
     onSetModel={(model) => control('setModel', { model }, 'The run did not accept that model.')}
+    /* OQ-188's ruling (PD-MONITOR-004): keep waiting is `setModel` marked as a retry of the wait it names, never a switch. */
+    onKeepWaiting={(retry) => control('setModel', { model: retry.model, keepWaiting: true, agent: retry.agent, attempt: retry.attempt }, 'The wait could not be retried; it may already have ended.')}
     onSetReasoning={(level) => control('setReasoning', { level }, 'The run did not accept that reasoning level.')}
   /></>; // Part AN: the fragment closes the worktree dialog + view pair opened above.
 }

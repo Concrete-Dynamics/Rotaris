@@ -2038,6 +2038,13 @@ export class Sessions {
       }
       case 'setModel': {
         const key = text('model');
+        // OQ-188's ruling (PD-MONITOR-004): the wait header's keep waiting travels on this operation, marked and naming the wait
+        // it answers; it is a retry of that wait's pair, never a switch (`Run.keepWaiting`), so REQ-MONITOR-004 keeps 22.
+        if (req.args['keepWaiting'] === true) {
+          const agent = text('agent');
+          const attempt = req.args['attempt'];
+          return key !== null && agent !== null && typeof attempt === 'number' && run.keepWaiting(key, agent, attempt) ? { ok: true } : { ok: false };
+        }
         return key !== null && run.setEntryModel(key) ? { ok: true } : { ok: false };
       }
       case 'setReasoning': {

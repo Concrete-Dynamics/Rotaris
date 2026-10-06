@@ -105,6 +105,11 @@ export interface WorkspaceViewProps {
   /** REQ-MONITOR-142/144: the run header's model and reasoning switch, next-iteration changes. */
   readonly onSetModel?: ((model: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly onSetReasoning?: ((level: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /**
+   * OQ-188's ruling (PD-MONITOR-004 clause 1): the wait header's keep waiting in an out-of-quota wait — a retry of the wait it
+   * names (agent and attempt) on the waiting pair's key, never a switch of model (`setModel` marked `keepWaiting`).
+   */
+  readonly onKeepWaiting?: ((retry: { readonly model: string; readonly agent: string; readonly attempt: number }) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly models?: readonly string[] | undefined;
   /** REQ-CHAT-171/172: explicit capability declarations for the model selection surface. */
   readonly imageInputModels?: readonly string[] | undefined;
@@ -446,27 +451,36 @@ export function waitModelOptions(models: readonly string[], excluded: readonly s
 
 /**
  * OQ-188's ruling (R-071, PD-MONITOR-004): what the wait header's keep waiting does. In the wait that never auto-resumes
- * (`resumeAt` null: a pair the provider reported out of quota) it retries the waiting pair now — `setModel` with its key, the
- * explicit choice of it that clears its exclusion and resolves the wait as a retry (REQ-MONITOR-194/303) — where a key names
- * it and the header can send one. In the timed wait it acknowledges and sends nothing: its timer retries when the provider's
- * interval ends (REQ-MONITOR-192, REQ-NOTIFY-087), and an earlier retry would meet the same limit. Until 2026-10-06 it
- * acknowledged in both, so an out-of-quota wait stayed parked until the user changed model or cancelled.
+ * (`resumeAt` null: a pair the provider reported out of quota) it retries the waiting pair now — `setModel` with its key,
+ * marked as keep waiting and naming the wait it answers by agent and attempt (`onKeepWaiting`, the run's `keepWaiting`): a
+ * retry of that pair alone, its exclusion cleared (REQ-MONITOR-194/303), no override, no other parked agent moved — where a
+ * key names it and the header can send one. Once a retry was sent for the wait shown (`sent`) a further press sends nothing:
+ * the header stays drawn for that wait until the next snapshot, and a second send would answer a wait already resolved. In
+ * the timed wait it acknowledges and sends nothing: its timer retries when the provider's interval ends (REQ-MONITOR-192,
+ * REQ-NOTIFY-087), and an earlier retry would meet the same limit. Until 2026-10-06 it acknowledged in both, so an
+ * out-of-quota wait stayed parked until the user changed model or cancelled; until repair round 1 the retry was a plain
+ * `setModel`, which moved every other parked agent onto the waiting pair, and a double-click switched the entry model.
  */
-export function keepWaitingAction(wait: NonNullable<SessionRecord['wait']>, canSend: boolean): { readonly kind: 'retry'; readonly key: string } | { readonly kind: 'acknowledge' } {
-  return wait.resumeAt === null && wait.modelKey !== null && canSend ? { kind: 'retry', key: wait.modelKey } : { kind: 'acknowledge' };
+export function keepWaitingAction(wait: NonNullable<SessionRecord['wait']>, canSend: boolean, sent: boolean): { readonly kind: 'retry'; readonly key: string; readonly agent: string; readonly attempt: number } | { readonly kind: 'sent' } | { readonly kind: 'acknowledge' } {
+  if (wait.resumeAt !== null || wait.modelKey === null || !canSend) return { kind: 'acknowledge' };
+  return sent ? { kind: 'sent' } : { kind: 'retry', key: wait.modelKey, agent: wait.agent, attempt: wait.attempt };
 }
 
 /**
  * The wait as the user sees it (REQ-NOTIFY-263, REQ-ORCH-091 d): the header and its exactly three choices, here and on no
  * other surface — keep waiting (`keepWaitingAction`: in the out-of-quota wait a retry of the waiting pair now, through
- * `setModel` with its key, saying "Retrying <key> now."; in the timed wait an acknowledgement that changes nothing), change model
+ * `onKeepWaiting` with its key and the wait's agent and attempt, saying "Retrying <key> now." and sending once per wait; in
+ * the timed wait an acknowledgement that changes nothing), change model
  * (every configured model, pinned through `setModel`, REQ-NOTIFY-089; the pairs held out of quota annotated,
  * `waitModelOptions`, REQ-MONITOR-194/303), cancel the run — the confirmed
  * "Cancel the run?", which sends the reserved run id, the explicit cancel, never the stop (PD-ORCH-005 clause 15).
  * The countdown ticks once a second on the surface's own clock, as the Overview's runtime label does.
  */
-function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<SessionRecord['wait']>; models: readonly string[]; onSetModel?: WorkspaceViewProps['onSetModel']; onCancel?: (() => void) | undefined }) {
+function WaitHeader({ wait, models, onSetModel, onKeepWaiting, onCancel }: { wait: NonNullable<SessionRecord['wait']>; models: readonly string[]; onSetModel?: WorkspaceViewProps['onSetModel']; onKeepWaiting?: WorkspaceViewProps['onKeepWaiting']; onCancel?: (() => void) | undefined }) {
   const [now, setNow] = useState(() => Date.now());
+  // Whether a keep-waiting retry is in flight or accepted for the wait this header was drawn for; the header remounts per
+  // wait (its key at the render site), so a new wait starts clean. A ref, so two presses in one frame see the first.
+  const retrySent = useRef(false);
   const [choosing, setChoosing] = useState(false);
   // The keep-waiting line: "Still waiting." for an acknowledgement, "Retrying <key> now." for a retry sent (OQ-188); null before.
   const [acknowledged, setAcknowledged] = useState<string | null>(null);
@@ -490,10 +504,15 @@ function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<
       <div className="wait-header__actions" aria-label="Wait choices">
         <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => {
           setChoosing(false);
-          const action = keepWaitingAction(wait, onSetModel !== undefined);
-          if (action.kind === 'acknowledge' || onSetModel === undefined) { setAcknowledged('Still waiting.'); return; }
+          const action = keepWaitingAction(wait, onKeepWaiting !== undefined, retrySent.current);
+          if (action.kind === 'sent') return;
+          if (action.kind === 'acknowledge' || onKeepWaiting === undefined) { setAcknowledged('Still waiting.'); return; }
+          retrySent.current = true;
           setAcknowledged(`Retrying ${action.key} now.`);
-          void onSetModel(action.key).then((r) => { setError(r.ok ? null : r.reason); if (!r.ok) setAcknowledged(null); });
+          void onKeepWaiting({ model: action.key, agent: action.agent, attempt: action.attempt }).then((r) => {
+            setError(r.ok ? null : r.reason);
+            if (!r.ok) { setAcknowledged(null); retrySent.current = false; }
+          });
         }}>Keep waiting</DesignButton>
         {onSetModel && models.length > 0 && (choosing ? (
           <DesignSearchableSelect className="input select" ariaLabel="Change model" value="" autoFocus
@@ -713,7 +732,7 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
@@ -1427,7 +1446,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
           <div className="intent-status mono" role="status" aria-live="polite" data-phase={session?.intent?.phase}>{intentStatusText(session?.intent ?? null)}</div>
         )}
         {session?.wait && runActive && (
-          <WaitHeader key={`${session.wait.agent}:${session.wait.attempt}:${session.wait.provider}:${session.wait.model}:${session.wait.rejection ?? ''}`} wait={session.wait} models={models} onSetModel={onSetModel} onCancel={onCancelRun ? () => setConfirming('cancelRun') : undefined} />
+          <WaitHeader key={`${session.wait.agent}:${session.wait.attempt}:${session.wait.provider}:${session.wait.model}:${session.wait.rejection ?? ''}`} wait={session.wait} models={models} onSetModel={onSetModel} onKeepWaiting={onKeepWaiting} onCancel={onCancelRun ? () => setConfirming('cancelRun') : undefined} />
         )}
         {/* Part AA — REQ-CHAT-068: above the shown transcript, and only for a CHILD agent; a root agent produces none. */}
         {scope === 'task' && selected !== null && selected.id !== RUN_AGENT_ID && <DelegationHeader agent={selected} />}

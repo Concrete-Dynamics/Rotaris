@@ -4689,17 +4689,21 @@ it again in the composer.
 On the quota-wait decision surface (REQ-MONITOR-303, REQ-NOTIFY-263), **keep waiting** SHALL depend on the wait's variant:
 
 1. Where automatic resume is **not** allowed — a provider-and-model pair recorded out of quota (REQ-MONITOR-194) — keep
-   waiting SHALL resolve the wait as a retry of the same pair at once and return the status to `running`. It is an explicit
-   choice of that pair: it clears the pair's out-of-quota exclusion as REQ-MONITOR-194 says, persists no override, and takes
-   back an earlier override of the pair (`PD-ORCH-009`). A further insufficient-quota answer records the pair again and
-   parks the run in a new wait. As every resolution of a wait does, it resumes every agent parked at that moment, an agent
-   parked on another pair resuming on the waiting pair.
+   waiting SHALL resolve the wait as a retry of the same pair at once and return the status to `running`. It is a retry,
+   never a change of model: it clears the pair's out-of-quota exclusion as an explicit choice of the pair does
+   (REQ-MONITOR-194), persists no override, and takes back an earlier override of the pair (`PD-ORCH-009`), so the retry
+   calls it. It resumes the agents parked out of quota on that pair, each on its own model; an agent parked on another pair
+   is not moved and stays in its own wait, which the surface shows next. A further insufficient-quota answer records the
+   pair again and parks the agent in a new wait. One press retries the wait shown once: a press that reaches no outstanding
+   out-of-quota wait — one already retried, or a timed one — is refused and changes nothing, and never switches the entry
+   model.
 2. Where automatic resume **is** allowed, keep waiting SHALL acknowledge the choice and change nothing: the wait goes on
    and its timer resolves it as a retry when the interval elapses (REQ-MONITOR-192, REQ-NOTIFY-087).
 
-Neither adds an operation to REQ-MONITOR-004's enumeration: the retry is the switch of the run's entry model naming the
-waiting pair's model key, which the session record's wait carries. Where no configured model key names the waiting pair,
-keep waiting acknowledges in both variants; change model and cancel the run remain.
+Neither adds an operation to REQ-MONITOR-004's enumeration: the retry travels on the switch-of-entry-model operation, marked
+as keep waiting and naming the wait it answers (its agent and attempt) and the waiting pair's model key, which the session
+record's wait carries; so marked, it switches nothing. Where no model key names the waiting pair — a configured key first,
+else a discovered one — keep waiting acknowledges in both variants; change model and cancel the run remain.
 
 **Why, and what it costs.** REQ-MONITOR-303 says keep waiting resolves the wait as a retry; the build had read it as the
 absence of a decision, so in the out-of-quota wait the button did nothing and a user who had topped up the account had no
@@ -4720,6 +4724,24 @@ acknowledgement for the timed one (OQ-188). What it costs: in the timed wait kee
 > `key`, and ADR-0030's credential-shape test (`providers.test.ts`, consequence 2) refused it as a field named like a
 > credential; it is `modelKey`, beside the record's `entryModelKey`. It also found the clause about
 > other parked agents, which the existing branch already did (`overrideWaitingPairs`) and which the directive now states.
+>
+> **Corrected the same day (repair round 1 of plan fin21, the verifier's findings), the clause above kept as it was found:**
+> the first build sent a plain `setModel` and so reached `setEntryModel`'s quota-retry branch, the change-model chooser's own
+> path for the waiting pair. That branch moves every other parked agent to the waiting pair with a `model_override` that
+> "stands for the rest of the session" (`overrideWaitingPairs`) — a change of model the user never chose, which the first
+> text of clause 1 wrote down as "an agent parked on another pair resuming on the waiting pair" — and with no wait current, a
+> second press (a double-click before the next snapshot) switched the entry model to the waiting pair. Clause 1 now says
+> keep waiting moves no other agent and that a press reaching no outstanding wait is refused. Built as `Run.keepWaiting`
+> (`setModel` marked `keepWaiting`, with the wait's `agent` and `attempt`): it refuses a press naming no outstanding
+> out-of-quota wait or a key of another pair, and resumes the agents parked out of quota on the waiting pair alone
+> (`WaitRegistry.retryOn`); the header sends once per wait drawn (`keepWaitingAction`'s `sent`). The change-model chooser's
+> choice of the waiting pair is unchanged. **Measured:** three `ladder.test.ts` cases on two agents parked at once (the root
+> on a1, a child on b1): keep waiting on a1 leaves the child in its own wait on b1, retried there next, with no override and
+> both exclusions cleared — red before, the child moved to a1 with a `b1 → a1` override; a second press for the wait already
+> retried is refused and writes no `entry_model_switched` — red before, `{ok: true}` and a switch to b1; presses naming another
+> pair, another attempt or another agent are refused and change nothing — red before. `ui.test.ts`: `keepWaitingAction`
+> answers `sent` after a retry was sent for the wait shown — red before. `resilience-proof`'s `keep-waiting` now presses Keep
+> waiting twice in one frame and requires one retry row and no `entry_model_switched`.
 > **Measured:** `ladder.test.ts` (a quota wait's record names `modelKey: 'a1'`, and `setModel` with it completes the run on a1,
 > a1 recorded then cleared, no override, no refusal; a timed wait names its key too), `ui.test.ts` (`keepWaitingAction`:
 > retry in the out-of-quota wait, acknowledgement in the timed one, with no key, or with no `setModel` — red before, the

@@ -61,7 +61,7 @@ export interface InspectorProps {
 export const FOLLOWING_TAG = 'Following — tracking whichever agent wrote last';
 export const PINNED_TAG = 'Pinned by selection';
 export const PER_PERSONA_NOTE = 'Model and reasoning are set per persona and edited in persona settings.';
-export const NEXT_ITERATION_NOTE = 'Takes effect from the next iteration.';
+export const NEXT_ITERATION_NOTE = 'Takes effect from the next iteration, for the rest of this run.';
 /** REQ-MONITOR-052 (live-run finding K1): the empty sentence — it said "this build has no artifact store", false since Part Y. */
 export const NO_ARTIFACTS = 'This agent has produced and received no artifacts yet.';
 

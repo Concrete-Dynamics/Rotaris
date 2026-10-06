@@ -124,7 +124,7 @@ export function RunHeader({ runState, session, runActive, stepStartedAt, models,
               {/* PD-CHAT-001's icon clause: the wording rides as the accessible name; the icon leads. */}
               <i className="ph ph-cpu run-controls__icon" aria-hidden="true" />
               <DesignSearchableSelect className="input select chip-control__select" ariaLabel="Active run model" data-testid="run-model" value="" disabled={headerReason !== null}
-                title={headerReason ?? 'Switch the live run to another model from its next iteration.'} aria-describedby="run-controls-reason"
+                title={headerReason ?? 'Switch the live run to another model from its next iteration, for the rest of this run.'} aria-describedby="run-controls-reason"
                 filterPlaceholder="Filter models…"
                 /* REQ-MONITOR-194: a key the session holds out of quota is annotated, still choosable — the switch clears it. */
                 options={[{ value: '', label: 'Switch model…' }, ...annotatedModelOptions(models, session?.excludedModels ?? [])]}
@@ -135,7 +135,7 @@ export function RunHeader({ runState, session, runActive, stepStartedAt, models,
             <>
               <i className="ph ph-brain run-controls__icon" aria-hidden="true" />
               <DesignSelect className="input select chip-control__select" aria-label="Active run reasoning" data-testid="run-reasoning" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
-                title={headerReason ?? 'Switch the live run to another reasoning effort from its next iteration.'} aria-describedby="run-controls-reason"
+                title={headerReason ?? 'Switch the live run to another reasoning effort from its next iteration, for the rest of this run.'} aria-describedby="run-controls-reason"
                 onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetReasoning(v).then((r) => { if (!r.ok) onError(r.reason); }); }}>
                 <option value="">Switch reasoning…</option>
                 {REASONING_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}

@@ -39,12 +39,24 @@ describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
    */
   it('OQ-188 / PD-MONITOR-004: keep waiting retries the out-of-quota pair now, and acknowledges a timed wait', () => {
     const exhausted = { ...wait, exhausted: true, resumeAt: null, excluded: ['gpt-x'] };
-    expect(keepWaitingAction(exhausted, true)).toEqual({ kind: 'retry', key: 'gpt-x' });
+    // The retry names the wait it answers, as the header drew it, so the run retries that wait and no other (repair round 1).
+    expect(keepWaitingAction(exhausted, true, false)).toEqual({ kind: 'retry', key: 'gpt-x', agent: exhausted.agent, attempt: exhausted.attempt });
     // The timed wait: its timer retries when the provider's interval ends; keep waiting sends nothing.
-    expect(keepWaitingAction(wait, true)).toEqual({ kind: 'acknowledge' });
+    expect(keepWaitingAction(wait, true, false)).toEqual({ kind: 'acknowledge' });
     // No key names the waiting pair, or the header cannot send one: an acknowledgement, as before.
-    expect(keepWaitingAction({ ...exhausted, modelKey: null }, true)).toEqual({ kind: 'acknowledge' });
-    expect(keepWaitingAction(exhausted, false)).toEqual({ kind: 'acknowledge' });
+    expect(keepWaitingAction({ ...exhausted, modelKey: null }, true, false)).toEqual({ kind: 'acknowledge' });
+    expect(keepWaitingAction(exhausted, false, false)).toEqual({ kind: 'acknowledge' });
+  });
+  /*
+   * Repair round 1 of plan fin21: the header stays drawn for the wait it retried until the next snapshot arrives, so a second
+   * press (a double-click) must send nothing. Before, it sent `setModel` with the key again, which — no wait being current
+   * any more — switched the run's entry model to the waiting pair.
+   */
+  it('OQ-188 / PD-MONITOR-004: a second press of keep waiting after the retry was sent for the wait shown sends nothing', () => {
+    const exhausted = { ...wait, exhausted: true, resumeAt: null, excluded: ['gpt-x'] };
+    expect(keepWaitingAction(exhausted, true, true)).toEqual({ kind: 'sent' });
+    // The timed wait's acknowledgement is unchanged by it.
+    expect(keepWaitingAction(wait, true, true)).toEqual({ kind: 'acknowledge' });
   });
   it('a waiting session is busy and presents as running, so the composer stays locked (REQ-NOTIFY-050/051)', () => {
     expect(presentationStatus('waiting')).toBe('running');

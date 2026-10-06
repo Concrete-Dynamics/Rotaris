@@ -537,6 +537,14 @@ pair's key, which the record's `wait` now carries (`modelKey`), and the run's ex
 retry on that pair, its exclusion cleared as an explicit choice clears it. No operation was added; the contracts test still
 pins twenty-two. Shown by `resilience-proof`'s `keep-waiting` scenario (2026-10-06).
 
+*Corrected the same day (plan fin21's repair round 1), the paragraph above kept as it was first reported:* reading (b) as
+first built was wrong in two ways the verifier found. The quota-retry branch is the change-model chooser's path, and it moves
+every other parked agent onto the waiting pair with an override standing for the session; and a second press, arriving with
+no wait current, was read as a switch of the entry model. Keep waiting now travels on `setModel` marked `keepWaiting` and
+naming the wait's `agent` and `attempt`, which `Sessions.control` routes to `Run.keepWaiting`: it answers `{ok: false}` for a
+press naming no outstanding out-of-quota wait, and otherwise retries the agents parked on the waiting pair alone, no override
+persisted. The arguments stay text, numbers and booleans (REQ-MONITOR-013); the operation count is still twenty-two.
+
 **The wait state on the record, not in a column.** `SessionRecordSchema.wait` (provider, model, exhausted, resumeAt, attempt,
 reason, agent, rejection; since 2026-10-02 `excluded` and since 2026-10-06 `modelKey`, the waiting pair's model key) is derived from the live run at every snapshot — ADR-0043's rule that adding a field to the record
 adds it to the payload — and the persisted status is REQ-SESSION-073's own `waiting`, presented as `running` (REQ-NOTIFY-049),

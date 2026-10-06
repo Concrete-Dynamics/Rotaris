@@ -2482,6 +2482,35 @@ export class Run {
     return true;
   }
   /**
+   * OQ-188's ruling (R-071, PD-MONITOR-004 clause 1): the wait header's keep waiting in a wait that never auto-resumes — a retry
+   * of the model the wait shows, not a change of model. The wait is named by its agent and attempt, as the header drew it, and
+   * `key` must name its pair; a press that names no outstanding out-of-quota wait — a timed one, one already retried (a second
+   * click before the next snapshot), a key of another pair — is refused and changes nothing, so it can never fall through to a
+   * switch of the entry model. Accepted, it clears the pair's exclusion as an explicit choice of it does (REQ-MONITOR-194,
+   * `clearChosenExclusion`), takes back an earlier override of the pair (`takeBackOverrideOf`, so the retry calls it), persists
+   * no override, and resumes the agents parked out of quota on that pair alone (`WaitRegistry.retryOn`), each on its own cell;
+   * an agent parked on another pair stays in its own wait, which the header shows next.
+   *
+   * Until repair round 1 of plan fin21 (2026-10-06) the header sent a plain `setModel` with the key and reached
+   * `setEntryModel`'s quota-retry branch, which moves every other parked agent to the waiting pair with a `model_override`
+   * that stands for the rest of the session, and a second press, with no wait current, switched the entry model.
+   */
+  keepWaiting(key: string, agent: string, attempt: number): boolean {
+    if (this.ended) return false;
+    const waiting = this.waits.all().find((w) => w.agent === agent && w.attempt === attempt);
+    if (waiting === undefined || !waiting.exhausted) return false;
+    const resolved: ModelLookup = this.deps.models ? this.deps.models(key) : { ok: false, reason: 'this run resolves no model keys' };
+    if (!resolved.ok) return false;
+    const provider = providerIdentity(this.catalogue, resolved.choice.model);
+    if (pairKey(provider, resolved.choice.model.modelId) !== pairKey(waiting.provider, waiting.model)) return false;
+    const choice = withSettings(this.catalogue, resolved.choice);
+    this.clearChosenExclusion(key, provider, resolved.choice.model.modelId);
+    this.takeBackOverrideOf(`to keep waiting on ${waiting.provider}/${waiting.model}`, key, choice, waiting.agent === this.rootName ? {} : { switch_pending: this.entrySwitchPending });
+    this.deps.writer.appendRow('system', `Keep waiting: ${key} is retried now and is no longer treated as out of quota.`, true);
+    this.waits.retryOn(waiting.provider, waiting.model);
+    return true;
+  }
+  /**
    * REQ-ORCH-091 (d) / REQ-SESSION-026 / REQ-SESSION-196: a wait choice resolves every parked agent (`resolveWithModel`), so
    * every waiting pair but the one chosen is overridden to it — in the memory and as a `model_override` entry of its own, so
    * a reload (`ResilienceMemory.rehydrate`) and both autopsy readers replay every override the run holds. Each entry carries

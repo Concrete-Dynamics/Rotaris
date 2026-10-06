@@ -455,19 +455,21 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
 
   /*
    * OQ-188's ruling (R-071, PD-MONITOR-004): the wait record names the waiting pair's key, and keep waiting in the wait that
-   * never auto-resumes sends `setModel` with it — the explicit choice of the waiting pair, which clears its exclusion and
-   * retries it now, no override persisted. A timed wait names its key too; the header sends nothing for it (`keepWaitingAction`).
+   * never auto-resumes sends `setModel` with it, marked `keepWaiting` and naming the wait's agent and attempt (`Run.keepWaiting`,
+   * since repair round 1; before, a plain `setModel`) — a retry of the waiting pair, which clears its exclusion and retries it
+   * now, no override persisted. A timed wait names its key too; the header sends nothing for it (`keepWaitingAction`).
    */
-  it('OQ-188 / PD-MONITOR-004: a quota wait names the waiting pair\'s key, and keep waiting (setModel with it) retries the pair now, its exclusion cleared', async () => {
+  it('OQ-188 / PD-MONITOR-004: a quota wait names the waiting pair\'s key, and keep waiting (setModel with it, marked) retries the pair now, its exclusion cleared', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, [])];
     const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('after the top-up')), { catalogue });
     const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
     for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
     const wait = lastWait(pub)!;
     expect(wait).toMatchObject({ provider: 'a', model: 'a1', resumeAt: null, excluded: ['a1'], modelKey: 'a1' });
-    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: wait.modelKey! } })).toEqual({ ok: true });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: wait.modelKey!, keepWaiting: true, agent: wait.agent, attempt: wait.attempt } })).toEqual({ ok: true });
     expect((await sessions.running(sid)!).status).toBe('completed');
     expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1']);
+    expect(dal.timelineOf(sid).some((t) => t.name === 'entry_model_switched')).toBe(false);
     const timeline = dal.timelineOf(sid);
     expect(timeline.filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata) as Record<string, unknown>)).toEqual([
       expect.objectContaining({ provider: 'a', model: 'a1' }),
@@ -482,6 +484,11 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     await tick();
     expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', modelKey: 'a1' });
     expect(lastWait(pub)!.resumeAt).not.toBeNull();
+    // PD-MONITOR-004 clause 2: the timed wait's keep waiting sends nothing; a retry asked of the run anyway is refused, and
+    // the timer still resolves the wait.
+    const w = lastWait(pub)!;
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1', keepWaiting: true, agent: w.agent, attempt: w.attempt } })).toEqual({ ok: false });
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1' });
     clock.advance(2000);
     expect((await sessions.running(sid)!).status).toBe('completed');
   });
@@ -1739,6 +1746,80 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(memory.overrideFor('b', 'b1')?.key).toBe('a1');
       expect(memory.overrideFor('a', 'a1')).toBeUndefined();
       expect(memory.isExhausted('a', 'a1')).toBe(false);
+    });
+
+    /*
+     * OQ-188's ruling (R-071, PD-MONITOR-004 clause 1, repair round 1): keep waiting is a retry of the model the wait shows, never
+     * a change of model. It resumes the agents parked on that pair alone, each on its own pair, clears that pair's exclusion and
+     * persists no override; an agent parked on another pair stays in its own wait, which the header shows next. Until this repair
+     * keep waiting reached `setEntryModel`'s quota-retry branch, which moves every other parked agent to the waiting pair with a
+     * `model_override` that "stands for the rest of the session" (the verifier's finding: the child on b1 retried on a1).
+     */
+    const keepWaiting = (h: ReturnType<typeof twoWaits>, sid: SessionId) => {
+      const w = lastWait(h.pub)!;
+      return h.sessions.control({ op: 'setModel', sessionId: sid, args: { model: w.modelKey!, keepWaiting: true, agent: w.agent, attempt: w.attempt } });
+    };
+    it('keep waiting retries the shown wait\'s pair alone: the agent parked on another pair keeps its own pair and its own wait, and no override is persisted', async () => {
+      const h = twoWaits('root');
+      const sid = await parkBoth(h, 'a1');
+      expect(lastWait(h.pub)).toMatchObject({ provider: 'a', model: 'a1', agent: 'orchestrator', modelKey: 'a1' });
+      expect(keepWaiting(h, sid)).toEqual({ ok: true });
+      // The child's wait on b1 is the one outstanding now, and the header shows it (before: none, the child moved to a1).
+      for (let i = 0; i < 40 && lastWait(h.pub)?.model !== 'b1'; i++) await tick();
+      expect(lastWait(h.pub)).toMatchObject({ provider: 'b', model: 'b1', agent: 'side', modelKey: 'b1' });
+      expect(keepWaiting(h, sid)).toEqual({ ok: true });
+      expect((await h.sessions.running(sid)!).status).toBe('completed');
+      // Every call of the child went to b1 (before: b1 then a1), and no override was written (before: b1 → a1).
+      const byModel = h.client.requests.map((r) => r.model.modelId);
+      expect(byModel.filter((m) => m === 'c1')).toEqual([]);
+      expect(overrides(sid)).toEqual([]);
+      expect(dal.timelineOf(sid).some((t) => t.name === 'entry_model_switched')).toBe(false);
+      const memory = ResilienceMemory.rehydrate(dal.timelineOf(sid), resolveIn(h.catalogue));
+      expect(memory.overrideFor('b', 'b1')).toBeUndefined();
+      expect(memory.isExhausted('a', 'a1')).toBe(false);
+      expect(memory.isExhausted('b', 'b1')).toBe(false);
+      const cleared = dal.timelineOf(sid).filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata) as Record<string, unknown>).filter((m) => m['cleared'] === true);
+      expect(cleared).toEqual([expect.objectContaining({ provider: 'a', model: 'a1' }), expect.objectContaining({ provider: 'b', model: 'b1' })]);
+      expect(dal.childrenOf(sid)[0]!.state).toBe('succeeded');
+    });
+
+    it('a second press of keep waiting for a wait already retried is refused and switches nothing: the entry agent stays on its own pair', async () => {
+      const h = twoWaits('child');
+      const sid = await parkBoth(h, 'b1');
+      const shown = lastWait(h.pub)!;
+      expect(shown).toMatchObject({ provider: 'b', model: 'b1', agent: 'side' });
+      const press = () => h.sessions.control({ op: 'setModel', sessionId: sid, args: { model: shown.modelKey!, keepWaiting: true, agent: shown.agent, attempt: shown.attempt } });
+      expect(press()).toEqual({ ok: true });
+      // The double-click: the header still shows the wait it was drawn for. Before: {ok: true}, an override a1 → b1 and an
+      // `entry_model_switched` to b1 the user never chose, and every later root call on b1.
+      expect(press()).toEqual({ ok: false });
+      expect(dal.timelineOf(sid).some((t) => t.name === 'entry_model_switched')).toBe(false);
+      expect(overrides(sid)).toEqual([]);
+      for (let i = 0; i < 40 && lastWait(h.pub)?.model !== 'a1'; i++) await tick();
+      expect(lastWait(h.pub)).toMatchObject({ provider: 'a', model: 'a1', agent: 'orchestrator' });
+      expect(keepWaiting(h, sid)).toEqual({ ok: true });
+      expect((await h.sessions.running(sid)!).status).toBe('completed');
+      const rootCalls = h.client.requests.filter((r) => r.model.modelId !== 'b1').map((r) => r.model.modelId);
+      expect(rootCalls.every((m) => m === 'a1')).toBe(true);
+      expect(h.client.requests.filter((r) => r.model.modelId === 'b1').length).toBeGreaterThanOrEqual(2);
+      expect(overrides(sid)).toEqual([]);
+    });
+
+    it('keep waiting is refused for a key that does not name the waiting pair and for a wait it does not identify, and changes nothing', async () => {
+      const h = twoWaits('root');
+      const sid = await parkBoth(h, 'a1');
+      const w = lastWait(h.pub)!;
+      const control = (args: Record<string, string | number | boolean>) => h.sessions.control({ op: 'setModel', sessionId: sid, args });
+      expect(control({ model: 'b1', keepWaiting: true, agent: w.agent, attempt: w.attempt })).toEqual({ ok: false });
+      expect(control({ model: 'a1', keepWaiting: true, agent: w.agent, attempt: w.attempt + 1 })).toEqual({ ok: false });
+      expect(control({ model: 'a1', keepWaiting: true, agent: 'nobody', attempt: w.attempt })).toEqual({ ok: false });
+      expect(control({ model: 'a1', keepWaiting: true, agent: w.agent })).toEqual({ ok: false });
+      // Nothing was resolved, written or moved by the refusals.
+      expect(lastWait(h.pub)).toMatchObject({ model: 'a1', agent: 'orchestrator' });
+      expect(overrides(sid)).toEqual([]);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'model_wait')).toHaveLength(2);
+      expect(h.sessions.control({ op: 'cancel', sessionId: sid, args: {} }).ok).toBe(true);
+      await h.sessions.running(sid);
     });
   });
 

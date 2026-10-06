@@ -61,3 +61,12 @@ the run on a1 with a1 recorded then cleared, no override and no refusal — red 
 `packages/ui/src/ui.test.ts` (`keepWaitingAction`, red before: absent). Shown by `resilience-proof`'s driven `keep-waiting`
 scenario on the built app (2026-10-06): alpha refused on quota, Keep waiting pressed, calls alpha then alpha, the exclusion
 recorded then cleared, no `model_override`. ADR-0010's reading (a) carries the ruling in place.
+
+**Corrected the same day (plan fin21's repair round 1), the outcome above kept as first written.** Reaching
+`setEntryModel`'s quota-retry branch moved every other agent parked on another pair onto the waiting pair with a
+session-wide `model_override`, and a second press with no wait current switched the entry model. Keep waiting is now a
+retry of its own wait alone: the header sends `setModel` marked `keepWaiting` with the wait's `agent` and `attempt`
+(`onKeepWaiting`), once per wait drawn (`keepWaitingAction`'s `sent`), and `Run.keepWaiting` refuses a press naming no
+outstanding out-of-quota wait and otherwise resumes the agents parked on that pair alone (`WaitRegistry.retryOn`), no
+override persisted. Pinned by three `ladder.test.ts` cases on two parked agents and a `ui.test.ts` case, each red before;
+`resilience-proof`'s `keep-waiting` presses twice in one frame. `PD-MONITOR-004` clause 1 states it.

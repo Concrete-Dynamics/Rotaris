@@ -3,7 +3,8 @@
  * (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`): run 4's `explicit_trivial (0.99)`
  * for the README question, run 5's classification that hit the 12 s bound, and run 2's run that completed with no
  * answer. Each line below is the log line those runs wrote. A fallback, a category the taxonomy's texts leave out of
- * reach, and a missing intent line stay reds (REQ-ORCH-006, REQ-ORCH-007, REQ-ORCH-021; Part L).
+ * reach, and a missing intent line stay reds (REQ-ORCH-006, REQ-ORCH-007, REQ-ORCH-021; Part L). Since PD-ORCH-010 (the
+ * owner's ruling of OQ-198, 2026-10-06) run 4's answer is one of those reds: `explicit_trivial` is a small edit.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -25,13 +26,15 @@ describe('the intent scenario accepts what REQ-ORCH-006 and REQ-ORCH-021 leave i
     }
   });
 
-  it('accepts run 4\'s explicit_trivial for the README question (the red it went on)', () => {
-    expect(intentVerdict(RUN4_INTENTS_1, readme)).toMatchObject({ category: 'explicit_trivial', confidence: '0.99', rung: 'json_schema', problem: null });
+  it('PD-ORCH-010 (OQ-198): run 4\'s explicit_trivial for the README question is a red, since explicit_trivial is a small edit', () => {
+    expect(intentVerdict(RUN4_INTENTS_1, readme)).toMatchObject({ category: 'explicit_trivial', confidence: '0.99', rung: 'json_schema' });
+    expect(intentVerdict(RUN4_INTENTS_1, readme).problem).toMatch(/classified as explicit_trivial, outside what REQ-ORCH-006 and REQ-ORCH-021 leave in reach of it: question, exploration$/);
   });
 
-  it('accepts the whole answer group for the README question, and nothing that edits, fixes or builds', () => {
+  it('accepts the answer group alone for the README question, and nothing that edits, fixes or builds', () => {
+    expect(readme.accept).toEqual([...INTENT_GROUPS.answer]);
     for (const c of INTENT_GROUPS.answer) expect(intentVerdict(line(c), readme).problem).toBeNull();
-    for (const c of ['single_file_change', 'problem_resolution', 'refactor', 'small_feature', 'moderate_feature', 'large_feature', 'architectural', 'whole_project', 'ambiguous', 'requirements']) {
+    for (const c of ['explicit_trivial', 'single_file_change', 'problem_resolution', 'refactor', 'small_feature', 'moderate_feature', 'large_feature', 'architectural', 'whole_project', 'ambiguous', 'requirements']) {
       expect(intentVerdict(line(c), readme).problem).toMatch(new RegExp(`classified as ${c}, outside what REQ-ORCH-006 and REQ-ORCH-021 leave in reach`));
     }
   });

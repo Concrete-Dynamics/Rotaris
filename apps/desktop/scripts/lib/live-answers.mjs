@@ -14,21 +14,22 @@
  * meanings, its tie-break) and REQ-ORCH-021 (the groups) leave in reach of it, and why. The classifier sees the prompt
  * and nothing of the workspace (REQ-ORCH-008), so what is in reach is read from the prompt alone.
  *
- * The tie-break ("when several categories are plausible the tie-break prefers `moderate_feature`") is read as a choice
- * among the plausible categories: it never brings `moderate_feature` into reach of a prompt no build is plausible for.
- * That reading, and whether `explicit_trivial` reaches a request that changes nothing, are OQ-198's.
+ * The tie-break ("when several categories are plausible the tie-break prefers `moderate_feature`") chooses among the
+ * plausible categories: it never brings `moderate_feature` into reach of a prompt no build is plausible for. And
+ * `explicit_trivial` is a small edit, so a request that changes nothing is out of its reach. Both are PD-ORCH-010's,
+ * the owner's ruling of OQ-198 (R-071, 2026-10-06), which narrows REQ-ORCH-006.
  */
 export const INTENTS = [
   {
     prompt: 'What is the first heading of README.md?',
-    accept: ['question', 'exploration', 'explicit_trivial'],
+    accept: ['question', 'exploration'],
     why: 'a question about one file that changes nothing. `question` and `exploration` are REQ-ORCH-021\'s answer group, and '
-      + 'REQ-ORCH-006 fixes `exploration` as "investigate only", which reading one file to answer is. REQ-ORCH-006 fixes no '
-      + 'meaning for `explicit_trivial` and REQ-ORCH-021 groups it with `single_file_change` (micro). Neither text keeps an '
-      + 'explicit, trivial request out of it because it asks for no edit, so it is in reach (run 4 of 2026-10-03 answered it '
-      + 'at 0.99; OQ-198 asks whether it is meant for edits alone). Out of reach: `single_file_change` (the prompt asks for no '
-      + 'change), `problem_resolution` (diagnose AND fix: nothing to fix), `refactor`, the build groups, and the clarify group '
-      + '(the prompt is neither ambiguous nor requirements work).',
+      + 'REQ-ORCH-006 fixes `exploration` as "investigate only", which reading one file to answer is. Out of reach: '
+      + '`explicit_trivial` and `single_file_change` (PD-ORCH-010: `explicit_trivial` is a small edit, and with '
+      + '`single_file_change` the micro group holds the two smallest edits; the prompt asks for none; run 4 of 2026-10-03 '
+      + 'answered `explicit_trivial` at 0.99, which is a red since that ruling), `problem_resolution` (diagnose AND fix: '
+      + 'nothing to fix), `refactor`, the build groups, and the clarify group (the prompt is neither ambiguous nor '
+      + 'requirements work).',
   },
   {
     prompt: "Append the line 'hello' to the end of README.md.",

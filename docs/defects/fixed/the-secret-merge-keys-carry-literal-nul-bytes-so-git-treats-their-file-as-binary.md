@@ -21,6 +21,7 @@ None contradicted. The defect is in the repository's reviewability, not in the p
 
 - `packages/config/src/mcp/environment.ts` — `mergeSecrets`, the two template literals with the NUL separator.
 - `packages/config/src/mcp/mcp.test.ts` — the merge's tests, which would pin the escape's equivalence.
+- `.gitattributes` — its comment over the file's own `text eol=lf` line gave the NUL byte as the reason for that line.
 
 ## Repaired — 2026-10-06 (fin21, bundle `fin21-leftover-notes`)
 
@@ -34,3 +35,13 @@ Pinned by `packages/config/src/mcp/mcp.test.ts`, "the merge keys a server and a 
 byte Git would read as binary": `a b`/`c` and `a`/`b c` stay two entries (they would collide under a printable
 separator such as a space), and the module's source bytes hold no NUL (red before the repair: "expected true to be
 false").
+
+`.gitattributes` carried the old reason: a comment saying the file "holds a literal NUL byte as a map-key separator, so
+git's binary heuristic reads it as binary", over a line `packages/config/src/mcp/environment.ts text eol=lf` declared for
+that reason. The repair's first commit (`3f5531e`) left that comment standing after it stopped being true; the
+verifier of fin21 found it. The comment now keeps the old reason quoted and marked "No longer true (2026-10-06)" beside
+the replacement (the separator is written as the escape, the file holds no NUL, git reads it as text), and points at
+this note. The file's own line is **dropped**: `*.ts text eol=lf` already gives the file the same attributes
+(`git check-attr -a packages/config/src/mcp/environment.ts` answers `text: set`, `eol: lf` before and after), so it was
+redundant even when the NUL was there. `git ls-files --eol` reads the index copy as `i/lf` (text), and
+`git grep -I mergeSecrets` finds the file on the branch and skips it as binary at `origin/main`.

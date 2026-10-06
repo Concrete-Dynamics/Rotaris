@@ -30,12 +30,16 @@
 .editorconfig   text eol=lf
 .gitattributes  text eol=lf
 
-# `packages/config/src/mcp/environment.ts` holds a literal NUL byte as a map-key
-# separator, so git's binary heuristic reads it as binary and would leave it out
-# of `text=auto`. Declared here so normalisation reaches it; git still reports it
-# `-text` and may show a diff of it as a blob, which is an argument for writing
-# that separator as a `\u0000` escape in the source one day.
-packages/config/src/mcp/environment.ts text eol=lf
+# No longer true (2026-10-06): "`packages/config/src/mcp/environment.ts` holds a
+# literal NUL byte as a map-key separator, so git's binary heuristic reads it as
+# binary and would leave it out of `text=auto`. Declared here so normalisation
+# reaches it; git still reports it `-text` and may show a diff of it as a blob,
+# which is an argument for writing that separator as a `\u0000` escape in the
+# source one day." That day came: `mergeSecrets` writes the separator as the
+# escape `\u0000`, the file holds no NUL byte, and git reads it as text
+# (docs/defects/fixed/the-secret-merge-keys-carry-literal-nul-bytes-so-git-treats-their-file-as-binary.md).
+# The file's own line `packages/config/src/mcp/environment.ts text eol=lf` is
+# dropped: `*.ts text eol=lf` above already gives it the same attributes.
 
 # cmd.exe is the one consumer that genuinely needs CRLF: a batch file with LF
 # endings can mis-handle labels and `goto`. None are tracked today; if one is,

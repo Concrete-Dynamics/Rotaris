@@ -1260,9 +1260,11 @@ that false. The configuration key is **not rejected** — it remains available o
 
 ### ESC-36 — the provider row visibility: REQ-PROVIDER-140's union against REQ-CONFIG-389's authenticated-only list
 
-**Raised 2026-09-14, not yet ruled.** Raised by R-016, the Settings Models overhaul, while planning which
+**Raised 2026-09-14, ~~not yet ruled.~~ Ruled 2026-10-06.** Raised by R-016, the Settings Models overhaul, while planning which
 rows the rebuilt providers card may draw. The two requirements state disjoint populations and no document
 between them narrows either.
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the built behaviour is kept. REQ-PROVIDER-140 governs: the Settings provider list shows every provider its union lists, authenticated or not. REQ-CONFIG-389 is amended to match by [`PD-CONFIG-002`](../product/directives.md#pd-config-002), which narrows its first sentence and keeps the managed-cloud quick-start rule and the rule that a reference by a model slot alone causes no row. The amendment is carried as a directive with its back-pointer, the specification not being edited in place by this round.
 
 - **REQ-PROVIDER-140** (domain 04) fixes the listed set: "the union of the ids holding a stored credential,
   the built-in catalog ids, and the snapshot ids, each appearing exactly once, ordered by id." Every
@@ -1410,12 +1412,14 @@ identity and its typed command are different things — but nothing currently sa
 
 ### ESC-41 — the exit-1 success conventions: REQ-TOOLS-112's test 4 against `git diff`, `diff` and `grep`
 
-**Raised 2026-09-18, not yet ruled.** Found by the autopsy of run `cc6191a2` (logged as
+**Raised 2026-09-18, ~~not yet ruled.~~ Ruled 2026-10-06.** Found by the autopsy of run `cc6191a2` (logged as
 [R-039](../product/requests.md#r-039)): the run's `git diff --no-index` with differences exits 1
 carrying the payload the caller asked for, and the observation classified it `shell_failure` / error.
 `REQ-TOOLS-112`'s test 4 reads "a non-zero exit code → `shell_failure` / error" with no carve-out, and
 the conventions predate the corpus: `git diff` exits 1 when differences were found, `diff` exits 1 on
 a difference, `grep` exits 1 on no match. Each is an answer, not a failure.
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** REQ-TOOLS-112's test 4 is amended with the carve-out as built: exit code 1 from `diff`, `git … diff …`, `grep`, `egrep`, `fgrep`, `rg` — and `findstr`, which the built list also names — classifies `success` / `info`, and every other non-zero exit is unchanged. [`PD-TOOLS-009`](../product/directives.md#pd-tools-009) states it and narrows REQ-TOOLS-112, carrying the amendment with its back-pointer.
 
 **What the build proceeds under.** The narrowed reading: exit 1 from a command whose leading tokens
 name one of those conventions (`git … diff …`, `diff`, `grep`/`egrep`/`fgrep`/`rg`, head matched

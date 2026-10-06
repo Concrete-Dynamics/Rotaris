@@ -1442,6 +1442,8 @@ of the hosted mode is canonical**, and **does the quota property carry a number 
 and explicitly refuses to hold a list of names, and `REQ-PROVIDER-049` disclaims one too. A number
 resolves the second cleanly.
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** `hosted-cloud` is the canonical spelling of the hosted connection mode, as the catalogue spells it, and the shared-quota property is a number each provider's catalogue entry declares: the cap of concurrent calls its models carry unless the user sets one. [`PD-PROVIDER-001`](../product/directives.md#pd-provider-001) states both and narrows REQ-CONFIG-370 and REQ-MONITOR-021. **The build differs in one place:** the caps in force are the directive's (`deepseek` 3, `claude-code` 2), but configuration's default holds them as a list of two provider names (`defaultMaxParallel`) and the catalogue entry declares none — recorded in [`the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md`](../defects/the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md), not built here.
+
 **OQ-7 — Decision closed, 2026-09-07.** REQ-TOOLS-123 now cites
 REQ-SANDBOX-077's host-path preservation rule. A backend unable to preserve
 the host path refuses the command. Native confinement proof remains governed
@@ -1779,6 +1781,8 @@ process of this application is exactly what `REQ-STARTUP-161` forbids. The per-w
 therefore the only one that can hold, and it should be **stated in the requirement rather than inferred**
 by every reader who meets the pair. Still needs a product-owner statement.
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the claim is per window: a demo window opens no outbound connection for its whole lifetime, and a non-demo window of the same instance behaves normally. [`PD-SHELL-004`](../product/directives.md#pd-shell-004) states it and narrows REQ-SHELL-005. Demo mode itself is not built; the directive governs it when it is.
+
 **OQ-35 — Decision closed, 2026-09-07.** REQ-SANDBOX-079 now defines each
 confined command as a fresh inner shell initialized from configured session
 working directory/environment. Changes inside that invocation end with it.
@@ -2074,6 +2078,8 @@ to publish and marks the surface **unanchored**, so the condition is visible rat
 **OQ-43 — Does the single-instance gate admit a benchmark iteration? *Unchanged in substance; the gate it
 asks about is now OURS rather than the platform's (2026-09-02).*** *(ADR-0042, ADR-0053, ADR-0055;
 constraints P-16, P-17, W-14.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the exception is stated as built in [`PD-STARTUP-002`](../product/directives.md#pd-startup-002), which narrows REQ-STARTUP-161: a launch the product starts itself under a reserved token — the code-intelligence child, the update-restart successor and a benchmark iteration child — is neither the instance nor handed to it. The first two are built; the benchmark harness and its marker (W-14) are not.
 
 ***What changed and what did not.*** ADR-0055's claim moved from the platform's single-instance primitive
 to our own record file, **on measurement** — the primitive blocked 20.0 s against `REQ-STARTUP-164`'s 5 s
@@ -2479,6 +2485,8 @@ first execution, Part AB, 2026-09-07.)* `REQ-CHAT-038` gives a queued prompt "a 
 unscoped)" and `REQ-CHAT-039` gives an unscoped prompt a behaviour of its own: it "MUST be consumable by any run
 but invisible to session-scoped listings". **Two things in the record now disagree with that sentence.**
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the unscoped queued prompt is withdrawn: every queued prompt belongs to a session, as the store has required since v6. [`PD-CHAT-007`](../product/directives.md#pd-chat-007) narrows REQ-CHAT-038 and REQ-CHAT-039. The code's comments that call this question open (`packages/engine/src/sessions.ts`, `packages/store/src/schema.ts`) are not changed by this ruling.
+
 1. **The store cannot represent one, and has not been able to since v6.** `queued_prompts.session_id` is
    `TEXT NOT NULL REFERENCES sessions(session_id)` (`store/src/schema.ts`, the v6 migration), so every queued
    prompt is scoped by construction. Nothing has ever written an unscoped one and no route offers to.
@@ -2638,6 +2646,8 @@ to implement and worse to use: a colleague starting a second session in the same
 drop a skill out of the first session's agents mid-run. Stated here rather than chosen quietly.
 
 **OQ-59 — REQ-WORKSPACE-151's chooser asks for a file **or** a directory, which no platform dialog offers.** *(REQ-WORKSPACE-151 with REQ-WORKSPACE-057 and REQ-SHELL-164; raised 2026-09-14 by the same planning pass.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the requirement is amended to the file chooser as built: a file chooser filtered to `SKILL.md` on Windows and Linux, a file or a directory on macOS, the directory form reachable through `/skill <path>`. [`PD-WORKSPACE-003`](../product/directives.md#pd-workspace-003) narrows REQ-WORKSPACE-151.
 
 REQ-WORKSPACE-151 requires the "Load skill file…" action to open "the platform's own file chooser,
 **restricted to selecting a `SKILL.md` file or a directory containing one**", applying REQ-WORKSPACE-057
@@ -3037,6 +3047,8 @@ round 1 of the same change; each was stated only in a code comment or the plan's
 
 **OQ-68 — What does REQ-WORKSPACE-049's "up to 20 context files" measure, when discovery can reach fourteen?** *(REQ-WORKSPACE-049 with REQ-WORKSPACE-041/042, both narrowed by `PD-WORKSPACE-002`; first-release-plan §3.2. Raised 2026-09-27 by building the fixture "at exactly that bound"; raised as OQ-66 and renumbered OQ-68 when it reached `main`, the `/skills` listing's OQ-67 having reached it first.)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the count is restated as every instruction file discovery can reach — fourteen files where the platform has an `/etc` hierarchy, twelve on Windows — and the fixture at the bound fills them with 1 MiB, as `pnpm injection-proof` does. [`PD-WORKSPACE-004`](../product/directives.md#pd-workspace-004) narrows REQ-WORKSPACE-049. No discovery rule that reaches twenty is added.
+
 REQ-WORKSPACE-049 states its 200 ms figure over "a workspace holding up to 20 context files totalling 1 MiB". No
 discovery rule the record has held can present twenty. REQ-WORKSPACE-041 as written read one file. `PD-WORKSPACE-002`
 names four at the workspace root and two at each of five further bases: **fourteen** on a platform with an `/etc`
@@ -3096,6 +3108,8 @@ normalised. If it is normalised, the grammar must also say which spelling the ar
 carry.
 
 **OQ-71 — With no version metadata, does the running desktop report `dev` or `0+unknown`?** *(REQ-STARTUP-004, REQ-STARTUP-007; REQ-STARTUP-109, REQ-STARTUP-158, REQ-STARTUP-159, REQ-SHELL-140. Raised 2026-09-27 by the review of the version guard, first-release plan §4.1; raised as OQ-68 and renumbered OQ-71 when it reached `main` after the `/skills` listing's OQ-67 and the injection proof's OQ-68.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** `dev` is kept, and REQ-STARTUP-004 is amended to agree by [`PD-STARTUP-003`](../product/directives.md#pd-startup-003): with no installation metadata the running desktop reports `dev`.
 
 Both requirements govern the same value and fix different literals for the same case. REQ-STARTUP-004: the product
 reports its version from its own installation metadata, and "when that metadata is absent, the reported version SHALL
@@ -3498,11 +3512,15 @@ Domain 11's Data & Formats says "the form of a key, the form of a signature, and
 
 **OQ-84 — Is a packaged Windows build outside `InstallDir` and without the launcher's variable portable, or not updatable?** *(REQ-STARTUP-106, REQ-STARTUP-125, REQ-STARTUP-147; ADR-0054 "How the artifact is identified for the update path" and "The updater". Raised 2026-09-28 by building the classification, first-release-plan.md §4.6, under R-062. Raised as OQ-77 on its branch; renumbered OQ-84 at the merge, because OQ-76 to OQ-82 were already on `main`.)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** ADR-0054's reading is confirmed: a packaged Windows build outside `InstallDir` with no launcher variable naming its artifact is not updatable and issues no request. [`PD-STARTUP-004`](../product/directives.md#pd-startup-004) amends REQ-STARTUP-106 and REQ-STARTUP-147 to match.
+
 REQ-STARTUP-106 says "every other Windows standalone build is classified portable", and its last sentence reads a copied installed tree as portable, "and the portable strategy of REQ-STARTUP-125 replaces it with a self-contained executable that runs from any location". ADR-0054, having moved the artifact's identity to the launcher's declared variable (measured: `process.execPath` points into the preparation in 149 of 149 launches), reads the absent variable the other way: "someone who runs the payload's executable directly out of a preparation is not running from a released artifact, so REQ-STARTUP-106 classifies the build not updatable and no request is issued at all". REQ-STARTUP-147 bears on the same case from the other side: "a variable naming the artifact a launch started from decides which file an update replaces and decides nothing about whether, when, or where the check happens" — and under ADR-0054's reading the absence of `ROTARIS_PORTABLE_ARTIFACT` is exactly what decides whether a packaged Windows build outside `InstallDir` checks at all. A ruling therefore settles both texts. The two cases — a copied tree and a payload run directly — are indistinguishable to the process, which sees a packaged executable, no registry match and no variable, and the two texts give them opposite outcomes. Following the requirement's sentence would also replace a `win-unpacked` tree's executable with a single-file portable in place, leaving the tree's support files beside a file that no longer needs them.
 
 **What the build proceeds under.** ADR-0054's reading: **not updatable**, no request, one `info` line naming this question (`classify.ts`). **What a ruling decides.** Whether REQ-STARTUP-106's copied-tree sentence describes a consequence the product must produce (then the target is the running executable and the portable strategy replaces it, as the sentence says) or a consequence the discriminator would have had before the artifact's identity moved to the launcher's variable, in which case the sentence wants amending to ADR-0054's reading — and REQ-STARTUP-147's sentence with it, since under ADR-0054's reading the variable decides whether the check happens. *(REQ-STARTUP-147 added to this entry 2026-09-28 by the item's verification.)*
 
 **OQ-85 — Which requirement governs the update notice while the download runs: REQ-STARTUP-118 or REQ-SHELL-118?** *(REQ-STARTUP-118, REQ-STARTUP-119, REQ-STARTUP-120, REQ-STARTUP-122; REQ-SHELL-114, REQ-SHELL-118. Raised 2026-09-28 by building the updater's notices, first-release-plan.md §4.6, under R-062. Raised as OQ-78 on its branch; renumbered OQ-85 at the merge, because OQ-76 to OQ-82 were already on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built, and REQ-SHELL-118 is amended to match by [`PD-SHELL-005`](../product/directives.md#pd-shell-005): while the download runs the notice keeps its identity and is updated in place, carries REQ-STARTUP-118's title and message, is not persistent, and leads into the apply with no pause; a failure becomes REQ-STARTUP-120's `Update not installed` in place.
 
 REQ-STARTUP-118: "a non-persistent notice titled `Downloading Rotaris {version}` SHALL show the message `{measured} — verifying against the published checksum when it finishes.`". REQ-SHELL-118: "While the download runs the notice keeps that title [`Rotaris {version} is available`] and its identity — it is updated in place, never replaced — and its message SHALL convey two things and no more: that the update is downloading, and how far it has got … When the download completes the message SHALL convey that the update is ready to install and the action SHALL be enabled again, performing the install action of REQ-SHELL-115". The two disagree on the title, on persistence (a non-persistent notice against the persistent offer's identity), on the message's content (a fixed three-part sentence against two things and no more) and on whether the apply waits for a second click, where REQ-STARTUP-122 runs download → verify → apply in one sequence.
 
@@ -3614,6 +3632,8 @@ ms; only a profile of the same increments names that, which is why the proof now
 
 **OQ-90 — Are the variables that name a launch's artifact removed from what the product's children inherit, and which requirement says so?** *(REQ-STARTUP-147, REQ-STARTUP-106, REQ-HOOKS-032; ADR-0054, "The updater", item (6). Raised 2026-09-28 by repairing `docs/defects/fixed/the-artifact-variables-reach-the-products-own-child-processes.md` under [R-062](../product/requests.md#r-062).)*
 
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed, with one sentence added to REQ-STARTUP-147 that REQ-HOOKS-032 cites, as the entry recommends: main removes the variables naming its launch's artifact from its own environment before it starts any child, and a hook sees the application's environment less those two. [`PD-STARTUP-004`](../product/directives.md#pd-startup-004) states it and narrows both requirements.
+
 REQ-STARTUP-147 says a variable naming the artifact a launch started from is "set by the artifact's own runtime rather
 than by a user" and "decides which file an update replaces", and REQ-STARTUP-106 takes the classification from "the
 artifact the launch started from". Neither says what the product's own children receive. REQ-STARTUP-147's closing
@@ -3656,6 +3676,8 @@ comparison always read it. **A ruling for the second reading** would restore the
 else depends on it.
 
 **OQ-92 — Where does `THIRD-PARTY-LICENSES.txt` report the tool-server package versions REQ-STARTUP-152 asks it to?** *(REQ-STARTUP-152 with REQ-STARTUP-142 and REQ-STARTUP-058. Raised 2026-09-28 by repairing the notices file's tools section under [R-062](../product/requests.md#r-062); the note is `../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`; raised as OQ-90 on its branch and renumbered at the merge, OQ-90 and OQ-91 having been taken on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: the notices file's `Tools provisioned after installation` section gains a third sub-heading, `Tool-server packages`, after the language servers. [`PD-STARTUP-005`](../product/directives.md#pd-startup-005) extends REQ-STARTUP-142.
 
 REQ-STARTUP-152 requires "the tool and MCP package versions a build provisions and warms" to be "the same versions its
 `THIRD-PARTY-LICENSES.txt` reports". REQ-STARTUP-142 says what the file's `Tools provisioned after installation`
@@ -6292,7 +6314,9 @@ REQ-TOOLS-128; OQ-10 as ruled in [R-044](../product/requests.md#r-044). Raised 2
 [`a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md`](../defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md),
 for the exposure recorded open in
 [`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md`](../defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
-Open; numbered OQ-134 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
+~~Open;~~ ruled 2026-10-06; numbered OQ-134 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** SIGINT must stop the session: R-044's "stops" binds the product past delivery. The narrow re-delivery is accepted as built, where the session's shell is `dash` on Linux, with the residue this entry states. [`PD-TOOLS-010`](../product/directives.md#pd-tools-010) states it and extends REQ-TOOLS-110 and REQ-TOOLS-128.
 
 REQ-TOOLS-110 says `send_signal` *sends* the signal. The product sends it to every process of the session's group and
 reports it sent. R-044's ruling reads "SIGINT stops a background session". Where `/bin/sh` is `dash`, a SIGINT that
@@ -6502,7 +6526,9 @@ document's markers illustrative for human-readable messages and leaves "a string
 contract" unaffected; REQ-CHAT-166, which governs whether the tool row shows a tool's result. Raised 2026-09-29 by the
 repair of live-run finding L11 under [R-067](../product/requests.md#r-067),
 [`a-literal-plural-marker-is-rendered-in-sign-in-notices.md`](../defects/fixed/a-literal-plural-marker-is-rendered-in-sign-in-notices.md).
-Open.)*
+~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built, the four strings treated as fixed contract text: REQ-TOOLS-110's, REQ-TOOLS-134's, REQ-LIBRARY-100's and REQ-LIBRARY-089's markers stay as spelt, wherever the tool row draws them. [`PD-SHELL-006`](../product/directives.md#pd-shell-006) narrows REQ-SHELL-044.
 
 A tool's result is text for the model, and the four requirements above fix it word for word. The transcript's tool row
 also draws that result, as the first line of its preview and in full under OUTPUT (`ui/transcript/Row.tsx`), so

@@ -68,6 +68,11 @@ While a task run is executing, a user must be able to watch what every agent is 
 
 **REQ-MONITOR-021** — Per-model parallelism is unbounded unless a cap applies to that model. Whether a provider's quota is consumed by concurrent calls against a single account is a declared property of that provider's catalogue entry, not a list of provider names held in this document: every model of a provider that declares it carries an automatic cap of 2 concurrent calls, applied without the user configuring anything, so that concurrency alone cannot exhaust a shared quota; every model of a provider that does not declare it is uncapped. A cap the user configures for a model replaces the automatic one entirely, whether it raises it, lowers it, or removes it. Adding a provider that declares the property therefore caps its models with no amendment here, and the cap in force for a model must be inspectable so a user can see why an agent is parked in `waiting_on_model_slot`.
 
+> **Narrowed by [`PD-PROVIDER-001`](../product/directives.md#pd-provider-001), 2026-10-06.** A provider's
+> shared-quota property is a number its catalogue entry declares — the cap its models carry, `deepseek` 3 and
+> `claude-code` 2 as REQ-CONFIG-095 states them — in place of the uniform 2 above. A user's cap still replaces it,
+> and the cap in force is still inspectable.
+
 **REQ-MONITOR-022** — Every agent's persisted record must expose, to monitoring surfaces, at least: display name, canonical name, persona, task description, dependency list, inherited context, state, spawn timestamp, completion timestamp, parent agent id, depth (default 1), conversation id, category, session id, background flag, task id, launch generation, produced artifact ids, received artifact ids, the resolved model key recorded at spawn (absent for synthetic agents), the native tools actually granted after policy narrowing, the granted MCP tools listed under their owning server, and the agent's live todo list.
 
 **REQ-MONITOR-023** — When a background agent reaches a terminal state, a completion notification must be emitted carrying its task id, canonical name, description, terminal state, duration in seconds, the number of background agents still running, and the ids of artifacts it produced.

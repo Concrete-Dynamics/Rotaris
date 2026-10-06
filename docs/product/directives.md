@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Thirty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Forty-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -3141,6 +3141,402 @@ work in different trees the first to connect decides the root.
 > fixture servers a user might add and reads the root each was handed. **What was not measured.** A session whose agents work
 > in different trees, where the first `lsp` connection decides the root for all. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-provider-001"></a>
+
+### PD-PROVIDER-001 — the hosted connection mode is spelt `hosted-cloud`, and a provider's shared quota is a number it declares
+
+**The spelling.** The hosted connection mode SHALL be spelt `hosted-cloud` wherever the product names it: the
+catalogue's connection mode (REQ-PROVIDER-002), the destination sentence REQ-CONFIG-370 composes for it, and the
+vocabulary table of domain 15, whose `rotaris-cloud` names the same mode. No surface or record SHALL carry a second
+spelling. REQ-CONFIG-370's sentence for the mode, its fields and its fallbacks are otherwise unchanged.
+
+**The quota cap.** Whether a provider's quota is consumed by concurrent calls against one account SHALL be declared on
+that provider's catalogue entry as a **number**: the cap of concurrent calls that every model of the provider carries
+without the user configuring anything. A provider that declares none leaves its models uncapped. REQ-MONITOR-021's
+uniform figure of 2 no longer governs; the rest of that requirement does — a cap the user configures for a model replaces
+the declared one entirely, and the cap in force stays inspectable. The numbers this product declares are REQ-CONFIG-095's:
+`deepseek` 3 and `claude-code` 2.
+
+**As built.** The catalogue spells the mode `hosted-cloud` (`packages/providers/src/catalogue.ts`), and the values in force
+are the two numbers above. They are held by configuration's provider-conditional default (`defaultMaxParallel`,
+`packages/config/src/sections/models.ts`), which is a list of two provider names, and not by the catalogue entry, so the
+place this directive names is not yet the place the number lives. That is recorded in
+[`the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md`](../defects/the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md)
+and is not built by the ruling.
+
+**Why, and what it costs.** OQ-6: REQ-PROVIDER-002 spells the mode `hosted-cloud` where REQ-CONFIG-370 spells it
+`rotaris-cloud`, and REQ-CONFIG-095 gives one provider a cap of 3 where REQ-MONITOR-021 gives every declaring provider 2
+and refuses to hold a list of names. The owner took the catalogue's spelling and a number per provider, which keeps both
+caps the product applies today and lets a provider added later declare its own. What it costs: REQ-MONITOR-021's single
+figure is gone, so the cap a provider imposes is read from its entry rather than known in advance.
+
+> **Narrows:** REQ-CONFIG-370, REQ-MONITOR-021
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-6.*
+
+---
+
+<a id="pd-config-002"></a>
+
+### PD-CONFIG-002 — the Settings provider list shows every provider REQ-PROVIDER-140 lists
+
+The provider list of the Settings Models category SHALL show a row for each provider REQ-PROVIDER-140 lists — the union
+of the ids holding a stored credential, the built-in catalogue ids and the snapshot ids, each once, ordered by id —
+whether or not it is authenticated. REQ-CONFIG-389's first sentence, "The provider list shows **no** built-in or
+merely-referenced provider by default; a row appears only once a provider is authenticated", no longer governs. Its other
+sentences still do: the managed-cloud provider's row carries its quick-start action in addition to the normal actions, and
+a provider that a model slot references and REQ-PROVIDER-140's union does not hold, a deleted custom endpoint included,
+causes no row.
+
+**Why, and what it costs.** ESC-36: REQ-PROVIDER-140 and REQ-CONFIG-389 state disjoint populations for one list. The build
+follows REQ-PROVIDER-140 (`packages/providers/src/signin.ts` `list()`, the renderer's providers card), the mockup's row
+for an unauthenticated GitHub Copilot shows the same, and Settings is the one place a user starts authentication for any
+provider. The owner kept the built behaviour. What it costs: the list is longer, and an unauthenticated built-in reads
+"Not authenticated" rather than being absent.
+
+> **Narrows:** REQ-CONFIG-389
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of ESC-36.*
+
+---
+
+<a id="pd-tools-009"></a>
+
+### PD-TOOLS-009 — exit 1 from a diff or a search is an answer, not a failure
+
+REQ-TOOLS-112's test 4 ("a non-zero exit code → `shell_failure` / error") SHALL NOT apply to exit code 1 from a command
+whose leading tokens name a convention that uses exit 1 for an answer: `diff`; `git` with a `diff` subcommand among its
+tokens (`git diff`, `git --no-pager diff`, `git diff --no-index`; not `git difftool`); and the searches `grep`, `egrep`,
+`fgrep`, `rg` and `findstr`. The head is matched case-insensitively, as REQ-TOOLS-033 matches it. Such an observation
+SHALL classify `success` / `info`. Every other non-zero exit still classifies `shell_failure` / error, a test earlier in the
+cascade still decides first (a present `failure_kind` among them), and no other test of the cascade moves.
+
+**As built.** `successExitOne` in `packages/agent-tools/src/terminal/classify.ts`, consulted before the generic non-zero
+rule. `findstr`, the Windows search, is in the built list beside the four ESC-41 names.
+
+**Why, and what it costs.** ESC-41: run `cc6191a2`'s `git diff --no-index` with differences exited 1 carrying the payload
+the caller asked for, and was classified a failure the agent then had to explain away. `git diff`, `diff` and `grep` use
+exit 1 for "differences found" and "no match", conventions older than the specification. What it costs: exit 1 from those
+commands is never an error, including the rare case where one of them really did fail with 1; a failure that exits 2 or
+more is still an error.
+
+> **Narrows:** REQ-TOOLS-112
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of ESC-41.*
+
+---
+
+<a id="pd-tools-010"></a>
+
+### PD-TOOLS-010 — `send_signal SIGINT` stops a background session where the shell loses the signal
+
+`send_signal SIGINT` (REQ-TOOLS-110) and the stream-control interrupt (REQ-TOOLS-128) SHALL stop a background session
+whose command takes SIGINT's default, as [R-044](requests.md#r-044) ruled ("SIGINT stops a background session"), and not
+only send the signal. Where the session's shell has a window, between starting a command and the command's own image, in
+which a delivered SIGINT is lost — `dash` as `/bin/sh` on Linux, between its `vfork` and the command's `exec` — the product
+SHALL read the session's process group the instant before it sends the signal and again at 250 ms and 1.5 s while the
+session still runs, and SHALL send SIGINT once more, once each, to what that window cost the signal:
+
+- a member that the first reading found to be the shell, not ignoring SIGINT, which is alive and now runs another image
+  (its name or its arguments changed);
+- where such a member had started nothing at the first reading and is still the shell, each child it has started since;
+- with each, its descendants alive that the first reading did not hold.
+
+It SHALL NOT send a second SIGINT to a process the first reading found already running the command, whatever that process
+did with the first, one-shot handlers included, nor to what it starts on receiving it. Each re-delivery is logged as a
+warning. A session whose shell has no such window — any shell but `dash` — is not read and is signalled once, as
+REQ-TOOLS-110 states. Off Linux nothing is read: Windows terminates the session's tree for every signal (OQ-10, R-044).
+
+The residue OQ-135 states is accepted: a member that `exec`s between the reading and the delivery, and installs a handler
+within that step, is sent a second SIGINT; a script that traps SIGINT and then `exec`s its command has the trap overridden;
+and a shell other than `dash` that loses a SIGINT across its fork, if one does, is not read.
+
+**As built.** `BackgroundSession.checkSigint` and `missedSigint` (`packages/agent-tools/src/terminal/background.ts`) over
+`ProcessTable.tree` (`@rotaris/platform`), armed where `hasVforkWindow` finds the session's shell to be `dash`. The
+measurements are OQ-135's: 0 of 150 to 200 sessions ran on in each case under six CPU burners, against 5 to 28 with the
+check disabled.
+
+**Why, and what it costs.** R-044 read SIGINT as stopping a session, and acceptance finding A8 graded a dev server or a
+watcher left running after "Sent SIGINT" a product defect. A single delivery could not meet that where `dash` discards a
+signal in its fork window. The owner took the narrow re-delivery as built. What it costs: a command that `exec`s within one
+synchronous step and installs a one-shot handler there can be sent two SIGINTs, and a script's own SIGINT trap can be
+overridden.
+
+> **Extends:** REQ-TOOLS-110, REQ-TOOLS-128
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-135.*
+
+---
+
+<a id="pd-shell-004"></a>
+
+### PD-SHELL-004 — demo mode's network silence holds for the demo window, not for the process
+
+In demo mode (REQ-SHELL-162) the silence REQ-SHELL-005 states SHALL hold for the **demo window**: nothing that window does,
+and nothing done on its behalf, opens an outbound network connection for that window's whole lifetime — no cloud-credit
+polling for it (REQ-SHELL-015), no request to a model provider, and no update check from it. It SHALL NOT be read as a
+statement about the process: a non-demo window of the same instance checks for updates and reaches its providers normally
+(REQ-STARTUP-057), and the one instance REQ-STARTUP-161 allows is never split so that a demo window has a process of its
+own. Every other sentence of REQ-SHELL-005 still governs.
+
+**As built.** Demo mode is not built: the palette's "Open demo window" entry declines with "no demo mode exists yet"
+(`packages/ui/src/commands/registry.ts`). This directive governs it when it is.
+
+**Why, and what it costs.** OQ-34: REQ-SHELL-162 lets a demo window be opened from a non-demo window, and REQ-STARTUP-057
+lets that non-demo window check for updates, so a process-wide silence cannot hold once a mixed process exists, and with
+one instance a mixed process is the only kind there is. The owner had the per-window reading stated in the requirement's
+place. What it costs: a user running a demo window beside a real one has a process that does open connections, for the
+real one.
+
+> **Narrows:** REQ-SHELL-005
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-34.*
+
+---
+
+<a id="pd-shell-005"></a>
+
+### PD-SHELL-005 — while an update downloads, its notice carries Distribution's words
+
+While the download of an update runs, the update notice SHALL keep its identity and be updated in place, never replaced,
+as REQ-SHELL-118 states, and SHALL carry REQ-STARTUP-118's words: the title `Downloading Rotaris {version}` and the
+message `{measured} — verifying against the published checksum when it finishes.` It SHALL NOT be persistent while the
+download runs, so no dismissal can wave off a version whose install is in flight, and its action SHALL be disabled with an
+accessible description stating why. The apply SHALL follow the verified download in one sequence (REQ-STARTUP-122), with no
+second activation of the action, so a "ready to install" state stands only for the length of the apply. A failure SHALL
+turn the same notice into REQ-STARTUP-120's `Update not installed`, in place. The notice that offers the update before the
+download — its title `Rotaris {version} is available`, its persistence and its `Update now` — and REQ-SHELL-118's
+waved-off rule are unchanged.
+
+**As built.** The updater's notices (`apps/desktop/src/main/updater/`), ADR-0054's "the same notice by identity, never by
+replacement".
+
+**Why, and what it costs.** OQ-85: REQ-STARTUP-118 and REQ-SHELL-118 disagree on the title, the persistence, the message
+and the pause before the apply. Distribution owns the words and Shell the surface (`CONTEXT-MAP.md`), so the build took the
+words from the one and the identity from the other, and ran the apply on from the download as REQ-STARTUP-122's sequence
+has it. The owner confirmed that reading. What it costs: no second click before the install, and REQ-SHELL-118's
+percentage-only message gives way to Distribution's sentence.
+
+> **Narrows:** REQ-SHELL-118
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-85.*
+
+---
+
+<a id="pd-shell-006"></a>
+
+### PD-SHELL-006 — four tool results keep the plural marker their requirements spell
+
+REQ-SHELL-044's rule that "the literal parenthesised '(s)' form is never rendered anywhere in the product" SHALL NOT reach
+four tool results whose requirements fix their text as a contract a caller may match: REQ-TOOLS-110's
+`Sent <n> byte(s) to session <id>.`, REQ-TOOLS-134's `N match(es) for '<pattern>':`, REQ-LIBRARY-100's `<N> artifact(s):`,
+and REQ-LIBRARY-089's refusal beginning `Invalid tag(s): `. Each keeps its marker exactly as spelt, in the result the model
+receives and wherever the transcript's tool row draws that result. Every other string the product can draw agrees with its
+count, as REQ-SHELL-044 states.
+
+**As built.** `tools/check-plural-markers.mjs` names these four in its `ALLOWED` list and fails `pnpm lint` on any other
+literal marker in a string the product can draw.
+
+**Why, and what it costs.** OQ-138: the four texts are fixed word for word by their requirements, and the tool row draws
+a tool's result, which REQ-SHELL-044's "anywhere" reaches. The owner ruled them fixed contract text. What it costs: four
+strings a user can read in the transcript keep a marker the rest of the product never shows.
+
+> **Narrows:** REQ-SHELL-044
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-138.*
+
+---
+
+<a id="pd-chat-007"></a>
+
+### PD-CHAT-007 — every queued prompt belongs to a session
+
+A queued prompt SHALL always carry the session that owns it: the explicit session id it was submitted to, or the
+`session_id` key of its context snapshot (REQ-CHAT-039). There is no unscoped queued prompt. REQ-CHAT-038's "(empty =
+unscoped)" and REQ-CHAT-039's sentence giving an unscoped prompt a behaviour of its own ("an unscoped prompt MUST be
+consumable by any run but invisible to session-scoped listings") no longer govern, and a request that would create a
+prompt with no owner is refused. Every other clause of the two requirements still governs: the content, the id and the
+status progression, the refusals, the exactly-once transition, a prompt visible and consumable only by its session's runs,
+and ownership preserved across edit and trigger.
+
+**As built.** `queued_prompts.session_id` is `NOT NULL` since store v6, so no unscoped prompt can be stored, and
+`resolveQueueOwnership` (`packages/engine/src/sessions.ts`) refuses an `unscoped` verdict; every route supplies the
+addressed session. Its comments still cite OQ-51 as open.
+
+**Why, and what it costs.** OQ-51: REQ-CHAT-041's amendment of 2026-09-07 assigned one session-scoped queue to the
+instance, and the store has never been able to hold a prompt with no session, while REQ-CHAT-039 still described one. The
+owner withdrew it. What it costs: no prompt can be queued for "whichever run comes next"; a prompt is queued for a session.
+
+> **Narrows:** REQ-CHAT-038, REQ-CHAT-039
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-51.*
+
+---
+
+<a id="pd-workspace-003"></a>
+
+### PD-WORKSPACE-003 — "Load skill file…" opens a file chooser
+
+The "Load skill file…" action of REQ-WORKSPACE-151 SHALL open the platform's own **file** chooser, filtered to
+`SKILL.md`, on Windows and Linux, whose host dialog cannot offer a file and a directory at once; on macOS, whose dialog can,
+it SHALL offer both. A directory holding a `SKILL.md` is reached by selecting that file. REQ-WORKSPACE-057's directory form
+stays reachable through the typed `/skill <path>` command (REQ-CHAT-162), with REQ-WORKSPACE-057's own directory-path error.
+No second header action is added. Everything else REQ-WORKSPACE-151 states still governs.
+
+**As built.** The chooser ADR-0063 planned: `openFile` filtered to `SKILL.md` on win32 and linux, both properties on darwin.
+
+**Why, and what it costs.** OQ-59: REQ-WORKSPACE-151 asks for a chooser "restricted to selecting a `SKILL.md` file or a
+directory containing one", which no platform dialog but macOS's offers, and REQ-SHELL-164 holds the product answerable only
+for what it supplies to the host. The owner amended the requirement to the file chooser as built. What it costs: on two of
+three platforms the dialog cannot pick a folder; the command can.
+
+> **Narrows:** REQ-WORKSPACE-151
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-59.*
+
+---
+
+<a id="pd-workspace-004"></a>
+
+### PD-WORKSPACE-004 — the injection latency bound counts every instruction file discovery can reach
+
+REQ-WORKSPACE-049's reference conditions SHALL read "every instruction file discovery can reach, totalling up to 1 MiB"
+where they read "up to 20 context files totalling 1 MiB", in both places the requirement states them. Under
+`PD-WORKSPACE-002`'s discovery that is fourteen files on a platform with a machine-wide `/etc` hierarchy and twelve on
+Windows, of which the merge reads twelve and ten. A fixture "at the bound" fills every slot discovery can reach with
+1,048,576 bytes across them. The 200 ms figure, the cold cache, the 95th percentile of at least twenty measurements in
+separate processes, determinism and responsiveness are unchanged.
+
+**As built.** `pnpm injection-proof`'s latency section, whose fixture fills the fourteen slots with exactly 1 MiB.
+
+**Why, and what it costs.** OQ-68: no discovery rule the record has held can present twenty files, so the count half of
+the bound could not be built. The owner restated it as what discovery reaches. What it costs: should discovery widen, the
+bound widens with it, and the 200 ms figure then covers more files than it was first stated over.
+
+> **Narrows:** REQ-WORKSPACE-049
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-68.*
+
+---
+
+<a id="pd-startup-002"></a>
+
+### PD-STARTUP-002 — a launch the product starts itself is neither the instance nor handed to it
+
+REQ-STARTUP-161's two outcomes SHALL govern every launch a person makes. A launch the running product starts itself,
+carrying a reserved token first on its command line that no user-facing invocation defines (REQ-STARTUP-015), SHALL take
+neither outcome: it is admitted outside the instance claim and is not handed to the running instance. There are three:
+
+1. **The code-intelligence child**, `builtin:code-intelligence` (REQ-MCP-033, REQ-STARTUP-002). Its branch runs before the
+   claim and ends without opening a window, creating the instance record or a data directory.
+2. **The update-restart successor**, `builtin:update-successor` (REQ-STARTUP-121). It takes over the record from the
+   predecessor that started it rather than claiming one, and ends quietly, starting nothing, when the predecessor refuses it.
+3. **A benchmark iteration child** (REQ-UIBENCH-037 to REQ-UIBENCH-039), marked by its parent the same way. It runs with
+   its redirected configuration home and never reads or writes the user's instance record.
+
+None of them is a second instance, and REQ-STARTUP-161's last sentence still holds: no configuration key, environment
+variable, preference or control a user can set starts one.
+
+**As built.** The first two (`apps/desktop/src/main/sentinel.ts`, ahead of main's body; `inheritInstance` beside
+`claimInstance` in `apps/desktop/src/main/index.ts`). The third is not built: ADR-0053's benchmark harness does not exist, so
+no iteration child is started, and its marker (constraint W-14) is owed with the harness.
+
+**Why, and what it costs.** OQ-43: REQ-UIBENCH-037 to REQ-UIBENCH-039 make a benchmark iteration a fresh child of the
+product's own program, and REQ-UIBENCH-046 requires the user's settings untouched afterwards. If the gate handed that child
+to the running instance, the measurement would run against the user's real preferences and still report numbers. "Which
+processes the gate admits" has a security flavour, so the owner had the exception stated rather than inferred. What it
+costs: the single-instance rule has three named exceptions, each a launch only the product makes.
+
+> **Narrows:** REQ-STARTUP-161
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-43.*
+
+---
+
+<a id="pd-startup-003"></a>
+
+### PD-STARTUP-003 — with no version metadata the running desktop reports `dev`
+
+When the installation metadata REQ-STARTUP-004 reads is absent, the running desktop SHALL report the literal `dev`, as
+REQ-STARTUP-007 states, and not `0+unknown`. The About surface (REQ-SHELL-140) and the update comparison read that value,
+and REQ-STARTUP-109's unanswerable comparison names it. Every other sentence of REQ-STARTUP-004 still governs: the version
+comes from the installation's own metadata, and a standalone bundle always reports its true release version.
+
+**As built.** `VERSION_WITHOUT_METADATA` in `packages/platform/src/version.ts`.
+
+**Why, and what it costs.** OQ-71: REQ-STARTUP-004 and REQ-STARTUP-007 fix two literals for one case. REQ-STARTUP-007 is
+written for the running desktop and its two consumers, and `0+unknown` is not a version REQ-STARTUP-027's grammar parses
+either. The owner kept `dev`. What it costs: nothing an installed build can reach; only a development launch reports it.
+
+> **Narrows:** REQ-STARTUP-004
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-71.*
+
+---
+
+<a id="pd-startup-004"></a>
+
+### PD-STARTUP-004 — the variable naming a launch's artifact decides updatability, and no child inherits it
+
+**(1) A Windows build with no named artifact is not updatable.** A packaged Windows build that runs outside the directory
+the installer's `InstallDir` value names, and whose launch carries no `ROTARIS_PORTABLE_ARTIFACT` naming the artifact it
+started from — the payload run directly out of a preparation, or an installed tree copied elsewhere — SHALL be classified
+not updatable: no check is performed and no request is issued (REQ-STARTUP-106's not-updatable branch), and one `info` log
+line says why. REQ-STARTUP-106's sentence that reads a copied installed tree as portable, to be replaced by a
+self-contained executable, no longer governs. `ROTARIS_PORTABLE_ARTIFACT`, which the portable launcher publishes, is a
+variable of REQ-STARTUP-147's artifact-naming kind beside `APPIMAGE`, and its absence on a packaged Windows build outside
+`InstallDir` decides that no check happens, where REQ-STARTUP-147 says such a variable decides nothing about whether the
+check happens.
+
+**(2) No child inherits it.** The variables that name the artifact a launch started from — `APPIMAGE` and
+`ROTARIS_PORTABLE_ARTIFACT` — SHALL be read once by the main process and removed from its own environment before it starts
+any child, so no run host, workspace service, tool, terminal, hook, tool server or code-intelligence branch inherits them.
+REQ-STARTUP-147's variables written for child processes gain that removal, and REQ-HOOKS-032's "exactly the environment the
+application itself was started with" is that environment less those two variables.
+
+**As built.** (1) `classify.ts` in `apps/desktop/src/main/updater/` (ADR-0054, "How the artifact is identified for the update
+path"). (2) `takeArtifactVariables` (`packages/platform/src/artifact-environment.ts`), called by main before it starts any
+child.
+
+**Why, and what it costs.** OQ-84: ADR-0054 moved the artifact's identity to the launcher's variable (measured:
+`process.execPath` points into the preparation in 149 of 149 launches), and a copied tree and a payload run directly are
+indistinguishable to the process; following REQ-STARTUP-106's sentence would also replace a tree's executable with a
+single-file portable, leaving the tree's support files beside it. OQ-90: a copy of either variable that a child inherits
+names an artifact that is not the child's launch, and a Rotaris started from inside one would classify itself from the
+other's file. What it costs: a user who copies an installed tree elsewhere gets no updates for that copy, and a hook cannot
+read which artifact started the application.
+
+> **Narrows:** REQ-STARTUP-106, REQ-STARTUP-147, REQ-HOOKS-032
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the rulings of OQ-84 and OQ-90.*
+
+---
+
+<a id="pd-startup-005"></a>
+
+### PD-STARTUP-005 — the notices file lists the tool-server packages a build pins
+
+`THIRD-PARTY-LICENSES.txt`'s `Tools provisioned after installation` section SHALL carry, after the machine tools and the
+code-intelligence runtime's sub-heading with its language servers (REQ-STARTUP-142's order, kept), a third sub-heading,
+`Tool-server packages`. It lists each package the setup manifest's `toolServerPackages` pins with REQ-STARTUP-142's four
+fields, and states that a tool server of the built-in configuration launches each through its package runner, which
+downloads it when that tool server is first started, and that none is contained in the artifact. The sub-heading is left
+out for a manifest that pins no package. This is where REQ-STARTUP-152's "the same versions its `THIRD-PARTY-LICENSES.txt`
+reports" finds the tool-server packages.
+
+**As built.** The notices generator (`tools/notices/`); `@playwright/mcp` 0.0.80 is the one package this build pins.
+
+**Why, and what it costs.** OQ-92: REQ-STARTUP-152 requires the file to report the tool-server package versions a build
+provisions, and REQ-STARTUP-142 names no place for them; they are not "dependencies present in the shipped artifact"
+either, since the package runner fetches them. The owner confirmed the sub-heading as built. What it costs: one more
+section of the file to keep in step with the manifest.
+
+> **Extends:** REQ-STARTUP-142
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-92.*
 
 ---
 

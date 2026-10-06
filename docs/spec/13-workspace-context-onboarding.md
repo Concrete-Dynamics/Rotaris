@@ -193,6 +193,10 @@ The product operates on a user-selected workspace folder: the desktop app resolv
   > read, whatever the per-file policies say; while true only the files switched on are read.
 
 - **REQ-WORKSPACE-049** — Discovering and merging workspace context files SHALL complete within 200 ms for a workspace holding up to 20 context files totalling 1 MiB on local storage. It SHALL NOT delay the moment the interface first accepts input, and the window SHALL keep responding to input for as long as it runs. For an unchanged filesystem state, running it again in a separate process SHALL yield byte-identical output: the merged text SHALL carry no timestamp, no process identifier, and no ordering that varies from run to run. The 200 ms figure SHALL be measured under these reference conditions and no others: the workspace on local, non-removable storage; the filesystem cache **cold** for the files concerned, so the figure covers the first read after a workspace is opened rather than a repeat of it; up to 20 context files totalling 1 MiB; and the reported figure being the 95th percentile of at least 20 consecutive cold measurements taken in separate processes, rather than a mean or a best case. Conformance is assessed per machine: a build meets this requirement on a machine when it meets the figure there under those conditions. The determinism and responsiveness guarantees stated here hold unconditionally, on every machine and under every load.
+  > **Narrowed by [`PD-WORKSPACE-004`](../product/directives.md#pd-workspace-004), 2026-10-06.** "Up to 20 context
+  > files totalling 1 MiB" reads "every instruction file discovery can reach, totalling up to 1 MiB" — fourteen
+  > files, or twelve on Windows — in both places it appears. The figure and every other reference condition are
+  > unchanged.
 
 - **REQ-WORKSPACE-050** — When a run executes in an isolated worktree, workspace context files SHALL be read from the run's execution root, while the portable-skill catalog and persona memory SHALL be discovered from the user-selected base workspace, so persistent workspace metadata stays with the base workspace.
 
@@ -267,6 +271,10 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 - **REQ-WORKSPACE-077** — *Withdrawn.* There is no terminal steering payload; REQ-WORKSPACE-073 and REQ-WORKSPACE-062 carry what invoking a skill does — its body becomes a force-loaded, always-active context block for the session, and the typed command text is not submitted to the model as a prompt.
 
 - **REQ-WORKSPACE-151** — Loading a `SKILL.md` by hand SHALL be reachable through the desktop interface and from nowhere else. The Settings Skills tab SHALL carry a header action "Load skill file…" whose accessible description states that it loads a skill file for this session only. Activating it SHALL open the platform's own file chooser, restricted to selecting a `SKILL.md` file or a directory containing one, on the native-dialog terms of REQ-SHELL-164 and REQ-WORKSPACE-009 — a dismissal by any host-offered means returns no selection and changes nothing. A selection SHALL be loaded exactly as REQ-WORKSPACE-057 specifies: it carries the scope label `manual`, overrides a discovered skill of the same normalized name, applies to the current session only, and persists nothing. On success the skill list SHALL be re-projected, the composer's slash commands SHALL be re-registered (REQ-WORKSPACE-072), and a toast SHALL convey that the named skill was loaded. A failure SHALL be reported with the reason REQ-WORKSPACE-057 gives for it and SHALL leave the catalog unchanged.
+  > **Narrowed by [`PD-WORKSPACE-003`](../product/directives.md#pd-workspace-003), 2026-10-06.** The chooser is a
+  > file chooser filtered to `SKILL.md` on Windows and Linux, and offers a file or a directory on macOS; the
+  > directory form of REQ-WORKSPACE-057 stays reachable through `/skill <path>`. Everything else above still
+  > governs.
 
 ### Project Initialization Framework
 

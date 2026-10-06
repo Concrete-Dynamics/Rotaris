@@ -339,6 +339,10 @@ Captured foreground output is capped at 100,000 characters per call. When a comm
 
 **REQ-TOOLS-110** — Session actions: `query` (the default when `session_id` is set) returns only output new since the last poll (placeholder `(no new output since last poll)`) plus status and exit code; `kill` returns the final output; `send_input` writes bytes to stdin (result `Sent <n> byte(s) to session <id>.`; a closed pipe logs a warning); `send_signal` sends SIGTERM/SIGINT/SIGKILL/SIGHUP (default SIGTERM; result `Sent <sig> to session <id>.`); `list` needs no session id and returns an aligned text table plus structured entries `{session_id, command, status, exit_code, started_at (ISO-8601)}`, with a per-row status glyph (`▶`/`✓`/`✗`). An unknown session id yields `invalid_request` with `Unknown background session: '<id>'`.
 
+> **Extended by [`PD-TOOLS-010`](../product/directives.md#pd-tools-010), 2026-10-06.** `send_signal SIGINT` stops
+> a background session whose command takes SIGINT's default: where the session's shell is `dash` on Linux, a
+> SIGINT its fork window lost is sent once more to the command it cost. Every action above is unchanged.
+
 **REQ-TOOLS-111** — Executor teardown MUST terminate its terminal-tool process trees, including background terminal sessions, and close every terminal resource it holds. Application shutdown and crash cleanup MUST apply that scope to owned terminal-tool processes. Hook descendants follow REQ-HOOKS-033's explicit survival exception; hook help MUST disclose that exception. Hook timeout and bounded-output collection remain governed by the hooks domain.
   > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005), 2026-09-27 (revision 3).** A pause does not end the background terminal sessions its agents started while the application stays open; a stop, a quit and a crash end them as stated.
 
@@ -353,6 +357,10 @@ Captured foreground output is capped at 100,000 characters per call. When a comm
 6. otherwise → `success` / info.
 
 `background_running` always carries severity `info`: a session that is still running has reported nothing to be concerned about. `background_terminal` takes its severity from the session's final status of REQ-TOOLS-109 — `completed` → `info`, `killed` → `warning` (the agent or the user ended it deliberately, so it is neither a clean finish nor a fault), and `failed` or `timeout` → `error`. Severity therefore never asserts a problem the status does not report, and a background failure reads at the same severity a foreground failure of the same shape would.
+
+> **Narrowed by [`PD-TOOLS-009`](../product/directives.md#pd-tools-009), 2026-10-06.** Test 4 does not apply to
+> exit code 1 from `diff`, `git … diff …`, `grep`, `egrep`, `fgrep`, `rg` or `findstr`, which classifies `success`
+> / `info`. Every other test, and every other non-zero exit, is unchanged.
 
 **REQ-TOOLS-113** — Three independent checks run over the output of a command that exited 0. Each contributes at most one warning, and one or more warnings makes the observation `suspicious_success`:
 - **Literal failure markers**, searched case-insensitively anywhere in the output, in this fixed order: `Traceback (most recent call last):`, `ERROR: file or directory not found`, `no tests ran`, `AssertionError`, `FAILED ` (the trailing space is part of the marker). The earliest marker in that order that is present produces the single marker warning, whose text names the marker that matched; further markers present in the same output add nothing.
@@ -396,6 +404,10 @@ Independently of exit code, a pipeline check adds the warning `Pipeline command 
 **REQ-TOOLS-127** — A foreground command's live output is published on a stream named `fg:<scope>`, where `<scope>` is the identifier of the run the command belongs to, or the literal `root` when the command belongs to no run. A background session publishes on `bg:<session_id>` using its `ts_XXXXXXXX` id. Frames are typed `delta` (the text appended since the previous frame), `screen` (a complete replacement of the displayed text), or `meta`. Streaming changes nothing the agent sees: with or without a consumer attached, and whether or not publishing succeeds, the command still runs to completion and the observation returned is identical — the only detectable difference is whether a live preview existed. A completed stream — foreground and background alike — ends with a `screen` frame whose text equals the observation's final output text, so the live view finishes on the same text the observation reports rather than on a partial capture, and the stream is then closed carrying the command's exit code. That closing frame is a **literal replacement of the displayed text and carries an explicit marker saying that it is one**: its text is plain on the terms this requirement already fixes — capped, and truncated from the oldest end — and it is the only frame of a stream of which any of that is true. Every earlier frame stays faithful to what the command actually wrote, which is what REQ-SHELL-095 and REQ-SHELL-098 need in order to present a character grid with cursor addressing, alternate-screen fidelity, per-cell attributes and sixteen colours. **The two bind different instants and therefore do not conflict**: those requirements govern the stream while the process is running, and this frame is the one emitted after it has exited — when there is no cursor to paint (REQ-SHELL-098), no alternate screen left to be in, and no further output to attribute to a cell.
 
 **REQ-TOOLS-128** — Displays can talk back through a registered stream-control channel — send-keys, resize, and interrupt for foreground; send-keys, interrupt (SIGINT), and kill for background — without knowing what drives the stream. A stream info record carries the command, a running flag, start time, exit code, and a `truncated` flag set once replay frames were dropped.
+
+> **Extended by [`PD-TOOLS-010`](../product/directives.md#pd-tools-010), 2026-10-06.** The stream-control
+> interrupt of a background session is re-delivered as `send_signal SIGINT` is, where the session's shell lost it
+> in its fork window.
 
 ### 15. Workspace File Tools and the Path Fence
 

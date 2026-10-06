@@ -437,7 +437,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
   it('REQ-MONITOR-117..119 (OQ-173): a compression\'s own model call, automatic or on a rejection, is a wait the run imposes — 100 s of it raises no `stall` issue and no stalled seconds', async () => {
     for (const trigger of ['automatic', 'rejection'] as const) {
       warnings.length = 0;
-    infos.length = 0;
+      infos.length = 0;
       let release!: () => void;
       const held = new Promise<void>((r) => { release = r; });
       const { sessions, counts, pub } = sessionsWith((persona, turn) => {

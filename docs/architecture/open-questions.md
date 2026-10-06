@@ -7270,8 +7270,9 @@ injected into a conversation whose model step or tool call is in flight.
 
 **What a ruling decides.** Which surfaces draw the stall and in what words; whether the recovery is also a notice or a
 timeline entry *(the timeline entry is settled by OQ-127's ruling of 2026-10-06, see "Notified" above; the notice by
-this question's own ruling the same day, which confirms the recovery notified by the republished record alone)*; whether the root is watched against the child threshold or one of its own; and whether REQ-MONITOR-135's
-evaluation leg means waking a waiting agent, as built, or something a step in flight could receive.
+this question's own ruling the same day, which confirms the recovery notified by the republished record alone)*;
+whether the root is watched against the child threshold or one of its own; and whether REQ-MONITOR-135's evaluation
+leg means waking a waiting agent, as built, or something a step in flight could receive.
 
 **OQ-154 — Does a child that ends where no run's lifecycle hooks are live fire `child_completed`, and when?**
 *(REQ-HOOKS-003, "`child_completed` once a delegated child agent has finished, whatever its final state"; REQ-HOOKS-076,

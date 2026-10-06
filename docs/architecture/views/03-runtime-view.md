@@ -1095,7 +1095,10 @@ What it writes (`stallRecords`, one function for a child's watch and the root's;
 
 The lines go to the session log (REQ-SESSION-142) and the application log: the warning through the run's `warn`, the
 waits and the recovery through its `info` (`RunDeps.info` and `ChildrenDeps.info`, which `Sessions` wires to the session
-log at `INFO` and to `SessionsDeps.log`; absent, `warn`), since each records an intended state. The corrective message
+log at `INFO` and to `SessionsDeps.log`; absent, `warn`), since each records an intended state. A session log at its
+default `WARNING` level (REQ-SESSION-142) therefore keeps neither the waits nor the recovery: REQ-MONITOR-120's "logged"
+is met by the `INFO` line, which the application log keeps (`PD-MONITOR-002`) as does a session log set to `INFO`, beside
+the `stall_recovered` entry the timeline keeps at any level. The corrective message
 below is a `corrective_message` timeline entry and a `child corrective message: …` line at `WARNING`
 (`recordCorrectiveMessage`), since a failed step precedes it. *(Until 2026-10-06 every one of these lines went through
 `warn`, and none was a timeline entry, because REQ-ORCH-139's closed vocabulary had no word for them; OQ-127 and OQ-157

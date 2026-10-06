@@ -58,7 +58,8 @@ OQ-127's ruling; fin20).** `stallRecords` and `recordCorrectiveMessage` (`engine
 a child's watch and the root's: the `stall` issue beside each throttled warning only, `waiting_on_tools`, `stall_recovered`
 and `corrective_message` timeline entries, and the intended states (the waits, the recovery, the children a user's rest
 leaves paused) through the run's new `info` channel (`RunDeps.info`, `ChildrenDeps.info`, wired by `Sessions` to the session
-log at `INFO`). The **runtime view**'s stall-watch paragraph and its `timeline` row say so. No package, edge, process,
+log at `INFO`). The **runtime view**'s stall-watch paragraph and its `timeline` row say so, and the paragraph says how
+REQ-MONITOR-120's "logged" is met when the session log keeps its default `WARNING` level. No package, edge, process,
 channel, command or store column changed.
 
 **The remaining confirm-as-built questions are ruled, and no code moved (R-071; fin20).** OQ-154 to OQ-203's

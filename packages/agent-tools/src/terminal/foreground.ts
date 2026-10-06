@@ -777,6 +777,10 @@ export type RestoreOutcome =
 /** Bound on the snapshot/restore round trip: the shell just proved responsive (or just respawned). */
 export const SNAPSHOT_TIMEOUT_MS = 15_000;
 
+/** PD-TOOLS-001, POSIX: the marker each capture row begins with (the colon follows it), and the base64 characters a row carries. */
+const SNAPSHOT_MARK = '__rot_b64__';
+const SNAPSHOT_ROW = 64;
+
 /**
  * PD-TOOLS-001's capture line: the shell's own cwd plus every exported variable, one per line. The
  * marker literals are assembled through variables (`$__p`, `$P`) rather than written inline, so the
@@ -789,14 +793,42 @@ export function snapshotCommand(backend: ShellBackend): string {
   // POSIX: the directory and `env -0`, NUL-separated, as base64 folded to 64 columns. The capture is the EMULATED
   // screen (ADR-0021), which wraps a line at its width, and a wrapped line cannot be told from a value's own newline:
   // a PATH longer than the 240 columns came back with a newline inside it and the restore broke every command lookup
-  // (`sleep: not found`), measured on Linux 2026-09-24. A 64-column line never wraps, and NUL separates entries even
-  // where a value holds a newline.
-  return `Q='__rot_b64__'; { printf '%s\\0' "$PWD"; env -0; } | base64 | fold -w 64 | sed "s/^/$Q:/"`;
+  // (`sleep: not found`), measured on Linux 2026-09-24. Base64 holds no newline of its own, so a row break inside the
+  // capture is always the screen's, and the parse (`encodedSnapshot`) joins the rows back with nothing between them; NUL
+  // separates entries even where a value holds a newline.
+  // FALSIFIED, kept beside its replacement (docs/defects/fixed/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md,
+  // 2026-10-04): "a 64-column line never wraps". A row is the 12-column marker and 64 characters, 76 columns, and the
+  // display narrows the screen to as few as 20 (REQ-TOOLS-128); the parse kept only the rows that began with the marker,
+  // and at 40 columns fin15 read back three entries, PATH and HOME gone, one name spliced from two and a value cut.
+  // The encoder's own line breaks (76 columns in GNU and busybox `base64`, none in BSD's) are taken out and one put back at
+  // the end, so every row but the last carries exactly 64 characters on every host, which the parse checks.
+  return `Q='${SNAPSHOT_MARK}'; { { printf '%s\\0' "$PWD"; env -0; } | base64 | tr -d '\\n'; echo; } | fold -w ${SNAPSHOT_ROW} | sed "s/^/$Q:/"`;
 }
 
-/** PD-TOOLS-001, POSIX: the decoded capture — the directory, then `NAME=value` entries, NUL-separated. */
-function parseEncodedSnapshot(chunks: readonly string[]): ShellState | null {
-  const [cwd, ...entries] = Buffer.from(chunks.join(''), 'base64').toString('utf8').split('\0');
+/**
+ * PD-TOOLS-001, POSIX: the base64 text of the capture, read off screen rows of any width, or null when there is none or it
+ * is not whole. The rows are joined with nothing between them, so the continuation a narrow screen wrapped onto the next
+ * row rejoins its head, and each marker then opens one of `snapshotCommand`'s rows. A stray line between rows (a job
+ * notice) ends the row before it at its first character outside the alphabet. Whatever the joining could still get
+ * wrong is refused, never decoded into a spliced environment: every row but the last carries exactly 64 characters, the
+ * last 1 to 64, the whole is valid padded base64, and its decoded text ends with the NUL `env -0` writes after each entry.
+ */
+function encodedSnapshot(output: string): string | null {
+  const joined = output.split('\n').join('');
+  if (!joined.includes(`${SNAPSHOT_MARK}:`)) return null;
+  const rows = [...joined.matchAll(new RegExp(`${SNAPSHOT_MARK}:([A-Za-z0-9+/=]*)`, 'g'))].map((m) => m[1]!);
+  if (rows.length === 0) return null;
+  const last = rows[rows.length - 1]!;
+  if (rows.slice(0, -1).some((r) => r.length !== SNAPSHOT_ROW) || last.length === 0 || last.length > SNAPSHOT_ROW) return '';
+  const text = rows.join('');
+  return text.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(text) ? text : '';
+}
+
+/** PD-TOOLS-001, POSIX: the decoded capture — the directory, then `NAME=value` entries, each NUL-terminated. */
+function parseEncodedSnapshot(encoded: string): ShellState | null {
+  const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+  if (!decoded.endsWith('\0')) return null;
+  const [cwd, ...entries] = decoded.slice(0, -1).split('\0');
   const env: Record<string, string> = {};
   for (const entry of entries) {
     const eq = entry.indexOf('=');
@@ -810,8 +842,8 @@ function parseEncodedSnapshot(chunks: readonly string[]): ShellState | null {
 
 /** PD-TOOLS-001's parse: POSIX's encoded capture when present; otherwise (PowerShell) the last cwd line wins, env lines after it, continuations rejoin. */
 export function parseSnapshot(output: string): ShellState | null {
-  const encoded = output.split('\n').filter((line) => line.startsWith('__rot_b64__:')).map((line) => line.slice('__rot_b64__:'.length).trim());
-  if (encoded.length > 0) return parseEncodedSnapshot(encoded);
+  const encoded = encodedSnapshot(output);
+  if (encoded !== null) return encoded === '' ? null : parseEncodedSnapshot(encoded);
   let cwd: string | null = null;
   let env: Record<string, string> = {};
   let cur: string | null = null;

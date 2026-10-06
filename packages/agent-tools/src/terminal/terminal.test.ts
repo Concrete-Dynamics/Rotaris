@@ -541,6 +541,41 @@ describe.skipIf(process.platform === 'win32')('PD-TOOLS-001: the POSIX shell-sta
     expect(snap?.env['MULTI']).toBe('first\nsecond');
   });
 
+  // docs/defects/fixed/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md: the capture is read off
+  // an emulated screen of the session's own width, which the display may narrow to 20 columns (REQ-TOOLS-128). Each row
+  // is `__rot_b64__:` and 64 characters, 76 columns, so below 76 every row wraps; the parse kept only the rows that began
+  // with the marker, and at 40 columns fin15 measured three entries back, PATH and HOME gone and one name spliced from two.
+  it('reads the same directory and variables back off an emulated screen at every width the display may give it (REQ-TOOLS-128)', async () => {
+    const env = { PATH: process.env['PATH'] ?? '', HOME: '/home/probe', PROBE_VAR: 'hello-there', LONG_PATHISH: `/opt/${'y'.repeat(300)}/bin`, MULTI: 'first\nsecond' };
+    const out = execFileSync('/bin/sh', ['-c', snapshotCommand({ kind: 'posix', file: '/bin/sh' })], { cwd: root, encoding: 'utf8', env });
+    const wide = parseSnapshot(out);
+    expect(wide?.cwd).toBe(root);
+    for (const [k, v] of Object.entries(env)) expect(wide?.env[k]).toBe(v);
+    for (const cols of [20, 33, 40, 64, 75, 76, 77, 240]) {
+      const screen = xtermEmulatorFactory({ cols, rows: 50, scrollback: 5_000 });
+      try {
+        await screen.write(out.replace(/\n/g, '\r\n'));
+        expect({ cols, snap: parseSnapshot(screen.text()) }).toEqual({ cols, snap: wide });
+      } finally { screen.dispose(); }
+    }
+  });
+
+  it('refuses a capture that lost or gained characters, rather than decoding the pieces into a spliced environment', () => {
+    const env = { PATH: '/usr/bin:/bin', HOME: '/home/probe', PROBE_VAR: 'hello-there' };
+    const out = execFileSync('/bin/sh', ['-c', snapshotCommand({ kind: 'posix', file: '/bin/sh' })], { cwd: root, encoding: 'utf8', env });
+    const rows = out.trimEnd().split('\n');
+    expect(rows.length).toBeGreaterThan(2);
+    expect(parseSnapshot(rows.join('\n'))?.env['PROBE_VAR']).toBe('hello-there');
+    // A row whose continuation was dropped, as the old parse dropped every wrapped one.
+    expect(parseSnapshot(rows.map((r, i) => (i === 0 ? r.slice(0, 40) : r)).join('\n'))).toBeNull();
+    // A stray row of base64's own letters between two rows (a shell's `Terminated`, say) is not read as capture.
+    expect(parseSnapshot([rows[0], 'Terminated', ...rows.slice(1)].join('\n'))).toBeNull();
+    // A stray row after the last one that would decode past its final separator.
+    expect(parseSnapshot([...rows, 'Terminated'].join('\n'))).toBeNull();
+    // A stray line that is no part of the alphabet, between rows, is left out and the capture still reads whole.
+    expect(parseSnapshot([rows[0], '[1]+ Done   sleep 5', ...rows.slice(1)].join('\n'))?.env).toEqual(parseSnapshot(out)?.env);
+  });
+
   it('refuses a capture that names no variable, rather than restoring an empty environment over the fresh shell', () => {
     const cwdOnly = Buffer.from(`${root}\0`, 'utf8').toString('base64');
     expect(parseSnapshot(`__rot_b64__:${cwdOnly}\n`)).toBeNull();
@@ -1182,6 +1217,32 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(output(own.text)).toBe('ready\nready2');
       await wideEchoCase(t);
     } finally { await m.dispose(); }
+  }, 90_000);
+  // docs/defects/fixed/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md, through a real PTY: below
+  // 76 columns the snapshot's rows wrap, and the reset restored a spliced environment and named it restored.
+  it.skipIf(PS)('PD-TOOLS-001, REQ-TOOLS-128: at 20 and 40 columns a hard-timeout reset restores the directory and every exported variable whole', async () => {
+    const dir = join(root, 'narrow-cwd');
+    mkdirSync(dir, { recursive: true });
+    for (const cols of [20, 40]) {
+      const { m, t } = await posixSession(shell!.file, { cols });
+      try {
+        const value = `hello-there-${'v'.repeat(90)}-${cols}`;
+        expect(diag((await t.execute(args({ command: `cd '${dir}' && ${SH.setVar('ROTARIS_NARROW', value)}`, timeout: 15 }), ctx())).text)['exit_code']).toBe(0);
+        const r = await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 1 }), ctx());
+        expect(diag(r.text)).toMatchObject({ exit_code: 124, kill_status: 'session_reset' });
+        expect(r.text).toContain('were restored');
+        const after = await t.execute(args({ command: `${SH.bracketVar('ROTARIS_NARROW')}; pwd; printf '%s\\n' "$PATH" "$HOME"; command -v sleep`, timeout: 15 }), ctx());
+        expect(diag(after.text)['exit_code']).toBe(0);
+        // The capture is read off a 20-column screen too, so its rows are rejoined before they are compared.
+        const lines = (output(after.text) ?? '').split('\n');
+        const joined = lines.join('');
+        expect(joined).toContain(`[${value}]`);
+        expect(joined).toContain(`${dir}`);
+        expect(joined).toContain(process.env['PATH'] ?? '');
+        expect(joined).toContain(process.env['HOME'] ?? '');
+        expect(joined).toMatch(/\/sleep$/);
+      } finally { await m.dispose(); }
+    }
   }, 90_000);
   // fin15's verification: where a startup file turns bash's readline back on, the sideways row it draws of the next call's
   // wrapper is too narrow below about 50 columns to carry the whole end statement, and it reached the interrupted call's

@@ -702,4 +702,15 @@ no echo" (real PTY, the host's shell) and "under bash as `/bin/sh` with its line
 lets the echo of a next call reach the paused call's poll" (real PTY at 20, 40 and 240 columns), both red without it.
 Found on the way and recorded, not repaired here: PD-TOOLS-001's snapshot reads its `__rot_b64__:` rows one screen row
 at a time, so below 76 columns it decodes a corrupted environment
-([the note](../../defects/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md)).
+([the note](../../defects/fixed/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md)).
+
+*Reported back 2026-10-06 (finacc2's acceptance finding A4), when that note was repaired:* the third first execution's
+snapshot is now read across the screen's row breaks. The capture's rows are joined with nothing between them, as the
+frames already were, and each `__rot_b64__:` opens one 64-character row of base64, which holds no newline of its own;
+a capture whose rows are not 64 characters but the last, is not padded base64, or does not decode to NUL-terminated
+entries is refused and the previous one kept (`encodedSnapshot`). The encoder's own line breaks are taken out before the
+fold, so the 64 holds on every host. Measured under `dash` through a real PTY before the change, a capture at 75, 40, 30,
+20 and 10 columns lost `PATH` or the directory or parsed to nothing, and a reset at 20 columns said its restore failed;
+after it, every width from 10 to 240 read the 240-column capture, and a reset at 20 and 40 columns restored the
+directory and the variables whole. The PowerShell capture is left as it was, its wrap recorded open
+([the PowerShell note](../../defects/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md)).

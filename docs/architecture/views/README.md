@@ -1787,7 +1787,10 @@ kinds. No package, process, channel or state owner changed.
 **The terminal on Linux (defect round, 2026-09-24).** Two repairs, no structure moved. A background session is started
 as the leader of its own process group on POSIX (`spawnChild`'s new `processGroup`), so `send_signal` and the tree kill
 reach it. PD-TOOLS-001's POSIX capture is encoded so the emulated screen cannot wrap it. No view text describes either
-at this depth, so no view changes beyond this entry.
+at this depth, so no view changes beyond this entry. *Falsified 2026-10-06, kept as written above:* the screen does wrap
+the capture's 76-column rows below 76 columns (REQ-TOOLS-128 narrows it to 20), and the parse now joins the rows back
+([the note](../../defects/fixed/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md)); still no
+view text at this depth.
 
 **An immediate exit closes the child windows first (defect round, 2026-09-24).** On Linux, `app.exit` over an open
 modal child window segfaults inside Electron, which is how every live-run sign-in there ended. The capture seam's exit

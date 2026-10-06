@@ -90,4 +90,4 @@ dropped at any width …" and "a frame the screen wraps … is found across its 
 floor a call's capture and a paused call's poll carry no frame and no echo" (real PTY, the host's shell) and "under bash as
 `/bin/sh` with its line editor turned back on by `$ENV`, no width lets the echo …" (real PTY at 20, 40 and 240 columns).
 CPU load was again varied under `dash` only. Found on the way and recorded open:
-[the shell-state snapshot is corrupted on a screen narrower than its rows](../the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md).
+[the shell-state snapshot is corrupted on a screen narrower than its rows](the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md).

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { millis, type Clocks, type Timers } from '@rotaris/kernel';
-import { runSetupSteps, type SetupStepReport, type SetupStepSpec } from './setup.js';
+import { runSetupSteps, SETUP_SHUTDOWN_GRACE_MS, SETUP_TERMINATE_GRACE_MS, type SetupStepReport, type SetupStepSpec } from './setup.js';
 
 /**
  * REQ-MCP-099's runner against node itself as the "runtime": the invocation is `node -e <script>` where the script reads
@@ -151,6 +151,48 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
     expect(r.steps[0]!.stopped).toBe('cancelled');
     expect(pids).toHaveLength(2);
     expect(await settled(pids)).toBe(true);
+  }, 20_000);
+
+  /**
+   * PD-MCP-001 (OQ-172, ruled 2026-10-06, R-071): every stop of a setup step gives it the same 2 s before the force-kill — a
+   * Cancel or a switch's cancellation and an exhausted budget as well as the close. Before, the cancellation and the budget
+   * kept REQ-MCP-099's 5 s, and a step that ignored the ask outlived REQ-WORKSPACE-092's 5 s bound (measured on Windows
+   * 2026-10-02: 5.489 s after a switch, 5.603 s after a Cancel). No `graceMs` is passed: the default is what is measured.
+   */
+  it('gives every stop one grace, the close\'s 2 s (PD-MCP-001, REQ-WORKSPACE-092)', () => {
+    expect(SETUP_TERMINATE_GRACE_MS).toBe(2_000);
+    expect(SETUP_SHUTDOWN_GRACE_MS).toBe(SETUP_TERMINATE_GRACE_MS);
+  });
+
+  it.skipIf(process.platform === 'win32')('cancels a step that ignores the ask with the force-kill 2 s after the cancellation, by default (PD-MCP-001, REQ-WORKSPACE-092)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rotaris-setup-cancel-grace-'));
+    const abort = new AbortController();
+    let pids: number[] = [];
+    let cancelledAt = 0;
+    const r = await runSetupSteps({
+      invocation: familyInvocation, workspaceRoot: root, steps: [step('create', 'stubborn')], creationStepId: 'create', markerPresent: false, containsCode: true,
+      env: process.env as Record<string, string>, clocks: realClocks(), log, signal: abort.signal, pollMs: millis(50),
+      onStep: (s) => { if (s.id === 'create' && s.status === 'running') whenPids(root, (found) => { pids = found; cancelledAt = performance.now(); abort.abort(); }); },
+    });
+    const endedAfter = performance.now() - cancelledAt;
+    expect(r.steps[0]!.stopped).toBe('cancelled');
+    expect(endedAfter).toBeGreaterThanOrEqual(1_900);
+    expect(endedAfter).toBeLessThan(4_000);
+    expect(await settled(pids)).toBe(true);
+  }, 20_000);
+
+  it.skipIf(process.platform === 'win32')('ends a step past its budget that ignores the ask with the force-kill 2 s after the budget, by default (PD-MCP-001, REQ-WORKSPACE-092)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rotaris-setup-budget-grace-'));
+    const started = performance.now();
+    const r = await runSetupSteps({
+      invocation: familyInvocation, workspaceRoot: root, steps: [step('create', 'stubborn', { budgetMs: 600 })], creationStepId: 'create', markerPresent: false, containsCode: true,
+      env: process.env as Record<string, string>, clocks: realClocks(), log, signal: new AbortController().signal, pollMs: millis(50), onStep: () => undefined,
+    });
+    const took = performance.now() - started;
+    expect(r.steps[0]!.stopped).toBe('budget');
+    expect(took).toBeGreaterThanOrEqual(600 + 1_900);
+    expect(took).toBeLessThan(600 + 4_000);
+    expect(await settled(pidsIn(root))).toBe(true);
   }, 20_000);
 
   it.skipIf(process.platform === 'win32')('at its host\'s shutdown, force-kills a step that ignores the ask after the shutdown\'s grace, shortening a cancellation\'s grace already under way (REQ-WORKSPACE-092, REQ-WORKSPACE-109)', async () => {

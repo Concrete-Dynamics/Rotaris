@@ -450,7 +450,10 @@ holding that root (`MainWindows.holding`). The setup port is addressed by the ru
 scenario 8e. In 8e the first window reads its own state and cancels its own run while the second window, opened last and
 focused, holds the other workspace: 44 passed, 0 failed, 2 skipped, as root under Xvfb, Node 24, `--skip-build` after
 `pnpm build`. **Found besides:** the two initialization banners are application notices, shown in every window. Which
-window should show a workspace's banner is raised as OQ-171.
+window should show a workspace's banner is raised as OQ-171. *Ruled 2026-10-06 ([R-071](../../product/requests.md#r-071)): the banners stay
+the application's and name their project — [`PD-WORKSPACE-003`](../../product/directives.md#pd-workspace-003), built the same
+day: the title reads `{headline}: {the folder's name}` and the detail area opens on the project's folder
+(`namedBanner`, `initialization.test.ts`, `init-proof` scenario 4).*
 
 **Thirteenth round (2026-10-01): an undelivered cancellation at a quit.** At an orderly quit the close's cancellation
 can reach a run host that is already shutting down. That run host has closed its stores, so it refuses the

@@ -85,6 +85,12 @@ its head. The **runtime view**'s children paragraph says so. No package, edge, p
 coordinating prompt becomes its direct-work form, a configured prompt gains the statement after it, and a turn the plan gate
 holds keeps the persona's prompt (`Run`'s root turn). The **runtime view**'s system-prompt paragraph and its entry-port
 sentence say so. No package, edge, process, channel, command or store column changed.
+**A setup banner names its project; every stop of a setup step gets 2 s (PD-WORKSPACE-003, PD-MCP-001; OQ-171, OQ-172
+ruled 2026-10-06; fin21).** The initialization coordinator's two banners stay application notices and name the project they
+concern (`namedBanner`: `{headline}: {the folder's name}`, the detail area opening on the folder). A setup step is
+force-killed 2 s after any stop — Cancel, a switch's cancellation, an exhausted budget, the close — where a cancellation
+and a budget had REQ-MCP-099's 5 s (`SETUP_TERMINATE_GRACE_MS`). The **process view**'s `mcp.setup` paragraph and the
+**runtime view**'s application end say so. No package, edge, process, channel, command or store column changed.
 
 **The run completes only when the coordinator's own plan agrees (REQ-ORCH-029, REQ-ORCH-075, REQ-ORCH-078; fin18).**
 `Run.iterate` returns a task whose root answered `succeeded` with an item of its own plan open to the pending queue, once

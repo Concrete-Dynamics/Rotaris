@@ -1412,7 +1412,7 @@ its next turn (`Run.rebuildEntryFromMemory`) — the turn in flight finishes on 
 2026-09-28).** A run's teardown releases its lock at the end of cleanup; the application's end reaches the same point
 from outside. The orderly quit (`window-all-closed`, `main/index.ts`) asks the run host to `shutdown` — every run asked
 to stop before any is waited on, then `Sessions.closeAll` releases every lock a finished session still holds, and a
-code-intelligence setup under way ended and waited for (`McpHost.endSetup`, 2 s grace, OQ-172; the process view's
+code-intelligence setup under way ended and waited for (`McpHost.endSetup`, 2 s grace, every stop's under `PD-MCP-001` (OQ-172); the process view's
 `mcp.setup`; 2026-10-01) — and races
 that request against the run host's exit (`shutdownAtQuit`); then the workspace services the same way; then
 **`endBeforeMain`** (`main/exit.ts`) waits at most `RUN_HOST_END_BOUND_MS` (2 000 ms) for the run host to exit by

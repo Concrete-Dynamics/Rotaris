@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
 import type { InitializationStateView, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
 import { readInitializationState, writeConfigFields, type InitializationTask, type PlainMap } from '@rotaris/config';
 import {
   CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, CODE_INTELLIGENCE_SUCCESS_CODE, CODE_INTELLIGENCE_SUCCESS_NON_CODE,
-  CODE_INTELLIGENCE_TASK_ID, deliverSetupCancel, InitializationCoordinator, NOT_A_LOCAL_LAUNCH_ERROR, NOT_A_LOCAL_LAUNCH_SUMMARY,
+  CODE_INTELLIGENCE_TASK_ID, deliverSetupCancel, InitializationCoordinator, namedBanner, NOT_A_LOCAL_LAUNCH_ERROR, NOT_A_LOCAL_LAUNCH_SUMMARY, projectNameOf,
   SETUP_FOLLOW_BOUND_MS, SETUP_OVERDUE_DETAIL, SETUP_RUN_HOST_EXITED_DETAIL, SETUP_START_UNANSWERED_DETAIL,
 } from './initialization.js';
 
@@ -18,6 +18,12 @@ function workspace(): { root: string; agents: string } {
 }
 
 const step = (id: McpSetupStep['id'], status: McpSetupStep['status'], detail = '', facts: Partial<McpSetupStep> = {}): McpSetupStep => ({ id, label: id, status, detail, elapsedMs: null, ...facts });
+/**
+ * PD-WORKSPACE-003 (OQ-171): a banner names its project — the headline followed by the folder's name, and the detail area
+ * opening on the project's folder.
+ */
+const named = (root: string, headline: string, message: string, detail: string): { headline: string; message: string; detail: string } =>
+  ({ headline: `${headline}: ${basename(root)}`, message, detail: `Project folder: ${root}\n\n${detail}` });
 
 /**
  * The run host's own details and facts for a step, as `runSetupSteps` writes them (`packages/mcp/src/setup.ts`) — the
@@ -138,6 +144,39 @@ describe('the default task set', () => {
   });
 });
 
+/**
+ * PD-WORKSPACE-003 (OQ-171, ruled 2026-10-06, R-071): the initialization banners are application notices, shown in every open
+ * window, so each names the project it is about. Before, both read the requirement's headline alone, and with two main
+ * windows open the second window showed "Project setup did not finish" for the first window's project with nothing saying so.
+ */
+describe('a banner names its project (PD-WORKSPACE-003, OQ-171)', () => {
+  it('names a project by its folder, on either separator, and a root that has none by the root itself', () => {
+    expect(projectNameOf('/home/u/work/atlas-billing')).toBe('atlas-billing');
+    expect(projectNameOf('/home/u/work/atlas-billing/')).toBe('atlas-billing');
+    expect(projectNameOf('C:\\Users\\u\\work\\atlas-billing')).toBe('atlas-billing');
+    expect(projectNameOf('C:\\Users\\u\\work\\atlas-billing\\')).toBe('atlas-billing');
+    expect(projectNameOf('/')).toBe('/');
+  });
+
+  it('puts the name after the headline and the folder at the head of the detail area', () => {
+    expect(namedBanner('/w/one', 'Project setup did not finish', 'the error')).toEqual({ headline: 'Project setup did not finish: one', detail: 'Project folder: /w/one\n\nthe error' });
+    expect(namedBanner('/w/one', 'Project setup could not be checked', '')).toEqual({ headline: 'Project setup could not be checked: one', detail: 'Project folder: /w/one' });
+  });
+
+  it('raises the failed background run\'s banner under the project the run was for, with the message the requirement fixes (REQ-WORKSPACE-103)', async () => {
+    const h = harness();
+    const run = h.coordinator.resolve(h.root, true);
+    await new Promise((r) => setImmediate(r));
+    h.push(status({ state: 'finished', outcome: 'failed', containsCode: true, message: 'A step failed', steps: [RUN_HOST.exited('create', 2, 'boom'), RUN_HOST.notAttempted('index'), RUN_HOST.notAttempted('memory')] }));
+    await run;
+    await new Promise((r) => setImmediate(r));
+    expect(h.banners).toHaveLength(1);
+    expect(h.banners[0]!.headline).toBe(`Project setup did not finish: ${basename(h.root)}`);
+    expect(h.banners[0]!.message).toBe(CODE_INTELLIGENCE_FAILED_SUMMARY);
+    expect(h.banners[0]!.detail.startsWith(`Project folder: ${h.root}\n\n`)).toBe(true);
+  });
+});
+
 describe('resolution on workspace open', () => {
   /** REQ-WORKSPACE-083: a never-initialized workspace with no applicable task is marked silently. */
   it('marks a workspace with nothing applicable, stamping last_run and starting nothing', async () => {
@@ -243,12 +282,9 @@ describe('resolution on workspace open', () => {
     // REQ-WORKSPACE-084: a failure records nothing, so the task stays pending.
     expect(readInitializationState(h.agents).completed).toEqual([]);
     // The summary is the banner's sentence; its detail area says which stage failed and what it printed (REQ-NOTIFY-005).
-    expect(h.banners[0]).toEqual({
-      headline: 'Project setup did not finish',
-      message: CODE_INTELLIGENCE_FAILED_SUMMARY,
-      detail: "Code intelligence could not index this project's symbols: indexer: no such language\n"
-        + 'Project configuration: succeeded — made\nSymbol indexing: failed — indexer: no such language\nMemory-layout seeding: not-attempted',
-    });
+    expect(h.banners[0]).toEqual(named(h.root, 'Project setup did not finish', CODE_INTELLIGENCE_FAILED_SUMMARY,
+      "Code intelligence could not index this project's symbols: indexer: no such language\n"
+        + 'Project configuration: succeeded — made\nSymbol indexing: failed — indexer: no such language\nMemory-layout seeding: not-attempted'));
   });
 
   /**
@@ -390,7 +426,7 @@ describe('resolution on workspace open', () => {
     expect(task.summary).toBe(CODE_INTELLIGENCE_FAILED_SUMMARY);
     expect(`${task.error} ${task.summary}`).not.toContain('not a local launch');
     expect(`${task.error} ${task.summary}`).not.toContain('was skipped');
-    expect(h.banners).toEqual([{ headline: 'Project setup did not finish', message: CODE_INTELLIGENCE_FAILED_SUMMARY, detail: task.error }]);
+    expect(h.banners).toEqual([named(h.root, 'Project setup did not finish', CODE_INTELLIGENCE_FAILED_SUMMARY, task.error)]);
     expect(h.logs.some((l) => l.message.includes(`refused`) && l.message.includes(refusal.code))).toBe(true);
     // REQ-WORKSPACE-084: a failure records nothing, so the task stays pending for the next open.
     expect(readInitializationState(h.agents).completed).toEqual([]);
@@ -870,7 +906,7 @@ describe('closing a workspace', () => {
     const h = harness({ applicable: false, writeHold: { current: failing } });
     const state = await h.coordinator.resolve(h.root, true);
     expect(state.resolutionFailed).toBe(true);
-    expect(h.banners).toEqual([{ headline: 'Project setup could not be checked', message: 'Rotaris could not work out whether this workspace still needs setting up. Runs are not blocked; you can check again.', detail: 'Error: link closed' }]);
+    expect(h.banners).toEqual([named(h.root, 'Project setup could not be checked', 'Rotaris could not work out whether this workspace still needs setting up. Runs are not blocked; you can check again.', 'Error: link closed')]);
     expect(h.logs).toContainEqual({ level: 'warn', message: `initialization: resolution failed for ${h.root} (Error: link closed)` });
   });
 
@@ -1134,7 +1170,7 @@ describe('a setup request the run host never answers', () => {
     expect(task.error).toBe(`Code intelligence could not complete this project's setup: ${SETUP_START_UNANSWERED_DETAIL} (${NO_REPLY.message})`);
     expect(task.summary).toBe(CODE_INTELLIGENCE_FAILED_SUMMARY);
     expect(task.error).not.toContain('ended without reporting an outcome');
-    expect(h.banners).toEqual([{ headline: 'Project setup did not finish', message: CODE_INTELLIGENCE_FAILED_SUMMARY, detail: task.error }]);
+    expect(h.banners).toEqual([named(h.root, 'Project setup did not finish', CODE_INTELLIGENCE_FAILED_SUMMARY, task.error)]);
     expect(h.logs.some((l) => l.level === 'warn' && l.message.includes('did not answer') && l.message.includes(NO_REPLY.message))).toBe(true);
     // REQ-WORKSPACE-084: a failure records nothing, so the task stays pending for the next open.
     expect(readInitializationState(h.agents).completed).toEqual([]);
@@ -1195,7 +1231,7 @@ describe('a setup whose finished status never arrives', () => {
     expect(h.logs).toContainEqual({ level: 'info', message: `initialization: ${CODE_INTELLIGENCE_TASK_ID} → failure — ${error}` });
     expect(readInitializationState(h.agents).completed).toEqual([]);
     expect(readInitializationState(h.agents).lastRun).toBeNull();
-    expect(h.banners).toEqual([{ headline: 'Project setup did not finish', message: CODE_INTELLIGENCE_FAILED_SUMMARY, detail: `${error}\nProject configuration: succeeded` }]);
+    expect(h.banners).toEqual([named(h.root, 'Project setup did not finish', CODE_INTELLIGENCE_FAILED_SUMMARY, `${error}\nProject configuration: succeeded`)]);
     // The queued run's setup starts, and is followed to its own outcome.
     expect(starts).toBe(2);
     h.push(completedSetup());

@@ -130,6 +130,26 @@ export function failureDetail(failed: readonly { readonly error: string; readonl
     .join('\n\n');
 }
 
+/**
+ * PD-WORKSPACE-003 (OQ-171, ruled 2026-10-06 under R-071): an initialization banner is an application notice, shown in every
+ * open window (ADR-0049's one notice store), so it names the project it is about. The project's name is its folder's — the
+ * root's last path segment, either separator — and the root itself where it has none (a drive or filesystem root).
+ */
+export function projectNameOf(root: string): string {
+  const trimmed = root.replace(/[\\/]+$/u, '');
+  const name = trimmed.split(/[\\/]/u).pop() ?? '';
+  return name === '' ? root : name;
+}
+
+/**
+ * PD-WORKSPACE-003: the banner's title is the requirement's headline followed by the project's name, `{headline}: {name}`,
+ * and its detail area (REQ-NOTIFY-005) starts with the project's folder, which tells two projects of one name apart.
+ */
+export function namedBanner(root: string, headline: string, detail: string): { readonly headline: string; readonly detail: string } {
+  const folder = `Project folder: ${root}`;
+  return { headline: `${headline}: ${projectNameOf(root)}`, detail: detail === '' ? folder : `${folder}\n\n${detail}` };
+}
+
 /** REQ-WORKSPACE-095: the two success summaries, by classification. */
 export const CODE_INTELLIGENCE_SUCCESS_CODE = 'Code intelligence is set up for this project and its symbols are indexed.';
 export const CODE_INTELLIGENCE_SUCCESS_NON_CODE = 'Code intelligence is set up for this project. No symbols were indexed because the workspace contains documentation only.';
@@ -720,7 +740,7 @@ export class InitializationCoordinator {
         return await this.viewFor(e);
       }
       this.deps.log(`initialization: resolution failed for ${e.root} (${String(cause)})`, 'warn');
-      this.deps.banner(RESOLUTION_FAILED_HEADLINE, RESOLUTION_FAILED_DETAIL, String(cause));
+      this.banner(e, RESOLUTION_FAILED_HEADLINE, RESOLUTION_FAILED_DETAIL, String(cause));
       await this.publish(e);
       return await this.viewFor(e);
     }
@@ -744,6 +764,15 @@ export class InitializationCoordinator {
     }
     void this.run(e, sets.runnable, false);
     return { ok: true };
+  }
+
+  /**
+   * REQ-WORKSPACE-102/103 under PD-WORKSPACE-003: the banner reaches every live window, so it says which project it is about
+   * (`namedBanner`); `message` stays the requirement's sentence.
+   */
+  private banner(e: WorkspaceEntry, headline: string, message: string, detail: string): void {
+    const named = namedBanner(e.root, headline, detail);
+    this.deps.banner(named.headline, message, named.detail);
   }
 
   private async run(e: WorkspaceEntry, tasks: readonly InitializationTask[], background: boolean): Promise<void> {
@@ -772,7 +801,7 @@ export class InitializationCoordinator {
       if (background && failed.length > 0 && !e.closed) {
         // REQ-WORKSPACE-103: a banner carrying the task's own summary, with the stated fallback.
         // The summary is a fixed sentence and says nothing of what went wrong; what did is the task's error and its steps.
-        this.deps.banner(BACKGROUND_FAILED_HEADLINE, failed[0]?.summary ?? BACKGROUND_FAILED_FALLBACK, failureDetail(failed));
+        this.banner(e, BACKGROUND_FAILED_HEADLINE, failed[0]?.summary ?? BACKGROUND_FAILED_FALLBACK, failureDetail(failed));
       }
       for (const t of result.report.tasks) this.deps.log(`initialization: ${t.id} → ${t.status}${t.error === '' ? '' : ` — ${t.error}`}`);
     } catch (cause) {
@@ -780,7 +809,7 @@ export class InitializationCoordinator {
       e.lastError = String(cause);
       e.report = { running: false, current: null, currentLabel: '', currentSteps: [], tasks: [], outcome: 'failed', error: String(cause) };
       this.deps.log(`initialization: the run broke down for ${e.root} (${String(cause)})`, 'warn');
-      if (background && !e.closed) this.deps.banner(BACKGROUND_FAILED_HEADLINE, `${BACKGROUND_FAILED_FALLBACK} ${BACKGROUND_BROKE_DOWN}`, String(cause));
+      if (background && !e.closed) this.banner(e, BACKGROUND_FAILED_HEADLINE, `${BACKGROUND_FAILED_FALLBACK} ${BACKGROUND_BROKE_DOWN}`, String(cause));
     } finally {
       e.running = null;
       e.attempting = new Set();

@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
+import { basename, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
@@ -231,7 +231,12 @@ if (/verification-fail/.test(ws4)) throw new Error(`a failed task recorded an ou
 if (!/code-intelligence-setup/.test(ws4)) throw new Error(withSetupFailure(`the task after the failure was not attempted:\n${ws4}`, log4));
 if (!/initialization: verification-fail → failure/.test(log4)) throw new Error(`the failure was not reported:\n${log4}`);
 if (!/Project setup did not finish/.test(log4)) throw new Error(`the background banner was not raised:\n${log4}`);
-results.failure = { workspaceFile: ws4 };
+// PD-WORKSPACE-003 (OQ-171): the banner reaches every open window, so it names the project it is about — its folder's name
+// after the headline, and the folder itself at the head of the detail area.
+const bannerLine = log4.split('\n').findIndex((line) => line.includes('"Project setup did not finish'));
+if (bannerLine < 0 || !log4.split('\n')[bannerLine].includes(`"Project setup did not finish: ${basename(s4.workspace)}"`)) throw new Error(`the background banner did not name its project (PD-WORKSPACE-003):\n${log4}`);
+if (!log4.includes(`Project folder: ${s4.workspace}`)) throw new Error(`the background banner's detail did not open on the project's folder (PD-WORKSPACE-003):\n${log4}`);
+results.failure = { workspaceFile: ws4, banner: log4.split('\n')[bannerLine] };
 
 /* --------------------------------------------------------------------------------------------- *
  * 5. REQ-WORKSPACE-101/114 — Settings › Project states the card in exactly one of six states, with

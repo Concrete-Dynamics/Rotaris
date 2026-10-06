@@ -8893,7 +8893,15 @@ opened them, through an appended store migration, so a crash record settles exac
 could not be checked" error surface; REQ-WORKSPACE-013, "The replacement window SHALL resolve initialization for its own
 workspace independently"; PD-SHELL-001's two main windows, one per project. Raised 2026-10-01 by the repair of
 [`initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`](../defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md);
-raised as OQ-170 on its branch and renumbered at the merge, OQ-170 having been taken on `main` meanwhile. Open.)*
+raised as OQ-170 on its branch and renumbered at the merge, OQ-170 having been taken on `main` meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the banners stay the application's, shown in
+every window, and name the project they concern — by [`PD-WORKSPACE-003`](../product/directives.md#pd-workspace-003), which
+narrows REQ-WORKSPACE-102 and REQ-WORKSPACE-103. Both banners are named, the failed resolution's as well as the failed
+background run's, since both reach every window: the title reads `{headline}: {the folder's name}`, the message stays the
+requirement's sentence, and the detail area opens on the project's full folder path, which tells two projects of one name
+apart. Built the same day (`namedBanner` in `apps/desktop/src/main/initialization.ts`; `initialization.test.ts`;
+`init-proof` scenario 4).
 
 Initialization now answers, records and publishes for each window's own workspace: channel 12 reaches only the windows
 holding the workspace the state is about. Its two banners do not travel on channel 12. They are notices, and the
@@ -8917,7 +8925,13 @@ application is closed while setup is running, nothing the step launched SHALL st
 2026-10-01 by the repair of
 [`an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`](../defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md),
 on its verifier's finding; raised as OQ-171 on its branch and renumbered at the merge, OQ-170 having been taken on `main`
-meanwhile. Open.)*
+meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** every stop of a setup step gets the 2 s grace
+before the force-kill — a close, a workspace switch's cancellation, Cancel and, by the same reading, an exhausted stage
+budget, which REQ-WORKSPACE-092 bounds by the same 5 s — so REQ-WORKSPACE-092's 5 s holds at each; by
+[`PD-MCP-001`](../product/directives.md#pd-mcp-001), which narrows REQ-MCP-099's 5 s grace. Built the same day
+(`SETUP_TERMINATE_GRACE_MS` in `packages/mcp/src/setup.ts`, equal to `SETUP_SHUTDOWN_GRACE_MS`; `setup.test.ts`).
 
 At an orderly quit the window's close cancels the initialization run, so the step in flight is asked to terminate under
 REQ-MCP-099's cancellation: 5 s, then the force-kill. The run host's `shutdown` follows within milliseconds (measured

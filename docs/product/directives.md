@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Forty-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Fifty-one.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -3724,6 +3724,84 @@ section of the file to keep in step with the manifest.
 > **Extends:** REQ-STARTUP-142
 
 *Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-92.*
+
+---
+
+<a id="pd-workspace-003"></a>
+
+### PD-WORKSPACE-003 — a project-setup banner names the project it is about
+
+**The banner.** The two initialization banners — a failed background run's "Project setup did not finish"
+(REQ-WORKSPACE-103) and a failed resolution's "Project setup could not be checked" (REQ-WORKSPACE-102) — SHALL stay
+application notices, raised once and shown in every open main window as every other notice is, and SHALL name the project
+they concern. Their title SHALL read the requirement's headline, a colon and a space, and the project's name:
+`Project setup did not finish: atlas-billing`. The project's name is the last path segment of the project's folder, and
+the folder's full path where it has no last segment (a drive or filesystem root). The message SHALL be the sentence the
+requirement fixes, unchanged — the task's own summary or its fallback, and for a run that broke down entirely "Runs are not
+blocked; you can try again."; for a failed resolution "Rotaris could not work out whether this workspace still needs setting
+up. Runs are not blocked; you can check again." The banner's detail area (REQ-NOTIFY-005) SHALL begin with the line
+`Project folder: <the folder's full path>`, followed by a blank line and the technical text the requirement's surface
+already carried, so two projects whose folders share a name are told apart there.
+
+**What is unchanged.** Which window shows the banner (every one, ADR-0049's one notice store), when it is raised, its
+severity and every other surface of the two requirements. The in-window error surface of a failed resolution — the Project
+section's "Project setup could not be checked" and its "Check again" (REQ-WORKSPACE-102) — is the window's own and reads
+the requirement's headline as it stands. A banner for a workspace no window holds any more is still not raised (OQ-141).
+
+**Why, and what it costs.** With two main windows open (PD-SHELL-001) a project's failed setup raised "Project setup did not
+finish" in the other project's window too, carrying a summary that says "this project" and nothing saying which; the user
+could not tell which project to try again. Showing the banner only in the windows holding the project would make the
+application's single notice store work per window, which is a larger change than the confusion is worth; naming the
+project is a text change that removes it. What it costs: the title is no longer the requirement's fixed string, so a
+reader or a test matching the headline whole must match its start; and a long folder name lengthens the title.
+
+> **Narrows:** REQ-WORKSPACE-102, REQ-WORKSPACE-103
+
+*Raised by the owner, 2026-10-06, ruling OQ-171 as recommended; logged as [R-071](requests.md#r-071).*
+
+> **First execution, 2026-10-06.** Built the day it was written: `InitializationCoordinator.banner`, `namedBanner` and
+> `projectNameOf` in `apps/desktop/src/main/initialization.ts`. **What was measured.** Three cases in
+> `initialization.test.ts`'s "a banner names its project" block and the seven earlier banner assertions, each red on the code
+> before the change; `init-proof` scenario 4 requires the background banner's title to name the scenario's folder and its
+> detail to open on the folder. **What was not measured.** No built-app run with two main windows open photographed the
+> banner in the window that does not hold the project. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-mcp-001"></a>
+
+### PD-MCP-001 — a code-intelligence setup step gets 2 seconds to exit at every stop
+
+**The grace.** When a code-intelligence setup step is stopped — its stage budget exhausted, the setup cancelled (the
+user's Cancel, or the cancellation a workspace switch or a window's close makes), or the application closed while it runs
+— the child SHALL be asked to terminate, given **2 seconds** to exit, and then force-killed, on Windows the whole process
+tree and on POSIX the step's whole process group. One grace serves every stop; no stop gives the step longer.
+
+**What is unchanged.** Everything else REQ-MCP-099 states: the three steps, their budgets, the 0.25 s polling, the UTF-8
+encoding, the ask before the force-kill, a budget-exceeded step reported failed, the 400-character output and the
+non-retryable "not a local launch" failure. REQ-WORKSPACE-092's bound — nothing the step launched still running 5 s after
+the stop — and REQ-WORKSPACE-109's 5000 ms close are the limits the 2 s is chosen to meet; neither is changed.
+
+**Why, and what it costs.** REQ-MCP-099 gives the step 5 seconds before the force-kill, and REQ-WORKSPACE-092 requires
+everything it launched gone 5 s after the stop. Both cannot hold for a step that uses its whole grace: the force-kill,
+its settling and the poll come after the 5 s. At a close the build already cut the grace to 2 s, measured inside both
+bounds (a step and a descendant that both ignore SIGTERM, force-killed, the quit 2234 ms and 2274 ms; OQ-172). A switch
+and a Cancel kept the full 5 s, and on Windows, the release platform, the step outlived the 5 s bound — 5.489 s after a
+switch and 5.603 s after a Cancel (`workspace-proof`, 2026-10-02). One short grace is simpler and already proven at the
+close. What it costs: a runtime that needs more than 2 s to wind down cleanly after being asked is force-killed sooner,
+and may leave a partly written project or index for the next setup to redo.
+
+> **Narrows:** REQ-MCP-099
+
+*Raised by the owner, 2026-10-06, ruling OQ-172 as recommended; logged as [R-071](requests.md#r-071).*
+
+> **First execution, 2026-10-06.** Built the day it was written: `SETUP_TERMINATE_GRACE_MS` in
+> `packages/mcp/src/setup.ts` is 2 s, and `SETUP_SHUTDOWN_GRACE_MS` is the same grace. **What was measured.** Three cases in
+> `setup.test.ts` — the one grace, a cancelled step that ignores the ask force-killed 2 s after the cancellation, and a step
+> past its budget force-killed 2 s after it — each red on the code before the change (5 s, 5150 ms and 5762 ms on this
+> Linux host). **What was not measured.** The Windows `workspace-proof` that measured the misses was not re-run: this host
+> is Linux. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

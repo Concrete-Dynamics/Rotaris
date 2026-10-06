@@ -43,6 +43,12 @@ import { z } from 'zod';
  *    `patternProperties` name that is no such expression (which properties it governs cannot be known), the schema is not
  *    compiled. The walk goes by keyword position, so a property NAMED `pattern` or `oneOf` is a property, not the keyword.
  *
+ * **`$async` is removed wherever it stands as a keyword.** It is ajv's own keyword, not JSON Schema's, so any other reader of
+ * the server's schema ignores it; honoured, ajv compiled an asynchronous validator whose Promise the refinement read as a
+ * pass and whose rejection for an invalid call nothing handled, so every call was sent and the run host was left a stray
+ * rejection (the fin18 verifier's probe,
+ * docs/defects/fixed/an-advertised-schema-marked-async-compiles-a-check-that-never-refuses.md).
+ *
  * **A schema that cannot be compiled leaves the tool callable.** The MCP requirements drop a discovered tool for an empty
  * or non-string name only (REQ-MCP-052), and a persona's callable set is every granted tool that survives
  * `disabled_tools` (REQ-MCP-055, REQ-MCP-059); nothing there drops one for a schema this product's validator cannot read (an
@@ -87,6 +93,8 @@ function withoutUnreadPatterns(node: unknown, walk: Walk): unknown {
   const out: Json = {};
   for (const [key, value] of Object.entries(node)) {
     if (NOT_MONOTONE.has(key)) walk.notMonotone ??= key;
+    // ajv's own keyword, not JSON Schema's: honoured, it compiles a validator that returns a Promise (see the header).
+    if (key === '$async') continue;
     if (key === 'pattern' && typeof value === 'string' && !isUnicodeRegExp(value)) {
       walk.unreadPatterns += 1;
       continue;
@@ -151,7 +159,14 @@ export function advertisedSchemaCheck(inputSchema: Readonly<Record<string, unkno
   const schema = object.superRefine((value, ctx) => {
     let errors: readonly ErrorObject[];
     try {
-      if (validate(value)) return;
+      const verdict: unknown = validate(value);
+      // A check that answers anything but a boolean is not a check this refinement can read; `$async` is stripped above,
+      // so this is a guard, and a Promise it might still hold is given a handler rather than left to reject unheard.
+      if (typeof verdict !== 'boolean') {
+        if (verdict instanceof Promise) verdict.catch(() => undefined);
+        return;
+      }
+      if (verdict) return;
       errors = validate.errors ?? [];
     } catch {
       return; // A check that cannot run is no refusal: the object check stands, as for a schema that would not compile.

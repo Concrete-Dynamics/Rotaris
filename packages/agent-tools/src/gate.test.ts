@@ -975,6 +975,38 @@ describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCh
     expect(named.sent).toEqual([]);
   });
 
+  /*
+   * `$async` is ajv's keyword, not JSON Schema's. Honoured, it compiled a validator returning a Promise, which the check
+   * read as a pass, and whose rejection for an invalid call nothing handled (the fin18 verifier's probe;
+   * docs/defects/fixed/an-advertised-schema-marked-async-compiles-a-check-that-never-refuses.md).
+   */
+  it('an `$async` schema is read as JSON Schema reads it: checked synchronously, an invalid call refused, no rejection left unhandled', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const h = advertisedHarness({ $async: true, type: 'object', required: ['needle'], properties: { needle: { type: 'string' }, at: { $async: true, type: 'object', required: ['line'] } } });
+      expect(h.check.compiled).toBe(true);
+      const refused = await h.gate.dispatch(h.call('amend_note', { memory_name: 'm' }), new AbortController().signal);
+      expect(refused.status).toBe('failed');
+      expect(refused.text).toMatch(/needle: required property is missing/);
+      const nested = await h.gate.dispatch(h.call('amend_note', { needle: 'n', at: {} }), new AbortController().signal);
+      expect(nested.text).toMatch(/at\.line: required property is missing/);
+      expect((await h.gate.dispatch(h.call('amend_note', { needle: 'n' }), new AbortController().signal)).status).toBe('ok');
+      expect(h.sent).toEqual([{ needle: 'n' }]);
+      // The refinement itself never yields a Promise, whatever `validate` returns.
+      expect(h.check.schema.safeParse({ other: 1 }).success).toBe(false);
+      // A property NAMED `$async` is a property, not the keyword: its schema still binds.
+      const named = advertisedSchemaCheck({ type: 'object', required: ['$async'], properties: { $async: { type: 'boolean' } } }).schema;
+      expect(named.safeParse({}).success).toBe(false);
+      expect(named.safeParse({ $async: true }).success).toBe(true);
+      await new Promise((resolve) => { setImmediate(resolve); });
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
   it('a schema the validator cannot compile keeps the object check alone, and says why', async () => {
     const h = advertisedHarness({ $schema: 'http://json-schema.org/draft-04/schema#', type: 'object', required: ['b'] });
     expect(h.check).toMatchObject({ compiled: false });

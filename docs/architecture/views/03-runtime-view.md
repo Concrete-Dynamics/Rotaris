@@ -569,7 +569,9 @@ the default until 2026-09-16, such a field is advertised as required and the pro
 enforce. The gate checks a call against the schema the model was handed, so an MCP executor's `schema` is
 `advertisedSchemaCheck(inputSchema)` (`agent-tools/advertised-schema.ts`): the object record refined by ajv 8's reading
 of the server's schema, the engine the MCP SDK bundles, with the dialect taken from `$schema` as the SDK takes it (none or
-2020-12, 2019-09, draft-07/06). `format` is an annotation; a `pattern` that is no regular expression under the `u` flag is
+2020-12, 2019-09, draft-07/06). `format` is an annotation; `$async`, ajv's own keyword rather than JSON Schema's, is
+removed before compiling, so the check stays synchronous (until fin21 it compiled a Promise-returning validator that never
+refused and left its rejection unhandled); a `pattern` that is no regular expression under the `u` flag is
 removed where removing it can only widen what the schema accepts (no `not`, `oneOf`, `if` or `maxContains` in the schema),
 and otherwise the schema is not compiled. A call that fails it is refused at the gate exactly as a built-in tool's schema
 failure is (REQ-TOOLS-032; `invalid_request`, a `tool_error` issue) and never sent; a valid call is sent as written,

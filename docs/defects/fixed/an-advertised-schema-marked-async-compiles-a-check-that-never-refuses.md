@@ -15,7 +15,7 @@ Found by the fin18 verifier's probes of the advertised-schema check and recorded
 
 - `REQ-TOOLS-032`: a payload still schema-invalid after repair is returned to the model as a recoverable error and not
   executed. A server schema carrying `$async` has every invalid call sent to the server instead (the defect G3 repaired,
-  [`fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md`](fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md),
+  [`an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md`](an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md),
   back for these schemas), and the run is put at risk by the stray rejection, where REQ-TOOLS-032 says the run is never
   ended by a schema-invalid call.
 
@@ -24,3 +24,16 @@ Found by the fin18 verifier's probes of the advertised-schema check and recorded
 - `packages/agent-tools/src/advertised-schema.ts:147` — `engineFor(readable).compile(readable)`, which honours `$async`.
 - `packages/agent-tools/src/advertised-schema.ts:154` — `if (validate(value)) return;`, true for a Promise.
 - `packages/agent-tools/src/gate.test.ts` — the advertised-schema cases, none with `$async`.
+
+## Repaired — 2026-10-06 (fin21)
+
+`withoutUnreadPatterns`, the walk that already reads the schema by keyword position before compiling, drops `$async`
+wherever it stands as a keyword, so ajv compiles the synchronous validator JSON Schema describes; a property *named*
+`$async` is a property and still binds. The refinement now reads `validate`'s answer as a boolean only: anything else is
+no refusal, and a Promise it might still be handed is given a handler, so no rejection can be left unheard. The header of
+`advertised-schema.ts` says so.
+
+Pinned by "an `$async` schema is read as JSON Schema reads it: checked synchronously, an invalid call refused, no
+rejection left unhandled" in `packages/agent-tools/src/gate.test.ts`: a root and a nested `$async`, an invalid call
+refused at each level, a valid one sent as written, and no `unhandledRejection` seen. Against the code before the repair
+it fails with vitest's "Unhandled Rejection — Error: validation failed" from `advertised-schema.ts:154`.

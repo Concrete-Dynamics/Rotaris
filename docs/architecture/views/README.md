@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**An advertised schema's `$async` is not honoured (REQ-TOOLS-032; fin21).** `advertisedSchemaCheck` drops ajv's own `$async`
+keyword before compiling and reads the validator's answer as a boolean only, so a server schema carrying it is checked
+synchronously and refuses an invalid call. The **runtime view**'s `toolSpec` paragraph says so. No package, edge, process,
+channel, command or store column changed.
+
 **A recovered session's readers present the correction entry (OQ-60, R-071; fin20).** `sessionOutcomeOf` (`run/summary.ts`)
 is what a session's record carries as its `summary` and `summary.md` as its Outcome block: REQ-ORCH-082's columns, except
 while the session is `interrupted`, when the latest `session.interrupted_recovered` entry stands in their place. The repair

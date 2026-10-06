@@ -38,6 +38,12 @@ describe('run-host/loop — the loop classifier\'s model (REQ-ORCH-100/103, OQ-1
     await c.classify(activation, new AbortController().signal);
     expect(inputs.map((i) => i.model.modelId)).toEqual(['small', 'override']);
   });
+  it('sends the reasoning level the helper resolved with the override, not the slot\'s own', async () => {
+    const { b, inputs } = backend();
+    const c = createLoopClassifier(deps(b, () => ({ ok: true, model: M('override'), thinking: 'high' })))!;
+    await c.classify(activation, new AbortController().signal);
+    expect(inputs.map((i) => i.thinking)).toEqual(['high']);
+  });
   it('makes no call on a pair held out of quota, and fails with the reason', async () => {
     const { b, inputs } = backend();
     const c = createLoopClassifier(deps(b, () => ({ ok: false, reason: 'p/small is held out of quota for this session' })))!;

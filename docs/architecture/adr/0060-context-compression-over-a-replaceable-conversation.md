@@ -507,3 +507,14 @@ with the reason (`due()` answers false for the automatic one). A configured `com
 then compresses on the model chosen at its trigger; a manual pass in the span calls nothing — each red before) and by
 `compression-proof`'s `excluded-before-pass` scenario (red before: a pass at alpha's 600-token trigger; after: none, the root
 on beta, whose trigger is 60,000).
+
+*Ruled 2026-10-06 (OQ-189, [R-071](../../product/requests.md#r-071), [`PD-MONITOR-005`](../../product/directives.md#pd-monitor-005)),
+reported back in place; the sentence above that a configured `compressor.model` "is still called as configured" is kept as it
+was written and no longer holds.* A configured compressing model is now a helper call: it is resolved through the session's
+overrides at each pass (`Run.helperModel`, `helperChoiceOf`), and where the pair it ends on is held out of quota the pass
+compresses on the agent's own model (`compressing` in `Run.compressionFor`), REQ-MONITOR-080's default. `withheld` is read for
+whichever model the pass would call, so a manual pass whose configured compressor and agent pair are both excluded makes no
+call and fails naming both (before: `if (c.model) return null`, and the configured pair was called). Measured in
+`ladder.test.ts` (a configured compressor held out of quota yields to the root's own model; one following a wait choice's
+override; a manual pass with both excluded calls nothing, red with the old guard) and by `compression-proof`'s
+`after-a-move` scenario (the compressor's model `scripted/beta`, before `scripted/alpha`).

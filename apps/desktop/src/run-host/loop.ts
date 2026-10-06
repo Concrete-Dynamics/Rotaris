@@ -65,7 +65,7 @@ export function createLoopClassifier(deps: LoopClassifierDeps): LoopClassifier |
 
   return {
     async classify(activation: LoopActivation, signal: AbortSignal): Promise<LoopClassification> {
-      const helper = deps.helperModel?.({ model: configured.model, thinking: deps.thinking }) ?? { ok: true as const, model: configured.model };
+      const helper = deps.helperModel?.({ model: configured.model, thinking: deps.thinking }) ?? { ok: true as const, model: configured.model, thinking: deps.thinking };
       if (!helper.ok) throw new Error(`the loop classifier's model ${helper.reason}; no classification call was made`);
       const selected = { ...configured, model: helper.model };
       const resolveCredential = deps.credentialFor(selected.model);
@@ -75,7 +75,8 @@ export function createLoopClassifier(deps: LoopClassifierDeps): LoopClassifier |
         const report = await deps.backend.runTurn({
           persona: 'loop-supervisor', systemPrompt: SYSTEM_PROMPT,
           messages: [{ role: 'user', content: [{ kind: 'text', text: `${prompt}\n\n${INSTRUCTION[rung]}` }] }], tools: [], model: selected.model,
-          thinking: deps.thinking, timeoutMs: deps.modelTimeoutMs, retries: 0, resolveCredential,
+          // The helper's level: the override's model at its own configured level, as `helperChoiceOf` resolves it (PD-MONITOR-005).
+          thinking: helper.thinking, timeoutMs: deps.modelTimeoutMs, retries: 0, resolveCredential,
           ...(output ? { output } : {}),
         }, { delta: () => undefined, reasoning: () => undefined, usage: () => undefined }, signal);
         if (report.status === 'failed') {

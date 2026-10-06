@@ -305,6 +305,41 @@ describe('engine/children/report — every construction site carries them', () =
       expect(r!.errors.at(-1)).toMatchObject({ type: 'summary_failure' });
     });
   });
+
+  /*
+   * OQ-189's ruling (R-071, PD-MONITOR-005): where the summarising model and the model the child ran on are both held out of
+   * quota, the session's resolver answers `withheld` and the pass makes no call: the report is the fallback one, with the
+   * resolver's reason. Until 2026-10-06 the resolver could only answer a model, and the excluded pair was called.
+   */
+  describe('OQ-189 / PD-MONITOR-005: a summariser the session withholds makes no call', () => {
+    const own = { model: { providerId: 'b', modelId: 'b1', dialect: 'chat' as const }, thinking: 'unset' as const };
+    it('a resolver answering withheld: no summarising call, and the fallback report names the reason', async () => {
+      const calls: unknown[] = [];
+      const asked: unknown[] = [];
+      const s: SummariserDeps = {
+        backend: { runTurn: async (req: unknown) => { calls.push(req); return { status: 'succeeded' as const, usage: { input: 1, output: 1 }, text: '{"summary":"called"}' }; } } as never,
+        model: { providerId: 'a', modelId: 'a1', dialect: 'chat' }, thinking: 'unset', timers: new FakeClock().timers, credentialFor: () => async () => 'k',
+        resolve: (choice, agent) => { asked.push({ choice, agent }); return { withheld: 'the summarising model a/a1 is held out of quota, and so is the model the agent ran on; no summarising call was made' }; },
+      };
+      const r = await produceReport({ ...input({ messages, toolCallCount: 2 }), agentModel: own }, s, new AbortController().signal);
+      expect(calls).toHaveLength(0);
+      // The resolver is asked with the configured summariser and the child's own model, so it can fall back to the latter.
+      expect(asked).toEqual([{ choice: { model: s.model, thinking: 'unset' }, agent: own }]);
+      expect(r!.summary).toBe('wrote the documents');
+      expect(r!.errors.at(-1)).toEqual({ type: 'summary_failure', message: 'the summarising model a/a1 is held out of quota, and so is the model the agent ran on; no summarising call was made' });
+    });
+    it('a resolver answering the child\'s own model: the one call goes to it', async () => {
+      const models: string[] = [];
+      const s: SummariserDeps = {
+        backend: { runTurn: async (req: { model: { modelId: string } }) => { models.push(req.model.modelId); return { status: 'succeeded' as const, usage: { input: 1, output: 1 }, text: '{"summary":"on b1"}' }; } } as never,
+        model: { providerId: 'a', modelId: 'a1', dialect: 'chat' }, thinking: 'unset', timers: new FakeClock().timers, credentialFor: () => async () => 'k',
+        resolve: (_choice, agent) => agent ?? { withheld: 'none' },
+      };
+      const r = await produceReport({ ...input({ messages, toolCallCount: 2 }), agentModel: own }, s, new AbortController().signal);
+      expect(models).toEqual(['b1']);
+      expect(r!.summary).toBe('on b1');
+    });
+  });
 });
 
 /**

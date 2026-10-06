@@ -588,7 +588,8 @@ hands its `countUsage` to the run host's two classifiers, through `PreflightCont
 and has no run totals to join. Until 2026-09-27 these four calls discarded their usage. **Which model they call
 (PD-MONITOR-005, OQ-189, ruled 2026-10-06).** Every one of these helper calls, the analyst's included, resolves its
 configured model through the session's memory at the call (`helperChoiceOf`, `run/resilience.ts`; `Run.helperModel`):
-the overrides followed, and not `ok` where the pair it ends on is held out of quota. `Sessions` hands the reader to the run
+the overrides followed — the model at the level its configured key carries, which the call sends (the loop classifier's
+`helper.thinking` since the plan's repair round 1) — and not `ok` where the pair it ends on is held out of quota. `Sessions` hands the reader to the run
 host as `PreflightContext.helperModel`, the `supervisor` factory's fourth argument and `onRunResult`'s third; the intent
 classifier (`classifyIntent`'s `helperModel`) and the loop classifier (`createLoopClassifier`'s, read at each
 classification) then make no call and proceed as on a failed classification, the analyst is skipped with a log line

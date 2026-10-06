@@ -2096,6 +2096,40 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect((await sessions.running(sid)!).status).toBe('completed');
       expect(compressorModels(client)).toEqual([]);
     });
+
+    /*
+     * OQ-189's ruling (R-071, PD-MONITOR-005): a configured compressor held out of quota yields to the agent's own model, and
+     * where that one is held out of quota too the pass makes no call and fails naming both. Until 2026-10-06 a configured
+     * compressor was never withheld (`if (c.model) return null`): the pass called the excluded configured pair.
+     */
+    it('a manual pass with a configured compressor whose pair and the agent\'s own are both held out of quota calls no model and names both', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'g1', name: 'glob', args: {} }], 'looking', { input: 20, output: 5 });
+          if (turn === 2) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }], 'delegating', { input: 20, output: 5 });
+          if (turn === 3) return { parts: [{ hold: held }, ...answer('waiting on the child', { input: 20, output: 5 }).parts] };
+          return answer(`root ${turn}`);
+        }
+        return turn === 1 ? failing(quota()) : answer('I did it.');
+      };
+      const { sessions, client } = sessionsWith(script, { catalogue, delegation: true, tool: glob, childTimeoutMs: 600_000, compressorModel: A1, ...limits });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      const childEnded = () => timeline(sid).includes('child_end');
+      for (let i = 0; i < 60 && !childEnded(); i++) await tick();
+      expect(childEnded()).toBe(true);
+      // The child's quota answer excluded a1: the configured compressor's pair and the root's, whose call on it is in flight.
+      const r = await sessions.controlAsync({ op: 'forceCompression', sessionId: sid, args: {} });
+      // Before: the configured compressor was called on a1 for the root.
+      expect(compressorModels(client)).toEqual([]);
+      expect(r).toEqual({ ok: true, compression: { compressed: 0, unchanged: 0, failed: [{ agent: 'orchestrator', reason: expect.stringMatching(/^a\/a1, the model this agent runs on, is held out of quota for this session, as is the configured compressing model; no compressing call is made on it/) }] } });
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(compressorModels(client)).toEqual([]);
+    });
   });
 
   it('an unresponsive model: no event within llm_response_timeout closes the call and re-runs it once on the fallback; without a fallback the call keeps waiting (REQ-ORCH-090, REQ-CONFIG-114)', async () => {

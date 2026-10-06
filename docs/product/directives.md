@@ -4807,6 +4807,15 @@ and a run whose analyst slot is excluded produces no improvement proposals.
 > previous intent over, as REQ-ORCH-012 does for any fallback) and `two-waits` (the relaunch's
 > classifier and analyst on gamma, the override). Not driven in the built app: the loop classifier, which no proof
 > activates with an excluded slot. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Added at the plan's repair round 1 (the verifier's findings):** the two no-call clauses had no case. Now pinned: in
+> `children/report.test.ts`, a resolver answering `withheld` makes the summariser call nothing and write the fallback report
+> with the reason (red with the `withheld` branch removed), and one answering the child's own model sends the one call there;
+> in `ladder.test.ts`, a manual pass whose configured compressor and the root's own pair are both held out of quota calls no
+> model and fails naming both (red with the old `if (c.model) return null`). The loop classifier now sends the reasoning
+> level the reader resolved with an override (`helper.thinking`; before, the slot's own), pinned in `loop.test.ts`.
+> [`adr/0060`](../architecture/adr/0060-context-compression-over-a-replaceable-conversation.md) carries the ruling in place,
+> and the engine glossary names the group (**Helper call**, `packages/engine/CONTEXT.md`).
 
 ---
 

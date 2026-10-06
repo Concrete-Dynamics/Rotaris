@@ -253,6 +253,14 @@ A run at rest because a provider's quota is exhausted, carrying the waiting agen
 wait duration, and presented distinctly from an ordinary pause. — `REQ-MONITOR-303`,
 `REQ-NOTIFY-263`
 
+**Helper call**:
+A model call the run makes on a slot's configured model rather than as an agent's own step: the intent classifier, the loop
+supervisor's classifier, a compression pass on a configured compressing model, the child-report summariser and the post-run
+improvement analyst. Its model is resolved through the session's model state at each call. The specification has no word
+for the group; the directive that rules it names it. — `PD-MONITOR-005` (narrowing `REQ-ORCH-009`, `REQ-ORCH-114`,
+`REQ-ORCH-100`, `REQ-MONITOR-080`, `REQ-CONFIG-065`, `REQ-LIBRARY-037`), OQ-189
+_Avoid_: auxiliary call (OQ-189's word before the ruling), side call
+
 **Cost qualifier**:
 What a run's cost total rests on, recorded with it: `unknown` (no request has a figure), `incomplete` (some
 do, some do not), `reported` (every figure was the provider's) or `configured` (every request priced, at least

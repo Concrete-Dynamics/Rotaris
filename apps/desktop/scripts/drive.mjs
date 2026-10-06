@@ -10,6 +10,7 @@
  *   pnpm app:drive start --env=ROTARIS_CAPTURE_PROJECT_FOLDER=D:\a\folder   (repeatable; hands a seam over)
  *   pnpm app:drive waitFor ".board" [--timeout=15000]
  *   pnpm app:drive click ".nav-item" --text=Overview
+ *   pnpm app:drive click ".agent-table__row .btn" --text="Pop out" --settle   (pressed once it holds still; fails a press that missed)
  *   pnpm app:drive type "hello" --enter
  *   pnpm app:drive chord Ctrl+K
  *   pnpm app:drive inspect ".composer"
@@ -158,7 +159,7 @@ switch (command) {
     await withClient((d) => d.waitFor(positional[0], { ...on, ...(flag('text', undefined) === undefined ? {} : { text: String(flag('text')) }), ...(flag('timeout', undefined) === undefined ? {} : { timeoutMs: Number(flag('timeout')) }) }));
     break;
   case 'click':
-    await withClient((d) => d.click(positional[0], { ...on, ...(flag('text', undefined) === undefined ? {} : { text: String(flag('text')) }), ...(flag('timeout', undefined) === undefined ? {} : { timeoutMs: Number(flag('timeout')) }) }));
+    await withClient((d) => d.click(positional[0], { ...on, ...(flag('text', undefined) === undefined ? {} : { text: String(flag('text')) }), ...(flag('timeout', undefined) === undefined ? {} : { timeoutMs: Number(flag('timeout')) }), ...(flag('settle', false) === true ? { settle: true } : {}) }));
     break;
   case 'type':
     await withClient((d) => d.type(positional[0] ?? '', { ...on, enter: flag('enter', false) === true }));

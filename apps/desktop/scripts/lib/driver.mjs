@@ -234,6 +234,29 @@ export async function until(probe, accept, { timeoutMs = 15_000, intervalMs = 15
 }
 
 /**
+ * A real click that is known to have reached its target: the driver's settled click (`settle: true` — pressed once the
+ * match holds still and is the element at its own centre, and refused when the press met something else), repeated
+ * only when a press is refused for not landing, up to `attempts` presses in all. Any other refusal — nothing matched,
+ * a match that never settled — is thrown at once. Resolves with the driver's reply and every press that missed, so a
+ * proof can say a click needed a second press rather than hide it
+ * (`docs/defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`).
+ */
+export async function clickLanded(driver, selector, { text, timeoutMs = 15_000, attempts = 3 } = {}) {
+  const missed = [];
+  for (;;) {
+    try {
+      const reply = await driver.click(selector, { ...(text === undefined ? {} : { text }), timeoutMs, settle: true });
+      return { ...reply, missed };
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      if (!/ did not land: /.test(message)) throw cause;
+      missed.push(message);
+      if (missed.length >= attempts) throw new Error(`${missed.length} press(es) on ${JSON.stringify(selector)} did not land: ${missed.join(' / ')}`);
+    }
+  }
+}
+
+/**
  * Choose `value` in the control at `selector`, whichever of the product's two chooser kinds it is — waiting for it
  * first. A native `<select>` takes the value through the prototype setter and a `change` event (what React listens
  * to), and the choice is confirmed once the control shows it; the design system's `SearchableSelect` is a button and a listbox, so it is driven as a person drives it: a real

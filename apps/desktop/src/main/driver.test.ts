@@ -20,13 +20,16 @@ interface FakeWindow {
   readonly inputs: { type: string; keyCode?: string; modifiers?: string[] }[];
 }
 
-function fakeWindow(paints: 'at-once' | 'never', id = 7): { win: BrowserWindow; state: FakeWindow } {
+/** What a stand-in window answers to a script other than the paint wait; `undefined` falls back to `null`. */
+type Answer = (script: string) => unknown;
+
+function fakeWindow(paints: 'at-once' | 'never', id = 7, answer: Answer = () => null): { win: BrowserWindow; state: FakeWindow } {
   const state: FakeWindow = { calls: [], paint: null, inputs: [] };
   const webContents = {
     id,
     executeJavaScript: (script: string): Promise<unknown> => {
       state.calls.push(script === PAINTED_SCRIPT ? 'paint' : 'script');
-      if (script !== PAINTED_SCRIPT) return Promise.resolve(null);
+      if (script !== PAINTED_SCRIPT) return Promise.resolve(answer(script) ?? null);
       if (paints === 'at-once') return Promise.resolve(true);
       return new Promise((resolve) => { state.paint = () => resolve(true); });
     },
@@ -44,14 +47,14 @@ afterEach(() => {
   for (const o of open.splice(0)) { o.socket.destroy(); o.driver.close(); rmSync(o.dir, { recursive: true, force: true }); }
 });
 
-async function harness(paints: 'at-once' | 'never' = 'at-once', auxiliary: () => readonly AuxiliaryWindow[] = () => []) {
+async function harness(paints: 'at-once' | 'never' = 'at-once', auxiliary: () => readonly AuxiliaryWindow[] = () => [], answer?: Answer) {
   const dir = mkdtempSync(join(tmpdir(), 'rotaris-driver-'));
   const endpointFile = join(dir, 'endpoint.json');
   const clock = new FakeClock();
   const ended: string[] = [];
   const deferred: number[] = [];
   const commanded: number[] = [];
-  const { win, state } = fakeWindow(paints);
+  const { win, state } = fakeWindow(paints, 7, answer);
   const deps: DriverDeps = {
     // The one main window, by index 0, by a suffix of its workspace path, or as the active window.
     window: (which) => (which === undefined || which === '0' || '/w'.endsWith(which) ? win : null),
@@ -241,5 +244,74 @@ describe("the driver's type (REQ-CHAT-001; docs/defects/fixed/the-driver-and-the
     const h = await harness();
     await h.send('type', { text: 'one\ntwo', enter: true });
     expect(h.state.inputs).toEqual([...'one'].flatMap(key).concat(shiftEnter, [...'two'].flatMap(key), enter));
+  });
+});
+
+describe("the driver's settled click (docs/defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md)", () => {
+  const box = (y: number) => ({ x: 1312, y, width: 61, height: 24, text: 'Pop out' });
+  /** The window as driver-proof's 13c met it: each settle measurement answered in turn, then what the press landed on. */
+  function window13c(settles: unknown[], landing: unknown = { landed: true, hit: 'button.btn "Pop out"' }) {
+    const scripts: string[] = [];
+    const answer: Answer = (script) => {
+      if (script.startsWith('/* driver:settle */')) { scripts.push('settle'); return settles.length > 1 ? settles.shift() : settles[0]; }
+      if (script.startsWith('/* driver:landing */')) { scripts.push('landing'); return landing; }
+      scripts.push('locate');
+      return box(199);
+    };
+    return { answer, scripts };
+  }
+  const presses = (inputs: FakeWindow['inputs']) => inputs.filter((e) => e.type === 'mouseDown').map((e) => (e as unknown as { y: number }).y);
+  /** Let the poll fire and the socket answer, `n` times. */
+  async function polls(h: Awaited<ReturnType<typeof harness>>, n: number) {
+    await settle();
+    for (let i = 0; i < n; i += 1) { h.clock.advance(100); await settle(); }
+  }
+
+  it('presses only once the target has held still, at the box it settled at — not where it was first measured', async () => {
+    const w = window13c([{ ...box(274), settled: false, why: 'moved from {"y":199}' }, { ...box(296), settled: true, why: '' }]);
+    const h = await harness('at-once', () => [], w.answer);
+    const pending = h.send('click', { selector: '.agent-table__row .btn', text: 'Pop out', settle: true });
+    await polls(h, 2);
+    expect(await pending).toMatchObject({ ok: true, value: { x: 1343, y: 308, landed: true } });
+    expect(presses(h.state.inputs)).toEqual([308]);
+    expect(w.scripts).toEqual(['settle', 'settle', 'landing']);
+  });
+
+  it('refuses a press that met something other than its target, naming what it met', async () => {
+    const w = window13c([{ ...box(296), settled: true, why: '' }], { landed: false, hit: 'div.mission__header' });
+    const h = await harness('at-once', () => [], w.answer);
+    const pending = h.send('click', { selector: '.agent-table__row .btn', text: 'Pop out', settle: true });
+    await polls(h, 1);
+    const reply = await pending;
+    expect(reply.ok).toBe(false);
+    expect(reply.error).toBe('the click at (1343, 308) on ".agent-table__row .btn" with text "Pop out" did not land: the press met div.mission__header');
+  });
+
+  it('never presses a target that is covered, and says what covers it when the wait runs out', async () => {
+    const w = window13c([{ ...box(296), settled: false, why: 'covered by div.notice' }]);
+    const h = await harness('at-once', () => [], w.answer);
+    const pending = h.send('click', { selector: '.agent-table__row .btn', text: 'Pop out', settle: true, timeoutMs: 250 });
+    await polls(h, 4);
+    const reply = await pending;
+    expect(reply).toMatchObject({ ok: false, error: '".agent-table__row .btn" with text "Pop out" matched but did not settle within 250 ms: last covered by div.notice' });
+    expect(presses(h.state.inputs)).toEqual([]);
+  });
+
+  it('reads a press whose window could not answer as unknown, not as a miss', async () => {
+    const w = window13c([{ ...box(296), settled: true, why: '' }], { landed: null, hit: null });
+    const h = await harness('at-once', () => [], w.answer);
+    const pending = h.send('click', { selector: '.agent-table__row .btn', text: 'Pop out', settle: true });
+    await polls(h, 1);
+    expect(await pending).toMatchObject({ ok: true, value: { landed: null } });
+  });
+
+  it('leaves a plain click as it was: one measurement, pressed at once, nothing read back', async () => {
+    const w = window13c([]);
+    const h = await harness('at-once', () => [], w.answer);
+    const pending = h.send('click', { selector: '.agent-table__row .btn', text: 'Pop out' });
+    await polls(h, 1);
+    expect(await pending).toMatchObject({ ok: true, value: { x: 1343, y: 211 } });
+    expect(presses(h.state.inputs)).toEqual([211]);
+    expect(w.scripts).toEqual(['locate']);
   });
 });

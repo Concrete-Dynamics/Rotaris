@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 // @ts-expect-error — the module is plain ESM beside the scripts that run it.
-import { choose, connect, connectOrEnd, stopApp, stopOverrunMessage, until, within } from './driver.mjs';
+import { choose, clickLanded, connect, connectOrEnd, stopApp, stopOverrunMessage, until, within } from './driver.mjs';
 
 const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch { return false; } };
 const cleanups: (() => void)[] = [];
@@ -176,5 +176,40 @@ describe('R-062: waiting on a condition, and choosing in either chooser kind', (
       'click [role="option"][data-value="beta"]',
     ]);
     await expect(choose(fake('design-system').driver, '.chooser', 'gamma')).rejects.toThrow('nothing matched [role="option"][data-value="gamma"]');
+  });
+});
+
+describe('clickLanded (docs/defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md)', () => {
+  /** A driver whose settled clicks answer in turn: a string is the seam's refusal, anything else its reply. */
+  function clicking(answers: unknown[]) {
+    const sent: Record<string, unknown>[] = [];
+    const driver = {
+      click: (selector: string, options: Record<string, unknown>) => {
+        sent.push({ selector, ...options });
+        const next = answers.shift();
+        return typeof next === 'string' ? Promise.reject(new Error(next)) : Promise.resolve(next);
+      },
+    };
+    return { driver, sent };
+  }
+  const miss = 'the click at (1343, 211) on ".x" with text "Pop out" did not land: the press met div.notice';
+
+  it('asks for the settled click, and presses again only after a press that did not land, saying so', async () => {
+    const d = clicking([miss, { x: 1343, y: 308, landed: true }]);
+    const reply = await clickLanded(d.driver, '.x', { text: 'Pop out', timeoutMs: 9_000 });
+    expect(reply).toEqual({ x: 1343, y: 308, landed: true, missed: [miss] });
+    expect(d.sent).toEqual([{ selector: '.x', text: 'Pop out', timeoutMs: 9_000, settle: true }, { selector: '.x', text: 'Pop out', timeoutMs: 9_000, settle: true }]);
+  });
+
+  it('throws any other refusal at once, without pressing again', async () => {
+    const d = clicking(['".x" matched but did not settle within 15000 ms: last covered by div.notice', { landed: true }]);
+    await expect(clickLanded(d.driver, '.x')).rejects.toThrow(/did not settle/);
+    expect(d.sent).toHaveLength(1);
+  });
+
+  it('gives up after its presses all missed, naming each', async () => {
+    const d = clicking([miss, miss, { landed: true }]);
+    await expect(clickLanded(d.driver, '.x', { attempts: 2 })).rejects.toThrow(`2 press(es) on ".x" did not land: ${miss} / ${miss}`);
+    expect(d.sent).toHaveLength(2);
   });
 });

@@ -1621,6 +1621,15 @@ promised was read by no op until now; each op resolves `request.window ?? select
 run's approvals with the dialog's own button and probes the child's persona window
 ([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md)).
 
+**A click known to have landed (2026-10-06, acceptance finding A3).** `click` measured once and pressed at that box's
+centre, and nothing read what the press met: driver-proof's 13c lost its Pop out when the provider notice filled the
+notice slot between the measurement and the press and moved the Mission table 75 px down. `click`'s `settle` presses
+only once the box has held across two of the renderer's frames and the element at its centre is the match, then reads
+what a one-shot `mousedown` listener saw and refuses a press that met something else; `scripts/lib/driver.mjs`'s
+`clickLanded` presses again only after such a refusal; 13b and 13c open the persona window that way on the child's own
+row, and a press that landed and opened nothing fails as REQ-SHELL-072's. `driver.test.ts` and `scripts/lib/driver.test.ts`
+pin it ([`driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`](../defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md)).
+
 **What is still owed.** No existing proof has been rewritten onto the driver — the protocol is proved by its own
 proof and not yet by a migrated one. And the strip covers **main only**: the renderer bundle still carries Part AA's
 `rows-proof` role, which is a fixture surface with no input injection, named here so its survival is a decision

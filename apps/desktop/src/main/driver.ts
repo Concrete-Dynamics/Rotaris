@@ -103,6 +103,11 @@ interface Request {
   /** `quit` only: the immediate exit rather than the application's quit. */
   immediate?: boolean;
   enter?: boolean;
+  /**
+   * `click` only: click once the match has held still and is the element at its own centre, then confirm that the press
+   * landed on it, and fail when it did not (`docs/defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`).
+   */
+  settle?: boolean;
   width?: number;
   height?: number;
   timeoutMs?: number;
@@ -157,6 +162,79 @@ function locateScript(selector: string, text: string | undefined): string {
     return { x: r.x, y: r.y, width: r.width, height: r.height, text: (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' ? element.value : (element.textContent || '')).trim().slice(0, 600) };
   })()`;
 }
+
+/** How many frames a settled click's target must hold the same box across before it is pressed. */
+export const SETTLE_FRAMES = 2;
+/**
+ * The longest one of those frames is waited for. A window that is not painting (hidden, or occluded on some hosts)
+ * begins no frame, and a settle measurement waiting on one would never answer, holding the poll and its timeout with it;
+ * past this bound the second measurement is taken anyway, so the box is still compared across time.
+ */
+export const SETTLE_FRAME_BOUND_MS = 100;
+
+/** A short description of an element, for a click that met something other than its target. */
+const DESCRIBE_ELEMENT = `(el) => el ? (el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\\s+/).join('.') : '') + ((el.textContent || '').trim() ? ' "' + (el.textContent || '').trim().slice(0, 40) + '"' : '')) : 'nothing'`;
+
+/**
+ * A settled click's measurement (`settle: true`). The plain locator measures once, and `click` presses at that box's
+ * centre some milliseconds later; when the document above the target changes in between, the press lands on whatever
+ * moved under it. Driver-proof's 13c met exactly that on 2026-10-06: the Mission table's Pop out stood at y=199 for the
+ * first frames after Ctrl+3 and at y=274, then y=296, once the provider notice filled the notice slot, so a press
+ * measured before the notice opened no persona window and reported success
+ * (`docs/defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`).
+ *
+ * So this measures the match, lets `SETTLE_FRAMES` frames begin, and measures again; it answers `settled` only when the
+ * box is the same and the element at its centre is the match or inside it (what a pointer there would press). When it
+ * is, it arms a one-shot capture listener for the next `mousedown`, which `LANDING_SCRIPT` reads after the press.
+ */
+function settleScript(selector: string, text: string | undefined): string {
+  const match = text === undefined ? 'true' : `(element.textContent || '').trim() === ${JSON.stringify(text)}`;
+  return `/* driver:settle */ (async () => {
+    const describe = ${DESCRIBE_ELEMENT};
+    const locate = () => [...document.querySelectorAll(${JSON.stringify(selector)})].find((element) => ${match});
+    const box = (el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+    let element = locate();
+    if (!element) return null;
+    element.scrollIntoView({ block: 'center', inline: 'nearest' });
+    const before = box(element);
+    for (let left = ${SETTLE_FRAMES}; left > 0; left -= 1) await new Promise((resolve) => { requestAnimationFrame(resolve); setTimeout(resolve, ${SETTLE_FRAME_BOUND_MS}); });
+    element = locate();
+    if (!element) return null;
+    const r = box(element);
+    if (r.width === 0 || r.height === 0) return null;
+    const found = { ...r, text: (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' ? element.value : (element.textContent || '')).trim().slice(0, 600) };
+    if (r.x !== before.x || r.y !== before.y || r.width !== before.width || r.height !== before.height) return { ...found, settled: false, why: 'moved from ' + JSON.stringify(before) };
+    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    if (hit !== element && !element.contains(hit)) return { ...found, settled: false, why: 'covered by ' + describe(hit) };
+    const target = element;
+    window.__rotarisDriverLanding = { landed: null, hit: null };
+    window.__rotarisDriverLandingListener = (event) => {
+      window.removeEventListener('mousedown', window.__rotarisDriverLandingListener, true);
+      window.__rotarisDriverLanding = { landed: event.target === target || target.contains(event.target), hit: describe(event.target) };
+    };
+    window.addEventListener('mousedown', window.__rotarisDriverLandingListener, true);
+    return { ...found, settled: true, why: '' };
+  })()`;
+}
+
+/**
+ * What the press `settleScript` armed for met: `{ landed, hit }`, or `landed: null` when no `mousedown` arrived within
+ * the bound. Read through timers, not frames, so a window that stops painting still answers.
+ */
+export const LANDING_SCRIPT = `/* driver:landing */ new Promise((resolve) => {
+  let left = 60;
+  const look = () => {
+    const seen = window.__rotarisDriverLanding;
+    if ((seen && seen.landed !== null) || left === 0) {
+      if (window.__rotarisDriverLandingListener) window.removeEventListener('mousedown', window.__rotarisDriverLandingListener, true);
+      resolve(seen ?? { landed: null, hit: null });
+      return;
+    }
+    left -= 1;
+    setTimeout(look, 16);
+  };
+  look();
+})`;
 
 /** The inspect payload: every match's box, attributes and text, plus the viewport and what holds focus. */
 function inspectScript(selector: string): string {
@@ -269,25 +347,33 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
 
   const evaluate = async (script: string, which: string | undefined): Promise<unknown> => windowOrThrow(which).webContents.executeJavaScript(script) as Promise<unknown>;
 
-  /** Poll until the selector matches or the deadline passes. The ONE waiting primitive; every other wait is this one. */
-  const waitFor = (selector: string, text: string | undefined, timeoutMs: number, which: string | undefined): Promise<Found & { waitedMs: number }> =>
+  /**
+   * Poll until the selector matches or the deadline passes. The ONE waiting primitive; every other wait is this one.
+   * With `settle`, a match counts only once `settleScript` finds it settled; one that matched and never settled is
+   * named in the refusal with why.
+   */
+  const waitFor = (selector: string, text: string | undefined, timeoutMs: number, which: string | undefined, settle = false): Promise<Found & { waitedMs: number }> =>
     new Promise((resolve, reject) => {
       const started = deps.monotonic.now();
       let inFlight = false;
+      let unsettled = '';
       const poll = deps.timers.every(millis(POLL_MS), () => {
         if (inFlight) return;
         inFlight = true;
-        void evaluate(locateScript(selector, text), which)
+        void evaluate(settle ? settleScript(selector, text) : locateScript(selector, text), which)
           .then((found) => {
             inFlight = false;
-            if (found !== null && found !== undefined) {
+            const measured = found as (Found & { settled?: boolean; why?: string }) | null | undefined;
+            if (measured !== null && measured !== undefined && (!settle || measured.settled === true)) {
               poll.cancel();
-              resolve({ ...(found as Found), waitedMs: Math.round(deps.monotonic.now() - started) });
+              resolve({ x: measured.x, y: measured.y, width: measured.width, height: measured.height, text: measured.text, waitedMs: Math.round(deps.monotonic.now() - started) });
               return;
             }
+            if (measured !== null && measured !== undefined) unsettled = measured.why ?? 'unsettled';
             if (deps.monotonic.now() - started > timeoutMs) {
               poll.cancel();
-              reject(new Error(`nothing matched ${JSON.stringify(selector)}${text === undefined ? '' : ` with text ${JSON.stringify(text)}`} within ${timeoutMs} ms`));
+              const named = `${JSON.stringify(selector)}${text === undefined ? '' : ` with text ${JSON.stringify(text)}`}`;
+              reject(new Error(unsettled === '' ? `nothing matched ${named} within ${timeoutMs} ms` : `${named} matched but did not settle within ${timeoutMs} ms: last ${unsettled}`));
             }
           })
           .catch((cause: unknown) => {
@@ -329,11 +415,17 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
       }
       case 'click': {
         if (!request.selector) throw new Error('click needs a selector');
-        const found = await waitFor(request.selector, request.text, timeoutMs, target);
+        const settle = request.settle === true;
+        const found = await waitFor(request.selector, request.text, timeoutMs, target, settle);
         const x = Math.round(found.x + found.width / 2);
         const y = Math.round(found.y + found.height / 2);
         clickAt(x, y, target);
-        return { x, y, text: found.text, waitedMs: found.waitedMs };
+        if (!settle) return { x, y, text: found.text, waitedMs: found.waitedMs };
+        // A settled click says whether the press met its target. A window the press closed cannot answer, and that is
+        // `landed: null`, not a miss; a press that met something else is refused, naming what it met.
+        const landing = await evaluate(LANDING_SCRIPT, target).catch(() => null) as { landed: boolean | null; hit: string | null } | null;
+        if (landing?.landed === false) throw new Error(`the click at (${x}, ${y}) on ${JSON.stringify(request.selector)}${request.text === undefined ? '' : ` with text ${JSON.stringify(request.text)}`} did not land: the press met ${landing.hit ?? 'nothing'}`);
+        return { x, y, text: found.text, waitedMs: found.waitedMs, landed: landing?.landed ?? null };
       }
       case 'type': {
         const wc = windowOrThrow(target).webContents;

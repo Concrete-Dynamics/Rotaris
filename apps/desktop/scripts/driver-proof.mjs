@@ -32,7 +32,7 @@ import { createRequire } from 'node:module';
 import { connect as connectSocket } from 'node:net';
 import { join } from 'node:path';
 import { buildDesktop, evidenceDirectory, oneDatabase } from './lib/harness.mjs';
-import { startApp, until } from './lib/driver.mjs';
+import { clickLanded, startApp, until } from './lib/driver.mjs';
 import { exitWithin } from './lib/bounded-launch.mjs';
 
 const require = createRequire(import.meta.url);
@@ -57,6 +57,29 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
 
 /** Whether the composer holds the document's focus — read from `activeElement`, which does not need the window focused. */
 const COMPOSER_FOCUSED = "document.activeElement?.classList.contains('composer__input') === true";
+
+/**
+ * Open `persona`'s window with the Mission table's own Pop out (REQ-SHELL-072), on the row that agent has, as a click
+ * known to have landed. Until 2026-10-06, 13b and 13c clicked the first `.agent-table__row .btn` reading Pop out straight
+ * after Ctrl+3, and nothing checked the press: in the acceptance run of that day the provider notice filled the notice
+ * slot between the driver's measurement and its press, the table moved 75 px down under it, no `window.openPersona`
+ * reached main, and 13c waited 15 s for a window nobody had asked for
+ * (`docs/defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`). Now the row is found by its persona
+ * cell, the press is the driver's settled click — taken once the button holds still and is what its centre would press,
+ * refused when it met something else, and pressed again only then — and a press that landed and opened no window within
+ * 15 s is REQ-SHELL-072's to answer for, not the harness's.
+ */
+async function popOutPersona(d, persona) {
+  const rowId = await until(
+    () => d.eval(`[...document.querySelectorAll('.agent-table__row[data-agent-id]')].find((row) => (row.querySelector('.agent-table__persona')?.textContent ?? '').trim() === ${JSON.stringify(persona)})?.getAttribute('data-agent-id') ?? null`),
+    (id) => typeof id === 'string' && id !== '',
+    { timeoutMs: 15_000, what: `the ${persona} row in the Mission table` },
+  );
+  const pressed = await clickLanded(d, `.agent-table__row[data-agent-id=${JSON.stringify(rowId)}] .btn`, { text: 'Pop out', timeoutMs: 15_000 });
+  const listed = await until(() => d.windows(), (w) => w.auxiliary.some((a) => a.selector === `persona:${persona}`),
+    { timeoutMs: 15_000, what: `REQ-SHELL-072: the ${persona} persona window, after a Pop out press that landed on its settled row (landed ${JSON.stringify(pressed.landed)}, ${pressed.missed.length} missed press(es))` });
+  return { rowId, pressed, window: listed.auxiliary.find((a) => a.selector === `persona:${persona}`) };
+}
 
 const results = [];
 let failures = 0;
@@ -238,9 +261,9 @@ try {
 
   // 13b. The child's persona window, opened by the Mission view's own Pop out, addressed and probed as a window.
   await r.chord('Ctrl+3');
-  // The table lists the delegated agents; `alpha` is the one.
-  await r.click('.agent-table__row .btn', { text: 'Pop out', timeoutMs: 15_000 });
-  const personaListed = await until(() => r.windows(), (w) => w.auxiliary.some((a) => a.selector === 'persona:coding-agent'), { timeoutMs: 15_000, what: 'the persona window listed' }).then((w) => w.auxiliary.find((a) => a.selector === 'persona:coding-agent')).catch(() => null);
+  // The table lists the delegated agents; `alpha`, of the coding-agent persona, is the one.
+  const popped = await popOutPersona(r, 'coding-agent').catch((cause) => ({ error: cause instanceof Error ? cause.message : String(cause) }));
+  const personaListed = popped.window ?? null;
   let personaState = null;
   let personaName = null;
   if (personaListed) {
@@ -251,7 +274,7 @@ try {
     await r.screenshot(join(output, 'shots', 'run-3-persona.png'));
     await r.useWindow();
   }
-  check('a persona window is listed and its document probed through useWindow (PD-ORCH-005 clause 13\'s surface)', personaListed?.role === 'persona' && personaName?.text === 'alpha' && typeof personaState?.text === 'string' && personaState.text !== '', `listed ${JSON.stringify(personaListed)}; name ${JSON.stringify(personaName?.text)}, state ${JSON.stringify(personaState?.text)}`);
+  check('a persona window is listed and its document probed through useWindow (PD-ORCH-005 clause 13\'s surface)', personaListed?.role === 'persona' && personaName?.text === 'alpha' && typeof personaState?.text === 'string' && personaState.text !== '', `listed ${JSON.stringify(personaListed)}; name ${JSON.stringify(personaName?.text)}, state ${JSON.stringify(personaState?.text)}${popped.error ? `; ${popped.error}` : `; ${popped.pressed.missed.length} missed press(es)`}`);
   const refused = await r.useWindow('persona:nobody').then(() => null).catch((cause) => cause.message);
   const stillMain = await r.eval("document.querySelector('.app-shell') !== null");
   check('a role selector naming no open window is refused, and the selection stays', /^no window matches "persona:nobody"; open: /.test(refused ?? '') && stillMain === true, refused ?? 'it was accepted');
@@ -306,8 +329,10 @@ try {
   await f.type('delegate one child and hold the run', { enter: true });
   await f.waitFor('[data-testid="run-header"][data-state="running"]', { timeoutMs: 30_000 });
   await f.chord('Ctrl+3');
-  await f.click('.agent-table__row .btn', { text: 'Pop out', timeoutMs: 15_000 });
-  await until(() => f.windows(), (w) => w.auxiliary.some((a) => a.selector === 'persona:coding-agent'), { timeoutMs: 15_000, what: 'the persona window listed' });
+  const popped = await popOutPersona(f, 'coding-agent');
+  check("13c: the child's Pop out, pressed on its settled row, landed and opened its persona window (REQ-SHELL-072)",
+    popped.pressed.landed === true && popped.window?.role === 'persona',
+    `row ${popped.rowId}; landed ${JSON.stringify(popped.pressed.landed)} after waiting ${popped.pressed.waitedMs} ms; ${popped.pressed.missed.length} missed press(es)${popped.pressed.missed.length === 0 ? '' : `: ${popped.pressed.missed.join(' / ')}`}`);
   await f.command({ kind: 'window.openTerminal' });
   await until(() => f.windows(), (w) => w.auxiliary.some((a) => a.selector === 'terminal'), { timeoutMs: 15_000, what: 'the terminal window listed' });
   // The second main window, on the other workspace, added last and so the active one.

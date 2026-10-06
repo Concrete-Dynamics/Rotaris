@@ -137,6 +137,9 @@ A window is named by its index in `windows`, by a suffix of a main window's work
 `persona:<persona>` (that persona's window), `approval` (the open approval dialog, answered with its own buttons) or
 `terminal` (the terminal window). A name that matches no open window is refused with the list of what is open.
 
+`click --settle` presses only once the match has held still across two frames and is what its centre would press, and
+fails when the press met something else, naming it: use it for a control that a notice, a new row or a resize can move
+between the measurement and the press (driver-proof's Pop out, 2026-10-06; a plain `click` is unchanged).
 `type` types a line break as Shift+Enter, the composer's newline (REQ-CHAT-001), so a multi-line text keeps its breaks and
 is submitted only by `--enter`; the capture seams' typed steps do the same.
 

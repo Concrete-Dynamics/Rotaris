@@ -960,6 +960,14 @@ in a string the product can draw; log lines and four requirement-fixed tool resu
 `a-literal-plural-marker-is-rendered-in-sign-in-notices.md`. The **component view**'s kernel box says so. No package,
 edge, process, message kind, channel, command or store column changed.
 
+**The driver's settled click (acceptance finding A3, 2026-10-06).** `driver.ts`'s `click` takes `settle`: the match is
+measured, two of the renderer's frames begin, and it is measured again; it is pressed only when its box is unchanged and
+the element at its centre is the match or inside it, and a one-shot capture `mousedown` listener then says what the press
+met, a press that met something else being refused with it. `scripts/lib/driver.mjs`'s `clickLanded` presses again only
+after such a refusal, and driver-proof's 13b and 13c open the persona window that way on the child's own row. This is
+for `driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`. The **process view**'s main row says so. No
+package, edge, process, message kind, channel, command or store column changed.
+
 **The driver addresses persona, approval and terminal windows (R-067).** `driver.ts` resolves a role selector —
 `persona:<persona>`, `approval`, `terminal` — over `DriverDeps.auxiliary`, which main fills from each main window's
 persona-window registry, open approval dialog and terminal window; `windows` lists them, `useWindow` and each op's own

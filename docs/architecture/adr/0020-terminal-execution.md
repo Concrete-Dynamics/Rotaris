@@ -725,4 +725,12 @@ fold, so the 64 holds on every host. Measured under `dash` through a real PTY be
 20 and 10 columns lost `PATH` or the directory or parsed to nothing, and a reset at 20 columns said its restore failed;
 after it, every width from 10 to 240 read the 240-column capture, and a reset at 20 and 40 columns restored the
 directory and the variables whole. The PowerShell capture is left as it was, its wrap recorded open
-([the PowerShell note](../../defects/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md)).
+([the PowerShell note](../../defects/fixed/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md)).
+
+*Reported back 2026-10-06 (fin21, bundle `fin21-leftover-notes`), when the PowerShell note was repaired:* the PowerShell
+capture now prints the same encoded rows, spelled in PowerShell — a `__rot_ps__` tag field, the directory and every
+`NAME=value`, NUL-terminated, UTF-8, base64, 64 characters a row behind `__rot_b64__:` — and `parseSnapshot` reads both
+backends through `encodedSnapshot`; the tag stands in for POSIX's leading `/` in refusing a capture that lost its top
+rows. Pinned on Linux over the parse through the `@xterm/headless` emulator at 20 to 240 columns, from the rows the
+command's loop prints. **Not executed:** no Windows host and no `pwsh` here, so the PowerShell capture's first execution
+is still owed, and it reports back here.

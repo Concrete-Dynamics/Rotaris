@@ -6,7 +6,7 @@ import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
-import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, posixShellArgs, printsMarker, processIdentity, shellHoldsTerminal, snapshotCommand, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
+import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, posixShellArgs, printsMarker, processIdentity, restoreCommand, shellHoldsTerminal, snapshotCommand, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
 import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
 import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
@@ -588,6 +588,69 @@ describe.skipIf(process.platform === 'win32')('PD-TOOLS-001: the POSIX shell-sta
   it('refuses a capture that names no variable, rather than restoring an empty environment over the fresh shell', () => {
     const cwdOnly = Buffer.from(`${root}\0`, 'utf8').toString('base64');
     expect(parseSnapshot(`__rot_b64__:${cwdOnly}\n`)).toBeNull();
+  });
+});
+
+// docs/defects/fixed/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md: PowerShell's capture printed
+// one plain row per variable and the parse rejoined a row the screen wrapped with a newline, so a `Path` wider than the
+// screen came back with newlines in it and a directory wider than the screen was cut at its edge. It now prints the POSIX
+// capture's encoded rows. No PowerShell runs on this host: `powershellCapture` prints what the command's loop prints
+// (the tag, the directory and each `NAME=value`, NUL-terminated, UTF-8, base64, 64 characters a row behind the marker),
+// and the parse is read off the emulated screen at every width the display may give it. The Windows run is owed.
+describe('PD-TOOLS-001: the PowerShell shell-state capture survives a screen that wraps (REQ-TOOLS-104, REQ-TOOLS-128)', () => {
+  const ps: ShellBackend = { kind: 'powershell', file: 'pwsh' };
+  const powershellCapture = (cwd: string, env: Readonly<Record<string, string>>): string => {
+    const text = `__rot_ps__\0${cwd}\0${Object.entries(env).map(([k, v]) => `${k}=${v}\0`).join('')}`;
+    const encoded = Buffer.from(text, 'utf8').toString('base64');
+    return (encoded.match(/.{1,64}/g) ?? []).map((r) => `__rot_b64__:${r}`).join('\n');
+  };
+  const cwd = `C:\\Users\\probe\\${'d'.repeat(260)}\\src`;
+  const env = {
+    Path: Array.from({ length: 24 }, (_, i) => `C:\\Program Files\\Tool${i}\\bin`).join(';'),
+    USERPROFILE: 'C:\\Users\\probe',
+    PROBE_VAR: 'héllo-there',
+    EMPTYISH: ' ',
+  };
+
+  it('the command never writes the marker next to its colon, so its own echo is never read as a capture', () => {
+    const command = snapshotCommand(ps);
+    expect(command).not.toContain('__rot_b64__:');
+    expect(command).toContain('[System.Text.Encoding]::UTF8.GetBytes');
+    expect(command).toContain('$__i += 64');
+    expect(parseSnapshot(`PS C:\\> ${command}\n`)).toBeNull();
+  });
+
+  it('reads the directory and every variable back exactly off an emulated screen at every width the display may give it', async () => {
+    expect(env.Path.length).toBeGreaterThan(240);
+    expect(cwd.length).toBeGreaterThan(240);
+    const out = `PS C:\\> ${snapshotCommand(ps)}\n${powershellCapture(cwd, env)}\n`;
+    expect(parseSnapshot(out)).toEqual({ cwd, env });
+    for (const cols of [20, 33, 40, 64, 75, 76, 77, 240]) {
+      const screen = xtermEmulatorFactory({ cols, rows: 50, scrollback: 5_000 });
+      try {
+        await screen.write(out.replace(/\n/g, '\r\n'));
+        expect({ cols, snap: parseSnapshot(screen.text()) }).toEqual({ cols, snap: { cwd, env } });
+      } finally { screen.dispose(); }
+    }
+  });
+
+  it('the restore built from the read sets the long Path whole, with no newline in it, and the directory last', () => {
+    const snap = parseSnapshot(powershellCapture(cwd, env));
+    expect(snap).not.toBeNull();
+    const plan = restoreCommand(ps, snap!, { cwd: 'C:\\', env: { Path: 'C:\\Windows', USERPROFILE: 'C:\\Users\\probe' } });
+    expect(plan?.line).toContain(`Set-Item -LiteralPath 'Env:Path' -Value '${env.Path}'`);
+    expect(plan?.line).not.toContain('\n');
+    expect(plan?.line.endsWith(`Set-Location -LiteralPath '${cwd}'`)).toBe(true);
+  });
+
+  it('refuses a capture that lost its top rows, one that lost a row\'s continuation, and one with no variable or no directory', () => {
+    const rows = powershellCapture(cwd, env).split('\n');
+    expect(rows.length).toBeGreaterThan(3);
+    expect(parseSnapshot(rows.slice(1).join('\n'))).toBeNull();
+    // A row whose continuation was lost: the rows no longer carry 64 characters each.
+    expect(parseSnapshot(rows.map((r, i) => (i === 1 ? r.slice(0, 40) : r)).join('\n'))).toBeNull();
+    expect(parseSnapshot(powershellCapture(cwd, {}))).toBeNull();
+    expect(parseSnapshot(powershellCapture('', env))).toBeNull();
   });
 });
 

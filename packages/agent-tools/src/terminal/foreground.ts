@@ -790,9 +790,15 @@ export type RestoreOutcome =
 /** Bound on the snapshot/restore round trip: the shell just proved responsive (or just respawned). */
 export const SNAPSHOT_TIMEOUT_MS = 15_000;
 
-/** PD-TOOLS-001, POSIX: the marker each capture row begins with (the colon follows it), and the base64 characters a row carries. */
+/** PD-TOOLS-001: the marker each capture row begins with (the colon follows it), and the base64 characters a row carries. */
 const SNAPSHOT_MARK = '__rot_b64__';
 const SNAPSHOT_ROW = 64;
+/**
+ * PD-TOOLS-001, PowerShell: the NUL-terminated field the encoded capture opens with. A Windows directory has no single
+ * leading character to tell a whole capture from one that lost its top rows (POSIX's `/`), so the capture names itself:
+ * a decode that does not begin with this field began mid-entry and is refused.
+ */
+const PS_SNAPSHOT_TAG = '__rot_ps__';
 
 /**
  * PD-TOOLS-001's capture line: the shell's own cwd plus every exported variable. The marker is never written next to the
@@ -802,7 +808,13 @@ const SNAPSHOT_ROW = 64;
  */
 export function snapshotCommand(backend: ShellBackend): string {
   if (backend.kind === 'powershell') {
-    return `$__p = '__rot_cwd__'; Write-Output ($__p + ':' + (Get-Location).Path); $__q = '__rot_env__'; Get-ChildItem Env: | ForEach-Object { Write-Output ($__q + ':' + $_.Name + '=' + $_.Value) }`;
+    // The POSIX capture's rows, spelled in PowerShell: the tag, the directory and every `NAME=value`, each NUL-terminated,
+    // UTF-8, base64, cut into 64-character rows behind the marker. Until 2026-10-06 it printed one plain row per variable
+    // and the parse took a row the screen wrapped for a newline inside the value — a `Path` past the 240 columns, every
+    // row at the 20 the display may narrow to — and cut a directory wider than the screen at its edge
+    // (docs/defects/fixed/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md). Read from the
+    // POSIX repair and pinned over the parse on Linux; executing it needs a Windows host.
+    return `$__m = '${SNAPSHOT_MARK}'; $__s = '${PS_SNAPSHOT_TAG}' + [char]0 + (Get-Location).Path + [char]0 + ((Get-ChildItem Env: | ForEach-Object { $_.Name + '=' + $_.Value + [char]0 }) -join ''); $__b = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($__s)); for ($__i = 0; $__i -lt $__b.Length; $__i += ${SNAPSHOT_ROW}) { Write-Output ($__m + ':' + $__b.Substring($__i, [Math]::Min(${SNAPSHOT_ROW}, $__b.Length - $__i))) }`;
   }
   // POSIX: the directory and `env -0`, NUL-separated, as base64 folded to 64 columns. The capture is the EMULATED
   // screen (ADR-0021), which wraps a line at its width, and a wrapped line cannot be told from a value's own newline:
@@ -820,7 +832,7 @@ export function snapshotCommand(backend: ShellBackend): string {
 }
 
 /**
- * PD-TOOLS-001, POSIX: the base64 text of the capture, read off screen rows of any width, or null when there is none or it
+ * PD-TOOLS-001, both backends: the base64 text of the capture, read off screen rows of any width, or null when there is none or it
  * is not whole. The rows are joined with nothing between them, so the continuation a narrow screen wrapped onto the next
  * row rejoins its head, and each marker then opens one of `snapshotCommand`'s rows. A stray line between rows (a job
  * notice) ends the row before it at its first character outside the alphabet. Whatever the joining could still get
@@ -838,11 +850,16 @@ function encodedSnapshot(output: string): string | null {
   return text.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(text) ? text : '';
 }
 
-/** PD-TOOLS-001, POSIX: the decoded capture — the directory, then `NAME=value` entries, each NUL-terminated. */
+/**
+ * PD-TOOLS-001: the decoded capture — the directory, then `NAME=value` entries, each NUL-terminated; PowerShell's opens
+ * with `PS_SNAPSHOT_TAG`'s field.
+ */
 function parseEncodedSnapshot(encoded: string): ShellState | null {
   const decoded = Buffer.from(encoded, 'base64').toString('utf8');
   if (!decoded.endsWith('\0')) return null;
-  const [cwd, ...entries] = decoded.slice(0, -1).split('\0');
+  const fields = decoded.slice(0, -1).split('\0');
+  const powershell = fields[0] === PS_SNAPSHOT_TAG;
+  const [cwd, ...entries] = powershell ? fields.slice(1) : fields;
   const env: Record<string, string> = {};
   for (const entry of entries) {
     const eq = entry.indexOf('=');
@@ -853,39 +870,19 @@ function parseEncodedSnapshot(encoded: string): ShellState | null {
   // `$PWD` is always absolute, so a directory that does not start with `/` is a capture that lost whole rows from its top
   // (the emulator's scrollback overflowed under a very large environment at a narrow width): every row still carries 64
   // characters, so the checks in `encodedSnapshot` pass, and the decode starts mid-entry. It is refused the same way.
-  if (cwd === undefined || !cwd.startsWith('/') || Object.keys(env).length === 0) return null;
+  // PowerShell's capture is told whole by its tag instead; its directory is whatever `Get-Location` named, never empty.
+  if (cwd === undefined || (powershell ? cwd === '' : !cwd.startsWith('/')) || Object.keys(env).length === 0) return null;
   return { cwd, env };
 }
 
-/** PD-TOOLS-001's parse: POSIX's encoded capture when present; otherwise (PowerShell) the last cwd line wins, env lines after it, continuations rejoin. */
+/**
+ * PD-TOOLS-001's parse, both backends: the encoded capture's rows, joined across the screen's wraps, decoded; null when
+ * there is none or it is not whole (`encodedSnapshot`, `parseEncodedSnapshot`).
+ */
 export function parseSnapshot(output: string): ShellState | null {
   const encoded = encodedSnapshot(output);
-  if (encoded !== null) return encoded === '' ? null : parseEncodedSnapshot(encoded);
-  let cwd: string | null = null;
-  let env: Record<string, string> = {};
-  let cur: string | null = null;
-  for (const line of output.split('\n')) {
-    if (line.startsWith('__rot_cwd__:')) {
-      cwd = line.slice('__rot_cwd__:'.length);
-      env = {};
-      cur = null;
-      continue;
-    }
-    if (line.startsWith('__rot_env__:')) {
-      const rest = line.slice('__rot_env__:'.length);
-      const eq = rest.indexOf('=');
-      if (eq >= 0) {
-        cur = rest.slice(0, eq);
-        env[cur] = rest.slice(eq + 1);
-      } else {
-        cur = null;
-      }
-      continue;
-    }
-    if (cur !== null) env[cur] += `\n${line}`;
-  }
-  if (cwd === null) return null;
-  return { cwd, env };
+  if (encoded === null || encoded === '') return null;
+  return parseEncodedSnapshot(encoded);
 }
 
 function psQuote(s: string): string {

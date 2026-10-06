@@ -49,7 +49,7 @@ decoded text must end with the NUL `env -0` writes after each entry. So that the
 `snapshotCommand` takes the encoder's own line breaks out (`base64 | tr -d '\n'; echo`, GNU and busybox break at 76,
 BSD not at all) before `fold -w 64`. The comment that read "a 64-column line never wraps" is kept beside its
 replacement, marked falsified. The PowerShell capture is unchanged (no Windows host here); its own wrap is recorded open in
-[the PowerShell note](../the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md).
+[the PowerShell note](the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md).
 
 **What pins it** (`packages/agent-tools/src/terminal/terminal.test.ts`, each red on `27a5127`'s parse): "reads the same
 directory and variables back off an emulated screen at every width the display may give it" (the real capture line run

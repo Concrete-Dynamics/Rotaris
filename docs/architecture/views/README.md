@@ -128,6 +128,12 @@ force-killed 2 s after any stop — Cancel, a switch's cancellation, an exhauste
 and a budget had REQ-MCP-099's 5 s (`SETUP_TERMINATE_GRACE_MS`). The **process view**'s `mcp.setup` paragraph and the
 **runtime view**'s application end say so. No package, edge, process, channel, command or store column changed.
 
+**An authentication restart re-sends the prompt's images (REQ-NOTIFY-070/074/076, REQ-CHAT-171; OQ-182 ruled by R-071,
+fin21).** `Sessions.lastPromptOf` reads the last prompt's images back by path and digest (`readBackAttachments`, the retry's
+read-back) and the restarts re-submit them with the text; an image that cannot be read back, or a restart model declaring no
+image input, refuses the restart before anything is pinned. `AuthFallbackRestart` gains `images`. The **runtime view**'s
+fallback paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **The run completes only when the coordinator's own plan agrees (REQ-ORCH-029, REQ-ORCH-075, REQ-ORCH-078; fin18).**
 `Run.iterate` returns a task whose root answered `succeeded` with an item of its own plan open to the pending queue, once
 REQ-ORCH-078's corrections into the root's own conversation are spent (`RunConfig.validationRetries`, default 0; a `followUp`

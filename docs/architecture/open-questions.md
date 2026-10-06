@@ -9394,7 +9394,20 @@ as OQ-177, renumbered OQ-179 at its first merge because `origin/main` had taken 
 OQ-180 at its second (2026-10-02, beside the note's parts C and D) because `origin/main` had taken OQ-179 meanwhile, part D's
 question above, and renumbered OQ-182 at its third (2026-10-02) because `origin/main` had taken OQ-180 meanwhile (bundle
 `fin9-queue-dispatch-and-disclosure`'s question above) and the branch's own OQ-181 kept its number; the branch's commit
-subjects say OQ-177, and those of its fourth repair round OQ-180. Open.)*
+subjects say OQ-177, and those of its fourth repair round OQ-180. Open until 2026-10-06; ruled that day by the owner, and built.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** every reading below is accepted as built — the
+restart appends the last prompt as a new user turn (a run a plan decision launched relaunched as that decision), a restart
+that cannot begin takes the pin back, the pin moves every agent on the failed pair, a first failure with no usable fallback
+spends the session's first failure, the bookkeeping lasts for the life of the process, and a session not on screen restarts
+when it is focused — with one change: **the restart re-sends the prompt's images with its text**, read back from the
+session's directory by path and verified by digest through the retry's read-back (`readBackAttachments`). Read the way the
+retry reads it, where the ruling leaves the detail open: an image that can no longer be read back, or a model the restart
+runs on (the fallback, or the model chosen in the dialog) that declares no image input (REQ-CHAT-171), refuses the restart
+by name rather than restarting with less than was sent, so the restart cannot begin, nothing is pinned, and main publishes
+the generic notice; a last prompt of images alone is restarted with its images. REQ-NOTIFY-070's "the same prompt" reads so;
+no requirement's text is departed from, so the ruling alone settles it. Built the same day (`Sessions.lastPromptOf`, plan
+fin21). The reading below is kept as the build proceeded under it until then.
 
 Three things the requirements leave to the build:
 

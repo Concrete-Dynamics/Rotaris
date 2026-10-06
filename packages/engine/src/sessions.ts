@@ -314,6 +314,29 @@ export interface AuthFallbackRestart {
   readonly failed: { readonly provider: string; readonly model: string; readonly key: string | null };
   readonly fallback: { readonly provider: string; readonly model: string; readonly key: string };
   readonly prompt: string;
+  /** How many images the restart re-sent with the prompt (OQ-182, ruled 2026-10-06): 0 for a prompt of text alone or a relaunched plan decision. */
+  readonly images: number;
+}
+
+/** What an authentication restart re-submits (REQ-NOTIFY-070/074/076): the last prompt's text and its images read back (OQ-182's ruling). */
+interface RestartPrompt {
+  readonly text: string;
+  readonly inputs: readonly ImageAttachmentInput[];
+}
+
+/**
+ * REQ-CHAT-171's gate for an authentication restart, against the model it runs on: a prompt that carries images cannot go to
+ * a model that declares no image input. Null where it may.
+ */
+function imageInputRefusal(prompt: RestartPrompt, model: { readonly acceptsImageInput?: boolean | undefined }, named: string): { code: string; reason: string } | null {
+  if (prompt.inputs.length === 0 || model.acceptsImageInput === true) return null;
+  return { code: 'image-input-unsupported', reason: `The last prompt carries ${prompt.inputs.length === 1 ? 'an image' : `${prompt.inputs.length} images`}, and ${named} does not declare image input support.` };
+}
+
+/** REQ-NOTIFY-069's "a recorded last prompt": a submitted prompt with text or images, over released rows too. */
+function hasPrompt(dal: StoreDal, sessionId: SessionId): boolean {
+  const last = lastSubmittedPrompt(dal, sessionId);
+  return last !== null && (last.text.trim() !== '' || last.attachments.length > 0);
 }
 
 /** REQ-NOTIFY-072/074: a model as the authentication recovery names it — its `models:` key when it has one, its provider identity (REQ-NOTIFY-082's), its model id. */
@@ -2401,17 +2424,17 @@ export class Sessions {
    * run was launched to do, on the model the caller has just pinned (or, after a re-authentication, on the same one). A run
    * a plan decision launched is relaunched as that decision (`relaunchPlanDecision`): approve carries the plan as the user
    * left it again, and revise starts the same further cycle — its number, the changes stated, the plan as it stood — and
-   * nothing is re-submitted, since a decision is no prompt. Any other run re-submits the session's last prompt
-   * (`promptHeld`, OQ-182's reading). `beginning` runs once every refusal has passed, just before the launch.
+   * nothing is re-submitted, since a decision is no prompt. Any other run re-submits the session's last prompt with the
+   * images it was sent with (`promptHeld`; OQ-182, ruled 2026-10-06 by R-071). `beginning` runs once every refusal has passed, just before the launch.
    *
    * Until 2026-10-02's fourth repair round every restart took the second path, so a revise cycle that failed on a first 401
    * came back as a fresh cycle from the original prompt, the changes stated and the plan they revised dropped (and an
    * approved plan's edit with them).
    */
-  private relaunchAfterAuthFailure(s: Live, sessionId: SessionId, lastPrompt: string, hold: HoldSlot, beginning: () => void): Result<void, { code: string; reason: string }> {
+  private relaunchAfterAuthFailure(s: Live, sessionId: SessionId, lastPrompt: RestartPrompt, hold: HoldSlot, beginning: () => void): Result<void, { code: string; reason: string }> {
     const decided = s.planLaunch;
-    if (decided !== undefined && s.run !== null && decided.run === s.run) return this.relaunchPlanDecision(s, sessionId, decided, hold, beginning);
-    const restarted = this.promptHeld(sessionId, lastPrompt, [], hold, beginning);
+    if (decided !== undefined && this.relaunchesPlanDecision(s)) return this.relaunchPlanDecision(s, sessionId, decided, hold, beginning);
+    const restarted = this.promptHeld(sessionId, lastPrompt.text, lastPrompt.inputs, hold, beginning);
     return restarted.ok ? ok(undefined) : err(restarted.error);
   }
 
@@ -2490,6 +2513,10 @@ export class Sessions {
     const from = { provider: providerIdentity(catalogue, failed), model: failed.modelId, key: entryOf(catalogue, failed)?.key ?? null };
     const to = { provider: providerIdentity(catalogue, fallback.model), model: fallback.model.modelId, key: fallbackKey };
     if (pairKey(from.provider, from.model) === pairKey(to.provider, to.model)) return err({ code: 'fallback-failed', reason: `The fallback model ${to.provider}/${to.model} is the model that failed.` });
+    // REQ-CHAT-171 against the model the restart runs on (OQ-182's ruling): the images go with the prompt, so a fallback that
+    // takes no image input cannot receive it, and the restart cannot begin — nothing is pinned.
+    const imageRefusal = imageInputRefusal(lastPrompt, fallback.model, `the fallback model ${to.provider}/${to.model}`);
+    if (imageRefusal !== null) return err(imageRefusal);
     const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
     if (s.memory === null) {
       const resolve = (key: string): ModelChoice | null => { const r = setup.value.models?.(key); return r && r.ok ? r.choice : null; };
@@ -2512,7 +2539,7 @@ export class Sessions {
       if (announced) s.writer.appendRow('system', `The run could not restart on the fallback model ${fallbackKey} (${restarted.error.reason}); the session stays on ${from.provider}/${from.model}.`, true);
       return err({ code: 'restart-failed', reason: restarted.error.reason });
     }
-    return ok({ failed: from, fallback: to, prompt: lastPrompt });
+    return ok({ failed: from, fallback: to, prompt: lastPrompt.text, images: lastPrompt.inputs.length });
   }
 
   /**
@@ -2637,17 +2664,28 @@ export class Sessions {
   }
 
   /**
-   * The text of the session's last submitted prompt — the one a restart re-submits (REQ-NOTIFY-070/074/076) — read by
-   * `lastSubmittedPrompt`, over released rows too; refused as `no-prompt` where there is no text to re-send. The restarts
-   * re-send the text alone (OQ-182's reading), so a last prompt of images alone is refused rather than sent empty, and the
-   * refusal says so: a prompt IS recorded, the restart does not re-send what it carries (an optional finding of fin8's
-   * verifier — it had read "No prompt is recorded for this session.").
+   * The session's last submitted prompt — the one a restart re-submits (REQ-NOTIFY-070/074/076) — read by
+   * `lastSubmittedPrompt`, over released rows too, with the images it was sent with read back from the session's directory
+   * by path and verified by digest (`readBackAttachments`, the retry's read-back): OQ-182, ruled 2026-10-06 (R-071), so a
+   * restarted run receives the prompt it failed on and not its text alone. A missing or altered image refuses the restart,
+   * naming it, rather than restarting with less than was sent — the retry's rule — and so the restart cannot begin. A run a
+   * plan decision launched is relaunched as that decision, which re-submits no prompt, so its images are not read.
+   * Refused as `no-prompt` where no prompt was ever submitted. Until 2026-10-06 the restarts re-sent the text alone, and a
+   * last prompt of images alone was refused as having no text to restart with.
    */
-  private lastPromptOf(s: Live, sessionId: SessionId): Result<string, { readonly code: string; readonly reason: string }> {
+  private lastPromptOf(s: Live, sessionId: SessionId): Result<RestartPrompt, { readonly code: string; readonly reason: string }> {
     const last = lastSubmittedPrompt(s.dal, sessionId);
-    if (last !== null && last.text.trim() !== '') return ok(last.text);
-    if (last !== null && last.attachments.length > 0) return err({ code: 'no-prompt', reason: 'The last prompt carries images only, which the restart does not re-send (OQ-182), so there is no text to restart with.' });
-    return err({ code: 'no-prompt', reason: 'No prompt is recorded for this session.' });
+    if (last === null || (last.text.trim() === '' && last.attachments.length === 0)) return err({ code: 'no-prompt', reason: 'No prompt is recorded for this session.' });
+    if (this.relaunchesPlanDecision(s)) return ok({ text: last.text, inputs: [] });
+    const images = readBackAttachments(this.deps.sessionFilesDir(s.dal, sessionId), last.attachments);
+    if (!images.ok) return err({ code: 'attachment-unavailable', reason: `The last prompt was not restarted, because its image ${images.name} could not be read back: ${images.reason}` });
+    return ok({ text: last.text, inputs: images.inputs });
+  }
+
+  /** Whether an authentication restart of the session's last run relaunches the plan decision that launched it (`relaunchAfterAuthFailure`). */
+  private relaunchesPlanDecision(s: Live): boolean {
+    const decided = s.planLaunch;
+    return decided !== undefined && s.run !== null && decided.run === s.run;
   }
 
   /**
@@ -2679,7 +2717,7 @@ export class Sessions {
       // REQ-MONITOR-194: the dialog is a model selector — a pair the session holds out of quota is listed with the reason.
       models.push({ key: e.key, provider: e.provider, model: e.model.modelId, ...(memory.isExhausted(e.provider, e.model.modelId) ? { excluded: true as const } : {}) });
     }
-    return ok({ failed: failed === null ? null : named(failed), active: named(active), models, lastPrompt: this.lastPromptOf(s, sessionId).ok });
+    return ok({ failed: failed === null ? null : named(failed), active: named(active), models, lastPrompt: hasPrompt(s.dal, sessionId) });
   }
 
   /**
@@ -2723,6 +2761,9 @@ export class Sessions {
     const from: AuthRecoveryModel = { key: entryOf(catalogue, failedRef)?.key ?? null, provider: providerIdentity(catalogue, failedRef), model: failedRef.modelId };
     const to = { key: modelKey, provider: providerIdentity(catalogue, resolved.choice.model), model: resolved.choice.model.modelId };
     if (pairKey(from.provider, from.model) === pairKey(to.provider, to.model)) return err({ code: 'same-model', reason: `${modelKey} is the model that failed authentication (${to.provider}/${to.model}); choose a different one.` });
+    // REQ-CHAT-171 against the model chosen (OQ-182's ruling): the restart re-sends the prompt's images too.
+    const imageRefusal = imageInputRefusal(lastPrompt, resolved.choice.model, `${modelKey} (${to.provider}/${to.model})`);
+    if (imageRefusal !== null) return err(imageRefusal);
     // A model chosen by hand is the one to use: a pin that moved it away (an earlier choice in this dialog, REQ-NOTIFY-075) is
     // taken back first, so the override chain cannot lead off it again — or back and forth between the two.
     if (memory.clearOverride(to.provider, to.model)) s.writer.appendTimeline('model_override', 'user', `${modelKey} (${to.provider}/${to.model}) was chosen in the recovery dialog; the pin that replaced it is taken back.`, { provider: to.provider, model: to.model, cleared: true, cause: 'authentication' });

@@ -2217,7 +2217,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
       const restarted = sessions.restartOnFallback(sid);
       if (!restarted.ok) throw new Error(restarted.error.reason);
-      expect(restarted.value).toEqual({ failed: { provider: 'a', model: 'a1', key: 'a1' }, fallback: { provider: 'f', model: 'f1', key: 'f1' }, prompt: 'do the thing' });
+      expect(restarted.value).toEqual({ failed: { provider: 'a', model: 'a1', key: 'a1' }, fallback: { provider: 'f', model: 'f1', key: 'f1' }, prompt: 'do the thing', images: 0 });
       expect((await sessions.running(sid)!).status).toBe('completed');
       expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
       expect(dal.residentRows(sid).filter((r) => r.kind === 'user').map((r) => r.body)).toEqual(['do the thing', 'do the thing']);
@@ -2247,7 +2247,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
       const restarted = sessions.restartOnFallback(sid);
       if (!restarted.ok) throw new Error(`${restarted.error.code}: ${restarted.error.reason}`);
-      expect(restarted.value).toEqual({ failed: { provider: 'a', model: 'a1', key: 'a1' }, fallback: { provider: 'f', model: 'f1', key: 'f1' }, prompt: 'plan the thing' });
+      expect(restarted.value).toEqual({ failed: { provider: 'a', model: 'a1', key: 'a1' }, fallback: { provider: 'f', model: 'f1', key: 'f1' }, prompt: 'plan the thing', images: 0 });
       await sessions.running(sid)!;
       expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
       // The restart is the same prompt under the same mode: a plan cycle, held at the gate with the fallback's plan.
@@ -2754,17 +2754,74 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(userBodies(sid)).toEqual(['the released prompt', 'the released prompt']);
     });
 
-    it('a last prompt of images alone is refused by name — a prompt is recorded, its images are not re-sent (OQ-182) — never as "no prompt recorded"', async () => {
-      const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1]);
-      const saved = persistAttachments(join(dir, 'sessions', 'RL3'), [{ name: 'shot.png', mediaType: 'image/png', size: png.length, base64: png.toString('base64') }]);
+    /*
+     * OQ-182, ruled 2026-10-06 by the owner (R-071): the restarts re-send the prompt's images with its text, read back from
+     * the session's directory by the retry's read-back (`readBackAttachments`). Until then they re-sent the text alone, and a
+     * last prompt of images alone was refused as having no text to restart with.
+     */
+    const PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1]);
+    const savedImage = (raw: string) => {
+      const saved = persistAttachments(join(dir, 'sessions', raw), [{ name: 'shot.png', mediaType: 'image/png', size: PNG.length, base64: PNG.toString('base64') }]);
       if (!saved.ok) throw new Error(saved.reason);
-      const { sessions, sid } = await failedReleased('RL3', { fallbackModel: { model: F1, thinking: 'unset' } }, { body: '', attachments: JSON.stringify(saved.attachments) });
-      const reason = 'The last prompt carries images only, which the restart does not re-send (OQ-182), so there is no text to restart with.';
-      expect(sessions.restartOnFallback(sid)).toEqual({ ok: false, error: { code: 'no-prompt', reason } });
-      expect(sessions.restartAfterAuthFailure(sid, null)).toEqual({ ok: false, error: { code: 'no-prompt', reason } });
+      return saved.attachments;
+    };
+    const IMAGES = { entryModel: { ...A1, acceptsImageInput: true } } as const;
+    const imagesOf = (req: Parameters<ScriptedModelClient['stream']>[0] | undefined) => (req?.messages ?? []).flatMap((m): readonly { readonly kind: string }[] => m.content).filter((p) => p.kind === 'image');
+
+    it('the fallback restart re-sends the prompt\'s images with its text, read back by path and digest (OQ-182 ruled)', async () => {
+      const attachments = savedImage('RL4');
+      const { sessions, client, sid } = await failedReleased('RL4', { ...IMAGES, catalogue: [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', { ...F1, acceptsImageInput: true }, [])], fallbackModel: { model: { ...F1, acceptsImageInput: true }, thinking: 'unset' } }, { body: 'look at this', attachments: JSON.stringify(attachments) });
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(restarted.error.reason);
+      expect(restarted.value).toMatchObject({ prompt: 'look at this', images: 1 });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const onFallback = client.requests.find((r) => r.model.modelId === 'f1');
+      expect(imagesOf(onFallback)).toEqual([{ kind: 'image', mediaType: 'image/png', base64: PNG.toString('base64') }]);
+      // The re-submitted user row carries the image as the original did.
+      const users = dal.rowsBefore(sid, dal.nextRowIndex(sid), 1_000_000).filter((r) => r.kind === 'user');
+      expect(users.map((r) => JSON.parse(r.attachments || '[]').length)).toEqual([1, 1]);
+    });
+
+    it('a last prompt of images alone is restarted with its images, by the fallback and by the re-authenticated restart', async () => {
+      const attachments = savedImage('RL3');
+      const { sessions, client, sid } = await failedReleased('RL3', { ...IMAGES, catalogue: [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', { ...F1, acceptsImageInput: true }, [])], fallbackModel: { model: { ...F1, acceptsImageInput: true }, thinking: 'unset' } }, { body: '', attachments: JSON.stringify(attachments) });
       const facts = sessions.authRecoveryFacts(sid);
       if (!facts.ok) throw new Error(facts.error.reason);
-      expect(facts.value.lastPrompt).toBe(false);
+      expect(facts.value.lastPrompt).toBe(true);
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(restarted.error.reason);
+      expect(restarted.value).toMatchObject({ prompt: '', images: 1 });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(imagesOf(client.requests.find((r) => r.model.modelId === 'f1'))).toHaveLength(1);
+    });
+
+    it('the re-authenticated restart (no model chosen) re-sends the images on the same model', async () => {
+      const attachments = savedImage('RL5');
+      const { sessions, client, sid } = await failedReleased('RL5', IMAGES, { body: 'and this', attachments: JSON.stringify(attachments) });
+      const restarted = sessions.restartAfterAuthFailure(sid, null);
+      if (!restarted.ok) throw new Error(restarted.error.reason);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests).toHaveLength(2);
+      expect(imagesOf(client.requests[1])).toHaveLength(1);
+    });
+
+    it('a fallback that declares no image input cannot take the prompt: the restart cannot begin and nothing is pinned', async () => {
+      const attachments = savedImage('RL6');
+      const { sessions, sid } = await failedReleased('RL6', { ...IMAGES, fallbackModel: { model: F1, thinking: 'unset' } }, { body: 'look', attachments: JSON.stringify(attachments) });
+      expect(sessions.restartOnFallback(sid)).toEqual({ ok: false, error: { code: 'image-input-unsupported', reason: 'The last prompt carries an image, and the fallback model f/f1 does not declare image input support.' } });
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'model_override')).toHaveLength(0);
+      // The dialog's chosen model is held to the same gate.
+      expect(sessions.restartAfterAuthFailure(sid, 'f1')).toMatchObject({ ok: false, error: { code: 'image-input-unsupported' } });
+    });
+
+    it('an image that can no longer be read back refuses the restart by name, as the retry does — never a restart with less than was sent', async () => {
+      const attachments = savedImage('RL7');
+      rmSync(join(dir, 'sessions', 'RL7', attachments[0]!.path));
+      const { sessions, sid } = await failedReleased('RL7', { ...IMAGES, fallbackModel: { model: { ...F1, acceptsImageInput: true }, thinking: 'unset' } }, { body: 'look', attachments: JSON.stringify(attachments) });
+      const reason = 'The last prompt was not restarted, because its image shot.png could not be read back: Image is no longer available.';
+      expect(sessions.restartOnFallback(sid)).toEqual({ ok: false, error: { code: 'attachment-unavailable', reason } });
+      expect(sessions.restartAfterAuthFailure(sid, null)).toEqual({ ok: false, error: { code: 'attachment-unavailable', reason } });
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'model_override')).toHaveLength(0);
     });
   });
 });

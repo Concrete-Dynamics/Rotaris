@@ -63,7 +63,8 @@ sequenceDiagram
 ```
 
 **What an agent's system prompt is made of (ADR-0063).** At every agent construction — the entry turn and each
-child — the role's instructions (for the entry turn, fitted first to the run's grant: a coordinator granted the direct-work
+child — the role's instructions (for the entry turn, fitted first to the grant the iteration runs under,
+`Run.preflightInEffect` — a resumed iteration's carried grant, `PD-ORCH-005` clause 23: a coordinator granted the direct-work
 bundle is told to do the work itself, `entryInstructionsFor`, OQ-202 as ruled, `PD-ORCH-006`; a turn the plan gate holds
 keeps the persona's prompt) take its playbook (`withPlaybook`, REQ-ORCH-019) and then the session's
 **always-active context units** (`withContextUnits`, REQ-WORKSPACE-060), in that requirement's order: workspace
@@ -128,7 +129,7 @@ small slot's rung ladder; the grant; the playbooks; the BUDGET cell — since 20
 revision 6 clause 23, the Continue action and a message-limit resolution hand the pre-flight the intent in effect,
 `PreflightContext.intent`, and it classifies nothing, so the status never reads `classifying` for it, `RunDeps.preflightCarries`; a continue by message that resumes an open iteration also runs the
 resumed iteration's carried pre-flight, `RunDeps.resumedPreflight`, and `Run.preflightInEffect` is what the ports, the
-playbooks and the clamp read until that iteration closes, when `nextIntentInEffect` records the message's classification as
+entry turn's grant-fitted instructions, the playbooks and the clamp read until that iteration closes, when `nextIntentInEffect` records the message's classification as
 a further `run_continuation_intent` entry with its row) → **the plan gate's hold settled** (on the run's own pre-flight) → the
 launch audit (once per session, REQ-SESSION-138; a continuation's run records its payload as a
 `run_continuation_intent` timeline entry instead, and the record's intent status, REQ-ORCH-014, reads the newest of

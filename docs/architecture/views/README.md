@@ -58,7 +58,8 @@ store column changed.
 (OQ-162, OQ-105; `PD-ORCH-005` revision 6, R-071; fin20).** The Continue action and a message-limit resolution hand the
 pre-flight the intent in effect (`PreflightContext.intent`), which `runPreflight` resolves with no classification call; a
 continue by message that resumes an open iteration runs it under the carried pre-flight (`RunDeps.resumedPreflight`,
-`Run.preflightInEffect`) and records its own classification as in effect once that iteration closes (`nextIntentInEffect`).
+`Run.preflightInEffect`, which the entry turn's grant-fitted instructions of `PD-ORCH-006` read too) and records its own
+classification as in effect once that iteration closes (`nextIntentInEffect`).
 `ConversationRecord.fingerprint` takes the persona's own definition (`personaDefinitionOf`) and replaces the row after a
 stated change (`SessionWriter.replaceAgentFingerprint`, `StoreDal.replaceAgentFingerprint`, a statement over the v24 table).
 The **runtime view**'s `Run.start()` order, its conversation-record paragraph and its §7 row, the **state-ownership** row and

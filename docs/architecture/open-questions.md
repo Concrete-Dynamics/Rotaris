@@ -8472,12 +8472,15 @@ Continue action and the message-limit resolution (`continueSessionHeld`) pass `c
 intent in effect (`PreflightContext.intent`, `carriedIntent`), which the run host's `runPreflight` resolves the grant,
 playbooks and clamp for with no classification call. A continue by message that resumes an open iteration classifies its
 message for the run (`RunDeps.preflight`) and hands the resumed iteration the carried pre-flight
-(`RunDeps.resumedPreflight`); `Run.preflightInEffect` is what the ports, the playbooks and the clamp read, and when the
+(`RunDeps.resumedPreflight`); `Run.preflightInEffect` is what the ports, the playbooks, the clamp and the entry turn's
+grant-fitted instructions (`entryInstructionsFor`, `PD-ORCH-006`, merged from `main` before landing) read, and when the
 resumed iteration closes, `nextIntentInEffect` records the message's classification as a `run_continuation_intent` entry
 with its row. The resumed iteration's entry carries the message's classification beside its own as `next_run_intent`.
 `previousIntent` (REQ-ORCH-013's prior) is the intent in effect. A plan decision resumes nothing (the iteration closed
-before the hold) and classifies as before. Pinned by `packages/engine/src/run/preflight.test.ts`, "OQ-162 as ruled …" (three
-cases, each red on the code before it) and `apps/desktop/src/run-host/intent.test.ts`.
+before the hold) and classifies as before. Pinned by `packages/engine/src/run/preflight.test.ts`, "OQ-162 as ruled …" (four
+cases, each red on the code before it; the fourth, a resumed coordinator that carried `none` keeping the coordinating
+prompt under a message classified for the direct-work bundle, red with the run's own grant read) and
+`apps/desktop/src/run-host/intent.test.ts`.
 
 **OQ-163 — What does REQ-TOOLS-145's refusal name when a `replace`'s own list marks two tasks in progress and no task is
 active?** *(REQ-TOOLS-145, "At most one task may be `IN_PROGRESS` at a time, enforced both when marking a task and on
@@ -10086,7 +10089,11 @@ stays in the bundle and may still be used; a prompt the configuration supplies i
 a turn the plan gate holds, which REQ-ORCH-153 denies the bundle's writing tools, keeps the coordinating prompt. **Built
 2026-10-06 (fin20):** `entryInstructionsFor` (`packages/engine/src/children/personas.ts`) read by the root turn in
 `packages/engine/src/run/run.ts`; cases in `children/personas.test.ts`, `run/preflight.test.ts` and `run/plan-gate.test.ts`;
-`pnpm fetch-proof` reads the instructions its `explicit_trivial` launch received.
+`pnpm fetch-proof` reads the instructions its `explicit_trivial` launch received. *Since OQ-162's ruling was built beside
+it (`PD-ORCH-005` revision 6 clause 23, fin20, before landing):* the grant the instructions are fitted to is the one the
+iteration runs under (`Run.preflightInEffect`), so an iteration a continue by message resumes keeps the instructions of the
+grant it started with, and the message's grant fits them from the next iteration; pinned by the fourth "OQ-162 as ruled"
+case in `run/preflight.test.ts`.
 
 **OQ-203 — Which items of the coordinator's own plan does REQ-ORCH-075's re-queue hold against a task: every non-terminal
 item of the session's plan, or only those the task's own iterations left open?** *(REQ-ORCH-075, "when a report says

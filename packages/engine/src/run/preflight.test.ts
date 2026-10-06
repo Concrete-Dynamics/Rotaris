@@ -251,6 +251,43 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       expect(dal.issuesOf(sid).filter((i) => i.kind === 'resumed_under_changed_instructions')).toEqual([]);
     });
 
+    it('OQ-202 with OQ-162 (PD-ORCH-006, PD-ORCH-005 revision 6 clause 23): a resumed coordinator keeps the instructions of the grant it started with; a message\'s direct-work grant tells the next iteration\'s root to do the work itself', async () => {
+      // The launch coordinates (`none`); the continue's message classifies `explicit_trivial` with the direct-work bundle.
+      // The resumed iteration runs under the carried grant, so its root keeps the coordinating prompt that agrees with the
+      // tools it is offered; only the next iteration's root is told to do the work itself (found by fin20's verifier).
+      const coordinating = BUILT_IN_PERSONAS.orchestrator.systemPrompt;
+      const answers = [resolvedFor(classifiedAs('moderate_feature')), resolvedFor(classifiedAs('explicit_trivial'))];
+      const ports: ToolPortContext[] = [];
+      let releaseFirst!: () => void;
+      const first = new Promise<void>((r) => { releaseFirst = r; });
+      let releaseResumed!: () => void;
+      const resumed = new Promise<void>((r) => { releaseResumed = r; });
+      const { sessions, client } = sessionsWith([pausedMidTurn(first), { parts: [{ hold: resumed }, ...answer('resumed, done').parts] }, answer('next, done')],
+        (ctx) => (ctx.intent ? resolvedFor(ctx.intent) : answers.shift()!),
+        (ctx) => { if (ctx.persona === 'orchestrator') ports.push(ctx); }, undefined, NONE, coordinating);
+      const sid = (sessions.start(dal, 'C:/ws', 'add the export feature') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && dal.getSession(sid)!.execution_status !== 'running'; i++) await new Promise((r) => setTimeout(r, 5));
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      releaseFirst();
+      await sessions.running(sid)!;
+      expect(sessions.prompt(sid, 'just fix the typo in the README').ok).toBe(true);
+      for (let i = 0; i < 80 && client.requests.length < 2; i++) await new Promise((r) => setTimeout(r, 5));
+      expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'then this' } }).ok).toBe(true);
+      releaseResumed();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(ports.map((p) => [p.grant, p.intent])).toEqual([['none', 'moderate_feature'], ['none', 'moderate_feature'], ['direct-work', 'explicit_trivial']]);
+      const [launched, resumedRoot, next] = client.requests.map(systemOf);
+      for (const text of [launched!, resumedRoot!]) {
+        expect(text).toContain('you do not modify files or run commands yourself');
+        expect(text).not.toContain(DIRECT_WORK_INSTRUCTION);
+      }
+      expect(resumedRoot).toContain('PLAYBOOK for moderate_feature');
+      expect(next).toContain(DIRECT_WORK_INSTRUCTION);
+      expect(next).not.toContain('you do not modify files or run commands yourself');
+      expect(next).toContain('PLAYBOOK for explicit_trivial');
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'resumed_under_changed_instructions')).toEqual([]);
+    });
+
     it('REQ-ORCH-013: the prior intent a continue\'s classification inherits is the intent in effect, a continue\'s over the launch\'s', async () => {
       const answers = [resolvedFor(classifiedAs('single_file_change')), resolvedFor(classifiedAs('whole_project')), resolvedFor(classifiedAs('moderate_feature', true))];
       const priors: (string | null | undefined)[] = [];

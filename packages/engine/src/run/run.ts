@@ -1738,6 +1738,7 @@ export class Run {
     const compression = this.compressionFor(() => this.callsOn(rootResilience.cell), () => this.plannerTodoLines());
     // PD-ORCH-005 revision 4 clause 14: one check per execution of the root, at its first model step.
     // OQ-105 as ruled (R-071): taken of the entry persona's own definition — its instructions and its tool declaration.
+    // The definition is the persona's prompt as written, never the grant-fitted form below (PD-ORCH-005 revision 6 clause 14).
     const entryPersona = (this.deps.personas ? this.deps.personas.resolve(config.persona) : resolveRole(config.persona))?.persona;
     const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration, personaDefinitionOf(config.systemPrompt, entryPersona));
     /*
@@ -1745,8 +1746,11 @@ export class Run {
      * do the work itself, so its instructions agree with the tools it is offered; every other entry keeps its own prompt.
      * While the plan gate holds the run, REQ-ORCH-153 withholds the bundle's writing and command tools, so the held turn
      * keeps the prompt it had before the ruling (`turnFn` reads the hold per turn, as the supervisor below does).
+     * OQ-162 as ruled (R-071, `PD-ORCH-005` revision 6 clause 23): the grant read is the one the iteration runs under —
+     * a resumed iteration's carried intent, never the classification a continue's message brought for the next one —
+     * so a resumed coordinator's instructions agree with the carried tools and do not change partway through it.
      */
-    const entryInstructions = entryInstructionsFor(config.systemPrompt, this.preflight?.grant ?? null, entryPersona ?? null);
+    const entryInstructions = entryInstructionsFor(config.systemPrompt, this.preflightInEffect?.grant ?? null, entryPersona ?? null);
     /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
     let rootDetached = false;
     /*

@@ -2664,12 +2664,13 @@ REQ-MONITOR-020's "only running and summarizing agents count" and REQ-CONFIG-094
 by an earlier process holds no place until a run of it starts in this one, and a resting session's places do not lapse.
 **(23) A continue resumes the paused iteration with the intent and tools it started with (revision 6).** An iteration a
 continue resumes SHALL run under the intent in effect when it was left open — the newest intent the session recorded, a
-continuation's or else the launch's — with that intent's grant to the entry role, its playbook and its budget clamp, for
-its root and every agent it resumes or delegates. The Continue action, and the resolution of a message-limit pause, bring
-no new request, and SHALL make no classification call: the run carries the intent in effect, conveyed as continued from
-the previous run. A continue that brings a request — a message, or a plan decision — classifies it as any run does, and
-that classification SHALL take effect from the run's next iteration, once the resumed iteration has closed; an iteration
-left open again keeps the intent it started with. The prior intent a classification inherits when its own is unusable
+continuation's or else the launch's — with that intent's grant to the entry role, the entry role's instructions as that
+grant fits them (PD-ORCH-006), its playbook and its budget clamp, for its root and every agent it resumes or delegates.
+The Continue action, and the resolution of a message-limit pause, bring no new request, and SHALL make no classification
+call: the run carries the intent in effect, conveyed as continued from the previous run. A continue by message classifies
+the message as any run does, and that classification SHALL take effect from the run's next iteration, once the resumed
+iteration has closed; an iteration left open again keeps the intent it started with. A plan decision resumes nothing,
+and its run classifies the session's request as before. The prior intent a classification inherits when its own is unusable
 (REQ-ORCH-013) is the intent in effect.
 
 **What is unchanged.** A continuation is still not a resume: a timed-out child is never resumed and earns no corrective
@@ -3119,6 +3120,17 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 >   message's classification is not taken up: the "run's next iteration" the clause names is this run's, and a later
 >   Continue carries the intent in effect, which is still the one the iteration started with. A later continue by message
 >   classifies afresh.
+> - **The instructions follow the grant in effect.** `PD-ORCH-006` (OQ-202), which landed on `main` while this revision
+>   was built, fits the entry turn's instructions to the run's grant (`entryInstructionsFor`), and read the run's own
+>   pre-flight. Merged as written, a continue by message whose resumed iteration carried `none` and whose message classified
+>   `explicit_trivial` would have told the resumed coordinator to do the work itself while it still held only the
+>   coordinating tools — the mid-iteration change this clause removes (found at the verifier's second review, before
+>   landing). The root's instructions now read `Run.preflightInEffect`'s grant, as its tools, playbook and clamp do, so the
+>   clause names the instructions with them; the next iteration's root is the first given the message's. The fingerprint
+>   stays the persona's prompt as written, never its grant-fitted form, so the change of form between iterations is no
+>   change of definition and warns nothing. Clause 23 also said "a continue that brings a request — a message, or a plan
+>   decision — classifies it"; a plan decision is not classified, its relaunch classifies the session's last request, so
+>   the clause now says that (the same review).
 > - **The persona's definition** is its own system prompt and its tool declaration (declared tools, `tool_restrictions`,
 >   the `coordinatorOnly` and `readOnly` flags); the root's is the entry persona's. Digests are marked `persona:`, so a
 >   fingerprint recorded before the ruling, of the whole request, is told apart and replaced with nothing stated. A
@@ -3127,7 +3139,9 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 >   as "changed since it last ran".
 >
 > **What was measured.** Unit and scripted end-to-end tests: three cases in `packages/engine/src/run/preflight.test.ts`
-> ("OQ-162 as ruled …"), each red on the code before the repair — the live run's a71-3 and G1 shape (a launch that fell
+> ("OQ-162 as ruled …"), each red on the code before the repair, and a fourth since the merge with `PD-ORCH-006` (a
+> resumed coordinator that carried `none` keeps the coordinating prompt, the next iteration's root under the message's
+> direct-work grant is told to do the work itself, and nothing is warned; red with the run's own grant read) — the live run's a71-3 and G1 shape (a launch that fell
 > back, a Continue that would have classified otherwise: one classification, the resumed root's grant and playbook the
 > launch's, no warning), a continue by message whose classification governs from the next iteration, and the prior
 > intent; `apps/desktop/src/run-host/intent.test.ts` (a carried intent makes no classification request); and the clause

@@ -492,6 +492,81 @@ describe('the main window\'s close guard reports a confirmed close before it clo
   });
 });
 
+describe('a person\'s close asks the active-run confirmation after the renderer\'s guard (REQ-STARTUP-046, REQ-SHELL-119)', () => {
+  function fakeWindow(log: string[]) {
+    let listener: ((event: { preventDefault(): void }) => void) | null = null;
+    const win: GuardedWindow & { attempt(): void } = {
+      on: (_event, l) => { listener = l; },
+      isDestroyed: () => false,
+      close: () => { log.push('close'); win.attempt(); },
+      attempt: () => { let prevented = false; listener?.({ preventDefault: () => { prevented = true; } }); log.push(prevented ? 'held' : 'passed'); },
+    };
+    return win;
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it('declined, the close is aborted: nothing is reported or closed, and the window stays', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => { log.push('settings'); return true; }, () => log.push('confirmed'), async () => { log.push('runs'); return false; });
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['settings', 'held', 'runs']);
+  });
+
+  it('accepted, the close is reported, made and passes', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => { log.push('settings'); return true; }, () => log.push('confirmed'), async () => { log.push('runs'); return true; });
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['settings', 'held', 'runs', 'confirmed', 'close', 'passed']);
+  });
+
+  it('the unsaved-settings guard comes first: refused there, the run confirmation is never asked', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => { log.push('settings'); return false; }, () => log.push('confirmed'), async () => { log.push('runs'); return true; });
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['settings', 'held']);
+  });
+
+  it('a confirmation that cannot be asked is the returning answer', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => true, () => log.push('confirmed'), async () => { throw new Error('no box'); });
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held']);
+  });
+
+  it('a second close while the confirmation is open is held and asks nothing more', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    let answer!: (proceed: boolean) => void;
+    guardClose(win, async () => true, () => log.push('confirmed'), () => { log.push('runs'); return new Promise<boolean>((r) => { answer = r; }); });
+    win.attempt();
+    await settle();
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held', 'runs', 'held']);
+    answer(false);
+    await settle();
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held', 'runs', 'held', 'held', 'runs']);
+  });
+
+  it('the application\'s quit asks the renderer\'s guard alone', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    const guard = guardClose(win, async () => { log.push('settings'); return true; }, () => log.push('confirmed'), async () => { log.push('runs'); return false; });
+    expect(await guard.ask()).toBe(true);
+    expect(log).toEqual(['settings']);
+  });
+});
+
 describe('a main window\'s close guard, as the application\'s quit drives it (PD-ORCH-005 clause 9)', () => {
   it('asking closes nothing; a confirmed guard lets the window\'s next close pass, and one that cannot answer allows', async () => {
     const log: string[] = [];

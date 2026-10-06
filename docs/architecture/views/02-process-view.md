@@ -254,7 +254,14 @@ through their guards, all or none (`closeThroughGuards`: every guard asked, ever
 closed). Nothing a quit closes answers for a person. `QuitState` (`main/exit.ts`) knows the quit from
 `exitCleanly` and from each main window's confirmed close, which `guardClose` reports before closing. While it is under
 way an approval dialog that closes sends no Deny, and the question dock's cancellation is not forwarded. The run host's
-`shutdown` withdraws both instead (PD-ORCH-005 clause 9, OQ-96).
+`shutdown` withdraws both instead (PD-ORCH-005 clause 9, OQ-96). **Since 2026-10-06 a person's close of a main window asks
+REQ-SHELL-119's guards in order** (REQ-STARTUP-046, OQ-205; fin22): the renderer's unsaved-settings guard, then, when no
+other main window stays open and the run host's `runs.active` counts a run (a count that cannot be read counts), the
+active-run confirmation — a message box over the closing window, "Quit while a run is active?" with Cancel and Yes, Cancel
+the default and Escape's answer (`activeRunCloseBox`, `confirmActiveRunClose`, `main/close-confirmation.ts`, reached through
+the adapter's `confirmRunsAtClose`). Only Yes confirms the close; Cancel leaves the window, its state and the run as they
+were. A close made while the guards are being asked is held and asks nothing more. The application's quit
+(`closeThroughGuards`) asks the renderer's guard alone: it is not a person's close of a window.
 
 **The session browser's actions (Part U).** Renderer → main: `session.repair {sessionId?}` (one stale session, or every
 stale session when the id is absent — REQ-SESSION-060/182) → `{report: {repaired[{sessionId, from, to: interrupted,

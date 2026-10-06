@@ -53,6 +53,7 @@ import { sessionCommands } from './commands/session.js';
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
+import { confirmActiveRunClose } from './close-confirmation.js';
 import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
@@ -1288,6 +1289,20 @@ async function main(): Promise<void> {
     forgetTerminalFrames: (wcId) => terminalFrames.forget(wcId),
     closeConfirmed: (wcId) => { quit.closeConfirmed(wcId); },
     closeGuard: (wcId, guard) => { if (guard) closeGuards.set(wcId, guard); else closeGuards.delete(wcId); },
+    /*
+     * REQ-STARTUP-046 / REQ-SHELL-119 guard 3 (OQ-205): a person's close of the last main window staying asks while the run
+     * host counts a run active; with another main window staying, the close ends nothing and asks nothing. The count is
+     * instance-wide, as at REQ-SHELL-021's gate 3. The box is `activeRunCloseBox`, over the closing window.
+     */
+    confirmRunsAtClose: (wcId, win) => confirmActiveRunClose({
+      othersStaying: () => mainWindows.ordered().some((m) => m.wcId !== wcId && !m.win.isDestroyed() && !quit.isClosing(m.wcId)),
+      activeRuns: async () => {
+        const active = await runHost.request({ kind: 'runs.active', workspaceId: '' }, millis(5_000)).catch(() => null);
+        return active?.kind === 'runs.count' ? active.count : null;
+      },
+      ask: (box) => askBox(win.isDestroyed() ? null : win, box),
+      log,
+    }),
     log,
   });
 

@@ -10409,3 +10409,35 @@ directive naming REQ-ORCH-025), or keeps the coordination-only tool set and the 
 so `swarm` becomes an input to REQ-ORCH-016's mapping as `single` is, and `PD-ORCH-006` does not reach that run), or
 keeps the bundle and is told both. The repair of the defect note can render REQ-ORCH-025's `swarm` text on the other
 intents whichever way this is ruled; what it renders on the granted ones waits on the ruling.
+
+**OQ-205 — Which closes of a main window ask REQ-STARTUP-046's active-run confirmation, now that the instance holds several
+main windows and a quit can start outside any window?** *(REQ-STARTUP-046, "When a run is active, a confirmation SHALL be
+presented before anything is torn down", its text conveying "that closing the window ends it"; REQ-SHELL-119's third guard,
+"with runs active, a user-initiated close asks 'Quit while a run is active?'"; REQ-STARTUP-161, several main windows in one
+instance; REQ-STARTUP-047 with REQ-SHELL-018, the switch's close; `PD-ORCH-005` clause 3, a quit leaves unfinished agents
+`paused`. Raised 2026-10-06 by the repair of
+[`closing-a-window-while-a-run-is-active-asks-no-confirmation.md`](../defects/fixed/closing-a-window-while-a-run-is-active-asks-no-confirmation.md)
+(fin22, bundle `fin22-window-strip-config`). Open.)*
+
+Both requirements were written when the instance held one main window and its close was the quit. Since REQ-STARTUP-161
+the run host keeps executing while any main window stays, and the run host's count of active runs is instance-wide
+(sessions are not keyed by workspace; REQ-SHELL-021's gate 3 and OQ-86 read it the same way). Closing one of two windows
+ends no run, so REQ-STARTUP-046's sentence "closing the window ends it" would be untrue there; and the switch's outgoing
+window closes while its replacement is shown, behind REQ-SHELL-021's gate 3, which already declines a switch while any run
+is active. A quit Electron starts on its own account (SIGTERM, the desktop's logout, `app.quit()`, the driver's quit) closes
+every window at once and is not a person's close of a window; REQ-SHELL-119 asks its third guard on "a user-initiated close".
+
+**What the build proceeds under** (`confirmActiveRunClose`, `apps/desktop/src/main/close-confirmation.ts`; `guardClose`,
+`apps/desktop/src/main/main-windows.ts`). A person's close of a main window — its close control, the title bar's Close
+(PD-SHELL-003), the window manager's close — asks the confirmation after the renderer's unsaved-settings guard allows,
+when no other main window stays open and the run host counts a run active (a count that cannot be read asks). The box
+asks REQ-SHELL-119's question with Cancel and Yes, Cancel first, the default, and Escape's and the close control's answer
+(REQ-SHELL-055); its detail conveys REQ-STARTUP-046's three things with REQ-SHELL-119's statement that shutdown is
+requested and in-flight work may not finish. Only Yes closes; Cancel changes nothing, and a box that cannot be shown is
+Cancel. With another main window staying, the close asks nothing, and the run keeps executing. A quit started outside any
+window is not asked; its shutdown leaves the run as `PD-ORCH-005` clause 3 says.
+
+**What a ruling decides.** Whether the confirmation is asked on every close of a main window while any run is active
+(and then what it says where the close ends nothing), only on a close that ends a run (as built), or on a close of the
+window whose own workspace has a run active (which needs the run host's count keyed by workspace); and whether a quit
+started outside any window — the desktop's logout above all — asks it.

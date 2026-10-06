@@ -645,6 +645,8 @@ export interface ElectronMainWindowAdapterDependencies {
   readonly forgetTerminalFrames: (wcId: number) => void;
   /** A main window's close was confirmed and is now under way: what an application quit is recognised by (`exit.ts`). */
   readonly closeConfirmed?: ((wcId: number) => void) | undefined;
+  /** REQ-STARTUP-046 / REQ-SHELL-119 guard 3: a person's close of this window, asked once the renderer's guard allows. */
+  readonly confirmRunsAtClose?: ((wcId: number, win: BrowserWindow) => Promise<boolean>) | undefined;
   /** Each main window's close guard as it is built, and `null` once the window has closed. */
   readonly closeGuard?: ((wcId: number, guard: CloseGuard | null) => void) | undefined;
   readonly log: (message: string) => void;
@@ -693,9 +695,16 @@ export interface CloseGuard {
  * is what lets main tell the application's quit from a person closing a dialog (PD-ORCH-005 clause 9, `exit.ts`): the
  * window's modal dialogs close as the window does, after the report. The guard is returned so the application's quit
  * can ask every window's guard before confirming any.
+ *
+ * A person's close asks REQ-SHELL-119's guards in their order: the renderer's (unsaved settings, guard 1), then, once
+ * that allows, `confirmRuns` (the active-run confirmation, guard 3; REQ-STARTUP-046, `close-confirmation.ts`), which
+ * declines when it cannot answer. A declined close changes nothing. A close attempted while the guards are still being
+ * asked is held and adds no second question. The application's quit asks `ask` alone (`closeThroughGuards`): it is not
+ * a person's close of the window (OQ-205).
  */
-export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, confirmed: () => void): CloseGuard {
+export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, confirmed: () => void, confirmRuns?: () => Promise<boolean>): CloseGuard {
   let closeConfirmed = false;
+  let asking = false;
   const guard: CloseGuard = {
     ask: () => ask().then((proceed) => proceed !== false, () => true),
     confirm: () => { if (closeConfirmed) return; closeConfirmed = true; confirmed(); },
@@ -704,7 +713,11 @@ export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, conf
   win.on('close', (event) => {
     if (closeConfirmed || win.isDestroyed()) return;
     event.preventDefault();
-    void guard.ask().then((allowed) => { if (allowed) { guard.confirm(); guard.close(); } });
+    if (asking) return;
+    asking = true;
+    void guard.ask()
+      .then((allowed) => (allowed && confirmRuns ? confirmRuns().catch(() => false) : allowed))
+      .then((allowed) => { asking = false; if (allowed) { guard.confirm(); guard.close(); } });
   });
   return guard;
 }
@@ -797,6 +810,7 @@ export function createElectronMainWindowAdapter(
         win,
         () => win.webContents.executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true'),
         () => dependencies.closeConfirmed?.(wcId),
+        dependencies.confirmRunsAtClose === undefined ? undefined : () => dependencies.confirmRunsAtClose!(wcId, win),
       );
       dependencies.closeGuard?.(wcId, guard);
       win.once('closed', () => dependencies.closeGuard?.(wcId, null));

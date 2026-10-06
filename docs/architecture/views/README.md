@@ -62,6 +62,12 @@ log at `INFO`). The **runtime view**'s stall-watch paragraph and its `timeline` 
 REQ-MONITOR-120's "logged" is met when the session log keeps its default `WARNING` level. No package, edge, process,
 channel, command or store column changed.
 
+**A person's close of the last main window asks the active-run confirmation (REQ-STARTUP-046, REQ-SHELL-119; OQ-205
+raised, fin22).** `guardClose` takes a third guard, `confirmRunsAtClose`, asked after the renderer's unsaved-settings guard
+allows; main answers it from the run host's `runs.active` and `activeRunCloseBox` (`main/close-confirmation.ts`) when no
+other main window stays open. The application's quit asks the renderer's guards alone, as before. The **process view**'s
+quit paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **The remaining confirm-as-built questions are ruled, and no code moved (R-071; fin20).** OQ-154 to OQ-203's
 confirm-as-built rulings are written into their entries, with `PD-HOOKS-001`, `PD-ORCH-010` to `PD-ORCH-012`, `PD-ORCH-006`
 revision 2, `PD-MONITOR-003` to `PD-MONITOR-005`, `PD-WORKSPACE-006` to `PD-WORKSPACE-008`, `PD-SHELL-007`, `PD-SHELL-008`,

@@ -684,8 +684,9 @@ const ROUND_OVER = `(() => {
 // ---- 9. Exit under an outstanding discovery -------------------------------------------------------------------
 {
   // The run's first port waits on the mute server's discovery; the bound fires at 35 s, the run proceeds with alpha listed bare,
-  // and the user closes the window at 40 s — the exit must follow without waiting on anything.
-  const r = await launch('exit-bound', { ROTARIS_CAPTURE_PROMPT: 'a server that never answers', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '60000', ROTARIS_CAPTURE_QUIT_MS: '40000' }, { files: { global: globalYaml({ alphaFlags: ['--never-init'] }) }, timeout: 120_000 });
+  // and the user closes the window at 40 s — the exit must follow without waiting on anything. A run still active then is
+  // asked about first (REQ-STARTUP-046), and the box is answered Yes.
+  const r = await launch('exit-bound', { ROTARIS_CAPTURE_PROMPT: 'a server that never answers', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '60000', ROTARIS_CAPTURE_QUIT_MS: '40000', ROTARIS_CAPTURE_ANSWERS: '1' }, { files: { global: globalYaml({ alphaFlags: ['--never-init'] }) }, timeout: 120_000 });
   // The failure's one record is `ToolDiscovery`'s REQ-MCP-048 warning, which carries the time; the run host's own
   // "discovery of 'alpha' failed … in N ms" restated it until 2026-10-03 and is gone (finding U4).
   const disc = lines(r.log, /mcp alpha: tool discovery failed in \d+ ms/)[0] ?? '';

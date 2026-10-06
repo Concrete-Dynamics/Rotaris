@@ -16,7 +16,8 @@ import { STEER_EARLY_CLICKS, STEER_EARLY_TYPE, SUBSCRIBE_HOLD_MS, steerEarlyRead
  * pending at a pause, delivered into the root's record and read by the resumed root, which carries on with its next
  * scripted step; the
  * message-limit pause with its dialog answered "double", then the relaunch finding a session paused at the
- * limit and its dialog answered "cancel"; a user-initiated quit during a run; a root the quit cut before its first reply
+ * limit and its dialog answered "cancel"; a user-initiated quit during a run, its active-run confirmation answered Yes, and
+ * the same close declined, the run going on to its own end (REQ-STARTUP-046); a root the quit cut before its first reply
  * in a later iteration, resumed by the relaunch's Continue at the step after the one cut. Every assertion reads the store.
  */
 const require = createRequire(import.meta.url);
@@ -330,10 +331,14 @@ await launch('limit-cancel', s5, { ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAP
   results.limitRelaunch = { session };
 }
 
-// 5. A user-initiated quit during a run: the run stops for shutdown, its terminal result is written, the lock is released.
+// 5. A user-initiated quit during a run: the close asks REQ-STARTUP-046's confirmation (REQ-SHELL-119's question, Cancel
+// first and the default), answered Yes; the run stops for shutdown, its terminal result is written, the lock is released.
+// `ROTARIS_CAPTURE_ANSWERS` answers the box (`askBox`), whose log line is the evidence it was asked.
+const ACTIVE_RUN_BOX = /capture: message box "Quit while a run is active\?" \| Quit while a run is active\? \| A run is still executing\. Closing this window ends it: Rotaris will request shutdown of the run, and work in flight may not finish\. Choose Cancel to return to the window and let it finish\. \| buttons \["Cancel","Yes"\] default 0 → answered (\d)/;
 const s6 = scenario('quit', []);
-await launch('quit', s6, { ROTARIS_SCRIPT: 'read,read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'quit me', ROTARIS_CAPTURE_QUIT_MS: '2200', ROTARIS_CAPTURE_AFTER_MS: '40000' }, { expectPng: false });
+const quitLog = await launch('quit', s6, { ROTARIS_SCRIPT: 'read,read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'quit me', ROTARIS_CAPTURE_QUIT_MS: '2200', ROTARIS_CAPTURE_ANSWERS: '1', ROTARIS_CAPTURE_AFTER_MS: '40000' }, { expectPng: false });
 {
+  if (ACTIVE_RUN_BOX.exec(quitLog)?.[1] !== '1') throw new Error('the close during a run asked no active-run confirmation, or not in REQ-SHELL-119\'s words (REQ-STARTUP-046); see quit.log');
   const db = open(s6);
   const session = db.prepare('SELECT execution_status, stop_reason FROM sessions').get();
   const locks = db.prepare('SELECT count(*) AS c FROM session_locks').get().c;
@@ -342,7 +347,21 @@ await launch('quit', s6, { ROTARIS_SCRIPT: 'read,read,read,read,read,read', ROTA
   if (session.stop_reason !== 'application_shutdown') throw new Error(`the quit did not stop the run for shutdown: ${JSON.stringify(session)}`);
   if (!events.includes('session.end') || !events.includes('result')) throw new Error(`the terminal pair was not written before exit: ${events.join(',')}`);
   if (locks !== 0) throw new Error('the quit left a lock behind');
-  results.quit = { session, events };
+  results.quit = { session, events, confirmation: 'asked; answered Yes' };
+}
+
+// 5b. The same close declined (REQ-STARTUP-046): Cancel aborts the close, the window stays and accepts input, and the run
+// keeps executing to its own end — not stopped for shutdown. The capture then photographs the window that stayed.
+const s6b = scenario('quit-declined', []);
+const declinedLog = await launch('quit-declined', s6b, { ROTARIS_SCRIPT: 'read,read,read,answer', ROTARIS_CAPTURE_PROMPT: 'keep me', ROTARIS_CAPTURE_QUIT_MS: '2200', ROTARIS_CAPTURE_ANSWERS: '0', ROTARIS_CAPTURE_AFTER_MS: '16000' });
+{
+  if (ACTIVE_RUN_BOX.exec(declinedLog)?.[1] !== '0') throw new Error('the close during a run asked no active-run confirmation to decline (REQ-STARTUP-046); see quit-declined.log');
+  if (!/close: active-run confirmation \(\d+ active\) → return to the window/.test(declinedLog)) throw new Error('main did not record the declined close; see quit-declined.log');
+  const db = open(s6b);
+  const session = db.prepare('SELECT execution_status, stop_reason FROM sessions').get();
+  db.close();
+  if (session.stop_reason === 'application_shutdown' || session.execution_status !== 'completed') throw new Error(`the declined close did not leave the run executing to its own end: ${JSON.stringify(session)}`);
+  results.quitDeclined = { session, confirmation: 'asked; answered Cancel' };
 }
 
 // 6. A root resumed before its first reply in a later iteration (the repair of
@@ -354,7 +373,7 @@ await launch('quit', s6, { ROTARIS_SCRIPT: 'read,read,read,read,read,read', ROTA
 // `glob`. Before the repair it was placed as a fresh agent and took the script's first step, the `read`, again.
 const s7 = scenario('quit-before-reply', []);
 const BEFORE_REPLY_SCRIPT = 'read,answer,wait:60000,glob,answer';
-await launch('quit-before-reply', s7, { ROTARIS_SCRIPT: BEFORE_REPLY_SCRIPT, ROTARIS_CAPTURE_PROMPT: 'first task', ROTARIS_CAPTURE_TYPE: 'and then this>>composer@2200', ROTARIS_CAPTURE_QUIT_MS: '22000', ROTARIS_CAPTURE_AFTER_MS: '40000' }, { expectPng: false });
+await launch('quit-before-reply', s7, { ROTARIS_SCRIPT: BEFORE_REPLY_SCRIPT, ROTARIS_CAPTURE_PROMPT: 'first task', ROTARIS_CAPTURE_TYPE: 'and then this>>composer@2200', ROTARIS_CAPTURE_QUIT_MS: '22000', ROTARIS_CAPTURE_ANSWERS: '1', ROTARIS_CAPTURE_AFTER_MS: '40000' }, { expectPng: false });
 const laterRoot = (s) => {
   const db = open(s);
   const sid = db.prepare('SELECT session_id FROM sessions').get().session_id;

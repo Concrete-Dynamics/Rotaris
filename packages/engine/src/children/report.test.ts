@@ -385,16 +385,32 @@ describe('engine/children/report — OQ-111: the pass reads the start and the mo
     expect(Number(marker![1])).toBe(full.length - (t.length - marker![0].length) - 1);
   });
 
-  it("a task longer than REQ-ORCH-110's 2,000 per event keeps its head, cut and marked like any event (OQ-119)", () => {
-    const long = `${TASK}\nCONTEXT: ${'the documents were written by two different agents at different times. '.repeat(40)}`;
+  it("a task longer than REQ-ORCH-110's 2,000 per event is kept whole, its closing sections included, within the 12,000 total (OQ-119 as ruled, PD-ORCH-007)", () => {
+    const long = `${TASK}\nCONTEXT: ${'the documents were written by two different agents at different times. '.repeat(40)}\nCLOSING: report each document you changed.`;
     const opening = childPayload('/ws', long, '', [INDEX], SCOPES, INHERITED);
     const t = reportTranscript(duress(say('user', opening)), long);
     const whole = `user: … [${opening.length - long.length} characters omitted] … ${long}`;
     expect(whole.length).toBeGreaterThan(2_000);
-    expect(t.startsWith(`${event(whole)}\n… [`)).toBe(true);
+    // Before the ruling the start was `event(whole)`: its head, the closing section lost to the per-event cut.
+    expect(event(whole)).not.toContain('CLOSING: report each document you changed.');
+    expect(t.startsWith(`${whole}\n… [`)).toBe(true);
     expect(t).toContain('MUST NOT DO:');
+    expect(t).toContain('CLOSING: report each document you changed.');
     expect(t.length).toBeLessThanOrEqual(TRANSCRIPT_CAP);
     expect(t.endsWith(FINAL)).toBe(true);
+    // Every other event keeps REQ-ORCH-110's 2,000: the most recent part is the events as each is cut.
+    expect(t.slice(t.lastIndexOf('\n… [')).split('\n').slice(2).every((line) => line.length <= 2_000 + ' … [99999 characters omitted]'.length)).toBe(true);
+  });
+
+  it('a task that alone passes the 12,000 total keeps its head within the total, and every later event is marked omitted (OQ-119 as ruled)', () => {
+    const huge = `${TASK}\nCONTEXT: ${'x'.repeat(13_000)}`;
+    const messages = duress(say('user', huge));
+    const t = reportTranscript(messages, huge);
+    expect(t.length).toBeLessThanOrEqual(TRANSCRIPT_CAP);
+    expect(t.startsWith(`user: ${TASK}`)).toBe(true);
+    const rest = events(messages).slice(1).join('\n');
+    expect(t.endsWith(`characters omitted]\n… [${rest.length} characters omitted] …`)).toBe(true);
+    expect(t).not.toContain('tool-call haet_edit');
   });
 
   it('where the first event is not the payload — a compression replaced the conversation — the task is put ahead of the events as given', () => {

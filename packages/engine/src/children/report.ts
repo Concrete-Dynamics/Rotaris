@@ -101,8 +101,11 @@ function eventTexts(messages: readonly ChatMessage[]): string[] {
  * which carries the task LAST: where that event is recognised (a user message ending with the task), what the payload
  * puts ahead of the task is replaced by a marker saying how many characters it held, so the first event reads
  * `user: … [N characters omitted] … <the task>`. Where it is not — a compression replaced the conversation — the task
- * is put ahead of the events as given. Either way the start is ONE event and is cut to REQ-ORCH-110's 2,000 from its
- * head: a task longer than that keeps its head, and OQ-119 asks whether it may be kept whole.
+ * is put ahead of the events as given. Either way the start is ONE event, and since OQ-119's ruling (R-071, `PD-ORCH-007`)
+ * the task is exempt from REQ-ORCH-110's 2,000 per event: it is kept whole within the 12,000 total, and only a task that
+ * fills the total alone is cut, from its head, with every later event marked omitted. Every other event keeps the 2,000.
+ * Until the ruling the start was cut to 2,000 from its head, so a long task lost its closing sections (OQ-119: six of the
+ * twelve delegations of the duress run of 2026-09-29 carried tasks longer than 2,000 characters).
  *
  * The reasons it did not, kept beside their replacement: (1) it was cut to 12,000 from its head. For a long child that
  * is the task and its first reads, and the edits come after the cut; in the duress live run of 2026-09-29 the request
@@ -120,7 +123,8 @@ export function reportTranscript(messages: readonly ChatMessage[], task?: string
     const opening = first?.role === 'user' ? first.content[0] : undefined;
     const payload = opening?.kind === 'text' && opening.text.endsWith(task) ? opening.text : null;
     const ahead = payload === null ? 0 : payload.length - task.length;
-    const start = cut(`user: ${ahead > 0 ? `${marker(ahead)} ` : ''}${task}`, EVENT_CAP);
+    // OQ-119 as ruled (R-071, PD-ORCH-007): the task is exempt from the per-event cut; the total still bounds it.
+    const start = `user: ${ahead > 0 ? `${marker(ahead)} ` : ''}${task}`;
     parts = [start, ...(payload === null ? parts : parts.slice(1))];
   }
   const whole = parts.join('\n');
@@ -129,7 +133,14 @@ export function reportTranscript(messages: readonly ChatMessage[], task?: string
   const rest = parts.slice(1).join('\n');
   // The marker's length depends on the count it states, which is never more than `rest`'s own length: reserve that
   // widest marker, so the whole never passes the cap whatever the count turns out to be.
-  const omitted = rest.length - (TRANSCRIPT_CAP - head.length - marker(rest.length).length - 2);
+  const room = TRANSCRIPT_CAP - marker(rest.length).length - 2;
+  if (head.length > room) {
+    // OQ-119 as ruled: a task longer than the total leaves no room for the most recent part. Its head is kept, cut so that
+    // it and its own omission count fit the room (the count is never wider than the head's length), and everything after
+    // it is marked omitted.
+    return `${cut(head, room - ` [${head.length} characters omitted]`.length - 1)}\n${marker(rest.length)}`;
+  }
+  const omitted = rest.length - (room - head.length);
   return `${head}\n${marker(omitted)}\n${rest.slice(omitted)}`;
 }
 

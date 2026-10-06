@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Twenty-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Thirty.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -2878,6 +2878,34 @@ REQ-ORCH-029, carries the same grant and is given the same instructions.
 > received on its `explicit_trivial` launch. **What was not measured.** No live run: the orchestrator's default live run's
 > `frictions` scenario should show the coordinator's first request answered without reasoning about the contradiction. The
 > row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-orch-007"></a>
+
+### PD-ORCH-007 — the report summariser reads the child's whole task
+
+The report-producing pass of REQ-ORCH-110 keeps the child's task as given as the start of the transcript it reads (OQ-111's
+ruling). That task SHALL be exempt from REQ-ORCH-110's 2,000 characters for any one event: it is kept whole, within the
+12,000 characters in total. A task that alone fills the total keeps its head, cut and marked, and every later event is marked
+omitted. Every other event, and the start where no task is given, keeps the 2,000.
+
+**Why, and what it costs.** The task is the one event the summary is judged against, and a delegation's task carries its
+closing sections — what must not be done, the expected outcome — last. Under the per-event cut a task longer than 2,000
+characters lost them ([OQ-119](../architecture/open-questions.md)): six of the twelve delegations of the duress run of
+2026-09-29 carried longer tasks, up to 3,447 characters. The cost is room: a long task leaves less of the 12,000 for the most
+recent part of the transcript, which the report's deterministic facts (OQ-111) partly make up for.
+
+> **Narrows:** REQ-ORCH-110
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), which ruled OQ-119 as recommended.*
+
+> **First execution, 2026-10-06 (fin20).** `reportTranscript` (`packages/engine/src/children/report.ts`) no longer cuts the
+> start it builds from the task; the two-part assembly cuts a start that leaves no room for the most recent part. **What was
+> measured.** Two cases in `children/report.test.ts`, both red on the code before: a 3,000-character task kept whole with its
+> closing section, and a task past 12,000 characters held within the total. **What was not measured.** No built-app proof
+> delegates a task that long; the orchestrator's duress live run's summarising requests should each begin with the whole task.
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

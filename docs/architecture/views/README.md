@@ -45,6 +45,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**The report summariser reads the child's whole task (OQ-119; `PD-ORCH-007`, R-071; fin20).** `reportTranscript` keeps the
+task as given whole within REQ-ORCH-110's 12,000 total, exempt from the 2,000 per event; a task that alone fills the total keeps
+its head. The **runtime view**'s children paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **A coordinator granted the direct-work bundle is told to do the work itself (OQ-202; `PD-ORCH-006`, R-071; fin20).**
 `entryInstructionsFor` (`children/personas.ts`) fits the entry turn's instructions to the pre-flight's grant: the built-in
 coordinating prompt becomes its direct-work form, a configured prompt gains the statement after it, and a turn the plan gate

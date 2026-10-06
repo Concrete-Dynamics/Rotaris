@@ -860,7 +860,8 @@ turn loop under its persona's tools, model, credential and supervisor; its **rep
 which reads the task as given (the ledger row's, the payload's blocks ahead of it marked omitted) and the most recent
 part of the transcript within 12,000 characters, the omission marked between them, beside the report's deterministic
 facts — edited files (a write the record answers as refused, or cut before it started, is not one; a write cut off
-while under way is), commands and exit codes (OQ-111; OQ-119 and OQ-120 ask its two bounds);
+while under way is), commands and exit codes (OQ-111; OQ-120 asks the facts' bound). The task is kept whole within the
+12,000, exempt from the 2,000 per event every other event keeps (OQ-119 as ruled, `PD-ORCH-007`);
 the parent resumes with the report. Every exit from an iteration leaves every child record terminal — except a rest
 (PD-ORCH-005), which leaves every unfinished child `paused`.
 

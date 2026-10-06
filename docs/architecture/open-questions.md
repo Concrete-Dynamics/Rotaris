@@ -5604,7 +5604,7 @@ in the summary (a directive naming it, or a stop reason of the pause's own in RE
 one notice a rest raises can say which it was and whether a continue resumes its agents; or whether the neutral wording
 stands and the row and the Continue action are where the difference is told.
 
-**OQ-119 — May the task the report summariser keeps as its start be longer than REQ-ORCH-110's 2,000 characters per event?** *(REQ-ORCH-110, "2000 characters for any one event"; OQ-111's ruling, whose kept start is "the task as given"; REQ-TOOLS-154, whose payload carries the task last. Raised 2026-09-29 by the repair of D1 under [R-067](../product/requests.md#r-067), from the branch's verification; raised as OQ-118 on its branch and renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. Open.)*
+**OQ-119 — May the task the report summariser keeps as its start be longer than REQ-ORCH-110's 2,000 characters per event?** *(REQ-ORCH-110, "2000 characters for any one event"; OQ-111's ruling, whose kept start is "the task as given"; REQ-TOOLS-154, whose payload carries the task last. Raised 2026-09-29 by the repair of D1 under [R-067](../product/requests.md#r-067), from the branch's verification; raised as OQ-118 on its branch and renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. ~~Open.~~ Ruled 2026-10-06.)*
 
 OQ-111's first build kept the transcript's first event as its start. That event is the child's whole REQ-TOOLS-154
 payload, which puts the workspace root, the write scopes, the sibling index, the attached artifacts and the inherited
@@ -5621,6 +5621,14 @@ event's. The task's closing sections are the ones lost.
 
 **What a ruling decides.** Whether the task as given is exempt from the per-event cap, so its whole is kept within the
 12,000 total. That would narrow REQ-ORCH-110's per-event figure for this one event. The alternative is that the cut stands.
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the task is exempt from the per-event cap within
+the 12,000-character total, so the summariser sees the whole brief. Carried by
+[`PD-ORCH-007`](../product/directives.md#pd-orch-007), which narrows REQ-ORCH-110. The reading taken where the ruling leaves a
+detail open: the exemption is the task's alone (the marker standing for the payload's blocks ahead of it included), every
+other event keeps the 2,000; and a task that alone fills the total keeps its head within it, cut and marked, with every later
+event marked omitted. **Built 2026-10-06 (fin20):** `reportTranscript` (`packages/engine/src/children/report.ts`), two cases
+in `children/report.test.ts`, red on the code before.
 
 **OQ-120 — How large may the facts given to the report summariser be, and which are kept when they are larger?** *(OQ-111's ruling, which gives the pass the report's deterministic facts and no bound on them; REQ-ORCH-110, "The report-producing pass MUST be bounded"; REQ-ORCH-109. Raised 2026-09-29 by the repair of D1 under [R-067](../product/requests.md#r-067), from the branch's verification; raised as OQ-119 on its branch and renumbered at the merge. Open.)*
 

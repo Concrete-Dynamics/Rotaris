@@ -2304,9 +2304,11 @@
 .req-rail:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: 2px; }
 .req-rail__glyph { font-family: var(--rt-font-mono); font-size: var(--rt-text-sm); }
 /* REQ-TRACE-310/309: the heading is set in the rail's own font, sentence case and untracked, because eight characters of
-   that font are what the width was chosen to hold — a seven-letter label on one line, "Needs Update" wrapping at its space
-   onto two. Drawn as an uppercase, tracked kicker it read "BLOCKE / D" (docs/defects/fixed/the-folded-blocked-rail-breaks-its-label-inside-the-word.md);
-   the kicker is the one exception to sentence case (docs/design/README.md §1.4) and a rail's label is not a section kicker. */
+   that font are what the width was chosen to hold. The ordinary delivery labels are the one-word ones, the longest seven
+   letters, and each sits on one line; "Needs Update" is the heading too long for the rail and wraps at its space onto two.
+   Drawn with the kicker's uppercase and tracking (docs/design/README.md §1.4), which make a word wider than the font's
+   characters, it read "BLOCKE / D" (docs/defects/fixed/the-folded-blocked-rail-breaks-its-label-inside-the-word.md).
+   The open column keeps the kicker paint; the text is the same string (REQ-TRACE-308). */
 .req-rail__heading { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-weight: var(--rt-weight-medium); line-height: var(--rt-leading-tight); max-width: 100%; }
 .req-rail__count { font-size: var(--rt-text-2xs); }
 /* REQ-TRACE-318/319: during a drag every rail states its answer in the engine's words, takes an open column's minimum width and 1.5 lines more height, unanimated. */

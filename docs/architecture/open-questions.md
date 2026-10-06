@@ -10502,6 +10502,12 @@ terminal counts read their own outcomes and issues.
 `tool_error` from `status` and `is_error`), carries one from a vocabulary the specification would name, or keeps `mcp` as a
 bucket of its own.
 
+**Recommendation** (added 2026-10-06 by fin25; for the owner, not a ruling): REQ-TOOLS-112's `outcome_kind` vocabulary is
+the terminal's, the only vocabulary the specification gives the field, so under REQ-SESSION-136's "only when applicable"
+an `outcome_kind` applies to a record whose tool has one, and an MCP call's record would carry none. REQ-SESSION-139 then
+derives its bucket from `status` and `is_error`, `success` or `tool_error`, and the histogram tells an MCP call that failed
+from one that succeeded. The build is not changed by this recommendation: it proceeds as stated above until the owner rules.
+
 **OQ-209 — An error-path tool record's arguments are "truncated to 2000 characters", and paths and identifiers are "never
 truncated": which governs, and what do the 2,000 characters measure?** *(REQ-SESSION-136, "On error, recorded args/result
 are truncated to 2000 characters"; REQ-SESSION-194, which names "the truncated arguments and results of an error-path tool

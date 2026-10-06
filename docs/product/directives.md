@@ -3506,7 +3506,12 @@ second one in this case.
 > build: the live run's list refused in the new sentence with nothing stored and no id named, REQ-TOOLS-146's case still
 > answered in REQ-TOOLS-145's sentence, and the list accepted when re-sent with one task in progress. **What was not
 > measured.** No live run has met the case since; `pnpm live-run`'s `frictions` and `duress` scenarios now check that no
-> `todo` call was sent to an id a refusal named and never stored (`lib/tool-frictions.mjs`). The note is repaired:
+> `todo` call was sent to an id a refusal named and never stored (`lib/tool-frictions.mjs`). *fin23, 2026-10-06:* since
+> `760394c` that check runs no longer in those two scenarios but once, at the run's end, over every session the run keeps
+> (`checkToolRecord` in `apps/desktop/scripts/live-run.mjs`, over `runWideReadings`), naming each finding by its session
+> and ordinal:
+> [`the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`](../defects/fixed/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md).
+> The note is repaired:
 > [`a-rejected-todo-replace-names-an-active-task-it-never-stored.md`](../defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 

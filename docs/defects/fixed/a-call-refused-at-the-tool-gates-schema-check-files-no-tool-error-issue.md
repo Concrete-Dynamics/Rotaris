@@ -61,7 +61,11 @@ plan gate's `blocked` — files no issue".
 
 **Shown live.** The live run gained the check "every call refused at the tool gate as invalid_request filed a tool_error
 issue referencing it" in its `frictions` and `duress` scenarios (`apps/desktop/scripts/lib/refusal-issues.mjs`, pinned
-against this note's duress pack in `refusal-issues.test.ts`; a run with no such refusal reads as a NOTE). `--only=frictions`
+against this note's duress pack in `refusal-issues.test.ts`; a run with no such refusal reads as a NOTE). *fin23,
+2026-10-06:* since `760394c` the check runs no longer in those two scenarios but once, at the run's end, over every session
+the run keeps (`checkToolRecord` in `apps/desktop/scripts/live-run.mjs`, over `runWideReadings`); the default run at
+`c2a9444` held such a refusal in its requirements session, ordinal 62, which the two scenarios' check never read
+(`docs/defects/fixed/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`). `--only=frictions`
 on the built branch against `katalyst` (pack `.live-run/runs/2026-10-01T14-50-35-317Z` of the
 `Rotaris-crw-wt-fin1-toolresultsa` worktree; git-ignored) passed it: the child's first `write_file` (ordinal 6, no
 `operation`) was refused `invalid_request` and filed issue 6, `tool_error`, `tool_call_evidence#chatcmpl-tool-84787a147482a68c`.

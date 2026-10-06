@@ -98,7 +98,7 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
       '- Mostly-elided artifacts: n/a (no record measures how much of an artifact was elided)',
       '- Report downgrades: n/a (the report-validation record is not kept by this store)',
       '- Permission denials: 1 (counted from the permission audit, where each is an entry)',
-      '- Tool errors: 0 (counted from the issues record, where each failed call that is not a terminal failure, suspicious success or timeout is a tool_error entry)',
+      '- Tool errors: 0 (counted from the issues record, where each tool_error issue is an entry)',
       '- Terminal failures: 1',
       '- Terminal suspicious successes: 0',
       "- Timeouts: 1 (tool calls that timed out, a terminal's among them)",
@@ -129,7 +129,7 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
     const issues = [{ kind: 'tool_error' }, { kind: 'tool_error' }, { kind: 'tool_error' }, { kind: 'tool_error' }, { kind: 'terminal_shell_failure' }, { kind: 'terminal_timeout' }];
     const metrics = sessionMetrics(row, records, [], issues, 0, 0, 0);
     const md = renderSummary(factsOf(row, { metrics }));
-    expect(section(md, 'Warnings')).toContain('- Tool errors: 4 (counted from the issues record, where each failed call that is not a terminal failure, suspicious success or timeout is a tool_error entry)');
+    expect(section(md, 'Warnings')).toContain('- Tool errors: 4 (counted from the issues record, where each tool_error issue is an entry)');
     expect(section(md, 'Metrics')).toContain('- Issues: 6 (terminal_shell_failure 1, terminal_timeout 1, tool_error 4)');
     // The histogram is REQ-SESSION-139's and is unchanged: it classifies by outcome_kind first, an MCP call's included.
     expect(metrics.tool_outcomes).toEqual({ success: 0, tool_error: 2, rejected: 0, unknown: 0, invalid_request: 1, execution_error: 1, mcp: 2, shell_failure: 1 });

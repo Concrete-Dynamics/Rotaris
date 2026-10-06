@@ -69,4 +69,7 @@ marking another task while a stored task is active, still answers in REQ-TOOLS-1
 Pinned by "a replace whose own list marks two tasks IN_PROGRESS while none is active is refused, saying so and that nothing
 was saved (PD-TOOLS-008)" in `packages/agent-tools/src/tools/tools.test.ts`, red on the code before the repair. `pnpm
 live-run`'s `frictions` and `duress` scenarios now check that no `todo` call is sent to an id a refusal named and never
-stored (`apps/desktop/scripts/lib/tool-frictions.mjs`); no live run has met the case since.
+stored (`apps/desktop/scripts/lib/tool-frictions.mjs`); no live run has met the case since. *fin23, 2026-10-06:* since
+`760394c` that check runs no longer in those two scenarios but once, at the run's end, over every session the run keeps
+(`checkToolRecord` in `apps/desktop/scripts/live-run.mjs`, over `runWideReadings`;
+`docs/defects/fixed/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`).

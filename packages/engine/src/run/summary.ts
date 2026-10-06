@@ -171,9 +171,12 @@ function warningLines(m: SessionMetrics): string[] {
      * success and a timeout, each referencing its record. Read from the issues record, as the Issues line above is, so the
      * file never gives two counts for one thing. Until fin23 this read the histogram's `tool_error` bucket, which a failed
      * record carrying an `outcome_kind` (`invalid_request`, `execution_error`, `mcp`) never reaches and a timeout with none
-     * does (docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md).
+     * does (docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md). The
+     * parenthesis names what is counted, each `tool_error` issue: until fin25 it read "each failed call that is not a
+     * terminal failure, suspicious success or timeout", and a suspicious success is no failed call, while a call cut short
+     * under PD-ORCH-005 is one and files no issue.
      */
-    `- Tool errors: ${m.issues_by_kind['tool_error'] ?? 0} (counted from the issues record, where each failed call that is not a terminal failure, suspicious success or timeout is a tool_error entry)`,
+    `- Tool errors: ${m.issues_by_kind['tool_error'] ?? 0} (counted from the issues record, where each tool_error issue is an entry)`,
     `- Terminal failures: ${m.terminal_shell_failures}`,
     `- Terminal suspicious successes: ${m.suspicious_successes}`,
     // The metrics document's `timeouts`: every tool call that timed out, the terminal's among them, or the terminal's issues.

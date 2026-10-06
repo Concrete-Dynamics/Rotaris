@@ -121,4 +121,9 @@ refuses after REQ-TOOLS-032's three, validates what comes back, and carries the 
 Pinned by the four `PD-TOOLS-007` cases in `packages/agent-tools/src/gate.test.ts`, three of them red on the code before
 the repair. A live run has not yet met the shape: `pnpm live-run`'s `frictions` and `duress` scenarios now check that no
 create-shaped call was refused for want of an operation (`apps/desktop/scripts/lib/tool-frictions.mjs`), and their next
-run is the first to show it on a real model.
+run is the first to show it on a real model. *fin23, 2026-10-06:* since `760394c` that check runs no longer in those two
+scenarios but once, at the run's end, over every session the run keeps (`checkToolRecord` in
+`apps/desktop/scripts/live-run.mjs`, over `runWideReadings`), reading arguments the record stores cut; the default run at
+`c2a9444` met the shape in two sessions the two scenarios' check never read, the resume session's ordinal 9 read as a
+create and the requirements session's ordinal 62 refused at the fence
+(`docs/defects/fixed/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`).

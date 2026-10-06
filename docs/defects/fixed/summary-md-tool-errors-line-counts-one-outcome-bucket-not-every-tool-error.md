@@ -50,7 +50,9 @@ line does, so the file can no longer give two counts for one thing, and it says 
 `- Tool errors: <n> (counted from the issues record, where each failed call that is not a terminal failure, suspicious
 success or timeout is a tool_error entry)` (`warningLines` in `packages/engine/src/run/summary.ts`). A call the run's rest
 cut short (PD-ORCH-005) or a crash settled files no issue and is not counted, where the histogram's derived bucket counted
-it.
+it. *fin25, 2026-10-06:* the parenthesis now names what it counts, `(counted from the issues record, where each tool_error
+issue is an entry)`: a suspicious success is no failed call, and a call cut short under PD-ORCH-005 is one that files no
+issue, so the old wording described neither.
 
 REQ-SESSION-139's histogram is unchanged: it still buckets by `outcome_kind` first, `mcp` included. Whether an MCP call's
 record should carry `outcome_kind: 'mcp'` at all is a question the specification leaves open, raised as

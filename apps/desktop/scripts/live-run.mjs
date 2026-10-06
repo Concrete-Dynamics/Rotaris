@@ -124,7 +124,7 @@ import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
-import { summaryReading } from './lib/summary-sections.mjs';
+import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
@@ -900,14 +900,14 @@ function checkToolRecord() {
  * sections in its order, the stop-reason line only where a stop reason is recorded, every Warnings kind, and a Tool errors
  * line that agrees with the file's own Issues line (REQ-SESSION-136). Until fin23 no live run read the file.
  */
-function checkSummary(scenario, sessionId, text) {
+function checkSummary(scenario, sessionId, text, record = check) {
   const Database = require('better-sqlite3');
   const handle = new Database(oneDatabase(), { readonly: true });
   let stopReason = null;
   try { stopReason = handle.prepare('SELECT stop_reason FROM sessions WHERE session_id = ?').get(sessionId)?.stop_reason ?? null; }
   finally { handle.close(); }
   const { ok, problems } = summaryReading(text, { sessionId, stopReason });
-  check(ok, `${scenario}: the session's summary.md carries REQ-SESSION-140's sections, in its order, its Tool errors line agreeing with its Issues line`, ok ? `stop reason ${stopReason ?? 'none recorded'}` : problems.join('; '));
+  record(ok, `${scenario}: the session's summary.md carries REQ-SESSION-140's sections, in its order, its Tool errors line agreeing with its Issues line`, ok ? `stop reason ${stopReason ?? 'none recorded'}` : problems.join('; '));
 }
 
 /**
@@ -946,21 +946,20 @@ function preserveRun(name, sessionId) {
       wrote.push('session.log');
     } else failed.push(`session.log (the run wrote none at ${SESSION_LOG_LEVEL})`);
   } catch (cause) { failed.push(`session.log (${cause instanceof Error ? cause.message : String(cause)})`); }
-  try {
+  {
     // The product's human-readable summary (REQ-SESSION-140), written beside the log and deleted with the sandbox until
-    // fin23 copied it (docs/defects/fixed/the-live-runs-pack-carries-no-summary-md.md). Read here, then checked below.
+    // fin23 copied it (docs/defects/fixed/the-live-runs-pack-carries-no-summary-md.md). Kept, then checked; a step that
+    // throws records a failed check since fin25 (`preserveSummary` in `lib/summary-sections.mjs`).
     const summary = join(dirname(db), 'sessions', sessionId, 'summary.md');
-    if (existsSync(summary)) {
-      const text = redact(readFileSync(summary, 'utf8'));
-      assertNoCredential(`${name}/summary.md`, text);
-      writeFileSync(join(dir, 'summary.md'), text);
-      wrote.push('summary.md');
-      checkSummary(name, sessionId, text);
-    } else {
-      failed.push('summary.md (the product wrote none)');
-      check(false, `${name}: the session's summary.md carries REQ-SESSION-140's sections, in its order`, `no summary.md beside the session's record (${sessionId})`);
-    }
-  } catch (cause) { failed.push(`summary.md (${cause instanceof Error ? cause.message : String(cause)})`); }
+    const step = preserveSummary({
+      name, sessionId, check,
+      read: () => (existsSync(summary) ? redact(readFileSync(summary, 'utf8')) : null),
+      keep: (text) => { assertNoCredential(`${name}/summary.md`, text); writeFileSync(join(dir, 'summary.md'), text); },
+      judge: (text, record) => checkSummary(name, sessionId, text, record),
+    });
+    if (step.wrote) wrote.push('summary.md');
+    if (step.failed !== null) failed.push(step.failed);
+  }
   try {
     // The transcript in full. `results.json` keeps 400 characters of the answer; this keeps what was actually said.
     const Database = require('better-sqlite3');

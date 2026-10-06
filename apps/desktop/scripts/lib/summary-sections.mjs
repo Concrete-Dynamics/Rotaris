@@ -64,6 +64,39 @@ export function summaryReading(md, { sessionId, stopReason }) {
   return { ok: problems.length === 0, problems };
 }
 
+/**
+ * `preserveRun`'s summary step for one kept session, with its effects passed in: `read()` the file's redacted text, or null
+ * where the product wrote none; `keep(text)` refuse a credential and write it into the pack; `judge(text, check)` check it
+ * against REQ-SESSION-140 through the `check` it is given (`checkSummary` in `apps/desktop/scripts/live-run.mjs`); `check`
+ * the run's own. Returns `{ wrote, failed }`, `failed` the pack's entry for the step or null.
+ *
+ * Whatever stops the step, the scenario's summary check is recorded once: a failed one where no file was written, where
+ * one could not be kept, or where the judge threw before its own check. Until fin25 a throw after the no-file branch was
+ * only pushed to the pack's `failed` list, and that scenario's check vanished from `results.json`
+ * (`docs/defects/fixed/a-summary-check-that-throws-leaves-no-check-in-the-live-runs-results.md`).
+ */
+export function preserveSummary({ name, sessionId, read, keep, judge, check }) {
+  const what = `${name}: the session's summary.md carries REQ-SESSION-140's sections, in its order`;
+  let checked = false;
+  const recording = (...args) => { checked = true; check(...args); };
+  let wrote = false;
+  try {
+    const text = read();
+    if (text === null) {
+      recording(false, what, `no summary.md beside the session's record (${sessionId})`);
+      return { wrote: false, failed: 'summary.md (the product wrote none)' };
+    }
+    keep(text);
+    wrote = true;
+    judge(text, recording);
+    return { wrote: true, failed: null };
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    if (!checked) recording(false, what, `it could not be ${wrote ? 'judged' : 'kept'}: ${message}`);
+    return { wrote, failed: `summary.md (${message})` };
+  }
+}
+
 /** The lines of one `## <name>` section, its blank lines dropped. */
 function sectionOf(lines, name) {
   const start = lines.indexOf(`## ${name}`);

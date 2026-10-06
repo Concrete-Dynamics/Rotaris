@@ -348,7 +348,7 @@ describe('McpHost.prepare\'s discovery lines (REQ-MCP-048, U4)', () => {
  * (docs/defects/fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md). The executor now checks
  * a call against the schema the model was given; a valid call is sent exactly as the model wrote it.
  */
-describe('an MCP call checked against the input schema the model was given (REQ-TOOLS-032, REQ-SESSION-136, REQ-MCP-005)', () => {
+describe('an MCP call checked against the input schema the model was given (REQ-TOOLS-032, REQ-SESSION-136)', () => {
   // The schema the run's memory-edit tool advertised (model-traffic line 28 of its requirements scenario), under a name of
   // this test's own: REQ-MCP-116 keeps the bundled runtime's tool names in its manifest alone.
   const EDIT_MEMORY = {
@@ -425,6 +425,29 @@ describe('an MCP call checked against the input schema the model was given (REQ-
   it('the model is still handed the server\'s own input schema', () => {
     const r = rig(EDIT_MEMORY);
     expect(r.executors[0]!.parameters).toEqual(EDIT_MEMORY);
+  });
+
+  /*
+   * The fin18 verifier's probes, through this rig and a real gate: calls the server's own schema accepts, which the first
+   * repair refused on every re-issue — a Unicode property escape zod read without the `u` flag, and an object `items` the
+   * gate's array repair rewrote before the check saw it
+   * (docs/defects/fixed/the-gate-wraps-an-object-in-an-array-where-the-schema-does-not-expect-one.md).
+   */
+  it('a valid call is sent unchanged when its pattern is a Unicode property escape, and one the pattern refuses is never sent', async () => {
+    const r = rig({ type: 'object', required: ['name'], properties: { name: { type: 'string', pattern: '^\\p{L}+$' } } });
+    const ok = await r.dispatch({ name: 'Zoë' });
+    expect(ok).toMatchObject({ status: 'ok', text: 'edited' });
+    const refused = await r.dispatch({ name: 'Zoë 2' });
+    expect(refused).toMatchObject({ status: 'failed' });
+    expect(r.settles[1]).toMatchObject({ failure_kind: 'invalid_request' });
+    expect(r.sent).toEqual([{ tool: 'amend_note', args: { name: 'Zoë' } }]);
+  });
+
+  it('an object `items` the server\'s schema names an object is sent as the object, not wrapped in an array (REQ-TOOLS-032)', async () => {
+    const r = rig({ type: 'object', required: ['items'], properties: { items: { type: 'object' } } });
+    const result = await r.dispatch({ items: { a: 1 } });
+    expect(result).toMatchObject({ status: 'ok', text: 'edited' });
+    expect(r.sent).toEqual([{ tool: 'amend_note', args: { items: { a: 1 } } }]);
   });
 
   it('a schema the product cannot compile leaves the tool callable with the object check alone, said once at info (REQ-MCP-052, REQ-MCP-055, REQ-MCP-059)', async () => {

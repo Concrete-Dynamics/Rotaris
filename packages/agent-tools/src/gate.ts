@@ -188,7 +188,11 @@ export function completeTruncatedJson(text: string): string {
 
 const ARRAY_FIELDS = ['tasks', 'phases', 'files', 'items', 'test_cases'] as const;
 
-/** REQ-TOOLS-032: the three repairs, before schema validation. Null when nothing readable remains. */
+/**
+ * REQ-TOOLS-032's JSON repairs — the cut-off structure completed, the run-completion payload recovered — before schema
+ * validation. Null when nothing readable remains. The third repair, an object read as a one-element array, is the
+ * schema's to decide and is `repairArrayFields`'.
+ */
 export function repairPayload(raw: string | Readonly<Record<string, unknown>> | null, isCompletion: boolean): Record<string, unknown> | null {
   let obj: unknown = null;
   if (raw === null) return {};
@@ -206,9 +210,46 @@ export function repairPayload(raw: string | Readonly<Record<string, unknown>> | 
     }
   }
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
-  const o = { ...(obj as Record<string, unknown>) };
-  for (const f of ARRAY_FIELDS) if (o[f] !== undefined && !Array.isArray(o[f]) && typeof o[f] === 'object' && o[f] !== null) o[f] = [o[f]];
-  return o;
+  return { ...(obj as Record<string, unknown>) };
+}
+
+function hasIssueAt(issues: readonly { readonly path: readonly PropertyKey[] }[], field: string): boolean {
+  return issues.some((i) => i.path.length === 1 && i.path[0] === field);
+}
+
+/**
+ * REQ-TOOLS-032: "a single object supplied where the schema expects an array is read as a one-element array, for the
+ * fields `tasks`, `phases`, `files`, `items`, and `test_cases`". Where the schema expects an array is read from the schema
+ * itself, whichever kind it is (a built-in tool's zod, an MCP tool's advertised JSON Schema): a field is wrapped when the
+ * schema refuses the object at that field and does not refuse the one-element array there. The violation inside the
+ * element, if any, is then the one the refusal names.
+ *
+ * Until 2026-10-06 `repairPayload` wrapped the five fields unconditionally, before the schema was consulted. No public tool
+ * names one of them as anything but an array, but an MCP tool may: a server whose `items` is an object received an array it
+ * never asked for, and once its call was checked against its advertised schema the wrapped value was refused on every
+ * re-issue (docs/defects/fixed/the-gate-wraps-an-object-in-an-array-where-the-schema-does-not-expect-one.md).
+ */
+export function repairArrayFields(payload: Record<string, unknown>, schema: z.ZodType): Record<string, unknown> {
+  const fields = ARRAY_FIELDS.filter((f) => { const v = payload[f]; return v !== null && typeof v === 'object' && !Array.isArray(v); });
+  if (fields.length === 0) return payload;
+  try {
+    const asSent = schema.safeParse(payload);
+    if (asSent.success) return payload;
+    const wrapped: Record<string, unknown> = { ...payload };
+    for (const f of fields) wrapped[f] = [payload[f]];
+    const asArrays = schema.safeParse(wrapped);
+    const out: Record<string, unknown> = { ...payload };
+    let changed = false;
+    for (const f of fields) {
+      if (hasIssueAt(asSent.error.issues, f) && (asArrays.success || !hasIssueAt(asArrays.error.issues, f))) {
+        out[f] = wrapped[f];
+        changed = true;
+      }
+    }
+    return changed ? out : payload;
+  } catch {
+    return payload; // A schema that cannot be run here decides nothing; its own parse below reports what it will.
+  }
 }
 
 function defaultLabel(name: string, args: Readonly<Record<string, unknown>>): string {
@@ -226,7 +267,8 @@ export class Gate {
     const started = deps.monotonic.now();
     const executor = deps.executors.get(call.name) ?? deps.executors.get(call.name.toLowerCase());
     const isMeta = META_TOOL_NAMES.has(call.name.toLowerCase());
-    const repaired = repairPayload(call.rawArgs, isMeta);
+    const readable = repairPayload(call.rawArgs, isMeta);
+    const repaired = readable !== null && executor !== undefined ? repairArrayFields(readable, executor.schema) : readable;
     const argsForGate: Readonly<Record<string, unknown>> = repaired ?? {};
     const open = { call_id: call.callId, agent_name: call.agentName, tool_name: call.name, args: argsForGate };
     const label = executor?.label?.(argsForGate) ?? defaultLabel(call.name, argsForGate);

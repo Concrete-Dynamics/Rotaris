@@ -8,7 +8,7 @@ import type { ApprovalPayload } from '@rotaris/contracts';
 import { PendingApprovals, PresenterRegistry, type PresenterPort } from './approvals.js';
 import type { ToolHooks } from './gate.js';
 import { advertisedSchemaCheck } from './advertised-schema.js';
-import { anySchema, completeTruncatedJson, Gate, repairPayload, simpleExecutor, type GateDeps, type GateSink, type ToolCall } from './gate.js';
+import { anySchema, completeTruncatedJson, Gate, repairArrayFields, repairPayload, simpleExecutor, type GateDeps, type GateSink, type ToolCall } from './gate.js';
 import { buildPolicy, PolicyContext } from './policy.js';
 import { terminalTool, TERMINAL_DEFAULTS, type TerminalManager } from './terminal/index.js';
 import { askQuestionsTool, PendingQuestions } from './tools/questions.js';
@@ -414,7 +414,8 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect(completeTruncatedJson('{"a": "b')).toBe('{"a": "b"}');
     expect(completeTruncatedJson('{"a": [1, 2')).toBe('{"a": [1, 2]}');
     expect(completeTruncatedJson('{"a": 1, "b":')).toBe('{"a": 1}');
-    expect(repairPayload('{"tasks": {"name": "x"}}', false)).toEqual({ tasks: [{ name: 'x' }] });
+    // The array repair is the schema's to decide (repairArrayFields, below): the JSON repairs leave an object an object.
+    expect(repairPayload('{"tasks": {"name": "x"}}', false)).toEqual({ tasks: { name: 'x' } });
     expect(repairPayload('{"message": "done', true)).toEqual({ message: 'done' });
     expect(repairPayload('not json at all {', true)).toEqual({ message: 'not json at all {' });
     const h = harness({ preset: 'autonomous' });
@@ -982,7 +983,6 @@ describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCh
     expect((await h.gate.dispatch(h.call('amend_note', '"just a string"'), new AbortController().signal)).status).toBe('failed');
     expect(h.sent).toEqual([{ a: 1 }]);
     expect(advertisedSchemaCheck({ type: 'object', properties: { a: { $ref: 'https://example.invalid/s.json' } } }).compiled).toBe(false);
-    expect(advertisedSchemaCheck({ type: 'object', properties: { a: { type: 'string', pattern: '[unclosed' } } }).compiled).toBe(false);
   });
 
   it('local references and the usual composition keywords compile and bind', async () => {
@@ -991,5 +991,110 @@ describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCh
     expect(check.schema.safeParse({ a: 'ok', b: null }).success).toBe(true);
     expect(check.schema.safeParse({ a: 'x' }).success).toBe(false);
     expect(check.schema.safeParse({ a: 'ok', c: 1 }).success).toBe(false);
+  });
+});
+
+/**
+ * The fin18 verifier's three probes of the advertised-schema check, each a call the server's own schema accepts that the
+ * first repair refused, and none of which a re-issue could recover from: a Unicode property escape read without the `u`
+ * flag (`\p{L}` as the text "p{L}"), an integer past 2^53, and an object `items` rewritten to an array by the gate before
+ * the check saw it (docs/defects/fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md,
+ * docs/defects/fixed/the-gate-wraps-an-object-in-an-array-where-the-schema-does-not-expect-one.md).
+ */
+describe('REQ-TOOLS-032: a call the advertised JSON Schema accepts is never refused', () => {
+  function advertisedHarness(inputSchema: Record<string, unknown>) {
+    const sent: unknown[] = [];
+    const check = advertisedSchemaCheck(inputSchema);
+    const executor = simpleExecutor('amend_note', 'e', check.schema, async (a) => { sent.push(a); return { text: 'edited', isError: false, outcomeKind: 'mcp' }; });
+    const h = harness({ preset: 'autonomous', extraExecutors: [['amend_note', executor]], publicTool: (n) => n !== 'amend_note' });
+    return { ...h, sent, check };
+  }
+  const dispatch = (h: ReturnType<typeof advertisedHarness>, args: unknown) => h.gate.dispatch(h.call('amend_note', args), new AbortController().signal);
+
+  it('a pattern is an ECMA-262 regular expression read with Unicode semantics: \\p{L} accepts a non-ASCII letter, and still binds', async () => {
+    const h = advertisedHarness({ type: 'object', required: ['name'], properties: { name: { type: 'string', pattern: '^\\p{L}+$' } } });
+    expect((await dispatch(h, { name: 'Zoë' })).status).toBe('ok');
+    const refused = await dispatch(h, { name: 'Zoë 2' });
+    expect(refused.status).toBe('failed');
+    expect(refused.text).toContain("name: Invalid string: must match pattern /^\\p{L}+$/u");
+    expect(h.sent).toEqual([{ name: 'Zoë' }]);
+  });
+
+  it('a code point outside the BMP is one character to a pattern, as the u flag reads it', async () => {
+    const h = advertisedHarness({ type: 'object', properties: { glyph: { type: 'string', pattern: '^.$' }, word: { type: 'string', pattern: '^[^ ]{1,2}$' } } });
+    expect((await dispatch(h, { glyph: '😀', word: '😀😀' })).status).toBe('ok');
+    expect((await dispatch(h, { glyph: '😀😀' })).status).toBe('failed');
+    expect(h.sent).toEqual([{ glyph: '😀', word: '😀😀' }]);
+  });
+
+  it('a pattern read with Unicode semantics binds through items, additionalProperties, allOf and a local $ref', () => {
+    const { schema } = advertisedSchemaCheck({
+      type: 'object', $defs: { Word: { type: 'string', pattern: '^\\p{Lu}' } },
+      properties: { list: { type: 'array', items: { $ref: '#/$defs/Word' } }, both: { allOf: [{ $ref: '#/$defs/Word' }] } },
+      additionalProperties: { type: 'string', pattern: '^\\p{N}+$' },
+    });
+    expect(schema.safeParse({ list: ['Él', 'Ü'], both: 'Ä', extra: '٣' }).success).toBe(true);
+    const bad = schema.safeParse({ list: ['Él', 'él'], both: 'ä', extra: 'x' });
+    expect(bad.success).toBe(false);
+    expect(bad.error!.issues.map((i) => i.path.join('.')).sort()).toEqual(['both', 'extra', 'list.1']);
+  });
+
+  it('a pattern that is not an ECMA-262 Unicode regular expression is not asserted; the rest of the schema still binds', async () => {
+    // A Python named group, and an identity escape the u flag rejects: the server may read either; this product cannot.
+    const h = advertisedHarness({ type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^(?P<x>a)$' }, tag: { type: 'string', pattern: '^a\\-b$' }, n: { type: 'integer' } } });
+    expect(h.check.compiled).toBe(true);
+    expect((await dispatch(h, { id: 'anything', tag: 'whatever' })).status).toBe('ok');
+    expect((await dispatch(h, { tag: 'a-b' })).status).toBe('failed');
+    expect((await dispatch(h, { id: 'a', n: 'one' })).status).toBe('failed');
+    expect(advertisedSchemaCheck({ type: 'object', properties: { a: { type: 'string', pattern: '[unclosed' } } }).compiled).toBe(true);
+  });
+
+  it('a pattern inside anyOf the host cannot read as zod does is not asserted, rather than refusing a branch the server accepts', async () => {
+    const h = advertisedHarness({ type: 'object', properties: { v: { anyOf: [{ type: 'string', pattern: '^\\p{L}+$' }, { type: 'integer' }] } } });
+    expect((await dispatch(h, { v: 'Zoë' })).status).toBe('ok');
+    expect((await dispatch(h, { v: 3 })).status).toBe('ok');
+    expect((await dispatch(h, { v: false })).status).toBe('failed');
+  });
+
+  it('an integer has no bound JSON Schema does not set: 2^60 is an integer, 1.5 is not, and a nullable integer takes null', async () => {
+    const h = advertisedHarness({ type: 'object', properties: { big: { type: 'integer', minimum: 0 }, maybe: { type: ['integer', 'null'] }, step: { type: 'integer', multipleOf: 5 } } });
+    expect((await dispatch(h, { big: 2 ** 60, maybe: null, step: 10 })).status).toBe('ok');
+    expect((await dispatch(h, { maybe: 7 })).status).toBe('ok');
+    expect((await dispatch(h, { big: 1.5 })).status).toBe('failed');
+    expect((await dispatch(h, { big: -1 })).status).toBe('failed');
+    expect((await dispatch(h, { maybe: 1.5 })).status).toBe('failed');
+    expect((await dispatch(h, { step: 7 })).status).toBe('failed');
+    expect(h.sent).toEqual([{ big: 2 ** 60, maybe: null, step: 10 }, { maybe: 7 }]);
+  });
+
+  it('a `format` inside the schema of a property named like a data keyword (enum, const, default, examples) is still an annotation', async () => {
+    const h = advertisedHarness({ type: 'object', properties: { enum: { type: 'string', format: 'email' }, default: { type: 'object', properties: { site: { type: 'string', format: 'uri' } } } } });
+    expect((await dispatch(h, { enum: 'not an email', default: { site: 'not a uri' } })).status).toBe('ok');
+    expect((await dispatch(h, { enum: 5 })).status).toBe('failed');
+  });
+
+  it('REQ-TOOLS-032\'s array repair applies only where the schema expects an array: an object `items` is sent as the object it is', async () => {
+    const h = advertisedHarness({ type: 'object', required: ['items'], properties: { items: { type: 'object' } } });
+    const r = await dispatch(h, { items: { a: 1 } });
+    expect(r.status).toBe('ok');
+    expect(r.args).toEqual({ items: { a: 1 } });
+    expect(h.sent).toEqual([{ items: { a: 1 } }]);
+    // Where the advertised schema does expect an array, the single object is read as a one-element array.
+    const arrays = advertisedHarness({ type: 'object', properties: { files: { type: 'array', items: { type: 'object', required: ['path'] } } } });
+    const wrapped = await dispatch(arrays, '{"files": {"path": "a.txt"}}');
+    expect(wrapped.status).toBe('ok');
+    expect(arrays.sent).toEqual([{ files: [{ path: 'a.txt' }] }]);
+  });
+
+  it('repairArrayFields wraps a field only when the schema refuses the object there and accepts the array', () => {
+    const schema = z.object({ tasks: z.array(z.object({ name: z.string() })), items: z.object({ a: z.number() }).optional(), phases: z.union([z.array(z.string()), z.string()]).optional() });
+    expect(repairArrayFields({ tasks: { name: 'x' }, items: { a: 1 } }, schema)).toEqual({ tasks: [{ name: 'x' }], items: { a: 1 } });
+    // An object inside the wrapped array that is itself invalid is still read as the array the schema expects, so the
+    // refusal names the element's own violation rather than "expected array".
+    expect(repairArrayFields({ tasks: { name: 5 } }, schema)).toEqual({ tasks: [{ name: 5 }] });
+    expect(repairArrayFields({ tasks: [], items: { a: 'no' } }, schema)).toEqual({ tasks: [], items: { a: 'no' } });
+    expect(repairArrayFields({ tasks: [], phases: { p: 1 } }, schema)).toEqual({ tasks: [], phases: { p: 1 } });
+    // A field outside REQ-TOOLS-032's five is never wrapped.
+    expect(repairArrayFields({ tasks: [], other: { a: 1 } }, z.object({ tasks: z.array(z.unknown()), other: z.array(z.unknown()).optional() }))).toEqual({ tasks: [], other: { a: 1 } });
   });
 });

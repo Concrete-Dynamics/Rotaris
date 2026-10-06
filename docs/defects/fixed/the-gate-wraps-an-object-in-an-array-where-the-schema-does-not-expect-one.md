@@ -32,3 +32,25 @@ Recorded 2026-10-06.
   which hands the wrapped payload to the schema check, the permission request and the executor.
 - `packages/agent-tools/src/advertised-schema.ts` — the advertised-schema check that now refuses the wrapped value.
 - `apps/desktop/src/run-host/mcp.ts` — `McpHost.executorsFor`, the MCP executor whose `schema` is that check.
+
+## Repaired — 2026-10-06 (fin18, repair round 1)
+
+The array repair is the schema's to decide, for every tool. `repairPayload` keeps REQ-TOOLS-032's JSON repairs (the
+cut-off structure completed, the run-completion payload recovered) and no longer wraps anything; the gate hands its result
+to `repairArrayFields(payload, executor.schema)` (`packages/agent-tools/src/gate.ts`), which wraps one of the five fields
+holding an object only when the schema refuses the object at that field and does not refuse the one-element array there.
+Read from the schema's own issues, it holds alike for a built-in tool's zod and an MCP tool's advertised JSON Schema
+(`advertisedSchemaCheck` now passes each issue on with its code and path). It runs before the call's record is opened, so a
+built-in tool's recorded arguments are the wrapped ones exactly as before. The verifier's probe now sends `{"items":
+{"a": 1}}` as written.
+
+Pinned by tests that fail without the repair:
+
+- `packages/agent-tools/src/gate.test.ts`, "REQ-TOOLS-032: a call the advertised JSON Schema accepts is never refused": an
+  object `items` the advertised schema names an object is executed with the object; a `files` object the advertised schema
+  names an array is executed as a one-element array; `repairArrayFields` wraps a field the schema expects an array at (also
+  when the element itself is invalid, so the refusal names the element), and leaves an object field, a union field the
+  object fails for another reason, and a name outside the five alone. The existing REQ-TOOLS-032 case keeps a `todo`
+  `tasks` object wrapped and recorded wrapped.
+- `apps/desktop/src/run-host/mcp.test.ts`: the verifier's probe through `McpHost.executorsFor` and a real gate, sent
+  unchanged (red before: refused, nothing sent).

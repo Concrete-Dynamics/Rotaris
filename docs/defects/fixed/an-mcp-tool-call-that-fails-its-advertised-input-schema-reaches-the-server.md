@@ -83,3 +83,44 @@ Pinned by tests that fail without the repair:
 - `pnpm code-intel-proof` against the bundled runtime: PASSED on 2026-10-06 (load average 2.5 to 4.0 on 4 CPUs). Every one
   of the runtime's 22 advertised schemas compiled (no "could not be compiled" line in any launch's log), and the scripted
   `list_memories` and `get_symbols_overview {relative_path}` calls passed the check and succeeded.
+
+## Corrected — 2026-10-06 (fin18, repair round 1)
+
+The fin18 verifier found the repair above refusing calls the server's own schema accepts, which REQ-TOOLS-032 does not
+allow and which no re-issue recovers from. The claims it falsified are kept here as written above, beside what replaced
+them:
+
+- "the object record refined by zod's `z.fromJSONSchema` reading of the schema the model was handed" assumed zod reads
+  JSON Schema as JSON Schema does. It does not everywhere. `pattern` is an ECMA-262 regular expression with Unicode
+  semantics (the `u` flag), and zod compiles it without the flag: `{name: "Zoë"}` against `^\p{L}+$` was refused ("must
+  match pattern"), since `\p{L}` read as the text "p{L}". `integer` is bounded at 2^53 - 1 by zod's `int()`, and JSON Schema
+  sets no bound.
+- "a pattern the host's regular expressions reject" made the whole schema uncompilable, so one Python-only pattern (a
+  server written in Python, as this run's was, may advertise one) dropped every other check of that tool.
+- "`format` is read as an annotation" held only where `format` was not inside the schema of a property named `enum`,
+  `const`, `default` or `examples`, which the keyword stripper treated as data and did not enter.
+- "a valid call reaches the server exactly as written" was false for an object under one of REQ-TOOLS-032's five array
+  field names, which the gate wrapped before the check saw it: recorded and repaired on its own,
+  `docs/defects/fixed/the-gate-wraps-an-object-in-an-array-where-the-schema-does-not-expect-one.md`.
+
+`advertisedSchemaCheck` now rewrites the schema before zod reads it, walking it by keyword position (so a property named
+like a keyword is a property). `format` is dropped. `integer` is read as a number that is a multiple of 1. A `pattern` zod
+reads exactly as the `u` flag does (printable ASCII without `\p`, `\u`, `.`, a negated class or `\S`/`\W`/`\D`) stays zod's.
+Any other valid one is checked by the module itself, with the flag, wherever it binds the value unconditionally (the
+schema, `properties`, `patternProperties`, `additionalProperties`, `items`, `prefixItems`, `allOf`, a local `$ref`), and
+is left unasserted inside `anyOf`, `oneOf`, `not`, `if` and the like, where it would decide a branch. A pattern that is no
+regular expression under the flag is left unasserted, and the rest of the schema still binds. A `patternProperties` name
+zod would read differently makes the schema uncompilable (object check alone), since zod alone decides which names it
+covers. The compiled schema is filed in a registry of its own, not zod's global one. Each zod issue is passed on with its
+code, which the gate's array repair reads.
+
+Pinned in `packages/agent-tools/src/gate.test.ts`, "REQ-TOOLS-032: a call the advertised JSON Schema accepts is never
+refused": `\p{L}` accepting "Zoë" and refusing "Zoë 2" (text "must match pattern /^\p{L}+$/u"); a code point outside the
+BMP one character to `^.$` and `^[^ ]{1,2}$`; Unicode patterns binding through `items`, `additionalProperties`, `allOf` and
+a local `$ref` with their paths; a Python named group and a `u`-invalid identity escape unasserted while `required` and
+`integer` still bind; a Unicode pattern in an `anyOf` branch not refusing that branch; 2^60 accepted as an integer, 1.5,
+-1 under `minimum: 0`, and 7 under `multipleOf: 5` refused, and `["integer", "null"]` taking null and 7 but not 1.5; a
+`format` inside properties named `enum` and `default` not asserted. All seven were red on the round-0 module. In
+`apps/desktop/src/run-host/mcp.test.ts`, the verifier's `\p{L}` probe through `McpHost.executorsFor` and a real gate: "Zoë"
+sent unchanged, "Zoë 2" refused as `invalid_request` and not sent (red before). `pnpm mcp-proof` and `pnpm code-intel-proof`
+were run again on this head; their results are in the bundle's report.

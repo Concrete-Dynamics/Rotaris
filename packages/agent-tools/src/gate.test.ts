@@ -938,17 +938,17 @@ describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCh
   function advertisedHarness(inputSchema: Record<string, unknown>) {
     const sent: unknown[] = [];
     const check = advertisedSchemaCheck(inputSchema);
-    const executor = simpleExecutor('edit_memory', 'e', check.schema, async (a) => { sent.push(a); return { text: 'edited', isError: false, outcomeKind: 'mcp' }; });
-    const h = harness({ preset: 'autonomous', extraExecutors: [['edit_memory', executor]], publicTool: (n) => n !== 'edit_memory' });
+    const executor = simpleExecutor('amend_note', 'e', check.schema, async (a) => { sent.push(a); return { text: 'edited', isError: false, outcomeKind: 'mcp' }; });
+    const h = harness({ preset: 'autonomous', extraExecutors: [['amend_note', executor]], publicTool: (n) => n !== 'amend_note' });
     return { ...h, sent, check };
   }
 
   it('a call missing a required property is refused as invalid_request with a tool_error issue, and never executed', async () => {
     const h = advertisedHarness(ADVERTISED);
-    const r = await h.gate.dispatch(h.call('edit_memory', { content: 'x', memory_name: 'm' }), new AbortController().signal);
+    const r = await h.gate.dispatch(h.call('amend_note', { content: 'x', memory_name: 'm' }), new AbortController().signal);
     expect(h.sent).toEqual([]);
     expect(r).toMatchObject({ status: 'failed', isError: true });
-    expect(r.text).toBe("The arguments for 'edit_memory' do not match its schema (needle: Invalid input: expected string, received undefined). Re-issue the call with corrected arguments.");
+    expect(r.text).toBe("The arguments for 'amend_note' do not match its schema (needle: Invalid input: expected string, received undefined). Re-issue the call with corrected arguments.");
     expect(h.rec.settles[0]).toMatchObject({ status: 'failed', is_error: true, failure_kind: 'invalid_request' });
     expect(h.rec.issues).toEqual([expect.objectContaining({ kind: 'tool_error', severity: 'warning' })]);
     expect(h.rec.decisions).toHaveLength(0);
@@ -957,19 +957,19 @@ describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCh
   it('a valid call is executed with exactly the arguments the model wrote: no default filled, no unnamed property dropped', async () => {
     const h = advertisedHarness(ADVERTISED);
     const args = { memory_name: 'm', needle: 'n', extra: [1] };
-    const r = await h.gate.dispatch(h.call('edit_memory', args), new AbortController().signal);
+    const r = await h.gate.dispatch(h.call('amend_note', args), new AbortController().signal);
     expect(r).toMatchObject({ status: 'ok', text: 'edited' });
     expect(h.sent).toEqual([args]);
   });
 
   it('`format` is an annotation, as JSON Schema 2020-12 has it: a value the format would reject is not refused for it', async () => {
     const h = advertisedHarness(ADVERTISED);
-    const r = await h.gate.dispatch(h.call('edit_memory', { memory_name: 'm', needle: 'n', site: 'not a uri' }), new AbortController().signal);
+    const r = await h.gate.dispatch(h.call('amend_note', { memory_name: 'm', needle: 'n', site: 'not a uri' }), new AbortController().signal);
     expect(r.status).toBe('ok');
     expect(h.sent).toHaveLength(1);
     // A property NAMED format is a property, not the keyword: its schema still binds.
     const named = advertisedHarness({ type: 'object', required: ['format'], properties: { format: { type: 'string', enum: ['json', 'text'] } } });
-    const refused = await named.gate.dispatch(named.call('edit_memory', { format: 'xml' }), new AbortController().signal);
+    const refused = await named.gate.dispatch(named.call('amend_note', { format: 'xml' }), new AbortController().signal);
     expect(refused.status).toBe('failed');
     expect(named.sent).toEqual([]);
   });
@@ -978,8 +978,8 @@ describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCh
     const h = advertisedHarness({ type: 'object', if: { required: ['a'] }, then: { required: ['b'] } });
     expect(h.check).toMatchObject({ compiled: false });
     expect(h.check.reason).toMatch(/if\/then\/else/);
-    expect((await h.gate.dispatch(h.call('edit_memory', { a: 1 }), new AbortController().signal)).status).toBe('ok');
-    expect((await h.gate.dispatch(h.call('edit_memory', '"just a string"'), new AbortController().signal)).status).toBe('failed');
+    expect((await h.gate.dispatch(h.call('amend_note', { a: 1 }), new AbortController().signal)).status).toBe('ok');
+    expect((await h.gate.dispatch(h.call('amend_note', '"just a string"'), new AbortController().signal)).status).toBe('failed');
     expect(h.sent).toEqual([{ a: 1 }]);
     expect(advertisedSchemaCheck({ type: 'object', properties: { a: { $ref: 'https://example.invalid/s.json' } } }).compiled).toBe(false);
     expect(advertisedSchemaCheck({ type: 'object', properties: { a: { type: 'string', pattern: '[unclosed' } } }).compiled).toBe(false);

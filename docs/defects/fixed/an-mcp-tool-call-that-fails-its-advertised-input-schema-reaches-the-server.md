@@ -69,9 +69,11 @@ property stripped.
 Pinned by tests that fail without the repair:
 
 - `apps/desktop/src/run-host/mcp.test.ts`, "an MCP call checked against the input schema the model was given": the run's own
-  `edit_memory` schema and call (`{content, memory_name}`) refused at a real gate as `invalid_request` with a `tool_error`
-  issue and never sent (red before: the call reached the connection); an enum and a type violation refused; a valid call
-  with an unnamed property sent unchanged; an uncompilable schema callable under the object check and said once at info.
+  `edit_memory` schema and call (`{content, memory_name}`), under the test's own name `amend_note` (REQ-MCP-116 keeps the
+  runtime's tool names in its manifest alone; `code-intelligence.test.ts` fails a quoted one written elsewhere), refused at
+  a real gate as `invalid_request` with a `tool_error` issue and never sent (red before: the call reached the connection);
+  an enum and a type violation refused; a valid call with an unnamed property sent unchanged; an uncompilable schema
+  callable under the object check and said once at info.
 - `packages/agent-tools/src/gate.test.ts`, "REQ-TOOLS-032 for a tool advertised by JSON Schema": the exact refusal text, the
   record and the issue; a valid call executed with its own arguments; `format` not asserted while a property named
   `format` still binds; uncompilable schemas; local `$ref`, `anyOf` and `additionalProperties: false` bound.

@@ -349,7 +349,8 @@ describe('McpHost.prepare\'s discovery lines (REQ-MCP-048, U4)', () => {
  * a call against the schema the model was given; a valid call is sent exactly as the model wrote it.
  */
 describe('an MCP call checked against the input schema the model was given (REQ-TOOLS-032, REQ-SESSION-136, REQ-MCP-005)', () => {
-  // The schema serena advertised for `edit_memory` in that run (model-traffic line 28 of its requirements scenario).
+  // The schema the run's memory-edit tool advertised (model-traffic line 28 of its requirements scenario), under a name of
+  // this test's own: REQ-MCP-116 keeps the bundled runtime's tool names in its manifest alone.
   const EDIT_MEMORY = {
     type: 'object', title: 'applyArguments', required: ['memory_name', 'needle', 'repl', 'mode'],
     properties: {
@@ -361,7 +362,7 @@ describe('an MCP call checked against the input schema the model was given (REQ-
   function rig(inputSchema: Record<string, unknown>) {
     const lines: { message: string; level: string }[] = [];
     const mcp = new McpHost({ clocks: new FakeClock(), log: (message, level = 'info') => { lines.push({ message, level }); }, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
-    vi.spyOn(mcp.discovery, 'peek').mockReturnValue({ tools: [{ name: 'edit_memory', description: 'Replace content in a memory.', inputSchema }], failed: false } as unknown as ReturnType<typeof mcp.discovery.peek>);
+    vi.spyOn(mcp.discovery, 'peek').mockReturnValue({ tools: [{ name: 'amend_note', description: 'Replace content in a memory.', inputSchema }], failed: false } as unknown as ReturnType<typeof mcp.discovery.peek>);
     const sent: { tool: string; args: Record<string, unknown> }[] = [];
     vi.spyOn(mcp, 'connectionsFor').mockReturnValue({
       connect: async () => ({ onToolsChanged: () => undefined }),
@@ -369,8 +370,8 @@ describe('an MCP call checked against the input schema the model was given (REQ-
     } as unknown as ReturnType<typeof mcp.connectionsFor>);
     const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'ci' };
     const cfg = {
-      personas: { verifier: { mcp_servers: ['serena'], tools: [] } },
-      mcp: { servers: { serena: { name: 'serena', entry, origin: 'workspace', availability: { available: true }, description: {}, resolved: { command: 'ci', args: [] } } }, origins: { serena: 'workspace' }, diagnostics: [] },
+      personas: { verifier: { mcp_servers: ['notes'], tools: [] } },
+      mcp: { servers: { notes: { name: 'notes', entry, origin: 'workspace', availability: { available: true }, description: {}, resolved: { command: 'ci', args: [] } } }, origins: { notes: 'workspace' }, diagnostics: [] },
     } as unknown as LoadedConfiguration;
     const surface = mcp.surfaceFor(cfg, '/ws', 'verifier', null);
     const executors = mcp.executorsFor({ cfg, workspaceRoot: '/ws', role: 'verifier', surface, ctx: { sessionId: 'S1', writer: null }, remove: () => undefined, log: () => undefined });
@@ -388,7 +389,7 @@ describe('an MCP call checked against the input schema the model was given (REQ-
         timeline: () => undefined, toolOpen: () => ++seq, toolSettle: (_o, _open, s) => { settles.push(s as Record<string, unknown>); }, warn: () => undefined,
       },
     });
-    const dispatch = (args: Record<string, unknown>) => gate.dispatch({ callId: 'c1', name: 'edit_memory', rawArgs: args, persona: 'verifier', agentId: 'verifier', agentName: 'verifier' }, new AbortController().signal);
+    const dispatch = (args: Record<string, unknown>) => gate.dispatch({ callId: 'c1', name: 'amend_note', rawArgs: args, persona: 'verifier', agentId: 'verifier', agentName: 'verifier' }, new AbortController().signal);
     return { executors, dispatch, sent, issues, settles, lines };
   }
 
@@ -397,7 +398,7 @@ describe('an MCP call checked against the input schema the model was given (REQ-
     const result = await r.dispatch({ content: 'notes', memory_name: 'req-104' });
     expect(r.sent).toEqual([]);
     expect(result).toMatchObject({ status: 'failed', isError: true });
-    expect(result.text).toContain("The arguments for 'edit_memory' do not match its schema");
+    expect(result.text).toContain("The arguments for 'amend_note' do not match its schema");
     expect(result.text).toMatch(/needle: .*; repl: .*; mode: /);
     expect(result.text).toContain('Re-issue the call with corrected arguments.');
     expect(r.settles[0]).toMatchObject({ failure_kind: 'invalid_request' });
@@ -418,7 +419,7 @@ describe('an MCP call checked against the input schema the model was given (REQ-
     const args = { memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal', extra: { kept: true } };
     const result = await r.dispatch(args);
     expect(result).toMatchObject({ status: 'ok', isError: false, text: 'edited' });
-    expect(r.sent).toEqual([{ tool: 'edit_memory', args }]);
+    expect(r.sent).toEqual([{ tool: 'amend_note', args }]);
   });
 
   it('the model is still handed the server\'s own input schema', () => {
@@ -431,13 +432,13 @@ describe('an MCP call checked against the input schema the model was given (REQ-
     const r = rig(conditional);
     const result = await r.dispatch({ path: 'a' });
     expect(result).toMatchObject({ status: 'ok', text: 'edited' });
-    expect(r.sent).toEqual([{ tool: 'edit_memory', args: { path: 'a' } }]);
+    expect(r.sent).toEqual([{ tool: 'amend_note', args: { path: 'a' } }]);
     const notArgs = await r.dispatch('[1, 2]' as unknown as Record<string, unknown>);
     expect(notArgs).toMatchObject({ status: 'failed' });
     expect(r.sent).toHaveLength(1);
     const said = r.lines.filter((l) => l.message.includes('could not be compiled'));
     expect(said).toHaveLength(1);
     expect(said[0]).toMatchObject({ level: 'info' });
-    expect(said[0]!.message).toContain("'edit_memory' on MCP server 'serena'");
+    expect(said[0]!.message).toContain("'amend_note' on MCP server 'notes'");
   });
 });

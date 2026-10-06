@@ -58,8 +58,18 @@ Pinned by the describe "undo puts the path back as it was before the write: a cr
 (REQ-TOOLS-132, REQ-TOOLS-135, REQ-CHAT-050)" in `packages/agent-tools/src/tools/tools.test.ts`: create then undo removes
 (and a second undo has no history), the directories a create made, a file removed since, edit then undo restores, the
 create-overwrite-haet_edit chain walked back by three undos, and an inferred create (`PD-TOOLS-007`). Every one of the five
-failed on the code before the repair ("Restored … to its previous content (0 lines)"). The architecture's runtime view
-carries a paragraph on the file tools' shared state.
+failed on the code before the repair ("Restored … to its previous content (0 lines)"). A removal that fails is pinned by
+"undoing a create whose file cannot be removed answers the error and stays undoable (REQ-TOOLS-132, REQ-TOOLS-135)" in
+`packages/agent-tools/src/tools/files-undo-failure.test.ts`, its own file because the `node:fs` mock it needs is hoisted
+over the whole file: `unlinkSync` refuses with EBUSY, as Windows does while another process holds the file open, the undo
+answers `Could not remove n/f.txt: EBUSY: …` with the file still there, and the next undo removes the file and the
+directory the create made (it failed with the entry's re-push taken out). The architecture's runtime view carries a
+paragraph on the file tools' shared state.
+
+What the repair does not do: only the create that made a directory records it. When two creates put files into a
+directory the first of them made, undoing the first create before the second leaves that directory in place (it still
+held the second file then), and the second create's undo, which made no directory, then leaves it empty. Undone in the
+other order, the directory goes with the first create's undo.
 
 Not shown by a live run yet: an undone create in a run should leave no file behind, answer "Removed …", and its diff row
 should read `+0 -<n>`.

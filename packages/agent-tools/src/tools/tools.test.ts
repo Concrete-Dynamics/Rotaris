@@ -722,7 +722,8 @@ describe('undo puts the path back as it was before the write: a create is undone
     expect(u.diff).toBe('.tmp-run-tests.sh +0 -1\n[1]- placeholder');
     expect(exists('.tmp-run-tests.sh')).toBe(false);
     expect(await w.execute({ operation: 'undo', path: '.tmp-run-tests.sh', replace_all: false }, ctx())).toMatchObject({ isError: true, text: 'No edit history for .tmp-run-tests.sh.' });
-    expect(exists('.tmp-run-tests.sh')).toBe(false);    // the child in the run reasoned "I can't delete files with these tools": the prose it reads says what an undone create does
+    expect(exists('.tmp-run-tests.sh')).toBe(false);
+    // the child in the run reasoned "I can't delete files with these tools": the prose it reads says what an undone create does
     expect(w.description).toContain('undo {path} (undoing a create removes the file it made)');
   });
 

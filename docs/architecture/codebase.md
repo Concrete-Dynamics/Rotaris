@@ -1176,6 +1176,12 @@ whole — `branchLineFloor`, `--git-branch-fit`); the base row drew neither `mai
 Since 2026-10-04 (fin17) a name the cell cuts must be cut by its own box's `text-overflow: ellipsis` over a cut it can
 mark (`runMarksElision`; the room check alone, `runShowsLeadingChars`, passed a name sliced off with no marker), and both
 fits are measured again when a row's path changes (`branchFitKey`, `stateFitKey`), since the row is keyed by it.
+Since 2026-10-06 (fin22) launch 6c, `unborn-branch`, opens a fresh `git init` outside the repository and requires the
+strip's branch item to be REQ-WORKSPACE-020's empty item for REQ-WORKSPACE-029's empty branch name: no text, no branch
+icon, no tooltip, no accessible description. Ten launches run in all; the script's header block lists each as
+`<label>. <name>` and `AGENTS.md`'s row names every lettered one, both kept by `scripts/git-proof-index.test.ts`
+(finacc3: the row and the header had missed 6c,
+`docs/defects/fixed/agents-md-git-proof-row-omits-the-unborn-branch-launch.md`).
 Evidence under `.proof/git-proof/`.
 
 **What `pnpm checkpoint-proof` does.** It builds Electron and launches the app thirteen times against a scratch repository:

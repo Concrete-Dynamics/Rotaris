@@ -1,7 +1,7 @@
 /**
  * The Git proof (Part O): the Git view and the worktrees, painted from what the workspace service reads and writes
  * (REQ-GIT-075..090, 102..112, 115..122, 158, 161; REQ-SHELL-125; ADR-0038's second execution). Scripted client,
- * scratch store, six launches against one scratch profile whose workspace is a repository with three commits, a local
+ * scratch store, ten launches against one scratch profile whose workspace is a repository with three commits, a local
  * bare "remote" one commit behind (so `ahead 1` and one local-tinted row exist) and `.rotaris/` ignored:
  *
  *   1. painted   — the header (branch, `ahead 1  behind 0`), one worktree row carrying the base and active markers and
@@ -15,7 +15,7 @@
  *                  carries the binding, the worktree table shows the session id and `completed`, the base stays clean.
  *                  The strip names the worktree's branch (REQ-WORKSPACE-020): no ` ↑{n}` (the branch has no upstream yet),
  *                  the base checkout's sentence as its tooltip, and the worktree named in its accessible description alone.
- *   3b. ahead    — the session branch pushed with an upstream, then NOTES.md committed in the worktree; the session reopened
+ *   3b. worktree-ahead — the session branch pushed with an upstream, then NOTES.md committed in the worktree; the session reopened
  *                  through the browser: the strip reads `rotaris/session/<sid> ↑1`, tooltip "Branch this workspace is on:
  *                  rotaris/session/<sid>, 1 commit ahead." and the same sentence plus the worktree in its description —
  *                  the count against THAT branch's upstream, while the base checkout is 1 ahead of its own as well.
@@ -33,9 +33,13 @@
  *   4. delete    — a file dropped into `feature/proof`; Delete → Yes → Git refuses → the second confirmation → force:
  *                  the row is gone, the directory is gone, `Worktree deleted.` (REQ-GIT-111/117).
  *   5. relaunch  — the split dragged in (1) is restored (REQ-SHELL-069, `panels/git`).
- *   6. no-git    — PATH without Git: the header's empty version, `Working without Git` raised, no dialog; then a plain
- *                  folder that is not a repository: no notice (REQ-GIT-104). In both the strip's branch item reads its
- *                  state words whole and unshortened, the plain folder under a deep path (REQ-GIT-161, OQ-193).
+ *   6. no-git    — PATH without Git: the header's empty version, `Working without Git` raised, no dialog (REQ-GIT-104).
+ *   6b. not-a-repository — a plain folder that is not a repository, outside this one: no notice (REQ-GIT-104). In 6 and
+ *                  6b the strip's branch item reads its state words whole and unshortened, the plain folder under a deep
+ *                  path (REQ-GIT-161, OQ-193).
+ *   6c. unborn-branch — a repository before its first commit, outside this one: REQ-WORKSPACE-029's branch name is empty,
+ *                  so the strip's branch item is REQ-WORKSPACE-020's empty item — no text, no branch icon, no tooltip, no
+ *                  accessible description (`results.unbornBranch`).
  *
  * Evidence under `.proof/git-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */

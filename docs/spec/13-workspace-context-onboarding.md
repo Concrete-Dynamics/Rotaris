@@ -272,9 +272,9 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 
 - **REQ-WORKSPACE-151** — Loading a `SKILL.md` by hand SHALL be reachable through the desktop interface and from nowhere else. The Settings Skills tab SHALL carry a header action "Load skill file…" whose accessible description states that it loads a skill file for this session only. Activating it SHALL open the platform's own file chooser, restricted to selecting a `SKILL.md` file or a directory containing one, on the native-dialog terms of REQ-SHELL-164 and REQ-WORKSPACE-009 — a dismissal by any host-offered means returns no selection and changes nothing. A selection SHALL be loaded exactly as REQ-WORKSPACE-057 specifies: it carries the scope label `manual`, overrides a discovered skill of the same normalized name, applies to the current session only, and persists nothing. On success the skill list SHALL be re-projected, the composer's slash commands SHALL be re-registered (REQ-WORKSPACE-072), and a toast SHALL convey that the named skill was loaded. A failure SHALL be reported with the reason REQ-WORKSPACE-057 gives for it and SHALL leave the catalog unchanged.
   > **Narrowed by [`PD-WORKSPACE-003`](../product/directives.md#pd-workspace-003), 2026-10-06.** The chooser is a
-  > file chooser filtered to `SKILL.md` on Windows and Linux, and offers a file or a directory on macOS; the
-  > directory form of REQ-WORKSPACE-057 stays reachable through `/skill <path>`. Everything else above still
-  > governs.
+  > file chooser filtered to Markdown files (`.md`) on Windows and Linux, and offers a file or a directory on macOS;
+  > a chosen file not named `SKILL.md` is refused with REQ-WORKSPACE-057's message, and the directory form of
+  > REQ-WORKSPACE-057 stays reachable through `/skill <path>`. Everything else above still governs.
 
 ### Project Initialization Framework
 

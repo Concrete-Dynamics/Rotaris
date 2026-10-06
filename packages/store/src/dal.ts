@@ -339,7 +339,13 @@ export interface PlanRootRow {
   readonly root_canonical_name: string;
   readonly root_persona: string;
   readonly opened_at: string;
+  /**
+   * v33 — REQ-SESSION-140 with REQ-MONITOR-102: how many of the root's calls the session's total holds, raised with it;
+   * NULL for a root recorded before v33, whose count was never kept.
+   */
+  readonly tool_calls: number | null;
 }
+export type PlanRootInsert = Omit<PlanRootRow, 'tool_calls'>;
 
 /**
  * v23 — PD-ORCH-005 clauses 1 and 12: one entry of an agent's recorded conversation. `message` is one message as the
@@ -504,8 +510,10 @@ export class StoreDal {
       clearPlanRoot: db.prepare('UPDATE sessions SET plan_root_task_id = NULL, plan_root_persona = NULL, plan_root_tool_calls = 0 WHERE session_id = ? AND plan_root_task_id = ?'),
       addPlanRootCalls: db.prepare('UPDATE sessions SET plan_root_tool_calls = plan_root_tool_calls + ? WHERE session_id = ? AND plan_root_task_id = ?'),
       // v30: a plan cycle's root is recorded once and never changed; a second write of the same root changes nothing.
-      insertPlanRoot: db.prepare(`INSERT OR IGNORE INTO plan_roots (session_id, root_task_id, root_canonical_name, root_persona, opened_at)
-        VALUES (@session_id, @root_task_id, @root_canonical_name, @root_persona, @opened_at)`),
+      insertPlanRoot: db.prepare(`INSERT OR IGNORE INTO plan_roots (session_id, root_task_id, root_canonical_name, root_persona, opened_at, tool_calls)
+        VALUES (@session_id, @root_task_id, @root_canonical_name, @root_persona, @opened_at, 0)`),
+      // v33: the plan cycle's root's own count, raised with the total; a row recorded before v33 (NULL) stays unknown.
+      countPlanRootCalls: db.prepare('UPDATE plan_roots SET tool_calls = tool_calls + ? WHERE session_id = ? AND root_task_id = ? AND tool_calls IS NOT NULL'),
       planRootsOf: db.prepare('SELECT * FROM plan_roots WHERE session_id = ? ORDER BY opened_at, root_task_id'),
       // REQ-ORCH-087 / REQ-SESSION-110: the pause recorded with its count; the resolution clears it in the same act that writes the status.
       setPause: db.prepare('UPDATE sessions SET execution_status = ?, paused_at_count = ?, message_limit = ?, updated_at = ? WHERE session_id = ?'),
@@ -1028,7 +1036,7 @@ export class StoreDal {
     this.stmts['setPlanRoot']!.run(taskId, persona, id);
   }
   /** v30 — REQ-ORCH-153: records a plan cycle's root; false when it is recorded already. */
-  insertPlanRoot(row: PlanRootRow): boolean {
+  insertPlanRoot(row: PlanRootInsert): boolean {
     return this.stmts['insertPlanRoot']!.run(row).changes === 1;
   }
   /** v30: the session's plan cycles' roots, in the order they started. */
@@ -1042,6 +1050,13 @@ export class StoreDal {
   /** v32 — OQ-116 as ruled: `n` more of the under-way plan cycle root `taskId`'s calls are in the total; false when it is not under way. */
   addPlanRootCalls(id: SessionId, taskId: string, n: number): boolean {
     return this.stmts['addPlanRootCalls']!.run(n, id, taskId).changes === 1;
+  }
+  /**
+   * v33 — REQ-SESSION-140 with REQ-MONITOR-102: `n` more of the plan cycle root `taskId`'s calls are in the session's total,
+   * raised on its `plan_roots` row in the transaction that adds them; false when it has no row, or one recorded before v33.
+   */
+  countPlanRootCalls(id: SessionId, taskId: string, n: number): boolean {
+    return this.stmts['countPlanRootCalls']!.run(n, id, taskId).changes === 1;
   }
   /** REQ-ORCH-087 / REQ-SESSION-110: status, the count reached (null clears the pause) and the limit in force, one statement. */
   setPause(id: SessionId, status: string, pausedAtCount: number | null, messageLimit: number | null, updatedAt: string): void {

@@ -1483,14 +1483,18 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       // cut one is not. Before the ruling nothing was counted until the root's turn returned. The session names the root.
       expect(dal.getSession(sid)).toMatchObject({ tool_calls: 1, plan_root_tool_calls: 1, plan_root_task_id: planRootOf(sid), plan_root_persona: 'orchestrator' });
       expect(dal.iterationsOf(sid)).toEqual([]);
+      // REQ-SESSION-140 (store v33): the root's own count is raised with the total, and kept past its release.
+      expect(dal.planRootsOf(sid).map((r) => r.tool_calls)).toEqual([1]);
       expect(next().repair(dal, 'C:/ws', { sessionId: sid }).repaired).toHaveLength(1);
       expect(dal.getSession(sid)).toMatchObject({ tool_calls: 2, plan_root_tool_calls: 0, plan_root_task_id: null, plan_root_persona: null });
+      expect(dal.planRootsOf(sid).map((r) => r.tool_calls)).toEqual([2]);
       // REQ-SESSION-129: the call the crash cut is answered as a crash's, and its row settles `failed`.
       expect(conversationOf(dal.agentConversation(sid, planRootOf(sid))).at(-1)).toEqual({ role: 'tool', content: [{ kind: 'tool-result', callId: 'g2', name: 'grep', isError: true, result: interruptedResult('crash', true, '') }] });
       expect(cutRow(sid)).toMatchObject({ tool_status: 'failed', output: interruptedResult('crash', true, '') });
       // A second recording finds nothing more to count.
       recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
       expect(dal.getSession(sid)!.tool_calls).toBe(2);
+      expect(dal.planRootsOf(sid).map((r) => r.tool_calls)).toEqual([2]);
     });
 
     it('a plan cycle whose root returned — the run parked at the gate — counted its calls once and names no root, so a crash recorded after adds nothing', async () => {
@@ -1499,6 +1503,8 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(dal.getSession(sid)).toMatchObject({ tool_calls: 1, plan_root_task_id: null });
       recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
       expect(dal.getSession(sid)!.tool_calls).toBe(1);
+      // REQ-SESSION-140 (store v33): its own count holds its one call, released or not.
+      expect(dal.planRootsOf(sid).map((r) => r.tool_calls)).toEqual([1]);
     });
 
     it('a plan cycle\'s root the stop\'s grace gave up on is counted from its record and released, so a crash recorded after adds nothing', async () => {

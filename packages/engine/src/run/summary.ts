@@ -95,8 +95,18 @@ export function summaryFactsOf(dal: SummaryDal, sessionId: SessionId): SummaryFa
   });
 }
 
+/**
+ * REQ-SESSION-140's Agents: each agent with the calls it counted. A root and a child read their own counters — an
+ * iteration's root `iterations.root_tool_calls`, a plan cycle's root `plan_roots.tool_calls` (store v33), a child
+ * `children.tool_calls` — never the tool-call record, a ring capped at 5,000 rows (REQ-SESSION-133) that reads fewer calls
+ * than were made once the cap has dropped its oldest. Where no counter exists — a plan cycle's root recorded before v33, an
+ * agent known only by its records — the record is read while it has dropped nothing, and `n/a` once it has, never a figure
+ * it knows may be short (the repair of `summary-md-reads-a-plan-cycle-roots-calls-from-the-capped-tool-call-record.md`).
+ */
 function agentsOf(dal: SummaryDal, sessionId: SessionId, metrics: SessionMetrics): SummaryAgent[] {
   const agents: SummaryAgent[] = [];
+  const whole = metrics.records_kept.tool_calls.dropped === 0;
+  const recorded = (name: string): number | null => (whole ? metrics.per_agent[name]?.tool_calls ?? null : null);
   // A child's parent is named by its task id: an iteration's root, a plan cycle's root, or another child.
   const nameOf = new Map<string, string>();
   for (const it of dal.iterationsOf(sessionId)) {
@@ -106,7 +116,7 @@ function agentsOf(dal: SummaryDal, sessionId: SessionId, metrics: SessionMetrics
   }
   for (const p of dal.planRootsOf(sessionId)) {
     nameOf.set(p.root_task_id, p.root_canonical_name);
-    agents.push({ name: p.root_canonical_name, persona: p.root_persona, role: 'plan cycle root', state: null, toolCalls: metrics.per_agent[p.root_canonical_name]?.tool_calls ?? null });
+    agents.push({ name: p.root_canonical_name, persona: p.root_persona, role: 'plan cycle root', state: null, toolCalls: p.tool_calls ?? recorded(p.root_canonical_name) });
   }
   const children = dal.childrenOf(sessionId);
   for (const c of children) nameOf.set(c.task_id, c.canonical_name);
@@ -114,7 +124,7 @@ function agentsOf(dal: SummaryDal, sessionId: SessionId, metrics: SessionMetrics
     agents.push({ name: c.canonical_name, persona: c.persona, role: c.parent_id ? `child of ${nameOf.get(c.parent_id) ?? c.parent_id}` : 'child', state: c.state, toolCalls: c.tool_calls });
   }
   const named = new Set(agents.map((a) => a.name));
-  for (const [name, a] of Object.entries(metrics.per_agent)) if (!named.has(name)) agents.push({ name, persona: null, role: null, state: null, toolCalls: a.tool_calls });
+  for (const name of Object.keys(metrics.per_agent)) if (!named.has(name)) agents.push({ name, persona: null, role: null, state: null, toolCalls: recorded(name) });
   return agents;
 }
 

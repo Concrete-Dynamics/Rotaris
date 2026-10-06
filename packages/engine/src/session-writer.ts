@@ -1213,6 +1213,10 @@ export class SessionWriter {
    * `planRootCall` (OQ-116 as ruled, R-071, `PD-ORCH-008`; store v32): calls of the plan cycle's root that completed while it
    * is under way join the total and its count (`sessions.plan_root_tool_calls`) without releasing it, so its release, and a
    * crash record, add only what that count does not hold. A root not under way adds nothing.
+   *
+   * Whatever `planRootCall` and `planRoot` add to the total is added to that root's own count on its `plan_roots` row
+   * (store v33) in the same transaction, which neither release nor a later root zeroes: the count summary.md's Agents
+   * line reads (REQ-SESSION-140; the repair of `summary-md-reads-a-plan-cycle-roots-calls-from-the-capped-tool-call-record.md`).
    */
   countToolCalls(counts: { readonly root?: { readonly iteration: number; readonly add: number }; readonly planRoot?: { readonly taskId: string; readonly add: number }; readonly planRootCall?: { readonly taskId: string; readonly add: number }; readonly children?: readonly { readonly taskId: string; readonly calls: number }[] }, total?: number): Result<number, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
@@ -1221,8 +1225,14 @@ export class SessionWriter {
       return ok(dal.transaction(() => {
         let gained = 0;
         if (counts.root && counts.root.add > 0 && dal.addIterationRootCalls(sessionId, counts.root.iteration, counts.root.add)) gained += counts.root.add;
-        if (counts.planRootCall && counts.planRootCall.add > 0 && dal.addPlanRootCalls(sessionId, counts.planRootCall.taskId, counts.planRootCall.add)) gained += counts.planRootCall.add;
-        if (counts.planRoot && dal.clearPlanRoot(sessionId, counts.planRoot.taskId)) gained += Math.max(0, counts.planRoot.add);
+        if (counts.planRootCall && counts.planRootCall.add > 0 && dal.addPlanRootCalls(sessionId, counts.planRootCall.taskId, counts.planRootCall.add)) {
+          gained += counts.planRootCall.add;
+          dal.countPlanRootCalls(sessionId, counts.planRootCall.taskId, counts.planRootCall.add);
+        }
+        if (counts.planRoot && dal.clearPlanRoot(sessionId, counts.planRoot.taskId) && counts.planRoot.add > 0) {
+          gained += counts.planRoot.add;
+          dal.countPlanRootCalls(sessionId, counts.planRoot.taskId, counts.planRoot.add);
+        }
         for (const c of counts.children ?? []) {
           const current = dal.getChild(sessionId, c.taskId);
           if (!current || c.calls <= current.tool_calls) continue;

@@ -61,4 +61,5 @@ ruled. The same round names the permission audit on the denials line whatever it
 `timeouts` as every tool call that timed out (`- Timeouts:`, not `- Terminal timeouts:`, since it counts more than the
 terminal's), and reads a non-string `outcome_kind` or `failure_kind` as NULL in `toolCallDigestOf` (`json_type`), as
 `toolCallFactsOf` does. A plan cycle root's Agents line read from the capped record is recorded in
-[`summary-md-reads-a-plan-cycle-roots-calls-from-the-capped-tool-call-record.md`](../summary-md-reads-a-plan-cycle-roots-calls-from-the-capped-tool-call-record.md).
+[`summary-md-reads-a-plan-cycle-roots-calls-from-the-capped-tool-call-record.md`](summary-md-reads-a-plan-cycle-roots-calls-from-the-capped-tool-call-record.md), and repaired in repair round 2: a plan cycle's root reads its own count, store v33's
+`plan_roots.tool_calls`, and a line with no count kept reads `n/a` once the ring has dropped any.

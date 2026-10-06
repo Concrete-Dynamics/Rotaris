@@ -63,7 +63,11 @@ recorded, Metrics with `n/a` for what is unavailable, Warnings (mostly-elided ar
 Tools and the inspection note; the counts are `sessionMetrics` (`export.ts`, which the metrics document now wraps), over
 `StoreDal.toolCallDigestOf` and `auditDigestOf`, two new statements over the existing tables. `SummaryWriter.rebuild` guards
 every read and skips a superseded rebuild; `costLabelOf` moved to `run/cost-label.ts` and is re-exported where it was. The
-**runtime view**'s repair paragraph says so. No package, edge, process, channel, command or store column changed.
+**runtime view**'s repair paragraph says so. In repair round 2 a plan cycle's root's Agents line stopped reading the capped
+tool-call record: store **v33** adds `plan_roots.tool_calls`, raised by `SessionWriter.countToolCalls` with the total, and a
+line with no count kept reads `n/a` once the ring has dropped any. The **runtime view**'s repair paragraph, its §7 heading
+(v33) and `plan_roots` row, and the **state-ownership view**'s plan-cycle-root row say so. No package, edge, process,
+channel or command changed.
 
 **The timeline's vocabulary names every name the product writes (PD-ORCH-014, PD-CHAT-009, PD-TOOLS-011; OQ-157 with
 OQ-53, OQ-54, OQ-76 and OQ-127; fin20).** `tools/check-timeline-vocabulary.mjs`'s `AWAITING` is empty, every name it held

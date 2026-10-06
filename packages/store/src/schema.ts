@@ -1100,6 +1100,23 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE sessions ADD COLUMN plan_root_tool_calls INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    to: 33,
+    /*
+     * REQ-SESSION-140's Agents section with REQ-MONITOR-102 (the repair of
+     * `summary-md-reads-a-plan-cycle-roots-calls-from-the-capped-tool-call-record.md`): each agent's line carries the calls
+     * it counted. An iteration's root reads `iterations.root_tool_calls` (v26) and a child `children.tool_calls`; a plan
+     * cycle's root had no count that outlived its release (v32's `plan_root_tool_calls` is the root UNDER WAY's, zeroed
+     * when it is released), so its line was read from the tool-call record, a ring capped at 5,000 rows (REQ-SESSION-133)
+     * that reads fewer calls than the root made once the cap drops its oldest. `plan_roots.tool_calls` is how many of the
+     * root's calls the session's total holds: 0 when its turn starts, raised in the transaction that adds its calls to the
+     * total (as each completes, at its release, and from a crash record), never lowered. NULL on every row written before
+     * this version, and true of them: what those roots counted was never recorded per root, so it is unknown.
+     */
+    sql: `
+      ALTER TABLE plan_roots ADD COLUMN tool_calls INTEGER;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

@@ -167,6 +167,35 @@ describe('run/summary — summaryFactsOf reads one session\'s record (REQ-SESSIO
     expect(md).toContain('- Task: First prompt.');
   });
 
+  // The fin22 verifier's finding (`summary-md-reads-a-plan-cycle-roots-calls-from-the-capped-tool-call-record.md`): a plan
+  // cycle's root's line was read from the tool-call record, a ring capped at 5,000 rows, so past the cap it read short.
+  it('a plan cycle\'s root reads its own count (store v33), never the capped record\'s rows', () => {
+    dal.insertPlanRoot({ session_id: sid, root_task_id: 'bg_plan', root_canonical_name: 'Ada', root_persona: 'orchestrator', opened_at: 't0' });
+    dal.setPlanRoot(sid, 'bg_plan', 'orchestrator');
+    dal.addPlanRootCalls(sid, 'bg_plan', 6);
+    dal.countPlanRootCalls(sid, 'bg_plan', 6);
+    dal.clearPlanRoot(sid, 'bg_plan');
+    // The record holds one of its six calls: the cap dropped the rest.
+    call(1, 'Ada', 10, 'completed', false);
+    dal.db.prepare('UPDATE ring_state SET dropped = 5 WHERE session_id = ? AND kind = ?').run(sid, 'tool_calls');
+    const facts = summaryFactsOf(dal, sid)!;
+    expect(facts.agents.map((a) => [a.name, a.role, a.toolCalls])).toEqual([['Ada', 'plan cycle root', 6]]);
+    expect(section(renderSummary(facts), 'Agents')).toEqual(['- Ada (orchestrator) — plan cycle root; tool calls: 6']);
+  });
+
+  it('where no count is kept — a plan cycle\'s root recorded before v33, an agent known only by its records — the record is read while whole, and n/a once the cap has dropped any', () => {
+    dal.insertPlanRoot({ session_id: sid, root_task_id: 'bg_plan', root_canonical_name: 'Ada', root_persona: 'orchestrator', opened_at: 't0' });
+    dal.db.prepare('UPDATE plan_roots SET tool_calls = NULL WHERE session_id = ?').run(sid);
+    call(1, 'Ada', 10, 'completed', false);
+    call(2, 'Ada', 20, 'completed', false);
+    call(3, 'Eve', 30, 'completed', false);
+    expect(summaryFactsOf(dal, sid)!.agents.map((a) => [a.name, a.toolCalls])).toEqual([['Ada', 2], ['Eve', 1]]);
+    dal.db.prepare('UPDATE ring_state SET dropped = 1 WHERE session_id = ? AND kind = ?').run(sid, 'tool_calls');
+    const facts = summaryFactsOf(dal, sid)!;
+    expect(facts.agents.map((a) => [a.name, a.toolCalls])).toEqual([['Ada', null], ['Eve', null]]);
+    expect(section(renderSummary(facts), 'Agents')).toEqual(['- Ada (orchestrator) — plan cycle root; tool calls: n/a', '- Eve; tool calls: n/a']);
+  });
+
   it('a recovered session presents its correction entry through every rebuild (OQ-60 as ruled)', () => {
     dal.touchSession(sid, 'interrupted', 't2');
     dal.insertTimeline(sid, dal.nextTimelineOrdinal(sid), 't2', RECOVERY_ENTRY, 'rotaris', 'recovered.', '{}', 'abcdefabcdef', 'warning');

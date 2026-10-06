@@ -4,7 +4,7 @@ import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type AgentTerminalRow, type Checkp
 import { FOLLOW_UP_STATE, interruptionPhrase, isLegalChildMove, isLegalFollowUp, isResumeState, isTerminalChildState, type ChildState, type ImageAttachment, type Interruption, type ResumeState, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus, summarise } from './run/stop-conditions.js';
-import { cut } from './run/cut.js';
+import { cut, cutArguments } from './run/cut.js';
 import { AgentActivity } from './children/activity.js';
 import type { AgentGrant } from './children/personas.js';
 
@@ -967,9 +967,12 @@ export class SessionWriter {
     const capped = (s: string) => (settle.is_error ? cut(s, ERROR_RECORD_CAP) : s);
     const entry: Record<string, unknown> = {
       timestamp: at, agent_name: open.agent_name, tool_name: open.tool_name, call_id: open.call_id, status: settle.status, elapsed_ms: settle.elapsed_ms, is_error: settle.is_error,
-      // REQ-SESSION-136: on error the args and the result are cut to 2000 characters; an object that fits stays an object, and
-      // one that does not is stored as the head of its JSON text, marked, so a reader sees an object's text that is cut.
-      args: settle.is_error && JSON.stringify(open.args).length > ERROR_RECORD_CAP ? capped(JSON.stringify(open.args)) : open.args, result: capped(settle.result),
+      // REQ-SESSION-136: on error the args and the result are cut to 2000 characters. The args stay an object: only their
+      // free-text values are cut, each marked, and a path, an identifier, a count or a timestamp is never cut (REQ-SESSION-194's
+      // last sentence; `cutArguments`, and OQ-209 for args those alone take past the cap).
+      // FALSIFIED, kept beside its replacement (the fin23 verifier, 2026-10-06): "one that does not is stored as the head of
+      // its JSON text, marked" — a head drops whatever the model serialised after a long value, a path among them.
+      args: settle.is_error ? cutArguments(open.args, ERROR_RECORD_CAP) : open.args, result: capped(settle.result),
       ...(settle.outcome_kind === undefined ? {} : { outcome_kind: settle.outcome_kind }), ...(settle.exit_code === undefined ? {} : { exit_code: settle.exit_code }),
       ...(settle.failure_kind === undefined ? {} : { failure_kind: settle.failure_kind }), ...(settle.warnings === undefined ? {} : { warnings: settle.warnings }),
     };

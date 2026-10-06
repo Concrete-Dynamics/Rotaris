@@ -10501,3 +10501,35 @@ terminal counts read their own outcomes and issues.
 **What a ruling decides.** Whether an MCP call's record carries no `outcome_kind` (the histogram then derives `success` or
 `tool_error` from `status` and `is_error`), carries one from a vocabulary the specification would name, or keeps `mcp` as a
 bucket of its own.
+
+**OQ-209 — An error-path tool record's arguments are "truncated to 2000 characters", and paths and identifiers are "never
+truncated": which governs, and what do the 2,000 characters measure?** *(REQ-SESSION-136, "On error, recorded args/result
+are truncated to 2000 characters"; REQ-SESSION-194, which names "the truncated arguments and results of an error-path tool
+record" among the cuts its marker governs and ends "Counts, identifiers, paths and timestamps are never truncated"; the
+domain's resolution 21. Raised 2026-10-06 by fin23 (bundle `fin23-terminal-and-records`) on its verifier's finding against
+the repair of
+[`an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md`](../defects/fixed/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md).
+Raised on the branch as OQ-208 and renumbered OQ-209 when the branch was rebased onto `origin/main`, main's OQ-208 (an MCP
+call's `outcome_kind`) having taken that number first. Open, the owner's.)*
+
+A tool call's arguments are a JSON object whose key order the model chooses. REQ-SESSION-136 caps them at 2,000 characters
+without saying what is counted (the object's JSON text, or each value), and REQ-SESSION-194 forbids truncating a count, an
+identifier, a path or a timestamp. The two meet in two places. A cut of the JSON text from its head drops or cuts through
+whatever the model serialised after a long value — a `path` after a 1,990-character `content` — which the first repair did
+and the verifier found. And where a value that is a path or an identifier is itself longer than the cap (a deep path, a
+long list of ids), no cut can meet both: the cap is exceeded or the path is cut.
+
+**What the build proceeds under** (`cutArguments`, `packages/engine/src/run/cut.ts`; `SessionWriter.settleToolCall`). The
+2,000 characters measure the arguments' JSON text. The arguments keep their shape: an object stays an object with every key,
+and only free-text string values are cut, longest first, each ending with REQ-SESSION-194's `...` inside its own length,
+until the text fits. A value is a path, an identifier or a timestamp by its key — the key's last word is one of `path`,
+`file`, `dir`, `cwd`, `url`, `uri`, `id`, `slug`, `ref`, `hash`, `name`, `at`, `timestamp`, `time`, `date`, `since`,
+`until` (or their plurals), or the key is one of this product's own `persona`, `supersedes`, `depends_on`,
+`continuation_of`, `write_scope` — and it is never cut, nor anything beneath it; a number, a boolean and null are never cut.
+Where what is kept whole cannot fit on its own, every free-text value is cut to the marker alone and the record exceeds
+2,000 characters: "never truncated" is read as governing over the cap. A value that only mentions a path (a command
+line, a free-text result) is free text and is cut; the result, a single text, is cut from its head as before.
+
+**What a ruling decides.** Whether the 2,000 characters measure the JSON text or each value; whether the cap or "never
+truncated" yields when a path or an identifier is longer than the cap; and whether a key-name reading of "path, identifier,
+timestamp" is the test, or the tool's declared schema should say which arguments are which.

@@ -47,7 +47,8 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 **An error-path tool record marks the cut it makes (REQ-SESSION-194, REQ-SESSION-136; fin23, live-run M3).**
 `SessionWriter.settleToolCall` cuts an error's `args` and `result` with `run/cut.ts`, so a cut value ends with `...` inside
-its 2,000 characters where it was a bare `slice`. The **runtime view**'s store table says so. No package, edge, process,
+its 2,000 characters where it was a bare `slice`; the arguments keep their shape (`cutArguments`: only free-text values cut,
+a path, identifier, count or timestamp never; OQ-209). The **runtime view**'s store table says so. No package, edge, process,
 channel, command or store column changed.
 
 **A terminal command too long for one PTY line is staged in a script (REQ-TOOLS-096, ADR-0020; fin23, live-run M1).** A POSIX

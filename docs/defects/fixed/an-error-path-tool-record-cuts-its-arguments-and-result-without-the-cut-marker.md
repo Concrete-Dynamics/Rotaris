@@ -34,16 +34,32 @@ session `63f26919` (`requirements`). Of the pack's 12 error-path records, 3 were
 
 `SessionWriter.settleToolCall` (`packages/engine/src/session-writer.ts`) cuts an error-path record's arguments and result
 with `run/cut.ts`, REQ-SESSION-194's one marked cut: at most 2,000 characters, the last three `...`, never between the two
-halves of a surrogate pair. Arguments that fit stay the object they were; arguments that do not are stored as the head of
-their JSON text, marked, so a reader sees an object's text that does not close and ends with the marker. A result that
-fits, and every record of a call that succeeded, is stored whole as before. `run/cut.ts`'s comment no longer places this
+halves of a surrogate pair. Arguments that fit stay the object they were; arguments that do not keep their shape too
+(`cutArguments`): an object with every key, only its free-text values cut, longest first, each ending with the marker, and a
+path, an identifier, a count or a timestamp never cut, as REQ-SESSION-194's last sentence requires. A result that fits, and
+every record of a call that succeeded, is stored whole as before.
+
+FALSIFIED, kept beside its replacement (the fin23 verifier's finding, 2026-10-06): the first repair stored arguments that do
+not fit as "the head of their JSON text, marked, so a reader sees an object's text that does not close and ends with the
+marker". A head keeps whatever the model serialised first, so `{content: <1,990 characters>, path: '/ws/src/x.ts'}` lost its
+path whole, and a path that began near character 1,997 was cut through, against "Counts, identifiers, paths and timestamps
+are never truncated". Where a path or an identifier is itself longer than the cap, REQ-SESSION-136's cap and that sentence
+cannot both hold: [OQ-209](../../architecture/open-questions.md) records the question and the reading the build proceeds
+under (the value kept whole, the free text cut to the marker alone, the record over 2,000 characters). `run/cut.ts`'s comment no longer places this
 cut outside REQ-SESSION-194; its old reading is kept there beside the new one. The runtime view's store table says so.
 
 **Pinned by** `packages/engine/src/session-writer.test.ts`, "SessionWriter — an error-path tool record marks the cut it
-makes": long arguments and a long result come back 2,000 characters ending `...` (red before the repair: the bare
-2,000-character heads); arguments and a result that fit, an exactly 2,000-character result included, come back whole;
+makes": long arguments come back an object of at most 2,000 characters of JSON text, the free text ending `...` and the
+path and the operation whole, and a long result 2,000 characters ending `...` (red before the repair: the bare
+2,000-character heads; red on the first repair: a string); a path serialised after a long `content`, and identifiers, counts
+and timestamps anywhere in the arguments, come back whole, and a path longer than the cap comes back whole with the free
+text cut to the marker, OQ-209's reading (all four red on the first repair's JSON head); arguments and a result that fit, an exactly 2,000-character result included, come back whole;
 a call that succeeded is never cut; and a cut never splits a surrogate pair (red before the repair: the bare 2,000-character head, unmarked).
+`packages/engine/src/run/cut.test.ts`, "cutArguments": the longest value is cut first, an escaped character counts at its
+JSON length, nothing under a path, identifier or timestamp key is cut, and the key is read by its last word.
 
 **Not shown:** no proof drives an error-path tool record through the built app; a live run should show each error-path
-record whose arguments or result passed 2,000 characters ending with `...`, its length 2,000. The live-run harness's
-create-shaped test that reads such arguments (`createShaped`, live-run finding M2) is outside this repair.
+record whose result passed 2,000 characters ending with `...`, its length 2,000, and each whose arguments passed 2,000
+characters of JSON text still an object of at most 2,000, its long free text ending `...` and its `path` whole. The live-run harness's
+create-shaped test that reads such arguments (`createShaped`, live-run finding M2) is outside this repair; since cut
+arguments now stay an object, it reads them as it reads whole ones.

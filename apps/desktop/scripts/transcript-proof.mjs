@@ -35,9 +35,16 @@
  *                   the 2026-09-29 round, with V8's sampling profiler under the same trace, so the script is
  *                   attributed to the functions and source modules it ran in, loaded against empty.
  *
+ *   3d. interleave — two children of one scripted run, each holding a terminal command open while the other appends
+ *                   rows behind it, so a row settles BELOW the last (the duress run's shape: the coordinator's wait settling
+ *                   under its child's whole run). After the run, the rows the renderer's replica holds are the rows the store
+ *                   recorded, each in its recorded form, which is what the projection draws from (REQ-MONITOR-214,
+ *                   PD-CHAT-004 rev 2;
+ *                   docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md).
+ *
  * Evidence under `.proof/transcript-proof/`: one PNG and one log per launch, the two traces, `results.json`.
  * `--skip-build` skips the build. `--only=<stages>` runs the named stages alone (comma-separated, of `invariance`,
- * `behaviour`, `geometry`, `capacity`, `append`) after the `empty` launch, which always runs because it creates the store
+ * `behaviour`, `geometry`, `capacity`, `interleave`, `append`) after the `empty` launch, which always runs because it creates the store
  * the others are planted in; the verdict names them, since a partial run is evidence for those stages and no others.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -67,7 +74,7 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
-const STAGES = ['invariance', 'behaviour', 'geometry', 'capacity', 'append'];
+const STAGES = ['invariance', 'behaviour', 'geometry', 'capacity', 'interleave', 'append'];
 const only = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',').filter(Boolean) ?? null;
 if (only !== null && only.some((stage) => !STAGES.includes(stage))) throw new Error(`--only names a stage this proof does not have: ${only.join(',')} (stages: ${STAGES.join(', ')})`);
 const wanted = (stage) => only === null || only.includes(stage);
@@ -85,12 +92,12 @@ const PROBES = [
  * comparison's traced launches pass the startup-tracing switches through it; `hostSwitches` is what this host needs
  * on every launch (`--no-sandbox` as root, nothing elsewhere).
  */
-async function launch(name, extra, timeoutMs = 240_000, electronArgs = []) {
+async function launch(name, extra, timeoutMs = 240_000, electronArgs = [], where = { workspace, local, preferences }) {
   const png = join(output, `${name}.png`);
-  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, ...electronArgs, workspace], {
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, ...electronArgs, where.workspace], {
     cwd: app, timeoutMs, windowsHide: true,
     env: {
-      ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
+      ...cleanEnvironment(), ...proofIsolationEnv({ local: where.local, preferences: where.preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ...extra,
     },
@@ -634,6 +641,84 @@ if (wanted('capacity')) {
     expect(tail.following === '1' && tail.lastBound === `row:${NOTICES - 1}`, `the tail's last notice is not bound while the pane follows: ${JSON.stringify(tail)}`);
     results.capacity = { window: TALL, oldUnitVisibleRows: OLD_VISIBLE, tail, middle, png: capacity.png };
   }
+}
+
+// ── 3d. interleave: a row settled below the last keeps every row behind it ─────────────────────────────────────
+// H5 of the final duress autopsy at 27a5127: All activity drew a failed child's 21-minute run as its first row alone.
+// The projection owner published a row committed BELOW the last held row as that row alone, and the replica — which
+// replaces everything from an increment's earliest-changed index with what it carries (REQ-MONITOR-214) — dropped every
+// row behind it. Two children of one run each hold a terminal command open (`sleep`) while the other appends, so each
+// call settles below rows the other wrote. After the run, the replica — the projection's whole input — must hold every
+// recorded row in its recorded form; `projector.test.ts` holds the projection to drawing every row it is handed
+// (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md).
+if (wanted('interleave')) {
+  const where = { workspace: join(output, 'interleave', 'workspace'), local: join(output, 'interleave', 'local'), preferences: join(output, 'interleave', 'preferences') };
+  mkdirSync(join(where.workspace, '.rotaris'), { recursive: true });
+  mkdirSync(where.local, { recursive: true });
+  writeFileSync(join(where.workspace, 'README.md'), '# Transcript proof workspace (interleave)\n');
+  writeFileSync(join(where.workspace, '.rotaris', 'agents.yaml'), [
+    '# scratch configuration written by the proof script',
+    'models:', '  scripted: { provider: scripted, model_id: scripted }',
+    'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+    // This stage measures the transcript; the code-intelligence discovery would only lengthen the run start.
+    'mcp_servers:', '  code_intelligence: { enabled: false }',
+    'runtime:', '  permission_mode: autonomous', '  max_depth: 2', '  max_active_children: 4',
+    '',
+  ].join('\n'));
+  // Each child: a terminal command held open for 2.5 s, then reads and searches. The second child starts while the first
+  // one's command runs, so the first one's settle lands below the second one's rows, and the reverse.
+  const CHILD = 'terminal:hold,read,glob,terminal:hold,read,answer';
+  const HELD_ROWS = `(() => { const out = []; for (let i = 0; i < 400; i += 1) { const r = window.__rotarisRow(i); if (r) out.push({ index: r.index, kind: r.kind, settled: r.settled === true, toolStatus: r.toolStatus ?? null, name: r.name ?? null }); } return out; })()`;
+  const LINES = `(() => [...document.querySelectorAll('[data-testid="row-group"]')].map((n) => ({ agent: n.getAttribute('data-agent'), text: (n.querySelector('.activity__segments') ?? n).textContent.replace(/\s+/g, ' ').trim() })))()`;
+  // Read at an appointment well after the run's end (about ten seconds of scripted work), and checked against it below.
+  const READ_AT = 30_000;
+  const r = await launch('interleave', {
+    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,delegate:coding-agent:beta,answer',
+    ROTARIS_CHILD_SCRIPT: CHILD,
+    ROTARIS_SCRIPT_TERMINAL_ARGS: JSON.stringify({ hold: { command: 'sleep 2.5' } }),
+    ROTARIS_CAPTURE_PROMPT: 'delegate to two agents',
+    ROTARIS_CAPTURE_EVAL_AT: `${HELD_ROWS}@${READ_AT};;${LINES}@${READ_AT + 200};;window.__rotarisReplica()@${READ_AT + 400}`,
+    ROTARIS_CAPTURE_AFTER_MS: String(READ_AT + 1_000),
+  }, 240_000, [], where);
+  const ended = /^\[main (\S+)\] .*run \S+ ended /m.exec(r.log);
+  const read = new RegExp(`^\\[main (\\S+)\\] .*capture: eval-at ${READ_AT} `, 'm').exec(r.log);
+  expect(ended !== null && read !== null && Date.parse(ended[1]) <= Date.parse(read[1]), `interleave: the run did not end before the replica was read (see interleave.log): ended ${ended?.[1]}, read ${read?.[1]}`);
+  const databases = findDatabases(where.local);
+  expect(databases.length === 1, `interleave: expected one workspace database below ${where.local}; found ${databases.length}`);
+  const db = new Database(databases[0], { readonly: true });
+  let recorded;
+  let children;
+  let settledBelow;
+  try {
+    const sid = db.prepare('SELECT session_id FROM sessions ORDER BY created_at DESC LIMIT 1').get().session_id;
+    recorded = db.prepare('SELECT row_index AS "index", kind, settled, tool_status AS toolStatus, name FROM transcript_rows WHERE session_id = ? ORDER BY row_index').all(sid)
+      .map((x) => ({ index: x.index, kind: x.kind, settled: x.settled === 1, toolStatus: x.toolStatus ?? null, name: x.name ?? null }));
+    children = db.prepare('SELECT canonical_name AS name, state FROM children WHERE session_id = ? ORDER BY spawned_at').all(sid);
+    // The shape this stage exists for: a row's settle event arriving after a HIGHER index was already recorded.
+    let highest = -1;
+    settledBelow = [];
+    for (const { payload } of db.prepare("SELECT payload FROM events WHERE session_id = ? AND kind = 'transcript.row' ORDER BY ordinal").all(sid)) {
+      const index = JSON.parse(payload).index;
+      if (index < highest) settledBelow.push(index);
+      highest = Math.max(highest, index);
+    }
+  } finally { db.close(); }
+  const held = evalAt(r, READ_AT);
+  const lines = evalAt(r, READ_AT + 200) ?? [];
+  // The guards: both children ran and ended, and a terminal call really did settle below a row another agent wrote —
+  // or the assertion below is true of a run that never had the shape.
+  expect(children.length === 2 && children.every((c) => c.state === 'succeeded'), `interleave: the children were ${JSON.stringify(children)}`);
+  const terminals = recorded.filter((x) => x.kind === 'tool' && x.name !== null && x.name !== 'orchestrator');
+  expect(terminals.length >= 8, `interleave: the children recorded only ${terminals.length} tool rows`);
+  expect(settledBelow.length >= 2, `interleave: only ${settledBelow.length} rows settled below a later one (${JSON.stringify(settledBelow)}), so the shape was never asked`);
+  expect(held !== null, 'interleave: the replica was never read (see interleave.log)');
+  const missing = recorded.filter((x) => !held.some((h) => h.index === x.index));
+  const differ = recorded.filter((x) => { const h = held.find((y) => y.index === x.index); return h !== undefined && (h.kind !== x.kind || h.settled !== x.settled || h.toolStatus !== x.toolStatus); });
+  results.interleave = { recorded: recorded.length, held: held.length, missing: missing.map((x) => x.index), differ: differ.map((x) => x.index), children, settledBelow, activityLines: lines, replica: evalAt(r, READ_AT + 400), png: r.png };
+  writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
+  expect(missing.length === 0, `interleave: the replica holds ${held.length} of the ${recorded.length} recorded rows; missing ${JSON.stringify(missing.map((x) => x.index))} (REQ-MONITOR-214)`);
+  expect(differ.length === 0, `interleave: the replica holds rows ${JSON.stringify(differ.map((x) => x.index))} in a form the store does not`);
+  console.log(`  interleave (REQ-MONITOR-214): the replica holds all ${recorded.length} recorded rows after ${settledBelow.length} settles below a later row`);
 }
 
 // ── 4/5. the append comparison ──────────────────────────────────────────────────────────────────────────────

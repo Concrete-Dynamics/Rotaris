@@ -21,11 +21,11 @@ const lastUserText = (req: ModelRequest): string => {
 };
 
 /**
- * OQ-199 as ruled (R-071, `PD-ORCH-006`): an entry role that ends its turn with neither text nor a tool call is asked once
+ * OQ-199 as ruled (R-071, `PD-ORCH-009`): an entry role that ends its turn with neither text nor a tool call is asked once
  * more to answer, as a delegated child is re-prompted (REQ-ORCH-095); one that still writes nothing completes, and the
  * person is told the run ended without an answer.
  */
-describe('PD-ORCH-006: the entry role is asked once more for an answer it did not write (OQ-199)', () => {
+describe('PD-ORCH-009: the entry role is asked once more for an answer it did not write (OQ-199)', () => {
   let dir: string;
   let dal: StoreDal;
   let clock: FakeClock;
@@ -82,7 +82,7 @@ describe('PD-ORCH-006: the entry role is asked once more for an answer it did no
   });
 
   /*
-   * The verifier's finding on PD-ORCH-006's first form: the row said the run ended after any silent iteration, also one the
+   * The verifier's finding on PD-ORCH-009's first form: the row said the run ended after any silent iteration, also one the
    * run went on from. A queued prompt, created while the first root's read is held, gives the run a second iteration.
    */
   function heldFirst(rest: ScriptedCall[]) {

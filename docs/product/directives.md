@@ -3144,68 +3144,6 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 
 <a id="pd-orch-006"></a>
 
-### PD-ORCH-006 — an entry role that ends its turn without an answer is asked once more, and the person is told if it still writes none
-
-When the entry role of an execution iteration ends its turn with neither text nor a tool call — its last model step wrote
-nothing for the person — and the run is not stopping, pausing or coming to rest, the run SHALL send it one further message
-in its own conversation asking it to answer, and SHALL let it take that turn as it takes any. It SHALL be asked once in
-each execution of the iteration's root, never twice. Where the turn that message leads to still ends without an answer, the
-iteration SHALL close as it would have, and the run SHALL tell the person once, in a `system` row in the transcript and a
-warning `incomplete_execution` issue naming the entry role: where the run ends after that iteration (REQ-ORCH-069's stop
-conditions), that **the run** ended without an answer; where it does not — another task is taken up, the run parks at
-the plan gate, or it pauses (at the message limit, at the user's request or at a quit) or is cancelled — that **the
-iteration** ended without an answer. An answer written in reply to that message is an answer, even when a later correction's turn (REQ-ORCH-078)
-writes none. A plan cycle's root (REQ-ORCH-153) is not asked: the plan it produces is the plan gate's to judge.
-
-**Why, and what it costs.** A run asked "Read README.md … and tell me its first heading" read the file, globbed the
-workspace and ended its turn with reasoning and no text (run 2 of `slice-proof`, 2026-10-03, OQ-199). The run completed
-`tasks_complete` with only "The run completed." in the transcript: the person was given no answer and no warning, and a
-completed run with no answer misleads. A delegated child in the same state is already re-prompted once (REQ-ORCH-095), and
-the root now is too. What it costs: one more model call for a root that wrote nothing, and a row and an issue when even
-that fails; a root that wrote nothing on purpose is asked anyway.
-
-> **Extends:** REQ-ORCH-069
-
-*Raised by the owner, 2026-10-06, ruling OQ-199 as recommended; logged as [R-071](requests.md#r-071).*
-
-> **First execution, 2026-10-06, built on branch `fin20-continue-and-continuation`:** the directive was built as written,
-> through the follow-up REQ-ORCH-078's correction already used (`IterationChildren.runWithChildren`'s `followUp`, asked where
-> the root would otherwise be left idle, so a delegation the re-prompt leads to is waited for as any turn's is). The text
-> met the code in three places. **(1) "Neither text nor a tool call"** is read off the turn's report: a turn ends only on a
-> step with no tool call, so a turn that returned `succeeded` with empty text is the case. **(2) The same terms as the
-> correction** (`correctionDue`): only an execution iteration's root, only a `succeeded` turn, never once the run is
-> stopping, pausing or coming to rest — a rest that cut the turn is not an unanswered question. The re-prompt is asked
-> before any plan correction, once per execution of the root, so a resumed root may be asked again in its new execution.
-> **(3) Telling the person** is a `system` row, "The run ended without an answer: <role> ended its turn without writing one,
-> even when asked once more.", and an `incomplete_execution` warning issue — the vocabulary's kind for an ending that did
-> not do what was asked (REQ-ORCH-095's), so no issue kind is coined. The run then completes as before. With no delegation
-> port the root's turn now always runs the follow-up loop, which before ran only with validation retries configured.
-> **Corrected before landing (the verifier's review of the first form).** The first form wrote that row as soon as the
-> root's turn returned, so a silent iteration the run went on from (a queued prompt's, or its own task re-queued) was
-> reported as the run's end while the run carried on: the directive's own "the run completes as REQ-ORCH-069 says" was
-> true only of the run's last iteration. It now says what is true where it is known (`Run.tellUnanswered`): "The run ended
-> without an answer: …" at the teardown of a run that ends, and "Iteration <n> ended without an answer: …" before the run
-> takes up another iteration, parks at the plan gate or pauses at the message limit, or at the teardown of a run that only
-> paused or was cancelled (REQ-MONITOR-301's `interrupted`); the issue's metadata says which (`run_ended`). The same review
-> found that a root which answered when asked, and whose later plan correction (REQ-ORCH-078) ended without text, was
-> reported as answerless: only the turn the re-prompt itself led to is now read.
-> **What was measured.** `packages/engine/src/run/answerless.test.ts`, three cases: a root that read and then wrote nothing
-> is asked once in its own conversation and its answer is the run's; one that stays silent is asked once, never twice,
-> and the person is told; one that answers is not asked (the first two red on the code before). Two more since the
-> correction, both red on the first form: a run whose first iteration is silent and whose queued prompt's iteration
-> answers says only that iteration 1 ended without an answer; one whose both iterations are silent says so of iteration
-> 1 and then that the run ended without one. `packages/engine/src/run/coordinator-plan.test.ts` pins the root that answers
-> when asked and is then silent after a plan correction: nothing is said (red on the first form). `slice-proof`'s answerless
-> path now requires the row (`toldNoAnswer`, `apps/desktop/scripts/lib/live-answers.mjs`, with its case). In the built
-> app, `pnpm part-h-proof`, `pnpm part-j-proof` and `pnpm plan-gate-proof` passed: no scripted root there ends silent, so
-> they show the re-prompt asks nothing of a root that answers. **What was not measured.** No built-app or live run met a
-> silent root: `slice-proof`'s question against the live endpoint is where one was seen, and it is the orchestrator's to
-> run. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
-
----
-
-<a id="pd-orch-006"></a>
-
 ### PD-ORCH-006 — a coordinator granted the direct-work bundle does the work itself, and is told so
 
 Where the intent-to-tools mapping grants the entry role the direct-work bundle of REQ-ORCH-016 — with the built-in
@@ -3998,6 +3936,71 @@ and may leave a partly written project or index for the next setup to redo.
 > past its budget force-killed 2 s after it — each red on the code before the change (5 s, 5150 ms and 5762 ms on this
 > Linux host). **What was not measured.** The Windows `workspace-proof` that measured the misses was not re-run: this host
 > is Linux. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-orch-009"></a>
+
+### PD-ORCH-009 — an entry role that ends its turn without an answer is asked once more, and the person is told if it still writes none
+
+When the entry role of an execution iteration ends its turn with neither text nor a tool call — its last model step wrote
+nothing for the person — and the run is not stopping, pausing or coming to rest, the run SHALL send it one further message
+in its own conversation asking it to answer, and SHALL let it take that turn as it takes any. It SHALL be asked once in
+each execution of the iteration's root, never twice. Where the turn that message leads to still ends without an answer, the
+iteration SHALL close as it would have, and the run SHALL tell the person once, in a `system` row in the transcript and a
+warning `incomplete_execution` issue naming the entry role: where the run ends after that iteration (REQ-ORCH-069's stop
+conditions), that **the run** ended without an answer; where it does not — another task is taken up, the run parks at
+the plan gate, or it pauses (at the message limit, at the user's request or at a quit) or is cancelled — that **the
+iteration** ended without an answer. An answer written in reply to that message is an answer, even when a later correction's turn (REQ-ORCH-078)
+writes none. A plan cycle's root (REQ-ORCH-153) is not asked: the plan it produces is the plan gate's to judge.
+
+**Why, and what it costs.** A run asked "Read README.md … and tell me its first heading" read the file, globbed the
+workspace and ended its turn with reasoning and no text (run 2 of `slice-proof`, 2026-10-03, OQ-199). The run completed
+`tasks_complete` with only "The run completed." in the transcript: the person was given no answer and no warning, and a
+completed run with no answer misleads. A delegated child in the same state is already re-prompted once (REQ-ORCH-095), and
+the root now is too. What it costs: one more model call for a root that wrote nothing, and a row and an issue when even
+that fails; a root that wrote nothing on purpose is asked anyway.
+
+> **Extends:** REQ-ORCH-069
+
+*Raised by the owner, 2026-10-06, ruling OQ-199 as recommended; logged as [R-071](requests.md#r-071).*
+
+*Renumbered before landing: built as `PD-ORCH-006` on its branch, it took the next free number, `PD-ORCH-009`, when
+`PD-ORCH-006` to `PD-ORCH-008` (OQ-202, OQ-119, OQ-116) landed on `main` first; its citations followed.*
+
+> **First execution, 2026-10-06, built on branch `fin20-continue-and-continuation`:** the directive was built as written,
+> through the follow-up REQ-ORCH-078's correction already used (`IterationChildren.runWithChildren`'s `followUp`, asked where
+> the root would otherwise be left idle, so a delegation the re-prompt leads to is waited for as any turn's is). The text
+> met the code in three places. **(1) "Neither text nor a tool call"** is read off the turn's report: a turn ends only on a
+> step with no tool call, so a turn that returned `succeeded` with empty text is the case. **(2) The same terms as the
+> correction** (`correctionDue`): only an execution iteration's root, only a `succeeded` turn, never once the run is
+> stopping, pausing or coming to rest — a rest that cut the turn is not an unanswered question. The re-prompt is asked
+> before any plan correction, once per execution of the root, so a resumed root may be asked again in its new execution.
+> **(3) Telling the person** is a `system` row, "The run ended without an answer: <role> ended its turn without writing one,
+> even when asked once more.", and an `incomplete_execution` warning issue — the vocabulary's kind for an ending that did
+> not do what was asked (REQ-ORCH-095's), so no issue kind is coined. The run then completes as before. With no delegation
+> port the root's turn now always runs the follow-up loop, which before ran only with validation retries configured.
+> **Corrected before landing (the verifier's review of the first form).** The first form wrote that row as soon as the
+> root's turn returned, so a silent iteration the run went on from (a queued prompt's, or its own task re-queued) was
+> reported as the run's end while the run carried on: the directive's own "the run completes as REQ-ORCH-069 says" was
+> true only of the run's last iteration. It now says what is true where it is known (`Run.tellUnanswered`): "The run ended
+> without an answer: …" at the teardown of a run that ends, and "Iteration <n> ended without an answer: …" before the run
+> takes up another iteration, parks at the plan gate or pauses at the message limit, or at the teardown of a run that only
+> paused or was cancelled (REQ-MONITOR-301's `interrupted`); the issue's metadata says which (`run_ended`). The same review
+> found that a root which answered when asked, and whose later plan correction (REQ-ORCH-078) ended without text, was
+> reported as answerless: only the turn the re-prompt itself led to is now read.
+> **What was measured.** `packages/engine/src/run/answerless.test.ts`, three cases: a root that read and then wrote nothing
+> is asked once in its own conversation and its answer is the run's; one that stays silent is asked once, never twice,
+> and the person is told; one that answers is not asked (the first two red on the code before). Two more since the
+> correction, both red on the first form: a run whose first iteration is silent and whose queued prompt's iteration
+> answers says only that iteration 1 ended without an answer; one whose both iterations are silent says so of iteration
+> 1 and then that the run ended without one. `packages/engine/src/run/coordinator-plan.test.ts` pins the root that answers
+> when asked and is then silent after a plan correction: nothing is said (red on the first form). `slice-proof`'s answerless
+> path now requires the row (`toldNoAnswer`, `apps/desktop/scripts/lib/live-answers.mjs`, with its case). In the built
+> app, `pnpm part-h-proof`, `pnpm part-j-proof` and `pnpm plan-gate-proof` passed: no scripted root there ends silent, so
+> they show the re-prompt asks nothing of a root that answers. **What was not measured.** No built-app or live run met a
+> silent root: `slice-proof`'s question against the live endpoint is where one was seen, and it is the orchestrator's to
+> run. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

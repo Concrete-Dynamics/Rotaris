@@ -242,12 +242,12 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     expect(outcomes(sid)).toEqual(['partial', 'succeeded']);
   });
 
-  it('PD-ORCH-006 beside REQ-ORCH-078: a root that answers when asked once more is not said to be answerless when a later plan correction ends without text', async () => {
+  it('PD-ORCH-009 beside REQ-ORCH-078: a root that answers when asked once more is not said to be answerless when a later plan correction ends without text', async () => {
     // A step that reasons and ends its turn with neither text nor a tool call (OQ-199).
     const silent: ScriptedCall = { parts: [{ part: { kind: 'reasoning', delta: 'thinking' } }, { part: { kind: 'usage', usage: { input: 1, output: 1 } } }, { part: { kind: 'finish', reason: 'stop' } }] };
     const { sessions, client } = sessionsWith([
       writePlan('c1', ['COMPLETED', 'PENDING']), silent,
-      // Asked once more (PD-ORCH-006), it answers; the plan's correction then follows (REQ-ORCH-078), and its turn is silent.
+      // Asked once more (PD-ORCH-009), it answers; the plan's correction then follows (REQ-ORCH-078), and its turn is silent.
       answer('Here is each command\'s outcome.'), silent,
       writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
     ], null, undefined, { validationRetries: 1 });

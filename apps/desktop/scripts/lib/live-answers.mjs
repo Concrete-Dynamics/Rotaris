@@ -77,7 +77,7 @@ export const answerRows = (rows) => rows.filter((r) => r.kind === 'agent' && r.b
  * A run the product completed — `completed`, its terminal pair written — in which the model never wrote an answer.
  * REQ-ORCH-069 stops the run at `tasks_complete` once its tasks are done, and REQ-ORCH-115 skips the completion classifier
  * for the coordinator's report, so a model that ends its turn without text ends the run. Since OQ-199's ruling (R-071,
- * `PD-ORCH-006`) the product first asks the entry role once more, and tells the person when it still wrote none
+ * `PD-ORCH-009`) the product first asks the entry role once more, and tells the person when it still wrote none
  * (`toldNoAnswer`); a model silent twice is still the model's call. The proof reports it, keeps the attempt's evidence and
  * runs once more.
  */
@@ -87,8 +87,8 @@ export function answerlessCompletion(session, rows, events) {
     && answerRows(rows).length === 0;
 }
 
-/** PD-ORCH-006 (OQ-199 as ruled): the row that tells the person a run ended without an answer. */
+/** PD-ORCH-009 (OQ-199 as ruled): the row that tells the person a run ended without an answer. */
 export const NO_ANSWER_ROW = 'The run ended without an answer:';
 
-/** PD-ORCH-006: whether the product told the person its run ended without an answer — a `system` row that says so. */
+/** PD-ORCH-009: whether the product told the person its run ended without an answer — a `system` row that says so. */
 export const toldNoAnswer = (rows) => rows.some((r) => r.kind === 'system' && r.body.startsWith(NO_ANSWER_ROW));

@@ -9952,7 +9952,7 @@ tool calls made counting as `work_performed`. Raised 2026-10-04 by the repair of
 text nor a tool call is asked once more to answer, in its own conversation, as a delegated child is re-prompted; if it
 still writes nothing, the run completes as before and the person is told it ended without an answer (a transcript row and
 a warning `incomplete_execution` issue). A plan cycle's root is not asked. By
-[`PD-ORCH-006`](../product/directives.md#pd-orch-006), which extends REQ-ORCH-069.
+[`PD-ORCH-009`](../product/directives.md#pd-orch-009), which extends REQ-ORCH-069.
 
 Run 2 of `slice-proof` on 2026-10-03 (`katalyst`, load 2.5) asked "Read README.md in this workspace and tell me its first
 heading, in one sentence." The intent was `question`. The orchestrator read `README.md` and globbed the workspace, both calls
@@ -9989,7 +9989,7 @@ its transcript says so. *Corrected before landing (the verifier's review):* the 
 iteration is known (`Run.tellUnanswered`) — "The run ended without an answer: …" only when the run ends after it, and
 "Iteration <n> ended without an answer: …" when the run goes on, parks or only pauses — and only the turn the re-prompt led
 to is read, so a later plan correction's silent turn does not count; pinned by two more cases in `answerless.test.ts` and
-one in `coordinator-plan.test.ts`, each red on the first form (PD-ORCH-006's first-execution report).
+one in `coordinator-plan.test.ts`, each red on the first form (PD-ORCH-009's first-execution report).
 
 **OQ-200 — Which model call does the run timer count while a run has more than one?** *(REQ-CHAT-158, the run-timing
 indicator counts "the time spent inside the model call currently in flight" and restarts "each time the run moves on to

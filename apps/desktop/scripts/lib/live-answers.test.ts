@@ -80,7 +80,7 @@ describe('a run that completed without the model writing an answer (run 2 of 202
     expect(answerlessCompletion(completed, [...run2, { kind: 'agent', body: 'ok' }], terminal)).toBe(true);
   });
 
-  it('PD-ORCH-006 (OQ-199 as ruled): the product tells the person, in a system row, and the proof can tell a run that said so from one that did not', () => {
+  it('PD-ORCH-009 (OQ-199 as ruled): the product tells the person, in a system row, and the proof can tell a run that said so from one that did not', () => {
     expect(toldNoAnswer(run2)).toBe(false);
     expect(toldNoAnswer([...run2, { kind: 'system', body: 'The run ended without an answer: orchestrator ended its turn without writing one, even when asked once more.' }])).toBe(true);
     expect(toldNoAnswer([...run2, { kind: 'agent', body: 'The run ended without an answer: quoted by the model' }])).toBe(false);

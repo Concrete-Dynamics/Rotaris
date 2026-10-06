@@ -357,12 +357,12 @@ let requests = runLogRequests(log3);
 let stored = storedRun(log3);
 // A run the product completed in which the model wrote no answer (run 2 of 2026-10-03: two settled reads, then reasoning
 // about requests the run never made, then the end) is the model's call once the product has asked it once more and told
-// the person (`lib/live-answers.mjs`; PD-ORCH-006, OQ-199 as ruled): an answerless run with no such row is the product's
+// the person (`lib/live-answers.mjs`; PD-ORCH-009, OQ-199 as ruled): an answerless run with no such row is the product's
 // red. Otherwise it is reported, its evidence kept as `run.attempt-1.*`, and the run made once more; the second run is held
 // to every check below, and a second answerless run is a red that names both.
 const firstAttempt = join(output, 'run.attempt-1.json');
 if (!replay('run') && answerlessCompletion(stored.session, stored.rows, stored.events)) {
-  if (!toldNoAnswer(stored.rows)) throw new Error(`the run ${stored.session.session_id} completed without an answer and the person was not told so: PD-ORCH-006 asks the entry role once more and then writes "The run ended without an answer: …" (rows ${stored.rows.map((r) => r.kind).join(',')})`);
+  if (!toldNoAnswer(stored.rows)) throw new Error(`the run ${stored.session.session_id} completed without an answer and the person was not told so: PD-ORCH-009 asks the entry role once more and then writes "The run ended without an answer: …" (rows ${stored.rows.map((r) => r.kind).join(',')})`);
   const attempt = {
     session: stored.session.session_id, status: stored.session.execution_status, stopReason: stored.session.stop_reason,
     rowKinds: stored.rows.map((r) => r.kind), toolRows: stored.rows.filter((r) => r.kind === 'tool').length,
@@ -379,7 +379,7 @@ if (!replay('run') && answerlessCompletion(stored.session, stored.rows, stored.e
   log3 = await runLaunch();
   requests = runLogRequests(log3);
   stored = storedRun(log3);
-  if (answerlessCompletion(stored.session, stored.rows, stored.events)) throw new Error(`the run completed without the model writing an answer twice: ${attempt.session} (rows ${attempt.rowKinds.join(',')}; run.attempt-1.*) and ${stored.session.session_id} (rows ${stored.rows.map((r) => r.kind).join(',')}; run.*). REQ-ORCH-069 and REQ-ORCH-115 let both complete, and PD-ORCH-006 asked each once more first`);
+  if (answerlessCompletion(stored.session, stored.rows, stored.events)) throw new Error(`the run completed without the model writing an answer twice: ${attempt.session} (rows ${attempt.rowKinds.join(',')}; run.attempt-1.*) and ${stored.session.session_id} (rows ${stored.rows.map((r) => r.kind).join(',')}; run.*). REQ-ORCH-069 and REQ-ORCH-115 let both complete, and PD-ORCH-009 asked each once more first`);
 }
 const { session, rows, events, audit } = stored;
 const kinds = rows.map((r) => r.kind);

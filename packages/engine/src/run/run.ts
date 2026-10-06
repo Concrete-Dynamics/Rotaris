@@ -91,7 +91,7 @@ export interface RunConfig {
 }
 
 /**
- * OQ-199 as ruled (R-071, PD-ORCH-006): the one message an entry role that ended its turn without writing an answer is
+ * OQ-199 as ruled (R-071, PD-ORCH-009): the one message an entry role that ended its turn without writing an answer is
  * sent, as the next user message of its own conversation.
  */
 export const ANSWER_REPROMPT = 'You ended your turn without writing an answer. Write your answer to the user now, in plain text: what you did, what you found, and anything left open.';
@@ -428,7 +428,7 @@ export class Run {
    */
   private rootDone = false;
   /**
-   * OQ-199 as ruled (R-071, PD-ORCH-006): the closed iteration whose root was asked once more for an answer and still wrote
+   * OQ-199 as ruled (R-071, PD-ORCH-009): the closed iteration whose root was asked once more for an answer and still wrote
    * none, until the person is told. What they are told depends on what follows it: the run ending, or the run going on to
    * another iteration (or parking at its message limit) — so it is said where that is known (`tellUnanswered`).
    */
@@ -1092,7 +1092,7 @@ export class Run {
             return await this.parkAtPlanGate(this.resumeFrom.iteration);
           }
         }
-        // OQ-199 (PD-ORCH-006): an iteration the run goes on from is said to have ended without an answer, not the run.
+        // OQ-199 (PD-ORCH-009): an iteration the run goes on from is said to have ended without an answer, not the run.
         this.tellUnanswered(false);
         const escalated = await this.iterate(resuming);
         // OQ-162 as ruled: once the resumed iteration has closed, the run's own classification governs the next.
@@ -1146,7 +1146,7 @@ export class Run {
   }
 
   /**
-   * OQ-199 as ruled (R-071, PD-ORCH-006): the person is told, once, that the closed iteration's root wrote no answer even when
+   * OQ-199 as ruled (R-071, PD-ORCH-009): the person is told, once, that the closed iteration's root wrote no answer even when
    * asked once more — in the transcript and as a warning issue (REQ-ORCH-139's `incomplete_execution`). `runEnds` is whether
    * the run ends after it: then the run ended without an answer; otherwise the run goes on (another iteration, a queued
    * prompt, a pause at the message limit), and only that iteration did.
@@ -1866,7 +1866,7 @@ export class Run {
        */
       let corrections = 0;
       /*
-       * OQ-199 as ruled (R-071, PD-ORCH-006): a root that ends its turn with neither text nor a tool call — its last step
+       * OQ-199 as ruled (R-071, PD-ORCH-009): a root that ends its turn with neither text nor a tool call — its last step
        * wrote nothing, and a step with a tool call never ends a turn — is asked once more, in its own conversation, as a
        * delegated child is re-prompted (REQ-ORCH-095). On the same terms as the plan's correction, and before it: the
        * person's answer first. A root still silent after it is reported below, once its turn returns.
@@ -1882,7 +1882,7 @@ export class Run {
         if (!answerAsked && result.report.text.trim() === '' && this.correctionDue(result, iterationOverride === undefined)) {
           answerAsked = true;
           awaitingAnswer = true;
-          this.deps.warn(`iteration ${iteration}: ${rootName} ended its turn without writing an answer; it is asked once more (PD-ORCH-006, OQ-199)`);
+          this.deps.warn(`iteration ${iteration}: ${rootName} ended its turn without writing an answer; it is asked once more (PD-ORCH-009, OQ-199)`);
           return ANSWER_REPROMPT;
         }
         const planTask = this.iterationTaskRecord();
@@ -1922,7 +1922,7 @@ export class Run {
         this.aggregates.addToolCalls(rest);
         this.persistToolCalls(rootCounts(rest));
         this.rootUncountedFrom = null;
-        // OQ-199 as ruled (PD-ORCH-006): asked once more and still silent — the iteration completes as it would have, and the
+        // OQ-199 as ruled (PD-ORCH-009): asked once more and still silent — the iteration completes as it would have, and the
         // person is told once what follows it is known: the run ending, or going on (`tellUnanswered`).
         if (silentWhenAsked && outcome.report.text.trim() === '' && this.correctionDue(outcome, iterationOverride === undefined)) {
           this.unanswered = { iteration, rootName, actor: rootCanonical, taskId: rootTaskId };
@@ -2899,7 +2899,7 @@ export class Run {
     const stopReason: StopReason = this.stop.requested ? (this.stop.reason ?? 'user_cancelled') : reasonIn;
     const classified = classifyStop(stopReason);
     if (classified.diagnostic) this.deps.warn(classified.diagnostic);
-    // OQ-199 (PD-ORCH-006): the run ends here after an iteration whose root wrote no answer — unless it is only paused, to
+    // OQ-199 (PD-ORCH-009): the run ends here after an iteration whose root wrote no answer — unless it is only paused, to
     // be continued, when the iteration is what ended without one.
     try { this.tellUnanswered(classified.result !== 'interrupted'); } catch (cause) { this.deps.warn(`telling ${this.sessionId}'s answerless iteration failed: ${String(cause)}`); }
     const summary = summarise({ stopReason, completed: this.todo.completedCount, abandoned: this.todo.abandonedCount, lastFailure: this.lastFailure });

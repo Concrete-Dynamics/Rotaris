@@ -226,7 +226,7 @@ flowchart TB
   I --> TR["turnWithRetry(task) — every retry now happens at the model STEP (Part Q's ladder, §3)"]
   TR --> TURN["turn(): IterationChildren for this iteration,<br/>the root's tool port, runTurn(...)"]
   TURN --> OUT{"outcome"}
-  TURN -. "succeeded with no text: ANSWER_REPROMPT once (PD-ORCH-006);<br/>with an item of its plan open:<br/>a correction into the root's own conversation,<br/>up to validationRetries times (REQ-ORCH-078; followUp)" .-> TURN
+  TURN -. "succeeded with no text: ANSWER_REPROMPT once (PD-ORCH-009);<br/>with an item of its plan open:<br/>a correction into the root's own conversation,<br/>up to validationRetries times (REQ-ORCH-078; followUp)" .-> TURN
   OUT -- "succeeded, the root's own plan all terminal" --> C["todo.complete"]
   OUT -- "partial, or succeeded with an item of the coordinator's<br/>own plan open that the task answers for<br/>(REQ-ORCH-029/075; Task.planLeftOpen → the same task's next root)" --> RQ["todo.requeue (abandon at the consecutive-retry limit)"]
   OUT -- failed --> AB["todo.abandon; escalate → the run ends agent_session_aborted"]
@@ -241,7 +241,7 @@ flowchart TB
   ML -- no --> L0
 ```
 
-**An entry role that wrote no answer is asked once more (PD-ORCH-006, OQ-199 as ruled; since 2026-10-06).** The same
+**An entry role that wrote no answer is asked once more (PD-ORCH-009, OQ-199 as ruled; since 2026-10-06).** The same
 `followUp` first asks whether the root's turn returned `succeeded` with empty text — its last step wrote nothing, and a
 step with a tool call never ends a turn — while the run is not stopping, pausing or coming to rest (`correctionDue`); if so
 it sends `ANSWER_REPROMPT` once per execution of the root, before any plan correction. When the turn the re-prompt led to

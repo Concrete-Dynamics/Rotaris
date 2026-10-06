@@ -163,7 +163,10 @@ and 40; built as revision 6, clauses 14 and 23, and renumbered before landing), 
 Pinned by `packages/engine/src/run/preflight.test.ts` ("OQ-162 as ruled: a continue resumes the paused iteration with the
 intent and tools it started with": the Continue action classifies nothing and the resumed root keeps the launch's grant and
 playbook with no warning — the live run's a71-3 and G1 shape; a continue by message's classification governs from the next
-iteration; the prior intent is the intent in effect — each red on the code before the repair), by
+iteration; the prior intent is the intent in effect — each red on the code before the repair; and, added at the merge
+with `main`'s `PD-ORCH-006`, "OQ-202 with OQ-162 …: a resumed coordinator keeps the instructions of the grant it started
+with; a message's direct-work grant tells the next iteration's root to do the work itself", red with the entry turn's
+instructions read from the run's own grant rather than the grant in effect), by
 `apps/desktop/src/run-host/intent.test.ts` (a carried intent makes no classification call), and by
 `packages/engine/src/run/record.test.ts`'s clause 14 describe ("a resume whose playbook, skills, MCP section or tool listing
 changed, with no persona edited, states nothing"; a change stated once). A live run's `resume` scenario should now show the

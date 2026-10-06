@@ -2365,6 +2365,13 @@ builds "failed". That would be false, and it would read as a broken pipeline. Wh
 
 ### PD-ORCH-005 — a continued session resumes the agents its last run left unfinished, from their full record
 
+*Revision 7 (2026-10-06, [R-071](requests.md#r-071)) — **two rulings on what the build left open**: clause 14 is replaced
+(the fingerprint is of the persona's own definition, and a change is stated once, OQ-105) and clause 40 is added (a continue
+resumes the paused iteration with the intent and tools it started with, OQ-162); `REQ-ORCH-005` and `REQ-ORCH-013` join the
+Narrows list. The owner took both recommendations. Built as revision 6, with clause 23, on its branch,
+and renumbered before landing, when the ratification of the readings OQ-100 to OQ-149 recorded took revision 6 and
+clauses 23 to 39 on `main` first.*
+
 *Revision 6 (2026-10-06, [R-071](requests.md#r-071)) — **the readings the build proceeds under, ratified**: the owner
 confirmed as built every reading OQ-100 to OQ-104, OQ-106 to OQ-108, OQ-117, OQ-118, OQ-124, OQ-128 to OQ-132, OQ-148 and
 OQ-149 record. Clauses 23 to 39 are added, and the Narrows list names the requirements those readings depart from. No
@@ -2372,13 +2379,6 @@ earlier text is replaced, but two earlier clauses are qualified, and each carrie
 sentence ("settled as before") no longer holds for the agents a crash left, which clause 23 presents `paused` before the
 crash is recorded; and clause 15's "whichever surface asks it" no longer holds on one surface, a persona window on the
 run's own instance while the session rests, where clause 24 refuses the run's cancel.*
-
-*Revision 7 (2026-10-06, [R-071](requests.md#r-071)) — **two rulings on what the build left open**: clause 14 is replaced
-(the fingerprint is of the persona's own definition, and a change is stated once, OQ-105) and clause 40 is added (a continue
-resumes the paused iteration with the intent and tools it started with, OQ-162); `REQ-ORCH-005` and `REQ-ORCH-013` join the
-Narrows list. The owner took both recommendations. Built as revision 6, with clause 23, on its branch,
-and renumbered before landing, when the ratification of the readings OQ-100 to OQ-149 recorded took revision 6 and
-clauses 23 to 39 on `main` first.*
 
 *Revision 5 (2026-09-29, [R-067](requests.md#r-067)) — **two rulings on what the build left open**: clause 21 (the
 status a stop persists, OQ-96) and clause 22 (a follow-up by `session_id` resumes a settled child, OQ-66's open part)

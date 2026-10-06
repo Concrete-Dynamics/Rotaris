@@ -1587,7 +1587,10 @@ of §5 and none a channel: each is a request answered once.
   document's (`sessionMetrics` in `export.ts`). Its Warnings line for mostly-elided artifacts reads `n/a` while OQ-207 is
   open (recorded open in `docs/defects/`); its Tool errors line counts the issues record's `tool_error` entries
   (REQ-SESSION-136's "any other failure"), as its Issues line does, never the histogram's `tool_error` bucket, which a
-  record carrying an `outcome_kind` never reaches (fin23; the histogram's `mcp` bucket is OQ-208's). Its Agents lines read each agent's own count — an iteration's root
+  record carrying an `outcome_kind` never reaches (fin23; the histogram's `mcp` bucket is OQ-208's). A count over the
+  permission audit or the issues record — Permission denials, Tool errors, and the Metrics lines printing the same figures —
+  reads `at least N` with how many rows the cap dropped once REQ-SESSION-133's cap has dropped rows of its ring (`atLeast`;
+  finacc3 F10). Its Agents lines read each agent's own count — an iteration's root
   `iterations.root_tool_calls`, a plan cycle's root `plan_roots.tool_calls` (v33), a child `children.tool_calls` — and
   read the tool-call record only where no count is kept (a plan cycle's root recorded before v33, an agent known only by
   its records), and then only while the ring has dropped nothing: `n/a` once it has. Every rebuild — a run's saves, a continuation's, the repair's — reads it so;

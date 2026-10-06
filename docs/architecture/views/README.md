@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**`summary.md`'s counts over a capped ring read as a lower bound past the cap (REQ-SESSION-133, REQ-SESSION-140; finacc3 F10).**
+`warningLines` and `metricsLines` (`run/summary.ts`) print Permission denials, Tool errors, Permission decisions and Issues as
+`at least N`, with how many rows the cap dropped, once the permission audit or the issues record has dropped rows
+(`records_kept`); a whole ring's count reads plain. The live run's reader (`lib/summary-sections.mjs`) reads either form. The
+**runtime view**'s `summary.md` paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **No control accepted after the teardown wrote the run's end writes over it (REQ-SESSION-186, REQ-SESSION-094, OQ-165; finacc3 F05).**
 `Run.endWritten` (`ended`, or `cancelWindowClosed`, set just before the terminal transaction with nothing awaited between)
 refuses the stop (`acceptsStop`, which `Sessions.control`'s `cancel` reads before raising it), the pause, the mode change and

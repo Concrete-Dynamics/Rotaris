@@ -130,6 +130,12 @@ function agentsOf(dal: SummaryDal, sessionId: SessionId, metrics: SessionMetrics
 
 const NA = 'n/a';
 const count = (n: number | null): string => (n === null ? NA : String(n));
+/**
+ * REQ-SESSION-133: a count over a capped ring describes what is stored, so once the cap has dropped rows of it the count is a
+ * lower bound and reads `at least N`; a whole ring's count reads plain (finacc3 F10).
+ */
+const atLeast = (n: number, dropped: number): string => (dropped > 0 ? `at least ${n}` : String(n));
+const droppedNote = (dropped: number, what: string): string => (dropped > 0 ? `${dropped} older ${what} dropped by the retention cap` : '');
 
 function metricsLines(f: SummaryFacts): string[] {
   const { row, metrics: m } = f;
@@ -139,6 +145,12 @@ function metricsLines(f: SummaryFacts): string[] {
   const kept = m.records_kept.tool_calls;
   const outcomes = Object.entries(m.tool_outcomes).map(([bucket, n]) => `${bucket} ${n}`).join(', ');
   const kinds = Object.entries(m.issues_by_kind).sort(([a], [b]) => a.localeCompare(b)).map(([kind, n]) => `${kind} ${n}`).join(', ');
+  // REQ-SESSION-133: the permission audit and the issues record are capped rings; a count over one the cap has dropped rows
+  // of reads `at least` and says how many it dropped, as the tool-call record's line does (finacc3 F10).
+  const audit = m.records_kept.permission_audit.dropped;
+  const issues = m.records_kept.issues.dropped;
+  const auditDropped = droppedNote(audit, 'permission-audit entries');
+  const issueNotes = [kinds, droppedNote(issues, 'issues')].filter((x) => x !== '').join('; ');
   return [
     `- Iterations completed: ${row.iterations_completed}`,
     `- Tool calls: ${row.tool_calls}`,
@@ -147,8 +159,8 @@ function metricsLines(f: SummaryFacts): string[] {
     `- Compressions: ${row.compressions}`,
     `- Tool-call records: ${kept.retained}${kept.dropped > 0 ? ` (${kept.dropped} older records dropped by the retention cap)` : ''}`,
     `- Tool outcomes: ${outcomes}`,
-    `- Permission decisions: ${m.permission_decisions} (${m.permission_denials} denied); mode changes: ${m.mode_changes}`,
-    `- Issues: ${m.issues_total}${kinds ? ` (${kinds})` : ''}`,
+    `- Permission decisions: ${atLeast(m.permission_decisions, audit)} (${atLeast(m.permission_denials, audit)} denied); mode changes: ${atLeast(m.mode_changes, audit)}${auditDropped ? ` (${auditDropped})` : ''}`,
+    `- Issues: ${atLeast(m.issues_total, issues)}${issueNotes ? ` (${issueNotes})` : ''}`,
     `- Model-input records: ${NA} (${NOT_KEPT})`,
     `- Context selections: ${NA} (${NOT_KEPT})`,
     `- Report validations: ${NA} (${NOT_KEPT})`,
@@ -161,11 +173,15 @@ function metricsLines(f: SummaryFacts): string[] {
  * mostly-elided artifacts, which no requirement defines and no record measures (OQ-207: the build proceeds under `n/a`).
  */
 function warningLines(m: SessionMetrics): string[] {
+  // REQ-SESSION-133 (finacc3 F10): each count over a capped ring the cap has dropped rows of reads `at least`, with how many.
+  const audit = m.records_kept.permission_audit.dropped;
+  const issues = m.records_kept.issues.dropped;
+  const entries = (dropped: number): string => (dropped > 0 ? `; ${droppedNote(dropped, 'entries')}` : '');
   return [
     `- Stale-input drops: ${NA} (the model-input record is ${NOT_KEPT})`,
     `- Mostly-elided artifacts: ${NA} (no record measures how much of an artifact was elided)`,
     `- Report downgrades: ${NA} (the report-validation record is ${NOT_KEPT})`,
-    `- Permission denials: ${m.permission_denials} (counted from the permission audit, where each is an entry)`,
+    `- Permission denials: ${atLeast(m.permission_denials, audit)} (counted from the permission audit, where each is an entry${entries(audit)})`,
     /*
      * REQ-SESSION-136's tool errors are its `tool_error` issues: "any other failure" than a shell failure, a suspicious
      * success and a timeout, each referencing its record. Read from the issues record, as the Issues line above is, so the
@@ -176,7 +192,7 @@ function warningLines(m: SessionMetrics): string[] {
      * terminal failure, suspicious success or timeout", and a suspicious success is no failed call, while a call cut short
      * under PD-ORCH-005 is one and files no issue.
      */
-    `- Tool errors: ${m.issues_by_kind['tool_error'] ?? 0} (counted from the issues record, where each tool_error issue is an entry)`,
+    `- Tool errors: ${atLeast(m.issues_by_kind['tool_error'] ?? 0, issues)} (counted from the issues record, where each tool_error issue is an entry${entries(issues)})`,
     `- Terminal failures: ${m.terminal_shell_failures}`,
     `- Terminal suspicious successes: ${m.suspicious_successes}`,
     // The metrics document's `timeouts`: every tool call that timed out, the terminal's among them, or the terminal's issues.

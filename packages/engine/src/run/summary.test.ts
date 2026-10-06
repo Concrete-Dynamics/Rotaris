@@ -135,6 +135,29 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
     expect(metrics.tool_outcomes).toEqual({ success: 0, tool_error: 2, rejected: 0, unknown: 0, invalid_request: 1, execution_error: 1, mcp: 2, shell_failure: 1 });
   });
 
+  /*
+   * REQ-SESSION-133: a count over a capped ring describes what is stored. Until finacc3 (F10) Permission denials and Tool
+   * errors — and the Metrics lines that print the same figures — read as whole after the cap had dropped rows
+   * (`docs/defects/fixed/summary-md-permission-denials-and-tool-errors-read-short-past-the-cap-with-no-flag.md`).
+   */
+  it('a count over a ring the cap has dropped rows of reads as a lower bound and says how many were dropped (REQ-SESSION-133, REQ-SESSION-140)', () => {
+    const row = rowOf();
+    const audit = [{ kind: 'decision', decision: 'deny', source: 'rule' }, { kind: 'decision', decision: 'allow', source: 'rule' }] as const;
+    const issues = [{ kind: 'tool_error' }, { kind: 'tool_error' }, { kind: 'terminal_timeout' }];
+    const capped = renderSummary(factsOf(row, { metrics: sessionMetrics(row, [], audit, issues, 7, 4, 0) }));
+    expect(section(capped, 'Warnings')).toContain('- Permission denials: at least 1 (counted from the permission audit, where each is an entry; 7 older entries dropped by the retention cap)');
+    expect(section(capped, 'Warnings')).toContain('- Tool errors: at least 2 (counted from the issues record, where each tool_error issue is an entry; 4 older entries dropped by the retention cap)');
+    expect(section(capped, 'Metrics')).toContain('- Permission decisions: at least 2 (at least 1 denied); mode changes: at least 0 (7 older permission-audit entries dropped by the retention cap)');
+    expect(section(capped, 'Metrics')).toContain('- Issues: at least 3 (terminal_timeout 1, tool_error 2; 4 older issues dropped by the retention cap)');
+    // Each ring is judged on its own: the issues record whole, its count stands plain beside a capped audit.
+    const auditOnly = renderSummary(factsOf(row, { metrics: sessionMetrics(row, [], audit, issues, 7, 0, 0) }));
+    expect(section(auditOnly, 'Warnings')).toContain('- Tool errors: 2 (counted from the issues record, where each tool_error issue is an entry)');
+    expect(section(auditOnly, 'Metrics')).toContain('- Issues: 3 (terminal_timeout 1, tool_error 2)');
+    const issuesOnly = renderSummary(factsOf(row, { metrics: sessionMetrics(row, [], audit, issues, 0, 4, 0) }));
+    expect(section(issuesOnly, 'Warnings')).toContain('- Permission denials: 1 (counted from the permission audit, where each is an entry)');
+    expect(section(issuesOnly, 'Metrics')).toContain('- Permission decisions: 2 (1 denied); mode changes: 0');
+  });
+
   it('Agents lists each agent with its counted calls, n/a where the record holds no count', () => {
     const md = renderSummary(factsOf(rowOf(), { agents: [
       { name: 'Ada', persona: 'orchestrator', role: 'iteration 1 root', state: 'closed (completed)', toolCalls: 3 },

@@ -18,14 +18,14 @@ const row = (over: Partial<SessionRow> = {}): SessionRow => ({
 } as unknown as SessionRow);
 
 /** The requirements session of the c2a9444 live run, in small: a refused invalid_request, a plain failure, a shell failure. */
-function md(r: SessionRow = row()): string {
+function md(r: SessionRow = row(), dropped: { audit?: number; issues?: number } = {}): string {
   const records = [
     { call_id: 'c1', agent_name: 'Ada', tool_name: 'write_file', status: 'failed', elapsed_ms: 3, is_error: 1, outcome_kind: 'invalid_request', failure_kind: 'invalid_request' },
     { call_id: 'c2', agent_name: 'Ada', tool_name: 'todo', status: 'failed', elapsed_ms: 2, is_error: 1, outcome_kind: null, failure_kind: null },
     { call_id: 'c3', agent_name: 'Ada', tool_name: 'terminal', status: 'failed', elapsed_ms: 9, is_error: 1, outcome_kind: 'shell_failure', failure_kind: null },
   ];
   const issues = [{ kind: 'tool_error' }, { kind: 'tool_error' }, { kind: 'terminal_shell_failure' }];
-  const facts: SummaryFacts = { row: r, outcome: null, task: 'Build it.', metrics: sessionMetrics(r, records, [], issues, 0, 0, 0), agents: [] };
+  const facts: SummaryFacts = { row: r, outcome: null, task: 'Build it.', metrics: sessionMetrics(r, records, [], issues, dropped.audit ?? 0, dropped.issues ?? 0, 0), agents: [] };
   return renderSummary(facts);
 }
 
@@ -52,6 +52,18 @@ describe('summaryReading (REQ-SESSION-140)', () => {
   it('the Tool errors line that read one histogram bucket before fin23 disagrees with its Issues line, and is named', () => {
     const before = md().replace(/^- Tool errors: .*$/m, '- Tool errors: 1');
     expect(summaryReading(before, { sessionId: 'S-1', stopReason: 'tasks_complete' }).problems).toEqual(['Warnings reads 1 tool error(s) and the Issues line 2 tool_error']);
+  });
+
+  /*
+   * finacc3 F10 (`docs/defects/fixed/summary-md-permission-denials-and-tool-errors-read-short-past-the-cap-with-no-flag.md`):
+   * past the retention cap the counts read `at least N`; the agreement is still read, never skipped for the form.
+   */
+  it('past the retention cap the counts read `at least`, and the Tool errors line is still held to its Issues line', () => {
+    const capped = md(row(), { audit: 3, issues: 2 });
+    expect(capped).toMatch(/^- Tool errors: at least 2 /m);
+    expect(summaryReading(capped, { sessionId: 'S-1', stopReason: 'tasks_complete' })).toEqual({ ok: true, problems: [] });
+    const disagreeing = capped.replace(/^- Tool errors: at least 2 /m, '- Tool errors: at least 1 ');
+    expect(summaryReading(disagreeing, { sessionId: 'S-1', stopReason: 'tasks_complete' }).problems).toEqual(['Warnings reads 1 tool error(s) and the Issues line 2 tool_error']);
   });
 });
 

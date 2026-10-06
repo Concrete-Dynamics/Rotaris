@@ -54,7 +54,8 @@ export function summaryReading(md, { sessionId, stopReason }) {
   }
   const denials = warnings.find((l) => l.startsWith('- Permission denials: '));
   if (denials !== undefined && !denials.includes('permission audit')) problems.push('the permission denials do not name the permission audit');
-  const toolErrors = /^- Tool errors: (\d+)/.exec(warnings.find((l) => l.startsWith('- Tool errors: ')) ?? '');
+  // A count over a ring the retention cap has dropped rows of reads `at least N` (REQ-SESSION-133; finacc3 F10).
+  const toolErrors = /^- Tool errors: (?:at least )?(\d+)/.exec(warnings.find((l) => l.startsWith('- Tool errors: ')) ?? '');
   const issues = lines.find((l) => l.startsWith('- Issues: '));
   if (toolErrors !== null && issues !== undefined) {
     const filed = /\btool_error (\d+)/.exec(issues);

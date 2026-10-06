@@ -87,6 +87,13 @@ mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 mkdirSync(configDir, { recursive: true });
 mkdirSync(pids, { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# MCP proof workspace\n');
+// The workspace is a repository of its own, as a project is: the skill catalog's project walk stops at the nearest `.git`
+// (REQ-WORKSPACE-051), and without one it climbed to this checkout's root and listed the repository's own skills
+// (docs/defects/fixed/the-mcp-proofs-runs-list-the-repositorys-own-skills-in-their-catalog.md).
+if (!existsSync(join(workspace, '.git'))) {
+  const init = spawnSync('git', ['init', '-q'], { cwd: workspace, encoding: 'utf8', timeout: 30_000 });
+  if (init.status !== 0) throw new Error(`git init in the proof's workspace exited ${init.status ?? init.signal}: ${init.stderr}`);
+}
 writeFileSync(join(workspace, '.env'), 'GAMMA_FROM_FILE=filed\n');
 const y = (v) => JSON.stringify(v);
 const node = process.execPath;
@@ -314,8 +321,14 @@ const ROUND_OVER = `(() => {
   writeFileSync(agentsMd, `${agentsText}\n`);
   const modelRequests = join(output, 'discovery.model-requests.jsonl');
   writeFileSync(modelRequests, '');
-  const r = await launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000', ROTARIS_CAPTURE_MODEL_REQUESTS: modelRequests }, { files: { global: globalYaml({ alphaFlags: ['--client-file', clients] }) } });
-  rmSync(agentsMd, { force: true });
+  // The instruction file is this launch's alone: it is taken away whether the launch succeeds or throws, so a failed launch 1
+  // never leaves it for the launches after it to read.
+  let r;
+  try {
+    r = await launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000', ROTARIS_CAPTURE_MODEL_REQUESTS: modelRequests }, { files: { global: globalYaml({ alphaFlags: ['--client-file', clients] }) } });
+  } finally {
+    rmSync(agentsMd, { force: true });
+  }
   if (sha(join(workspace, '.mcp.json')) !== before) throw new Error('the discovery file changed across the load (REQ-MCP-027)');
   // REQ-WORKSPACE-043 with REQ-MCP-101: the file is closed before the section (finding H4 of the duress run at 27a5127).
   const orchestratorCalls = readFileSync(modelRequests, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l)).filter((c) => c.who === 'orchestrator');
@@ -325,15 +338,20 @@ const ROUND_OVER = `(() => {
   if (fileStart < 0) throw new Error(`the orchestrator's prompt does not carry AGENTS.md whole after its source comment:\n${system}`);
   const fileEnd = fileStart + `<!-- source: ${agentsMd} -->\n${agentsText}`.length;
   /*
-   * The file is followed at once by the closing comment. Whatever the prompt carries next comes after it: here the skill
-   * catalog first (this proof's workspace lies inside the repository, whose own skills the catalog lists), then the MCP
-   * section; in the live run, with no skill, the MCP section directly.
+   * The file is followed at once by the closing comment, and the MCP section at once by that: the live run's shape, where the
+   * workspace declares no skill. The workspace is a repository of its own (`git init` above), so the skill catalog's project
+   * walk (REQ-WORKSPACE-051) stops there; until 2026-10-06 it walked up to this checkout's root and every run's prompt listed
+   * the repository's own development skills (`build-ui`, …) between the two
+   * (docs/defects/fixed/the-mcp-proofs-runs-list-the-repositorys-own-skills-in-their-catalog.md).
    */
   const END = '<!-- end of instruction files: nothing below this line is part of them -->';
   const boundary = system.slice(fileEnd, fileEnd + END.length + 4);
   if (boundary !== `\n\n${END}\n\n`) throw new Error(`nothing closes AGENTS.md; after its last line stands ${JSON.stringify(system.slice(fileEnd, fileEnd + 200))}`);
   const headingAt = system.indexOf('## MCP servers', fileEnd);
   if (headingAt < fileEnd + boundary.length) throw new Error(`the MCP section does not follow the closed instruction files in the orchestrator's prompt:\n${system}`);
+  const repositorySkills = readdirSync(join(repo, '.agents', 'skills'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).filter((name) => system.includes(name));
+  if (/Portable skills available/.test(system) || repositorySkills.length > 0) throw new Error(`the orchestrator's prompt carries a skill catalog the workspace never declared (${repositorySkills.join(', ') || 'a catalog'}): the project walk left the workspace`);
+  if (headingAt !== fileEnd + boundary.length) throw new Error(`something stands between the closed instruction files and the MCP section: ${JSON.stringify(system.slice(fileEnd + boundary.length, headingAt))}`);
   const surface = lines(r.log, /mcp: surface for orchestrator/);
   if (surface.length === 0) throw new Error(`no surface line:\n${r.log}`);
   const first = surface[0];
@@ -364,7 +382,7 @@ const ROUND_OVER = `(() => {
   const declared = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).version;
   const told = readFileSync(clients, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
   if (told.length < 2 || told.some((c) => c?.name !== 'rotaris' || c?.version !== declared)) throw new Error(`the MCP handshakes did not name rotaris ${declared} (REQ-STARTUP-158): ${JSON.stringify(told)}`);
-  results.discovery = { section, promptBoundary: boundary, callable, inertReports: inert.length, loads, unknownKeyWarnings: weird, discoveryMs: Object.fromEntries(disc.map((l) => [/discovery of '(\w+)'/.exec(l)[1], Number(/in (\d+) ms/.exec(l)?.[1])])), fileByteIdentical: true, stderrLines: env.length, clientInfo: told };
+  results.discovery = { section, promptBoundary: boundary, repositorySkillsInPrompt: repositorySkills, callable, inertReports: inert.length, loads, unknownKeyWarnings: weird, discoveryMs: Object.fromEntries(disc.map((l) => [/discovery of '(\w+)'/.exec(l)[1], Number(/in (\d+) ms/.exec(l)?.[1])])), fileByteIdentical: true, stderrLines: env.length, clientInfo: told };
 }
 
 // ---- 2. A call end to end, and the allowance ------------------------------------------------------------------

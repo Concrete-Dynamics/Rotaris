@@ -69,4 +69,4 @@ On the unrepaired build it stopped red: "nothing closes AGENTS.md; after its las
 in this workspace. …"". On the repaired build all ten launches passed, and `results.json` records
 `discovery.promptBoundary` as the close between two blank lines. Load average about 5 on 4 CPUs, with two other plans running.
 In this proof the repository's own skills sit between the close and the MCP section, because its workspace lies inside the
-checkout. That is recorded separately in `docs/defects/the-mcp-proofs-runs-list-the-repositorys-own-skills-in-their-catalog.md`.
+checkout. That is recorded separately in `docs/defects/fixed/the-mcp-proofs-runs-list-the-repositorys-own-skills-in-their-catalog.md`.

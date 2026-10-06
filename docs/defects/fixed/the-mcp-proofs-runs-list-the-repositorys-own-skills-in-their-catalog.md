@@ -28,3 +28,22 @@ isolation: its workspace inherits the checkout's skills (the same class as
 - `.agents/skills/` — the repository's own skills the catalog lists.
 
 Noticed 2026-10-06 by plan fin19 (task 1, H4's proof). Open; not repaired here.
+
+## Repaired — 2026-10-06 (fin21, bundle `fin21-leftover-notes`)
+
+`apps/desktop/scripts/mcp-proof.mjs` runs `git init -q` in its workspace when it holds no `.git` entry, as a project is a
+repository and as `code-intel-proof`, `slash-proof` and others already do, so REQ-WORKSPACE-051's project walk stops at the
+workspace and the catalog lists nothing of this checkout. Launch 1 now asserts the shape the live run has: no "Portable
+skills available" line and no name of a directory under `.agents/skills/` in the orchestrator's prompt, and the MCP section
+standing directly after the instruction files' end comment (`results.json`'s `discovery.repositorySkillsInPrompt`, empty).
+
+Shown with the proof, as root under Xvfb, Node 24, `--skip-build` after `pnpm build`: before the `git init`, with the new
+assertion, launch 1 was red with "the orchestrator's prompt carries a skill catalog the workspace never declared
+(build-ui, debug-ui, orchestrated-build, review-ui, run-autopsy): the project walk left the workspace" (load 3.7); after it
+the whole proof passed (exit 0, load 3.2 to 7.3). The same commit wraps launch 1's `AGENTS.md` removal in `try`/`finally`
+(a verifier's finding), so a launch that throws no longer leaves the file for the launches after it.
+
+Not changed: the other proofs whose workspace lies under `.proof/` without a `.git`. Of the proofs that read the prompt
+the model port received, `injection-proof` already makes its workspace a repository, and `plan-gate-proof` and
+`notice-proof` read particular parts of it and none asserts on what follows the instruction files; whether the others' runs
+carry the catalog was not measured.

@@ -6,7 +6,7 @@ import type { ModelChoice } from './resilience.js';
  * provider limit waits here on a decision keyed by that agent; the timer (clock port) resolves a wait whose
  * auto-resume is allowed; a `cancel` resolves it cancelled through the run's abort signal; a `setModel` resolves
  * every pending wait with the chosen model; keep waiting in an out-of-quota wait resolves the waits on its pair alone as a
- * retry (`retryOn`, PD-MONITOR-004). The registry holds the state the session record publishes, and
+ * retry (`retryOn`, PD-MONITOR-007). The registry holds the state the session record publishes, and
  * tells the run on every change so the snapshot goes out with it.
  */
 export interface WaitState {
@@ -89,7 +89,7 @@ export class WaitRegistry {
   }
 
   /**
-   * OQ-188's ruling (R-071, PD-MONITOR-004 clause 1): keep waiting in a wait that never auto-resumes retries the pair it waits
+   * OQ-188's ruling (R-071, PD-MONITOR-007 clause 1): keep waiting in a wait that never auto-resumes retries the pair it waits
    * on. Every agent parked out of quota on that one pair resumes on its own cell (`resume`, the ladder's retry of the same
    * pair); an agent parked on another pair, or in a timed wait, stays parked. Returns how many.
    */

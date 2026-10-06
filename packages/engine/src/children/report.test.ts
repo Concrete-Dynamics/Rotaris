@@ -307,11 +307,11 @@ describe('engine/children/report — every construction site carries them', () =
   });
 
   /*
-   * OQ-189's ruling (R-071, PD-MONITOR-005): where the summarising model and the model the child ran on are both held out of
+   * OQ-189's ruling (R-071, PD-MONITOR-008): where the summarising model and the model the child ran on are both held out of
    * quota, the session's resolver answers `withheld` and the pass makes no call: the report is the fallback one, with the
    * resolver's reason. Until 2026-10-06 the resolver could only answer a model, and the excluded pair was called.
    */
-  describe('OQ-189 / PD-MONITOR-005: a summariser the session withholds makes no call', () => {
+  describe('OQ-189 / PD-MONITOR-008: a summariser the session withholds makes no call', () => {
     const own = { model: { providerId: 'b', modelId: 'b1', dialect: 'chat' as const }, thinking: 'unset' as const };
     it('a resolver answering withheld: no summarising call, and the fallback report names the reason', async () => {
       const calls: unknown[] = [];

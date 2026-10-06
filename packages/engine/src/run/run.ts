@@ -777,7 +777,7 @@ export class Run {
    * REQ-MONITOR-303: with it, the model keys the session holds out of quota (`excludedModelKeys`), read from the memory at
    * every snapshot, so the change-model picker lists them annotated with the reason rather than as any other model; and the
    * waiting pair's own key (`keyOfPair`), which the header's keep waiting chooses in the out-of-quota wait (OQ-188's ruling,
-   * PD-MONITOR-004).
+   * PD-MONITOR-007).
    */
   get currentWait(): (WaitState & { readonly excluded: string[]; readonly modelKey: string | null }) | null {
     const wait = this.waits.current();
@@ -1486,7 +1486,7 @@ export class Run {
     const c = this.deps.compression;
     if (!c) return undefined;
     /*
-     * OQ-189's ruling (R-071, PD-MONITOR-005): a configured `compression.model` is followed through the session's overrides,
+     * OQ-189's ruling (R-071, PD-MONITOR-008): a configured `compression.model` is followed through the session's overrides,
      * and where the pair it ends on is held out of quota the pass compresses on the agent's own model — the model its cell
      * calls next. Until 2026-10-06 the configured model was called as configured, a pair the provider had refused included.
      */
@@ -1507,7 +1507,7 @@ export class Run {
        * REQ-MONITOR-194 with REQ-MONITOR-080: the agent's own pair, when the session holds it out of quota, is not called to
        * compress. The turn settles the cell before its automatic check (`settleBeforeCall`), so this answers only in the
        * span before the agent's next call — a manual pass while it awaits a tool or a child. Since OQ-189's ruling
-       * (PD-MONITOR-005, 2026-10-06) a configured `compression.model` held out of quota yields to the agent's own model
+       * (PD-MONITOR-008, 2026-10-06) a configured `compression.model` held out of quota yields to the agent's own model
        * (`compressing`), so this is read for whichever model the pass would call; until then a configured one was called as
        * configured.
        */
@@ -1585,7 +1585,7 @@ export class Run {
   private summariserDeps(): SummariserDeps | null {
     const s = this.deps.summariser ?? null;
     if (s === null) return null;
-    // OQ-189's ruling (R-071, PD-MONITOR-005): where the pair the summariser's model ends on is held out of quota, the child's
+    // OQ-189's ruling (R-071, PD-MONITOR-008): where the pair the summariser's model ends on is held out of quota, the child's
     // report is summarised on the model the child itself ran on — the calling agent's, as a compression pass falls back to
     // it — and where that one is held out of quota too, no call is made and the report is the fallback one, saying why.
     return {
@@ -1601,7 +1601,7 @@ export class Run {
   }
 
   /**
-   * OQ-189's ruling (R-071, PD-MONITOR-005): what a helper call configured on `choice` makes — the session's overrides
+   * OQ-189's ruling (R-071, PD-MONITOR-008): what a helper call configured on `choice` makes — the session's overrides
    * followed, or not `ok` where the pair it ends on is held out of quota (`helperChoiceOf`). Read at each call, from the
    * session's memory as it stands then. The intent classifier, the loop classifier and the post-run analyst reach it
    * through the session (`Sessions`), the compressor and the summariser here.
@@ -2405,9 +2405,9 @@ export class Run {
   }
 
   /**
-   * REQ-MONITOR-142: applies from the next iteration, for the rest of this run (PD-MONITOR-003, OQ-185: it ends with its run,
+   * REQ-MONITOR-142: applies from the next iteration, for the rest of this run (PD-MONITOR-006, OQ-185: it ends with its run,
    * and its row says so); a system row states the switch. It ends a ladder move and takes back an override an earlier wait
-   * choice set from the pair chosen (PD-ORCH-009, OQ-177). During a wait (REQ-ORCH-091 d,
+   * choice set from the pair chosen (PD-ORCH-013, OQ-177). During a wait (REQ-ORCH-091 d,
    * REQ-NOTIFY-089/263) it is the change-model resolution: the parked agent rebuilds and re-runs at once, and the
    * override is persisted (`model_override` timeline entry) so later calls of the session never return to the
    * exhausted pair. A choice that cannot be applied is never discarded silently: `model_override_rejected` is
@@ -2457,7 +2457,7 @@ export class Run {
       return true;
     }
     this.clearChosenExclusion(key, providerIdentity(this.catalogue, resolved.choice.model), resolved.choice.model.modelId);
-    // OQ-177's ruling (R-071, PD-ORCH-009): every explicit switch wins. It ends a ladder move (`pendingEntrySwitch`), and it
+    // OQ-177's ruling (R-071, PD-ORCH-013): every explicit switch wins. It ends a ladder move (`pendingEntrySwitch`), and it
     // takes back an override an earlier wait choice set FROM the pair chosen (REQ-ORCH-091 d), as the quota-wait surface's
     // own choice does, so the entry agent runs on the pair chosen from the next iteration. Until 2026-10-06 the override
     // stood and the row said "but <key>, chosen for <pair> during an earlier wait, stands for the rest of the session".
@@ -2466,7 +2466,7 @@ export class Run {
     this.takeBackOverrideOf('as the entry model', key, withSettings(this.catalogue, resolved.choice), {});
     this.entryOverride = { ...this.entryOverride, model: resolved.choice.model, key };
     this.pendingEntrySwitch = 'model';
-    // OQ-185's ruling (R-071, PD-MONITOR-003): the switch holds for the rest of its own run, and the row says so; the
+    // OQ-185's ruling (R-071, PD-MONITOR-006): the switch holds for the rest of its own run, and the row says so; the
     // composer's model chip is the one control for the next run. Until 2026-10-06 it read "it applies from the next
     // iteration", untrue when the run had none of its own left.
     writer.appendRow('system', `Entry model switched to ${key}; it applies for the rest of this run, after the iteration in flight. The next run starts on the composer's model.`, true);
@@ -2482,7 +2482,7 @@ export class Run {
     return true;
   }
   /**
-   * OQ-188's ruling (R-071, PD-MONITOR-004 clause 1): the wait header's keep waiting in a wait that never auto-resumes — a retry
+   * OQ-188's ruling (R-071, PD-MONITOR-007 clause 1): the wait header's keep waiting in a wait that never auto-resumes — a retry
    * of the model the wait shows, not a change of model. The wait is named by its agent and attempt, as the header drew it, and
    * `key` must name its pair; a press that names no outstanding out-of-quota wait — a timed one, one already retried (a second
    * click before the next snapshot), a key of another pair — is refused and changes nothing, so it can never fall through to a
@@ -2552,7 +2552,7 @@ export class Run {
   /**
    * REQ-ORCH-091 (d) with REQ-MONITOR-303 and REQ-MONITOR-194: the user's newest explicit choice of a pair in a wait — a
    * change of model, or the waiting pair itself chosen for a retry — supersedes any override an earlier choice set FROM
-   * that pair, so the agent resumes on the pair chosen, as the wait's row says. Since OQ-177's ruling (R-071, PD-ORCH-009,
+   * that pair, so the agent resumes on the pair chosen, as the wait's row says. Since OQ-177's ruling (R-071, PD-ORCH-013,
    * 2026-10-06) a switch of the entry model from the run header or the inspector does the same (`where`: "as the entry
    * model"), so every explicit choice wins. The override is taken back in the memory
    * and as a `model_override` entry carrying `cleared: true`, `cause: 'superseded'` (fin6's shape for a taken-back pin),
@@ -2622,7 +2622,7 @@ export class Run {
     if (this.ended) return false;
     this.entryOverride = { ...this.entryOverride, thinking: level };
     if (this.pendingEntrySwitch !== 'model') this.pendingEntrySwitch = 'reasoning';
-    // OQ-185's ruling (R-071, PD-MONITOR-003): held for the rest of this run; the composer's reasoning chip chooses the next run's.
+    // OQ-185's ruling (R-071, PD-MONITOR-006): held for the rest of this run; the composer's reasoning chip chooses the next run's.
     this.deps.writer.appendRow('system', `Entry reasoning level switched to ${level}; it applies for the rest of this run, after the iteration in flight. The next run starts at the composer's reasoning level.`, true);
     this.deps.writer.appendTimeline('entry_reasoning_switched', 'user', `The entry reasoning level switched to ${level}.`, { level });
     return true;

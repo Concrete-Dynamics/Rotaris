@@ -9256,7 +9256,7 @@ as OQ-176, and renumbered OQ-177 at its merge because `origin/main` had taken OQ
 entry model from the run header or the inspector ends an automatic fallback, as built, and also takes back any earlier
 quota-wait override of the chosen pair, as the quota-wait surface already does, so the entry agent runs on the pair chosen
 from the next iteration; an agent that had already followed the override stays where it moved. Minted as
-[`PD-ORCH-009`](../product/directives.md#pd-orch-009), narrowing REQ-ORCH-091 (d) and REQ-NOTIFY-089, and built the same
+[`PD-ORCH-013`](../product/directives.md#pd-orch-013), narrowing REQ-ORCH-091 (d) and REQ-NOTIFY-089, and built the same
 day (`Run.setEntryModel` calls `takeBackOverrideOf` on the header path; plan fin21). The reading below is kept as the build
 proceeded under it until then.
 
@@ -9602,7 +9602,7 @@ and OQ-184 meanwhile. Open until 2026-10-06; ruled that day by the owner, and bu
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** keep the switch scoped to its own run, as built,
 and reword its row to say it applies for the rest of this run (after the iteration in flight), leaving the composer's model
 chip — and, read the same way, its reasoning chip — as the one control for the next run; a reasoning switch is ruled with
-the model switch. Minted as [`PD-MONITOR-003`](../product/directives.md#pd-monitor-003), narrowing REQ-MONITOR-142 (the
+the model switch. Minted as [`PD-MONITOR-006`](../product/directives.md#pd-monitor-006), narrowing REQ-MONITOR-142 (the
 row's words) and REQ-SESSION-026 (a header switch is not the session-wide override), and built the same day (plan fin21).
 
 A switch of the entry model or reasoning level from the run header or the inspector (`setModel`, `setReasoning`) is held
@@ -9720,7 +9720,7 @@ Open; owner-only, as every question this round raises. Ruled 2026-10-06 by the o
 the out-of-quota wait (the variant that never auto-resumes), clearing its out-of-quota mark through the existing retry path
 — read onto the existing switch of the entry model, which the header sends with the waiting pair's key, now carried on the
 record's `wait` as `modelKey`, so REQ-MONITOR-004's twenty-two operations are unchanged — and stays a plain acknowledgement in
-the timed wait, whose timer already retries. Minted as [`PD-MONITOR-004`](../product/directives.md#pd-monitor-004),
+the timed wait, whose timer already retries. Minted as [`PD-MONITOR-007`](../product/directives.md#pd-monitor-007),
 narrowing REQ-MONITOR-303, and built the same day (plan fin21). The reading taken where the ruling leaves a detail open, as
 corrected in that plan's repair round 1: "retry the same model" moves no other agent — keep waiting resumes only the agents
 parked out of quota on the waiting pair and persists no override, an agent parked on another pair keeping its own wait — and
@@ -9765,7 +9765,7 @@ summariser already did; where the pair it reaches is held out of quota with noth
 calling agent's current model, and the classifiers and the analyst make no call. The summariser, which the ruling does not
 name, is read as the condensing call it is beside compression: it summarises the child on the model the child ran on, and
 writes the fallback report where that is held out of quota too; and a configured `compressor.model` yields to the exclusion
-of its pair. Minted as [`PD-MONITOR-005`](../product/directives.md#pd-monitor-005), narrowing REQ-MONITOR-080, REQ-ORCH-009,
+of its pair. Minted as [`PD-MONITOR-008`](../product/directives.md#pd-monitor-008), narrowing REQ-MONITOR-080, REQ-ORCH-009,
 REQ-ORCH-114, REQ-ORCH-100, REQ-CONFIG-065 and REQ-LIBRARY-037, and built the same day (plan fin21).
 
 The run's auxiliary calls — the intent classifier and the pre-flight, the loop classifier, a configured compressor, the

@@ -289,7 +289,7 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * A store recording no `supersedes` reads each switch as applied; one recording no `switch_pending` reads each move and
  * each child's choice where it is recorded, until a switch that supersedes places it.
  * A switch is held on its run alone (`entryOverride`; a continuation is a new `Run`), and since OQ-185's ruling (R-071,
- * PD-MONITOR-003, 2026-10-06) that is the product: a switch ends with its run, and the next run starts on the configured
+ * PD-MONITOR-006, 2026-10-06) that is the product: a switch ends with its run, and the next run starts on the configured
  * model, which the composer's chip chooses. A continuation whose snapshot names the entry model says which it ran on; one
  * recording none, after a switch onto another key than the last snapshot's, prints `ENTRY_KEY_UNDETERMINED` until a record
  * names a key — the switch did not reach it, but the configuration it was built from may have been changed by the composer
@@ -345,7 +345,7 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
     const e = snapshotEntry(snapshot);
     if (!e) {
       // A switch recorded since the last snapshot naming an entry model, onto another key: it ended with its own run
-      // (`entryOverride` is held per `Run`; OQ-185's ruling, PD-MONITOR-003), but this snapshot does not say which model the
+      // (`entryOverride` is held per `Run`; OQ-185's ruling, PD-MONITOR-006), but this snapshot does not say which model the
       // new run was configured with — the composer may have changed it since — so the key is undetermined until a record
       // names one (the repair of the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot).
       if (s.configured !== null && s.configured.label !== s.snapshotLabel) {

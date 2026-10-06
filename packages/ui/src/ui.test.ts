@@ -33,11 +33,11 @@ describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
     expect(waitModelOptions(['beta'], ['alpha']).map((o) => o.value)).toEqual(['', 'beta']);
   });
   /*
-   * OQ-188's ruling (R-071, PD-MONITOR-004): keep waiting retries the waiting pair now in the wait that never auto-resumes
+   * OQ-188's ruling (R-071, PD-MONITOR-007): keep waiting retries the waiting pair now in the wait that never auto-resumes
    * (an out-of-quota pair), through `setModel` with its key, and stays an acknowledgement in the timed wait, whose timer
    * retries. Until 2026-10-06 it acknowledged in both (`keep-waiting-on-the-quota-wait-header-sends-nothing-…`).
    */
-  it('OQ-188 / PD-MONITOR-004: keep waiting retries the out-of-quota pair now, and acknowledges a timed wait', () => {
+  it('OQ-188 / PD-MONITOR-007: keep waiting retries the out-of-quota pair now, and acknowledges a timed wait', () => {
     const exhausted = { ...wait, exhausted: true, resumeAt: null, excluded: ['gpt-x'] };
     // The retry names the wait it answers, as the header drew it, so the run retries that wait and no other (repair round 1).
     expect(keepWaitingAction(exhausted, true, false)).toEqual({ kind: 'retry', key: 'gpt-x', agent: exhausted.agent, attempt: exhausted.attempt });
@@ -52,7 +52,7 @@ describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
    * press (a double-click) must send nothing. Before, it sent `setModel` with the key again, which — no wait being current
    * any more — switched the run's entry model to the waiting pair.
    */
-  it('OQ-188 / PD-MONITOR-004: a second press of keep waiting after the retry was sent for the wait shown sends nothing', () => {
+  it('OQ-188 / PD-MONITOR-007: a second press of keep waiting after the retry was sent for the wait shown sends nothing', () => {
     const exhausted = { ...wait, exhausted: true, resumeAt: null, excluded: ['gpt-x'] };
     expect(keepWaitingAction(exhausted, true, true)).toEqual({ kind: 'sent' });
     // The timed wait's acknowledgement is unchanged by it.

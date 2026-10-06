@@ -4594,9 +4594,9 @@ writes no row is never seen to begin.
 
 ---
 
-<a id="pd-orch-009"></a>
+<a id="pd-orch-013"></a>
 
-### PD-ORCH-009 — an explicit choice of the entry model wins over an earlier wait's override of that model
+### PD-ORCH-013 — an explicit choice of the entry model wins over an earlier wait's override of that model
 
 When the user explicitly chooses a model for the run's entry agent — a switch of the entry model from the run header or
 the inspector (REQ-MONITOR-142), or a choice made on the quota-wait decision surface (REQ-MONITOR-303) — and a
@@ -4624,8 +4624,9 @@ out of quota again.
 
 *Raised by the owner, 2026-10-06, ruling OQ-177 as recommended; logged as [R-071](requests.md#r-071).*
 
-*Numbered PD-ORCH-009: first written as PD-ORCH-006 on its branch, but fin20's directives reached `main` first and took
-PD-ORCH-006 to PD-ORCH-008, so this entry takes the next free number.*
+*Numbered PD-ORCH-013: first written as PD-ORCH-006 on its branch, then PD-ORCH-009 when fin20's directives reached `main`
+first and took PD-ORCH-006 to PD-ORCH-008; renumbered PD-ORCH-013 at the landing rebase, since `main` had meanwhile taken
+PD-ORCH-009 to PD-ORCH-012, so this entry takes the next free number.*
 
 > **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (plan fin21):** `Run.setEntryModel` takes the
 > override back on the header path through the same `takeBackOverrideOf` the wait path uses — a `model_override` entry
@@ -4643,9 +4644,9 @@ PD-ORCH-006 to PD-ORCH-008, so this entry takes the next free number.*
 
 ---
 
-<a id="pd-monitor-003"></a>
+<a id="pd-monitor-006"></a>
 
-### PD-MONITOR-003 — a switch of the entry model or reasoning level from the run header holds for its own run
+### PD-MONITOR-006 — a switch of the entry model or reasoning level from the run header holds for its own run
 
 A switch of the run's entry model, or of its entry reasoning level, made from the run header or the inspector while a run
 is live (REQ-MONITOR-142) SHALL apply from the run's next iteration for the rest of **that run** only. It SHALL NOT be
@@ -4669,6 +4670,8 @@ it again in the composer.
 
 *Raised by the owner, 2026-10-06, ruling OQ-185 as recommended; logged as [R-071](requests.md#r-071).*
 
+*Numbered PD-MONITOR-006: first written as PD-MONITOR-003 on its branch; renumbered at the landing rebase, since `main` had meanwhile taken PD-MONITOR-003 to PD-MONITOR-005, so this entry takes the next free number.*
+
 > **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (plan fin21):** the rows read "Entry model switched
 > to X; it applies for the rest of this run, after the iteration in flight. The next run starts on the composer's model."
 > and "Entry reasoning level switched to L; it applies for the rest of this run, after the iteration in flight. The next run
@@ -4682,16 +4685,16 @@ it again in the composer.
 
 ---
 
-<a id="pd-monitor-004"></a>
+<a id="pd-monitor-007"></a>
 
-### PD-MONITOR-004 — keep waiting retries an out-of-quota wait now, and acknowledges a timed one
+### PD-MONITOR-007 — keep waiting retries an out-of-quota wait now, and acknowledges a timed one
 
 On the quota-wait decision surface (REQ-MONITOR-303, REQ-NOTIFY-263), **keep waiting** SHALL depend on the wait's variant:
 
 1. Where automatic resume is **not** allowed — a provider-and-model pair recorded out of quota (REQ-MONITOR-194) — keep
    waiting SHALL resolve the wait as a retry of the same pair at once and return the status to `running`. It is a retry,
    never a change of model: it clears the pair's out-of-quota exclusion as an explicit choice of the pair does
-   (REQ-MONITOR-194), persists no override, and takes back an earlier override of the pair (`PD-ORCH-009`), so the retry
+   (REQ-MONITOR-194), persists no override, and takes back an earlier override of the pair (`PD-ORCH-013`), so the retry
    calls it. It resumes the agents parked out of quota on that pair, each on its own model; an agent parked on another pair
    is not moved and stays in its own wait, which the surface shows next. A further insufficient-quota answer records the
    pair again and parks the agent in a new wait. One press retries the wait shown once: a press that reaches no outstanding
@@ -4715,6 +4718,8 @@ acknowledgement for the timed one (OQ-188). What it costs: in the timed wait kee
 > **Narrows:** REQ-MONITOR-303
 
 *Raised by the owner, 2026-10-06, ruling OQ-188 as recommended; logged as [R-071](requests.md#r-071).*
+
+*Numbered PD-MONITOR-007: first written as PD-MONITOR-004 on its branch; renumbered at the landing rebase, since `main` had meanwhile taken PD-MONITOR-003 to PD-MONITOR-005, so this entry takes the next free number.*
 
 > **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (plan fin21):** the record's `wait` gained `modelKey`
 > (`keyOfPair`, `packages/engine/src/run/resilience.ts`: the first configured key naming the pair, else the first discovered
@@ -4756,9 +4761,9 @@ acknowledgement for the timed one (OQ-188). What it costs: in the timed wait kee
 
 ---
 
-<a id="pd-monitor-005"></a>
+<a id="pd-monitor-008"></a>
 
-### PD-MONITOR-005 — helper model calls follow the session's override and stay off a model held out of quota
+### PD-MONITOR-008 — helper model calls follow the session's override and stay off a model held out of quota
 
 The run's helper calls — the pre-flight's intent classifier (REQ-ORCH-009, REQ-ORCH-114), the loop supervisor's classifier
 (REQ-ORCH-100), a compression pass on a configured compressing model (REQ-MONITOR-080), the child-report summariser
@@ -4793,6 +4798,8 @@ and a run whose analyst slot is excluded produces no improvement proposals.
 > **Narrows:** REQ-MONITOR-080, REQ-ORCH-009, REQ-ORCH-114, REQ-ORCH-100, REQ-CONFIG-065, REQ-LIBRARY-037
 
 *Raised by the owner, 2026-10-06, ruling OQ-189 as recommended; logged as [R-071](requests.md#r-071).*
+
+*Numbered PD-MONITOR-008: first written as PD-MONITOR-005 on its branch; renumbered at the landing rebase, since `main` had meanwhile taken PD-MONITOR-003 to PD-MONITOR-005, so this entry takes the next free number.*
 
 > **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (plan fin21):** one reader serves every helper,
 > `helperChoiceOf` (`packages/engine/src/run/resilience.ts`), behind `Run.helperModel`, read at each call. The compressor

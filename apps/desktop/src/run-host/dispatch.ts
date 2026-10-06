@@ -301,7 +301,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       const controller = new AbortController();
       improvementControllers.set(req.job.artifact_id, controller);
       try {
-        // OQ-189 (PD-MONITOR-005): a post-run job runs on the model resolved at its capture, the session's overrides followed.
+        // OQ-189 (PD-MONITOR-008): a post-run job runs on the model resolved at its capture, the session's overrides followed.
         const chosen = req.job.pass === 'retrospective' ? collector : context?.analyst ?? collector;
         const artifact = await analyzeImprovement(req.job, { backend: run.model.backend, model: chosen.model, thinking: chosen.thinking, timers: clocks.timers, credentialFor: run.model.config.credentialFor, warn: (message) => log(message, 'warn') }, controller.signal);
         return { kind: 'improvement.analyzed', artifact };

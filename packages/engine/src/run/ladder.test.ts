@@ -120,7 +120,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const backend = new DefaultAgentBackend(client);
     const results: string[] = [];
     const restingReads: string[] = [];
-    // OQ-189 (PD-MONITOR-005): the helper-model readers the session hands its post-run analyst and its loop supervisor.
+    // OQ-189 (PD-MONITOR-008): the helper-model readers the session hands its post-run analyst and its loop supervisor.
     const helpers: { onRunResult: HelperModel[]; supervisor: HelperModel[] } = { onRunResult: [], supervisor: [] };
     let configured = 0;
     const sessions = new Sessions({
@@ -142,7 +142,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   const issues = (sid: SessionId) => dal.issuesOf(sid).map((i) => i.kind);
   const lastWait = (pub: ReturnType<typeof recorder>) => pub.snapshots.at(-1)?.wait ?? null;
   /**
-   * OQ-185's ruling (R-071, PD-MONITOR-003): a switch from the run header or the inspector holds for the rest of its own run,
+   * OQ-185's ruling (R-071, PD-MONITOR-006): a switch from the run header or the inspector holds for the rest of its own run,
    * and its row says so — the composer's model and reasoning chips choose the next run's. Until 2026-10-06 the row said "it
    * applies from the next iteration", untrue when the run had no next iteration of its own.
    */
@@ -454,12 +454,12 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   });
 
   /*
-   * OQ-188's ruling (R-071, PD-MONITOR-004): the wait record names the waiting pair's key, and keep waiting in the wait that
+   * OQ-188's ruling (R-071, PD-MONITOR-007): the wait record names the waiting pair's key, and keep waiting in the wait that
    * never auto-resumes sends `setModel` with it, marked `keepWaiting` and naming the wait's agent and attempt (`Run.keepWaiting`,
    * since repair round 1; before, a plain `setModel`) — a retry of the waiting pair, which clears its exclusion and retries it
    * now, no override persisted. A timed wait names its key too; the header sends nothing for it (`keepWaitingAction`).
    */
-  it('OQ-188 / PD-MONITOR-004: a quota wait names the waiting pair\'s key, and keep waiting (setModel with it, marked) retries the pair now, its exclusion cleared', async () => {
+  it('OQ-188 / PD-MONITOR-007: a quota wait names the waiting pair\'s key, and keep waiting (setModel with it, marked) retries the pair now, its exclusion cleared', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, [])];
     const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('after the top-up')), { catalogue });
     const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
@@ -484,7 +484,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     await tick();
     expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', modelKey: 'a1' });
     expect(lastWait(pub)!.resumeAt).not.toBeNull();
-    // PD-MONITOR-004 clause 2: the timed wait's keep waiting sends nothing; a retry asked of the run anyway is refused, and
+    // PD-MONITOR-007 clause 2: the timed wait's keep waiting sends nothing; a retry asked of the run anyway is refused, and
     // the timer still resolves the wait.
     const w = lastWait(pub)!;
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1', keepWaiting: true, agent: w.agent, attempt: w.attempt } })).toEqual({ ok: false });
@@ -1749,7 +1749,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     });
 
     /*
-     * OQ-188's ruling (R-071, PD-MONITOR-004 clause 1, repair round 1): keep waiting is a retry of the model the wait shows, never
+     * OQ-188's ruling (R-071, PD-MONITOR-007 clause 1, repair round 1): keep waiting is a retry of the model the wait shows, never
      * a change of model. It resumes the agents parked on that pair alone, each on its own pair, clears that pair's exclusion and
      * persists no override; an agent parked on another pair stays in its own wait, which the header shows next. Until this repair
      * keep waiting reached `setEntryModel`'s quota-retry branch, which moves every other parked agent to the waiting pair with a
@@ -1841,12 +1841,12 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
    * over the second and under the first.
    */
   /*
-   * OQ-189's ruling (R-071, PD-MONITOR-005): every helper call follows the session's model override, and where the pair it
+   * OQ-189's ruling (R-071, PD-MONITOR-008): every helper call follows the session's model override, and where the pair it
    * ends on is held out of quota with nothing replacing it, a compression or a child's summary runs on the calling agent's
    * own model and the classifiers and the analyst make no call. Until 2026-10-06 a configured compressor and the analyst were
    * called as configured, the classifiers too, and the summariser followed an override but called an excluded pair.
    */
-  describe('OQ-189 / PD-MONITOR-005: helper calls follow the override and stay off a pair held out of quota', () => {
+  describe('OQ-189 / PD-MONITOR-008: helper calls follow the override and stay off a pair held out of quota', () => {
     const limits = { inputLimits: { a1: 2000, b1: 200, c1: 200 }, triggerTokens: { a1: 1000, b1: 100, c1: 100 } };
     const glob: TestTool = (name) => (name === 'glob' ? Promise.resolve({ text: 'README.md', isError: false, status: 'ok', durationMs: 1, label: 'glob', args: {} }) : undefined);
     const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
@@ -2107,7 +2107,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     });
 
     /*
-     * OQ-189's ruling (R-071, PD-MONITOR-005): a configured compressor held out of quota yields to the agent's own model, and
+     * OQ-189's ruling (R-071, PD-MONITOR-008): a configured compressor held out of quota yields to the agent's own model, and
      * where that one is held out of quota too the pass makes no call and fails naming both. Until 2026-10-06 a configured
      * compressor was never withheld (`if (c.model) return null`): the pass called the excluded configured pair.
      */
@@ -2945,12 +2945,12 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     });
 
     /*
-     * OQ-177's ruling (R-071, PD-ORCH-009): every explicit switch wins. A switch onto a pair an earlier wait choice overrode
+     * OQ-177's ruling (R-071, PD-ORCH-013): every explicit switch wins. A switch onto a pair an earlier wait choice overrode
      * takes that override back, as the quota-wait surface's own choice does (`takeBackOverrideOf`), so the entry agent runs on
      * the pair chosen from the next iteration, the record replays the take-back, and the autopsy reader prints the key the
      * root ran on. Until 2026-10-06 the override stood and only the row said so: the third root call went to c1.
      */
-    it('a switch onto a pair an earlier wait moved for the rest of the session takes that override back, and the entry agent runs on the pair chosen (OQ-177, PD-ORCH-009)', async () => {
+    it('a switch onto a pair an earlier wait moved for the rest of the session takes that override back, and the entry agent runs on the pair chosen (OQ-177, PD-ORCH-013)', async () => {
       const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
       const gate = held();
       const { sessions, client, pub } = sessionsWith((p, turn) => (p !== 'orchestrator' ? answer('{"summary":"done"}') : turn === 1 ? failing(quota()) : turn === 2 ? hanging(gate.p) : answer(`iteration ${turn}`)), { catalogue });

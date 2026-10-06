@@ -106,7 +106,7 @@ export interface WorkspaceViewProps {
   readonly onSetModel?: ((model: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly onSetReasoning?: ((level: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /**
-   * OQ-188's ruling (PD-MONITOR-004 clause 1): the wait header's keep waiting in an out-of-quota wait — a retry of the wait it
+   * OQ-188's ruling (PD-MONITOR-007 clause 1): the wait header's keep waiting in an out-of-quota wait — a retry of the wait it
    * names (agent and attempt) on the waiting pair's key, never a switch of model (`setModel` marked `keepWaiting`).
    */
   readonly onKeepWaiting?: ((retry: { readonly model: string; readonly agent: string; readonly attempt: number }) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
@@ -450,7 +450,7 @@ export function waitModelOptions(models: readonly string[], excluded: readonly s
 }
 
 /**
- * OQ-188's ruling (R-071, PD-MONITOR-004): what the wait header's keep waiting does. In the wait that never auto-resumes
+ * OQ-188's ruling (R-071, PD-MONITOR-007): what the wait header's keep waiting does. In the wait that never auto-resumes
  * (`resumeAt` null: a pair the provider reported out of quota) it retries the waiting pair now — `setModel` with its key,
  * marked as keep waiting and naming the wait it answers by agent and attempt (`onKeepWaiting`, the run's `keepWaiting`): a
  * retry of that pair alone, its exclusion cleared (REQ-MONITOR-194/303), no override, no other parked agent moved — where a

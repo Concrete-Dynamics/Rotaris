@@ -41,7 +41,7 @@ model slot call when the session holds its pair out of quota or has replaced it?
 
 ## Outcome — 2026-10-06 (plan fin21, under [R-071](../../product/requests.md#r-071)): ruled and repaired
 
-OQ-189 was ruled by the owner as recommended ([`PD-MONITOR-005`](../../product/directives.md#pd-monitor-005)): every helper
+OQ-189 was ruled by the owner as recommended ([`PD-MONITOR-008`](../../product/directives.md#pd-monitor-008)): every helper
 call follows the session's model override, and where its pair is held out of quota with nothing replacing it, a compression
 runs on the calling agent's model and the classifiers and the analyst make no call; the summariser, read beside compression,
 summarises the child on the model the child ran on.

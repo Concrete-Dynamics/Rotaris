@@ -18,11 +18,11 @@ const deps = (b: AgentBackend, helperModel?: HelperModel) => ({
 });
 
 /*
- * OQ-189's ruling (R-071, PD-MONITOR-005): the loop classifier's model follows the session's override, read at each
+ * OQ-189's ruling (R-071, PD-MONITOR-008): the loop classifier's model follows the session's override, read at each
  * classification, and a pair held out of quota is not called — the classification fails with the reason, which the
  * supervisor reads as an unanswered one. Until 2026-10-06 the slot was called as configured.
  */
-describe('run-host/loop — the loop classifier\'s model (REQ-ORCH-100/103, OQ-189, PD-MONITOR-005)', () => {
+describe('run-host/loop — the loop classifier\'s model (REQ-ORCH-100/103, OQ-189, PD-MONITOR-008)', () => {
   it('calls the slot as configured when the session leaves it alone', async () => {
     const { b, inputs } = backend();
     const c = createLoopClassifier(deps(b, (choice) => ({ ok: true, model: choice.model, thinking: choice.thinking })))!;

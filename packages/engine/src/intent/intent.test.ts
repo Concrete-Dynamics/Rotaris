@@ -42,11 +42,11 @@ describe('REQ-ORCH-005..013 the classifier', () => {
     expect(r.reason).toMatch(/no small model is configured/);
   });
   /*
-   * OQ-189's ruling (R-071, PD-MONITOR-005): the selected slot's model follows the session's override, and where the pair it
+   * OQ-189's ruling (R-071, PD-MONITOR-008): the selected slot's model follows the session's override, and where the pair it
    * ends on is held out of quota no request is sent and the run proceeds on the fallback intent, saying why. Until 2026-10-06
    * the slot was called as configured, and a provider that had refused it made the classifier fall back on its error.
    */
-  it('OQ-189 / PD-MONITOR-005: the slot follows the session override, and a slot held out of quota sends no request', async () => {
+  it('OQ-189 / PD-MONITOR-008: the slot follows the session override, and a slot held out of quota sends no request', async () => {
     const moved = backend(() => ok('{"intent":"question"}'));
     const r = await classifyIntent({ prompt: 'p', metadata: {} }, SLOTS, { ...deps(moved.b, new FakeClock()), helperModel: (c) => (c.model.modelId === 'small' ? { ok: true, model: M('override'), thinking: 'unset' } : { ok: true, model: c.model, thinking: c.thinking }) }, new AbortController().signal);
     expect(moved.inputs.map((i) => i.model.modelId)).toEqual(['override']);

@@ -42,7 +42,7 @@ row should say the switch ends with the run, is for the owner, raised with the r
 
 OQ-185 was ruled by the owner as recommended: a switch from the run header or the inspector **ends with its run**, as built,
 and its row says so; the composer's model and reasoning chips are the one control for the next run
-([`PD-MONITOR-003`](../../product/directives.md#pd-monitor-003), narrowing REQ-MONITOR-142 and REQ-SESSION-026). So the
+([`PD-MONITOR-006`](../../product/directives.md#pd-monitor-006), narrowing REQ-MONITOR-142 and REQ-SESSION-026). So the
 continuation not taking the switch is the product, and the fault left was the sentence. The rows now read "Entry model
 switched to X; it applies for the rest of this run, after the iteration in flight. The next run starts on the composer's
 model." and "Entry reasoning level switched to L; it applies for the rest of this run, after the iteration in flight. The

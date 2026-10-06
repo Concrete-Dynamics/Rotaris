@@ -226,7 +226,7 @@ flowchart TB
   I --> TR["turnWithRetry(task) — every retry now happens at the model STEP (Part Q's ladder, §3)"]
   TR --> TURN["turn(): IterationChildren for this iteration,<br/>the root's tool port, runTurn(...)"]
   TURN --> OUT{"outcome"}
-  TURN -. "succeeded with an item of its plan open:<br/>a correction into the root's own conversation,<br/>up to validationRetries times (REQ-ORCH-078; followUp)" .-> TURN
+  TURN -. "succeeded with no text: ANSWER_REPROMPT once (PD-ORCH-006);<br/>with an item of its plan open:<br/>a correction into the root's own conversation,<br/>up to validationRetries times (REQ-ORCH-078; followUp)" .-> TURN
   OUT -- "succeeded, the root's own plan all terminal" --> C["todo.complete"]
   OUT -- "partial, or succeeded with an item of the coordinator's<br/>own plan open that the task answers for<br/>(REQ-ORCH-029/075; Task.planLeftOpen → the same task's next root)" --> RQ["todo.requeue (abandon at the consecutive-retry limit)"]
   OUT -- failed --> AB["todo.abandon; escalate → the run ends agent_session_aborted"]
@@ -240,6 +240,14 @@ flowchart TB
   ML -- yes --> PL["pauseAtLimit(): status paused_message_limit + count + limit (durable),<br/>run.paused event to main, no terminal pair; the Run ends"]
   ML -- no --> L0
 ```
+
+**An entry role that wrote no answer is asked once more (PD-ORCH-006, OQ-199 as ruled; since 2026-10-06).** The same
+`followUp` first asks whether the root's turn returned `succeeded` with empty text — its last step wrote nothing, and a
+step with a tool call never ends a turn — while the run is not stopping, pausing or coming to rest (`correctionDue`); if so
+it sends `ANSWER_REPROMPT` once per execution of the root, before any plan correction. A turn still silent after it writes
+"The run ended without an answer: …" as a `system` row and an `incomplete_execution` warning issue, and the iteration goes
+on as it would have. A plan cycle's root is not asked. With no children (no tool port's delegation) the same loop runs
+around `firstTurn`.
 
 **The coordinator's own plan and the task's completion (REQ-ORCH-029, REQ-ORCH-075, REQ-ORCH-078; since 2026-10-06,
 live-run finding G5).** A root that answers `succeeded` while its own plan (`Run.agentTodo`, REQ-TOOLS-144's states) holds an
@@ -659,7 +667,8 @@ expiry does not cut the child off — it **asks the child to land** (REQ-ORCH-08
 `runTurn` reads for REQ-MONITOR-123's pause, so the turn stops before its next model step with the step in flight
 finished and its text intact. A hard-abort **backstop** is armed `STOP_GRACE` (30 s, `run/grace.ts`, ADR-0014 rule 1's
 one allowance) behind it, for the child that cannot land inside the window; REQ-CONFIG-113's ceiling therefore still
-bounds the child. Then, with a role fallback untried, the child runs once more on it (the `fallback_model` timeline entry and `timeout_fallback` issue — REQ-ORCH-139's words; `child_timeout_fallback` for both before A29's repair); else
+bounds the child, at `child_timeout` and at most 30 s more — the bound `PD-ORCH-004` revision 5 writes down (OQ-196 as
+ruled, 2026-10-06): a model step the backstop cuts keeps only its streamed reasoning, as `thinking` rows. Then, with a role fallback untried, the child runs once more on it (the `fallback_model` timeline entry and `timeout_fallback` issue — REQ-ORCH-139's words; `child_timeout_fallback` for both before A29's repair); else
 it fails with `Child timed out after <N>s` and a report carrying what the child last **said** — the last assistant
 message with text, not the last assistant message, which is usually the one that opened a tool call and spoke
 nothing. Those words reach `last_response`; `final_response` stays empty, because REQ-ORCH-110's final response is
@@ -668,7 +677,9 @@ expiry instant — not at the backstop — the child's `ProgressLog` answers whe
 final stall window (the role's `stall_timeout`, else `runtime.child_stall_timeout`, 90 s by default; the bound is
 inclusive). If it did, and the child then ends failed on that timeout, the stored report gains `cut_off`: the statement,
 the workspace paths its own `write_file`/`haet_edit`/`haet` calls changed with `ok` (the name matched in lower case, as the
-gate's fallback dispatches it; resolved lexically against the root; both attempts, in the order first changed, each once), and — unless the child is itself a continuation — the offer naming `continuation_of`. The report block and
+gate's fallback dispatches it; resolved lexically against the root; both attempts, in the order first changed, each once), and — unless the child is itself a continuation — the offer naming `continuation_of`, which since 2026-10-06 also tells
+the parent that a continuation starts with no memory, so it writes a complete brief (`PD-ORCH-004` revision 5, OQ-114; and
+`delegate`'s description says the same). The report block and
 `background_output` render it after the result text; nothing resumes the child. See §4 for the continuation.
 Per-model `timeout` / `num_retries` ride the choice (REQ-ORCH-145). **`num_retries` is the dispatch layer's, not the
 ladder's** (REQ-CONFIG-086, default 5; OQ-110): the model client hands it to the SDK as `maxRetries`, so a 429, a 5xx or a

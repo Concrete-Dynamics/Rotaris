@@ -5531,7 +5531,13 @@ found the overwrite the note describes, and found that the store's own idempoten
 that a second task id under the same name updated the first artifact, which the amendment forbids, so that step is
 removed. Every caller in the build passes a child's task id, so the name key is now reached only by a record without one.
 
-**OQ-114 — Do the specification's fixed figures still hold when the model on the critical path reasons before it answers?** *(REQ-ORCH-108 and REQ-ORCH-110, the report-producing pass before the parent resumes, two attempts within 120 s; REQ-ORCH-007 and REQ-ORCH-008, the 12.0 s intent bound and its fallback; REQ-TOOLS-006, whose `coordinator_only` control removes the orchestrator's terminal; REQ-CONFIG-467 and REQ-ORCH-104, the 2.0 s loop-classification bound and its fallback; REQ-LIBRARY-127 and REQ-CONFIG-118, analysis cancelled at shutdown and its 60 s bound; REQ-TOOLS-039 under REQ-TOOLS-033, the recursive-delete deny rule; `PD-ORCH-004` revision 2, "nothing of the continued child is injected". Raised 2026-09-29 from the live runs' frictions F1 to F5 and the duress run's continuation under [R-067](../product/requests.md#r-067). Open. Raised as OQ-113 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
+**OQ-114 — Do the specification's fixed figures still hold when the model on the critical path reasons before it answers?** *(REQ-ORCH-108 and REQ-ORCH-110, the report-producing pass before the parent resumes, two attempts within 120 s; REQ-ORCH-007 and REQ-ORCH-008, the 12.0 s intent bound and its fallback; REQ-TOOLS-006, whose `coordinator_only` control removes the orchestrator's terminal; REQ-CONFIG-467 and REQ-ORCH-104, the 2.0 s loop-classification bound and its fallback; REQ-LIBRARY-127 and REQ-CONFIG-118, analysis cancelled at shutdown and its 60 s bound; REQ-TOOLS-039 under REQ-TOOLS-033, the recursive-delete deny rule; `PD-ORCH-004` revision 2, "nothing of the continued child is injected". Raised 2026-09-29 from the live runs' frictions F1 to F5 and the duress run's continuation under [R-067](../product/requests.md#r-067). ~~Open.~~ **Ruled 2026-10-06.** Raised as OQ-113 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** every figure this question names is kept for this release — the
+report summariser's pass, the 12 s intent bound, the 2 s loop-classification bound, the analyst's 60 s, the starter
+recursive-delete rule — and a continuation still starts with no part of the child it continues; the continuation offer and
+`delegate`'s description of `continuation_of` now tell the parent that a continuation starts with no memory, so that it
+writes a complete brief. By [`PD-ORCH-004`](../product/directives.md#pd-orch-004) revision 5.
 
 The live runs of 2026-09-29 ran the built product against the owner's self-hosted endpoint (`qwen3.8-flash-next`, a
 model that reasons before it answers; packs `2026-09-29T02-41-56-779Z` and `2026-09-29T03-06-14-929Z`). The product met
@@ -5571,7 +5577,7 @@ or the owner's choice, so each would be a directive or a revision, not a repair.
 
 *(Added 2026-10-03, a further case of the continuation that starts from nothing, from finding U2 of the orchestrator's
 duress live run at `1763f7f` (pack `2026-10-03T06-15-52-273Z`)
-([`a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md`](../defects/a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md)).
+([`a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md`](../defects/fixed/a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md)).
 The parent is not told that a continuation starts from nothing: neither the cut-off offer ("the remaining work may be
 delegated to a new child as a continuation of this one", `packages/engine/src/children/cut-off.ts`) nor `delegate`'s
 description of `continuation_of` (`packages/agent-tools/src/tools/delegation.ts`) says so, and no requirement fixes either
@@ -5620,6 +5626,11 @@ fallback. The report summariser held its parent's wait for 93.1 s in all (`requi
 about 153 s of the 924 s of session wall time, the largest single cost of the run. Nothing here is a defect of the code,
 and nothing new is asked: the case adds figures to what a ruling of this question weighs, and what the build proceeds under
 is unchanged.)*
+
+*Built 2026-10-06 (fin20, `fin20-continue-and-continuation`).* The offer (`cutOffReport`,
+`packages/engine/src/children/cut-off.ts`) and `delegate`'s description (`packages/agent-tools/src/tools/delegation.ts`)
+carry the sentence; every figure is unchanged. Pinned by `cut-off.test.ts` and `delegation.test.ts`'s "OQ-114 as ruled"
+cases, each red on the wording before.
 
 **OQ-115 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open until 2026-10-06; ruled then, below. Raised as OQ-114 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
@@ -9829,8 +9840,13 @@ is reached?** *(REQ-ORCH-088, on expiry "gracefully pause the child", narrowed b
 "finishes its current step and then stops", narrowed by `PD-ORCH-005` revision 2; REQ-CONFIG-131's
 `graceful_pause_tool_deadline`, which bounds in-flight tool calls only; REQ-CONFIG-113's `child_timeout`, the "hard per-child
 wall clock". Raised 2026-10-03 from finding U1 of the orchestrator's duress live run at `1763f7f`
-([`a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md`](../defects/a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md)).
-Open, the owner's.)*
+([`a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md`](../defects/fixed/a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md)).
+~~Open, the owner's.~~ **Ruled 2026-10-06.**)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current bound stays and is written down — what a child has in
+flight when its `child_timeout` expires has at most 30 s to end and is then aborted, so the child's time limit stays hard;
+of a model step so cut, its streamed reasoning is kept in the transcript and nothing else of it is kept. As built; by
+[`PD-ORCH-004`](../product/directives.md#pd-orch-004) revision 5, with back-pointers at REQ-ORCH-088 and REQ-CONFIG-113.
 
 The duress run of 2026-10-03 (pack `2026-10-03T06-15-52-273Z`, endpoint `katalyst`, a model that reasons before it answers)
 had two children reach the 1200 s ceiling, each in the middle of a model step. The ceiling asked each to land; the landing
@@ -9856,6 +9872,10 @@ built from the last assistant message that carried text, the child ends `failed`
 nothing, as now; the step's partial text or reasoning in the child's report; or the partial step handed to the
 continuation. A longer landing pushes back the ceiling REQ-CONFIG-113 calls hard, so either answer changes a requirement
 or a directive; neither is a repair.
+
+*Recorded 2026-10-06 (fin20, `fin20-continue-and-continuation`).* No code changed. The bound is reported back into
+[`adr/0012-the-delegated-child-scheduler.md`](adr/0012-the-delegated-child-scheduler.md) and beside `CHILD_LANDING_GRACE`,
+where its reason promised a report, and the note is closed as ruled as built.
 
 **OQ-197 — Does a write of the permission mode that leaves the file's value unchanged displace an unsaved Settings
 selection?** *(REQ-CONFIG-423, "for this one field the last write wins over an unsaved selection on this screen" and "a
@@ -9926,7 +9946,13 @@ check that compares the outcome with the request; REQ-TOOLS-180, a run terminate
 addressed to the user and requests no tool call in that turn; REQ-ORCH-095, a child's ending assessed into six categories,
 tool calls made counting as `work_performed`. Raised 2026-10-04 by the repair of
 [`fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`](../defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)
-(fin15, bundle `fin15-slice-proof-live-answers`). Open, the owner's.)*
+(fin15, bundle `fin15-slice-proof-live-answers`). ~~Open, the owner's.~~ **Ruled 2026-10-06.**)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** an execution iteration's entry role that ends its turn with neither
+text nor a tool call is asked once more to answer, in its own conversation, as a delegated child is re-prompted; if it
+still writes nothing, the run completes as before and the person is told it ended without an answer (a transcript row and
+a warning `incomplete_execution` issue). A plan cycle's root is not asked. By
+[`PD-ORCH-006`](../product/directives.md#pd-orch-006), which extends REQ-ORCH-069.
 
 Run 2 of `slice-proof` on 2026-10-03 (`katalyst`, load 2.5) asked "Read README.md in this workspace and tell me its first
 heading, in one sentence." The intent was `question`. The orchestrator read `README.md` and globbed the workspace, both calls
@@ -9951,6 +9977,15 @@ The second run is held to every check, and a second answerless run is a red that
 **What a ruling decides.** Whether an entry-role turn that ends with neither text nor a tool call should be told so and
 continued, re-queued as `partial`, or reported to the person as a run that ended without an answer, rather than completing.
 Each would add to REQ-ORCH-069, REQ-ORCH-113 or REQ-ORCH-115, so each is a revision or a directive, not a repair.
+
+*Built 2026-10-06 (fin20, `fin20-continue-and-continuation`).* `Run.turn`'s follow-up (the one REQ-ORCH-078's correction
+uses, `runWithChildren`'s `followUp`) sends `ANSWER_REPROMPT` once when the root's turn returned `succeeded` with empty text
+and the run is not stopping, pausing or coming to rest (`correctionDue`), before any plan correction; a turn that still
+returns empty text writes "The run ended without an answer: <role> ended its turn without writing one, even when asked
+once more." as a `system` row and an `incomplete_execution` warning issue. Pinned by
+`packages/engine/src/run/answerless.test.ts` (two of its three cases red before). `slice-proof`'s answerless rerun
+(`answerlessCompletion`) is unchanged: an answerless run is now one whose root stayed silent after the re-prompt too, and
+its transcript says so.
 
 **OQ-200 — Which model call does the run timer count while a run has more than one?** *(REQ-CHAT-158, the run-timing
 indicator counts "the time spent inside the model call currently in flight" and restarts "each time the run moves on to

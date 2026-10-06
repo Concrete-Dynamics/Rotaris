@@ -31,7 +31,7 @@ were continued once (tool calls #170 and #287) and both continuations succeeded.
 This is not a defect of the code against a requirement: no requirement bounds how long a model step may take to land.
 It is the owner's question
 "How long may a child at its time limit take to finish the model step in flight, and what is kept when that bound is
-reached?" in [`docs/architecture/open-questions.md`](../architecture/open-questions.md), raised with this note. The build
+reached?" in [`docs/architecture/open-questions.md`](../../architecture/open-questions.md), raised with this note. The build
 proceeds under the current behaviour, unchanged until the owner rules. No code is changed here.
 
 ## Specs
@@ -85,3 +85,15 @@ finding H1 of its autopsy. No check reads the traffic's `aborted` outcomes, so i
 Whether a longer landing would have written the file is not shown here either. Recorded as evidence only; the build
 proceeds under the current behaviour, and the bound is the owner's to rule ("How long may a child at its time limit take
 to finish the model step in flight, and what is kept when that bound is reached?", OQ-196).
+
+## Ruled as built (2026-10-06)
+
+The owner ruled OQ-196 as recommended on 2026-10-06 ([R-071](../../product/requests.md#r-071)): the 30 s landing bound
+stays, so a child's time limit stays hard, and the cut step's reasoning stays in the transcript alone. The bound is now
+written into [`PD-ORCH-004`](../../product/directives.md#pd-orch-004) revision 5 ("The landing at the limit is bounded"),
+with a back-pointer at REQ-ORCH-088 and REQ-CONFIG-113, and reported back into
+[`adr/0012-the-delegated-child-scheduler.md`](../../architecture/adr/0012-the-delegated-child-scheduler.md) and beside
+`CHILD_LANDING_GRACE` in `packages/engine/src/children/orchestration.ts`, where the reason promised it. No code changed: the
+behaviour this note records is the behaviour ruled. The cut-off children's work reaches the parent through PD-ORCH-004's
+continuation offer, which since the same ruling tells the parent that a continuation starts with no memory
+([`a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md`](a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md)).

@@ -413,6 +413,18 @@ allowance now lives in `run/grace.ts`, which neither file imports the other to r
 unavailable: `REQ-TOOLS-156` forbids a deadline in those words and `REQ-ORCH-064` blesses the long
 block. What this execution changes is what the block is worth at the end of it.
 
+**Reported back 2026-10-06: the 30 s window met a model that reasons, and the owner kept it.** The code beside
+`CHILD_LANDING_GRACE` promised that a window proving wrong would be reported back here. The duress live runs of
+2026-10-03 (`1763f7f`) and 2026-10-06 (`27a5127`) each had children reach the 1200 s ceiling mid-step on a model that
+reasons before it answers, and the backstop aborted the step in flight at ceiling + 30 s three times, after 115.4 s,
+87.0 s and 104.8 s of generation with no text and no tool call; the streamed reasoning stayed in the transcript as
+`thinking` rows and nothing else of the step was kept
+([`a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md`](../../defects/fixed/a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md)).
+At `71ad8e8` all three landings finished inside the window. The question was put to the owner as OQ-196, who ruled on
+2026-10-06 ([R-071](../../product/requests.md#r-071)) to keep the 30 s so the child's limit stays hard, and to keep the cut
+step's reasoning in the transcript alone; `PD-ORCH-004` revision 5 writes the bound down. The reason above stands: the
+window is the run's one 30 s allowance, and nothing in the code changed.
+
 ## First execution of the inherited-context path — 2026-09-28: a field the ledger stored and nothing read
 
 `REQ-TOOLS-152`'s `inherited_context` — "ids of already-completed sibling tasks whose reports are carried into the

@@ -99,6 +99,11 @@ describe('PD-ORCH-004: the report\'s additions and the offer', () => {
     expect(cutOffLines(c)).toEqual([c.statement, c.changes, c.continuation_offer]);
   });
 
+  it('OQ-114 as ruled (R-071, PD-ORCH-004 revision 5): the offer tells the parent that a continuation starts with no memory, so it writes a complete brief', () => {
+    const c = cutOffReport({ taskId: 'bg_0000000a', limitS: 1200, stallS: 90, changedPaths: ['src/a.ts'], isContinuation: false });
+    expect(c.continuation_offer).toBe('Continuation offer: the remaining work may be delegated to a new child as a continuation of this one — call delegate with continuation_of: "bg_0000000a". The continuation starts with no memory of this child\'s work: it is given only the task you write, so write a complete brief — what was asked, what this child did and found, and what remains. A piece of work is continued once; a continuation is not offered one of its own.');
+  });
+
   it('a continuation gets the statement and its paths and no offer; a child that changed nothing says so', () => {
     const c = cutOffReport({ taskId: 'bg_0000000b', limitS: 1200, stallS: 90, changedPaths: [], isContinuation: true });
     expect(c.changes).toBe('Its file-writing calls changed no workspace paths.');

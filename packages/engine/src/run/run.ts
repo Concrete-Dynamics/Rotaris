@@ -90,6 +90,12 @@ export interface RunConfig {
   readonly credentialFor: (model: ModelRef) => () => Promise<string>;
 }
 
+/**
+ * OQ-199 as ruled (R-071, PD-ORCH-006): the one message an entry role that ended its turn without writing an answer is
+ * sent, as the next user message of its own conversation.
+ */
+export const ANSWER_REPROMPT = 'You ended your turn without writing an answer. Write your answer to the user now, in plain text: what you did, what you found, and anything left open.';
+
 export const RUN_CONFIG_DEFAULTS: Omit<RunConfig, 'model' | 'credentialFor'> = {
   persona: 'orchestrator',
   systemPrompt: 'You are the orchestrator. Carry out the task you are given and answer plainly.',
@@ -1830,7 +1836,19 @@ export class Run {
        * (`runWithChildren`'s `followUp`), so a root with nothing to correct ends in the same step it always has.
        */
       let corrections = 0;
+      /*
+       * OQ-199 as ruled (R-071, PD-ORCH-006): a root that ends its turn with neither text nor a tool call — its last step
+       * wrote nothing, and a step with a tool call never ends a turn — is asked once more, in its own conversation, as a
+       * delegated child is re-prompted (REQ-ORCH-095). On the same terms as the plan's correction, and before it: the
+       * person's answer first. A root still silent after it is reported below, once its turn returns.
+       */
+      let answerAsked = false;
       const correction = (result: TurnOutcome): string | null => {
+        if (!answerAsked && result.report.text.trim() === '' && this.correctionDue(result, iterationOverride === undefined)) {
+          answerAsked = true;
+          this.deps.warn(`iteration ${iteration}: ${rootName} ended its turn without writing an answer; it is asked once more (PD-ORCH-006, OQ-199)`);
+          return ANSWER_REPROMPT;
+        }
         const planTask = this.iterationTaskRecord();
         if (corrections >= config.validationRetries || planTask === null || !this.correctionDue(result, iterationOverride === undefined)) return null;
         const open = this.openRootPlan(planTask);
@@ -1841,7 +1859,7 @@ export class Run {
       };
       const running = children
         ? children.runWithChildren(this.rootId, turnFn, start, this.abort.signal, correction)
-        : config.validationRetries <= 0 ? firstTurn(turnFn, start) : (async () => {
+        : (async () => {
           let result = await firstTurn(turnFn, start);
           for (let next = correction(result); next !== null; next = correction(result)) {
             const again = await turnFn(next, result.messages);
@@ -1868,6 +1886,13 @@ export class Run {
         this.aggregates.addToolCalls(rest);
         this.persistToolCalls(rootCounts(rest));
         this.rootUncountedFrom = null;
+        // OQ-199 as ruled (PD-ORCH-006): asked once more and still silent — the person is told, in the transcript and as a
+        // warning issue (REQ-ORCH-139's `incomplete_execution`), and the iteration completes as it would have.
+        if (answerAsked && outcome.report.text.trim() === '' && this.correctionDue(outcome, iterationOverride === undefined)) {
+          const message = `The run ended without an answer: ${rootName} ended its turn without writing one, even when asked once more.`;
+          writer.recordIssue({ kind: 'incomplete_execution', severity: 'warning', actor: rootCanonical, message, metadata: { task_id: rootTaskId, iteration, reprompted: true } });
+          writer.appendRow('system', message, true);
+        }
       }
       /*
        * REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that

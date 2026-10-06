@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Fifty-one.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Fifty-two.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -1763,6 +1763,10 @@ waiting for them; answering or writing anything to the session ends that.
 
 ### PD-ORCH-004 — a child cut off while making progress hands its work back to the parent
 
+*Revision 5 (2026-10-06, [R-071](requests.md#r-071)) — **two rulings**: what the parent is told of a continuation (OQ-114)
+and how long the landing at the limit may take (OQ-196), two paragraphs added after "How a later root learns of an offer";
+`REQ-CONFIG-113` joins the Narrows list. Nothing is replaced. The owner took both recommendations.*
+
 *Revision 4 (2026-09-28, [R-064](requests.md#r-064)) — **how a later root learns of an offer**, a paragraph added
 after "Naming the continuation"; the owner's ruling on OQ-99. Nothing is replaced.*
 
@@ -1809,6 +1813,18 @@ Each list names the open offers' children by canonical name and task id, the new
 were left out. Revision 3 gave a later root the right to an offer and no way to learn that one existed. The build told
 a new run's root and a resumed root, and the owner ruled that a later iteration of the same run is told as well.
 
+**What the parent is told of a continuation (revision 5).** The continuation offer, and `delegate`'s description of
+`continuation_of`, SHALL tell the parent that a continuation starts with no memory of the child it continues — it is given
+only the task the parent writes, since nothing of the continued child is injected into it — so the parent writes a
+complete brief: what was asked, what the child did and found, and what remains.
+
+**The landing at the limit is bounded (revision 5).** When a child's `runtime.child_timeout` expires, its turn stops
+before its next model step (REQ-ORCH-088's graceful pause). What it has in flight then — a model step, or a tool call —
+SHALL have at most 30 s from the expiry to end; at that bound the child's execution is aborted. Of a model step so
+aborted, its streamed reasoning SHALL stay in the session's transcript, and nothing of it reaches the child's
+conversation, its report or a continuation. The child then ends as REQ-ORCH-088 and this directive say, so the child's
+wall clock is its `child_timeout` and at most 30 s more, never longer.
+
 > Revision 2 said, and no longer governs: "Which agent may take up an offer once the iteration that raised it has
 > ended — after a stop, a pause or an interruption — is for the run-continuation policy R-058 opened; until that is
 > ruled, only the agent that delegated the child can, within the same iteration."
@@ -1822,16 +1838,27 @@ untouched; a child that was not making progress gets exactly REQ-ORCH-088's repo
 still holds that a child whose own `runtime.child_timeout` was exceeded is not recovery-eligible and earns
 no corrective message — the continuation is the parent's decision, never an automatic resume.
 
+**Why revision 5, and what it costs.** The owner ruled two questions the live runs raised ([R-071](requests.md#r-071)).
+The duress run of 2026-10-03 briefed both of its continuations as if they remembered ("You had already run everything …"),
+and one rebuilt its brief from the product's own session store: 31 terminal calls and about 1.7M input tokens, roughly
+18 % of the session (OQ-114). Telling the parent costs a few sentences in the offer and the tool's description; giving the
+continuation its predecessor's record instead would have cost a payload change and its budget. The same runs had three
+children reach the limit mid-step, and the 30 s backstop aborted each step after 87 to 115 s of generation; both cut-off
+children of 2026-10-03 succeeded when continued (OQ-196). Keeping the bound keeps run times predictable at the price of
+some repeated work, which the continuation offer already recovers; a longer landing would have made REQ-CONFIG-113's
+ceiling soft. Neither changes code beyond the wording: the bound is the one the build already had (`CHILD_LANDING_GRACE`),
+now written down.
+
 **Why, and what it costs.** In run `2e21e324` two children were cut off at 1200 seconds after 110 and 113
 tool calls. They were working, and the failure discarded what they knew about their own progress, leaving
 the parent to rediscover it. The report now hands back what a continuation needs. What it costs: a longer
 report for these children, and one more relationship in the child record. The limit itself is not raised,
 so a child that genuinely loops is still stopped at the same point.
 
-> **Narrows:** REQ-ORCH-088
+> **Narrows:** REQ-ORCH-088, REQ-CONFIG-113 (revision 5)
 > **Extends:** REQ-TOOLS-152 (revision 2)
 
-*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048). Revision 2 logged as [R-058](requests.md#r-058), revision 3 as [R-059](requests.md#r-059), revision 4 as [R-064](requests.md#r-064).*
+*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048). Revision 2 logged as [R-058](requests.md#r-058), revision 3 as [R-059](requests.md#r-059), revision 4 as [R-064](requests.md#r-064), revision 5 as [R-071](requests.md#r-071).*
 
 > **First execution, 2026-09-27, built under [R-057](requests.md#r-057):** the mechanism was built as written, and the
 > text met the code in four places. **(1) The stall window had no reader.** `runtime.child_stall_timeout` and a role's
@@ -1979,6 +2006,22 @@ so a child that genuinely loops is still stopped at the same point.
 > [`../architecture/first-executions.md`](../architecture/first-executions.md)
 > ([`fixed/no-live-run-has-executed-on-merged-main.md`](../defects/fixed/no-live-run-has-executed-on-merged-main.md)).
 
+
+> **First execution of revision 5, 2026-10-06, ruled by [R-071](requests.md#r-071) and built on branch
+> `fin20-continue-and-continuation`:** both paragraphs were built as written, and the text met the code in two places.
+> **(1) The wording.** The offer (`cutOffReport`, `packages/engine/src/children/cut-off.ts`) gains one sentence after its
+> `continuation_of` instruction — "The continuation starts with no memory of this child's work: it is given only the task
+> you write, so write a complete brief — what was asked, what this child did and found, and what remains." — and
+> `delegate`'s description one after its `continuation_of` sentence. An offer stored in a report before this keeps its
+> words; a root told of it later reads the stored text. **(2) The landing.** The bound was the build's already
+> (`CHILD_LANDING_GRACE`, the run's one 30 s allowance), and it bounds whatever the child has in flight, a tool call as
+> well as a model step, since the backstop aborts the child's execution; the paragraph says so. No code changed for it:
+> it is reported back into ADR-0012 and beside the constant, where its reason promised a report.
+> **What was measured.** `cut-off.test.ts` and `agent-tools`' `delegation.test.ts`, one case each, red on the wording
+> before; the landing's existing cases (`ladder.test.ts`'s REQ-ORCH-088 cases) unchanged and green. In the built app,
+> `pnpm resilience-proof` (the ladder, the waits and the fallbacks) passed. **What was not measured.** No built-app or
+> live run cut a child off at its limit: the duress live run's continuations are the evidence owed. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 ---
 
 <a id="pd-monitor-002"></a>
@@ -3088,6 +3131,53 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > an unusable classification. Both ran at a load average of 5 to 9 beside another plan's agents.
 > **What was not measured.** No live run: the orchestrator's default run's `resume` scenario is the evidence still owed.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-orch-006"></a>
+
+### PD-ORCH-006 — an entry role that ends its turn without an answer is asked once more, and the person is told if it still writes none
+
+When the entry role of an execution iteration ends its turn with neither text nor a tool call — its last model step wrote
+nothing for the person — and the run is not stopping, pausing or coming to rest, the run SHALL send it one further message
+in its own conversation asking it to answer, and SHALL let it take that turn as it takes any. It SHALL be asked once in
+each execution of the iteration's root, never twice. Where it still ends its turn without writing an answer, the iteration
+SHALL go on as it would have — the run completes as REQ-ORCH-069 says — and the run SHALL tell the person that it ended
+without an answer: a `system` row in the transcript and a warning `incomplete_execution` issue naming the entry role. A plan
+cycle's root (REQ-ORCH-153) is not asked: the plan it produces is the plan gate's to judge.
+
+**Why, and what it costs.** A run asked "Read README.md … and tell me its first heading" read the file, globbed the
+workspace and ended its turn with reasoning and no text (run 2 of `slice-proof`, 2026-10-03, OQ-199). The run completed
+`tasks_complete` with only "The run completed." in the transcript: the person was given no answer and no warning, and a
+completed run with no answer misleads. A delegated child in the same state is already re-prompted once (REQ-ORCH-095), and
+the root now is too. What it costs: one more model call for a root that wrote nothing, and a row and an issue when even
+that fails; a root that wrote nothing on purpose is asked anyway.
+
+> **Extends:** REQ-ORCH-069
+
+*Raised by the owner, 2026-10-06, ruling OQ-199 as recommended; logged as [R-071](requests.md#r-071).*
+
+> **First execution, 2026-10-06, built on branch `fin20-continue-and-continuation`:** the directive was built as written,
+> through the follow-up REQ-ORCH-078's correction already used (`IterationChildren.runWithChildren`'s `followUp`, asked where
+> the root would otherwise be left idle, so a delegation the re-prompt leads to is waited for as any turn's is). The text
+> met the code in three places. **(1) "Neither text nor a tool call"** is read off the turn's report: a turn ends only on a
+> step with no tool call, so a turn that returned `succeeded` with empty text is the case. **(2) The same terms as the
+> correction** (`correctionDue`): only an execution iteration's root, only a `succeeded` turn, never once the run is
+> stopping, pausing or coming to rest — a rest that cut the turn is not an unanswered question. The re-prompt is asked
+> before any plan correction, once per execution of the root, so a resumed root may be asked again in its new execution.
+> **(3) Telling the person** is a `system` row, "The run ended without an answer: <role> ended its turn without writing one,
+> even when asked once more.", and an `incomplete_execution` warning issue — the vocabulary's kind for an ending that did
+> not do what was asked (REQ-ORCH-095's), so no issue kind is coined. The run then completes as before. With no delegation
+> port the root's turn now always runs the follow-up loop, which before ran only with validation retries configured.
+> **What was measured.** `packages/engine/src/run/answerless.test.ts`, three cases: a root that read and then wrote nothing
+> is asked once in its own conversation and its answer is the run's; one that stays silent is asked once, never twice,
+> and the person is told; one that answers is not asked (the first two red on the code before). `slice-proof`'s answerless
+> path now requires the row (`toldNoAnswer`, `apps/desktop/scripts/lib/live-answers.mjs`, with its case). In the built
+> app, `pnpm part-h-proof`, `pnpm part-j-proof` and `pnpm plan-gate-proof` passed: no scripted root there ends silent, so
+> they show the re-prompt asks nothing of a root that answers. **What was not measured.** No built-app or live run met a
+> silent root: `slice-proof`'s question against the live endpoint is where one was seen, and it is the orchestrator's to
+> run. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-orch-006"></a>

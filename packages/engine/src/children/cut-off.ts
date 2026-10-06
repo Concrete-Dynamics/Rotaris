@@ -103,7 +103,9 @@ export function cutOffReport(input: { readonly taskId: string; readonly limitS: 
       : 'Its file-writing calls changed no workspace paths.',
     continuation_offer: isContinuation
       ? null
-      : `Continuation offer: the remaining work may be delegated to a new child as a continuation of this one — call delegate with continuation_of: "${taskId}". A piece of work is continued once; a continuation is not offered one of its own.`,
+      // OQ-114 as ruled (R-071, PD-ORCH-004 revision 5): the parent is told the continuation starts with no memory, since
+      // nothing of this child is injected into it (revision 2), so the parent writes the brief the continuation works from.
+      : `Continuation offer: the remaining work may be delegated to a new child as a continuation of this one — call delegate with continuation_of: "${taskId}". The continuation starts with no memory of this child's work: it is given only the task you write, so write a complete brief — what was asked, what this child did and found, and what remains. A piece of work is continued once; a continuation is not offered one of its own.`,
   };
 }
 

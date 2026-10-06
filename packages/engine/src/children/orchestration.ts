@@ -51,6 +51,10 @@ export const CHILD_TIMEOUT_MS: Millis = millis(1_200_000);
  * calls it "the one 30 s allowance" and this is a third reader of it, not a second figure. It is taken
  * from `run/grace.js` and never from `run/run.js`, for the reason that file gives. Should 30 s prove
  * wrong for a landing, that is reported back beside this reason rather than repaired quietly.
+ *
+ * Reported back 2026-10-06: the live runs of 2026-10-03 and 2026-10-06 had three children aborted here after 87 to 115 s
+ * of a reasoning model's step, and the owner kept the 30 s (OQ-196, R-071), now written into `PD-ORCH-004` revision 5:
+ * the child's limit stays hard, and the cut step's streamed reasoning is kept in the transcript alone. ADR-0012 says so.
  */
 export const CHILD_LANDING_GRACE: Millis = STOP_GRACE;
 

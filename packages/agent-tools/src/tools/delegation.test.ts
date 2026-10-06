@@ -26,6 +26,10 @@ describe('delegate — continuation_of (PD-ORCH-004)', () => {
   it('tells the model the argument exists', () => {
     expect(capture().tool.description).toContain('continuation_of');
   });
+
+  it('OQ-114 as ruled (R-071, PD-ORCH-004 revision 5): tells the model a continuation starts with no memory, so its task is a complete brief', () => {
+    expect(capture().tool.description).toContain('A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains.');
+  });
 });
 
 /** REQ-TOOLS-152: `suppress_auto_context` omits the automatic sibling-artifact index; the call's flag reaches the engine's port. */

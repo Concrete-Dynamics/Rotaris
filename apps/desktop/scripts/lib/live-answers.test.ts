@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { INTENT_CATEGORIES, INTENT_GROUPS } from '@rotaris/contracts';
-import { answerlessCompletion, answerRows, INTENTS, intentVerdict } from './live-answers.mjs';
+import { answerlessCompletion, answerRows, INTENTS, intentVerdict, toldNoAnswer } from './live-answers.mjs';
 
 const RUN4_INTENTS_1 = '[main 2026-10-03T06:02:51.969Z] info    run host: intent: explicit_trivial (0.99) via json_schema';
 const RUN5_INTENTS_3 = '[main 2026-10-03T06:06:10.115Z] info    run host: intent: moderate_feature (fallback: the classification call timed out after 12 s)';
@@ -80,6 +80,12 @@ describe('a run that completed without the model writing an answer (run 2 of 202
     expect(answerlessCompletion(completed, [...run2, { kind: 'agent', body: 'ok' }], terminal)).toBe(true);
   });
 
+  it('PD-ORCH-006 (OQ-199 as ruled): the product tells the person, in a system row, and the proof can tell a run that said so from one that did not', () => {
+    expect(toldNoAnswer(run2)).toBe(false);
+    expect(toldNoAnswer([...run2, { kind: 'system', body: 'The run ended without an answer: orchestrator ended its turn without writing one, even when asked once more.' }])).toBe(true);
+    expect(toldNoAnswer([...run2, { kind: 'agent', body: 'The run ended without an answer: quoted by the model' }])).toBe(false);
+  });
+
   it('is not when the product did not complete the run, or wrote no terminal pair: those stay reds at once', () => {
     expect(answerlessCompletion({ execution_status: 'failed' }, run2, terminal)).toBe(false);
     expect(answerlessCompletion(completed, run2, [{ kind: 'result' }])).toBe(false);
@@ -96,6 +102,7 @@ describe('slice-proof reads its answers through this module and keeps its reds',
   });
   it('re-runs scenario 3 once on an answerless completion, keeping the first attempt, and keeps every red', () => {
     expect(proof).toMatch(/answerlessCompletion\(/);
+    expect(proof).toMatch(/toldNoAnswer\(/);
     expect(proof).toMatch(/run\.attempt-1/);
     expect(proof).toMatch(/keepRed\(/);
     expect(proof).toMatch(/slice-proof-reds/);

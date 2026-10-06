@@ -50,7 +50,7 @@ This is not a defect of the code against a requirement. The continuation's empty
 2 says, no requirement fixes the wording of the offer or of `delegate`'s description, and REQ-SANDBOX-060 leaves reads
 unrestricted. It is a further case of the owner's question "Do the specification's fixed figures still hold when the
 model on the critical path reasons before it answers?" in
-[`docs/architecture/open-questions.md`](../architecture/open-questions.md). That question already records that a
+[`docs/architecture/open-questions.md`](../../architecture/open-questions.md). That question already records that a
 continuation starts from nothing. This case adds that the parent is not told so, and what the continuation then did. The
 build proceeds under the current behaviour, unchanged until the owner rules. No code and no wording is changed here.
 
@@ -104,3 +104,25 @@ PASS, 0 FAIL, 5 NOTE) briefed its one continuation as if it remembered again; fi
 
 Recorded as evidence only. What a continuation is given and what its parent is told stay the owner's to rule; the build
 proceeds under the current behaviour.
+
+## Repaired: ruled and built (2026-10-06)
+
+The owner ruled OQ-114 as recommended on 2026-10-06 ([R-071](../../product/requests.md#r-071)): every figure that question
+names is kept for this release, and the parent is told that a continuation starts with no memory, so that it writes a
+complete brief. Written as [`PD-ORCH-004`](../../product/directives.md#pd-orch-004) revision 5 ("What the parent is told
+of a continuation") and built on branch `fin20-continue-and-continuation`:
+
+- **The continuation offer** (`cutOffReport` in `packages/engine/src/children/cut-off.ts`) now reads, after the
+  `continuation_of` instruction: "The continuation starts with no memory of this child's work: it is given only the task
+  you write, so write a complete brief — what was asked, what this child did and found, and what remains."
+- **`delegate`'s description** (`packages/agent-tools/src/tools/delegation.ts`) says, after the `continuation_of`
+  sentence: "A continuation starts with no memory of the child it continues: write its task as a complete brief of what
+  was asked, what that child did and found, and what remains."
+- What a continuation is given is unchanged: nothing of the continued child is injected (revision 2). Whether an agent's
+  terminal may read the product's own data directory was not asked here and is not changed (REQ-SANDBOX-060).
+
+Pinned by `packages/engine/src/children/cut-off.test.ts` ("OQ-114 as ruled …: the offer tells the parent that a
+continuation starts with no memory …") and `packages/agent-tools/src/tools/delegation.test.ts` ("OQ-114 as ruled …: tells
+the model a continuation starts with no memory …"), each red on the wording before. A live duress run should now show
+each continuation's brief restating what its predecessor did and found rather than "You had already …", and no terminal
+call of a continuation on the product's data directory.

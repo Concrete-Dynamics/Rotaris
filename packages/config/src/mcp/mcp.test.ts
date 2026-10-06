@@ -206,6 +206,13 @@ describe('REQ-MCP-082/083/087/088/090 — secrets and the environment', () => {
     expect(readSecretsFile('x', 'global', () => 'not: [valid').value).toEqual([]);
     expect(readSecretsFile('x', 'global', () => null).value).toEqual([]);
   });
+  it('the merge keys a server and a key apart, and its source carries no NUL byte Git would read as binary', () => {
+    // docs/defects/fixed/the-secret-merge-keys-carry-literal-nul-bytes-so-git-treats-their-file-as-binary.md
+    const s = (server: string, key: string, scope: 'global' | 'workspace') => ({ server, key, value: `${server}|${key}`, scope });
+    const merged = mergeSecrets([s('a b', 'c', 'global'), s('a', 'b c', 'global')], [s('a', 'b c', 'workspace')]);
+    expect(merged.map((e) => `${e.server}/${e.key}@${e.scope}`)).toEqual(['a b/c@global', 'a/b c@workspace']);
+    expect(readFileSync(new URL('./environment.ts', import.meta.url)).includes(0)).toBe(false);
+  });
   it('a full-value ${VAR} expands or omits the key; other values kept; secrets overlay last', () => {
     const env = resolveServerEnvironment(entry({ env: { A: '${SET}', B: '${UNSET}', C: 'lit-${SET}', D: 'plain' } }), { SET: 'v' }, { D: 'secret', E: 's2' });
     expect(env).toEqual({ A: 'v', C: 'lit-${SET}', D: 'secret', E: 's2' });

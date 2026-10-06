@@ -21,3 +21,16 @@ None contradicted. The defect is in the repository's reviewability, not in the p
 
 - `packages/config/src/mcp/environment.ts` — `mergeSecrets`, the two template literals with the NUL separator.
 - `packages/config/src/mcp/mcp.test.ts` — the merge's tests, which would pin the escape's equivalence.
+
+## Repaired — 2026-10-06 (fin21, bundle `fin21-leftover-notes`)
+
+`mergeSecrets` writes its separator as the escape `\u0000` in both template literals; the string at run time is the same
+NUL, and `tr -cd '\000' < packages/config/src/mcp/environment.ts | wc -c` now answers 0. A scan of every tracked `.ts`,
+`.tsx`, `.mjs`, `.js`, `.cjs`, `.md`, `.json`, `.yaml`, `.yml` and `.css` file found no other NUL byte. The commit that
+makes the change is itself still shown as `Binary files differ` (its old side holds the bytes); every later change to
+the file diffs as text.
+
+Pinned by `packages/config/src/mcp/mcp.test.ts`, "the merge keys a server and a key apart, and its source carries no NUL
+byte Git would read as binary": `a b`/`c` and `a`/`b c` stay two entries (they would collide under a printable
+separator such as a space), and the module's source bytes hold no NUL (red before the repair: "expected true to be
+false").

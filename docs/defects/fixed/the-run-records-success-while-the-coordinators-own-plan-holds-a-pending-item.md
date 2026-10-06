@@ -22,6 +22,8 @@ Live-run finding: G5 of the final default live run at origin/main `27a5127` (202
   a positive value, a correction message is sent into the same conversation up to that many times first."
 - `REQ-ORCH-069` (1) and `REQ-ORCH-082` (3) read success off the planner's tasks; `REQ-ORCH-068` gives an iteration three
   ways to resolve its task (complete, given up on, returned to the pending queue).
+- `REQ-ORCH-153`: a held run's plan cycle is one turn of the entry role under planning grants, which keep "the todo state"
+  writable, so the plan the coordinator writes there is the plan of the task it plans.
 
 ## Evidence
 
@@ -85,6 +87,17 @@ three resolutions that is the pending return; REQ-ORCH-077 gives the task up at 
   queued prompt's done work recorded abandoned), and a re-queued task taken up by a later run took its own leftover item as
   excused and completed beside `[COMPLETED, PENDING]` (G5 again). Excused items stay open in the plan; nothing marks them
   done. A task first taken up by a build without the record has none, so every open item is held against it.
+- **A plan cycle is the take-up of the tasks it plans (REQ-ORCH-153; repair round 3).** The second form took a task's first
+  take-up to be the first iteration no row names it in. A plan cycle writes no iteration row, so in plan mode the first
+  execution iteration after approval found every item the coordinator had written as its plan already open and excused
+  it. The verifier of repair round 3 reproduced it: a plan cycle writing `[PENDING, PENDING]`, approval, and a root that
+  answers "All done." without touching the plan gave `succeeded` and `completed` / `tasks_complete` beside
+  `[PENDING, PENDING]`. That is G5 whole, on every plan-mode run. Now `Run.planCycleTakeUp` runs before the plan cycle's turn
+  and records what is open then as `planExcused` on each pending planner task that has no record and no iteration row yet.
+  What the turn writes is therefore the task's own. The record's presence is the take-up: it is now kept even when empty,
+  and `Run.takeUp` writes none for a task that already carries one. So a revise cycle, and the plan cycle after a resumed
+  iteration (PD-ORCH-003 revision 2), keep the record the first cycle wrote, and the plan they leave as it stands still holds
+  the task.
 - Under a `single` override the entry role is the worker (REQ-ORCH-025) and REQ-ORCH-029 does not bind it: the override
   reaches the run as `RunDeps.coordinating` (`RuntimePosture.runOverride`, `packages/engine/src/sessions.ts`, filled by the
   run host's `runtimeFromConfiguration`, which already carried it), and such a run completes as before.
@@ -125,12 +138,21 @@ Pinned by `packages/engine/src/run/coordinator-plan.test.ts`:
 - a task re-queued with its own item open, taken up again by a later run (the first ended at its iteration limit), is not
   marked complete when its root answers without touching the plan (`partial, partial`), and that root is told the item;
 - with `validationRetries` 1, the correction goes into the root's own conversation and the iteration closes `succeeded`
-  with nothing re-queued; a correction left unanswered is followed by the re-queue (`partial, succeeded`);
+  with nothing re-queued; a correction left unanswered is followed by the re-queue (`partial, succeeded`); a run built with
+  one tool port and no children (`RunDeps.tools`, no `toolsFor`) sends the correction too;
+- in plan mode, the plan the cycle writes holds the task after approval: a root that answers without finishing it closes
+  `partial`, its next root is told both items, finishes them, and the run completes (`partial, succeeded`);
+- a revise cycle that leaves the first cycle's plan as it stands keeps the first cycle's take-up (`partial, succeeded`);
+- a plan cycle re-armed after a task was given up on excuses the item that task left open and holds the one the cycle wrote
+  (`partial, partial, abandoned, partial, succeeded`);
 - an `ABANDONED` item is terminal; a `single` run completes on its first iteration.
 
 The first two fail without the repair (each run ended after one `succeeded` iteration); the queued-prompt and earlier-run
 cases fail on the first form of the repair (`partial, partial, abandoned, partial, failed` with the script exhausted); the
 resumed case fails if the resumed iteration takes what is open at the resume as excused; the continue-after-pause and
-later-run cases fail on the second form (`3d25edf`), and so do both correction cases (no correction was sent). The helpers by
+later-run cases fail on the second form (`3d25edf`), and so do both correction cases (no correction was sent). The three
+plan-mode cases fail on the third form (`1ef341a`): `succeeded` alone for the first two, `partial, partial, abandoned,
+succeeded` for the re-armed one. The no-children correction case fails when that path skips the correction
+(`partial, succeeded`). The helpers by
 `packages/engine/src/run/run-pure.test.ts`. The built app shows the repair in the next default live run's `terminal`
 scenario (the orchestrator's; an agent's live-run launch is refused).

@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
-import { RUN_CONFIG_DEFAULTS, Sessions, type RuntimePosture, type ToolPort, type ToolPortContext } from '../index.js';
+import { ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type RuntimePosture, type ToolPort, type ToolPortContext } from '../index.js';
 import { decodeStoredTodo, projectSessionTodos, type AgentTodoDocument } from '../todo-view.js';
 
 /**
@@ -42,9 +42,9 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  function sessionsWith(calls: ScriptedCall[], runOverride: 'single' | 'swarm' | null = null, gate?: (callId: string) => Promise<void>, config: Partial<typeof RUN_CONFIG_DEFAULTS> = {}) {
+  function sessionsWith(calls: ScriptedCall[], runOverride: 'single' | 'swarm' | null = null, gate?: (callId: string) => Promise<void>, config: Partial<typeof RUN_CONFIG_DEFAULTS> = {}, runStartMode: 'auto' | 'plan' = 'auto') {
     const client = new ScriptedModelClient(calls);
-    const runtime: RuntimePosture = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runOverride };
+    const runtime: RuntimePosture = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runOverride, runStartMode };
     // The `todo` tool as the run host's is to the run: it writes the root's plan through the context's `writeTodo`.
     const portFor = (ctx: ToolPortContext): ToolPort => ({
       specs: () => [{ name: 'todo', description: 'the plan', parameters: { type: 'object' } }],
@@ -240,6 +240,118 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
     expect((await sessions.running(sid)!).status).toBe('completed');
     expect(outcomes(sid)).toEqual(['partial', 'succeeded']);
+  });
+
+  it('REQ-ORCH-153 / REQ-ORCH-075 (OQ-203): the plan the coordinator writes in its plan cycle is the planned task\'s own — a root that answers without finishing it after approval does not complete the run', async () => {
+    const { sessions, client } = sessionsWith([
+      // The plan cycle: the coordinator writes its plan as its todo list (REQ-ORCH-153 keeps the todo state writable).
+      writePlan('p1', ['PENDING', 'PENDING']), answer('Step 1: run the sequence. Step 2: report each outcome.'),
+      // After approval: the first root answers without touching the plan; the next finishes it.
+      answer('All done.'),
+      writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
+    ], null, undefined, {}, 'plan');
+    const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+    expect(agentStates(sid)).toEqual(['PENDING', 'PENDING']);
+    expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    // Without the repair the first take-up after approval found the plan cycle's items open, excused them, and the run read
+    // completed / tasks_complete beside [PENDING, PENDING] — finding G5 on every plan-mode run.
+    expect(outcomes(sid)).toEqual(['partial', 'succeeded']);
+    expect(dal.getSession(sid)).toMatchObject({ execution_status: 'completed', stop_reason: 'tasks_complete' });
+    expect(agentStates(sid)).toEqual(['COMPLETED', 'COMPLETED']);
+    // The second fresh root is told both items its plan cycle wrote and the first root left open.
+    const second = firstUser(client.requests[3]!);
+    expect(second).toContain('Run the sequence');
+    expect(second).toContain('Report each command\'s outcome in one line');
+  });
+
+  it('REQ-ORCH-154 / REQ-ORCH-075 (OQ-203): a revise cycle keeps the take-up the first cycle recorded, so the plan it leaves as it stands is still the task\'s own', async () => {
+    const { sessions } = sessionsWith([
+      writePlan('p1', ['PENDING', 'PENDING']), answer('Step 1: run the sequence. Step 2: report.'),
+      // The revise cycle answers with the revised text and leaves the todo list as the first cycle wrote it.
+      answer('Revised: Step 1, run the sequence quietly. Step 2: report.'),
+      answer('All done.'),
+      writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
+    ], null, undefined, {}, 'plan');
+    const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(sessions.planDecision(sid, 'revise', 'run it quietly').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+    expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    // A take-up recorded at the revise cycle would have found the first cycle's items open and excused them.
+    expect(outcomes(sid)).toEqual(['partial', 'succeeded']);
+    expect(agentStates(sid)).toEqual(['COMPLETED', 'COMPLETED']);
+  });
+
+  it('REQ-ORCH-153 / REQ-ORCH-075 (OQ-203): what was open before a re-armed plan cycle is excused for the task it plans; what the cycle writes is not', async () => {
+    const calls: ScriptedCall[] = [];
+    // Run 1, in plan mode: the cycle leaves the plan alone; after approval task A leaves its second item in progress three times.
+    calls.push(answer('Step 1: run the sequence.'));
+    for (let i = 0; i < 3; i++) calls.push(writePlan(`a${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'));
+    // Run 2, re-armed: its plan cycle adds an item of its own; after approval the root answers without finishing it, then does.
+    calls.push(writePlan('p2', ['COMPLETED', 'IN_PROGRESS', 'PENDING']), answer('Step 1: write the changelog.'));
+    calls.push(answer('Changelog written.'));
+    calls.push(writePlan('b1', ['COMPLETED', 'IN_PROGRESS', 'COMPLETED']), answer('Changelog written; its item is complete.'));
+    const { sessions } = sessionsWith(calls, null, undefined, {}, 'plan');
+    const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(outcomes(sid)).toEqual(['partial', 'partial', 'abandoned']);
+    expect(sessions.planRearm(sid)).toEqual({ ok: true, value: true });
+    expect(sessions.prompt(sid, 'write the changelog').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+    expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+    await sessions.running(sid)!;
+    // The item A left open is not held against the changelog's task; the item its plan cycle wrote is, until it is done.
+    expect(outcomes(sid)).toEqual(['partial', 'partial', 'abandoned', 'partial', 'succeeded']);
+    const ends = dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; outcome: string; summary: string });
+    expect(ends[3]).toMatchObject({ outcome: 'partial', summary: 'the coordinator answered with 1 item of its plan not done: A third item' });
+    expect(agentStates(sid)).toEqual(['COMPLETED', 'IN_PROGRESS', 'COMPLETED']);
+  });
+
+  it('REQ-ORCH-078: a run built without per-agent tool ports (no children) sends the correction into the root\'s conversation too', async () => {
+    const sid = asSessionId('S-plan-no-children');
+    const client = new ScriptedModelClient([
+      writePlan('c1', ['COMPLETED', 'PENDING']), answer('Here is each command\'s outcome.'),
+      writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
+    ]);
+    const publisher = { increment: () => undefined, snapshot: () => undefined };
+    const bus = new Sessions({ clocks: clock, publisher, pid: 1, host: HOST, retentionCap: 0, warn: () => undefined, mintSessionId: () => 'x', model: null, sessionFilesDir: () => dir }).bus;
+    let owner: ProjectionOwner | undefined;
+    let run: Run | undefined;
+    const created = SessionWriter.create({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: (c) => { owner?.onCommitted(c); run?.onCommitted(c); } }, { workspaceRoot: 'C:/ws', pid: 1, host: HOST, task: 'run the sequence' });
+    if (!created.ok) throw new Error('create');
+    owner = new ProjectionOwner({ sessionId: sid, seq: new SequenceCounters(), timers: clock, publisher, readSession: () => toSessionRecord(dal.getSession(sid)!), readResident: () => dal.residentRows(sid).map(toTranscriptRow) });
+    // One port for the whole run (`RunDeps.tools`, no `toolsFor`): the root's `todo` writes the root's plan.
+    const tools: ToolPort = {
+      specs: () => [{ name: 'todo', description: 'the plan', parameters: { type: 'object' } }],
+      dispatch: async (call) => {
+        const args = JSON.parse(call.rawArgs) as { states: Parameters<typeof plan>[0] };
+        const written = run?.replaceAgentTodo(null, true, plan(args.states)) ?? false;
+        return { text: written ? 'Plan updated.' : 'not written', isError: !written, status: written ? 'ok' : 'failed', durationMs: 0, label: 'todo', args };
+      },
+      cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+    };
+    run = new Run({
+      sessionId: sid, workspaceRoot: 'C:/ws', task: 'run the sequence', taskId: 'T', writer: created.value, owner, bus, clocks: clock, backend: new DefaultAgentBackend(client),
+      config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', validationRetries: 1 }, tools,
+      permission: { requested: 'ask', effective: 'ask', downgraded: false, reason: '', sandboxed: false, sandboxBackend: '' }, pid: 1, host: HOST, readSession: () => dal.getSession(sid), warn: () => undefined,
+    });
+    expect((await run.start()).status).toBe('completed');
+    // One iteration: the correction was answered in the root's own conversation, so nothing was re-queued.
+    expect(outcomes(sid)).toEqual(['succeeded']);
+    expect(client.requests).toHaveLength(4);
+    const corrected = client.requests[2]!;
+    const last = corrected.messages[corrected.messages.length - 1]!;
+    expect(last.role).toBe('user');
+    expect(last.content.map((c) => (c.kind === 'text' ? c.text : '')).join('')).toContain('Report each command\'s outcome in one line');
+    expect(corrected.messages.some((m) => m.role === 'assistant' && m.content.some((c) => c.kind === 'text' && c.text.includes('Here is each command')))).toBe(true);
   });
 
   it('an item ABANDONED is terminal: the run completes', async () => {

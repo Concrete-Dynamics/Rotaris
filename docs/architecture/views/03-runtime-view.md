@@ -234,9 +234,11 @@ REQ-ORCH-069 and REQ-ORCH-082 read success off the planner's tasks, so the task 
 (`todo.requeue`, abandoned at the consecutive-retry limit, when `lastFailure` names the open items and the session reads
 failed), `iteration.end` carries `planNotDoneSummary`, and the same task's next fresh root is told REQ-ORCH-075's marker after
 its task (`Task.planLeftOpen` → `planCarry` → `planCarryText` in `firstMessage`). The plan is the session's, so a task answers
-only for the items that were not already open when it was first taken up (`Task.planExcused`, written by `Run.takeUp` at the
-iteration no row names the task in yet; OQ-203): an item a given-up task or an earlier run left open is neither carried to nor
-held against a later task, and one the task's own iteration left open always holds it. Both records live on the planner task
+only for the items that were not already open when it was first taken up (`Task.planExcused`, OQ-203). The first take-up is
+the plan cycle that planned the task (`Run.planCycleTakeUp`, before the cycle's turn, for each pending task with no record
+yet), else the iteration that takes it up with no record and no row naming it (`Run.takeUp`); a revise cycle keeps the record
+the first cycle wrote. An item a given-up task or an earlier run left open is neither carried to nor held against a later
+task, and one the task's plan cycle wrote or its own iteration left open always holds it. Both records live on the planner task
 in the stored todo, so the iteration a continue resumes, and a fresh iteration of a re-queued task in a later run, read them
 back; both are removed when the task completes or is given up on. Under a `single` override (`RuntimePosture.runOverride`,
 `RunDeps.coordinating: false`) the entry role is the worker and nothing of this applies (REQ-ORCH-025).

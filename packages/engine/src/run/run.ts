@@ -2159,20 +2159,42 @@ export class Run {
 
   /**
    * REQ-ORCH-075 with REQ-ORCH-029 and REQ-ORCH-067 (OQ-203): a task's first take-up records, with the task, the items of the
-   * coordinator's plan already open then, which are not held against it (`Task.planExcused`). The first take-up is the one
-   * no iteration row of the session names the task in yet; every later one — the iteration a continue resumes, a fresh
-   * iteration of a re-queued task, in this run or a later one — reads the record back from the stored todo, so an item its
-   * own earlier iteration left open still holds it, and one a given-up task or an earlier run left open never does. A
-   * record that is not empty is saved at once, so a crash before the task's next save does not lose it.
+   * coordinator's plan already open then, which are not held against it (`Task.planExcused`). The first take-up is the plan
+   * cycle that planned the task (`planCycleTakeUp`), or else the iteration that takes it up while it carries no record and no
+   * iteration row of the session names it yet; every later one — the iteration a continue resumes, a fresh iteration of a
+   * re-queued task, in this run or a later one — reads the record back from the stored todo, so an item its plan cycle wrote
+   * or its own earlier iteration left open still holds it, and one a given-up task or an earlier run left open never does.
+   * The record is saved at once, so a crash before the task's next save does not lose it.
    */
   private takeUp(task: Task, resumed: boolean): void {
-    const dal = this.deps.dal;
-    const taken = resumed || (dal ? dal.iterationsOf(this.sessionId).some((row) => row.todo_task_id === task.id) : task.consecutiveRetries > 0);
-    if (taken) return;
-    const open = [...openPlanIds(this.coordinatorPlan())];
-    if (open.length === 0) { delete task.planExcused; return; }
-    task.planExcused = open;
+    if (resumed || task.planExcused !== undefined || this.iterationNamed(task)) return;
+    task.planExcused = [...openPlanIds(this.coordinatorPlan())];
     this.saveRunning({});
+  }
+
+  /**
+   * REQ-ORCH-153 with REQ-ORCH-075 and REQ-ORCH-029 (OQ-203): a plan cycle is the take-up of the tasks it plans. Its turn is
+   * the coordinator's, under planning grants that keep the todo state writable, so the plan it writes there is those tasks'
+   * own: what was open BEFORE the turn is recorded as excused for each pending task not yet taken up, and what the turn
+   * writes is not — so the first iteration after approval does not find the plan cycle's items open and excuse them (found by
+   * the verifier of fin18's second repair round: every plan-mode run read completed beside its untouched plan). A task that
+   * already carries a record (a revise cycle's, or one a resumed iteration's plan cycle plans again) keeps it.
+   */
+  private planCycleTakeUp(): void {
+    const open = [...openPlanIds(this.coordinatorPlan())];
+    let recorded = false;
+    for (const task of this.todo.pendingTasks()) {
+      if (task.planExcused !== undefined || this.iterationNamed(task)) continue;
+      task.planExcused = [...open];
+      recorded = true;
+    }
+    if (recorded) this.saveRunning({});
+  }
+
+  /** Whether an iteration row of the session names `task` — a task a build before the take-up record took up has only that. */
+  private iterationNamed(task: Task): boolean {
+    const dal = this.deps.dal;
+    return dal ? dal.iterationsOf(this.sessionId).some((row) => row.todo_task_id === task.id) : task.consecutiveRetries > 0;
   }
 
   /** The tool port calls these for the exact root or child conversation it belongs to. */
@@ -2472,6 +2494,8 @@ export class Run {
         { kind: 'text', text: preamble },
         ...(this.deps.taskContent ?? [{ kind: 'text' as const, text: this.deps.task }]),
       ];
+      // REQ-ORCH-075 (OQ-203): the cycle takes up the tasks it plans, before its turn writes the plan they will answer for.
+      this.planCycleTakeUp();
       const report = await this.turn(`${preamble}\n\n${this.deps.task}`, 0, content);
       plan = report.status === 'failed' ? '' : report.text.trim();
       // REQ-NOTIFY-070: a plan cycle's turn is the root's model call too, so its failure records the model it was calling,

@@ -9747,12 +9747,15 @@ belong to which task. The verifier reproduced the literal reading with a queued 
 on: outcomes `partial, partial, abandoned, partial, partial, abandoned`, the second task's done work recorded as abandoned.
 
 **What the build proceeds under.** A task answers for every open item of the plan that was not already open when the task
-was first taken up — its first iteration in the session, the one no iteration row names it in yet — and for no other. That
-take-up record is kept with the planner task in the stored todo (`Task.planExcused`, `packages/engine/src/run/todo.ts`;
+was first taken up, and for no other. Its first take-up is the plan cycle that planned it, where one did (REQ-ORCH-153: the
+cycle is the coordinator's turn and its grants keep the todo state writable, so the plan it writes there is the planned
+task's own); otherwise its first iteration in the session, the one no iteration row names it in yet. That take-up record is
+kept with the planner task in the stored todo (`Task.planExcused`, `packages/engine/src/run/todo.ts`; `Run.planCycleTakeUp`,
 `Run.takeUp` and `openPlanItems`'s `excused`, `packages/engine/src/run/`), so every later iteration of the task reads the same
-record back: the one a continue resumes, and a fresh iteration of the re-queued task in the same run or a later one. An item
-the task opened, or one its own earlier iteration left open, therefore always holds it; an item a given-up task, an earlier
-run or anything else left open before the task was first taken up never does. The continuation that names the open items
+record back: the one a continue resumes, and a fresh iteration of the re-queued task in the same run or a later one. A revise
+cycle, and the plan cycle after a resumed iteration (PD-ORCH-003 revision 2), keep a record a task already carries. An item
+the task's plan cycle wrote, one the task opened, or one its own earlier iteration left open, therefore always holds it; an
+item a given-up task, an earlier run or anything else left open before the task was first taken up never does. The continuation that names the open items
 (REQ-ORCH-075's marker) is kept with the task too (`Task.planLeftOpen`), goes to the same task's next fresh root only, and is
 dropped when the task completes or is given up on. An excused item is not altered: it stays open in the plan the Todo pane
 counts, and a run in which a task was given up on reads failed by REQ-ORCH-082 anyway. A task first taken up by a build
@@ -9760,10 +9763,17 @@ before this record existed has none, so every open item is held against it. Pinn
 `packages/engine/src/run/coordinator-plan.test.ts`. (The first form of this reading held the record in the run's memory, so
 the run a continue built had none: an iteration it resumed held a given-up task's item against its own task, and a fresh
 iteration of a re-queued task in a later run took the task's own leftover item as excused and completed beside it. The
-verifier of fin18's second repair round reproduced both; the record has been kept with the task since.)
+verifier of fin18's second repair round reproduced both; the record has been kept with the task since. The second form took
+the first iteration as the first take-up even in plan mode, so the items the plan cycle wrote were recorded as already open
+and excused, and every plan-mode run read completed beside its untouched plan; the verifier of the third round reproduced it,
+and the plan cycle has counted as the take-up of the tasks it plans since.)
 
 **What a ruling decides.** Whether REQ-ORCH-075 and REQ-ORCH-029 range over the whole session plan (and a stale item then
 blocks every later task, or must be closed by someone before the run can succeed) or over the items a task owns, and if the
 latter, how ownership is decided and recorded: by what was open at the task's first take-up (as built, kept with the planner task), by a
 mark on the item (REQ-TOOLS-144's schema has no field for it), or otherwise; and whether a person's own addition to the agent
-plan (REQ-CHAT-090) during a task is held against it, as it is built now.
+plan (REQ-CHAT-090) during a task is held against it, as it is built now. Ownership by id meets one case the build cannot
+tell apart: REQ-TOOLS-146's `replace` keeps a `COMPLETED`, `IN_PROGRESS` or `ABANDONED` item by id, but a `PENDING` item
+re-listed in the documented id-less shape is given a new id (`packages/agent-tools/src/tools/todo.ts`), so a `PENDING` item a
+given-up task left, re-listed by the next task's root, stops being excused and counts against that task. A ruling decides
+whether such a re-listed item is the new task's (it re-wrote it) or still the earlier task's.

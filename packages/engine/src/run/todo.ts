@@ -48,9 +48,10 @@ export interface Task {
   message?: true;
   /**
    * REQ-ORCH-075 with REQ-ORCH-029 and REQ-ORCH-067 (OQ-203): the ids of the coordinator's plan items already open when this
-   * task was first taken up, which are not held against it. Kept with the task in the stored todo, so the iteration a
-   * continue resumes and a later run's fresh iteration read the same record back; absent when nothing was open then, and
-   * removed when the task completes or is given up on.
+   * task was first taken up — by its first iteration, or by the plan cycle that planned it before any iteration did
+   * (REQ-ORCH-153) — which are not held against it. Kept with the task in the stored todo, so the iteration a continue
+   * resumes and a later run's fresh iteration read the same record back; its presence is the record that the task has been
+   * taken up (empty when nothing was open then), and it is removed when the task completes or is given up on.
    */
   planExcused?: string[];
   /**
@@ -303,6 +304,11 @@ export class Todo {
   /** REQ-ORCH-067: the texts of the pending tasks, in the order selection takes them up. */
   pendingTexts(): string[] {
     return this.pendingInOrder().map((t) => t.text);
+  }
+
+  /** REQ-ORCH-067: the pending tasks themselves, in the order selection takes them up (what a plan cycle plans). */
+  pendingTasks(): Task[] {
+    return this.pendingInOrder();
   }
 
   private pendingInOrder(): Task[] {

@@ -49,7 +49,8 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 `Run.iterate` returns a task whose root answered `succeeded` with an item of its own plan open to the pending queue, once
 REQ-ORCH-078's corrections into the root's own conversation are spent (`RunConfig.validationRetries`, default 0; a `followUp`
 that `IterationChildren.runWithChildren` now takes). It names the open items in `iteration.end` and tells the same task's next
-root (`Task.planLeftOpen`); a task answers only for items not already open at its first take-up (`Task.planExcused`, OQ-203).
+root (`Task.planLeftOpen`); a task answers only for items not already open at its first take-up (`Task.planExcused`, OQ-203),
+which is the plan cycle that planned it where one did (`Run.planCycleTakeUp`), so a plan-mode run's plan is its task's own.
 Both records live on the planner task in the stored todo, so a continue and a later run read them back. `RuntimePosture.runOverride`
 reaches the run as `RunDeps.coordinating`, false under `single`. The **runtime view**'s loop diagram and its paragraph say
 so. No package, edge, process, channel, command or store column changed (the planner todo's JSON gains two optional task

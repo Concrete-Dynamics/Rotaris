@@ -4939,11 +4939,14 @@ meanwhile.*
 > this directive, `PD-CHAT-009` or `PD-TOOLS-011`. `AWAITING` is empty, so a new name fails the gate again. Its test
 > checks that each cited directive's entry states its word in backticks, as it already checked a requirement's, and that
 > this entry and the gate state the split of twenty-eight held and five raised beside them. Nothing in the rule was
-> wrong. The issue kinds are not gated: no gate reads an issue's kind, and every other kind the product writes is named
-> by a requirement of its own domain (read once, by hand, on this day). The row is in
-> [`../architecture/first-executions.md`](../architecture/first-executions.md). *Corrected in place 2026-10-06, before it
-> landed (the verifier's review): this entry first gave the sum, thirty-three, as the count the product wrote under no
-> word and the gate moved, where twenty-eight were held and five raised beside them.*
+> wrong. The issue kinds are not gated: no gate reads an issue's kind. Every other kind the product writes is named by a
+> requirement of its own domain but one, `resumed_under_changed_instructions`, which [`PD-ORCH-005`](#pd-orch-005)
+> clause 14 coined and OQ-105's ruling kept as built (revision 7): that directive's word, as this entry's three are its
+> own (read by hand on this day, over the source of `f94ab75`, and again of `395b73e` once `fin21` had landed). The row
+> is in [`../architecture/first-executions.md`](../architecture/first-executions.md). *Corrected in place 2026-10-06,
+> before it landed (the verifier's review): this entry first gave the sum, thirty-three, as the count the product wrote
+> under no word and the gate moved, where twenty-eight were held and five raised beside them; and it said every other
+> issue kind was named by a requirement, which a second reading of the kinds found untrue of PD-ORCH-005's one.*
 
 ---
 

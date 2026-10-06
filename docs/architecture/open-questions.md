@@ -8737,7 +8737,16 @@ poll a soft-paused command with an empty `command` or to interrupt it with `C-c`
 once a poll hands it over; OQ-144, whose handshake already writes one no-op line of the product's own to a fresh shell.
 Raised 2026-10-01 by the repair of
 [`a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`](../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md),
-as OQ-167, and renumbered OQ-168 at its merge because `origin/main` had taken OQ-167 meanwhile. Open.)*
+as OQ-167, and renumbered OQ-168 at its merge because `origin/main` had taken OQ-167 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the Linux behaviour stays — the product's own
+no-op line is written, on a poll or while the interrupted call still runs, only once `/proc` says the shell holds its
+terminal again — and on Windows and macOS nothing is written: the poll stays the soft pause and says, ahead of
+REQ-TOOLS-098's explanation, that the command may have ended and that the next command run in the session reports how,
+until a Windows machine has measured the line. Read with it: a Linux whose `/proc` does not answer is treated as those
+hosts are, and the terminal window's interrupt keeps marking the call as the agent's does. The requirements are silent on a
+line of the product's own, so no directive is minted. Built the same day (`ForegroundSession.poll`, `SessionDeps.platform`,
+`INTERRUPT_UNSEEN_NOTE`; three "(OQ-168, ruled)" cases in `terminal/terminal.test.ts` over the platform switch).
 
 An interactive shell that takes an interrupt abandons the rest of the wrapper's line, so the paused call's end frame never
 prints, and nothing else in the PTY's stream says the line is done. Before the repair every poll between the `C-c` and the

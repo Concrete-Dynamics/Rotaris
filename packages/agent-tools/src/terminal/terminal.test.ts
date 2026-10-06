@@ -6,12 +6,12 @@ import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
-import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, posixShellArgs, printsMarker, processIdentity, snapshotCommand, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
+import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, posixShellArgs, printsMarker, processIdentity, shellHoldsTerminal, snapshotCommand, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
 import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
 import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
-import { findShell, nodePtyFactory, seconds, TerminalManager, terminalDescription, terminalTool, TERMINAL_DEFAULTS, type BackgroundSession } from './index.js';
+import { findShell, INTERRUPT_UNSEEN_NOTE, nodePtyFactory, seconds, TerminalManager, terminalDescription, terminalTool, TERMINAL_DEFAULTS, type BackgroundSession } from './index.js';
 import type { ToolContext } from '../tools/types.js';
 import type { ConfinementPort } from '../confinement/index.js';
 
@@ -1051,6 +1051,71 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       await new Promise((res) => setTimeout(res, 1_000));
       const poll = await t.execute(args({ command: '' }), ctx());
       expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'soft_pause' });
+      expect(diag((await t.execute(args({ command: 'hello\r', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      await new Promise((res) => setTimeout(res, 1_000));
+      const answered = await t.execute(args({ command: '' }), ctx());
+      expect(diag(answered.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(output(answered.text)).toContain('got:hello');
+      expect(answered.text).not.toContain('__rot_');
+    } finally { await m.dispose(); }
+  }, 60_000);
+
+  // OQ-168 (ruled 2026-10-06, R-071): only where the host says the shell holds its terminal again (Linux's
+  // `/proc`) does a poll after an interrupt write the product's own no-op line. On Windows and macOS nothing says who holds
+  // it, and before the ruling the poll wrote the line whatever held the terminal; now it writes nothing and says the command
+  // may have ended and that the next command reports how. This host is Linux, so the session is told it runs on the other
+  // host (`TerminalManagerDeps.platform`) and the same PTY and shell exercise that branch.
+  it('OQ-168: only Linux can say whether the shell holds its terminal; Windows and macOS cannot', () => {
+    expect(shellHoldsTerminal(process.pid, 'win32')).toBeNull();
+    expect(shellHoldsTerminal(process.pid, 'darwin')).toBeNull();
+  });
+
+  it.skipIf(PS).each(['win32', 'darwin'] as const)('REQ-TOOLS-096/098 (OQ-168, ruled): on %s a poll after C-c writes nothing, says the command may have ended, and the next command reports how it ended', async (platform) => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined, platform });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    try {
+      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+      expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      const session = m.session('s1:orchestrator', root);
+      let tapped = '';
+      const untap = session.onOutput((chunk) => { tapped += chunk; });
+      expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      await new Promise((res) => setTimeout(res, 1_500));
+      const poll = await t.execute(args({ command: '' }), ctx());
+      untap();
+      // Still the soft pause, in the ruling's words, and nothing of the product's own reached the session.
+      expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'soft_pause' });
+      // The ruling's sentence leads; with an empty capture REQ-TOOLS-098's explanation follows it whole, and with output (the
+      // echoed `^C`) nothing says the command is still running.
+      const detail = String(diag(poll.text)['detail']);
+      expect(detail.startsWith(`${INTERRUPT_UNSEEN_NOTE} `)).toBe(true);
+      if (output(poll.text) === '(no output)') for (const kept of ['stdout and stderr are both captured', 'The process may still be running', 'Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.']) expect(detail).toContain(kept);
+      else expect(detail).not.toContain('is still running');
+      expect(String(diag((await t.execute(args({ command: '' }), ctx())).text)['detail'])).toContain('The process may still be running');
+      expect(poll.text).not.toContain('without an exit status of its own');
+      expect(tapped).not.toContain('__rot_');
+      // A second poll says the same: no line is ever written for it.
+      expect(String(diag((await t.execute(args({ command: '' }), ctx())).text)['detail']).startsWith(INTERRUPT_UNSEEN_NOTE)).toBe(true);
+      // The next command reports how the paused one ended, beside its own outcome.
+      const next = await t.execute(args({ command: SH.echo('after'), timeout: 15 }), ctx());
+      expect(diag(next.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(String(diag(next.text)['detail'])).toContain('with no exit status of its own');
+      expect(output(next.text)).toContain('after');
+      expect((await t.execute(args({ command: '' }), ctx())).text).toContain('No paused command to poll.');
+    } finally { await m.dispose(); }
+  }, 60_000);
+
+  it.skipIf(PS)('REQ-TOOLS-096/098 (OQ-168, ruled): on Windows a poll after C-c writes nothing into a program that survived the interrupt and still reads its input', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined, platform: 'win32' });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    try {
+      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+      expect(diag((await t.execute(args({ command: `sh -c 'trap "" INT; read line; printf "got:%s\\n" "$line"'` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      await new Promise((res) => setTimeout(res, 1_000));
+      const poll = await t.execute(args({ command: '' }), ctx());
+      expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'soft_pause' });
+      expect(String(diag(poll.text)['detail']).startsWith(INTERRUPT_UNSEEN_NOTE)).toBe(true);
       expect(diag((await t.execute(args({ command: 'hello\r', is_input: true }), ctx())).text)['exit_code']).toBe(0);
       await new Promise((res) => setTimeout(res, 1_000));
       const answered = await t.execute(args({ command: '' }), ctx());

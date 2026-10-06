@@ -58,6 +58,13 @@ export interface ForegroundResult {
   /** OQ-144: the command replaced the session's shell; the program was ended and the shell restarted. */
   readonly replaced?: true;
   /**
+   * OQ-168 (ruled 2026-10-06, R-071): a poll of a paused command an interrupt (`C-c`) reached, on a host that cannot
+   * see whether the shell holds its terminal again — Windows and macOS, where nothing like Linux's `/proc` says. Nothing
+   * was written into the session to find out, so the command may have ended; the next command run in the session reports
+   * how (OQ-164's `earlier`). Absent on every other result.
+   */
+  readonly interruptUnseen?: true;
+  /**
    * OQ-144 (the shell-exit case): the command — or, on a poll, the paused command — ended the session's shell (`exit`, a
    * signal to it), `'command'`; or the shell ended before the command ran, a soft-paused command ahead of it having ended
    * it, `'before'` (OQ-164). The shell was respawned with PD-TOOLS-001's snapshot re-applied, or, on a poll whose session
@@ -129,8 +136,8 @@ export function processIdentity(pid: number): string | null {
  * interrupt this says whether the interrupted program has gone or is still reading the terminal (a REPL that caught the
  * `C-c`). Null where `/proc` does not say: every host but Linux, or a process that has gone.
  */
-export function shellHoldsTerminal(pid: number): boolean | null {
-  if (process.platform !== 'linux') return null;
+export function shellHoldsTerminal(pid: number, platform: NodeJS.Platform = process.platform): boolean | null {
+  if (platform !== 'linux') return null;
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, 'latin1');
     // `pid (comm) state ppid pgrp session tty_nr tpgid …` — `comm` may hold spaces and parentheses, so the fields are
@@ -233,6 +240,12 @@ export interface SessionDeps {
   /** ADR-0021's emulator, the same adapter the live stream runs: what a call's capture is read off. */
   readonly emulator: EmulatorFactory;
   readonly warn: (m: string) => void;
+  /**
+   * The host the session runs on, `process.platform` where absent. OQ-168's ruling decides by it whether a poll after
+   * an interrupt may write the product's own no-op line (Linux, once `/proc` says the shell holds its terminal again) or
+   * writes nothing (Windows, macOS); a test names another host to pin that branch on this one.
+   */
+  readonly platform?: NodeJS.Platform;
 }
 
 /**
@@ -1405,7 +1418,7 @@ export class ForegroundSession {
           const look = () => {
             lookForEnd = null;
             if (this.active !== active || active.closer !== null) return;
-            const holds = shellHoldsTerminal(p.pid);
+            const holds = shellHoldsTerminal(p.pid, this.deps.platform ?? process.platform);
             if (holds === null) return;
             if (holds) { closer = this.submitCloser(p); active.closer = closer; return; }
             lookForEnd = timers.after(INTERRUPT_WATCH_MS as Millis, look);
@@ -1611,21 +1624,31 @@ export class ForegroundSession {
     const chain = this.openPaused();
     const open = this.pausedCommand;
     const pty = this.pty;
+    let unseen = false;
     if (open !== null && chain.some((c) => c.interrupted) && chain.every((c) => c.closer === null) && this.active === null && pty !== null) {
       // A poll made at once after the `C-c` can meet a shell still waiting on the dying program; it waits a short, bounded
       // while for the shell to take its terminal back (`INTERRUPT_SETTLE_MS`).
-      let holds = shellHoldsTerminal(pty.pid);
+      const platform = this.deps.platform ?? process.platform;
+      let holds = shellHoldsTerminal(pty.pid, platform);
       const by = this.deps.monotonic.now() + INTERRUPT_SETTLE_MS;
       while (holds === false && this.deps.monotonic.now() < by) {
         await new Promise<void>((res) => { this.deps.timers.after(25 as Millis, res); });
-        holds = shellHoldsTerminal(pty.pid);
+        holds = shellHoldsTerminal(pty.pid, platform);
       }
-      if (holds !== false && this.pausedCommand === open && open.closer === null && this.active === null && this.pty === pty) await this.findInterruptedEnd(open, pty);
+      // OQ-168 (ruled 2026-10-06, R-071): the product's own no-op line is written only once the host says the shell
+      // holds its terminal again (Linux's `/proc`). Where nothing says who holds it — Windows and macOS — nothing is written:
+      // a line written there could become the input of a program that survived the interrupt, and how PowerShell treats
+      // `C-c` mid-line is unmeasured. The poll says instead that the command may have ended and that the next command run in
+      // the session reports how (`interruptUnseen`). Before the ruling a poll there wrote the line whatever held the
+      // terminal (`holds !== false`), the build's reading while OQ-168 was open.
+      if (holds === true && this.pausedCommand === open && open.closer === null && this.active === null && this.pty === pty) await this.findInterruptedEnd(open, pty);
+      else if (holds === null) unseen = true;
     }
     // OQ-164: paused commands ahead of the polled one — ended and not reported, or still running — are reported beside it.
     const earlier = await this.drainEarlier(null, false);
     const withEarlier = (r: ForegroundResult): ForegroundResult => (earlier.length === 0 ? r : { ...r, earlier });
-    return withEarlier(await this.pollSubject());
+    const subject = await this.pollSubject();
+    return withEarlier(unseen && subject.softPaused ? { ...subject, interruptUnseen: true } : subject);
   }
 
   /** REQ-TOOLS-098's poll of the paused command itself (`poll`). */
@@ -1667,7 +1690,7 @@ export class ForegroundSession {
    * The repair of `a-poll-after-c-c-says-the-interrupted-command-is-still-running` (OQ-147). An interrupt makes an
    * interactive `sh` abandon the rest of the paused call's line, so its end frame never prints, and until the next call's
    * printed start marker closed it every poll read "still running" over a process that had died. A poll after an
-   * interrupt, once the shell holds its terminal again (`shellHoldsTerminal`; unknown where `/proc` does not say), submits
+   * interrupt, once the shell holds its terminal again (`shellHoldsTerminal`; never where `/proc` does not say, OQ-168's ruling), submits
    * one no-op line of the product's own, as OQ-144's handshake does: the shell reaches it only once the paused line is
    * done, so its printed start marker closes the paused call (`onData`, `closer`) and the poll hands it over with OQ-147's
    * reading. Its echo and its frames are dropped from the poll (`until`, `withoutEchoedWrappers`) and from the live stream

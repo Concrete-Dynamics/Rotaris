@@ -411,6 +411,18 @@ to `INTERRUPT_SETTLE_MS` for the shell before it decides. Pinned by three more "
 three red before the change. Off Linux a running call writes nothing, and a timed call still runs out its cap
 ([OQ-168](../open-questions.md)).*
 
+*Reported back 2026-10-06, OQ-168 ruled by the owner ([R-071](../../product/requests.md#r-071)) as recommended: **"off
+Linux nothing says who holds the terminal and the line is submitted at the poll" no longer holds** (kept above beside its
+replacement). The no-op line is written only once the host says the shell holds its terminal again — Linux's `/proc`, as
+before. On Windows and macOS a poll after an interrupt writes nothing: a line written there could become the input of a
+program that survived the interrupt, and how PowerShell treats `C-c` mid-line is unmeasured. The poll stays the soft pause
+and leads its detail with the ruling's sentence — the command may have ended, and the next command run in the session
+reports how (`INTERRUPT_UNSEEN_NOTE`, `ForegroundResult.interruptUnseen`), OQ-164's report of a paused command's end doing
+the reporting. A Linux whose `/proc` does not answer is read the same way. The host is a session dependency
+(`SessionDeps.platform`, `TerminalManagerDeps.platform`), so the branch is pinned on this Linux host by three
+"(OQ-168, ruled)" cases in `terminal.test.ts` over a real PTY told it runs on `win32` or `darwin`, each red under the
+write-anyway reading. Still unmeasured on a Windows or macOS host.*
+
 *Reported back 2026-10-01, the repair of
 [`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll`](../../defects/fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)
 (reasoned when it was recorded, measured now with a PTY double): **the soft pause handed its call over across an await.**

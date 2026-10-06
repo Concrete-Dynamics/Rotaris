@@ -78,6 +78,8 @@ export interface TerminalManagerDeps {
   readonly warn: (m: string) => void;
   /** Part AL / ADR-0021: the headless emulator behind every live stream; the `@xterm/headless` adapter unless a test supplies one. */
   readonly emulator?: EmulatorFactory;
+  /** The host, `process.platform` unless a test names another to pin OQ-168's ruled branch for it (`SessionDeps.platform`). */
+  readonly platform?: NodeJS.Platform;
 }
 
 /** One foreground session per agent (REQ-TOOLS-187); the background sessions per workspace; the live streams (ADR-0021). */
@@ -137,6 +139,7 @@ export class TerminalManager {
         ...(this.deps.config.noOutputWindowMs === undefined ? {} : { noOutputWindowMs: this.deps.config.noOutputWindowMs }),
         // ADR-0021: the agent's own capture is read off the same headless emulator the live stream runs.
         emulator: this.deps.emulator ?? xtermEmulatorFactory, warn: this.deps.warn,
+        ...(this.deps.platform === undefined ? {} : { platform: this.deps.platform }),
       });
       this.foreground.set(key, s);
     }
@@ -310,6 +313,13 @@ function relabelIfLauncherFailed(confined: boolean, failureKind: FailureKind | n
 }
 
 /** REQ-SANDBOX-085's detail: the cause lies in the host's configuration, not in the command. */
+/**
+ * OQ-168 (ruled 2026-10-06, R-071): a poll after an interrupt on a host that cannot see whether the shell holds its terminal
+ * again (Windows, macOS) writes nothing into the session, and says so ahead of REQ-TOOLS-098's soft-pause explanation, which
+ * it keeps whole: the command may have ended, and the next command run in the session reports how it ended, beside its own
+ * outcome (OQ-164's report of a paused command's end).
+ */
+export const INTERRUPT_UNSEEN_NOTE = 'An interrupt (C-c) was sent to this command, and on this system the terminal cannot show whether the command has ended without typing a line of its own into the session, which it does not do, so the command may have ended. The next command you run in this session reports how it ended, beside its own result.';
 const LAUNCHER_FAILED_DETAIL = 'Confinement could not be started, so the command never executed. The cause lies in the host\'s configuration rather than in the command; neither retrying nor rewording the command changes the outcome.';
 
 /**
@@ -438,6 +448,11 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
           : r.waited
             ? `No new output in ${seconds(r.waited.sinceObservedMs)} since the previous observation, and none for ${seconds(r.waited.silentMs)} in the merged terminal stream; stdout and stderr are both captured. A poll returns at once rather than waiting for output. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`
             : `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds in the merged terminal stream; stdout and stderr are both captured. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`;
+        // OQ-168 (ruled 2026-10-06): an interrupt reached the paused command on a host that cannot see whether it has ended,
+        // and nothing was written into the session to find out, so the poll says the command may have ended and that the next
+        // command reports how, ahead of the explanation above.
+        // With output, "The command is still running" would say what the poll cannot know; the output's sentence drops it.
+        if (r.interruptUnseen) detail = `${INTERRUPT_UNSEEN_NOTE} ${r.output !== '' ? 'This is its output since it was last observed. Poll again with an empty command.' : detail}`;
       } else if (r.replaced) {
         // OQ-144 (acceptance A9): REQ-TOOLS-103's failure before completion, and what became of the session, so the agent
         // knows the shell the description names is the one its next call runs in (REQ-TOOLS-104).

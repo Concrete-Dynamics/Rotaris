@@ -450,6 +450,30 @@ const notRepo = await launch('not-a-repository', plain, local, preferences, { RO
   results.notRepository = { header: 'not a git repository', notice: false, emptyStates: 2, strip: text(p, '[data-testid="strip-branch"]')[0], png: notRepo.png };
   try { rmSync(plainRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* scratch left to the temp folder */ }
 }
+// 6c. A repository before its first commit (an unborn branch): REQ-WORKSPACE-029's branch name is empty, and REQ-WORKSPACE-020
+// renders the item as empty text — no icon, no arrow, no tooltip; PD-WORKSPACE-008's words name other states only. Until fin22
+// the item drew the branch icon and a branch named `—`, "Branch this workspace is on: —."
+// (`docs/defects/fixed/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md`). Outside this
+// repository, for the reason 6b gives.
+const STRIP_BRANCH_EMPTY = '[data-testid="strip-branch"][data-branch-state="empty"][aria-label="Checked-out branch"]';
+const STRIP_BRANCH_TITLED = '[data-testid="strip-branch"][title]';
+const STRIP_BRANCH_DESCRIBED = '[data-testid="strip-branch"][aria-description]';
+const unbornRoot = mkdtempSync(join(tmpdir(), 'rotaris-git-proof-unborn-'));
+const unborn = join(unbornRoot, 'unborn');
+mkdirSync(join(unborn, '.rotaris'), { recursive: true });
+writeFileSync(join(unborn, '.rotaris', 'agents.yaml'), readFileSync(join(workspace, '.rotaris', 'agents.yaml'), 'utf8'));
+git(unborn, 'init', '-q', '-b', 'main');
+const unbornRun = await launch('unborn-branch', unborn, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' }, 120_000, [STRIP_BRANCH_EMPTY, STRIP_BRANCH_TITLED, STRIP_BRANCH_DESCRIBED]);
+{
+  const p = unbornRun.probes;
+  if (!/git view: \d+ reads in \d+ ms/.test(unbornRun.log)) throw new Error('the unborn repository was never read');
+  if ((p[STRIP_BRANCH_EMPTY] ?? []).length !== 1) throw new Error(`for an unborn branch the strip's branch item is not the empty item: ${JSON.stringify(p['[data-testid="strip-branch"]'] ?? [])}`);
+  if (text(p, '[data-testid="strip-branch"]')[0] !== '') throw new Error(`for an unborn branch the strip's branch item reads "${text(p, '[data-testid="strip-branch"]')[0]}"`);
+  if ((p[STRIP_BRANCH_ICON] ?? []).length !== 0) throw new Error('for an unborn branch the strip\'s branch item draws a branch icon');
+  if ((p[STRIP_BRANCH_TITLED] ?? []).length !== 0 || (p[STRIP_BRANCH_DESCRIBED] ?? []).length !== 0) throw new Error('for an unborn branch the strip\'s branch item carries a tooltip or an accessible description');
+  results.unbornBranch = { strip: '', icon: false, tooltip: false, description: false, png: unbornRun.png };
+  try { rmSync(unbornRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* scratch left to the temp folder */ }
+}
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 2));

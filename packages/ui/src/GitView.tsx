@@ -187,9 +187,9 @@ export const WORKTREE_BRANCH_NOTE = 'It belongs to the isolated worktree the act
  * workspace's checked-out branch with `↑<n>` when ahead; a detached checkout and a non-repository are each conveyed
  * in words distinct from a branch name and from each other; an unread repository takes the empty value. Those three
  * states follow REQ-GIT-161, where REQ-WORKSPACE-020 would render the item empty with no tooltip (OQ-193, ruled as built
- * 2026-10-06; PD-WORKSPACE-008). An unborn or unreadable branch is not among them and still owes REQ-WORKSPACE-020's empty
- * item; the last line draws it as a branch named `—`, recorded in
- * docs/defects/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md.
+ * 2026-10-06; PD-WORKSPACE-008). An unborn or unreadable branch is not among them and takes REQ-WORKSPACE-020's empty
+ * item (state `empty`: no text, no icon, no tooltip, no description); until fin22 it was drawn as a branch named `—`
+ * (docs/defects/fixed/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md).
  *
  * REQ-WORKSPACE-020: a worktree branch is "rendered exactly as any other branch name is" — its ` ↑{n}` and its sentences are
  * the base checkout's, the count read against THAT branch's upstream (the snapshot row's `upstreamAhead`, never the base
@@ -198,7 +198,7 @@ export const WORKTREE_BRANCH_NOTE = 'It belongs to the isolated worktree the act
  * (F8, 2026-10-03) the worktree branch had no marker and one sentence of its own for both, "Branch this session's worktree is
  * on: {branch}".
  */
-export function branchStripItem(state: GitViewState | null, focusedWorktreeBranch: string | null): { text: string; suffix?: string; title: string; description: string; state: 'branch' | 'detached' | 'none' | 'unknown' } {
+export function branchStripItem(state: GitViewState | null, focusedWorktreeBranch: string | null): { text: string; suffix?: string; title: string; description: string; state: 'branch' | 'detached' | 'none' | 'unknown' | 'empty' } {
   // REQ-WORKSPACE-149 rule 2 shortens the branch NAME; the ` ↑{n}` marker is drawn after it, whole (`suffix`).
   const named = (branch: string, ahead: number) => ({ text: branch, ...(ahead > 0 ? { suffix: ` ↑${ahead}` } : {}), title: branchSentence(branch, ahead), state: 'branch' as const });
   if (focusedWorktreeBranch !== null) {
@@ -211,7 +211,11 @@ export function branchStripItem(state: GitViewState | null, focusedWorktreeBranc
   if (state === null) return plain({ text: '—', title: 'Branch this workspace is on: not read yet', state: 'unknown' as const });
   if (!state.isRepository) return plain({ text: state.gitAvailable ? 'no git repository' : 'no git', title: state.gitAvailable ? 'This folder is not a Git repository.' : 'Git is not installed or not on PATH.', state: 'none' as const });
   if (state.detached) return plain({ text: 'detached HEAD', title: 'This workspace is on no branch (detached HEAD).', state: 'detached' as const });
-  return plain(named(state.branch ?? '—', state.ahead));
+  // REQ-WORKSPACE-020's empty item — no text, no icon, no arrow, no tooltip — for an unborn branch (REQ-WORKSPACE-029's empty
+  // name), and REQ-GIT-161's empty value of REQ-GIT-112 for a branch that could not be read: PD-WORKSPACE-008 names neither.
+  // Until fin22 both drew a branch named `—` ("Branch this workspace is on: —."), with the branch icon.
+  if (state.branch === null || state.branch === '') return { text: '', title: '', description: '', state: 'empty' as const };
+  return plain(named(state.branch, state.ahead));
 }
 
 const NO_ROWS: readonly GitWorktreeRow[] = [];

@@ -37,6 +37,16 @@ describe('the status strip\'s branch item, drawn (REQ-GIT-161, REQ-WORKSPACE-149
     }
   });
 
+  it('REQ-WORKSPACE-020: the empty item (an unborn branch) draws no text, no icon, no tooltip and no description, and keeps its name', () => {
+    const html = branchMarkup({ text: '', title: '', description: '', state: 'empty' });
+    expect(html).not.toContain('ph-git-branch');
+    expect(html).not.toContain('title=');
+    expect(html).not.toContain('aria-description');
+    expect(html).not.toContain('data-middle');
+    expect(html).toContain('aria-label="Checked-out branch"');
+    expect(html).toMatch(/data-testid="strip-branch"><\/span>$/u);
+  });
+
   it('draws a branch name as a rule-2 label after the accent icon, its ahead marker a whole suffix', () => {
     const html = branchMarkup({ text: 'main', suffix: ' ↑1', title: 'Branch this workspace is on: main, 1 commit ahead.', state: 'branch' });
     expect(html).toContain('data-middle="1"');

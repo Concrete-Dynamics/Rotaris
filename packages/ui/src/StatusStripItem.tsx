@@ -23,7 +23,8 @@ import { rowLabel } from './workspace-label.js';
  * measurement), so the measurement also re-runs when the document finishes loading a font (`document.fonts`
  * `loadingdone`): a swapped-in face measures differently from the fallback the first measurement used. (Until the
  * 2026-10-03 repair round this comment claimed the observer covered "a theme moving a font"; it does not.) The tooltip
- * and the accessible description always carry the full text (REQ-SHELL-022).
+ * and the accessible description always carry the full text (REQ-SHELL-022). An item with no tooltip — the branch item's
+ * empty state, REQ-WORKSPACE-020 — draws neither attribute rather than an empty one.
  *
  * The path link gives up its width before the branch name (shell.css), and where rule 2 hides the link's label the link
  * is hidden whole (`data-label-hidden`) rather than left an empty focus stop.
@@ -85,6 +86,6 @@ export function StatusStripItem({ item }: { readonly item: Exclude<StripItem, { 
   }
   return (
     <span ref={setBox} className="status-strip__item" data-elide={elide} data-middle={middle ? '1' : undefined} style={sizing}
-      aria-label={item.name} aria-description={item.description ?? item.title} title={item.title} data-branch-state={item.state} data-figure={item.figure ? '1' : undefined} data-strong={item.strong ? '1' : undefined} data-testid={item.testId}>{content}</span>
+      aria-label={item.name} aria-description={(item.description ?? item.title) || undefined} title={item.title || undefined} data-branch-state={item.state} data-figure={item.figure ? '1' : undefined} data-strong={item.strong ? '1' : undefined} data-testid={item.testId}>{content}</span>
   );
 }

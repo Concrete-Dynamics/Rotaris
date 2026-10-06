@@ -36,3 +36,21 @@ the detached, non-repository, no-git and unread states) does not name this state
 - `packages/workspace/src/git/view.ts`: the branch read (`rev-parse --abbrev-ref HEAD`), `branch` null on a failed read.
 - `packages/ui/src/ui.test.ts`: the branch item's cases, none for this state.
 - `docs/product/directives.md` (`PD-WORKSPACE-008`), `docs/architecture/open-questions.md` (OQ-193's ruling).
+
+## Outcome
+
+Repaired 2026-10-06 (fin22, bundle `fin22-window-strip-config`). The words come from REQ-WORKSPACE-020 and REQ-GIT-161, and
+OQ-193's ruling (`PD-WORKSPACE-008`) names neither state, so no question was left open: an unborn branch (REQ-WORKSPACE-029's
+empty branch name) and a branch that could not be read (REQ-GIT-161's "empty value of REQ-GIT-112") are REQ-WORKSPACE-020's
+empty item. `branchStripItem` (`packages/ui/src/GitView.tsx`) answers state `empty` with no text, no tooltip and no
+description where a repository's snapshot carries no branch name and no detached HEAD; `stripItems` draws the branch icon
+for state `branch` only, so none is drawn; and `StatusStripItem` (`packages/ui/src/StatusStripItem.tsx`) draws no `title`
+and no `aria-description` for an empty string, rather than empty attributes. The item keeps its accessible name, "Checked-out
+branch". The detached, non-repository, no-git and unread states are unchanged.
+
+Pinned by `packages/ui/src/ui.test.ts` ("an unborn branch, or a branch that could not be read, is the empty item") and
+`packages/ui/src/StatusStripItem.test.ts` ("the empty item … draws no text, no icon, no tooltip and no description"), both
+failing on the previous code. Shown by `pnpm git-proof`'s new launch 6c (`unborn-branch`): a fresh `git init` outside the
+repository, whose strip item is `[data-branch-state="empty"]` with empty text, no `ph-git-branch` icon, and no `title` or
+`aria-description` (`results.unbornBranch`; the photograph `unborn-branch.png` shows the strip with the path and no branch
+item text).

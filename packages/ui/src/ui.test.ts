@@ -293,6 +293,12 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
     expect(branchStripItem(state({ isRepository: false, gitAvailable: false }), null)).toMatchObject({ text: 'no git', state: 'none' });
     expect(branchStripItem(null, null)).toMatchObject({ state: 'unknown' });
   });
+  it('REQ-WORKSPACE-020 / REQ-GIT-161: an unborn branch, or a branch that could not be read, is the empty item — no text, no tooltip, no description', () => {
+    // Until fin22 both fell through to `named('—', …)` and drew a branch named `—`, "Branch this workspace is on: —.".
+    const empty = branchStripItem(state({ branch: null, detached: false, ahead: 0 }), null);
+    expect(empty).toEqual({ text: '', title: '', description: '', state: 'empty' });
+    expect(branchStripItem(state({ branch: null, detached: false, ahead: 2 }), null)).toEqual({ text: '', title: '', description: '', state: 'empty' });
+  });
   it('REQ-WORKSPACE-020: an isolated worktree\'s branch takes ITS upstream\'s ahead count and the base checkout\'s sentences; only the description names the worktree', () => {
     // Until the acceptance repair (F8) the item drew the worktree branch with no ` ↑{n}` and one string for tooltip and
     // description, "Branch this session's worktree is on: {branch}".

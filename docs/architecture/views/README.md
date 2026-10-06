@@ -62,6 +62,12 @@ log at `INFO`). The **runtime view**'s stall-watch paragraph and its `timeline` 
 REQ-MONITOR-120's "logged" is met when the session log keeps its default `WARNING` level. No package, edge, process,
 channel, command or store column changed.
 
+**An unborn or unreadable branch is the strip's empty branch item (REQ-WORKSPACE-020, REQ-GIT-161; fin22).**
+`branchStripItem` answers state `empty` — no text, no tooltip, no description — where a repository's snapshot carries no
+branch name and no detached HEAD, and `StatusStripItem` draws no `title` and no `aria-description` for an empty string; until
+then the item drew the branch icon and a branch named `—`. The **seams view**'s status-strip item says so. No package,
+edge, process, channel, command or store column changed.
+
 **A person's close of the last main window asks the active-run confirmation (REQ-STARTUP-046, REQ-SHELL-119; OQ-205
 raised, fin22).** `guardClose` takes a third guard, `confirmRunsAtClose`, asked after the renderer's unsaved-settings guard
 allows; main answers it from the run host's `runs.active` and `activeRunCloseBox` (`main/close-confirmation.ts`) when no

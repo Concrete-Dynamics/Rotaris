@@ -11,7 +11,8 @@ import { STEER_EARLY_CLICKS, STEER_EARLY_TYPE, SUBSCRIBE_HOLD_MS, steerEarlyRead
 
 /**
  * The control channel's first execution in the built app (Part J step 3): a queued message consumed at the
- * iteration boundary; a steer reaching the entry role; a graceful pause and the composer's Continue; a steer still
+ * iteration boundary; a steer reaching the entry role; a graceful pause and the composer's Continue, which carries the
+ * launch's intent unclassified with no changed-instructions warning (OQ-162, OQ-105); a steer still
  * pending at a pause, delivered into the root's record and read by the resumed root, which carries on with its next
  * scripted step; the
  * message-limit pause with its dialog answered "double", then the relaunch finding a session paused at the
@@ -221,7 +222,17 @@ await launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_
   const session = db.prepare('SELECT session_id, execution_status, stop_reason FROM sessions').get();
   const rows = db.prepare("SELECT body FROM transcript_rows WHERE session_id = ? AND kind = 'system'").all(session.session_id).map((r) => r.body);
   const list = names(db, session.session_id);
+  // OQ-162 and OQ-105 as ruled (R-071, PD-ORCH-005 revision 7 clauses 40 and 14): the Continue action resumes the paused
+  // iteration with the launch's intent, carried without classifying; no agent is said to resume under changed
+  // instructions; and every fingerprint is of a persona's own definition (marked `persona:`).
+  const launchIntent = JSON.parse(db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(session.session_id)?.payload ?? 'null')?.run_intent ?? null;
+  const carried = db.prepare("SELECT metadata FROM timeline WHERE session_id = ? AND name = 'run_continuation_intent' ORDER BY ordinal").all(session.session_id).map((r) => JSON.parse(r.metadata)?.run_intent ?? null);
+  const changed = db.prepare("SELECT COUNT(*) AS n FROM issues WHERE session_id = ? AND kind = 'resumed_under_changed_instructions'").get(session.session_id).n;
+  const prints = db.prepare('SELECT instructions, tools FROM agent_fingerprints WHERE session_id = ?').all(session.session_id);
   db.close();
+  if (launchIntent === null || carried.length === 0 || carried.some((i) => i === null || i.carried_over !== true || i.category !== launchIntent.category || !String(i.reason).includes('without classifying again'))) throw new Error(`the Continue did not carry the launch's intent unclassified: ${JSON.stringify({ launchIntent, carried })}`);
+  if (changed !== 0) throw new Error(`the Continue raised ${changed} resumed_under_changed_instructions issue(s)`);
+  if (prints.length === 0 || prints.some((p) => !p.instructions.startsWith('persona:') || !p.tools.startsWith('persona:'))) throw new Error(`a fingerprint is not of a persona's definition: ${JSON.stringify(prints)}`);
   if (!rows.some((b) => b.includes("paused at the user's request"))) throw new Error(`no pause row: ${rows.join(' | ')}`);
   if (!list.includes('run_pause_requested') || list.filter((n) => n === 'run_start').length < 2) throw new Error(`the pause and the continuation are not both recorded: ${list.join(',')}`);
   if (session.execution_status !== 'completed') throw new Error(`the continued run did not complete: ${JSON.stringify(session)}`);
@@ -236,7 +247,7 @@ await launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_
   // which the notice carries, names no stop beside the row that says the run paused — one message for every rest a person asks for.
   const restSummary = samples.find((x) => x.runStarts === 1 && x.status === 'paused')?.summary ?? null;
   if (restSummary !== "The run came to rest at the user's request.") throw new Error(`the paused session's summary reads ${JSON.stringify(restSummary)}`);
-  results.pause = { status: session.execution_status, runStarts: list.filter((n) => n === 'run_start').length, lockWhileContinued: [...new Set(continued.map((x) => x.lock))], restSummary, samples };
+  results.pause = { status: session.execution_status, runStarts: list.filter((n) => n === 'run_start').length, carriedIntent: carried, fingerprints: prints.length, lockWhileContinued: [...new Set(continued.map((x) => x.lock))], restSummary, samples };
 }
 
 // 3b. A steer still pending when the run comes to rest (the repair of a-steering-prompt-pending-at-a-rest-is-lost.md,

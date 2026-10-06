@@ -2279,8 +2279,10 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   /*
    * The fin20 verifier's finding against PD-ORCH-008 (`docs/defects/fixed/a-replaced-attempts-completed-calls-hide-the-retrys-unfinished-call-from-the-count.md`):
    * the settle counted `priorCalls + Math.max(made, live)`, so a replaced attempt with no outcome but completed calls (in
-   * `live`) covered a call the retry started and never completed (in `made`). Each attempt's remainder — its outcome's
-   * count less the calls it completed — is now counted on its own.
+   * `live`) covered a call the retry started and never completed (in `made`). Each attempt's remainder is now counted on
+   * its own: every call its turns counted (`TurnDeps.onToolCounted`, a replay included) less the calls it completed,
+   * with or without an outcome. (The first repair took "its outcome's count less the calls it completed"; repair round 1
+   * falsified that, since an attempt that raised leaves no outcome to count from.)
    */
   it('PD-ORCH-008: the retry\'s call answered from a replay is counted beside the calls the replaced attempt completed, its outcome lost', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
@@ -2314,7 +2316,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(dal.getSession(sid)!.tool_calls).toBe(4);
   });
 
-  it('PD-ORCH-008: the replaced attempt\'s own unfinished call is counted from its outcome (the `spent` limb alone)', async () => {
+  it('PD-ORCH-008: the replaced attempt\'s own unfinished call is counted as one its turns counted and never completed', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
     let open!: () => void;
     const gated = new Promise<void>((r) => { open = r; });

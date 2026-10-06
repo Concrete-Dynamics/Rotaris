@@ -10416,8 +10416,8 @@ presented before anything is torn down", its text conveying "that closing the wi
 "with runs active, a user-initiated close asks 'Quit while a run is active?'"; REQ-STARTUP-161, several main windows in one
 instance; REQ-STARTUP-047 with REQ-SHELL-018, the switch's close; `PD-ORCH-005` clause 3, a quit leaves unfinished agents
 `paused`. Raised 2026-10-06 by the repair of
-[`closing-a-window-while-a-run-is-active-asks-no-confirmation.md`](../defects/fixed/closing-a-window-while-a-run-is-active-asks-no-confirmation.md)
-(fin22, bundle `fin22-window-strip-config`). Open.)*
+[`closing-a-window-while-a-run-is-active-asks-no-confirmation.md`](../defects/closing-a-window-while-a-run-is-active-asks-no-confirmation.md)
+(fin22, bundle `fin22-window-strip-config`), which stays open on it. Open.)*
 
 Both requirements were written when the instance held one main window and its close was the quit. Since REQ-STARTUP-161
 the run host keeps executing while any main window stays, and the run host's count of active runs is instance-wide

@@ -45,9 +45,16 @@ endpoint):
 `Run.start()` reads the row's `updated_at` back right after the `starting` save, before the pre-flight, and the `running`
 save writes that as `run_started_at` (`packages/engine/src/run/run.ts`). A continuation's run now starts where a launch's
 does, its classification counted, so the header's frozen value, the inspector's run-level row and the session list's
-duration label read the run's whole wall-clock duration (64.9 s for the live run's continuation, where they read 56 s).
+duration label read the run's whole wall-clock duration from its starting save (about 64.8 s for the live run's
+continuation, where they read 56 s).
 The column is still written after the pre-flight, so the cancel overlay's order (`packages/ui/src/cancel-overlay.ts`)
 holds as it was.
+
+The value is the run's `starting` save, not literally the press: what lies between the two (the click's IPC, the run host
+loading the configuration and opening the continuation) is still outside `run_started_at`, as it is for a launch. In the
+pack that is about 35 ms (the press at `resume/app.log` line 55, 01:34:27.171; "a continuation run is executing" at line 58,
+01:34:27.202; the classification request at line 60, 01:34:27.208), so the repaired header reads the run from its starting
+save, about 64.8 s for the pack's continuation rather than the 64.9 s from the press.
 
 Pinned by `packages/engine/src/run/preflight.test.ts`, "REQ-CHAT-158 / REQ-SESSION-154 (live-run finding G8): a
 continuation's run starts at its `starting` save, its pre-flight counted as a launch's is": the launch's classification

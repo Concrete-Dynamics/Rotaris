@@ -106,10 +106,41 @@ describe('REQ-CONFIG-025..030 the bootstrap', () => {
     expect(bootstrapConfigFile(join(s.workspaceRoot, '.rotaris'))).toEqual({ ok: true, value: 'declined-directory' });
     writeFileSync(s.gFile, Buffer.from([0xff, 0xfe, 0x41]));
     expect(bootstrapConfigFile(s.gFile)).toEqual({ ok: true, value: 'declined-not-utf8' });
-    // The fourteen explicit nulls do not clear the built-in slots (REQ-CONFIG-052); PD-LIBRARY-002 added two.
+    // The twelve explicit nulls do not clear the built-in slots (REQ-CONFIG-052).
     const c = loadConfiguration({ globalDir: join(tmp(), 'none'), workspaceRoot: s.workspaceRoot, keepIgnored: false });
     expect(c.ok && c.value.slots.large_model).toBe('gpt-4o');
-    expect((starterDocument().match(/: null$/gm) ?? []).length).toBe(14);
+    expect((starterDocument().match(/: null$/gm) ?? []).length).toBe(12);
+  });
+
+  // docs/defects/fixed/the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md: the
+  // starter also wrote PD-LIBRARY-002's `retrospective_model` and its companion as nulls, a directive that names neither
+  // REQ-CONFIG-025 nor REQ-WORKSPACE-038.
+  it('states default_persona then exactly REQ-WORKSPACE-038\'s twelve explicitly-null keys, in its order, and nothing else (REQ-WORKSPACE-038, REQ-CONFIG-025)', () => {
+    const body = starterDocument().split('\n').filter((l) => l !== '' && !l.startsWith('#'));
+    expect(body).toEqual([
+      'default_persona: orchestrator',
+      ...['default_summary_model', 'default_summary_model_thinking', 'large_model', 'large_model_thinking', 'medium_model', 'medium_model_thinking', 'small_model', 'small_model_thinking', 'fallback_model', 'fallback_model_thinking', 'improvement_collector_model', 'improvement_collector_model_thinking'].map((k) => `${k}: null`),
+    ]);
+    expect(starterDocument()).not.toMatch(/^retrospective_model/m);
+  });
+
+  it('leaves the retrospective slot resolving as before once the starter no longer states it (REQ-CONFIG-041, PD-LIBRARY-002)', () => {
+    const s = scope();
+    // A lower layer pins the retrospective slot; the workspace starter, with or without the two old nulls, leaves it.
+    writeFileSync(s.gFile, 'retrospective_model: gpt-4o\nretrospective_model_thinking: high\n');
+    expect(bootstrapConfigFile(s.wsFile)).toEqual({ ok: true, value: 'written' });
+    const withStarter = loadConfiguration({ globalDir: s.globalDir, workspaceRoot: s.workspaceRoot, keepIgnored: false });
+    const old = starterDocument().includes('retrospective_model: null') ? starterDocument() : `${starterDocument()}retrospective_model: null\nretrospective_model_thinking: null\n`;
+    writeFileSync(s.wsFile, old);
+    const withNulls = loadConfiguration({ globalDir: s.globalDir, workspaceRoot: s.workspaceRoot, keepIgnored: false });
+    expect(withStarter.ok && withNulls.ok).toBe(true);
+    if (withStarter.ok && withNulls.ok) {
+      // With a thinking level the slot resolves to its synthesized name (REQ-CONFIG-076); what matters is that it is the global's.
+      expect(withStarter.value.slots.retrospective_model).not.toBeNull();
+      expect(withStarter.value.slots).toEqual(withNulls.value.slots);
+      expect(withStarter.value.slotThinking.retrospective_model).toBe('high');
+      expect(withStarter.value.slotThinking).toEqual(withNulls.value.slotThinking);
+    }
   });
 
   // docs/defects/fixed/replace-document-sync-throws-when-the-parent-cannot-be-created.md: a parent that cannot be created

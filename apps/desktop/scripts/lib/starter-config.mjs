@@ -35,9 +35,13 @@ export const STARTER_HEADER = Object.freeze([
 export const STARTER_PERSONA = 'orchestrator';
 
 /**
- * The twelve keys REQ-CONFIG-025 names as explicit nulls, in its order. The product's starter also states the
- * retrospective slot and its companion (`retrospective_model`, `retrospective_model_thinking`, PD-LIBRARY-002); this
- * reader requires the twelve the requirement names and does not object to more.
+ * The twelve keys REQ-CONFIG-025 names as explicit nulls, in its order: REQ-WORKSPACE-038's "exactly the twelve". The
+ * reader requires each and names any other top-level key stated as an explicit null. Until 2026-10-06 the product's
+ * starter also wrote the retrospective slot and its companion (`retrospective_model`, `retrospective_model_thinking`,
+ * PD-LIBRARY-002, a directive naming neither requirement) as nulls and this reader did not object to more
+ * (`docs/defects/fixed/the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md`).
+ * A value a sign-in or a slot edit writes over one of the twelve is no null and is not read; nothing else the proofs run
+ * before this reader writes a top-level null.
  */
 export const STARTER_NULL_KEYS = Object.freeze([
   'default_summary_model', 'default_summary_model_thinking',
@@ -61,5 +65,7 @@ export function starterMissing(text) {
   if (header.length !== STARTER_HEADER.length || header.some((l, i) => l.trimEnd() !== STARTER_HEADER[i])) missing.push('the comment header');
   if (!lines.some((l) => new RegExp(`^default_persona:\\s*${STARTER_PERSONA}\\s*(#.*)?$`).test(l))) missing.push(`default_persona: ${STARTER_PERSONA}`);
   for (const key of STARTER_NULL_KEYS) if (!lines.some((l) => l.startsWith(`${key}:`))) missing.push(key);
+  const extra = lines.map((l) => /^([A-Za-z_][\w-]*):\s*(?:null|~)\s*(?:#.*)?$/.exec(l)?.[1]).filter((k) => k !== undefined && !STARTER_NULL_KEYS.includes(k));
+  if (extra.length > 0) missing.push(`exactly the twelve explicit nulls (it also states ${extra.join(', ')})`);
   return missing;
 }

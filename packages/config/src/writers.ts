@@ -40,6 +40,11 @@ export interface WriteOutcome {
  * real models wired up by authenticating a provider in the Settings Models category (REQ-WORKSPACE-152). The wording
  * is the implementation's; the header shipped before 2026-10-03 carried only the second fact
  * (`docs/defects/fixed/the-starter-agents-yaml-header-never-says-models-are-wired-up-by-authenticating-a-provider.md`).
+ * After `default_persona` come exactly the twelve explicitly-null keys REQ-CONFIG-025 enumerates (REQ-WORKSPACE-038). The
+ * retrospective slot and its companion (PD-LIBRARY-002) are not among them: that directive names neither requirement, so
+ * it does not govern the starter, and until 2026-10-06 the starter wrote them as a thirteenth and fourteenth null
+ * (`docs/defects/fixed/the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md`).
+ * Every one is replace-if-not-null (REQ-CONFIG-041), so the slot still resolves exactly as before.
  */
 export function starterDocument(defaultPersona = 'orchestrator'): string {
   return [
@@ -59,8 +64,6 @@ export function starterDocument(defaultPersona = 'orchestrator'): string {
     'fallback_model_thinking: null',
     'improvement_collector_model: null',
     'improvement_collector_model_thinking: null',
-    'retrospective_model: null',
-    'retrospective_model_thinking: null',
     '',
   ].join('\n');
 }

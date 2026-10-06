@@ -65,6 +65,16 @@ describe('the starter agents.yaml read by its content (REQ-CONFIG-025, REQ-WORKS
     expect(starterMissing(text)).toEqual(['small_model']);
   });
 
+  // docs/defects/fixed/the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md: the
+  // starter shipped until 2026-10-06 stated the retrospective slot and its companion as a thirteenth and fourteenth null.
+  it('names an explicit null beyond REQ-WORKSPACE-038\'s twelve — the fourteen-null starter shipped before 2026-10-06', () => {
+    const fourteen = `${starterDocument()}retrospective_model: null\nretrospective_model_thinking: null\n`;
+    expect(starterMissing(fourteen)).toEqual(['exactly the twelve explicit nulls (it also states retrospective_model, retrospective_model_thinking)']);
+    expect(starterMissing(`${starterDocument()}gatekeeper_model: ~ # a comment\n`)).toEqual(['exactly the twelve explicit nulls (it also states gatekeeper_model)']);
+    // A nested null, a set value and initialization's block are none of the starter's business.
+    expect(starterMissing(`${starterDocument()}retrospective_model: katalyst/model\nmodels:\n  retrospective_model: null\n${INITIALIZATION_ONLY}`)).toEqual([]);
+  });
+
   it('reads a CRLF file the same way', () => {
     expect(starterMissing(starterDocument().replace(/\n/g, '\r\n'))).toEqual([]);
   });

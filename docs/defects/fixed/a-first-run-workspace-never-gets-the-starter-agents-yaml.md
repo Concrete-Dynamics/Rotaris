@@ -139,8 +139,8 @@ recorded per run in the session scratchpad's `a13-slice-proof.r<N>.log`):
 
 **Left as they were:** a workspace whose file already holds only `initialization:` keeps it. REQ-CONFIG-026 forbids
 the bootstrap to write over a non-blank file, so the starter does not come back for those workspaces. Recorded beside
-this repair: the starter writes fourteen nulls where REQ-WORKSPACE-038 names exactly twelve
-([the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md](../the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md)).
+this repair: the starter writes fourteen nulls where REQ-WORKSPACE-038 names exactly twelve (repaired 2026-10-06, `finacc2-accept1-4`)
+([the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md](the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md)).
 
 ## F2: slice-proof's scenario 1, on the repaired head
 

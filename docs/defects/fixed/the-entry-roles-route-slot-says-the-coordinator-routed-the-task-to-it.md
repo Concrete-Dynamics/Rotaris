@@ -40,7 +40,21 @@ direct-work one alike. `entryCell` (`packages/engine/src/playbooks/matrix.ts`) g
 `playbookFor(role, asEntry)` hands the root turn (`Run`, `packages/engine/src/run/run.ts`) the entry form, every delegated
 child keeps `routed` (a delegated `orchestrator` included, which a coordinator did route), and the launch audit records the
 entry role's cell as the root was given it, ROUTE `entry` (REQ-ORCH-027). The BUDGET clamp is read from the same row and
-is unchanged. The variant is in the catalogue the settings interface lists, so an override may re-word it (REQ-ORCH-026).
+is unchanged.
+
+*Corrected in place by repair round 1 (the verifier's blocking finding):* the sentence above held only for a run whose
+entry persona is `orchestrator`. The pre-flight (`apps/desktop/src/run-host/intent.ts`) took the entry role as the literal
+`'orchestrator'` while the root turn asks for `playbookFor(config.persona, true)`, `config.persona` being the run's
+`default_persona` (which the composer sets per run) or the open iteration's root persona a continue restores. A run
+started as `coding-agent` was given ROUTE `entry`, audited with `routed` for `coding-agent` and with an `entry` cell for
+`orchestrator` that no agent received, and clamped by the orchestrator's BUDGET cell (REQ-ORCH-024, the older half of
+the same literal). Now `PreflightDeps.entryRole` carries the persona the root runs on (`run.model.config.persona`, from
+`apps/desktop/src/run-host/host.ts`), and it names the audited entry cell, the root's form and the BUDGET row alike; an
+entry persona with no row (REQ-ORCH-023) has no cell and so no budget, and the configured child policy stands unchanged
+(`resolvePlaybooks`, `budgetTier` `none`), where it had clamped at `normal`. Pinned by
+`apps/desktop/src/run-host/intent.test.ts` (an entry persona of `coding-agent`: its audited cell and text are the
+root's entry form, the orchestrator's is `routed`, the clamp is `coding-agent`'s `normal`, not the orchestrator's
+`tight`) and `packages/engine/src/playbooks/playbooks.test.ts` (no entry row, no clamp), both red before. The variant is in the catalogue the settings interface lists, so an override may re-word it (REQ-ORCH-026).
 
 **Pinned by** `packages/engine/src/playbooks/playbooks.test.ts` (the entry form on a coordinating, a direct-work and an
 answer intent; a delegated child keeps `routed`; an override re-words `entry` with no warning; a not-routed entry cell

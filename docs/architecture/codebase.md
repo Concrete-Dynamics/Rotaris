@@ -600,7 +600,9 @@ in `configuration.ts`'s header.)
    its instructions had said it modified nothing while its listing offered the writing tools. **Since 2026-10-06 (K3 of
    the default live run at `c2fdd6a`)** the entry role's playbook takes the catalogue's `entry` ROUTE variant (`entryCell`)
    where its row resolves `routed`, so the coordinator is no longer told "the coordinator routed it to you"; a delegated
-   child keeps `routed`.
+   child keeps `routed`. The entry role is the persona the root runs on (`PreflightDeps.entryRole`), which names the
+   audited entry cell and the BUDGET row; it was the literal `orchestrator` until that repair's verifier found a run
+   started as another persona audited with a cell no agent received.
 
 12. **lifecycle hooks (2026-09-03/04):** the set is resolved once at run start from the two `agents.yaml` scopes,
    gated on provenance (a workspace's list runs only under a stored approval keyed by its fingerprint; withheld

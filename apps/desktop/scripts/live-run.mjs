@@ -1658,6 +1658,8 @@ if (wanted.includes('frictions')) {
    * K3 of the default live run at c2fdd6a (docs/defects/fixed/the-entry-roles-route-slot-says-the-coordinator-routed-the-task-to-it.md):
    * the root's playbook told the coordinator "the coordinator routed it to you", here beside the direct-work statement
    * (PD-ORCH-006). The root's requests are the ones whose instructions carry that statement, which no child is given.
+   * The two ROUTE strings are coupled to the built-in `ROUTE.entry` and `ROUTE.routed` wording in
+   * packages/engine/src/playbooks/catalogue.ts (and fetch-proof.mjs reads the same two): re-word them together.
    */
   const systemOf = (record) => { try { const m = JSON.parse(String(record.requestBody ?? '')).messages?.[0]; return m?.role === 'system' ? (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)) : ''; } catch { return ''; } };
   const rootSystems = readTraffic('frictions').filter((r) => String(r.path ?? '').includes('/chat/completions')).map(systemOf).filter((t) => t.includes('For this run you hold the tools to read and write files and run commands yourself'));

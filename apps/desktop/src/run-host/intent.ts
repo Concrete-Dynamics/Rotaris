@@ -16,9 +16,6 @@ import type { Clocks } from '@rotaris/kernel';
  * playbook overrides live in `<config>/playbooks/` and `<workspace>/.rotaris/playbooks/`. Every read is a
  * fresh read (REQ-CONFIG-014, REQ-ORCH-026's reload).
  */
-/** REQ-ORCH-024: the role whose BUDGET cell clamps the child policy and whose cell the launch audit records as the root's. */
-const ENTRY_ROLE = 'orchestrator';
-
 export interface PreflightDeps {
   readonly clocks: Clocks;
   readonly backend: AgentBackend;
@@ -31,6 +28,14 @@ export interface PreflightDeps {
   readonly runOverride: 'single' | 'swarm' | null;
   readonly memory: RungMemory;
   readonly log: (m: string) => void;
+  /**
+   * The persona the run's root turn runs on — the run's `default_persona`, or the open iteration's root persona a continue
+   * restores (PD-ORCH-005 clause 4): the same value the engine's `config.persona` carries. Its cell is the one the root is
+   * given (`playbookFor(role, true)`), the one the launch audit records as the root's (REQ-ORCH-027), and the one whose
+   * BUDGET clamps the child policy (REQ-ORCH-024). It was the literal 'orchestrator' until the verifier of the K3 repair
+   * found a run started as another persona audited with a cell no agent received.
+   */
+  readonly entryRole: string;
 }
 
 export async function runPreflight(ctx: PreflightContext, deps: PreflightDeps): Promise<Preflight> {
@@ -52,12 +57,12 @@ export async function runPreflight(ctx: PreflightContext, deps: PreflightDeps): 
   const w = readPlaybookOverrides(join(ctx.workspaceRoot, WORKSPACE_SCOPE_DIR, 'playbooks'));
   for (const m of [...g.warnings, ...w.warnings]) warn(m);
   const tier = deps.tier;
-  const resolved = resolvePlaybooks({ intent: intent.category, tier, roles: [...ROLE_VOCABULARY], entryRole: ENTRY_ROLE, overrides: mergePlaybookOverrides(g.overrides, w.overrides) });
+  const resolved = resolvePlaybooks({ intent: intent.category, tier, roles: [...ROLE_VOCABULARY], entryRole: deps.entryRole, overrides: mergePlaybookOverrides(g.overrides, w.overrides) });
   for (const m of resolved.warnings) warn(m);
   const resolvedPlaybooks: Record<string, NonNullable<Preflight['resolvedPlaybooks'][string]> | null> = {};
-  // REQ-ORCH-027: the entry role's cell is recorded as the root is given it, its ROUTE slot `entry`.
+  // REQ-ORCH-027: the entry persona's cell is recorded as the root is given it, its ROUTE slot `entry`; every other role's as a delegated child is.
   for (const [role, p] of Object.entries(resolved.perRole)) {
-    const given = role === ENTRY_ROLE ? resolved.asEntry[role] ?? null : p;
+    const given = role === deps.entryRole ? resolved.asEntry[role] ?? null : p;
     resolvedPlaybooks[role] = given ? { row: given.row, cell: given.cell, text: given.text } : null;
   }
   return {

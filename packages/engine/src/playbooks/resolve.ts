@@ -33,8 +33,9 @@ export interface ResolvedPlaybooks {
    * through `entryCell` (`entry` in place of `routed`; K3 of the default live run at c2fdd6a). Null where `perRole` is.
    */
   readonly asEntry: Readonly<Record<string, ResolvedPlaybook | null>>;
-  /** REQ-ORCH-024: the entry role's BUDGET cell as a clamp; null = wide, no clamp. */
+  /** REQ-ORCH-024: the entry role's BUDGET cell as a clamp; null = wide, an unresolvable variant, or no entry row: no clamp. */
   readonly budgetCell: Budget | null;
+  /** The entry role's BUDGET variant; `none` when the entry role has no row. */
   readonly budgetTier: string;
   readonly warnings: readonly string[];
 }
@@ -70,9 +71,11 @@ export function resolvePlaybooks(input: ResolveInput): ResolvedPlaybooks {
     const asRoot = renderPlaybook({ role, cell: entryCell(cell), tier: input.tier, catalogue, consumer });
     asEntry[role] = { row, cell: asRoot.cell, text: asRoot.text };
   }
-  const entry = asEntry[input.entryRole];
-  const budgetTier = entry?.cell.BUDGET ?? 'normal';
+  // REQ-ORCH-024: the BUDGET of the cell the entry role is given; an entry role with no row (REQ-ORCH-023) has no cell and
+  // so no budget to resolve, and the configured child policy stands unchanged (`none`).
+  const entry = asEntry[input.entryRole] ?? null;
+  const budgetTier = entry?.cell.BUDGET ?? 'none';
   const budgetCell = budgetTier in BUDGET_CELLS ? BUDGET_CELLS[budgetTier]! : null;
-  if (!(budgetTier in BUDGET_CELLS)) warnings.push(`the BUDGET variant '${budgetTier}' is not a budget tier; the configured child policy stands unchanged (REQ-ORCH-024)`);
+  if (entry !== null && !(budgetTier in BUDGET_CELLS)) warnings.push(`the BUDGET variant '${budgetTier}' is not a budget tier; the configured child policy stands unchanged (REQ-ORCH-024)`);
   return { intent: input.intent, tier: input.tier, workerRole, perRole, asEntry, budgetCell, budgetTier, warnings };
 }

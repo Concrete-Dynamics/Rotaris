@@ -100,5 +100,7 @@ describe('REQ-ORCH-019..027 the playbook matrix', () => {
     expect(nr.asEntry['tester']!.cell.ROUTE).toBe('not_routed');
     expect(nr.asEntry['tester']!.text).toContain(`ROUTE: ${CATALOGUE.ROUTE!['not_routed']}`);
     expect(resolvePlaybooks({ intent: 'question', tier: 'small', roles: ['nobody'], entryRole: 'nobody' }).asEntry['nobody']).toBeNull();
+    // REQ-ORCH-024: an entry role with no row has no cell, so no BUDGET: the configured child policy stands unchanged.
+    expect(resolvePlaybooks({ intent: 'question', tier: 'small', roles: ['nobody'], entryRole: 'nobody' }).budgetCell).toBeNull();
   });
 });

@@ -146,6 +146,8 @@ try {
   if (!system.includes('For this run you hold the tools to read and write files and run commands yourself')) throw new Error(`ok: the direct-work run's instructions do not say the coordinator does the work itself:\n${system}`);
   if (system.includes('you do not modify files or run commands yourself')) throw new Error(`ok: the direct-work run's instructions still forbid the tools it is granted:\n${system}`);
   // K3 of the default live run at c2fdd6a: the root's ROUTE slot is the entry role's, never the routed specialist's.
+  // Coupled to the built-in wording of `ROUTE.entry` and `ROUTE.routed` in packages/engine/src/playbooks/catalogue.ts:
+  // re-wording either there means re-wording these two strings here, and in live-run.mjs's frictions check.
   if (system.includes('the coordinator routed it to you') || !system.includes('ROUTE: Your assignment is the request itself')) throw new Error(`ok: the root's playbook does not give the entry role its own ROUTE wording:\n${system}`);
   results.ok = { status: ok.status, lines: 3, truncated: false, seen: ok.seen, loadMs: ok.loadMs, directWorkInstructions: true, entryRoute: true };
 

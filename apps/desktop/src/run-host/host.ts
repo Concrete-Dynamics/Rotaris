@@ -479,6 +479,8 @@ export function createRunHost() {
       return runPreflight(ctx, {
         clocks, backend: run.model.backend, runModel: run.model.config.model, credentialFor: run.model.config.credentialFor, modelTimeoutMs: run.model.config.modelTimeoutMs,
         globalDir: configDir, tier: run.tier, slots: classifierSlotsOf(run.cfg, run.scripted, runBearers.get(ctx.sessionId), (m) => ctx.warn(m)), runOverride: run.runtime.runOverride, memory: rungMemory, log: (m) => log(m),
+        // The persona the root turn runs on (the engine's `config.persona`): its cell is the root's, audited and clamping.
+        entryRole: run.model.config.persona,
       });
     },
   });

@@ -15,7 +15,7 @@ fallbacks of the root (`quota_fallback_model`, `llm_unresponsive`) are read as t
 its name and its instant: a child keeps its `[spawned_at, completed_at]` window, and a tool call or a ladder entry of that
 name outside every such window is the root's (`childModelKeys`, `childKeyAt`). So the case above — the child in one run,
 the root of its name in the next — prints the root's calls under the root's own key and reads its fallbacks as the root's
-([the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md](fixed/the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md),
+([the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md](the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md),
 pinned in `packages/engine/src/autopsy.test.ts`). Two cases are still not told apart:
 - A root that is alive while a child of its name is alive.
 - A child that never records a completion, because the run crashed or the child was paused and never resumed. Its window
@@ -28,7 +28,7 @@ The ledger cannot prevent it. It names children and keeps every child off every 
 its persona, which no ledger chooses, and the child was named before the root existed.
 
 Noticed 2026-10-01 while repairing
-[`a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`](fixed/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md)
+[`a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`](a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md)
 under R-067. Read from the code; not driven.
 
 ## Specs
@@ -43,3 +43,7 @@ OQ-158's second reading, rows that carry an identity the surfaces match instead 
 - `packages/engine/src/sessions.ts`: `entryRootsOf`, which names a root by its persona.
 - `packages/engine/src/run/run.ts`: `Run.turn`, where a root's name and canonical name are its persona's.
 - `packages/engine/src/autopsy.ts` and `apps/desktop/scripts/lib/autopsy-entry-model.mjs`: `childModelKeys`, `entryModelKeys`.
+
+## Ruled as built — 2026-10-06 ([R-071](../../product/requests.md#r-071)); closed
+
+The owner accepted the current renaming and left this edge, a root named like an earlier child, until after the first release (OQ-158, ruled in [`open-questions.md`](../../architecture/open-questions.md); [`PD-ORCH-009`](../../product/directives.md#pd-orch-009) narrows REQ-ORCH-044 and states the edge as accepted). The surfaces' share described above stays as it is for the first release, and the autopsy reader's two untold cases with it. Nothing is changed in the code.

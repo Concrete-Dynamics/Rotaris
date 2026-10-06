@@ -266,7 +266,7 @@ describe('the shell exit the ends-shell shape replays (OQ-144\'s sibling case)',
 
 describe('the command issued behind a soft-paused one (OQ-164)', () => {
   /*
-   * `docs/defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`: in the autopsy's run the
+   * `docs/defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`: in the autopsy's run the
    * command issued behind the wedge said only "The command exited with code 0." The repaired product names the paused
    * command and its end in the detail.
    */

@@ -116,7 +116,7 @@ path) — which is the first time a ruling closed more than one at once, and it 
 had been priced by measurement before they were put. Each of the four is stated where it
 was found, with what the build shipped meanwhile, so a ruling replaces an interim rather than filling a gap.
 
-**On 2026-10-06 the owner ruled every decision still waiting ([R-071](../product/requests.md#r-071)).** The rulings confirmed as built are written into each entry, dated and citing R-071: OQ-2, OQ-4, OQ-6, OQ-10, OQ-17, OQ-18, OQ-22, OQ-25, OQ-29, OQ-32 to OQ-34, OQ-39, OQ-40, OQ-43, OQ-47, OQ-50 to OQ-52, OQ-58, OQ-59, OQ-65, OQ-67 to OQ-71, OQ-79 to OQ-82, OQ-84, OQ-85, OQ-87 to OQ-93, OQ-100 to OQ-104, OQ-106 to OQ-109, OQ-117, OQ-118, OQ-120 to OQ-126, OQ-128 to OQ-138, OQ-141 to OQ-153, and in `owner-decisions.md` ESC-36 and ESC-41. Where a ruling departs from a requirement's text it is carried by a directive with its back-pointer: `PD-PROVIDER-001`, `PD-CONFIG-002`, `PD-TOOLS-009`, `PD-TOOLS-010`, `PD-SHELL-004` to `PD-SHELL-006`, `PD-CHAT-007`, `PD-WORKSPACE-003`, `PD-WORKSPACE-004`, `PD-STARTUP-002` to `PD-STARTUP-005`, `PD-ORCH-005` revision 6 and `PD-ORCH-003` revision 3. Two rulings meet a build that does something else, and each entry says so with a defect note: OQ-6 (the quota cap lives in configuration, not on the catalogue entry) and OQ-33 (the preference root honours the configuration-home variable on every platform). One entry described its build wrongly and its ruling states the build as it is, with no defect: OQ-59, whose chooser is filtered to Markdown files (`.md`), not to `SKILL.md`, the name check being the loader's. OQ-39's amendment was already in REQ-SANDBOX-101's text. **Deferred by the same ruling, and the work counts as finished without them:** OQ-72 to OQ-75 and OQ-83 (the release pipeline's notices and signing), OQ-140 (Linux confinement), and OQ-48, OQ-62, OQ-183 and OQ-195 (after the first release); each entry carries the deferral. The questions ruled as a change to build are ruled in their own entries by the plans that build them.
+**On 2026-10-06 the owner ruled every decision still waiting ([R-071](../product/requests.md#r-071)).** The rulings confirmed as built are written into each entry, dated and citing R-071: OQ-2, OQ-4, OQ-6, OQ-10, OQ-17, OQ-18, OQ-22, OQ-25, OQ-29, OQ-32 to OQ-34, OQ-39, OQ-40, OQ-43, OQ-47, OQ-50 to OQ-52, OQ-58, OQ-59, OQ-65, OQ-67 to OQ-71, OQ-79 to OQ-82, OQ-84, OQ-85, OQ-87 to OQ-93, OQ-100 to OQ-104, OQ-106 to OQ-109, OQ-117, OQ-118, OQ-120 to OQ-126, OQ-128 to OQ-138, OQ-141 to OQ-153, and in `owner-decisions.md` ESC-36 and ESC-41. Where a ruling departs from a requirement's text it is carried by a directive with its back-pointer: `PD-PROVIDER-001`, `PD-CONFIG-002`, `PD-TOOLS-009`, `PD-TOOLS-010`, `PD-SHELL-004` to `PD-SHELL-006`, `PD-CHAT-007`, `PD-WORKSPACE-003`, `PD-WORKSPACE-004`, `PD-STARTUP-002` to `PD-STARTUP-005`, `PD-ORCH-005` revision 6 and `PD-ORCH-003` revision 3. Two rulings meet a build that does something else, and each entry says so with a defect note: OQ-6 (the quota cap lives in configuration, not on the catalogue entry) and OQ-33 (the preference root honours the configuration-home variable on every platform). One entry described its build wrongly and its ruling states the build as it is, with no defect: OQ-59, whose chooser is filtered to Markdown files (`.md`), not to `SKILL.md`, the name check being the loader's. OQ-39's amendment was already in REQ-SANDBOX-101's text. **Deferred by the same ruling, and the work counts as finished without them:** OQ-72 to OQ-75 and OQ-83 (the release pipeline's notices and signing), OQ-140 (Linux confinement), and OQ-48, OQ-62, OQ-183 and OQ-195 (after the first release); each entry carries the deferral. The questions ruled as a change to build are ruled in their own entries by the plans that build them. **The rest of the confirm-as-built rulings, written the same day (plan fin20):** OQ-154 to OQ-156, OQ-158 to OQ-161, OQ-164, OQ-166, OQ-167, OQ-169, OQ-173 to OQ-176, OQ-178, OQ-179, OQ-181, OQ-184, OQ-186, OQ-187, OQ-190 to OQ-193, OQ-197 and OQ-198, and OQ-200, OQ-201 and OQ-203, raised that day after the overview the owner answered and confirmed under the same instruction at the readings their entries say the build proceeds under. Where one departs from a requirement's text it is carried by a directive with its back-pointer: `PD-HOOKS-001`, `PD-ORCH-009` to `PD-ORCH-011`, `PD-ORCH-006` revision 2, `PD-MONITOR-003`, `PD-MONITOR-004`, `PD-WORKSPACE-005` to `PD-WORKSPACE-007`, `PD-SHELL-007`, `PD-SHELL-008`, `PD-SESSION-001`, `PD-CHAT-008` and `PD-CHAT-003` revision 2. The defect notes that waited on them close with them, in `docs/defects/fixed/`.
 
 ***Three of those counts changed on 2026-09-02 and the direction is not the usual one, so a reader should
 not skim them.*** The seven escalations this register carried as open were **all ruled on that date** and
@@ -7229,8 +7229,10 @@ whose order is `session_start`, `child_completed`, …, `session_end` "matching 
 lifecycle hooks in line with the run loop; `PD-ORCH-005` clauses 3 and 16. Raised 2026-09-30 by the repair of acceptance
 finding A15,
 [`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../defects/fixed/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md),
-under [R-067](../product/requests.md#r-067). Open; numbered OQ-151 when it was raised, then OQ-152, and renumbered OQ-154
+under [R-067](../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-151 when it was raised, then OQ-152, and renumbered OQ-154
 at merge once origin/main's OQ-151 to OQ-153 had landed.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the build's behaviour is accepted, and the specification now says so: `child_completed` fires only while a run's lifecycle hooks are live, after its `session_start` and before its `session_end` begins. None of the five paths above fires it, then or later, and no later run owes it; on the fifth path the cancel of the paused child is still accepted and the child ends `cancelled` with its report and teardown. [`PD-HOOKS-001`](../product/directives.md#pd-hooks-001) narrows REQ-HOOKS-003. The note of the fifth path, [`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`](../defects/fixed/a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md), closes with this ruling.
 
 A run's hooks are resolved at its start and live until its teardown (ADR-0015; `Sessions` builds one hook port per run),
 and every lifecycle event the specification orders falls between that run's `session_start` and its `session_end`. Three
@@ -7263,7 +7265,7 @@ resumable iteration (`PD-ORCH-005` clause 6, after the continuing run's `session
 `session_start`; or fire none, as built.
 
 **A fifth path** *(added 2026-10-01 by the repair of
-[`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`](../defects/a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md),
+[`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`](../defects/fixed/a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md),
 under [R-067](../product/requests.md#r-067))*: the user's cancel of one paused child (REQ-ORCH-133) that lands while the
 run's own `session_end` hooks run, or after them and before the run has ended. `Run.cancelAgent` accepts it until then, the
 port is still held, and the run has announced its end; until this repair its `child_completed` fired after `session_end`.
@@ -7279,8 +7281,10 @@ calls exist, the condition is reported at informational level as waiting on N ac
 REQ-MONITOR-117 to REQ-MONITOR-120, "each agent is evaluated for a stall"; REQ-NOTIFY-112; OQ-127. Raised 2026-09-30 by
 the repair of acceptance finding A7,
 [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md),
-under [R-067](../product/requests.md#r-067). Open; numbered OQ-152 when it was raised, renumbered OQ-154 at
+under [R-067](../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-152 when it was raised, renumbered OQ-154 at
 the merge once origin/main's OQ-152 and OQ-153 had landed, and OQ-155 at the next merge once origin/main's OQ-154 had.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: a child between its turns — waiting on its own children, or resumed into that wait — is outside its stall watch, so an evaluation there reports no stall and no wait, and each child it waits on is watched for its own silence; no word is added to REQ-ORCH-139's vocabulary. The silence REQ-MONITOR-118 and REQ-MONITOR-119 count is read as the silence of a model step the agent has in flight, so no directive is minted.
 
 A child that delegated, and then waits for its children's reports before the run resumes it (REQ-ORCH-055 to
 REQ-ORCH-059), or that the run resumes into that wait from its record (PD-ORCH-005 clause 4), has no model step and no
@@ -7320,8 +7324,10 @@ the findings reached, and the questions left open"; REQ-MONITOR-084; REQ-MONITOR
 to hold the context being compressed"; REQ-MONITOR-078; REQ-ORCH-110's 12,000 and 2,000 characters; ADR-0060 decision 4.
 Raised 2026-09-30 by the repair of acceptance finding A12,
 [`the-compressor-reads-only-the-head-of-what-it-compresses.md`](../defects/fixed/the-compressor-reads-only-the-head-of-what-it-compresses.md),
-under [R-067](../product/requests.md#r-067). Open; numbered OQ-153 when it was raised, renumbered OQ-155 at
+under [R-067](../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-153 when it was raised, renumbered OQ-155 at
 the merge once origin/main's OQ-152 and OQ-153 had landed, and OQ-156 at the next merge once origin/main's OQ-154 had.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: the compressing model reads the history it replaces, each event whole, up to its own effective threshold at `chars_per_token`; past that bound it reads the start, held to half the bound, and the most recent part, with OQ-111's marker between them. The consequence stated above is accepted with it: on REQ-ORCH-093's rejection path the compressing request can itself be rejected, and the original rejection is then surfaced. No requirement bounds what the compressing model reads, so this ruling settles it.
 
 The compressing pass replaced the history between the original request and the preserved turns with a summary written
 from `transcriptText`, the report pass's reader: each event cut to 2,000 characters and the whole to 12,000 from its
@@ -8257,7 +8263,9 @@ REQ-MONITOR-071, REQ-CHAT-069 and REQ-MONITOR-044, which the surfaces meet by na
 which a root keeps its own persona's name; REQ-LIBRARY-093. Raised 2026-10-01 under [R-067](../product/requests.md#r-067)
 by the repair of
 [`a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`](../defects/fixed/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md),
-acceptance finding A23. Open.)*
+acceptance finding A23. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the renaming is accepted as built: no child at any depth takes the canonical name or the persona of its own root or of any root the session has recorded, and such a child is renamed `<name>_<n>`. The remaining edge, a root named like an earlier child, is left until after the first release, and its note, [`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../defects/fixed/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md), closes with this ruling. [`PD-ORCH-009`](../product/directives.md#pd-orch-009) narrows REQ-ORCH-044.
 
 A transcript row, a tool call and an artifact know their agent by a name alone. The surfaces give the run-level agent every
 row and artifact carrying the entry persona or a name one of the session's roots carries (`ownRow`, `artifactNames`,
@@ -8282,7 +8290,7 @@ recorded root's two names (`recordedRootNames` in `children/naming.ts`: each ite
 Two edges are left as they are. A child named before this repair keeps its name. And a **root named like an earlier child**
 — the entry persona changed to one an earlier child's canonical name already spells — is drawn as both, since the root's
 name is its persona and no ledger names it
-([`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../defects/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md)).
+([`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../defects/fixed/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md)).
 
 **What a ruling decides.** Whether a root's names count as in use under every parent, or the surfaces must tell a child
 from a root by an identity the rows carry; with the second, whether rows recorded before keep the name-only rule.
@@ -8295,7 +8303,9 @@ which call the run's own agent its synthetic root, as ADR-0012 does; REQ-MONITOR
 with REQ-ORCH-097's cadence (OQ-116). Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the verification of
 the repair of
 [`the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`](../defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md),
-acceptance finding A20. Raised on its branch as OQ-158 and renumbered OQ-159 at the merge, origin/main's OQ-158 keeping its number. Open.)*
+acceptance finding A20. Raised on its branch as OQ-158 and renumbered OQ-159 at the merge, origin/main's OQ-158 keeping its number. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: the run-level agent carries its own tool-call count and called history (the roots'), and REQ-MONITOR-101's aggregate run count is REQ-MONITOR-102's displayed total; the run-level agent's compression count stays the run-wide count. [`PD-MONITOR-003`](../product/directives.md#pd-monitor-003) narrows REQ-MONITOR-101.
 
 The inspector, the Mission view and the persona windows present the run's own agent as the run-level agent
 (`runLevelAgent`, `packages/ui/src/agents.ts`), and the record calls that agent the run's synthetic root (REQ-MONITOR-043,
@@ -8333,7 +8343,9 @@ the reading says; the inspector and the persona window draw it. Nothing about th
 failure's form as "{reason}: {detail}"; REQ-WORKSPACE-103, under which the recorded outcome is visible in Settings Project. Raised 2026-10-01 under
 [R-067](../product/requests.md#r-067) by the repair of
 [`the-project-sections-failure-hint-runs-out-of-the-sidebar.md`](../defects/fixed/the-project-sections-failure-hint-runs-out-of-the-sidebar.md),
-acceptance finding A39. Open.)*
+acceptance finding A39. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed as built: the sidebar's `{message}` is the recorded failure whole, broken to the column (`overflow-wrap: anywhere`), and Settings → Project shows the same outcome. REQ-WORKSPACE-113 does not bound `{message}`, so this ruling settles it.
 
 The recorded failure of the shipped code-intelligence task is its process's raw output: the exit, the platform's own log
 lines (a `[pid:date/time:ERROR:dbus/bus.cc:406]` prefix among them) and the runtime's explanation. Measured in the built
@@ -8356,9 +8368,11 @@ best-effort amended to exclude `.rotaris/`"; REQ-CONFIG-456; ground 3 of REQ-CON
 choice"; REQ-MCP-099 and REQ-MCP-116, which name the runtime's per-project marker file and read it from the binding
 manifest; ADR-0035, "At the merge", which took the reading and flagged it for the owner. Raised 2026-10-01 from the
 live-run autopsy at 71ad8e8 finding a71-1,
-[`the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md`](../defects/the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md).
-Open. Raised as OQ-160 on its branch and renumbered OQ-161 before it reached `main`, where OQ-160 had been taken
+[`the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md`](../defects/fixed/the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md).
+~~Open.~~ Ruled 2026-10-06. Raised as OQ-160 on its branch and renumbered OQ-161 before it reached `main`, where OQ-160 had been taken
 meanwhile.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current behaviour is accepted: a configuration load appends `.rotaris/` alone to the workspace's `.gitignore` (REQ-CONFIG-013, REQ-MCP-089), and the code-intelligence runtime's marker directory `.serena/` goes to the untracked `info/exclude` file of the repository whose top level is the workspace, best-effort and idempotent, on the terms stated above; a workspace below a repository's top level, or in none, gets no line. The marker stays in the workspace root as the runtime creates it, so the file tools, which read the root `.gitignore` alone (REQ-TOOLS-139, REQ-TOOLS-140), still list it, as the duress run of 2026-10-06 showed, and the agents are not told that the product wrote the exclude line. D-21's one exception covers the exclude file as a second ignore file. The requirements name the `.rotaris/` line and are silent on the marker, so this ruling settles it; [`the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md`](../defects/fixed/the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md) closes with it.
 
 The bundled runtime creates `.serena/project.yml` in the workspace root whenever it starts with a project (ADR-0035,
 finding 5). With the `code_intelligence` entry enabled by default, every first run therefore left an untracked directory
@@ -8524,9 +8538,11 @@ REQ-TOOLS-187, "a second foreground call against a session whose previous foregr
 it"; REQ-TOOLS-096, the empty-command poll; REQ-TOOLS-097, the no-output window and the hard timeout; REQ-TOOLS-179, the
 exit status a call reports; OQ-147, what the paused call reports once a poll hands it over. Raised 2026-10-01 from the
 live-run autopsy at 71ad8e8 finding a71-8,
-[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md).
-Open. Raised as OQ-163 on its branch and renumbered OQ-164 before it reached `main`, where OQ-160 had been taken
+[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md).
+~~Open.~~ Ruled 2026-10-06. Raised as OQ-163 on its branch and renumbered OQ-164 before it reached `main`, where OQ-160 had been taken
 meanwhile.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current behaviour is the rule. A foreground call made while an earlier command is soft-paused is neither refused nor made to interrupt it: its line is submitted at once and waits behind the paused command, and its no-output window and timeout run from its own start, the wait included. Its observation reports the paused command beside its own outcome, as the reading above states: that it waited, when and how that command ended, and what it wrote since it was last observed, outside the cap on the call's own output; a second soft pause no longer disposes of the first. The tool description tells agents the third move: "a new command issued meanwhile waits behind it, and its result reports how the paused one ended". REQ-TOOLS-187 does not reach a soft-paused call, which has returned, so this ruling settles it; [`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md) closes with it.
 
 REQ-TOOLS-098 offers the agent two moves after a soft pause: poll, or interrupt. A third, issuing a new command, is
 always open, and no requirement says what it does. REQ-TOOLS-187 makes a second foreground call wait for a previous
@@ -8550,7 +8566,7 @@ ends at its own end frame or at the new call's start marker, and its end is kept
 `poll`). The code also shows a case the run did not reach. A later soft pause, including the new call's own when the
 paused command stays silent for its whole no-output window, replaces the kept call, and that call's end is never
 reported.~~ *(Superseded 2026-10-01 by the reading below. That reading was built by the partial repair of
-[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md),
+[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md),
 which fixes only the loss and the silence. The question stays open, and none of its four points is ruled.)*
 
 **What the build proceeds under** (since 2026-10-01). The new call is still neither refused nor made to interrupt the paused
@@ -8743,7 +8759,9 @@ the 30 px figure as a conservative slot-size floor while real rows may be shorte
 which the directive narrows off the row's box; REQ-CHAT-165; ADR-0045's capacity rule. Raised 2026-10-01 under
 [R-067](../product/requests.md#r-067) by the repair of
 [`the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`](../defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md),
-acceptance finding A38. Open.)*
+acceptance finding A38. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** [`PD-CHAT-003`](../product/directives.md#pd-chat-003) gains a short dated revision 2 whose cost paragraph names the capacity unit, the shortest row a slot can hold (20 px, `SHORTEST_ROW_HEIGHT`), with the 30 px figure the floor of a row's estimate before its first measurement; the sentence it replaces is quoted beside it. The code is left as it is.
 
 PD-CHAT-003's normative clauses — a row sizes to its content, 12 px above a block and at most 4 px within one, no row drawn
 so tightly that its lines touch — are untouched by the repair. Its cost paragraph is not normative but it is specific: it
@@ -8766,7 +8784,9 @@ REQ-WORKSPACE-092, whose fixed details are a stopped **step's**; REQ-WORKSPACE-0
 entry that is not a local launch and nothing else; REQ-WORKSPACE-103; REQ-MCP-112, "SHALL refuse to start a second
 concurrent run". Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the repair of
 [`a-refused-setup-start-is-reported-as-not-a-local-launch.md`](../defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md).
-Open.)*
+~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current wording and the immediate retryable failure are the rule: a setup that began no stage fails retryably with REQ-WORKSPACE-093's summary, under the reason "Code intelligence could not complete this project's setup", its detail the run host's own refusal or "the setup was cancelled before it started.", and a refused start, the run host's one slot taken by another setup included, fails straight away rather than waiting. [`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005) narrows REQ-WORKSPACE-092 and REQ-WORKSPACE-093.
 
 `code-intelligence-setup` can fail before any of REQ-WORKSPACE-091's three stages has begun, in two ways. The run host can
 refuse the setup's start: its one setup slot is taken by a setup the MCP settings category started (`mcp.setup.running`,
@@ -8877,7 +8897,9 @@ ends without reporting any of those three outcomes SHALL be treated as a failure
 message describing what went wrong"; REQ-WORKSPACE-091's three stage budgets, 300 / 1800 / 120 s; REQ-WORKSPACE-092's
 5 s; REQ-WORKSPACE-093. Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the repair of
 [`nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`](../defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md),
-as OQ-168, and renumbered OQ-169 at its merge because `origin/main` had taken OQ-168 meanwhile. Open.)*
+as OQ-168, and renumbered OQ-169 at its merge because `origin/main` had taken OQ-168 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current behaviour is the ruling, its wording and its fallback limit included: a setup whose finished status never arrives ends as a retryable failure with REQ-WORKSPACE-093's summary, the running stage's reason (OQ-167's where none ran) and the detail "the run host exited before the setup finished.", or, once 2235 s (about 37 minutes) have passed since the follow began, "no outcome arrived within the setup's time budgets."; a start the run host never answers reads "the run host did not answer the setup's start" with the request's own error. No cancellation follows either, the coordinator does not ask the run host for the setup's status when the bound passes, and nothing in main ends a lost run host's step processes. [`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005) carries the words.
 
 The initialization coordinator follows a setup through the run host's pushed `mcp.setupStatus` and ends the task on the
 status whose state is `finished`; its setups run one at a time, so every later workspace's setup waits for that end. The
@@ -9046,7 +9068,9 @@ ADR-0060, the automatic compression and the condensation on a rejection; OQ-153;
 whose no-output window the wait's end also restarts. Raised 2026-10-01 by the
 repair of
 [`a-provider-wait-or-a-compression-is-counted-as-a-stall.md`](../defects/fixed/a-provider-wait-or-a-compression-is-counted-as-a-stall.md).
-Open.)*
+~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current behaviour is accepted: a wait the run imposes on an agent (a retry backoff, a suspended wait on a provider limit) and a compression's own model call are outside the agent's stall watch, logged in the manner REQ-MONITOR-118 logs a wait on tools and with no timeline word, and the wait's end restarts the silence. The provider library's own short internal retries inside one model step stay counted as ordinary silence of that step. As for OQ-155, the silence REQ-MONITOR-118 and REQ-MONITOR-119 count is read as that of a model step the agent has in flight, so no directive is minted.
 
 An agent's stall watch counts the silence since its last model event or token. Between two of its model steps the run
 can hold an agent where it has no step in flight and no tool call either: `resilientStep`'s backoff before a transient or
@@ -9085,8 +9109,10 @@ update "SHALL only ever narrow" the callable set, the withdrawn name "ceases to 
 NOT … re-render the prompt"; REQ-MCP-114, the inspector's per-server list "sourced from the run's own recorded evidence,
 so it reads the same for a finished run as for a running one"; REQ-MCP-100, the persona window's line per server from the
 same evidence; REQ-MONITOR-060, the inspector's chips. Raised 2026-10-01 for
-[`a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md`](../defects/a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md)
-by the second triage of open defect notes, which judged it the owner's. Open.)*
+[`a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md`](../defects/fixed/a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md)
+by the second triage of open defect notes, which judged it the owner's. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current behaviour is accepted, and the recorded grant is defined as what the child was given when it started (its tool port's readiness). A tool a mid-run list update withdraws stays in the row's `granted_mcp`, unmarked, and every surface that reads the record lists it as granted; it is no longer callable, and a call to it is refused (REQ-MCP-062). REQ-MCP-065's "granted" is that grant, so this ruling settles it; [`a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md`](../defects/fixed/a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md) closes with it.
 
 A child's row records its MCP grant once, when its tool port is ready (`ChildLedger.recordGrant` →
 `SessionWriter.recordChildGrant`, once per execution). When a carried server then publishes a changed tool list,
@@ -9114,7 +9140,9 @@ output and standard error"; REQ-WORKSPACE-091, "where a stage's subcommand is un
 reported under REQ-WORKSPACE-093 as any other stage failure is"; REQ-WORKSPACE-093, "{reason}: {detail}"; REQ-MCP-099 and
 REQ-MCP-112, whose words for the same steps stay the MCP category's. Raised 2026-10-01 by the repair of
 [`the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`](../defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md),
-as OQ-174, and renumbered OQ-175 at its merge because `origin/main` had taken OQ-174 meanwhile. Open.)*
+as OQ-174, and renumbered OQ-175 at its merge because `origin/main` had taken OQ-174 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current behaviour is accepted, the trim included: a step not attempted and a step that wrote nothing have an empty detail, a step whose command could not be started reads in the launch's own error text, a failed stage with an empty detail takes the setup's final sentence as its `{detail}`, and the last 400 bytes are taken of the output once it is trimmed of its leading and trailing blank space. [`PD-WORKSPACE-005`](../product/directives.md#pd-workspace-005) narrows REQ-WORKSPACE-092 and REQ-WORKSPACE-093.
 
 `code-intelligence-setup`'s step rows now read in this domain's words: a stopped step in REQ-WORKSPACE-092's two fixed
 sentences, a creation the marker skipped and the two stages a `non-code` workspace skips in REQ-WORKSPACE-091's, and every
@@ -9148,7 +9176,9 @@ echo latency "within the 100 ms gesture budget of REQ-SHELL-150, measured from t
 REQ-SHELL-150, whose "sustained load" is a burst of changes in the shell, "a build that misses any of the three under
 sustained load fails this requirement". Raised 2026-10-01 while repairing (measured that day; first committed 2026-10-02)
 [`terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md`](../defects/fixed/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md)
-under R-062. Open.)*
+under R-062. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the specification is amended: REQ-SHELL-166's 100 ms echo applies on a machine whose CPUs other programs do not oversubscribe, a load average at or below the CPU count; a red taken above it is run again with the host quiet, and a red on a quiet host is the product's. The bound itself is not relaxed. [`PD-SHELL-007`](../product/directives.md#pd-shell-007) narrows REQ-SHELL-166.
 
 `pnpm terminal-proof`'s `live.echoUnder100ms` was run 120 times on 2026-10-01, with busy loops pinned beside the proof on
 one or two of the host's four CPUs and another plan's agents on the host. It went red in 10 runs, at load averages 9.1 to
@@ -9221,7 +9251,9 @@ provider resets … and offering an action opening model settings"; REQ-NOTIFY-0
 view". Raised 2026-10-02 by the repair of
 [`the-retry-run-notice-action-has-no-target.md`](../defects/fixed/the-retry-run-notice-action-has-no-target.md),
 as OQ-177, and renumbered OQ-178 at its merge because `origin/main` had taken OQ-176 meanwhile and this branch's OQ-176
-became OQ-177. Open.)*
+became OQ-177. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** kept as built: no run-failure notice carries a Retry action, each class keeping the action its requirement names and REQ-NOTIFY-063's retry staying in its message, and the composer keeps the draft, so the user resends it with one press of Send. The `retry-run` action keeps its target for a notice that carries it. No requirement names a notice that carries the retry, so this ruling settles it.
 
 REQ-NOTIFY-045 says what a retry does and REQ-NOTIFY-044 lists it among a notice's actions, and REQ-NOTIFY-061 takes the
 trouble to say its notice offers none, which reads as though another failure notice does. But every failure class names
@@ -9257,7 +9289,9 @@ carries?** *(REQ-NOTIFY-076, "For key-based providers it offers a masked key fie
 browser and device-code providers it starts that provider's own flow in place"; REQ-NOTIFY-077; REQ-NOTIFY-202;
 REQ-CONFIG-083 and REQ-PROVIDER-092, a model's `api_key` / `api_key_env`, read per request, when it names no
 `auth_provider`; REQ-PROVIDER-118/140, "Authentication is managed by model configuration." for a provider that resolves to
-no sign-in method. Raised 2026-10-02 by the 401 note's part D on `fin6-auth-recovery-2`. Open.)*
+no sign-in method. Raised 2026-10-02 by the 401 note's part D on `fin6-auth-recovery-2`. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the build is accepted: for a provider whose key the model configuration carries (`api_key` or `api_key_env` with no `auth_provider`), the recovery dialog's second path shows REQ-PROVIDER-118/140's sentence and says to correct the key the model configuration names, then retry, with no key field and no save-and-retry control. Such a provider resolves to no sign-in method and is neither of REQ-NOTIFY-076's two kinds, so this ruling settles it.
 
 REQ-NOTIFY-076 sorts the provider that failed into two kinds: key-based, re-authenticated through a key field, and
 browser or device-code, through their own flow. A model can also reach a provider with a key it states itself — `api_key`
@@ -9309,7 +9343,9 @@ navigable"; REQ-SHELL-022's minimum; REQ-CHAT-010's 180 px transcript floor; REQ
 [`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
 as OQ-180, and renumbered OQ-181 at the branch's merge beside the note's parts C and D (2026-10-02) because `origin/main` had
 taken OQ-179 meanwhile and the branch's own OQ-179 took OQ-180 (since renumbered OQ-182, at the branch's third merge,
-because `origin/main` had taken OQ-180). Open.)*
+because `origin/main` had taken OQ-180). ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the build's placement and visibility are accepted as they are: the prompt is drawn in flow in the Workspace view, between the run header and the transcript, yields to an expanded plan gate as a bar of its title and its answers, and is not drawn while another view is shown, the window holding it by session and drawing it again when the Workspace view returns. "Beside the continuing run" is the Workspace view's run column.
 
 The requirement places the prompt by the run, not by the window, and the level ADR-0048 gives it requires the rest of the
 window to stay navigable while it is open — and it stays open until it is answered. Two overlay placements were built
@@ -9438,7 +9474,9 @@ what does it say after a refused continuation of a confined session?"; that thir
 stops describing the run as sandboxed"; REQ-SHELL-038, the strip's items left to right, a closed list; REQ-SHELL-047, "An
 item added to the strip is given its threshold here"; REQ-TOOLS-184. Raised 2026-10-02 by the repair of
 [`no-workspace-indicator-names-the-confinement-backend.md`](../defects/fixed/no-workspace-indicator-names-the-confinement-backend.md)
-(fin8). Open.)*
+(fin8). ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** kept as built, and added to the specification's status-strip item list at that position: the indicator `sandbox: <backend>` (or `sandbox: confined`), named "Confinement backend", stands right after the file-access flag and before the mode flag, and is shown at every width. [`PD-SHELL-008`](../product/directives.md#pd-shell-008) narrows REQ-SHELL-038, REQ-SHELL-047 and REQ-SANDBOX-121.
 
 Two things the requirements leave to the build:
 
@@ -9516,7 +9554,9 @@ offers a model, every model except the one that failed is listed"; REQ-MONITOR-1
 quota-wait decision surface … listed there rather than hidden, annotated". Raised 2026-10-02 by the repair of
 [`the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md`](../defects/fixed/the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md)
 (fin8, bundle `fin8-noticed-gaps-4`), as OQ-185, and renumbered OQ-186 at its merge of `origin/main` because the
-ladder-overrides bundle had taken OQ-185 meanwhile. Open.)*
+ladder-overrides bundle had taken OQ-185 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current full list is accepted: the picker offers every configured model key, alphabetically, the waiting model included, with a pair held out of quota annotated and choosable, and both requirements are amended to describe it. [`PD-MONITOR-004`](../product/directives.md#pd-monitor-004) narrows REQ-MONITOR-303 and REQ-NOTIFY-263.
 
 Two requirements describe the one control. REQ-MONITOR-303 lists REQ-MONITOR-193's candidates — the same-tier configured
 models from any provider, in declaration order, less the pairs held out of quota — and beside them the excluded pairs,
@@ -9551,7 +9591,9 @@ window-level level, "an in-window panel that does not trap focus and leaves the 
 minimum; REQ-SHELL-024's vertical order. Raised 2026-10-02 by the repair of
 [`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](../defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md)
 (fin8, bundle `fin8-noticed-gaps-4`), as OQ-186, and renumbered OQ-187 at its merge of `origin/main` because the
-ladder-overrides bundle had taken OQ-185 meanwhile. Open.)*
+ladder-overrides bundle had taken OQ-185 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current floating placement is accepted: an overlay of the rail-and-view region at its top corner, inset by `--rt-space-4`, below the title bar and the notice slot, bounded by that region and scrolling with its answers pinned when shorter than it needs. It traps no focus, Escape answers it as a skip, and it lies over the view's top corner while it is open; "the rest of the app stays navigable" is met by controls reachable from the keyboard and, once it is answered, from the pointer.
 
 The dialog is window-level: it belongs to no view and is shown whichever view is on screen, so the decision it waits on is
 not lost by navigating. Every placement of such a surface takes something. Fixed at the window's corner it lay over the
@@ -9651,7 +9693,9 @@ yields to the exclusion of its pair.
 model provider's reported cost for this workspace's runs so far"; REQ-SHELL-038, the items' accessible names, "Tokens used"
 and "Cost so far". Raised 2026-10-02 by the repair of
 [`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)
-(fin10, bundle `fin10-strip-notices-and-listing`). Raised as OQ-188; renumbered 190 at the merge, since origin/main took 188 and 189 meanwhile. Open.)*
+(fin10, bundle `fin10-strip-notices-and-listing`). Raised as OQ-188; renumbered 190 at the merge, since origin/main took 188 and 189 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** accepted: the tokens item counts the workspace's runs, as the cost item does, the sum of every stored session's `tokens_input + tokens_output` for this workspace, and its tooltip says so ("Tokens used by this workspace's runs so far: {n} tok."). REQ-SHELL-044 names no scope, so this ruling settles it.
 
 REQ-SHELL-045 scopes the cost to this workspace's runs and its tooltip says so. REQ-SHELL-044 says "the running total of
 tokens used" and names no scope: not the workspace's runs, not the focused session's, not the current run's. The two items
@@ -9678,9 +9722,11 @@ flag's "that secrets are removed from what is recorded and displayed and that th
 circuit-breaker flag's "that the circuit breaker is armed and will halt a run that trips it"; REQ-SHELL-047,
 "This document owns the status strip". Raised 2026-10-02 by the repair of
 [`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)
-(fin10, bundle `fin10-strip-notices-and-listing`). Raised as OQ-189; renumbered 191 at the merge, since origin/main took 188 and 189 meanwhile. Open. *Amended 2026-10-03 (fin10's repair round): raised as "three
+(fin10, bundle `fin10-strip-notices-and-listing`). Raised as OQ-189; renumbered 191 at the merge, since origin/main took 188 and 189 meanwhile. ~~Open.~~ Ruled 2026-10-06. *Amended 2026-10-03 (fin10's repair round): raised as "three
 things", it missed the redaction and circuit-breaker explanations, which REQ-WORKSPACE-022's "exactly the following and no
 more" bounds as well; both are added below.*)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the shell specification's five statements stand, and the workspace specification is amended to match them: the path link's failure is reported, the `unsaved settings` explanation says runs keep using the last saved values, and the mode, redaction and circuit-breaker explanations are REQ-SHELL-041's word for word. [`PD-WORKSPACE-006`](../product/directives.md#pd-workspace-006) narrows REQ-WORKSPACE-019 and REQ-WORKSPACE-022.
 
 Five statements disagree:
 
@@ -9721,8 +9767,10 @@ branch, a token label, and a duration label"; REQ-SESSION-030, the listing recor
 "Every attribute a listing shows about the session itself MUST be one of these — making a new attribute list-visible is a
 change to this field set, not a reader-side extension"; REQ-SESSION-042, "Building the list MUST read nothing but those
 listing records". Raised 2026-10-03 by
-[`the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md`](../defects/the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md)
-(fin11, bundle `fin11-strip-labels-and-auxiliary-windows`). Open.)*
+[`the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md`](../defects/fixed/the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md)
+(fin11, bundle `fin11-strip-labels-and-auxiliary-windows`). ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the three labels stay on the card, and the listing record's field list gains the token total, the run start time and the workspace path. The duration label is the latest run's, as built. [`PD-SESSION-001`](../product/directives.md#pd-session-001) narrows REQ-SESSION-030. [`the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md`](../defects/fixed/the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md), whose checkpoint half closed on 2026-10-03, closes with this ruling.
 
 REQ-SESSION-030's twelve fields are `session_id`, `created_at`, `updated_at`, `execution_status`, `schema_version`,
 `internal`, `worktree`, `checkpoint_count`, `task_title`, `requirement_id`, `unit_id` and `awaiting_input`. None is a token
@@ -9755,8 +9803,10 @@ could not be read", each "distinguishable from an ordinary branch name and from 
 SHALL render as empty text — no icon, no arrow, no tooltip — exactly when the snapshot's branch name is empty, which per
 REQ-WORKSPACE-029 covers git being unavailable, the folder not being a repository, a detached HEAD, and an unborn branch";
 REQ-SHELL-042, which owns the item and names neither state. Raised 2026-10-03 by the repair of
-[`the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md`](../defects/the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md)
-(fin11, bundle `fin11-strip-labels-and-auxiliary-windows`). Open.)*
+[`the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md`](../defects/fixed/the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md)
+(fin11, bundle `fin11-strip-labels-and-auxiliary-windows`). ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the visible words and tooltips stay as built, and REQ-WORKSPACE-020 is amended to match them: `detached HEAD`, `no git repository`, `no git` and `—` before the first read, each with its tooltip and no icon. The base checkout's tooltip keeps its full stop and its singular or plural commit wording as built, REQ-GIT-122's form read as a template of them. [`PD-WORKSPACE-007`](../product/directives.md#pd-workspace-007) narrows REQ-WORKSPACE-020 and REQ-GIT-122. [`the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md`](../defects/fixed/the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md) closes with this ruling.
 
 REQ-GIT-161 requires a detached checkout and a non-repository to be conveyed, each in words or markers distinct from a branch
 name and from each other, and a repository whose branch could not be read to take REQ-GIT-112's empty value. REQ-WORKSPACE-020
@@ -9888,7 +9938,9 @@ where a mode already applied to a live run displaces an unsaved selection"; REQ-
 that key alone. Raised 2026-10-03 by the repair of
 [`fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md`](../defects/fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md)
 (fin13, bundle `fin13-settings-last-write-and-record-pointers`), as OQ-196, and renumbered OQ-197 at its merge of
-`origin/main` because the landing-grace question had taken OQ-196 meanwhile. Open.)*
+`origin/main` because the landing-grace question had taken OQ-196 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current behaviour is kept: only a change of the saved permission mode displaces an unsaved Settings selection, and a write that leaves the file's value unchanged keeps it, as every other field's edit is kept. REQ-CONFIG-423's "last write" is read as a write that changes the field's value, as its own "a change to the same field" and REQ-CONFIG-420's exception have it, so `config:changed` keeps its contract and no directive is minted.
 
 The screen learns of a write made elsewhere only from the reloaded snapshot main announces after it, and a snapshot carries
 values, not the writes that produced them. Settings holding an unsaved `plan` over a saved `ask`, the composer writing `ask`
@@ -9912,7 +9964,9 @@ are plausible the tie-break prefers `moderate_feature`"); REQ-ORCH-021, which gr
 `single_file_change` (micro) and apart from `question` and `exploration` (answer); REQ-ORCH-153, whose plan gate exempts the
 answer group alone. Raised 2026-10-04 by the repair of
 [`fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`](../defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)
-(fin15, bundle `fin15-slice-proof-live-answers`). Open, the owner's.)*
+(fin15, bundle `fin15-slice-proof-live-answers`). ~~Open, the owner's.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** `explicit_trivial` means a small edit, and the tie-break chooses only among the plausible categories, so a request that changes nothing belongs to the answer group. [`PD-ORCH-010`](../product/directives.md#pd-orch-010) narrows REQ-ORCH-006. The classifier's instruction is unchanged, and `slice-proof` now expects the answer group alone for its question (`INTENTS` in `apps/desktop/scripts/lib/live-answers.mjs`, pinned by `live-answers.test.ts`).
 
 Against the registered self-hosted endpoint (`katalyst`, a model that reasons before it answers), the product's classifier
 answered "What is the first heading of README.md?" with `question` in eight of the nine runs of 2026-10-03 that reached
@@ -9998,8 +10052,10 @@ one in `coordinator-plan.test.ts`, each red on the first form (PD-ORCH-009's fir
 indicator counts "the time spent inside the model call currently in flight" and restarts "each time the run moves on to
 the next model call within the same run"; REQ-ORCH-095 and the delegated children whose calls run beside the root's;
 REQ-CHAT-063, the live-refresh rules the tick follows. Raised 2026-10-06 by
-[`the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md`](../defects/the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md)
-(fin18, bundle `fin18-rail-label-and-observations`). Open, the owner's.)*
+[`the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md`](../defects/fixed/the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md)
+(fin18, bundle `fin18-rail-label-and-observations`). ~~Open, the owner's.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed at the reading the build proceeds under: while a run is active the run timer counts from the newest transcript row the run produced, the unsettled one first, so a call that writes no row does not restart it, and no call boundary is published on the record. It was raised on 2026-10-06, after the overview the owner answered, and is confirmed under the same instruction at the reading this entry says the build proceeds under. [`PD-CHAT-008`](../product/directives.md#pd-chat-008) narrows REQ-CHAT-158. Since no call boundary is owed, [`the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md`](../defects/fixed/the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md) closes with this ruling.
 
 The default live run at `27a5127` captured the run header at a moment when the one call in flight was the transcript
 summariser's, 5.5 s in, and the header read 0:09, counted from the newest transcript row. A run can have several calls out
@@ -10022,8 +10078,10 @@ repository card states "how many files were touched and how many changes are unc
 uncommitted-path count includes untracked paths so that it and the cleanliness gates of REQ-GIT-014 never disagree;
 REQ-GIT-107, a worktree row's "files-touched" figure; REQ-GIT-003, the `.rotaris/` exclusion of every working-tree read
 the Git domain performs. Raised 2026-10-06 by
-[`the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md`](../defects/the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md)
-(fin18, bundle `fin18-rail-label-and-observations`). Open, the owner's.)*
+[`the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md`](../defects/fixed/the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md)
+(fin18, bundle `fin18-rail-label-and-observations`). ~~Open, the owner's.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed at the reading the build proceeds under: the repository card's "touched" counts every path `git status` lists, untracked ones included, and its "uncommitted" the tracked paths with a staged or unstaged change, with no `.rotaris/` exclusion; the Git view keeps REQ-GIT-105's count under REQ-GIT-003's exclusion, so the two may differ for one tree. It was raised on 2026-10-06, after the overview the owner answered, and is confirmed under the same instruction at the reading this entry says the build proceeds under. REQ-MONITOR-168 defines neither word, and REQ-GIT-003's consequences name the Git view's figures, not the card's, so this ruling settles it; [`the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md`](../defects/fixed/the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md) closes with it.
 
 In one launch of the default live run at `27a5127` the Overview's repository card read "4 files touched · 2 uncommitted"
 and the Git view counted 4 uncommitted paths in the same tree. The card counts an untracked path as touched and not as
@@ -10103,7 +10161,9 @@ while a todo item's recorded state disagrees with what happened"; REQ-ORCH-067, 
 task only"; REQ-ORCH-077, the task abandoned at the consecutive-retry limit; REQ-TOOLS-144 and REQ-TOOLS-147, the plan is
 the agent's own and session-scoped. Raised 2026-10-06 by the builder of fin18's repair of live-run finding G5, from its verifier's finding (bundle
 `fin18-run-record-truth`; raised there as OQ-201 and renumbered OQ-203 when origin/main, which had taken OQ-200 and OQ-201,
-was merged in). Open, the owner's.)*
+was merged in). ~~Open, the owner's.~~ Ruled 2026-10-06.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** confirmed at the reading the build proceeds under: a task answers for every open item of the plan that was not already open when it was first taken up (its plan cycle, else its first iteration), a record kept with the task, and for no other; a person's own addition to the plan during the task is held against it, and a `PENDING` item re-listed in the id-less shape is the re-listing task's. It was raised on 2026-10-06, after the overview the owner answered, and is confirmed under the same instruction at the reading this entry says the build proceeds under. [`PD-ORCH-011`](../product/directives.md#pd-orch-011) narrows REQ-ORCH-075, and [`PD-ORCH-006`](../product/directives.md#pd-orch-006) revision 2 reads REQ-ORCH-029's todo clause the same way.
 
 The repair of `docs/defects/fixed/the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` returns a
 task to the pending queue when its root answers `succeeded` with an item of its plan open (REQ-ORCH-075). The plan is the

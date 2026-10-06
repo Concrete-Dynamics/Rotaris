@@ -46,7 +46,7 @@ export function terminalShapes(platform = process.platform) {
     // died. `prompt` asks for the poll after it too, which the scenario reads as the first empty-command call after the
     // keystroke: a second empty-command shape would match the `poll` shape's command.
     { id: 'interrupt', match: /^C-c$/, command: 'C-c', prompt: 'the keystroke C-c with is_input=true (command "C-c") — interrupt the command above; then one more empty command (command "") to poll it' },
-    // `docs/defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md` (live-run finding a71-8,
+    // `docs/defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md` (live-run finding a71-8,
     // OQ-164): the third move after a soft pause, a new command, which the shell queues behind the paused one. In the
     // autopsy's run the next command waited 5.9 s behind the wedge and said only "exited with code 0", and the wedge's own
     // end was never reported. A second wedge, 45 s so it soft-pauses at 30 s and is still running when the next command

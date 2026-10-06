@@ -803,7 +803,8 @@ derives it as the total less the children's (`runLevelAgent`). A root's calls jo
 store v32, without releasing it), and the pass's end adds only what was not counted as it completed — so the live root's
 uncounted calls are those in flight. It is the
 agent's own count (REQ-MONITOR-044/052), not REQ-MONITOR-101's aggregate run count for the synthetic root; which of the two
-the run-level agent shows is **OQ-159**, open, and the figure stays the agent's own until it is ruled. **`SessionRecord.compressions`**
+the run-level agent shows was **OQ-159**, ruled 2026-10-06 as built ([`PD-MONITOR-003`](../../product/directives.md#pd-monitor-003)):
+the figure is the agent's own, and the run's aggregate is REQ-MONITOR-102's displayed total. **`SessionRecord.compressions`**
 (2026-10-02) is the run-wide compression count (REQ-MONITOR-086): the live run's maintained aggregate (`Run.compressions`,
 ADR-0008) while a run is live, else the stored `sessions.compressions` (`runCompressionsOf`, `toSessionRecord`) — raised at
 the completion that raises the compressing agent's own count, a root's included. The run-level agent carries it as its
@@ -931,7 +932,7 @@ canonical name and the entry persona it runs as, and the persona and canonical n
 kept off its canonical name
 ([`a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`](../../defects/fixed/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md)).
 A root named like an earlier child is still drawn as both
-([`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../../defects/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md)).
+([`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../../defects/fixed/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md)).
 
 **The eleventh state (PD-ORCH-005).** `CHILD_TRANSITIONS` admits `paused` from every non-terminal state and leaves it
 for exactly the state the child resumes into (`RESUME_STATES`, `resumeStateFor`: where it waited, `queued` again for a

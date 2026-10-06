@@ -52,7 +52,7 @@ evidence.
 
 Two edges remain. A child named before the repair keeps its name. And a root named like an earlier child, after the entry
 persona is changed to a persona an earlier child's name already spells, is recorded as its own defect:
-[`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md).
+[`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md).
 
 ## Specs
 

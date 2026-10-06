@@ -302,7 +302,7 @@ cost — the load changed a file the user tracks before any agent ran, every age
 `.gitignore` change it had not made, and the duress run spent an unrequested child (319 s) finding out who had. The load
 now appends `.rotaris/` alone, and writes the marker's directory to the repository-local exclude file (`info/exclude` in
 the repository's common directory), which Git honours and nobody tracks, so the Git proof's base tree stays clean without
-the user's `.gitignore` changing. OQ-161 holds the owner's ruling; the proofs still seed both lines in their own
+the user's `.gitignore` changing. OQ-161 holds the owner's ruling (*ruled 2026-10-06, [R-071](../../product/requests.md#r-071): the current behaviour is accepted*); the proofs still seed both lines in their own
 fixtures. And the ≈4.5 s discovery at every process's
 first run (finding 6) pushed five proofs' fixed windows: Part J, resilience, fetch and mission now switch the entry off
 in their scratch configuration, config carries the cost in its window, and IC-6's packaged launch reads `session running`

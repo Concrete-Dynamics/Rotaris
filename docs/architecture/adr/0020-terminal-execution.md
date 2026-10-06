@@ -434,7 +434,7 @@ call is now opened in the same turn as the pause, before the listener goes and t
 `terminal.test.ts`, red on the old order in both its halves.*
 
 *Reported back 2026-10-01, the partial repair of
-[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced`](../../defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md)
+[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced`](../../defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md)
 (live-run finding a71-8, [OQ-164](../open-questions.md)): **the queue of one held one paused call, and a second pause
 replaced it.** A call issued while a command is soft-paused is queued by the shell behind it. The session treated the
 paused call as the poll's alone: the new call reported only its own exit, and a soft pause of the new call disposed of
@@ -445,7 +445,7 @@ the next line's printed start marker (`pausedShare`, as A10 built it), and is cl
 over, beside its own subject, each paused call that ended unreported and each still running ahead of it
 (`drainEarlier`, `ForegroundResult.earlier`). A reset under them reports the one the shell was running as ended by the
 reset. The old line "a pause nobody ever polled is replaced here" is struck in `execute` and kept beside its
-replacement. Whether such a call should wait at all is OQ-164's, not ruled. Pinned by two "(OQ-164)" cases in
+replacement. Whether such a call should wait at all is OQ-164's, not ruled. *(Ruled 2026-10-06 by the owner, [R-071](../../product/requests.md#r-071): the current behaviour is the rule — the call waits behind the paused command and reports its end.)* Pinned by two "(OQ-164)" cases in
 `terminal.test.ts`, both red before the change. Five A10 cases now read the hand-over from the next call and keep their
 assertions.*
 

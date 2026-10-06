@@ -20,6 +20,11 @@ Users can attach shell commands ("hooks") to named points during a run: around t
 - **REQ-HOOKS-002** — Only tool hooks SHALL be able to influence the run via exit code. Lifecycle hooks are strictly informational: given a lifecycle hook with any configuration (including `required: true`), when it exits with any code, then the run proceeds unaffected.
 
 - **REQ-HOOKS-003** — Events SHALL fire at these points: `pre_tool` immediately before a permitted tool call runs; `post_tool` once a tool call has run; `session_start` once per run, ahead of the first iteration; `session_end` once per run, on each of the ways a run can finish: success, failure, a requested stop, cancellation, and interruption; `iteration_end` at the close of each finished iteration; `child_completed` once a delegated child agent has finished, whatever its final state; `verifier_finished` once for every completion-verifier pass, executed or skipped.
+  > **Narrowed by [`PD-HOOKS-001`](../product/directives.md#pd-hooks-001), 2026-10-06.** `child_completed` fires only
+  > for a child that finishes while a run's lifecycle hooks are live, after its `session_start` and before its
+  > `session_end` begins; a child that finishes outside that window (cancelled at rest, after the run came to rest, by a
+  > repair, in a run that never started, or while `session_end` runs) fires none, then or later. Every other event above
+  > still fires as stated.
 
 - **REQ-HOOKS-004** — Permission policy SHALL be evaluated before hooks: given a tool call the policy denies, no hook process starts and no hook event fires for that call. `post_tool` SHALL fire only for calls that ran to completion — not for a policy denial, and not for a call stopped by a `pre_tool` hook.
 

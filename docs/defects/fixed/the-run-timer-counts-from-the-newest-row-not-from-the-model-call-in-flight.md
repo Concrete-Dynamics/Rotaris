@@ -39,3 +39,7 @@ time since the last row, and a quick one is never seen to begin.
 Noticed 2026-10-06 by the autopsy of the default live run at `27a5127`; confirmed by fin18 (bundle
 `fin18-rail-label-and-observations`). Not repaired: the boundary has to be published by the engine through the record
 before the surface can count it, which crosses three packages, and which call it should be is the owner's (OQ-200).
+
+## Ruled as built — 2026-10-06 ([R-071](../../product/requests.md#r-071)); closed
+
+OQ-200 was raised the same day, after the overview the owner answered, and the owner's instruction confirmed it at the reading the build proceeds under (ruled in [`open-questions.md`](../../architecture/open-questions.md); [`PD-CHAT-008`](../../product/directives.md#pd-chat-008) narrows REQ-CHAT-158): the timer counts from the newest transcript row the run produced, and no model call's start is published on the record. The debt this note held, a call boundary on the record, is not owed under that ruling. Nothing is changed in the code.

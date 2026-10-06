@@ -15,7 +15,7 @@ ninth child, unrequested, to find out who had changed the file.
 
 Live-run finding: a71-1
 
-Raised as [OQ-161](../architecture/open-questions.md): whether the load may append the marker's directory at all, and
+Raised as [OQ-161](../../architecture/open-questions.md): whether the load may append the marker's directory at all, and
 if it may, whether anyone is told. Recorded, not repaired.
 
 ## Specs
@@ -66,7 +66,7 @@ if it may, whether anyone is told. Recorded, not repaired.
 (`packages/config/src/load.test.ts`, "a repository whose committed .gitignore already names `.rotaris/` stays clean
 once the runtime's marker exists", red on the code before, with the other four new cases and the amended REQ-CONFIG-013 case).
 
-**The part repaired, under a reading recorded in [OQ-161](../architecture/open-questions.md) and not a ruling.** The
+**The part repaired, under a reading recorded in [OQ-161](../../architecture/open-questions.md) and not a ruling.** The
 load appends `.rotaris/` alone to the workspace's `.gitignore`, the one line REQ-CONFIG-013 and REQ-MCP-089 name. The
 marker's directory goes to the repository-local exclude file (`info/exclude` in the common directory of the repository
 whose top level is the workspace, a linked worktree's included), which Git honours and nobody tracks: `git status`
@@ -118,4 +118,8 @@ this evidence (CLAUDE.md: a falsified reason is kept beside its replacement).
 
 Recorded as evidence only; nothing is changed. Whether the runtime may leave a marker in the workspace root at all, and
 where, stays the owner's ruling of OQ-161, "May a configuration load append the code-intelligence runtime's marker directory
-to the user's `.gitignore` beside `.rotaris/`?" in [`open-questions.md`](../architecture/open-questions.md). The build proceeds under the current behaviour.
+to the user's `.gitignore` beside `.rotaris/`?" in [`open-questions.md`](../../architecture/open-questions.md). The build proceeds under the current behaviour.
+
+## Ruled as built — 2026-10-06 ([R-071](../../product/requests.md#r-071)); closed
+
+The owner accepted the current behaviour (OQ-161, ruled in [`open-questions.md`](../../architecture/open-questions.md)): `.rotaris/` goes in the workspace's `.gitignore`, and `.serena/` in the repository's untracked `info/exclude` file, as repaired above. The marker stays in the workspace root as the runtime creates it, so what "Seen again" records, the file tools listing `.serena/` as workspace content, is accepted with it. Nothing is changed in the code.

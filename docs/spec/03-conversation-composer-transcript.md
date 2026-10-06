@@ -64,6 +64,9 @@ The conversation surface belongs to the single desktop application, and is backe
 - **REQ-CHAT-012** — When starting a run fails for any reason (including "a run is already active" and workspace-isolation refusals), the typed text MUST be restored into the composer unchanged and an error notice raised with the failure reason (e.g. "A run is already active."). The user's text is never lost by a failed submission.
 - **REQ-CHAT-013** — In demo mode (no run backend attached), a submission MUST append the user row plus a system row reading "Demo mode: run bridge is disabled." and start nothing.
 - **REQ-CHAT-158** — The run header MUST carry a run-timing indicator rendering a duration as `M:SS`, or as `H:MM:SS` once the value reaches one hour. While a run is active the value MUST count the time spent inside the model call currently in flight and MUST restart from `0:00` each time the run moves on to the next model call within the same run, so a model call that is taking an unusual length of time is visible as a rising number. Once the run reaches a terminal state the value MUST freeze at that run's total wall-clock duration and stay frozen until a subsequent run starts; before any run has been started in the window the indicator MUST show no duration rather than a zero. It MUST advance at least once per second while a run is active, under the live-refresh rules of REQ-CHAT-063, and a tick MUST NOT write session state or cause a transcript publication (REQ-MONITOR-108).
+  > **Narrowed by [`PD-CHAT-008`](../product/directives.md#pd-chat-008), 2026-10-06.** While a run is active the value
+  > counts from the newest transcript row the run produced, restarting when a newer row appears; a call that writes no
+  > row does not restart it. Every other clause above still governs.
 
 ### 2. Desktop Prompt Drafts and History Recall
 

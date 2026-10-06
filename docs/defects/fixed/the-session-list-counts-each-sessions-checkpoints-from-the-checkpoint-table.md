@@ -9,7 +9,7 @@ column; whether that ADR's choice governs the listing, or the listing record owe
 here. The listing rows also carry figures from outside REQ-SESSION-030's field set (`tokens`, `durationLabel`, `detail`
 from `workspace_root`), which the Overview draws. Noticed 2026-10-02 (fin10, bundle `fin10-strip-notices-and-listing`)
 while removing the list's transcript read
-([the-session-list-reads-each-sessions-transcript-for-its-label.md](fixed/the-session-list-reads-each-sessions-transcript-for-its-label.md));
+([the-session-list-reads-each-sessions-transcript-for-its-label.md](the-session-list-reads-each-sessions-transcript-for-its-label.md));
 not repaired there (outside that task).
 
 ## Status (2026-10-03, fin11)
@@ -20,7 +20,7 @@ not repaired there (outside that task).
   second copy, and reading it reads no session state, transcript or history (REQ-SESSION-042's three exclusions) and no
   Git (REQ-GIT-018). Recorded beside ADR-0039's first execution as well.
 - **The label half is open on the owner**:
-  [OQ-192](../architecture/open-questions.md) ("The sessions card's rows carry a token label, a duration label and a detail
+  [OQ-192](../../architecture/open-questions.md) ("The sessions card's rows carry a token label, a duration label and a detail
   caption, which the listing record's closed field set does not hold"). REQ-MONITOR-171 requires the three labels on each
   sessions-card row; REQ-SESSION-030's closed field set forbids them. The build proceeds under REQ-MONITOR-171, the three
   read from the same session row as the listing record. This note stays open until that question is ruled.
@@ -36,3 +36,7 @@ not repaired there (outside that task).
 
 - `packages/engine/src/sessions.ts`: `list`, its `checkpointCount` read per row and its `tokens`, `durationLabel`, `detail`.
 - `packages/store/src/dal.ts`: `checkpointCount` (ADR-0039's derived count) and `listSessions`.
+
+## Ruled as built — 2026-10-06 ([R-071](../../product/requests.md#r-071)); closed
+
+The owner kept the three labels and amended the listing record's field list to include the token total, the run start time and the workspace path (OQ-192, ruled in [`open-questions.md`](../../architecture/open-questions.md); [`PD-SESSION-001`](../../product/directives.md#pd-session-001) narrows REQ-SESSION-030). The label half is closed by that ruling, the checkpoint half having closed on 2026-10-03; the duration label stays the latest run's. Nothing is changed in the code.

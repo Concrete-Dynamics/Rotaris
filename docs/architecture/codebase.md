@@ -585,7 +585,8 @@ in `configuration.ts`'s header.)
    hooks are announced once and the displaced global entries reinstated), narrowed by the policy toggles, joined
    by the enabled Claude Code imports, and fixed for the run. `session_start` fires ahead of iteration 1,
    `iteration_end` before the next iteration, `child_completed` once a child settles (whichever path settles it inside
-   a run, since 2026-09-30; OQ-154 asks about the paths outside one), `session_end` with the one
+   a run, since 2026-09-30; OQ-154 asked about the paths outside one, and the owner's ruling of 2026-10-06,
+   [`PD-HOOKS-001`](../product/directives.md#pd-hooks-001), fires none there), `session_end` with the one
    status string; a permitted tool call passes the `pre_tool` slot (a stop is a `blocked` row with REQ-HOOKS-049's
    text) and, having run, the `post_tool` slot (feedback in the same result, or a following user message).
    Every invocation is one `hook.start`/`hook.finish` pair and one `hook_run` entry written before the event;
@@ -776,7 +777,8 @@ saved file. Recorded in [`first-executions.md`](first-executions.md).
 three of five runs on 2026-10-03 went red on what the model answered or how long the shared endpoint took
 ([note](../defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)). Each intent prompt accepts the
 categories REQ-ORCH-006 and REQ-ORCH-021 leave in reach of it, the reason written beside each (`INTENTS`). The README
-question now admits `explicit_trivial`, which is [OQ-198](open-questions.md)'s to narrow. A fallback stays a red, and one
+question admitted `explicit_trivial`, which was [OQ-198](open-questions.md)'s to narrow; since the owner's ruling of 2026-10-06
+([`PD-ORCH-010`](../product/directives.md#pd-orch-010), [R-071](../product/requests.md#r-071)) it accepts the answer group alone. A fallback stays a red, and one
 at the 12 s bound names OQ-114. A run the product completed in which the model wrote no answer is reported as the model's
 call: it is kept as `run.attempt-1.*` (and in `.proof/slice-proof-answerless/`, which the next run does not clear) and
 scenario 3 runs once more. A second answerless run is a red ([OQ-199](open-questions.md)

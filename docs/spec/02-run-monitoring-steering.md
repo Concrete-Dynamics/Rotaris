@@ -272,6 +272,11 @@ While a task run is executing, a user must be able to watch what every agent is 
 
 **REQ-MONITOR-101** — Each agent node exposes its live tool-call count and the set of tool names it has called; the synthetic root node exposes the aggregate run count and the aggregate called-tool history.
 
+> **Narrowed by [`PD-MONITOR-003`](../product/directives.md#pd-monitor-003), 2026-10-06.** The run-level agent the
+> inspector, the Mission view and the persona windows present carries its own tool-call count and called history (the
+> roots'); the aggregate run count is the run's total of REQ-MONITOR-102, and no surface draws an aggregate called-tool
+> history. Every other node is as stated above.
+
 **REQ-MONITOR-102** — Per-agent metrics are persisted with the session and comprise: tool-call count, per-tool-name counts, token usage, cost, compression count, and last prompt tokens. A session-wide total tool-call count is also persisted, and a displayed total is the persisted value, carried to the surface on the whole-session update (REQ-MONITOR-216) rather than tallied by that surface for itself.
 
 **REQ-MONITOR-103** — Tallying tool rows from a conversation transcript is idempotent: reading the same transcript again, whole or in part, must leave every tool-call total exactly as it was. A row may contribute to a total at most once, whatever a reader's position in the transcript.
@@ -525,6 +530,10 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-197** — Every host (REQ-MONITOR-003) presents from the same wait state and `waiting` status, delivered to all of them alike (REQ-MONITOR-216), and every one of them must present the run as waiting on provider quota, not as stalled or failed.
 
 **REQ-MONITOR-303** — Entering a quota wait raises a decision surface in the desktop interface for the session that is waiting. It must convey that the run is parked because a provider reported its quota exhausted, and must name the model and the provider. It has two body variants, chosen by the wait state's automatic-resume flag (REQ-MONITOR-195): where automatic resume is allowed, it also conveys the approximate retry delay and that the run will retry by itself if left alone; where it is not, it also conveys that this provider-and-model pair is treated as out of quota for the remainder of the session (REQ-MONITOR-194). It offers exactly three choices, and the set of three is a fixed contract while the wording of each is the implementation's: keep waiting, which resolves the wait as a retry and returns the status to `running`; cancel the run, which takes the ordinary cancellation path (REQ-MONITOR-127, REQ-MONITOR-129); and change model now, which opens a model picker offering the fallback candidates of REQ-MONITOR-193, listing excluded pairs with their reason rather than hiding them (REQ-MONITOR-194), and which on selection applies the run's model switch (REQ-MONITOR-142) and resolves the wait as a retry on the chosen model. The surface must not block the rest of the application: while it is open the transcript keeps updating, other sessions keep running, and every other control stays operable. Dismissing it without choosing leaves the wait exactly as it was and does not answer it; while the session's status is `waiting` the surface must remain reachable again from the run header, so a dismissed decision is never a lost one. At most one such surface exists per waiting session, and a session that leaves `waiting` for any reason closes its own.
+
+> **Narrowed by [`PD-MONITOR-004`](../product/directives.md#pd-monitor-004), 2026-10-06.** The change-model picker lists
+> every configured model key, alphabetically, the waiting model included, with an out-of-quota pair annotated and
+> choosable; REQ-MONITOR-193's candidates are not its filter. Every other clause above still governs.
 
 ### 22. Failure visibility
 

@@ -143,7 +143,7 @@ What holds now:
   hooks do.
 - Not closed here: a user's cancel of one child accepted while the run's own `session_end` hooks run fires its
   `child_completed` after `session_end`. Recorded as
-  [`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`](../a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md).
+  [`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`](a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md).
 
 Pinned by three cases in the same describe, each red before this change and each red with only its own part removed:
 "a child the user cancels while a pause waits on the executions is waited for too — its `child_completed` ends before

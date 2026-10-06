@@ -20,10 +20,10 @@ only for a call that names a timeout, because a call that names none soft-pauses
 
 Live-run finding: a71-8
 
-No requirement covers this third move. It is raised as [OQ-164](../architecture/open-questions.md).
-[OQ-147](../architecture/open-questions.md) covers a paused call's status only once a poll hands it over. The open notes
-[`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md`](fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)
-and [`a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`](fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)
+No requirement covers this third move. It is raised as [OQ-164](../../architecture/open-questions.md).
+[OQ-147](../../architecture/open-questions.md) covers a paused call's status only once a poll hands it over. The open notes
+[`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md`](output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)
+and [`a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`](a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)
 are neighbours, and neither describes this case. Recorded, not repaired.
 
 ## Specs
@@ -66,7 +66,7 @@ no-output window. A `sleep 3; …; (exit 5)` soft-paused, and an `echo behind` i
 Its observation said only "The command exited with code 0." A paused `sleep 2; (exit 6)` that ended unpolled was not
 mentioned by the next command either. All three cases below were red on that code.
 
-**Fixed, under the reading recorded in [OQ-164](../architecture/open-questions.md)** (the reading changed, the question
+**Fixed, under the reading recorded in [OQ-164](../../architecture/open-questions.md)** (the reading changed, the question
 not ruled):
 - A call issued while a command is soft-paused reports that command beside its own outcome (`ForegroundResult.earlier`,
   `terminal/index.ts`'s `earlierSentence`). It says that it waited behind the command, when the command ended relative to
@@ -115,8 +115,12 @@ reset", both red on the code before them. The live run's `terminal` scenario car
 (`lib/terminal-shapes.mjs`, `pausedBehindReading`). Its first run (2026-10-01, the self-hosted endpoint, pack
 `.live-run/runs/2026-10-01T11-09-06-837Z` of the `fin1-termshellend` worktree) read the command issued behind the paused
 `sleep 45` as "… waited behind it: that command ended 12.5 seconds after this command was submitted, with exit code 0",
-with the paused command's `slept` carried ([first-executions row](../architecture/first-executions.md)).
+with the paused command's `slept` carried ([first-executions row](../../architecture/first-executions.md)).
 
 **Left open, the owner's (OQ-164):** whether such a call is refused with REQ-TOOLS-098's remedy, waits as built, or
 interrupts the paused command; whether the wait counts against the new call's no-output window and timeout (it still
 does); and whether the report built here is the answer to the last point. This note stays open until that ruling.
+
+## Ruled as built — 2026-10-06 ([R-071](../../product/requests.md#r-071)); closed
+
+The owner made the current behaviour the rule (OQ-164, ruled in [`open-questions.md`](../../architecture/open-questions.md)): a call made while an earlier command is soft-paused waits behind it, its no-output window and timeout counting the wait, and its observation reports the paused command's end and output beside its own outcome; the tool description's third move stands. What "Left open, the owner's" above named is answered by that ruling, and nothing is changed in the code. The repair recorded above, and the tests and the live-run shapes that pin it, are the behaviour ruled.

@@ -85,7 +85,7 @@ the path link on this host (no `xdg-open`) raised "The workspace folder could no
 
 Noticed while building and recorded, not repaired:
 [the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md](the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md),
-[the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md](../the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md).
+[the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md](the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md).
 
 **Repair round, 2026-10-03 (the verifier's two findings against this repair).** Two flags still did not follow the
 configuration the file-access flag had been made to read:

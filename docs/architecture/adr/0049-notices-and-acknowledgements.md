@@ -208,7 +208,7 @@ exists. *Corrected 2026-10-02: the retry was one of the seven as first written; 
 dispatches to `retryRun` (`apps/desktop/src/renderer/session-actions.ts`, `REQ-NOTIFY-045`), which resubmits the
 composer's draft, else the followed session's last submitted prompt, and refuses with a reason when there is neither —
 [`the-retry-run-notice-action-has-no-target.md`](../../defects/fixed/the-retry-run-notice-action-has-no-target.md).
-No failure notice carries the action yet (OQ-178), so it is reached only by a notice that names it.*
+No failure notice carries the action yet (OQ-178), so it is reached only by a notice that names it. (Ruled 2026-10-06, [R-071](../../product/requests.md#r-071): kept as built, no failure notice carries it, and the composer keeps the draft.)*
 Two members outside `REQ-NOTIFY-044`'s list were carried because two other requirements demand them (`REQ-NOTIFY-224`'s hook review and `REQ-WORKSPACE-152`'s provider sign-in). **That gap was RULED 2026-09-06 as
 ESC-34, the same day:** the owner added both members to `REQ-NOTIFY-044` on the precedent of its own resolution 12,
 where this vocabulary was corrected to match a behavioural requirement rather than the other way round. **This ruling

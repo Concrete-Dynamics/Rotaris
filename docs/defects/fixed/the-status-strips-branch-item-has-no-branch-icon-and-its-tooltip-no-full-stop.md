@@ -44,7 +44,7 @@ found by reading, not driven; not repaired by fin11, which repairs the icon and 
   pushes the session branch with an upstream, commits in the worktree, reopens the session through the browser, and reads
   `rotaris/session/<sid> ↑1` with the title "Branch this workspace is on: rotaris/session/<sid>, 1 commit ahead." and that
   sentence plus the worktree clause as `aria-description`.
-- **Still open on the owner:** [OQ-193](../architecture/open-questions.md) ("What does the status strip's branch item show
+- **Still open on the owner:** [OQ-193](../../architecture/open-questions.md) ("What does the status strip's branch item show
   on a detached HEAD, outside a repository and before the first read"), unchanged by this repair.
 
 ## Status (2026-10-03, fin11) — partly fixed; open on OQ-193 and on the worktree finding
@@ -65,7 +65,7 @@ found by reading, not driven; not repaired by fin11, which repairs the icon and 
   `--rt-accent`'s, `oklch(0.59 0.16 292)`, and it stands before the label). Since fin11 the branch name is also shortened
   from the middle (`docs/defects/fixed/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md`), only while
   the item shows a branch name and only once the path beside it has given up its width; the state words are never cut.
-- **Open on the owner:** [OQ-193](../architecture/open-questions.md) ("What does the status strip's branch item show on a
+- **Open on the owner:** [OQ-193](../../architecture/open-questions.md) ("What does the status strip's branch item show on a
   detached HEAD, outside a repository and before the first read"). The build proceeds under REQ-GIT-161's words; that text
   is untouched.
 - **Open, recorded above:** the worktree branch's ahead marker and sentence (size M, not repaired in fin11; fixed by the
@@ -84,3 +84,7 @@ found by reading, not driven; not repaired by fin11, which repairs the icon and 
 - `packages/ui/src/composer.ts`: `stripItems` places it (`strip-branch`); `packages/ui/src/AppShell.tsx` draws it.
 - `apps/desktop/scripts/git-proof.mjs`: reads `strip-branch`'s text (`main ↑1`; the worktree branch in launches 3 and 3b).
 - `packages/workspace/src/git/view.ts`: `parseUpstreamAhead`, each worktree row's `upstreamAhead`.
+
+## Ruled as built — 2026-10-06 ([R-071](../../product/requests.md#r-071)); closed
+
+The owner kept the visible words and tooltips as built and amended REQ-WORKSPACE-020 to match them, keeping the tooltip's full stop and the singular or plural commit wording (OQ-193, ruled in [`open-questions.md`](../../architecture/open-questions.md); [`PD-WORKSPACE-007`](../../product/directives.md#pd-workspace-007) narrows REQ-WORKSPACE-020 and REQ-GIT-122). The icon, the full stop and the worktree branch were repaired as recorded above; the detached, non-repository, no-git and unread states are now the rule. Nothing is changed in the code.

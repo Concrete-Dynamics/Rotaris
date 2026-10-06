@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Fifty-two.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Sixty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -332,6 +332,10 @@ scrollable all-step form.
 
 ### PD-CHAT-003 — transcript row density follows the design material's compact flow
 
+*Revision 2 (2026-10-06, [R-071](requests.md#r-071)) — **the cost paragraph's capacity unit**, the owner's ruling of
+OQ-166. The normative clauses are unchanged; the last sentence of "Why, and what it costs" is replaced below and quoted
+beside its replacement. Revision 1 (2026-09-13, [R-012](requests.md#r-012)) is otherwise unchanged.*
+
 The workspace transcript SHALL be drawn at the density the adopted design material proposes for it
 (`docs/design/README.md` G7: "the mockup's transcript column is the best available drawing of the
 intent"), not at the geometry REQ-CHAT-057's figures produce when composed with per-row padding
@@ -360,9 +364,17 @@ taken with the row stylesheet's `min-height: 30px` + `padding: 8px 12px` + `marg
 row pitch of roughly 46–50 px where the mockup's blocks sit 12 px apart and a one-line row is
 ~17 px. The specification was faithful to its target and is not wrong; the owner wants something
 else — the mockup's compactness. The cost is that rows no longer carry their own breathing room,
-readability at density leaning on line-height and the block gap instead, and that the recycled
-pool's capacity arithmetic (`ROW_MIN_HEIGHT` in `packages/ui/src/transcript/constants.ts`) keeps
-the 30 px figure as a conservative slot-size floor while real rows may be shorter.
+readability at density leaning on line-height and the block gap instead, and — revision 2 — that the
+recycled pool's capacity is counted in the shortest row a slot can hold, 20 px (`SHORTEST_ROW_HEIGHT` in
+`packages/ui/src/transcript/constants.ts`), so a tall viewport of short rows binds enough slots, while the
+30 px figure (`ROW_MIN_HEIGHT`) stays the floor of the estimate a row is positioned by before its first
+measurement.
+
+> *Revision 1 said, and no longer governs:* "and that the recycled pool's capacity arithmetic
+> (`ROW_MIN_HEIGHT` in `packages/ui/src/transcript/constants.ts`) keeps the 30 px figure as a conservative
+> slot-size floor while real rows may be shorter." A unit taller than the shortest row binds fewer slots
+> than a tall viewport of such rows shows, so for capacity the 30 px figure was the opposite of
+> conservative (acceptance finding A38, repaired 2026-10-01).
 
 > **Narrows:** REQ-CHAT-057
 
@@ -3165,6 +3177,12 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 
 ### PD-ORCH-006 — a coordinator granted the direct-work bundle does the work itself, and is told so
 
+*Revision 2 (2026-10-06, [R-071](requests.md#r-071)) — **which todo items REQ-ORCH-029's success clause ranges over**, a
+section added after the directive's first two paragraphs; the owner's ruling of OQ-203. One clause of the first paragraph is
+qualified there and quoted beside its replacement. This directive is the one that narrows REQ-ORCH-029, and the symbol
+generator admits one narrowing directive per requirement, so a narrowing of REQ-ORCH-029 lands here whatever it is about
+(as `PD-TOOLS-006` holds REQ-TOOLS-152's). Revision 1 (2026-10-06, the ruling of OQ-202) is otherwise unchanged.*
+
 Where the intent-to-tools mapping grants the entry role the direct-work bundle of REQ-ORCH-016 — with the built-in
 mapping, on a run whose intent is `explicit_trivial` or `single_file_change` — three of REQ-ORCH-029's constraints on the
 coordinator SHALL NOT bind it for that run: it MAY make file-modifying tool calls, it MAY emit a plan, code or a diff of its
@@ -3178,7 +3196,18 @@ The instructions the entry role is given for that run SHALL say that it holds th
 commands and does the work with them, and SHALL NOT say that it modifies no files or runs no commands. A prompt supplied by
 configuration (REQ-CONFIG-100) is kept whole, with that statement after it. While the plan gate holds the run
 (REQ-ORCH-153), the bundle's writing and command tools are withheld, and the held turn is given the instructions of a
-coordinating run. Every other run keeps REQ-ORCH-029 whole.
+coordinating run. Every other run keeps REQ-ORCH-029 whole. *(Qualified by revision 2: on every run, the todo clause
+ranges over the task's own items, below.)*
+
+**Which todo items the success clause ranges over (revision 2).** On every run, coordinating or granted the bundle,
+REQ-ORCH-029's constraint "it does not report the run successful while a todo item is non-terminal" SHALL range over the
+items of the plan that the task in hand answers for, as [`PD-ORCH-011`](#pd-orch-011) decides them: the items not already
+open when the task was first taken up. An item a task given up on, an earlier run or anything else left open before then
+does not keep the coordinator from reporting the task's work done; it stays open in the plan. The clause's other half, a
+todo item whose recorded state disagrees with what happened, is unchanged.
+
+> *Revision 1 said, and no longer governs in the case above:* "it does not report the run successful while a todo item is
+> non-terminal or disagrees with what happened" — among the constraints that "still bind", read over every item of the plan.
 
 **Why, and what it costs.** REQ-ORCH-016 grants the coordinator the bundle on the two simplest intents and REQ-ORCH-029
 forbids it to use it; neither names the other ([OQ-202](../architecture/open-questions.md)). The build applied the grant and
@@ -4020,6 +4049,435 @@ that fails; a root that wrote nothing on purpose is asked anyway.
 > they show the re-prompt asks nothing of a root that answers. **What was not measured.** No built-app or live run met a
 > silent root: `slice-proof`'s question against the live endpoint is where one was seen, and it is the orchestrator's to
 > run. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-hooks-001"></a>
+
+### PD-HOOKS-001 — `child_completed` fires only while a run's lifecycle hooks are live
+
+`child_completed` SHALL fire for a delegated child that finishes while a run's lifecycle hooks are live: after that run's
+`session_start` and before its `session_end` begins, at the place REQ-HOOKS-076's order gives it. A child that finishes
+outside that window fires no `child_completed`, then or later, and no later run of the session owes it. Five paths end a
+child outside the window, and none fires it:
+
+1. the cancel of one paused child while its session rests (`PD-ORCH-005` clause 16), where no run and no hook port exist;
+2. an explicit cancel that lands after its run has come to rest, once the run's `session_end` has fired;
+3. the record of an accepted explicit cancel whose run host died, written from the store by a repair, which has no run, or
+   by the next continue before its run exists;
+4. the stale settle (REQ-ORCH-053) of a run that ends before its `session_start`, a stop requested during its pre-flight or
+   a raise before that point;
+5. the user's cancel of one paused child (REQ-ORCH-133) accepted while the run's own `session_end` hooks run, or after them
+   and before the run has ended. The cancel is still accepted: the child ends `cancelled` with its report, its
+   `child_user_cancelled` entry and its teardown.
+
+Every path the specification places inside a run fires it, after the run's `session_start`: the cascade (REQ-ORCH-048),
+the finalize sweep (REQ-ORCH-052), the user's cancel of one child in a live run (REQ-ORCH-133), the stale settle of a run
+that has started (REQ-ORCH-053), and the decline of a resumable iteration (`PD-ORCH-005` clause 6). Every other event of
+REQ-HOOKS-003 fires as that requirement states.
+
+**As built.** `Run`'s teardown awaits the hooks of children that ended outside their execution
+(`Run.childCompletionsSettled`) and then calls `IterationChildren.endLifecycle` before `session_end` fires, so from then no
+`child_completed` is queued (`packages/engine/src/run/run.ts`, `packages/engine/src/children/orchestration.ts`); pinned by
+`children.test.ts`, "REQ-HOOKS-076 / REQ-HOOKS-081 with OQ-154 …".
+
+**Why, and what it costs.** OQ-154: REQ-HOOKS-003 fires `child_completed` "whatever its final state" and names no
+exception, while REQ-HOOKS-076 and REQ-HOOKS-080 place it inside a run, between its `session_start` and its `session_end`.
+Firing on the five paths at the moment would run a hook with no `session_start` before it or after the `session_end` it
+should precede (REQ-HOOKS-081), or would need a hook port resolved for no run; owing it to the next run would announce,
+perhaps much later, a child that run never saw, and never if the session is not continued. The owner accepted the built
+behaviour and asked for the specification to say so. What it costs: a hook that counts children on `child_completed`
+misses a child that ended on one of the five paths; the child's terminal state, report and timeline entries are recorded
+as for any other.
+
+> **Narrows:** REQ-HOOKS-003
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-154.*
+
+---
+
+<a id="pd-orch-009"></a>
+
+### PD-ORCH-009 — a child is never named after a root of its session
+
+Beside REQ-ORCH-044's rule, a delegated child at any depth SHALL NOT take as its canonical name the canonical name or the
+persona of the root it works under, nor of any root the session has recorded: each iteration's root persona and root
+canonical name, and each publishing root that no iteration records. Such a name is in use for that child, and the child is
+renamed `<name>_<n>` by REQ-ORCH-044's own rule, though no sibling under its parent holds the name. A child named before
+this rule was built keeps its name.
+
+One case is accepted for the first release and left until after it: a **root named like an earlier child**. Where the
+entry persona of a later run is one whose id an earlier child's canonical name already spells, the root's rows carry that
+child's name, and the surfaces that know an agent by its name present the root as that child too, and the child as the
+run-level agent. A root's name is its persona, which no ledger chooses.
+
+**As built.** `ChildLedger.spawn` (`packages/engine/src/children/ledger.ts`) counts as taken, beside the parent's
+children's names, its root's canonical name and persona and every recorded root's two names (`recordedRootNames`,
+`packages/engine/src/children/naming.ts`). The accepted case is recorded in
+[`fixed/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../defects/fixed/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md).
+
+**Why, and what it costs.** OQ-158: a transcript row, a tool call and an artifact know their agent by a name alone, so a
+child whose canonical name a root carries is drawn as both agents. REQ-ORCH-044 renames only a name "reused" under the
+child's parent. The other reading, rows that carry an identity the surfaces match instead of the name, widens the
+transcript row's envelope and leaves every row recorded before on the name rule. The owner accepted the renaming. What it
+costs: a child the model names `orchestrator` two levels down is `orchestrator_1` where REQ-ORCH-044 alone would keep its
+name, and the root named like an earlier child stays drawn as both until after the first release.
+
+> **Narrows:** REQ-ORCH-044
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-158.*
+
+---
+
+<a id="pd-orch-010"></a>
+
+### PD-ORCH-010 — `explicit_trivial` is a small edit, and the tie-break chooses among the plausible categories
+
+`explicit_trivial` SHALL mean an explicitly stated, trivial **edit**: with `single_file_change`, one of the two smallest
+edits, as REQ-ORCH-021's micro group holds them. A request that changes nothing is not `explicit_trivial`, however small
+it is: a question about one file belongs to the answer group (`question`, `exploration`). REQ-ORCH-006's tie-break, "when
+several categories are plausible the tie-break prefers `moderate_feature`", SHALL choose among the categories that are
+plausible for the request: it prefers `moderate_feature` where `moderate_feature` is itself one of them, and never brings it
+into reach of a request for which no build is plausible. The thirteen categories, REQ-ORCH-006's two fixed meanings and
+REQ-ORCH-007's fallback are unchanged.
+
+**As built.** The classifier's instruction already calls `explicit_trivial` and `single_file_change` "the two smallest
+edits" and passes the tie-break on in REQ-ORCH-006's words (`packages/engine/src/intent/classifier.ts`); neither is
+changed. The product takes the category the model answers: it does not overrule a model that classifies a question
+`explicit_trivial`. `slice-proof` accepts the answer group alone for its question about `README.md` (`INTENTS`,
+`apps/desktop/scripts/lib/live-answers.mjs`), so that answer is a red there.
+
+**Why, and what it costs.** OQ-198: REQ-ORCH-006 names `explicit_trivial` without a meaning, and REQ-ORCH-021 groups it with
+`single_file_change` apart from the answer group. The two readings route a run differently: the micro group's playbook cells
+in place of the answer group's, and in `plan` mode a hold at the plan gate, which exempts the answer group alone
+(REQ-ORCH-153). Read literally, the tie-break would classify every request with several plausible categories as
+`moderate_feature`. The owner ruled the edit reading and the tie-break among the plausible. What it costs: a model that
+still answers `explicit_trivial` for a question (one run in nine against the registered endpoint on 2026-10-03) routes it
+as an edit, and `slice-proof` reports that run red where it accepted it before.
+
+> **Narrows:** REQ-ORCH-006
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-198.*
+
+---
+
+<a id="pd-orch-011"></a>
+
+### PD-ORCH-011 — a task answers for the plan items opened since it was first taken up
+
+REQ-ORCH-075's "the agent's own todo list still holds pending/in-progress items" SHALL range over the items of the
+coordinator's plan that the task in hand answers for, not over the whole session plan. A task answers for every item that
+is not terminal and was not already open when the task was first taken up, and for no other:
+
+- Its **first take-up** is the plan cycle that planned it, where one did (REQ-ORCH-153); otherwise its first iteration in the
+  session.
+- The record of what was open at that take-up is **kept with the task**, so every later iteration of it reads the same
+  record: the one a continue resumes, and a fresh iteration of the re-queued task in the same run or a later one. A revise
+  cycle, and the plan cycle after a resumed iteration (`PD-ORCH-003` revision 2), keep a record the task already carries.
+- An item the task's plan cycle wrote, one the task opened, and one its own earlier iteration left open therefore always
+  hold it; an item that a task given up on (REQ-ORCH-077), an earlier run or anything else left open before the task was
+  first taken up never does. An item a person adds to the agent plan during the task (REQ-CHAT-090) holds it. A `PENDING`
+  item re-listed by REQ-TOOLS-146's `replace` in the id-less shape is given a new id, so it is the re-listing task's.
+- An item excused this way is **not altered**: it stays open in the plan the Todo pane counts.
+- The continuation marker block naming the open items goes to the same task's next fresh root only, and is dropped when the
+  task completes or is given up on.
+- A task first taken up by a build that kept no such record has none, and every open item is held against it.
+
+REQ-ORCH-029's clause "it does not report the run successful while a todo item is non-terminal" reads the same way, under
+[`PD-ORCH-006`](#pd-orch-006) revision 2, the directive that narrows that requirement.
+
+**As built.** `Task.planExcused` and `Task.planLeftOpen` (`packages/engine/src/run/todo.ts`), kept with the planner task in
+the stored todo; `Run.planCycleTakeUp`, `Run.takeUp` and `openPlanItems`'s `excused` (`packages/engine/src/run/`); pinned by
+`packages/engine/src/run/coordinator-plan.test.ts`.
+
+**Why, and what it costs.** OQ-203: the plan is the session's and outlives every task, run and iteration. Read literally, an
+item a given-up task or an earlier run left open holds against every later task, each re-queued and given up on in turn
+though its own work was done: a record that disagrees with what happened, which REQ-ORCH-029's other clause forbids, and a
+root told to finish another task's work, which REQ-ORCH-067 forbids. No requirement says which items belong to which task.
+The owner confirmed the take-up reading as built. What it costs: a run can complete while its plan holds an item no task
+answers for, and the Todo pane shows it open beside a completed run.
+
+> **Narrows:** REQ-ORCH-075
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-203.*
+
+---
+
+<a id="pd-monitor-003"></a>
+
+### PD-MONITOR-003 — the run-level agent carries its own tool-call count, and the run's aggregate is the run's total
+
+The run-level agent that the inspector, the Mission view and the persona windows present (the run's synthetic root of
+REQ-MONITOR-043, which is never a tree row) SHALL carry, as REQ-MONITOR-044 and REQ-MONITOR-052 give every agent, **its own**
+tool-call count and called-tool history: the calls of the session's roots, which is the persisted total less every child's
+persisted count, plus the live root's calls not counted yet. REQ-MONITOR-101's "aggregate run count" SHALL be the run's
+displayed total of REQ-MONITOR-102, and not the run-level agent's count; no surface draws the run's aggregate called-tool
+history, and the run-level agent's called history is the roots' own. The run-level agent's compression count is the
+run-wide count (REQ-MONITOR-086). Every other agent node exposes its own count and history, as REQ-MONITOR-101 states.
+
+**As built.** `runLevelAgent` (`packages/ui/src/agents.ts`) reads `SessionRecord.entryToolCalls` (`entryToolCallsOf`,
+`packages/engine/src/sessions.ts`, with `Run.entryUncountedToolCalls`), `entryTools.called` and `compressions`; the run's
+total is `SessionRecord.toolCalls.total`.
+
+**Why, and what it costs.** OQ-159: REQ-MONITOR-101 gives the synthetic root the aggregate, while REQ-MONITOR-044 and
+REQ-MONITOR-052 give every agent as presented its own count on its meta line and do not except the run-level agent. The two
+part whenever a child has called a tool. The owner confirmed the agent's own count as built. What it costs: the run-level
+agent's `{N} tool calls` is smaller than the run's total whenever a child has called a tool, and a reader adds the children's
+counts, or reads the run's total, to see the whole.
+
+> **Narrows:** REQ-MONITOR-101
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-159.*
+
+---
+
+<a id="pd-monitor-004"></a>
+
+### PD-MONITOR-004 — the quota wait's model picker lists every configured model, an out-of-quota one marked
+
+The model picker that the quota wait's "change model" opens SHALL list **every configured model key** the configuration
+snapshot holds, in alphabetical order, the waiting model included. It applies neither REQ-MONITOR-193's filter and order
+(the same-tier candidates in declaration order) nor REQ-NOTIFY-074's (other providers first, the failed model left out),
+and no model is labelled with its provider. A key whose provider-and-model pair the session recorded out of quota is
+listed in its place, annotated "provider reported insufficient quota in this session", and stays choosable, as
+REQ-MONITOR-194 asks of every model selector. What a choice then does, and every other clause of REQ-MONITOR-303 and
+REQ-NOTIFY-263, is unchanged by this directive.
+
+**As built.** `WaitHeader` and `waitModelOptions` (`packages/ui/src/WorkspaceView.tsx`), the annotation read from the
+record's `wait.excluded` (`excludedModelKeys`, `packages/engine/src/run/resilience.ts`).
+
+**Why, and what it costs.** OQ-186: REQ-MONITOR-303 offers REQ-MONITOR-193's candidates beside the excluded pairs, and
+REQ-NOTIFY-263 opens REQ-NOTIFY-074's list, which has no tier, labels each model with its provider and leaves out the very
+model REQ-MONITOR-194 would list annotated. The built list holds both requirements' models and applies neither's filter,
+and marks what REQ-MONITOR-194 asks every selector to mark. The owner accepted it and asked for both requirements to
+describe it. What it costs: a model of another tier, or of the provider that failed, is offered beside the candidates the
+ladder itself would try, in an order that says nothing about which the ladder prefers.
+
+> **Narrows:** REQ-MONITOR-303, REQ-NOTIFY-263
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-186.*
+
+---
+
+<a id="pd-workspace-005"></a>
+
+### PD-WORKSPACE-005 — a code-intelligence setup's failure reads in these words where REQ-WORKSPACE-092 and REQ-WORKSPACE-093 give none
+
+The `code-intelligence-setup` task's step details and failure SHALL read as follows. REQ-WORKSPACE-092's two fixed
+sentences for a stopped step, REQ-WORKSPACE-091's for a skipped one, REQ-WORKSPACE-093's three stage reasons and its
+summary, and the retryable outcome are unchanged.
+
+- **A step's detail.** A step not attempted (an earlier one failed, or the setup was cancelled between steps) and a step that
+  ran and wrote nothing have an **empty** detail; the step's status (`not-attempted`, `succeeded`, `failed`) says what
+  happened. A step whose command could not be started reads in the **launch's own error text** (for example
+  `spawn /opt/ci ENOENT`). Every other step's detail is the last 400 bytes of its combined output **once that output is
+  trimmed of its leading and trailing blank space**, cut where a UTF-8 character begins so that no character is split.
+- **A failed stage with an empty detail** takes the setup's final sentence, "A step failed, so the workspace is only partly
+  set up.", as its error's `{detail}`.
+- **A setup that began no stage** fails retryably with REQ-WORKSPACE-093's summary, under the reason "Code intelligence could
+  not complete this project's setup". Its detail is the run host's own refusal of the start ("A code-intelligence setup is
+  already running for this workspace; wait for it to finish or cancel it first.", "That workspace is not open in the run
+  host", "The configuration could not be loaded"); "the setup was cancelled before it started." for a run cancelled while
+  its setup waited for the one before it; or "the run host did not answer the setup's start" with the request's own error in
+  parentheses, for a start the run host does not answer within main's 15 s request bound. A refused start is not waited
+  out: the task fails at once and runs again at the next open of the workspace or on Try again. No cancellation follows an
+  unanswered start.
+- **A setup whose finished status never arrives** ends as a retryable failure with REQ-WORKSPACE-093's summary, under the
+  reason of the stage that was running, or the reason above where none was. Its detail is "the run host exited before the
+  setup finished." when main sees the run host exit, or "no outcome arrived within the setup's time budgets." once every
+  stage's budget plus REQ-WORKSPACE-092's 5 s for each has passed since the follow began (2235 s, about 37 minutes). The
+  steps that finished are reported; the one that was running is not. No cancellation is sent when that bound passes.
+
+**As built.** `stepDetail`, `lastUtf8Bytes`, `SETUP_REASON`, `CANCELLED_BEFORE_SETUP_ERROR`,
+`SETUP_RUN_HOST_EXITED_DETAIL`, `SETUP_OVERDUE_DETAIL`, `SETUP_START_UNANSWERED_DETAIL` and `SETUP_FOLLOW_BOUND_MS`
+(`apps/desktop/src/main/initialization.ts`); the output's trim in the run host's setup (`packages/mcp/src/setup.ts`).
+
+**Why, and what it costs.** OQ-167, OQ-169 and OQ-175: REQ-WORKSPACE-092 and REQ-WORKSPACE-093 give a reason per stage and
+a detail per stopped step, and nothing for a step with no output, a step that could not start, a setup that began no
+stage, or one whose outcome never reaches the task; read literally, a failed stage's error was "{reason}: " with nothing
+after it. The owner made the built words and the immediate retryable failure the rule, with the 37-minute bound. What it
+costs: the borrowed final sentence is the run host's (REQ-MCP-112's final outcome) in this domain's error; a tail counted on
+trimmed output differs from the output as written where it ends in blank lines; and a setup whose run host keeps working
+past the bound without reporting is reported failed though it may still finish.
+
+> **Narrows:** REQ-WORKSPACE-092, REQ-WORKSPACE-093
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the rulings of OQ-167, OQ-169 and OQ-175.*
+
+---
+
+<a id="pd-workspace-006"></a>
+
+### PD-WORKSPACE-006 — the status strip's path link and flag explanations follow the shell domain
+
+Where the workspace domain and the shell domain, which owns the status strip (REQ-SHELL-047), state the strip differently,
+the shell domain's statement SHALL govern:
+
+- A workspace-path link that cannot open the folder raises REQ-SHELL-040's transient error naming the path attempted;
+  REQ-WORKSPACE-019's "a failure to open SHALL be silent" no longer governs.
+- The `unsaved settings` flag's explanation conveys that the Settings view holds edits not yet saved and that **runs keep
+  using the last saved values** until they are saved (REQ-SHELL-041), not that runs use the values on screen.
+- The mode, redaction and circuit-breaker flags' explanations are REQ-SHELL-041's sentences word for word, and
+  REQ-WORKSPACE-022's "exactly the following and no more" does not bound them.
+
+Everything else in REQ-WORKSPACE-019 and REQ-WORKSPACE-022 still governs: the link's name and tooltip, the five flags and
+their conditions, the mode flag's value vocabulary, the file-access pair's fixed sentences, and each flag's explanation as
+both its tooltip and its accessible description.
+
+**As built.** `workspace.openFolder` (`apps/desktop/src/main/commands/workspace.ts`, `apps/desktop/src/main/open-folder.ts`),
+`apps/desktop/src/renderer/strip-facts.ts` and `statusStripSafetyFlags` (`packages/ui/src/composer.ts`).
+
+**Why, and what it costs.** OQ-191: the two domains disagree in five statements, two of them opposite claims (a silent
+failure against a reported one, the values on screen against the last saved values; the product's runs read the saved
+configuration). REQ-SHELL-047 makes the shell domain the strip's owner, and its resolution 7 is the later decision. The owner
+let the shell's five statements stand and asked for the workspace domain to match them. What it costs: the redaction
+sentence does not say that redaction cannot be turned off, and the three sentences say more than the workspace domain's
+bound allowed.
+
+> **Narrows:** REQ-WORKSPACE-019, REQ-WORKSPACE-022
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-191.*
+
+---
+
+<a id="pd-workspace-007"></a>
+
+### PD-WORKSPACE-007 — the strip's branch item names the states in which there is no branch to show
+
+Where REQ-WORKSPACE-020 renders the status strip's branch item as empty text with no tooltip, the item SHALL instead convey
+the state, as REQ-GIT-161 asks, in these words, each its tooltip and its accessible description:
+
+- a detached HEAD: `detached HEAD`, "This workspace is on no branch (detached HEAD).";
+- a folder that is not a Git repository: `no git repository`, "This folder is not a Git repository.";
+- Git unavailable: `no git`, "Git is not installed or not on PATH.";
+- before the first read: `—`, "Branch this workspace is on: not read yet".
+
+The detached and absent states are set in italics, and none of these draws the branch icon, which stands before a branch
+name only. A branch name keeps REQ-WORKSPACE-020's sentences, the full stop and the agreeing noun included: "Branch this
+workspace is on: {branch}.", "…, 1 commit ahead.", "…, {n} commits ahead."; REQ-GIT-122's backticked tooltip is read as a
+template of those three, so it gains the full stop and never renders its "(s)". Every other clause of REQ-WORKSPACE-020 and
+REQ-GIT-122 still governs, the worktree branch's included.
+
+**As built.** `branchStripItem` and `branchSentence` (`packages/ui/src/GitView.tsx`), placed by `stripItems`
+(`packages/ui/src/composer.ts`).
+
+**Why, and what it costs.** OQ-193: REQ-GIT-161 requires a detached checkout and a non-repository to be conveyed, each
+distinct from a branch name and from the other, and REQ-WORKSPACE-020 requires the item to be empty in exactly those cases.
+One item cannot do both. The owner kept the visible words and tooltips as built. What it costs: the strip spends width on a
+state that has no branch, and the item is no longer empty text that a reader of REQ-WORKSPACE-020 would expect there.
+
+> **Narrows:** REQ-WORKSPACE-020, REQ-GIT-122
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-193.*
+
+---
+
+<a id="pd-shell-007"></a>
+
+### PD-SHELL-007 — the terminal's 100 ms echo is held on a host whose CPUs are not oversubscribed
+
+REQ-SHELL-166's echo-latency criterion, a keystroke's character visible in the grid within REQ-SHELL-150's 100 ms gesture
+budget from the key press to the frame that shows it, SHALL apply on a machine whose CPUs other programs do not
+oversubscribe: a host whose load average is at or below its CPU count. A reading taken while other processes keep the load
+above the CPU count is evidence about the host, not about the product, and is taken again with the host quiet before it is
+called a failure. A reading that misses the bound on a quiet host is the product's. The bound itself is not relaxed, and
+every other criterion of REQ-SHELL-166 is unchanged.
+
+**As built.** `pnpm terminal-proof`'s `live.echoUnder100ms` reads from the key event's own time stamp (`from: 'event'`) and
+records the host's load average and CPU count beside the reading (`results.live.echoLoad`) and how long the key waited in the
+renderer's queue (`queuedMs`).
+
+**Why, and what it costs.** OQ-176: 120 runs on 2026-10-01 went red ten times, each at a load average of 9.1 to 13.6 on four
+CPUs, each time one keystroke of three at 100 to 144 ms, while the same probe read 20 to 30 ms with nothing beside it.
+REQ-SHELL-150's "sustained load" is a burst of changes in the shell, and REQ-SHELL-166 states no host condition. The owner
+had the condition stated. What it costs: no promise is made about echo on a machine that other programs keep busier than
+it has CPUs.
+
+> **Narrows:** REQ-SHELL-166
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-176.*
+
+---
+
+<a id="pd-shell-008"></a>
+
+### PD-SHELL-008 — the status strip carries the sandbox indicator after the file-access flag
+
+REQ-SANDBOX-121's workspace indicator SHALL be an item of the status strip, standing right after the file-access flag
+(`workspace-scoped` or `outside-workspace!`) and before the mode flag. It is inert text reading `sandbox: <backend>`, or
+`sandbox: confined` for a record written before the backend was recorded; its accessible name is "Confinement backend",
+and its tooltip and accessible description are its short form joined to a sentence worded as the Settings page's Sandbox
+mode control words confinement, as REQ-SHELL-041 joins a flag's. It reads the focused session's record, so it is absent
+with no session focused and for a session whose recorded result is not confined, and it is gone once a run of the session
+is refused at the confinement gate until a run of it starts again. It is **shown at every width**: REQ-SHELL-047 gives it
+no threshold. Every other item of REQ-SHELL-038, its order and its accessible names are unchanged.
+
+**As built.** `statusStripSandboxItem` and `statusStripSafetyFlags` (`packages/ui/src/composer.ts`), fed by
+`apps/desktop/src/renderer/main.tsx`; the refusal's record from `Sessions.refusedAtStart` (`packages/engine/src/sessions.ts`).
+
+**Why, and what it costs.** OQ-184: REQ-SANDBOX-121 calls it a workspace indicator and places it nowhere; REQ-SHELL-038's
+list has no item for it, REQ-SHELL-047 gives it no threshold, and "naming the backend" fixes no other word. The owner kept
+it as built and had it added to the strip's list at that position. What it costs: one more item in a strip that hides two at
+narrow widths and never hides this one, and a record that predates the backend's recording names no backend.
+
+> **Narrows:** REQ-SHELL-038, REQ-SHELL-047, REQ-SANDBOX-121
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-184.*
+
+---
+
+<a id="pd-session-001"></a>
+
+### PD-SESSION-001 — the listing record carries the three figures the sessions card shows
+
+REQ-SESSION-030's listing record SHALL hold, beside its twelve fields, three more: the session's **token total** (its
+`tokens_input` plus its `tokens_output`), the **start time of its latest run** (`run_started_at`), and its **workspace path**
+(`workspace_root`). They are what the Overview's sessions card draws as REQ-MONITOR-171's token label, duration label and
+detail caption. The duration label is the latest run's duration, counted from that start, so for a session paused and
+continued it counts the continuation alone. Building the list still reads one stored row per session and nothing else of
+the session's (REQ-SESSION-042), and every other clause of REQ-SESSION-030 still governs. `checkpoint_count` is a count over
+the session's checkpoint rows in the same store, as ADR-0039 derives it.
+
+**As built.** `Sessions.list` (`packages/engine/src/sessions.ts`) reads the three from the session row the listing record is
+read from; the card is `packages/ui/src/OverviewView.tsx`.
+
+**Why, and what it costs.** OQ-192: REQ-MONITOR-171 requires the three labels on each row, and REQ-SESSION-030's closed field
+set forbids a listing to show anything else about the session, saying that making an attribute list-visible "is a change to
+this field set". The owner kept the labels and had the field set changed. What it costs: three more fields every listing
+reader carries, and a duration that does not add up a session's runs.
+
+> **Narrows:** REQ-SESSION-030
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-192.*
+
+---
+
+<a id="pd-chat-008"></a>
+
+### PD-CHAT-008 — the run timer counts from the newest row the run produced
+
+While a run is active, REQ-CHAT-158's run-timing indicator SHALL count from the **newest transcript row the run produced**,
+the unsettled one first, and restart from `0:00` when a newer row appears. A model call that writes no row (a summariser's,
+a classifier's) does not restart it, and a call that has written nothing yet is counted from the end of the step before it.
+Where several calls of one run are in flight at once, the value follows whichever of them wrote the newest row. No model
+call's start is published on the record for it. Every other clause of REQ-CHAT-158 still governs: the `M:SS` and `H:MM:SS`
+forms, the freeze at the run's total once it ends, no duration before a first run, the tick of at least once a second under
+REQ-CHAT-063, and a tick that writes no state.
+
+**As built.** `modelCallStartedAt` and `runTimingSeconds` (`packages/ui/src/composer.ts`), `stepStartedAt`
+(`packages/ui/src/WorkspaceView.tsx`), drawn by `packages/ui/src/RunHeader.tsx`; `SessionRecord` carries `runStartedAt` and
+no per-call boundary.
+
+**Why, and what it costs.** OQ-200: a run can have several model calls out at once (the root's, each running child's, a
+summariser's, a classifier's), and REQ-CHAT-158 speaks of "the model call currently in flight" as if there were one. Counting
+any one of them would need the engine to publish a call's start on the record, a contracts and engine change before it is a
+surface one. The owner confirmed the reading the build proceeds under. What it costs: the value can read longer than the
+call in flight (the default live run at `27a5127` read 0:09 while the summariser's call was 5.5 s in), and a quick call that
+writes no row is never seen to begin.
+
+> **Narrows:** REQ-CHAT-158
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-200.*
 
 ---
 

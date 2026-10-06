@@ -41,3 +41,7 @@ in the Git view, and a `.rotaris/` path not ignored by the repository is counted
 
 Noticed 2026-10-06 by the autopsy of the default live run at `27a5127`; confirmed by fin18 (bundle
 `fin18-rail-label-and-observations`). Not repaired: which definition the card takes is the owner's (OQ-201).
+
+## Ruled as built — 2026-10-06 ([R-071](../../product/requests.md#r-071)); closed
+
+OQ-201 was raised the same day, after the overview the owner answered, and the owner's instruction confirmed it at the reading the build proceeds under (ruled in [`open-questions.md`](../../architecture/open-questions.md)): the card's "touched" is every path `git status` lists and its "uncommitted" the tracked paths with a change, with no `.rotaris/` exclusion, while the Git view keeps REQ-GIT-105's count. The two figures may differ for one tree. Nothing is changed in the code.

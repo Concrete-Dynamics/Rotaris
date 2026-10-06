@@ -66,4 +66,4 @@ browser row reads its newest task `Wait a while.` and not its first prompt `Writ
 planted `B-nolock`, `C-deadlock` and `D-live`, each with a prompt row and no todo, read their ids (`repair-all`).
 
 Noticed while repairing, recorded and not repaired:
-[the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md](../the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md).
+[the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md](the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md).

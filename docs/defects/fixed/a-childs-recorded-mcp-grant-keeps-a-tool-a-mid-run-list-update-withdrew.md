@@ -13,7 +13,7 @@ Not reproduced in a built app (mcp-proof's launch 4 narrows the run-level agent,
 **Open with the owner as OQ-174** (raised 2026-10-01, fin3): whether the recorded grant keeps a tool a server withdrew
 mid-run, drops it, or marks it withdrawn is the owner's to rule, since the specification says "granted" for what
 configuration allows and "callable" for what an update leaves. The build proceeds under the grant at readiness, the
-behaviour this note describes ([`open-questions.md`](../architecture/open-questions.md), OQ-174). The note stays open
+behaviour this note describes ([`open-questions.md`](../../architecture/open-questions.md), OQ-174). The note stays open
 until that ruling is built.
 
 ## Specs
@@ -29,3 +29,7 @@ until that ruling is built.
 - `apps/desktop/src/run-host/mcp.ts`: `executorsFor`'s `watch`/`onToolsChanged`, which calls `remove` and logs.
 - `apps/desktop/src/run-host/tools.ts`: `createToolPort`'s `remove` and `grant`, set once in `ready()`.
 - `packages/engine/src/children/orchestration.ts`: `recordGrant`, once per execution.
+
+## Ruled as built — 2026-10-06 ([R-071](../../product/requests.md#r-071)); closed
+
+The owner accepted the current behaviour and defined the recorded grant as what the child was given when it started (OQ-174, ruled in [`open-questions.md`](../../architecture/open-questions.md)). A tool a mid-run list update withdraws stays in the row's `granted_mcp` and is listed as granted, and a call to it is refused (REQ-MCP-062). Nothing is changed in the code.

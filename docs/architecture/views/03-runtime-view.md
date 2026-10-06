@@ -74,7 +74,13 @@ discovers the present instruction files over the workspace root and the five fur
 merges the enabled set into one block
 (`mergeInstructionContext` — a source comment per file, one blank line between blocks, both size limits) and
 caches it for as long as the session lasts (REQ-WORKSPACE-046), cleared by session creation and by a rescan, the
-two events that already clear the catalog.
+two events that already clear the catalog. `contextUnits` pushes that block as the first unit through
+`instructionContextUnit`, which adds one blank line and `INSTRUCTION_FILES_END_COMMENT` after the last file, outside
+the merged output and its total limit. Each file therefore runs from its source comment to the next source comment or to
+that line, and whatever follows is not read as the last file's own: the skill catalog, or `runTurn`'s MCP section
+(`withMcpSection`, REQ-MCP-101), which is always appended last. Until 2026-10-06 nothing closed the files, and in the duress
+live run at `27a5127` agents read `## MCP servers` as part of `AGENTS.md`
+(`docs/defects/fixed/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
 
 **The cold path is timed, and it runs after first input.** `workspaceContext` reads the monotonic clock port four
 times on a cache miss: before the saved-policy read, after it, after the discovery and after the merge. It then logs

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readInstructionsSection } from './sections/instructions.js';
 import { instructionEnabled } from './snapshot.js';
-import { enabledInstructionFiles, instructionSourceComment, mergeInstructionContext, type InstructionFileEntry } from './instructions.js';
+import { enabledInstructionFiles, INSTRUCTION_FILES_END_COMMENT, instructionContextUnit, instructionSourceComment, mergeInstructionContext, type InstructionFileEntry } from './instructions.js';
 import { NODE_DISCOVERY_PORTS } from './skills/discover.js';
 import { loadConfiguration } from './load.js';
 import { saveDesktop } from './writers.js';
@@ -226,5 +226,16 @@ describe('REQ-WORKSPACE-043/044/045 — the merged output', () => {
     expect(Buffer.byteLength(once, 'utf8')).toBeLessThanOrEqual(900);
     // No block ends mid-line: every line of the output is a whole line of a source file or a comment.
     for (const line of once.split('\n')) expect(line === '' || line.startsWith('<!-- source:') || line === 'x'.repeat(40)).toBe(true);
+  });
+});
+
+describe('REQ-WORKSPACE-047 — the unit an agent receives closes after its last file', () => {
+  it('is the merged output unchanged, one blank line, then the closing comment; empty merged content builds no unit', () => {
+    const merged = `${instructionSourceComment('/w/AGENTS.md')}\n# Title\n\n${instructionSourceComment('/w/CLAUDE.md')}\nlast line`;
+    expect(instructionContextUnit(merged)).toBe(`${merged}\n\n${INSTRUCTION_FILES_END_COMMENT}`);
+    expect(instructionContextUnit('')).toBe('');
+    // One line, an HTML comment as the source comment is, and no Markdown heading a model could take for the file's own.
+    expect(INSTRUCTION_FILES_END_COMMENT).toMatch(/^<!-- [^\n]* -->$/);
+    expect(INSTRUCTION_FILES_END_COMMENT.startsWith('<!-- source:')).toBe(false);
   });
 });

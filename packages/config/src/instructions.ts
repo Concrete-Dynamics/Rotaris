@@ -160,6 +160,25 @@ function wholeLinesWithin(text: string, budget: number): string | null {
 export const instructionSourceComment = (path: string): string => `<!-- source: ${path} -->`;
 
 /**
+ * The one-line comment that closes the instruction files where they reach an agent: each file's start is its source
+ * comment, so a file runs to the next source comment or to this line. REQ-WORKSPACE-043 marks a start and says nothing
+ * of an end; without one the last file ran straight into whatever the prompt carried next (the skill catalog, or the
+ * MCP section of REQ-MCP-101 with its `## MCP servers` heading), and agents read that heading as the file's own
+ * (`docs/defects/fixed/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
+ */
+export const INSTRUCTION_FILES_END_COMMENT = '<!-- end of instruction files: nothing below this line is part of them -->' as const;
+
+/**
+ * REQ-WORKSPACE-047 — the workspace-context unit an agent receives: the merged output of `mergeInstructionContext`,
+ * unchanged, then one blank line and `INSTRUCTION_FILES_END_COMMENT`. Empty merged content constructs no unit at all,
+ * so no closing comment either. The close is framing of the unit and sits outside the merged output, which keeps
+ * REQ-WORKSPACE-043's format and REQ-WORKSPACE-044's total limit stated over the files' own blocks alone.
+ */
+export function instructionContextUnit(merged: string): string {
+  return merged === '' ? '' : `${merged}\n\n${INSTRUCTION_FILES_END_COMMENT}`;
+}
+
+/**
  * REQ-WORKSPACE-043/044/045 — the merged output.
  *
  * Format: each block is its source comment on its own line, then the file's content; blocks are

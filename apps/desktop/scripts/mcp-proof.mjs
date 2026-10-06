@@ -6,6 +6,9 @@
  *
  *   1. discovery   — the prompt's MCP section character-exact and equal to the callable set; the inert grant reported
  *                    once; gamma's unknown key warned once per load; the discovery file byte-identical after the run;
+ *                    the system prompt the model port received closes the workspace's `AGENTS.md` with the end comment
+ *                    before the section's heading, so the heading is not read as the file's own (REQ-WORKSPACE-043 with
+ *                    REQ-MCP-101; nothing stood between them until 2026-10-06, finding H4 of the duress run at 27a5127);
  *                    every handshake tells the server `rotaris` at the version `apps/desktop/package.json` declares
  *                    (REQ-STARTUP-158 — the client carried a literal `0.1.0` until 2026-09-27).
  *   2. call        — `echo` end to end (tool.start before tool.finish, the result text, the row succeeded); `slow` beyond
@@ -302,8 +305,32 @@ const ROUND_OVER = `(() => {
   const before = sha(join(workspace, '.mcp.json'));
   const clients = join(output, 'alpha.clients.jsonl');
   writeFileSync(clients, '');
-  const r = await launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' }, { files: { global: globalYaml({ alphaFlags: ['--client-file', clients] }) } });
+  // The live run's shape: one instruction file whose own heading is a `#`, then the MCP section — nothing else between.
+  const agentsMd = join(workspace, 'AGENTS.md');
+  const agentsText = '# Working in this workspace\n\nThe MCP proof\'s instruction file. It names no server.';
+  writeFileSync(agentsMd, `${agentsText}\n`);
+  const modelRequests = join(output, 'discovery.model-requests.jsonl');
+  writeFileSync(modelRequests, '');
+  const r = await launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000', ROTARIS_CAPTURE_MODEL_REQUESTS: modelRequests }, { files: { global: globalYaml({ alphaFlags: ['--client-file', clients] }) } });
+  rmSync(agentsMd, { force: true });
   if (sha(join(workspace, '.mcp.json')) !== before) throw new Error('the discovery file changed across the load (REQ-MCP-027)');
+  // REQ-WORKSPACE-043 with REQ-MCP-101: the file is closed before the section (finding H4 of the duress run at 27a5127).
+  const orchestratorCalls = readFileSync(modelRequests, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l)).filter((c) => c.who === 'orchestrator');
+  if (orchestratorCalls.length === 0) throw new Error('the model port recorded no orchestrator call, so the prompt is unobserved');
+  const system = orchestratorCalls[0].system;
+  const fileStart = system.indexOf(`<!-- source: ${agentsMd} -->\n${agentsText}`);
+  if (fileStart < 0) throw new Error(`the orchestrator's prompt does not carry AGENTS.md whole after its source comment:\n${system}`);
+  const fileEnd = fileStart + `<!-- source: ${agentsMd} -->\n${agentsText}`.length;
+  /*
+   * The file is followed at once by the closing comment. Whatever the prompt carries next comes after it: here the skill
+   * catalog first (this proof's workspace lies inside the repository, whose own skills the catalog lists), then the MCP
+   * section; in the live run, with no skill, the MCP section directly.
+   */
+  const END = '<!-- end of instruction files: nothing below this line is part of them -->';
+  const boundary = system.slice(fileEnd, fileEnd + END.length + 4);
+  if (boundary !== `\n\n${END}\n\n`) throw new Error(`nothing closes AGENTS.md; after its last line stands ${JSON.stringify(system.slice(fileEnd, fileEnd + 200))}`);
+  const headingAt = system.indexOf('## MCP servers', fileEnd);
+  if (headingAt < fileEnd + boundary.length) throw new Error(`the MCP section does not follow the closed instruction files in the orchestrator's prompt:\n${system}`);
   const surface = lines(r.log, /mcp: surface for orchestrator/);
   if (surface.length === 0) throw new Error(`no surface line:\n${r.log}`);
   const first = surface[0];
@@ -334,7 +361,7 @@ const ROUND_OVER = `(() => {
   const declared = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).version;
   const told = readFileSync(clients, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
   if (told.length < 2 || told.some((c) => c?.name !== 'rotaris' || c?.version !== declared)) throw new Error(`the MCP handshakes did not name rotaris ${declared} (REQ-STARTUP-158): ${JSON.stringify(told)}`);
-  results.discovery = { section, callable, inertReports: inert.length, loads, unknownKeyWarnings: weird, discoveryMs: Object.fromEntries(disc.map((l) => [/discovery of '(\w+)'/.exec(l)[1], Number(/in (\d+) ms/.exec(l)?.[1])])), fileByteIdentical: true, stderrLines: env.length, clientInfo: told };
+  results.discovery = { section, promptBoundary: boundary, callable, inertReports: inert.length, loads, unknownKeyWarnings: weird, discoveryMs: Object.fromEntries(disc.map((l) => [/discovery of '(\w+)'/.exec(l)[1], Number(/in (\d+) ms/.exec(l)?.[1])])), fileByteIdentical: true, stderrLines: env.length, clientInfo: told };
 }
 
 // ---- 2. A call end to end, and the allowance ------------------------------------------------------------------

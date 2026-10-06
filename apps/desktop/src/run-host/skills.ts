@@ -3,7 +3,7 @@ import { skillListing, skillListingBody, type SkillsState, type SkillRow } from 
 import type { SessionWriter } from '@rotaris/engine';
 import type { MonotonicClock } from '@rotaris/kernel';
 import {
-  discoverInstructionFiles, discoverSkills, enabledInstructionFiles, loadManualSkill, mergeInstructionContext,
+  discoverInstructionFiles, discoverSkills, enabledInstructionFiles, instructionContextUnit, loadManualSkill, mergeInstructionContext,
   NODE_DISCOVERY_PORTS, parseSkill, resolveSkills,
   skillBodyBlock, skillCatalogBlock, skillReadRoots,
   type DiscoveredSkill, type DiscoveryPorts, type InstructionFileEntry, type InstructionsSection, type SkillDiscovery, type SkillSessionState, type SkillsSection,
@@ -310,7 +310,8 @@ export class SkillHost {
     const units: string[] = [];
     // REQ-WORKSPACE-047: ahead of the catalog, ahead of every force-loaded body. Empty merged content
     // constructs no unit — "with no context files, or injection disabled, no such unit SHALL be built".
-    const context = this.workspaceContext(workspaceRoot, executionRoot);
+    // The unit closes after its last file, so nothing the prompt carries next reads as that file's own (H4, 27a5127).
+    const context = instructionContextUnit(this.workspaceContext(workspaceRoot, executionRoot));
     if (context !== '') units.push(context);
     const catalog = skillCatalogBlock(resolved);
     if (catalog !== null) units.push(catalog);

@@ -43,7 +43,13 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-10-03**
+## Last reconciled with the code: **2026-10-06**
+
+**The instruction files close before whatever the prompt carries next (REQ-WORKSPACE-043, REQ-WORKSPACE-047, REQ-MCP-101;
+fin19).** `contextUnits` builds the workspace-context unit with `instructionContextUnit` (`config/src/instructions.ts`): the
+merged output unchanged, then `INSTRUCTION_FILES_END_COMMENT`. `runTurn` appends the MCP section through the exported
+`withMcpSection`. The **runtime view**'s system-prompt paragraph says so. No package, edge, process, channel, command or
+store column changed.
 
 **Settings adopts a reload in one update of the whole form, and a permission mode written elsewhere wins (REQ-CONFIG-419,
 REQ-CONFIG-423; fin13).** The Settings hook holds the saved and pending values as one form (`SettingsForm`) and folds each

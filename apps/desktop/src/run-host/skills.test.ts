@@ -3,9 +3,9 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { FileToolState, grepTool, readFileTool, writeFileTool } from '@rotaris/agent-tools';
-import { NODE_DISCOVERY_PORTS, SKILLS_DEFAULTS, type DiscoveryPorts, type SkillsSection } from '@rotaris/config';
+import { MCP_SECTION_HEADING, NODE_DISCOVERY_PORTS, renderMcpSection, SKILLS_DEFAULTS, type DiscoveryPorts, type SkillsSection } from '@rotaris/config';
 import { parseSkillListing } from '@rotaris/contracts';
-import { readTrajectory, Sessions } from '@rotaris/engine';
+import { readTrajectory, Sessions, withContextUnits, withMcpSection } from '@rotaris/engine';
 import { asSessionId, FakeClock, millis, mintMachineId, type MachineId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { SkillHost, writeSkillListing, type SkillHostDeps } from './skills.js';
@@ -287,6 +287,52 @@ describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)'
       expect(units[0]).toContain(`<!-- source: ${join(t.root, 'AGENTS.md')} -->`);
       expect(units[1]).toContain('- alpha: Alpha does things.');
     } finally { t.cleanup(); }
+  });
+
+  /*
+   * Finding H4 of the final duress live run at 27a5127: the prompt read `<!-- source: …/AGENTS.md -->`, the file's 13
+   * lines, a blank line and `## MCP servers` — nothing said where the file ended, and two of eight agents read the MCP
+   * section as the file's own. The prompt is assembled here with the product's own three steps (the unit list, the
+   * role's prompt with its units, the MCP section after them), so what is asserted is the text an agent receives
+   * (`docs/defects/fixed/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
+   */
+  it('REQ-WORKSPACE-043 with REQ-MCP-101: the instruction files are closed before the MCP section, so its heading is not read as the last file\'s', () => {
+    const base = mkdtempSync(join(tmpdir(), 'rotaris-skills-'));
+    const root = join(base, 'ws');
+    const home = join(base, 'home');
+    try {
+      mkdirSync(root, { recursive: true });
+      mkdirSync(home, { recursive: true });
+      // No skill anywhere: the live run's case, where the MCP section follows the last file directly.
+      writeFileSync(join(root, 'AGENTS.md'), '# Working in this repository\n\nKeep changes minimal.\n');
+      const units = contextHost(home, join(home, 'cfg')).contextUnits(root, 's1');
+      expect(units).toHaveLength(1);
+      const section = renderMcpSection({ persona: 'docs', dropped: [], active: [{ name: 'alpha', entry: { type: 'stdio', command: 'x', args: [] } as never, origin: 'yaml', discoveryFailed: false, tools: [{ callable: 'echo', reported: 'echo', description: 'Echo the text back.', inputSchema: {} }] }] });
+      const prompt = withMcpSection(withContextUnits('You write documentation.', units), section);
+      const fileAt = prompt.indexOf(`<!-- source: ${join(root, 'AGENTS.md')} -->`);
+      const fileEnd = prompt.indexOf('Keep changes minimal.', fileAt) + 'Keep changes minimal.'.length;
+      const headingAt = prompt.indexOf(MCP_SECTION_HEADING, fileEnd);
+      expect(fileAt).toBeGreaterThan(0);
+      expect(headingAt).toBeGreaterThan(fileEnd);
+      // Between the file's last line and the MCP heading: exactly the closing comment, one blank line either side.
+      expect(prompt.slice(fileEnd, headingAt)).toBe('\n\n<!-- end of instruction files: nothing below this line is part of them -->\n\n');
+      // With a skill catalog after the files, the close sits between the files and the catalog instead.
+      mkdirSync(join(root, '.agents', 'skills', 'alpha'), { recursive: true });
+      writeFileSync(join(root, '.agents', 'skills', 'alpha', 'SKILL.md'), '---\nname: alpha\ndescription: Alpha does things.\n---\nALPHA BODY\n');
+      const withCatalog = contextHost(home, join(home, 'cfg')).contextUnits(root, 's2');
+      expect(withCatalog).toHaveLength(2);
+      expect(withCatalog[0]!.endsWith('Keep changes minimal.\n\n<!-- end of instruction files: nothing below this line is part of them -->')).toBe(true);
+      expect(withCatalog[1]).not.toContain('end of instruction files');
+    } finally { rmSync(base, { recursive: true, force: true }); }
+  });
+
+  it('REQ-WORKSPACE-047: with no instruction file there is no unit, and so no closing comment either', () => {
+    const base = mkdtempSync(join(tmpdir(), 'rotaris-skills-'));
+    try {
+      mkdirSync(join(base, 'ws'), { recursive: true });
+      mkdirSync(join(base, 'home'), { recursive: true });
+      expect(contextHost(join(base, 'home'), join(base, 'home', 'cfg')).contextUnits(join(base, 'ws'), 's1')).toEqual([]);
+    } finally { rmSync(base, { recursive: true, force: true }); }
   });
 
   it('PD-WORKSPACE-002: the global and user bases reach the agent, in discovery order', () => {

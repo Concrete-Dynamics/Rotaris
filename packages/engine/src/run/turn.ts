@@ -246,6 +246,17 @@ function injectSteering(deps: TurnDeps, conversation: Conversation): number {
   return pending.length;
 }
 
+/**
+ * REQ-MCP-101: the persona's one MCP section, after everything else the system prompt carries (the role's instructions,
+ * its playbook and the session's context units, `withContextUnits`), one blank line before its heading. An empty section
+ * (no MCP surface at all) adds nothing. The unit before it closes itself where it needs to: the instruction files end with
+ * `INSTRUCTION_FILES_END_COMMENT`, so this heading is never read as the last file's own
+ * (`docs/defects/fixed/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
+ */
+export function withMcpSection(systemPrompt: string, section: string): string {
+  return section === '' ? systemPrompt : `${systemPrompt}\n\n${section}`;
+}
+
 export async function runTurn(deps: TurnDeps, task: string | null, history: readonly ChatMessage[], signal: AbortSignal, initialContent?: readonly ContentPart[]): Promise<TurnOutcome> {
   const { writer, owner, tools, clocks } = deps;
   // ADR-0060: the history is an object whose array is SWAPPED by a compression, never spliced under a call in flight.
@@ -256,7 +267,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
   if (tools?.ready) await tools.ready();
   const specs = tools?.specs() ?? [];
   const section = tools?.promptSection?.() ?? '';
-  const stepDeps: TurnDeps = section === '' ? deps : { ...deps, systemPrompt: `${deps.systemPrompt}\n\n${section}` };
+  const stepDeps: TurnDeps = section === '' ? deps : { ...deps, systemPrompt: withMcpSection(deps.systemPrompt, section) };
   let toolCallCount = 0;
   let steps = 0;
   let lastReport: TurnReport = { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };

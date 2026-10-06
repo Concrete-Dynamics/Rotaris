@@ -9787,20 +9787,22 @@ the only element that grows with it: every other part of the gate is sized by it
 OQ-202 and OQ-203 (`ef1e6d9`, `6998e3f`), so it takes the next free number, OQ-204. Open, the owner's.)*
 
 On a short window the gate's row is less than its parts need: at 1000x680 with a 97 px persistent notice it is 261 px, and
-199 px with the re-authentication bar as well. The two clauses then pull apart. If every other part keeps its content
-height, the plan takes the whole loss (18 px beside the todo's 56 in finacc2's acceptance). If the plan is to stay the
-largest, some other part must stand smaller than its content, or the gate must scroll. The repair gives the plan a floor
-above the todo's cap, lets the todo (which already scrolls inside its cap) yield to its label's line, and lets the gate
-scroll after that with its answers pinned. That keeps the plan the largest of the parts that are bounded: the heading,
-the intent sentence, the todo, the closed revision field and the answers. Two parts have no bound: a later cycle's "You
-asked for" line (`.plan-gate__prior`, the whole of the changes the user stated) and the revision field once opened, which
-the user can drag taller (`resize: vertical`). On a short window either can stand taller than the plan's 72 px floor, and
-no floor fixed in advance is above a part with no bound.
+199 px with the re-authentication bar as well. If every part but the plan keeps its content height and the plan has no
+floor, the plan takes the whole loss (18 px beside the todo's 56 in finacc2's acceptance). The repair keeps both clauses
+for every part with a bound: the plan has a floor above the todo's cap (72 px; in edit mode the adopted `textarea.input`
+rule's 80 px), every other part keeps its content height, and the gate scrolls below that with its three answers pinned
+(at 261 px: the plan 72, the todo 56, the gate scrolling 31 px). That keeps the plan the largest of the parts that are
+bounded: the heading, the intent sentence, the todo, the closed revision field and the answers. Two parts have no bound:
+a later cycle's "You asked for" line (`.plan-gate__prior`, the whole of the changes the user stated) and the revision
+field once opened, which the user can drag taller (`resize: vertical`). On a short window either can stand taller than
+the plan's floor, and no floor fixed in advance is above a part with no bound.
 
-**What the build proceeds under.** The plan's floor is `calc(var(--rt-space-16) + var(--rt-space-2))`, above the todo's cap,
-the answers' row and the heading. The todo yields first, then the gate scrolls with its three answers pinned to its floor.
-The "You asked for" line and an opened revision field keep their content height, so on a short window either may stand
-taller than the plan.
+**What the build proceeds under.** The plan's floor is `calc(var(--rt-space-16) + var(--rt-space-2))` (edit mode:
+`textarea.input`'s 80 px), above the todo's cap, the answers' row and the heading. Every other part, the "You asked for"
+line and an opened revision field included, keeps its content height, and the gate scrolls with its three answers pinned
+to its floor; so on a short window either unbounded part may stand taller than the plan. (Until the bundle's repair round
+1 the reading also let the todo yield first, down to its label's line; that chose between the two clauses where a layout
+keeping both exists, and was withdrawn.)
 
 **What a ruling decides.** Whether "largest" holds against parts the user wrote or sized (then they need a cap or their
 own scroll, like the todo's), or "sized by its own content" holds for them (then "largest" is read over the gate's fixed

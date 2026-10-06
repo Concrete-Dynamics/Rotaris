@@ -62,9 +62,9 @@ took the row's last `updated_at` at that save, which a continuation's "Intent cl
 The **runtime view**'s `Run.start()` sequence says so. No package, edge, process, channel, command or store column changed.
 
 **The expanded plan gate keeps the plan its largest part when a notice shares the window (PD-ORCH-002 revision 2,
-REQ-SHELL-022; finacc2's A2).** In `packages/ui/src/shell.css` the plan's text has a floor above the todo's cap and a zero
-basis, and the todo yields first, so the gate scrolls only once the todo is at its label's line. The **runtime view**'s
-plan-gate passage says so. No package, edge, process, channel, command or store column changed.
+REQ-SHELL-022; finacc2's A2).** In `packages/ui/src/shell.css` the plan's text has a floor above the todo's cap (edit
+mode's is the adopted `textarea.input` rule's), every other part keeps its content height, and below the floor the gate
+scrolls with its answers pinned. The **runtime view**'s plan-gate passage says so. No package, edge, process, channel, command or store column changed.
 
 **The window that starts a session shows it from the start, and the fallback restart clears the session's notice
 (REQ-NOTIFY-032, REQ-NOTIFY-058; finacc2's A1).** `session.start` mints every start's id and marks it as the asking window's

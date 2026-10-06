@@ -163,11 +163,12 @@ GRID is what changes with it, published as `data-plan-gate-collapsed` beside `da
 draws REQ-ORCH-153's three answers in **both** states, so no state and no window size can put the decision out
 of reach. Revision 1 gave the transcript a floor of 220 px and capped the gate instead; the owner's capture of
 2026-09-17 showed what that costs at the window the product is used at, and the CSS keeps the falsified reason
-beside its replacement. Inside the expanded gate the plan's own text is the only part that grows (`flex: 1 1 0`), and
-it has a floor above the implied todo's cap. When the row is shorter than the gate's parts, as at REQ-SHELL-022's
-minimum with a persistent notice on screen, the todo yields first, down to its label's line, and then the gate scrolls
-with its three answers pinned to its floor. Until 2026-10-06 the plan alone took the loss: 41 px beside the todo's 56
-under a 97 px notice
+beside its replacement. Inside the expanded gate the plan's own text is the only part that grows (`flex: 1 1 auto`), and
+it has a floor above the implied todo's cap (72 px in preview; in edit mode the adopted `textarea.input` rule's 80 px,
+which outranks the field's class). Every other part keeps its content height (PD-ORCH-002 revision 2). When the row is
+shorter than the gate's parts, as at REQ-SHELL-022's minimum with a persistent notice on screen, the plan stands at its
+floor and the gate scrolls with its three answers pinned to its floor. Until 2026-10-06 the plan alone took the loss:
+41 px beside the todo's 56 under a 97 px notice
 (`docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md`).
 Parts sized by content with no bound (a later cycle's "You asked for" line, an opened revision field) can still stand
 taller than the plan's floor on a short window: OQ-204.

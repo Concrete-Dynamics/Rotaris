@@ -957,24 +957,23 @@
 .plan-gate > * { flex: 0 0 auto; }
 /* Revision 2: the plan's own text takes what is left after the heading, the controls and the three answers — no cap
    of its own, since the cap is what left it a single clipped line on the window the product is used at.
-   It also has a FLOOR, and its basis is 0. Without them every other part kept its content height and the plan alone
-   absorbed whatever the window lacked: at REQ-SHELL-022's minimum with a persistent notice on screen (about 97 px,
-   REQ-NOTIFY-032's warning about another session among them) the plan stood 41 px beside the todo's 56, and 18 with the
-   re-authentication bar as well (docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
+   It also has a FLOOR. Without one every other part kept its content height and the plan alone absorbed whatever the
+   window lacked: at REQ-SHELL-022's minimum with a persistent notice on screen (about 97 px, REQ-NOTIFY-032's warning
+   about another session among them) the plan stood 41 px beside the todo's 56, and 18 with the re-authentication bar as
+   well (docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
    The floor is the todo's own cap and one step more (every box is `border-box`, `base.css`), so the plan always stands
-   taller than the todo can, and taller than the heading and the answers' row. A basis of 0 changes nothing while there is
-   room, since the plan is the only part that grows and so takes all of it. Below the floor it makes the plan's floor a
-   demand rather than what is left: the todo yields first (its rule below), and only then does the gate scroll, its three
-   answers pinned to its floor. */
-.plan-gate__preview-wrap { flex: 1 1 0; min-height: calc(var(--rt-space-16) + var(--rt-space-2)); overflow: auto; padding: var(--rt-space-2) var(--rt-space-3); background: var(--rt-surface-2); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-sm); }
+   taller than the todo can, and taller than the heading and the answers' row. Every other part keeps its content height
+   (PD-ORCH-002 revision 2), so below the floor the gate scrolls, its three answers pinned to its floor. */
+.plan-gate__preview-wrap { flex: 1 1 auto; min-height: calc(var(--rt-space-16) + var(--rt-space-2)); overflow: auto; padding: var(--rt-space-2) var(--rt-space-3); background: var(--rt-surface-2); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-sm); }
 .plan-gate__markdown { font-size: var(--rt-text-sm); line-height: var(--rt-leading-body); }
 .plan-gate__markdown .md__table { width: 100%; margin: var(--rt-space-1) 0; }
-/* The same floor in edit mode. */
-.plan-gate__plan { flex: 1 1 0; width: 100%; min-height: calc(var(--rt-space-16) + var(--rt-space-2)); resize: none; white-space: pre; overflow-wrap: normal; overflow: auto; line-height: var(--rt-leading-body); }
-/* The implied todo state is bounded so a long one cannot take the height revision 2 gives the plan; it scrolls instead.
-   It is the one part that yields when the plan stands at its floor and the gate still lacks room, down to its padding and
-   its label's line (the plan's `flex-basis: 0` means it never yields while the plan has more than its floor). */
-.plan-gate__todo { flex: 0 1 auto; min-height: calc(2 * var(--rt-space-2) + var(--rt-space-4)); display: flex; flex-direction: column; gap: var(--rt-space-1); max-height: var(--rt-space-16); overflow: auto; padding: var(--rt-space-2); background: color-mix(in oklch, var(--rt-surface-2) 60%, transparent); border-radius: var(--rt-radius-sm); }
+/* Edit mode's floor is the adopted `textarea.input` rule's (`docs/design/system/components.css`, 80 px, above the todo's
+   cap): the field is a `textarea.input`, and that selector outranks this class, so a min-height written here never
+   governs. One was written here on 2026-10-06 and the bundle's verifier measured 80 px in the built app; the same rule's
+   `resize: vertical` outranks the `resize: none` below, which only lets the user drag the plan taller. */
+.plan-gate__plan { flex: 1 1 auto; width: 100%; resize: none; white-space: pre; overflow-wrap: normal; overflow: auto; line-height: var(--rt-leading-body); }
+/* The implied todo state is bounded so a long one cannot take the height revision 2 gives the plan; it scrolls instead. */
+.plan-gate__todo { display: flex; flex-direction: column; gap: var(--rt-space-1); max-height: var(--rt-space-16); overflow: auto; padding: var(--rt-space-2); background: color-mix(in oklch, var(--rt-surface-2) 60%, transparent); border-radius: var(--rt-radius-sm); }
 .plan-gate__todo-label { font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); color: var(--rt-text-secondary); }
 .plan-gate__todo-list { margin: 0; padding-left: var(--rt-space-4); font-size: var(--rt-text-xs); color: var(--rt-text); }
 .plan-gate__changes-details { margin-top: var(--rt-space-1); }

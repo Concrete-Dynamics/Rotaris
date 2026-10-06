@@ -242,7 +242,7 @@ results.survivedRestart = { status: edited.session.execution_status, cycle: edit
  * stand after layout settles, at the window the product opens. The reading is taken twice, once on the state a
  * gate OPENS in and once after the collapse control has been clicked like a user clicks it.
  */
-const STATE_PROBE = "(() => { const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) }; }; const gate = document.querySelector('[data-testid=\"plan-gate\"]'); const plan = document.querySelector('[data-testid=\"plan-gate-preview\"]') || document.querySelector('[data-testid=\"plan-gate-plan\"]'); const tr = document.querySelector('.transcript'); const answers = document.querySelector('[data-ui=\"plan-gate-actions\"]'); const ws = document.querySelector('.workspace'); return { collapsed: ws ? (ws.getAttribute('data-plan-gate-collapsed') || '') : 'no-workspace', workspace: r(ws), rows: ws ? getComputedStyle(ws).gridTemplateRows : null, children: gate ? [...gate.children].map((c) => ({ c: c.className.split(' ')[0], h: Math.round(c.getBoundingClientRect().height), grow: getComputedStyle(c).flexGrow })) : null, gate: r(gate), plan: r(plan), answers: r(answers), transcript: r(tr), threeAnswers: ['plan-approve', 'plan-revise', 'plan-cancel'].every((t) => document.querySelector('[data-testid=\"' + t + '\"]') !== null), viewport: Math.round(window.innerHeight) }; })()";
+const STATE_PROBE = "(() => { const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) }; }; const gate = document.querySelector('[data-testid=\"plan-gate\"]'); const plan = document.querySelector('[data-testid=\"plan-gate-preview\"]') || document.querySelector('[data-testid=\"plan-gate-plan\"]'); const tr = document.querySelector('.transcript'); const answers = document.querySelector('[data-ui=\"plan-gate-actions\"]'); const ws = document.querySelector('.workspace'); return { collapsed: ws ? (ws.getAttribute('data-plan-gate-collapsed') || '') : 'no-workspace', workspace: r(ws), rows: ws ? getComputedStyle(ws).gridTemplateRows : null, children: gate ? [...gate.children].map((c) => ({ c: c.className.split(' ')[0], h: Math.round(c.getBoundingClientRect().height), grow: getComputedStyle(c).flexGrow, shrink: getComputedStyle(c).flexShrink })) : null, gate: r(gate), plan: r(plan), answers: r(answers), transcript: r(tr), threeAnswers: ['plan-approve', 'plan-revise', 'plan-cancel'].every((t) => document.querySelector('[data-testid=\"' + t + '\"]') !== null), viewport: Math.round(window.innerHeight) }; })()";
 const log2b = await launch('two-states', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_AFTER_MS: '14000',
@@ -290,9 +290,11 @@ results.twoStates = {
  * of the gate but the plan kept its content height, and the whole loss fell on the plan: 41 px against the todo's 56 on
  * the first pass of this reading, 18 px against 56 in finacc2's acceptance (A2) with the re-authentication bar as well
  * (docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
- * Repaired the same day: the plan has a floor above the todo's cap and a basis of 0, and the todo yields first. The gate
- * read 261 px, the plan 72, the todo 32, and the gate scrolled 7 px, so the three answers are asserted hit here too
- * (REQ-SHELL-048).
+ * Repaired the same day: the plan has a floor above the todo's cap, every other part keeps its content height
+ * (PD-ORCH-002 revision 2), and below the floor the gate scrolls with its answers pinned, so the three answers are asserted
+ * hit here too (REQ-SHELL-048). The reading is taken in both modes: the edit field's floor is the adopted
+ * `textarea.input` rule's, which outranks the class, and a floor written on the class read 80 px in the built app, not
+ * the 72 it said (the bundle's verifier, 2026-10-06).
  * One notice is drawn at a time and the latest publication replaces it, and this launch raises its own on the way up (no
  * provider is authenticated; on a host without the code-intelligence bundle the project setup's failure), at times the
  * host decides: the first pass of this reading met each of them in turn, 75 px and 97 px. So the warning is published
@@ -309,12 +311,14 @@ const NOTICE_PROBE = "(() => { const n = document.querySelector('.notice-slot');
 const OTHER_FAILED = `${JSON.stringify({ op: 'report', severity: 'warning', title: `Session ${OTHER_SESSION} failed`, message: 'The session on screen is unaffected. Open the failed session to see its recovery.', detail: 'HTTP 401 Unauthorized: the provider refused the key.', persistent: true, action: { label: 'Open the session', action: { kind: 'focus-session', sessionId: OTHER_SESSION } }, sessionId: OTHER_SESSION })}`;
 const SMALL_STATE = whenReady(STATE_PROBE, 'smallState');
 const SMALL_NOTICE = whenReady(NOTICE_PROBE, 'smallNotice');
+// Edit mode, once both readings above are taken: the user's own control, then the same wait for the size and the notice.
+const EDIT_STATE = `(async () => { for (let i = 0; i < 400 && !(document.body.dataset.smallState === '1' && document.body.dataset.smallNotice === '1'); i += 1) await new Promise((r) => setTimeout(r, 100)); document.querySelector('[data-testid="plan-gate-toggle-edit"]')?.click(); for (let i = 0; i < 400 && !(document.querySelector('.plan-gate__plan') !== null && ${AT_MINIMUM_WITH_NOTICE}); i += 1) await new Promise((r) => setTimeout(r, 100)); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const field = document.querySelector('[data-testid="plan-gate-plan"]'); const g = document.querySelector('[data-testid="plan-gate"]'); const n = document.querySelector('.notice-slot'); const reach = ['plan-approve', 'plan-revise', 'plan-cancel'].map((id) => { const e = document.querySelector('[data-testid="' + id + '"]'); if (!e) return id + '=absent'; const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return id + '=' + (hit === e || e.contains(hit) ? 'ok' : 'not-hit'); }).join('|'); const read = { size: innerWidth + 'x' + innerHeight, edit: field !== null && field.classList.contains('plan-gate__plan'), fieldMin: field ? getComputedStyle(field).minHeight : null, noticeText: n ? n.innerText.slice(0, 200) : '', reach, gateScrolls: g ? g.scrollHeight - g.clientHeight : null, children: g ? [...g.children].map((c) => ({ c: [...c.classList].find((k) => k.startsWith('plan-gate__')) || c.classList[0] || c.tagName, h: Math.round(c.getBoundingClientRect().height), grow: getComputedStyle(c).flexGrow, shrink: getComputedStyle(c).flexShrink })) : null }; document.body.dataset.smallEdit = '1'; return read; })()`;
 const log2c = await launch('notice-at-minimum', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_RESIZE: '1000x680@200',
   ROTARIS_CAPTURE_NOTICES: [1500, 6000, 12000].map((at) => `${OTHER_FAILED}@${at}`).join(';;'),
-  ROTARIS_CAPTURE_EVAL_AT: `${SMALL_STATE}@2000;;${SMALL_NOTICE}@2000`,
-  ROTARIS_CAPTURE_WAIT: `js:document.body.dataset.smallState === '1' && document.body.dataset.smallNotice === '1'`,
+  ROTARIS_CAPTURE_EVAL_AT: `${SMALL_STATE}@2000;;${SMALL_NOTICE}@2000;;${EDIT_STATE}@2000`,
+  ROTARIS_CAPTURE_WAIT: `js:document.body.dataset.smallState === '1' && document.body.dataset.smallNotice === '1' && document.body.dataset.smallEdit === '1'`,
   ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
   ROTARIS_CAPTURE_AFTER_MS: '1500',
 });
@@ -330,7 +334,23 @@ if (grewSmall.length !== 1 || !/plan-gate__(preview-wrap|plan)/.test(grewSmall[0
 const tallestSmall = small.children.reduce((a, b) => (b.h > a.h ? b : a));
 if (!/plan-gate__(preview-wrap|plan)/.test(tallestSmall.c)) throw new Error(`at 1000x680 with a ${slot.notice} px notice the plan is not the largest element of the gate (gate ${JSON.stringify(small.gate)}): ${small.children.map((c) => `${c.c}=${c.h}`).join('|')}`);
 if (slot.reach !== 'plan-approve=ok|plan-revise=ok|plan-cancel=ok') throw new Error(`at 1000x680 with a notice an answer of the gate is not reachable (REQ-SHELL-048): ${slot.reach}`);
-results.noticeAtMinimum = { size: slot.size, notice: slot.notice, noticeText: slot.noticeText, gate: small.gate.h, plan: small.plan.h, gateScrolls: slot.gateScrolls, reach: slot.reach, children: small.children };
+// "Every other part of the gate is sized by its own content": nothing but the plan may shrink below it.
+const shrankSmall = small.children.filter((c) => Number(c.shrink) > 0 && !/plan-gate__(preview-wrap|plan)/.test(c.c)).map((c) => c.c);
+if (shrankSmall.length > 0) throw new Error(`at 1000x680 with a notice a part other than the plan yields below its content: ${JSON.stringify(shrankSmall)}`);
+const edit = readEval(evals2c, 2000, EDIT_STATE);
+if (edit === undefined || edit === null || edit.children === null) throw new Error(`the gate was not read in edit mode at the minimum with a notice:\n${log2c}`);
+if (!edit.edit || edit.size !== '1000x680' || !edit.noticeText.includes(OTHER_SESSION)) throw new Error(`edit mode was not read at 1000x680 beside REQ-NOTIFY-032's notice: ${JSON.stringify({ edit: edit.edit, size: edit.size, noticeText: edit.noticeText })}`);
+const grewEdit = edit.children.filter((c) => Number(c.grow) > 0 && c.h > 1).map((c) => c.c);
+if (grewEdit.length !== 1 || grewEdit[0] !== 'plan-gate__plan') throw new Error(`in edit mode at 1000x680 with a notice the plan is not the only element that grows: ${JSON.stringify(grewEdit)}`);
+const tallestEdit = edit.children.reduce((a, b) => (b.h > a.h ? b : a));
+if (tallestEdit.c !== 'plan-gate__plan') throw new Error(`in edit mode at 1000x680 with a notice the plan is not the largest element of the gate (field min-height ${edit.fieldMin}): ${edit.children.map((c) => `${c.c}=${c.h}`).join('|')}`);
+const shrankEdit = edit.children.filter((c) => Number(c.shrink) > 0 && c.c !== 'plan-gate__plan').map((c) => c.c);
+if (shrankEdit.length > 0) throw new Error(`in edit mode a part other than the plan yields below its content: ${JSON.stringify(shrankEdit)}`);
+if (edit.reach !== 'plan-approve=ok|plan-revise=ok|plan-cancel=ok') throw new Error(`in edit mode at 1000x680 with a notice an answer of the gate is not reachable (REQ-SHELL-048): ${edit.reach}`);
+results.noticeAtMinimum = {
+  size: slot.size, notice: slot.notice, noticeText: slot.noticeText, gate: small.gate.h, plan: small.plan.h, gateScrolls: slot.gateScrolls, reach: slot.reach, children: small.children,
+  edit: { fieldMin: edit.fieldMin, gateScrolls: edit.gateScrolls, reach: edit.reach, children: edit.children },
+};
 
 // 3. Revise: a further cycle, carrying the changes stated, and still nothing written.
 const log3 = await launch('revised', {

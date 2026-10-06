@@ -29,3 +29,21 @@ session `63f26919` (`requirements`). Of the pack's 12 error-path records, 3 were
 
 - `packages/engine/src/session-writer.ts` — `settleToolCall`, the `cut` it defines and the `args` it builds from it.
 - `packages/engine/src/run/cut.ts` — REQ-SESSION-194's cut, and the comment that places the error-path cut outside it.
+
+## Repaired — 2026-10-06 (fin23)
+
+`SessionWriter.settleToolCall` (`packages/engine/src/session-writer.ts`) cuts an error-path record's arguments and result
+with `run/cut.ts`, REQ-SESSION-194's one marked cut: at most 2,000 characters, the last three `...`, never between the two
+halves of a surrogate pair. Arguments that fit stay the object they were; arguments that do not are stored as the head of
+their JSON text, marked, so a reader sees an object's text that does not close and ends with the marker. A result that
+fits, and every record of a call that succeeded, is stored whole as before. `run/cut.ts`'s comment no longer places this
+cut outside REQ-SESSION-194; its old reading is kept there beside the new one. The runtime view's store table says so.
+
+**Pinned by** `packages/engine/src/session-writer.test.ts`, "SessionWriter — an error-path tool record marks the cut it
+makes": long arguments and a long result come back 2,000 characters ending `...` (red before the repair: the bare
+2,000-character heads); arguments and a result that fit, an exactly 2,000-character result included, come back whole;
+a call that succeeded is never cut; and a cut never splits a surrogate pair (red before the repair: the bare 2,000-character head, unmarked).
+
+**Not shown:** no proof drives an error-path tool record through the built app; a live run should show each error-path
+record whose arguments or result passed 2,000 characters ending with `...`, its length 2,000. The live-run harness's
+create-shaped test that reads such arguments (`createShaped`, live-run finding M2) is outside this repair.

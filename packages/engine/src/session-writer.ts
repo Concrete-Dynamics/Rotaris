@@ -4,8 +4,12 @@ import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type AgentTerminalRow, type Checkp
 import { FOLLOW_UP_STATE, interruptionPhrase, isLegalChildMove, isLegalFollowUp, isResumeState, isTerminalChildState, type ChildState, type ImageAttachment, type Interruption, type ResumeState, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus, summarise } from './run/stop-conditions.js';
+import { cut } from './run/cut.js';
 import { AgentActivity } from './children/activity.js';
 import type { AgentGrant } from './children/personas.js';
+
+/** REQ-SESSION-136: an error-path tool record's arguments and result are cut to this many characters, marker included. */
+const ERROR_RECORD_CAP = 2000;
 
 /**
  * ADR-0008 — one ordered session writer per session, owning the session's
@@ -949,16 +953,23 @@ export class SessionWriter {
     return ok(ordinal);
   }
 
-  /** The one settling update, with `tool.finish` in the same transaction; on error args/result are cut to 2000 (REQ-SESSION-136). */
+  /**
+   * The one settling update, with `tool.finish` in the same transaction; on error args/result are cut to 2000 (REQ-SESSION-136)
+   * with REQ-SESSION-194's marker, `...` counted inside the cap.
+   */
   settleToolCall(ordinal: number, open: ToolCallOpen, settle: ToolCallSettle): Result<boolean, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId, wall } = this.deps;
     const at = toIsoUtc(wall.instant());
-    const cut = (s: string) => (settle.is_error && s.length > 2000 ? s.slice(0, 2000) : s);
+    // REQ-SESSION-194 names this cut among those its marker governs (live-run M3,
+    // docs/defects/fixed/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md): until 2026-10-06
+    // it was a bare `slice(0, 2000)`, and a cut value could not be told from a whole one.
+    const capped = (s: string) => (settle.is_error ? cut(s, ERROR_RECORD_CAP) : s);
     const entry: Record<string, unknown> = {
       timestamp: at, agent_name: open.agent_name, tool_name: open.tool_name, call_id: open.call_id, status: settle.status, elapsed_ms: settle.elapsed_ms, is_error: settle.is_error,
-      // REQ-SESSION-136: on error the args and the result are cut to 2000 characters; an object that fits stays an object.
-      args: settle.is_error && JSON.stringify(open.args).length > 2000 ? cut(JSON.stringify(open.args)) : open.args, result: cut(settle.result),
+      // REQ-SESSION-136: on error the args and the result are cut to 2000 characters; an object that fits stays an object, and
+      // one that does not is stored as the head of its JSON text, marked, so a reader sees an object's text that is cut.
+      args: settle.is_error && JSON.stringify(open.args).length > ERROR_RECORD_CAP ? capped(JSON.stringify(open.args)) : open.args, result: capped(settle.result),
       ...(settle.outcome_kind === undefined ? {} : { outcome_kind: settle.outcome_kind }), ...(settle.exit_code === undefined ? {} : { exit_code: settle.exit_code }),
       ...(settle.failure_kind === undefined ? {} : { failure_kind: settle.failure_kind }), ...(settle.warnings === undefined ? {} : { warnings: settle.warnings }),
     };

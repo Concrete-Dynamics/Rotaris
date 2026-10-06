@@ -1770,7 +1770,10 @@ agent for a full timeout while nobody is there.
 > REQ-ORCH-139 closes the timeline vocabulary and neither it nor domain 05's permission events has a word for the user's
 > presence, so both transitions are session-log lines (REQ-SESSION-142) at `WARNING`, the default level — the end of an
 > away stretch is as much an autopsy fact as its start, and one written below the default level would leave the stretch
-> looking open; a timeline word is raised as [OQ-76](../architecture/open-questions.md). **(5) The question clause under
+> looking open; a timeline word is raised as [OQ-76](../architecture/open-questions.md). *(Since 2026-10-06,
+> [R-071](requests.md#r-071): OQ-76 is ruled and [`PD-TOOLS-011`](#pd-tools-011) gives domain 05 `user_away` and
+> `user_returned`, so both transitions are also timeline entries; the two session-log lines keep `WARNING` as above.)*
+> **(5) The question clause under
 > `ask`.** `ask_questions` is outside REQ-TOOLS-007's read-only class, so under the `ask` preset its own dispatch is an
 > approval ask, and that ask is one the away state resolves at once: under the default preset no question reaches an away
 > user. The clause is built as read — it governs the question the executor raises, which still prompts and waits

@@ -51,7 +51,8 @@ preset rule and carried in refusals and in the audit, so a decision can be trace
 `REQ-TOOLS-039`, `REQ-SANDBOX` rule identifiers
 
 **Decision source**:
-Which of the twelve origins a decision came from, recorded beside it. — `REQ-TOOLS-078`
+Which of the twelve origins a decision came from, recorded beside it; the audit entry of a user's own
+terminal action carries a thirteenth, `user`. — `REQ-TOOLS-078`, `PD-TOOLS-011`
 
 **Approval**:
 The interactive prompt raised for an `ask`, carrying a request id, the redacted command and the

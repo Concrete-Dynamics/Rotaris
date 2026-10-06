@@ -126,6 +126,7 @@ import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
+import { stallIssueCadence } from './lib/stall-issue-cadence.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
@@ -841,7 +842,7 @@ function readSessionLog(sessionId) {
 function readIssues(sessionId) {
   const Database = require('better-sqlite3');
   const db = new Database(oneDatabase(), { readonly: true });
-  try { return db.prepare('SELECT ordinal, id, kind, severity, actor, message, evidence_ref FROM issues WHERE session_id = ? ORDER BY ordinal').all(sessionId); }
+  try { return db.prepare('SELECT ordinal, id, recorded_at, kind, severity, actor, message, evidence_ref, metadata FROM issues WHERE session_id = ? ORDER BY ordinal').all(sessionId); }
   finally { db.close(); }
 }
 /**
@@ -1790,9 +1791,21 @@ if (wanted.includes('faults')) {
        */
       const rootStall = issues.filter((issue) => issue.kind === 'stall' && /^agent appears stalled: no model event or token for \d+ seconds/.test(String(issue.message ?? '')));
       check(rootStall.length > 0, 'the entry agent\'s stall watch reported the stalled stream before the idle bound (REQ-MONITOR-117/119)', rootStall.length > 0 ? `${rootStall.length} \`stall\` issue(s) for ${rootStall[0].actor ?? '?'}; first: ${String(rootStall[0].message).slice(0, 120)}` : `no \`stall\` issue among ${issues.length}`);
+      /*
+       * PD-MONITOR-005 revision 2 (OQ-127's ruling, 2026-10-06): the `stall` issue is written with its warning only — at
+       * entry, then no more often than REQ-MONITOR-120's throttle (the threshold, or 30 s, whichever is longer). Before it,
+       * one was written at every evaluation (every 5 s at 90 s), and the check above passed that too (finacc3's finding F14,
+       * `docs/defects/fixed/the-faults-stall-check-does-not-assert-the-stall-issue-throttle.md`). Every agent's `stall`
+       * issues are read, a stall at a time: a repeat sooner than the throttle after the one before it fails. Here the root's
+       * stall should leave one, at 90 s, before the 120 s idle bound gives the call up.
+       */
+      const cadence = stallIssueCadence(issues);
+      check(cadence.tooSoon.length === 0, 'each stall wrote its `stall` issue no more often than its throttled warning (PD-MONITOR-005 rev. 2, REQ-MONITOR-120)', cadence.tooSoon.length === 0
+        ? `${cadence.stalls.length} stall(s): ${cadence.stalls.map((s) => `${s.actor} at ${s.silences.join(', ')} s`).join('; ') || 'none'}${cadence.unread.length > 0 ? `; ${cadence.unread.length} unread` : ''}`
+        : `${cadence.tooSoon.length} repeat(s) sooner than the throttle; first: ${cadence.tooSoon[0].actor} at ${cadence.tooSoon[0].next} s, ${(cadence.tooSoon[0].gapMs / 1000).toFixed(1)} s after the one at ${cadence.tooSoon[0].previous} s (throttle ≥ ${cadence.tooSoon[0].throttleMs / 1000} s)`);
       noted('what the stalled run settled as', `${stallRead.session.execution_status} / ${stallRead.session.stop_reason} after ${stallRead.session.iterations_completed} iteration(s)`);
       preserveRun('faults-stall', stallRead.session.session_id);
-      results.scenarios['faults-stall'] = { fired: stallFired, holdMs: HOLD_MS, status: stallRead.session.execution_status, stopReason: stallRead.session.stop_reason, issues: issues.map((issue) => ({ kind: issue.kind, severity: issue.severity, message: issue.message })) };
+      results.scenarios['faults-stall'] = { fired: stallFired, holdMs: HOLD_MS, status: stallRead.session.execution_status, stopReason: stallRead.session.stop_reason, issues: issues.map((issue) => ({ kind: issue.kind, severity: issue.severity, recordedAt: issue.recorded_at, message: issue.message })) };
     }
     results.scenarios['faults-stall'] ??= { fired: stallFired, holdMs: HOLD_MS, status: null, stopReason: null, issues: [] };
     proxy.setFaults([]);

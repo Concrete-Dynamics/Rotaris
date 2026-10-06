@@ -3752,7 +3752,8 @@ the requirement's headline as it stands. A banner for a workspace no window hold
 finish" in the other project's window too, carrying a summary that says "this project" and nothing saying which; the user
 could not tell which project to try again. Showing the banner only in the windows holding the project would make the
 application's single notice store work per window, which is a larger change than the confusion is worth; naming the
-project is a text change that removes it. What it costs: the title is no longer the requirement's fixed string, so a
+project is a text change that removes it. The name says which project; the retry itself is made in that project's Settings ›
+Project, since the banner's own "Try again" action has no target in this build (ADR-0049, "Not built, said so"). What it costs: the title is no longer the requirement's fixed string, so a
 reader or a test matching the headline whole must match its start; and a long folder name lengthens the title.
 
 > **Narrows:** REQ-WORKSPACE-102, REQ-WORKSPACE-103
@@ -3765,7 +3766,11 @@ reader or a test matching the headline whole must match its start; and a long fo
 > before the change; `init-proof` scenario 4 requires the background banner's title to name the scenario's folder and its
 > detail to open on the folder. **What was not measured.** No built-app run with two main windows open photographed the
 > banner in the window that does not hold the project. The row is in
-> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+> [`../architecture/first-executions.md`](../architecture/first-executions.md). **Repaired on verification, 2026-10-06.**
+> As first built, `projectNameOf` took a Windows drive root's designator for its last segment and named `C:\` and `C:/`
+> as the bare `C:`, against the clause above that a root with no last segment is named by its full path; the unit test had
+> pinned only `/`. A drive designator (`^[A-Za-z]:$`) now counts as no segment, so a drive root reads `C:\`; the case
+> "names a Windows drive root by its full path" in `initialization.test.ts` pins it and was red on the first build.
 
 ---
 

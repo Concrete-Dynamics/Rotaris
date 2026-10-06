@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, join, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
@@ -71,9 +71,9 @@ const WORKSPACE_NO_TASK = [
   '',
 ].join('\n');
 
-function scenario(name, files, { code = false } = {}) {
+function scenario(name, files, { code = false, folder = 'workspace' } = {}) {
   const root = join(output, name);
-  const workspace = join(root, 'workspace');
+  const workspace = join(root, folder);
   const local = join(root, 'local');
   // The global configuration directory by the platform that reads it (`configDirFor`), not the Windows spelling alone.
   const configDir = configDirFor(local);
@@ -224,7 +224,9 @@ results.skipHolds = { dialogReturned: reopen.dialog, sendDisabled: reopen.send, 
  * 4. REQ-WORKSPACE-084/103 — a failing task records NOTHING and reaches the background banner,
  *    while the shipped task beside it still runs and IS recorded.
  * --------------------------------------------------------------------------------------------- */
-const s4 = scenario('failure', WORKSPACE);
+// PD-WORKSPACE-003: a folder name no banner would carry by accident, so the name check below tells the project's name from a
+// generic word.
+const s4 = scenario('failure', WORKSPACE, { folder: 'atlas-billing' });
 const log4 = await launch('failure', s4, { ROTARIS_INIT_TEST_TASK: 'fail', ROTARIS_CAPTURE_AFTER_MS: '30000' }, 180_000);
 const ws4 = readFileSync(s4.workspaceFile, 'utf8').replace(/\r/g, '');
 if (/verification-fail/.test(ws4)) throw new Error(`a failed task recorded an outcome:\n${ws4}`);
@@ -234,7 +236,7 @@ if (!/Project setup did not finish/.test(log4)) throw new Error(`the background 
 // PD-WORKSPACE-003 (OQ-171): the banner reaches every open window, so it names the project it is about — its folder's name
 // after the headline, and the folder itself at the head of the detail area.
 const bannerLine = log4.split('\n').findIndex((line) => line.includes('"Project setup did not finish'));
-if (bannerLine < 0 || !log4.split('\n')[bannerLine].includes(`"Project setup did not finish: ${basename(s4.workspace)}"`)) throw new Error(`the background banner did not name its project (PD-WORKSPACE-003):\n${log4}`);
+if (bannerLine < 0 || !log4.split('\n')[bannerLine].includes('"Project setup did not finish: atlas-billing"')) throw new Error(`the background banner did not name its project (PD-WORKSPACE-003):\n${log4}`);
 if (!log4.includes(`Project folder: ${s4.workspace}`)) throw new Error(`the background banner's detail did not open on the project's folder (PD-WORKSPACE-003):\n${log4}`);
 results.failure = { workspaceFile: ws4, banner: log4.split('\n')[bannerLine] };
 

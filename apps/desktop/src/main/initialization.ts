@@ -133,12 +133,13 @@ export function failureDetail(failed: readonly { readonly error: string; readonl
 /**
  * PD-WORKSPACE-003 (OQ-171, ruled 2026-10-06 under R-071): an initialization banner is an application notice, shown in every
  * open window (ADR-0049's one notice store), so it names the project it is about. The project's name is its folder's — the
- * root's last path segment, either separator — and the root itself where it has none (a drive or filesystem root).
+ * root's last path segment, either separator — and the root itself where it has none (a drive or filesystem root). A
+ * Windows drive designator (`C:` of `C:\`) is not a segment, so a drive root reads `C:\`, never the bare letter.
  */
 export function projectNameOf(root: string): string {
   const trimmed = root.replace(/[\\/]+$/u, '');
   const name = trimmed.split(/[\\/]/u).pop() ?? '';
-  return name === '' ? root : name;
+  return name === '' || /^[A-Za-z]:$/u.test(name) ? root : name;
 }
 
 /**

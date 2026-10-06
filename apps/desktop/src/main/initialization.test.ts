@@ -158,6 +158,15 @@ describe('a banner names its project (PD-WORKSPACE-003, OQ-171)', () => {
     expect(projectNameOf('/')).toBe('/');
   });
 
+  it('names a Windows drive root by its full path, never by the bare drive letter', () => {
+    expect(projectNameOf('C:\\')).toBe('C:\\');
+    expect(projectNameOf('C:/')).toBe('C:/');
+    expect(projectNameOf('d:\\')).toBe('d:\\');
+    expect(projectNameOf('C:')).toBe('C:');
+    expect(projectNameOf('C:\\atlas-billing')).toBe('atlas-billing');
+    expect(namedBanner('C:\\', 'Project setup did not finish', '').headline).toBe('Project setup did not finish: C:\\');
+  });
+
   it('puts the name after the headline and the folder at the head of the detail area', () => {
     expect(namedBanner('/w/one', 'Project setup did not finish', 'the error')).toEqual({ headline: 'Project setup did not finish: one', detail: 'Project folder: /w/one\n\nthe error' });
     expect(namedBanner('/w/one', 'Project setup could not be checked', '')).toEqual({ headline: 'Project setup could not be checked: one', detail: 'Project folder: /w/one' });

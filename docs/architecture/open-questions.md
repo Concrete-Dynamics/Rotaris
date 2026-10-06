@@ -7237,7 +7237,12 @@ injected into a conversation whose model step or tool call is in flight.
   design system's `tag-wait`, as the mockup's agents panel qualifies a waiting row; the inspector's meta line ends with the
   same words. The activity text is left as REQ-MONITOR-047 fixes it.
 - **"Notified".** The recovery is logged as OQ-127 reads it, and notified by the republished record, whose badge is gone.
-  No notice and no timeline word is minted for it (REQ-ORCH-139; OQ-127 asks the owner for the words). ~~A stall still
+  No notice and no timeline word is minted for it (REQ-ORCH-139; OQ-127 asks the owner for the words). *(Since OQ-127's
+  ruling, 2026-10-06, [R-071](../product/requests.md#r-071): the recovery is also a `stall_recovered` timeline entry, a
+  word of [`PD-ORCH-014`](../product/directives.md#pd-orch-014) given under OQ-157, and its session-log line is at `INFO`,
+  both written by `stallRecords` in `packages/engine/src/children/stall.ts`
+  ([`PD-MONITOR-005`](../product/directives.md#pd-monitor-005) revision 2) — the "no timeline word" above no longer holds;
+  still no notice. A correction of the build's state, not a ruling of this question.)* ~~A stall still
   under way when the watch is disarmed — the agent's attempt or execution has ended — is over, and is logged recovered and
   cleared then (`StallWatch.stop`).~~ *(Corrected 2026-09-30 by acceptance round 1's verifier: that line was false for the
   commonest way a stall ends without the agent resuming — a cancel or a stop of the stalled run — and for a pause, a
@@ -7264,7 +7269,8 @@ injected into a conversation whose model step or tool call is in flight.
   refreshes the agent's last-activity timestamp"), wherever it was delivered.
 
 **What a ruling decides.** Which surfaces draw the stall and in what words; whether the recovery is also a notice or a
-timeline entry; whether the root is watched against the child threshold or one of its own; and whether REQ-MONITOR-135's
+timeline entry *(the timeline entry is settled by OQ-127's ruling of 2026-10-06, see "Notified" above; the notice by
+this question's own ruling the same day, which confirms the recovery notified by the republished record alone)*; whether the root is watched against the child threshold or one of its own; and whether REQ-MONITOR-135's
 evaluation leg means waking a waiting agent, as built, or something a step in flight could receive.
 
 **OQ-154 — Does a child that ends where no run's lifecycle hooks are live fire `child_completed`, and when?**

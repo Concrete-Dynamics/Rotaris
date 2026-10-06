@@ -208,11 +208,15 @@ coordinating prompt becomes its direct-work form, a configured prompt gains the 
 holds keeps the persona's prompt (`Run`'s root turn). The **runtime view**'s system-prompt paragraph and its entry-port
 sentence say so. No package, edge, process, channel, command or store column changed.
 
-**A `swarm` run is told to delegate as widely as it can (REQ-ORCH-025; finacc3, finding F07).** `withRunOverride`
-(`children/personas.ts`) adds `SWARM_INSTRUCTION` to the entry turn's instructions after its playbook when the run override is
-`swarm`, the grant is not the direct-work bundle and the entry role declares `delegate`; `RuntimePosture.runOverride` reaches
-the run as `RunDeps.runOverride` beside `coordinating`. A run granted the bundle carries no `swarm` text until OQ-205 is ruled.
-The **runtime view**'s system-prompt paragraph says so. No package, edge, process, channel, command or store column changed.
+**A `swarm` run is told to delegate as widely as it can (REQ-ORCH-025; finacc3, finding F07).** `runOverrideLayer`
+(`children/personas.ts`) builds `SWARM_INSTRUCTION` for the entry turn when the run override is `swarm`, the grant is not the
+direct-work bundle and the entry role declares `delegate`, and `runTurn` appends it after everything else the prompt carries,
+the MCP section included (`withRunOverrideLayer`, `TurnDeps.runOverrideLayer`). The text has its own heading, says it takes
+precedence over the playbook's CHUNKING and BUDGET guidance where they differ, and is pointed at the plan while the plan gate
+holds. `RuntimePosture.runOverride` reaches the run as `RunDeps.runOverride` beside `coordinating`, at the launch and at a
+continuation. A run granted the bundle carries no `swarm` text until OQ-205 is ruled. The **runtime view** says so in its own
+paragraph after the instruction files'; repair round 1 moved the layer from before the context units to after the MCP
+section. No package, edge, process, channel, command or store column changed.
 
 **A corrective message's timeline entry is a warning, as its line is (OQ-127's ruling; finacc3, finding F11).**
 `recordCorrectiveMessage` (`engine/children/stall.ts`) writes the `corrective_message` entry at severity `warning`, the

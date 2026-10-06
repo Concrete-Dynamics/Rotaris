@@ -203,6 +203,12 @@ export interface TurnDeps {
    * just before the step goes out; the agent's record keeps the first and a resume compares against it.
    */
   readonly fingerprint?: FingerprintCheck | undefined;
+  /**
+   * REQ-ORCH-025: the run override's layer of this agent's instructions (`runOverrideLayer`, `children/personas.ts`), placed
+   * after everything else the request's system prompt carries, the MCP section included. Absent or '' adds nothing: every
+   * agent but a `swarm` run's coordinating entry role.
+   */
+  readonly runOverrideLayer?: string | undefined;
 }
 
 type ToolResultPart = { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean };
@@ -253,14 +259,28 @@ function injectSteering(deps: TurnDeps, conversation: Conversation): number {
 }
 
 /**
- * REQ-MCP-101: the persona's one MCP section, after everything else the system prompt carries (the role's instructions,
- * its playbook and the session's context units, `withContextUnits`), one blank line before its heading. An empty section
+ * REQ-MCP-101: the persona's one MCP section, after the role's instructions, its playbook and the session's context units
+ * (`withContextUnits`), one blank line before its heading; only the run override's layer comes after it
+ * (`withRunOverrideLayer`). An empty section
  * (no MCP surface at all) adds nothing. The unit before it closes itself where it needs to: the instruction files end with
  * `INSTRUCTION_FILES_END_COMMENT`, so this heading is never read as the last file's own
  * (`docs/defects/fixed/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
  */
 export function withMcpSection(systemPrompt: string, section: string): string {
   return section === '' ? systemPrompt : `${systemPrompt}\n\n${section}`;
+}
+
+/**
+ * REQ-ORCH-025: the run override "as a final layer ... placed after everything else": after the MCP section, so nothing the
+ * request's system prompt carries follows it. The layer opens with its own heading (`SWARM_HEADING`), so it is never read as
+ * part of the MCP listing before it. '' adds nothing.
+ *
+ * The reason it is composed here, kept beside it: the first repair of F07 (finacc3) appended it in `Run` before the context
+ * units, and `runTurn` adds the MCP section after whatever it is handed, so the "final layer" was followed by both.
+ */
+export function withRunOverrideLayer(systemPrompt: string, layer: string): string {
+  if (layer === '') return systemPrompt;
+  return systemPrompt === '' ? layer : `${systemPrompt}\n\n${layer}`;
 }
 
 export async function runTurn(deps: TurnDeps, task: string | null, history: readonly ChatMessage[], signal: AbortSignal, initialContent?: readonly ContentPart[]): Promise<TurnOutcome> {
@@ -273,7 +293,8 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
   if (tools?.ready) await tools.ready();
   const specs = tools?.specs() ?? [];
   const section = tools?.promptSection?.() ?? '';
-  const stepDeps: TurnDeps = section === '' ? deps : { ...deps, systemPrompt: withMcpSection(deps.systemPrompt, section) };
+  const composed = withRunOverrideLayer(withMcpSection(deps.systemPrompt, section), deps.runOverrideLayer ?? '');
+  const stepDeps: TurnDeps = composed === deps.systemPrompt ? deps : { ...deps, systemPrompt: composed };
   let toolCallCount = 0;
   let steps = 0;
   let lastReport: TurnReport = { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };

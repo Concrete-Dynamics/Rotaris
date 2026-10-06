@@ -69,11 +69,7 @@ bundle is told to do the work itself, `entryInstructionsFor`, OQ-202 as ruled, `
 keeps the persona's prompt) take its playbook (`withPlaybook`, REQ-ORCH-019; the entry turn the entry role's form,
 `Preflight.playbookFor(persona, true)`, whose ROUTE slot is the catalogue's `entry` variant where its row resolves `routed`,
 `entryCell`, while a delegated child of the same role reads `routed` — since 2026-10-06, K3 of the default live run at
-`c2fdd6a`; the launch audit records the entry role's cell in that form — the entry role being the persona the root runs on, `PreflightDeps.entryRole` from `run.model.config.persona`, which also names the BUDGET row; an entry persona with no row clamps nothing), for the entry turn the run override's text as
-the final layer (`withRunOverride`, `children/personas.ts`, REQ-ORCH-025: a `swarm` run's demand for maximum parallel
-delegation, `SWARM_INSTRUCTION`, given to an entry role that declares `delegate`; none under `single`, a capability change,
-and none on a run granted the direct-work bundle, OQ-205's reading; `RunDeps.runOverride` from `RuntimePosture.runOverride`),
-and then the session's
+`c2fdd6a`; the launch audit records the entry role's cell in that form — the entry role being the persona the root runs on, `PreflightDeps.entryRole` from `run.model.config.persona`, which also names the BUDGET row; an entry persona with no row clamps nothing) and then the session's
 **always-active context units** (`withContextUnits`, REQ-WORKSPACE-060), in that requirement's order: workspace
 context → the skill catalog → the force-loaded skill bodies → persona memory. **One of the four is not built**
 (persona memory) and is an empty slot in the list rather than a shape a later part must re-cut.
@@ -88,9 +84,20 @@ two events that already clear the catalog. `contextUnits` pushes that block as t
 `instructionContextUnit`, which adds one blank line and `INSTRUCTION_FILES_END_COMMENT` after the last file, outside
 the merged output and its total limit. Each file therefore runs from its source comment to the next source comment or to
 that line, and whatever follows is not read as the last file's own: the skill catalog, or `runTurn`'s MCP section
-(`withMcpSection`, REQ-MCP-101), which is always appended last. Until 2026-10-06 nothing closed the files, and in the duress
+(`withMcpSection`, REQ-MCP-101), which is appended after them. Until 2026-10-06 nothing closed the files, and in the duress
 live run at `27a5127` agents read `## MCP servers` as part of `AGENTS.md`
 (`docs/defects/fixed/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
+
+**The run override is the last thing an entry turn's prompt carries (REQ-ORCH-025).** After the MCP section `runTurn`
+appends the run override's layer (`withRunOverrideLayer`, `run/turn.ts`, from `TurnDeps.runOverrideLayer`), which `Run`
+builds for the entry turn with `runOverrideLayer` (`children/personas.ts`) from `RunDeps.runOverride`, itself
+`RuntimePosture.runOverride` handed over by `Sessions` at the launch and at a continuation alike. Only `swarm` renders one:
+`SWARM_INSTRUCTION`, under its own heading ``## Run override: `swarm` ``, demands maximum parallel delegation and says it takes
+precedence over the playbook's CHUNKING and BUDGET guidance where they differ, within the child limits the run enforces;
+while the plan gate holds the run (REQ-ORCH-153) `SWARM_PLAN_HELD_NOTE` points it at the plan. None under `single`, a capability
+change; none for an entry role that declares no `delegate`; and none on a run granted the direct-work bundle, OQ-205's
+reading. Until finacc3's repair round 1 (2026-10-06) the layer was appended in `Run` after the playbook but before the
+context units and the MCP section, and carried no precedence sentence: "the final layer" in name only.
 
 **The cold path is timed, and it runs after first input.** `workspaceContext` reads the monotonic clock port four
 times on a cache miss: before the saved-policy read, after it, after the discovery and after the merge. It then logs

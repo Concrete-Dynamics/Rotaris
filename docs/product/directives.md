@@ -3269,7 +3269,8 @@ no run (`packages/engine/src/children/personas.ts` reads no run override;
 [the defect recorded for it](../defects/the-swarm-run-override-changes-no-instruction-text.md)). *(The reason, corrected
 2026-10-06, finacc3, finding F07: the build now renders the `swarm` text on every run the mapping does not grant the bundle,
 `withRunOverride`, and withholds it on a granted run by a check of its own, OQ-205's reading; the outcome on a granted run is
-unchanged.)*
+unchanged. In that bundle's repair round 1 the function became `runOverrideLayer`, its text placed after everything else the
+prompt carries by `runTurn`; the check on a granted run is the same.)*
 
 **Which todo items the success clause ranges over (revision 2).** On every run, coordinating or granted the bundle,
 REQ-ORCH-029's constraint "it does not report the run successful while a todo item is non-terminal" SHALL range over the

@@ -143,31 +143,57 @@ export function entryInstructionsFor(systemPrompt: string, grant: IntentGrant | 
   return systemPrompt === '' ? DIRECT_WORK_INSTRUCTION : `${systemPrompt}\n\n${DIRECT_WORK_INSTRUCTION}`;
 }
 
+/** REQ-ORCH-025: the heading the `swarm` layer opens with, so it is never read as part of the section before it (the MCP listing). */
+export const SWARM_HEADING = '## Run override: `swarm`';
+
 /**
  * REQ-ORCH-025: the one effect of a `swarm` run override — instruction text demanding maximum parallel delegation, with
  * REQ-ORCH-028's overlapping-ownership rule restated, since the override does not lift it. Nothing else changes: the
  * grant (REQ-ORCH-016: `swarm` is not an input to the mapping), the tools and the coordinating status are the run's as
  * they would be without it.
+ *
+ * "Taking precedence over the matrix cell": the text says so, and names the two slots whose guidance it overrides where they
+ * differ — CHUNKING's `milestones` (one finished before the next starts) and BUDGET's `tight` (delegate sparingly). BUDGET's
+ * clamp is enforced, not advice (REQ-ORCH-024), so the demand is bounded by the limits the run enforces rather than told to
+ * exceed them.
+ *
+ * The reason the precedence sentence exists, kept beside it: the first form (finacc3, F07's repair, round 0) demanded parallel
+ * delegation directly under a cell's "finish and verify one before starting the next" with nothing saying which wins — the
+ * contradiction PD-ORCH-006 removed from the direct-work prompt (finding G2).
  */
-export const SWARM_INSTRUCTION = 'Run override `swarm`: delegate as widely and in parallel as the work allows. Split the task into as many independent work items as it truly has, hand each to its own specialist at once rather than one after another, and wait only where one item needs another\'s result. Overlapping ownership stays forbidden: never hold two implementation delegations for the same todo item at once.';
+export const SWARM_INSTRUCTION = [
+  SWARM_HEADING,
+  '',
+  'The user started this run under the `swarm` override. This section is the last layer of your instructions and takes precedence over the playbook above wherever the two differ on how to divide and delegate the work: where its CHUNKING says to finish one milestone before starting the next, or its BUDGET says to delegate sparingly, follow this section instead, within the child limits the run enforces.',
+  '',
+  'Delegate as widely and in parallel as the work allows. Split the task into as many independent work items as it truly has (a task that is one item, such as a plain question, stays one delegation), hand each to its own specialist at once rather than one after another, and wait only where one item needs another\'s result. Overlapping ownership stays forbidden: never hold two implementation delegations for the same todo item at once.',
+].join('\n');
 
 /**
- * REQ-ORCH-025: the run override as the final layer of the entry role's instructions, after the role's own instructions
- * and its playbook ("placed after everything else and taking precedence over the matrix cell"). Only `swarm` renders text:
- * `single` is a capability change the grant and the withheld `delegate` carry, never advice. The text is given to an entry
- * role that declares `delegate`, so it is never a demand the role has no tool to meet.
+ * REQ-ORCH-153: while the plan gate holds the run, no child whose role writes files or runs commands may be spawned, so the
+ * `swarm` demand is pointed at the plan rather than at spawning implementers the gate would refuse.
+ */
+export const SWARM_PLAN_HELD_NOTE = 'While this run\'s plan awaits approval no child that writes files or runs commands can be started: apply this section to the plan instead, laying the work out as independent items to be delegated in parallel once the plan is approved.';
+
+/**
+ * REQ-ORCH-025: the run override's layer of the entry role's instructions, or '' where it renders none. Only `swarm` renders
+ * text: `single` is a capability change the grant and the withheld `delegate` carry, never advice. The text is given to an
+ * entry role that declares `delegate`, so it is never a demand the role has no tool to meet. `runTurn` places it after
+ * everything else the prompt carries — the role's instructions, its playbook, the session's context units and the MCP
+ * section (`withRunOverrideLayer`, `run/turn.ts`) — "placed after everything else".
  *
  * The reason this exists, kept beside it: until 2026-10-06 (finacc3, finding F07) no reader of the instructions read the
  * override, so a `swarm` run was the same run as an `orchestrator` one
- * (`docs/defects/the-swarm-run-override-changes-no-instruction-text.md`).
+ * (`docs/defects/the-swarm-run-override-changes-no-instruction-text.md`). The first repair placed the
+ * text after the playbook but before the context units and the MCP section, and called that the final layer; it was not.
  *
  * On a run the mapping grants the direct-work bundle, `PD-ORCH-006` tells the entry role to do the work itself, and which of
  * that and the `swarm` demand such a run is told is OQ-205, open. Until it is ruled the build proceeds under the reading
  * OQ-205 records: the direct-work statement alone, no `swarm` text beside it.
  */
-export function withRunOverride(instructions: string, override: 'single' | 'swarm' | null, grant: IntentGrant | null, role: Pick<Persona, 'tools'> | null): string {
-  if (override !== 'swarm' || grant === 'direct-work' || role?.tools.includes('delegate') !== true) return instructions;
-  return instructions === '' ? SWARM_INSTRUCTION : `${instructions}\n\n${SWARM_INSTRUCTION}`;
+export function runOverrideLayer(override: 'single' | 'swarm' | null, grant: IntentGrant | null, role: Pick<Persona, 'tools'> | null, planHeld = false): string {
+  if (override !== 'swarm' || grant === 'direct-work' || role?.tools.includes('delegate') !== true) return '';
+  return planHeld ? `${SWARM_INSTRUCTION}\n\n${SWARM_PLAN_HELD_NOTE}` : SWARM_INSTRUCTION;
 }
 
 const ROUTING = 'Route work to specialists: an ambiguous or under-specified request → requirements-engineer; a question about the repository as it stands → codebase-analyst; a question answerable only from outside the repository → librarian; design → architect; an ordered plan → planner; implementation → coding-agent; testing → tester; documentation → docs-writer; behaviour-preserving restructuring → refactorer; final acceptance → verifier.';

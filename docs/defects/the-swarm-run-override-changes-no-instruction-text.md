@@ -6,7 +6,8 @@ selector) reaches the run as `runOverride: 'swarm'` and changes nothing the run 
 the entry role's instructions (`entryInstructionsFor`) read the grant and the persona, never the override; the playbook
 resolution reads no override; and the only readers of `runOverride` are the intent gate (where `swarm` is, rightly, not an
 input) and the `single` checks (`run-host/tools.ts`, `sessions.ts`'s `coordinating`). A `swarm` run is therefore the same
-run as an `orchestrator` one.
+run as an `orchestrator` one. *(As noticed; since 2026-10-06 the build renders the text on every intent the mapping does not
+grant the bundle — see **Repaired in part** below. The note stays open on the granted intents.)*
 
 Noticed 2026-10-06 (fin22, bundle `fin22-record-tidy`) while naming the `swarm` case in `PD-ORCH-006`'s reading, a
 verifier finding of fin20. Not repaired: the bundle is wording only.
@@ -31,7 +32,24 @@ capability change). Pinned by `run/preflight.test.ts` ("REQ-ORCH-025: a `swarm` 
 can…", red on the code before: the `swarm` run's instructions were the `orchestrator` run's, character for character) and four
 cases in `children/personas.test.ts`; shown in the built app by two scripted launches of a `moderate_feature` run reading the
 instructions the model port received (`ROTARIS_CAPTURE_MODEL_REQUESTS`): `delegation_strategy: orchestrator` and `swarm` differ
-by that paragraph alone, after the playbook. **Still open** on the other half: what a `swarm` run on a granted intent is told
+by that paragraph alone, after the playbook.
+
+*Corrected in that bundle's repair round 1 (2026-10-06), the reason kept above:* "their final layer" was not true of the round-0
+code, which appended the text in `Run` before the session's context units, so they and `runTurn`'s MCP section followed it, and
+the text never said it took precedence over the matrix cell, so it sat under a cell's "finish and verify one before starting
+the next" with nothing saying which wins — both REQ-ORCH-025 clauses, found by the bundle's verifier. Now
+`runOverrideLayer` (`children/personas.ts`) builds the layer and `runTurn` appends it after the MCP section
+(`withRunOverrideLayer`, `TurnDeps.runOverrideLayer`), under its own heading `## Run override: swarm` (the word in code
+formatting), saying it takes precedence over the playbook's CHUNKING and BUDGET guidance where they differ, within the child
+limits the run enforces; while the plan gate holds the run it is pointed at the plan (`SWARM_PLAN_HELD_NOTE`, REQ-ORCH-153).
+Pinned by four `run/preflight.test.ts` cases — the text last, after the playbook, a context unit and an MCP section (red with
+the layer composed before the MCP section); after a real `milestones` cell (`moderate_feature`) and a real `tight` cell
+(`question`), saying it overrides them; and a continuation of a `swarm` run carrying it where an `orchestrator` continuation
+does not (red with `Sessions`' continuation construction passing no `runOverride`); and a plan-mode `swarm` run's held turn
+ending with the plan-gate note — and six cases in
+`children/personas.test.ts`. Shown again in the built app (two scripted `moderate_feature` launches, the model port's captured
+instructions): the `swarm` run's differ from the `orchestrator` run's by the layer alone, after `## MCP servers` and ending the
+prompt. **Still open** on the other half: what a `swarm` run on a granted intent is told
 waits on OQ-205, and until it is ruled such a run is told PD-ORCH-006's statement with no `swarm` text beside it.
 
 ## Specs

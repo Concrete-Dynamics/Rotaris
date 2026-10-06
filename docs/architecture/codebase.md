@@ -663,8 +663,8 @@ REQ-ORCH-028's thirteen roles, the two aliases, our own system prompts) is the b
 stated fields win, `system_prompt`/`system_prompt_file` replace the prompt, a configured role is a new role
 (decision 3 of the plan); **the delegation strategy** is `rotaris.delegation_strategy` (`single` grants the entry
 role the direct-work bundle and withholds `delegate`; `swarm` adds REQ-ORCH-025's demand for maximum parallel delegation to
-the entry role's instructions after its playbook, `withRunOverride`, since 2026-10-06 — none on a run granted the bundle,
-OQ-205's reading); **the per-model cap** is each entry's stated `max_parallel`, else the cap its provider's catalogue entry declares (`modelCapInForce`, PD-PROVIDER-001, since fin22), counted across every session the run host holds a place for, a paused child's kept place included
+the entry role's instructions as the last thing its prompt carries, after the MCP section, `runOverrideLayer` composed by
+`runTurn`'s `withRunOverrideLayer`, since 2026-10-06 — none on a run granted the bundle, OQ-205's reading); **the per-model cap** is each entry's stated `max_parallel`, else the cap its provider's catalogue entry declares (`modelCapInForce`, PD-PROVIDER-001, since fin22), counted across every session the run host holds a place for, a paused child's kept place included
 (`children/model-slots.ts`, since 2026-09-30 — acceptance A13; OQ-148, OQ-149, OQ-150). **A bound
 of 100 model steps per turn** (`RUN_CONFIG_DEFAULTS.maxStepsPerTurn`) is a final belt behind the loop supervisor
 (`REQ-ORCH-099..107`, built 2026-09-05 — ADR-0059). `ROTARIS_CHILD_SCRIPT` and the

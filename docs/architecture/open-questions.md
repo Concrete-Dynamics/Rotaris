@@ -10409,7 +10409,9 @@ override; the defect note above). On every other intent a `swarm` run is today t
 does not grant the bundle a `swarm` run is now told REQ-ORCH-025's demand, after its playbook (`withRunOverride`,
 `SWARM_INSTRUCTION`); on a granted intent the build still renders no `swarm` text beside the direct-work statement, by a
 deliberate check in `withRunOverride` rather than because no run reads the override. That is the reading this question
-holds open.)*
+holds open. Corrected again in that bundle's repair round 1: the function is now `runOverrideLayer`, and `runTurn` places
+its text after everything else the prompt carries, the MCP section included (`withRunOverrideLayer`); the check that keeps it
+off a granted run is unchanged.)*
 
 **What a ruling decides.** Whether a `swarm` override on a granted intent keeps the bundle and is told to do the work
 itself (REQ-ORCH-025's coordination-only tool set and delegation demand yield on those intents, as built, carried by a

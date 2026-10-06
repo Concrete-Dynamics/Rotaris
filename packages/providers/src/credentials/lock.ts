@@ -42,15 +42,34 @@ export const lockUnavailable = (lockPath: string, cause: string): string =>
   `Nothing was changed: the lock file ${lockPath} could not be created. ${cause.replace(/\.?$/, '.')}`;
 
 /**
+ * Why a lock is reclaimed: its holder is gone (REQ-PROVIDER-152), it is this instance's own lock that an earlier
+ * operation's release could not remove, or its record names no holder at all.
+ */
+export type ReclaimedHolder = 'gone' | 'own' | 'unreadable';
+
+const RECLAIMED: Record<ReclaimedHolder, string> = {
+  gone: 'left by a process that is no longer running',
+  own: 'left by an earlier credential update of this instance, whose release could not remove it',
+  unreadable: 'whose record names no holder',
+};
+
+/**
  * A lock left by a process that is no longer running is reclaimed (REQ-PROVIDER-152), but `force` excuses only a file
  * that is already gone: a stale lock in a folder the account may not write into (`EACCES`), or one another process holds
  * open on Windows (`EPERM`, `EBUSY`), refuses the removal. That is reported as a value naming the lock file and the cause,
  * by the same reading as the create's refusal, never thrown out of `withLock` past the `Result` its four writers answer
  * (ADR-0044). Until 2026-10-06 it threw
  * (docs/defects/fixed/the-credential-lock-throws-when-a-lock-file-cannot-be-removed.md).
+ *
+ * The headline names whose lock it is, since only one of the three is a process that is no longer running. A lock of
+ * this instance's own that the account cannot remove refuses every credential update until it is removed, which the
+ * headline says. A refused removal is answered at once and never retried within the 5 s bound, a Windows sharing
+ * violation from a scanner that would pass in a moment included: the requirement gives the wait to a lock a live
+ * process holds, and this reading keeps a removal the account can never make from costing every update 5 s.
  */
-export const lockNotReclaimed = (lockPath: string, cause: string): string =>
-  `Nothing was changed: the lock file ${lockPath}, left by a process that is no longer running, could not be removed. ${cause.replace(/\.?$/, '.')}`;
+export const lockNotReclaimed = (lockPath: string, cause: string, whose: ReclaimedHolder = 'gone'): string =>
+  `Nothing was changed: the lock file ${lockPath}, ${RECLAIMED[whose]}, could not be removed. ${cause.replace(/\.?$/, '.')}` +
+  (whose === 'own' ? ' Every credential update is refused until it is removed.' : '');
 
 const remove = (path: string): void => { rmSync(path, { force: true }); };
 
@@ -87,13 +106,14 @@ export async function withLock<T>(lockPath: string, deps: LockDeps, fn: () => Pr
     if (r.value.minted) break;
     const holder = readHolder(lockPath);
     // A malformed record names no pid: it is reclaimed, since no live holder can be identified from it.
-    const dead = holder === null || probe(holder.pid) === 'dead' || holder.pid === deps.pid;
-    if (dead) {
+    const whose: ReclaimedHolder | null =
+      holder === null ? 'unreadable' : holder.pid === deps.pid ? 'own' : probe(holder.pid) === 'dead' ? 'gone' : null;
+    if (holder === null || whose !== null) {
       try {
         remove(lockPath);
       } catch (cause) {
         const text = cause instanceof Error ? cause.message : String(cause);
-        return err(failure('credential.lock.reclaim', lockNotReclaimed(lockPath, text), text, cause));
+        return err(failure('credential.lock.reclaim', lockNotReclaimed(lockPath, text, whose ?? 'unreadable'), text, cause));
       }
       continue;
     }

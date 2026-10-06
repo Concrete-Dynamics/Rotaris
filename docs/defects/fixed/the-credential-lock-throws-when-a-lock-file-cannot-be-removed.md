@@ -53,3 +53,19 @@ release keeps the operation's `ok('saved')` and the next `withLock` reclaims and
 `ProjectSettingsStore.upsertProvider` over such a lock answers the failure rather than rejecting. All three were red
 before the repair (each rejected with "EACCES: permission denied, unlink …"). Not reproduced against a real refusal:
 `EACCES` does not reach root, and a Windows sharing violation needs a Windows host.
+
+**Corrected the same day after the first verification** (fin21's verifier): the reclaim headline said every lock it could
+not remove was "left by a process that is no longer running", which was false for two of the three locks it reclaims. A
+release the removal refused leaves the lock with this instance's own pid, and a record that names no holder is
+reclaimed too. The headline now names whose lock it is: "left by a process that is no longer running", "left by an
+earlier credential update of this instance, whose release could not remove it" (followed by "Every credential update
+is refused until it is removed.", since an own lock the account cannot remove refuses every later update until it is
+gone), or "whose record names no holder". Two cases were added beside the first, both red on the earlier wording: an
+own-pid lock ("expected … not to contain 'no longer running'") and an unreadable record ("expected … to contain 'whose
+record names no holder'").
+
+Recorded as the reading the build proceeds under, not a gap: a refused removal is answered **at once and never retried**
+within the 5 s bound, a transient Windows sharing violation (`EBUSY`, `EPERM` from a scanner holding the file a moment)
+included. REQ-PROVIDER-152 gives the wait to a lock a live process holds; a removal the account can never make would
+otherwise cost every credential update the whole bound. A user who meets a transient one retries the action. The
+comment over `lockNotReclaimed` says so.

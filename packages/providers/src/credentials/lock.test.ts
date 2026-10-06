@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, err, failure, millis, ok } from '@rotaris/kernel';
 import * as platform from '@rotaris/platform';
-import { LOCK_BUSY, withLock, type LockDeps } from './lock.js';
+import { LOCK_BUSY, lockNotReclaimed, withLock, type LockDeps } from './lock.js';
 import { ProjectSettingsStore } from '../project-settings.js';
 
 /**
@@ -134,11 +134,43 @@ describe('a lock file that cannot be removed is reported, never thrown (REQ-PROV
       expect(r.error.code).toBe('credential.lock.reclaim');
       expect(r.error.headline).toContain('Nothing was changed');
       expect(r.error.headline).toContain(lock);
+      expect(r.error.headline).toContain('left by a process that is no longer running');
       expect(r.error.headline).not.toBe(LOCK_BUSY);
       expect(r.error.detail).toContain('EACCES');
     }
     expect(existsSync(lock)).toBe(true);
     expect(clock.now()).toBe(0);
+  });
+
+  it('this instance\'s own lock the reclaim cannot remove is named as its own, never as a process that is no longer running', async () => {
+    // A release the removal refused leaves the lock with this process's pid; a reclaim that is refused too must not
+    // tell the user the holder is gone, and says every credential update is refused until the lock is removed.
+    const lock = join(dir, 'o.lock');
+    writeFileSync(lock, JSON.stringify({ pid: process.pid, started_at: 'now' }));
+    refuseRemoval.add(lock);
+    const probe = vi.fn(() => 'alive' as const);
+    const r = await withLock(lock, lockDeps({ probe }), async () => ok('ran'));
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.code).toBe('credential.lock.reclaim');
+      expect(r.error.headline).toBe(lockNotReclaimed(lock, r.error.detail ?? '', 'own'));
+      expect(r.error.headline).not.toContain('no longer running');
+      expect(r.error.headline).toContain('Every credential update is refused until it is removed.');
+    }
+    expect(clock.now()).toBe(0);
+  });
+
+  it('a lock whose record names no holder, refused removal: named as such, never as a process that is no longer running', async () => {
+    const lock = join(dir, 'u.lock');
+    writeFileSync(lock, 'not a record');
+    refuseRemoval.add(lock);
+    const r = await withLock(lock, lockDeps(), async () => ok('ran'));
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.code).toBe('credential.lock.reclaim');
+      expect(r.error.headline).toContain('whose record names no holder');
+      expect(r.error.headline).not.toContain('no longer running');
+    }
   });
 
   it('a release the removal refuses keeps the operation\'s own result, and the next operation reclaims the lock as its own', async () => {

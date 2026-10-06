@@ -35,9 +35,9 @@ cut to 240 characters under REQ-SESSION-194, `—` where none was submitted; `- 
 OQ-60's Outcome block, kept as ruled, after it; Metrics, in which tokens of a session with no usage and a cost whose price was
 not established read `n/a`; Warnings, one line per kind REQ-SESSION-140 lists (a denial names the permission audit;
 stale-input drops and report downgrades read `n/a` for the records this store does not keep, and mostly-elided artifacts read
-`n/a` under [OQ-206](../../architecture/open-questions.md), which asks what the requirement means by one — that one kind is
+`n/a` under [OQ-207](../../architecture/open-questions.md), which asks what the requirement means by one — that one kind is
 **not** built, and stays open in
-[`summary-md-counts-no-mostly-elided-artifacts-until-oq-206-is-ruled.md`](../summary-md-counts-no-mostly-elided-artifacts-until-oq-206-is-ruled.md)
+[`summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`](../summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md)
 until the question is ruled); Agents (each
 iteration's root, each plan cycle's root, each child, and any name only the tool-call record carries, with its counted calls,
 `n/a` where none is held); Slowest Tools, the top five by `elapsed_ms`; and the closing inspection note naming Export records…
@@ -56,7 +56,7 @@ session's `summary.md` for the sections in order, the stop-reason line, `n/a` an
 `seed-summary.md` beside `repaired-summary.md`.
 
 **Repair round 1 (fin22's verifier).** The Warnings line for mostly-elided artifacts was split out into its own open note,
-linked above, citing OQ-206 and the `n/a` reading, since the requirement is not met for that kind until the question is
+linked above, citing OQ-207 and the `n/a` reading, since the requirement is not met for that kind until the question is
 ruled. The same round names the permission audit on the denials line whatever its count, labels the metrics document's
 `timeouts` as every tool call that timed out (`- Timeouts:`, not `- Terminal timeouts:`, since it counts more than the
 terminal's), and reads a non-string `outcome_kind` or `failure_kind` as NULL in `toolCallDigestOf` (`json_type`), as

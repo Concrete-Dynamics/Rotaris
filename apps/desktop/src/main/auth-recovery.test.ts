@@ -18,6 +18,7 @@ function harness(answers: (req: Parameters<AuthRecoveryDeps['request']>[0]) => P
   const acknowledged: { kind: string; title: string; body?: string }[] = [];
   const stored: { id: string; key: string }[] = [];
   const logged: string[] = [];
+  const cleared: string[] = [];
   const recovery = new AuthRecovery({
     request: async (req) => { requests.push(req); return await answers(req); },
     providerName: (id) => (id === 'scripted-b' ? 'Scripted B' : id),
@@ -27,11 +28,28 @@ function harness(answers: (req: Parameters<AuthRecoveryDeps['request']>[0]) => P
     reauthentication: (id) => (id === 'copilot' ? { method: 'unavailable', message: 'GitHub Copilot signs in with a code, which this build does not provide yet.' } : { method: 'api-key', message: `Enter a new API key for ${id}.` }),
     reauthenticate: async (id, key) => { stored.push({ id, key }); return store(id, key); },
     acknowledge: (kind, title, body) => acknowledged.push({ kind, title, ...(body === undefined ? {} : { body }) }),
+    clearForRunStart: (sid) => cleared.push(sid),
   });
-  return { recovery, presented, closed, requests, acknowledged, stored, logged };
+  return { recovery, presented, closed, requests, acknowledged, stored, logged, cleared };
 }
 
 describe('main/auth-recovery — the recovery dialog\'s coordinator (REQ-NOTIFY-069/072/074/080)', () => {
+  it('REQ-NOTIFY-058: a restart the dialog asks for clears the session\'s notice once the run host restarted it, and only then', async () => {
+    // docs/defects/fixed/a-prompt-or-retry-that-starts-a-run-does-not-clear-the-sessions-notice.md
+    let restart: ProcessReply = { kind: 'session.authRestarted', sessionId: 'S1', pinned: null };
+    const h = harness((req) => req.kind === 'session.authRecovery' ? facts() : restart);
+    await h.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    expect(await h.recovery.retry(h.presented[0]!, 'beta')).toEqual({ ok: true });
+    expect(h.cleared).toEqual(['S1']);
+    expect(await h.recovery.reauthenticate(h.presented[0]!, 'sk-new')).toEqual({ ok: true });
+    expect(h.cleared).toEqual(['S1', 'S1']);
+    restart = { kind: 'refused', code: 'session.run-active', headline: 'A run is already active.' };
+    expect(await h.recovery.retry(h.presented[0]!, 'beta')).toMatchObject({ ok: false });
+    expect(await h.recovery.reauthenticate(h.presented[0]!, 'sk-new')).toMatchObject({ ok: false });
+    h.recovery.cancel(h.presented[0]!);
+    expect(h.cleared).toEqual(['S1', 'S1']);
+  });
+
   it('opens the dialog over the run host\'s facts, every model named with its provider', async () => {
     const h = harness(() => facts());
     expect(await h.recovery.onAuthenticationFailure('S1', 'HTTP 401 — Incorrect API key provided')).toEqual({ opened: true });

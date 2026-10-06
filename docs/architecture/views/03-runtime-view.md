@@ -1415,6 +1415,12 @@ until then it raised REQ-NOTIFY-032's warning about the session on screen. And R
 session starting, so the publisher clears the session's notice as one does (REQ-NOTIFY-058/029, the new
 `clearForRunStart` dependency): a failure held while the session was not on screen and restarted on its fallback when it is
 focused leaves its warning standing beside the prompt no longer.
+*Since 2026-10-06 (fin21,
+`docs/defects/fixed/a-prompt-or-retry-that-starts-a-run-does-not-clear-the-sessions-notice.md`):* every other command that
+launches a run of an existing session clears it the same way once the run host has launched it: `session.prompt` and
+`session.retry` on their `ack`, `session.continue` when it `resumed`, `session.planDecision` when it `relaunched`, and the
+recovery dialog's two restarts on `session.authRestarted` (`AuthRecovery`'s `clearForRunStart` dependency). A refused one,
+or one that left the session at rest, clears nothing.
 
 Main presents `run.result` once as the notice — **except where that result carries `persistence: {confirmed: false}`**,
 the run host having already published the one failure notice `REQ-EVENTS-088` allows, with the last durable ordinal

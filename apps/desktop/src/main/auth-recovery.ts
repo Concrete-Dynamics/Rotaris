@@ -34,6 +34,11 @@ export interface AuthRecoveryDeps {
   readonly reauthenticate: (providerId: string, apiKey: string) => Promise<{ readonly ok: true; readonly message: string } | { readonly ok: false; readonly stage: 'method' | 'key' | 'validation' | 'storage' | 'catalog'; readonly message: string }>;
   /** REQ-NOTIFY-077's two error acknowledgements, on the transient stack (REQ-NOTIFY-003). */
   readonly acknowledge: (kind: AcknowledgementKind, title: string, body?: string) => void;
+  /**
+   * REQ-NOTIFY-058/029: a restart is a run of the session starting, so the session's standing notice is cleared where it is
+   * unscoped or scoped to that session (`NoticeStore.clearForRunStart`), as the fallback restart's is.
+   */
+  readonly clearForRunStart: (sessionId: string) => void;
 }
 
 /** REQ-NOTIFY-077's two titles. */
@@ -140,6 +145,7 @@ export class AuthRecovery {
     }
     if (reply.kind === 'refused') return { ok: false, message: [reply.headline, reply.detail].filter(Boolean).join(': ') };
     if (reply.kind !== 'session.authRestarted') return { ok: false, message: `The run could not be restarted: the run host answered ${reply.kind}.` };
+    this.deps.clearForRunStart(payload.sessionId);
     this.deps.close(payload.sessionId);
     this.deps.log(`authentication recovery: session ${payload.sessionId} restarted on ${reply.pinned === null ? 'the same model' : `${reply.pinned.to.key} (${reply.pinned.to.provider}/${reply.pinned.to.model})`}`);
     return { ok: true };
@@ -179,6 +185,7 @@ export class AuthRecovery {
       this.deps.acknowledge('fail', RESTART_AFTER_REAUTH_FAILED, `${providerName} was re-authenticated and its key is saved; ${why}`);
       return { ok: false, message: `${providerName} was re-authenticated, but the run could not be restarted: ${why}` };
     }
+    this.deps.clearForRunStart(payload.sessionId);
     this.deps.close(payload.sessionId);
     this.deps.log(`authentication recovery: session ${payload.sessionId} restarted after re-authenticating ${provider}`);
     return { ok: true };

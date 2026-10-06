@@ -77,4 +77,4 @@ notice slot empty beside the prompt. The whole of resilience-proof then passed o
 `background-quota` drive the focus test for a session no window follows, passed (04:03 to 04:04 UTC, load 11.98 to 7.90).
 
 Noticed while repairing, recorded and not fixed:
-`docs/defects/a-prompt-or-retry-that-starts-a-run-does-not-clear-the-sessions-notice.md`.
+`docs/defects/fixed/a-prompt-or-retry-that-starts-a-run-does-not-clear-the-sessions-notice.md`.

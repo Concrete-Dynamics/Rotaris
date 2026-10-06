@@ -41,6 +41,8 @@ interface Harness {
   readonly quit: { now: boolean };
   /** REQ-NOTIFY-030/032: `MainWindows.beginStart` / `endStart`, in order, and the host requests already sent at each. */
   readonly starts: { readonly op: 'begin' | 'end'; readonly wcId: number; readonly sessionId: string; readonly hostAskedBefore: number }[];
+  /** REQ-NOTIFY-058: the sessions `NoticeStore.clearForRunStart` was called for, in order. */
+  readonly cleared: string[];
 }
 
 function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | ProcessReply, host: (req: RunHostRequest) => Promise<ProcessReply> | ProcessReply): Harness {
@@ -52,6 +54,7 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
   const quit = { now: false };
   const focused: string[] = [];
   const starts: Harness['starts'] = [];
+  const cleared: string[] = [];
   const ctx = {
     capturing: false,
     clocks: new FakeClock(),
@@ -63,7 +66,7 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
       beginStart: (wcId: number, sessionId: string) => { starts.push({ op: 'begin', wcId, sessionId, hostAskedBefore: hostAsked.length }); },
       endStart: (wcId: number, sessionId: string) => { starts.push({ op: 'end', wcId, sessionId, hostAskedBefore: hostAsked.length }); },
     } as unknown as CommandContext['mainWindows'],
-    notices: { clearForRunStart: async () => undefined, report: async (input: ReportInput) => { reported.push(input); return { id: reported.length, shown: true }; } } as unknown as CommandContext['notices'],
+    notices: { clearForRunStart: async (sid: string) => { cleared.push(sid); }, report: async (input: ReportInput) => { reported.push(input); return { id: reported.length, shown: true }; } } as unknown as CommandContext['notices'],
     pauseWindows: new Map(),
     raiseNotice: (...args: Parameters<CommandContext['raiseNotice']>) => { raised.push({ severity: args[0], headline: args[1], detail: args[2] }); },
     recoveryFor: () => [],
@@ -72,7 +75,7 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
     runHost: { request: async (req: RunHostRequest) => { hostAsked.push(req); return host(req); } },
     services: new Map([[canonicalPath(WORKSPACE), { link: { request: async (req: WorkspaceServiceRequest) => { svcAsked.push(req); return svc(req); } } }]]) as unknown as CommandContext['services'],
   };
-  return { logs, raised, reported, svcAsked, hostAsked, ctx, quit, focused, starts };
+  return { logs, raised, reported, svcAsked, hostAsked, ctx, quit, focused, starts, cleared };
 }
 
 const created = { kind: 'worktree.created', path: `${WORKSPACE}/.rotaris/worktrees/minted-1`, branch: 'rotaris/session/minted-1', baseBranch: 'main', baseRevision: 'abc' } as const;
@@ -224,6 +227,42 @@ describe('REQ-NOTIFY-030/032: the window that starts a session follows it from t
     const unanswered = harness(() => ({ ...created, kind: 'worktree.created' }), () => Promise.reject(new Error('no reply to session.start within 10000 ms')));
     await sessionCommands(unanswered.ctx)['session.start']({ kind: 'session.start', prompt: 'Write the notes in a worktree.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
     expect(unanswered.starts).toEqual([{ op: 'begin', wcId: 7, sessionId: 'minted-1', hostAskedBefore: 0 }, { op: 'end', wcId: 7, sessionId: 'minted-1', hostAskedBefore: 1 }]);
+  });
+});
+
+/*
+ * REQ-NOTIFY-058 with REQ-NOTIFY-029: every command that launches a run of an existing session clears the standing notice
+ * as a start does — a prompt, a retry, a continue that resumed, a plan decision that relaunched — and one the run host
+ * refused, or that left the session at rest, clears nothing. Until 2026-10-06 only `session.start` did
+ * (docs/defects/fixed/a-prompt-or-retry-that-starts-a-run-does-not-clear-the-sessions-notice.md).
+ */
+describe('REQ-NOTIFY-058: a run of an existing session starting clears its notice', () => {
+  const refused = { kind: 'refused', code: 'session.run-active', headline: 'A run is already active.' } as const;
+  it('a prompt and a retry the run host launched clear it; refused ones do not', async () => {
+    const h = harness(() => ({ kind: 'ack' }), () => ({ kind: 'ack' }));
+    const commands = sessionCommands(h.ctx);
+    expect(await commands['session.prompt']({ kind: 'session.prompt', sessionId: 'S1', prompt: 'Again.' }, windowOn('ws-1'))).toEqual({ ok: true });
+    expect(await commands['session.retry']({ kind: 'session.retry', sessionId: 'S2' }, windowOn('ws-1'))).toEqual({ ok: true });
+    expect(h.cleared).toEqual(['S1', 'S2']);
+    const no = harness(() => ({ kind: 'ack' }), () => refused);
+    const refusing = sessionCommands(no.ctx);
+    expect(await refusing['session.prompt']({ kind: 'session.prompt', sessionId: 'S1', prompt: 'Again.' }, windowOn('ws-1'))).toMatchObject({ ok: false });
+    expect(await refusing['session.retry']({ kind: 'session.retry', sessionId: 'S1' }, windowOn('ws-1'))).toMatchObject({ ok: false });
+    expect(no.cleared).toEqual([]);
+  });
+  it('a continue that resumed and a plan decision that relaunched clear it; one that left the session at rest does not', async () => {
+    let resumed = true;
+    const h = harness(() => ({ kind: 'ack' }), (req) => req.kind === 'session.continue'
+      ? { kind: 'session.continued', sessionId: 'S1', resumed, messageLimit: null }
+      : { kind: 'session.planResolved', sessionId: 'S1', cycle: 1, relaunched: resumed });
+    const commands = sessionCommands(h.ctx);
+    await commands['session.continue']({ kind: 'session.continue', sessionId: 'S1', action: 'continue' }, windowOn('ws-1'));
+    await commands['session.planDecision']({ kind: 'session.planDecision', sessionId: 'S1', decision: 'approve' }, windowOn('ws-1'));
+    expect(h.cleared).toEqual(['S1', 'S1']);
+    resumed = false;
+    await commands['session.continue']({ kind: 'session.continue', sessionId: 'S1', action: 'cancel' }, windowOn('ws-1'));
+    await commands['session.planDecision']({ kind: 'session.planDecision', sessionId: 'S1', decision: 'cancel' }, windowOn('ws-1'));
+    expect(h.cleared).toEqual(['S1', 'S1']);
   });
 });
 

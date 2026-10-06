@@ -196,6 +196,12 @@ no override, and refuses a press for a wait no longer outstanding, so a double-c
 so. The snapshot channel's `SessionRecord.wait` gained the field; no package, edge, process, command, timeline name or store
 column changed.
 
+**Every run of an existing session clears its notice as a start does (REQ-NOTIFY-058, REQ-NOTIFY-029; fin21).** Main's
+`session.prompt`, `session.retry`, a resumed `session.continue` and a relaunched `session.planDecision` call
+`NoticeStore.clearForRunStart` once the run host has launched the run, and `AuthRecovery` gains `clearForRunStart` for the
+recovery dialog's restarts. The **runtime view**'s focus-gate passage says so. No package, edge, process, channel, command or
+store column changed.
+
 **The run completes only when the coordinator's own plan agrees (REQ-ORCH-029, REQ-ORCH-075, REQ-ORCH-078; fin18).**
 `Run.iterate` returns a task whose root answered `succeeded` with an item of its own plan open to the pending queue, once
 REQ-ORCH-078's corrections into the root's own conversation are spent (`RunConfig.validationRetries`, default 0; a `followUp`

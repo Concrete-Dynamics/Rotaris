@@ -35,6 +35,8 @@ export function sessionCommands(
       }
       const open = pauseWindows.get(req.sessionId);
       if (open && !open.isDestroyed()) open.close();
+      // REQ-NOTIFY-058 / REQ-NOTIFY-029: a continue that resumed launched a run of the session (`launchContinuation`).
+      if (r.resumed) await notices.clearForRunStart(req.sessionId);
       log(`session ${req.sessionId} ${req.action}: ${r.resumed ? 'continued' : 'left paused'}`);
       return { ok: true, value: { resumed: r.resumed, messageLimit: r.messageLimit } };
     },
@@ -50,6 +52,8 @@ export function sessionCommands(
     'session.planDecision': async (req) => {
       const r = await runHost.request({ kind: 'session.planDecision', sessionId: req.sessionId, decision: req.decision, ...(req.changes === undefined ? {} : { changes: req.changes }) }, millis(10_000));
       if (r.kind !== 'session.planResolved') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The plan decision could not be applied'); }
+      // REQ-NOTIFY-058 / REQ-NOTIFY-029: a decision that relaunched started a further run of the session.
+      if (r.relaunched) await notices.clearForRunStart(req.sessionId);
       log(`session ${req.sessionId} plan cycle ${r.cycle}: ${req.decision}${r.relaunched ? ' — a further segment is executing' : ' — the run came to rest'}`);
       return { ok: true, value: { cycle: r.cycle, relaunched: r.relaunched } };
     },
@@ -209,14 +213,23 @@ export function sessionCommands(
       const r = await runHost.request({ kind: 'session.prompt', sessionId: req.sessionId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }) }, millis(10_000));
       // REQ-NOTIFY-061: a continuation refused at the confinement gate never reached a run; it is reported as a start's is.
       if (r.kind === 'refused' && r.code === 'session.confinement') { void notices.report(confinementRefusalNotice(r)); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
-      return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be recorded');
+      if (r.kind !== 'ack') return refusal(r, 'The prompt could not be recorded');
+      // REQ-NOTIFY-058 / REQ-NOTIFY-029: the run host answers `ack` only once the prompt has launched a run of the session
+      // (the engine refuses one while a run is active), so the session's standing notice — "The run failed", REQ-NOTIFY-032's
+      // warning — is cleared as a start clears it. Until 2026-10-06 only `session.start` did
+      // (docs/defects/fixed/a-prompt-or-retry-that-starts-a-run-does-not-clear-the-sessions-notice.md).
+      await notices.clearForRunStart(req.sessionId);
+      return { ok: true };
     },
     'session.retry': async (req) => {
       // REQ-NOTIFY-045 (OQ-178): the engine resubmits the last submitted prompt with its images; a refusal carries its words.
       const r = await runHost.request({ kind: 'session.retry', sessionId: req.sessionId }, millis(10_000));
       // REQ-NOTIFY-061: a retry refused at the confinement gate never reached a run; it is reported as a prompt's is.
       if (r.kind === 'refused' && r.code === 'session.confinement') { void notices.report(confinementRefusalNotice(r)); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
-      return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be retried');
+      if (r.kind !== 'ack') return refusal(r, 'The prompt could not be retried');
+      // REQ-NOTIFY-058 / REQ-NOTIFY-045: the retry launched a run of the session, as a prompt does; its notice is cleared.
+      await notices.clearForRunStart(req.sessionId);
+      return { ok: true };
     },
     'session.readAttachment': async (req) => {
       const r = await runHost.request(req, millis(10_000));

@@ -649,6 +649,7 @@ async function main(): Promise<void> {
       return r;
     },
     acknowledge: (kind, title, body) => notices.acknowledge(kind, title, body),
+    clearForRunStart: (sessionId) => { void notices.clearForRunStart(sessionId); },
   });
   /**
    * REQ-NOTIFY-069/070/071/078 (the 401 note's parts A and B, `auth-fallback.ts`): the session's first authentication failure

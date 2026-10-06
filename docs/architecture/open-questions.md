@@ -9731,7 +9731,7 @@ succeeded but the agent's own todo list still holds pending/in-progress items â€
 (not abandoned)"; REQ-ORCH-029, the coordinator "does not report the run successful while a todo item is non-terminal or
 while a todo item's recorded state disagrees with what happened"; REQ-ORCH-067, each iteration does "work for that one
 task only"; REQ-ORCH-077, the task abandoned at the consecutive-retry limit; REQ-TOOLS-144 and REQ-TOOLS-147, the plan is
-the agent's own and session-scoped. Raised 2026-10-06 by the verifier of fin18's repair of live-run finding G5 (bundle
+the agent's own and session-scoped. Raised 2026-10-06 by the builder of fin18's repair of live-run finding G5, from its verifier's finding (bundle
 `fin18-run-record-truth`; raised there as OQ-201 and renumbered OQ-203 when origin/main, which had taken OQ-200 and OQ-201,
 was merged in). Open, the owner's.)*
 

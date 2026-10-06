@@ -13,7 +13,7 @@ import { MCP_ENTRY_DEFAULTS, MCP_ENTRY_KEYS, readMcpServerEntry, type McpServerE
 import { candidateSpellings, filterServerTools, grantDecision, resolvePersonaMcp, narrowAfterUpdate } from './persona.js';
 import { MCP_SECTION_HEADING, NO_MCP_SERVERS_LINE, renderMcpSection } from './prompt.js';
 import { SHIPPED_MCP_SERVERS, BUILT_IN_PERSONA_MCP_SERVERS } from './defaults.js';
-import { CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS } from './code-intelligence.js';
+import { CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, CODE_INTELLIGENCE_MANIFEST, codeIntelligenceProductDescription } from './code-intelligence.js';
 import { CODE_INTELLIGENCE_TOKEN } from './commands.js';
 import type { DiscoveredServers } from './discovery-files.js';
 import { launchedProjectOf, mcpConfigurationForExecutionRoot, resolveMcpConfiguration } from './index.js';
@@ -319,6 +319,46 @@ describe('REQ-MCP-101 — the prompt section, character-exact', () => {
   });
 });
 
+/*
+ * PD-MCP-001 (OQ-115): the bundled server's usage-instruction tool described itself imperatively ("IMPORTANT: If you have
+ * not yet read the manual, call this tool immediately …"), every agent's prompt carried it, and agents fetched the manual
+ * first and re-sent it with every request (live-run finding L8). The product writes that one description; the tool keeps
+ * its tier. Names come from the manifest: REQ-MCP-116 lets no other file spell them.
+ */
+describe('PD-MCP-001 — the bundled server\'s usage-instruction tool carries the product\'s description', () => {
+  const usage = CODE_INTELLIGENCE_MANIFEST.tiers.read.usageInstructions;
+  const lookup = CODE_INTELLIGENCE_MANIFEST.tiers.read.symbolLookup;
+  const IMPERATIVE = 'IMPORTANT: If you have not yet read the manual, call this tool immediately.';
+  const servers = { code_intelligence: entry({ command: CODE_INTELLIGENCE_TOKEN, args: [...CODE_INTELLIGENCE_DEFAULT_ARGS] }), other: entry({ command: 'node', args: ['s.js'] }) };
+  const discovered = () => ({ tools: [tool(usage, IMPERATIVE), tool(lookup, 'Finds symbols.')], failed: false });
+  const input = { persona: 'p', carried: ['code_intelligence', 'other'], grants: null, genericTools: [] as string[], servers, origins: { code_intelligence: 'default', other: 'yaml' } as const, sessionDisabled: new Set<string>(), availability: () => ({ available: true }), discovered };
+
+  it('the manifest carries a product-written description for the usage-instruction capability, and only a capability of the tiers', () => {
+    const text = codeIntelligenceProductDescription(usage);
+    expect(text).toBe(CODE_INTELLIGENCE_MANIFEST.productDescriptions.usageInstructions);
+    expect(text).not.toMatch(/IMPORTANT|immediately|must/i);
+    expect(codeIntelligenceProductDescription(lookup)).toBeNull();
+    // It stays in the read tier REQ-MCP-015 puts it in.
+    expect(Object.values(CODE_INTELLIGENCE_MANIFEST.tiers.read)).toContain(usage);
+  });
+
+  it('the persona surface, the prompt section and the server\'s other tools: only that tool of the bundled server is described anew', () => {
+    const surface = resolvePersonaMcp(input).value;
+    const bundled = surface.active.find((s) => s.name === 'code_intelligence')!;
+    const other = surface.active.find((s) => s.name === 'other')!;
+    expect(bundled.tools.find((t) => t.reported === usage)!.description).toBe(CODE_INTELLIGENCE_MANIFEST.productDescriptions.usageInstructions);
+    expect(bundled.tools.find((t) => t.reported === lookup)!.description).toBe('Finds symbols.');
+    // A server that is not the bundled runtime keeps its own words, whatever its tools are called.
+    expect(other.tools.find((t) => t.reported === usage)!.description).toBe(IMPERATIVE);
+    const section = renderMcpSection(surface);
+    expect(section).toContain(`  - \`${usage}\` — ${CODE_INTELLIGENCE_MANIFEST.productDescriptions.usageInstructions}`);
+    expect(section.split(IMPERATIVE)).toHaveLength(2); // once, under `other`
+    // A tool-list update keeps the description it was offered with (REQ-MCP-060 only narrows).
+    const kept = narrowAfterUpdate('code_intelligence', servers.code_intelligence, [tool(usage, IMPERATIVE)], undefined, bundled.tools);
+    expect(kept.map((t) => t.description)).toEqual([CODE_INTELLIGENCE_MANIFEST.productDescriptions.usageInstructions]);
+  });
+});
+
 describe('REQ-MCP-010/014 — the shipped defaults', () => {
   it('exactly three entries with the fixed names, transports, timeout and enablement; the persona rows', () => {
     expect(Object.keys(SHIPPED_MCP_SERVERS).sort()).toEqual(['browser', 'code_intelligence', 'web_search']);
@@ -382,16 +422,16 @@ describe('REQ-MCP-034: the configuration a run in an isolated working tree launc
     expect(args).toEqual([CODE_INTELLIGENCE_TOKEN, '--', ...CODE_INTELLIGENCE_DEFAULT_ARGS, binding.projectPathOption, tree]);
     expect(args).not.toContain(ws);
     expect(isolated.servers['code_intelligence']!.resolved?.args).toEqual(args);
-    // The command, the working directory (REQ-MCP-043 names the workspace root) and the loaded object are untouched.
+    // The command and the loaded object are untouched; the default working directory is the tree's too (PD-MCP-002, OQ-194;
+    // until 2026-10-06 it stayed the workspace root).
     const d = isolated.servers['code_intelligence']!.description;
-    expect(d.transport === 'stdio' ? [d.command, d.cwd] : null).toEqual(['/opt/rotaris/rotaris', ws]);
+    expect(d.transport === 'stdio' ? [d.command, d.cwd] : null).toEqual(['/opt/rotaris/rotaris', tree]);
     expect(argsOf(cfg, 'code_intelligence').slice(-2)).toEqual([binding.projectPathOption, ws]);
   });
 
   it('a run in the workspace itself gets the loaded configuration back, the same object', () => {
     const cfg = configured({ code_intelligence: entry({ command: CODE_INTELLIGENCE_TOKEN, args: [...CODE_INTELLIGENCE_DEFAULT_ARGS] }) });
     expect(mcpConfigurationForExecutionRoot(cfg, ws, ws)).toBe(cfg);
-    expect(mcpConfigurationForExecutionRoot(cfg, ws, tree, null)).toBe(cfg);
   });
 
   it('binds on the launch subcommand whatever the entry is named, and leaves every other server and any configured selection as it is', () => {
@@ -407,9 +447,51 @@ describe('REQ-MCP-034: the configuration a run in an isolated working tree launc
     // A selection the user wrote — even one naming the workspace root itself — is left exactly as configured.
     expect(argsOf(isolated, 'pinned')).toEqual(argsOf(cfg, 'pinned'));
     expect(argsOf(isolated, 'from_cwd')).toEqual(argsOf(cfg, 'from_cwd'));
-    // REQ-MCP-035's fill-in names the workspace root and is not REQ-MCP-034's stage.
-    expect(argsOf(isolated, 'files')).toEqual(['-y', '@modelcontextprotocol/server-filesystem', ws]);
+    // REQ-MCP-035's fill-in is rebound too, since PD-MCP-002 (OQ-194); until 2026-10-06 it kept the workspace root.
+    expect(argsOf(isolated, 'files')).toEqual(['-y', '@modelcontextprotocol/server-filesystem', tree]);
     expect(isolated.servers['remote']).toBe(cfg.servers['remote']);
+  });
+
+  /*
+   * PD-MCP-002 (OQ-194, ruled by the owner under R-071): every path the load filled in with the workspace root names the
+   * tree's root for an isolated run — REQ-MCP-035's fill-in and REQ-MCP-043/050's default working directory beside
+   * REQ-MCP-034's project path — so a filesystem server a user adds reads and writes the tree, not the main checkout.
+   * What the user configured is left exactly as configured.
+   */
+  it('PD-MCP-002: the filesystem fill-in and the default working directory name the tree; a configured path or cwd stays', () => {
+    const cfg = configured({
+      filesystem: entry({ command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/no/such/dir-9f3c'] }),
+      appended: entry({ command: 'npm:filesystem-mcp', args: [] }),
+      named: entry({ command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', ws] }),
+      other_path: entry({ command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/srv/data'] }),
+      two_paths: entry({ command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/a', '/b'] }),
+      plain: entry({ command: 'node', args: ['s.js'] }),
+      own_cwd: entry({ command: 'node', args: ['s.js'], cwd: '/srv/tools' }),
+      from_cwd: entry({ command: CODE_INTELLIGENCE_TOKEN, args: [binding.launchSubcommand, binding.projectFromCwdOption] }),
+      lsp: entry({ command: 'lsp-server', args: [] }),
+    });
+    // The load fills in the workspace root, as REQ-MCP-035 says (the substitution for a missing path, and the append).
+    expect(argsOf(cfg, 'filesystem')).toEqual(['-y', '@modelcontextprotocol/server-filesystem', ws]);
+    expect(argsOf(cfg, 'appended')).toEqual(['-y', 'filesystem-mcp', ws]);
+    const isolated = mcpConfigurationForExecutionRoot(cfg, ws, tree);
+    expect(argsOf(isolated, 'filesystem')).toEqual(['-y', '@modelcontextprotocol/server-filesystem', tree]);
+    expect(argsOf(isolated, 'appended')).toEqual(['-y', 'filesystem-mcp', tree]);
+    expect(isolated.servers['appended']!.resolved?.args).toEqual(['-y', 'filesystem-mcp', tree]);
+    // A path the user wrote — the workspace root itself included — is theirs.
+    expect(argsOf(isolated, 'named')).toEqual(['-y', '@modelcontextprotocol/server-filesystem', ws]);
+    expect(argsOf(isolated, 'other_path')).toEqual(['-y', '@modelcontextprotocol/server-filesystem', '/srv/data']);
+    expect(argsOf(isolated, 'two_paths')).toEqual(['-y', '@modelcontextprotocol/server-filesystem', '/a', '/b']);
+    const cwdOf = (c: ReturnType<typeof configured>, name: string) => { const d = c.servers[name]!.description; return d.transport === 'stdio' ? d.cwd : null; };
+    for (const name of ['filesystem', 'appended', 'named', 'other_path', 'two_paths', 'plain', 'lsp']) {
+      expect(cwdOf(cfg, name), name).toBe(ws);
+      expect(cwdOf(isolated, name), name).toBe(tree);
+    }
+    expect(cwdOf(isolated, 'own_cwd')).toBe('/srv/tools');
+    // A runtime taking its project from the working directory therefore takes the tree.
+    expect(launchedProjectOf(isolated.servers['from_cwd']!.description)).toBe(tree);
+    // The loaded configuration is not touched.
+    expect(argsOf(cfg, 'filesystem')).toEqual(['-y', '@modelcontextprotocol/server-filesystem', ws]);
+    expect(cwdOf(cfg, 'plain')).toBe(ws);
   });
 
   it('a launch line reads the project from the description it launched', () => {

@@ -18,6 +18,9 @@
  *                          proof's launch 2b: what reached the server, REQ-TOOLS-032).
  *   --client-file <path>   append the `clientInfo` of every `initialize` as one JSON line (who the client said it was,
  *                          REQ-STARTUP-158: the product version, never a literal).
+ *   --launch-file <path>   append `{cwd, argv}` as one JSON line at start: the working directory and the arguments this
+ *                          launch was given (the injection proof's isolated run, PD-MCP-002: REQ-MCP-035's fill-in and
+ *                          REQ-MCP-043's default working directory name the run's tree).
  *   --rename-after <ms>    after the first tools/list, wait then publish `notifications/tools/list_changed`
  *                          with `extra` withdrawn and `newcomer` introduced (REQ-MCP-060's narrowing).
  *   --crash-after <ms>     exit(3) that many ms after the first tools/call is received (REQ-MCP-069).
@@ -39,6 +42,7 @@ const pidFile = opt('--pid-file');
 const requestFile = opt('--request-file');
 const clientFile = opt('--client-file');
 const callFile = opt('--call-file');
+const launchFile = opt('--launch-file');
 const renameAfter = Number(opt('--rename-after', '0'));
 const crashAfter = Number(opt('--crash-after', '0'));
 const initDelay = Number(opt('--init-delay', '0'));
@@ -48,6 +52,7 @@ const stderrRepeat = opt('--stderr-repeat');
 const stderrCount = Number(opt('--stderr-count', '0'));
 const listChanged = !has('--no-list-changed');
 if (pidFile) appendFileSync(pidFile, `${process.pid}\n`);
+if (launchFile) appendFileSync(launchFile, `${JSON.stringify({ cwd: process.cwd(), argv: args })}\n`);
 if (stderrText) process.stderr.write(`${stderrText}\n`);
 // The run of 2026-09-18: a server whose validation block repeats per connection attempt.
 if (stderrRepeat) for (let i = 0; i < (stderrCount || 3); i += 1) process.stderr.write(`${stderrRepeat}\n`);

@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**The code-intelligence manual tool carries the product's description; an isolated run's servers are handed its tree
+(PD-MCP-001, PD-MCP-002, OQ-115, OQ-194; fin21).** The binding manifest gains `productDescriptions`, written by its
+generator, and `filterServerTools` puts the usage-instruction tool's on the bundled server's tool. `mcpConfigurationForExecutionRoot`
+rebinds REQ-MCP-035's fill-in and the default `cwd` with the project path, and `SessionConnections.connect` takes the root
+REQ-MCP-070's `lsp_init` names, which the tool port now passes as the execution root. The **runtime view**'s
+code-intelligence paragraph and the **component view**'s manifest paragraph say so. No package, edge, process, channel,
+command or store column changed.
+
 **A `write_file` call with no operation is read as a create when its file does not exist (PD-TOOLS-007, OQ-139; fin21).**
 `ToolExecutor` gains an optional `inferArguments`, which `Gate.dispatch` asks only for a call its schema still refuses after
 REQ-TOOLS-032's repairs; `write_file` answers it, and the gate dispatches the answer in the call's place and appends the

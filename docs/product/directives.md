@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Thirty-three.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Thirty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -3048,6 +3048,99 @@ second one in this case.
 > `todo` call was sent to an id a refusal named and never stored (`lib/tool-frictions.mjs`). The note is repaired:
 > [`a-rejected-todo-replace-names-an-active-task-it-never-stored.md`](../defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-mcp-001"></a>
+
+### PD-MCP-001 — the bundled code-intelligence server's manual tool is described in the product's own words
+
+The binding manifest of REQ-MCP-116 SHALL carry, beside the runtime's identifiers, a description **written by the
+product** for the bundled code-intelligence runtime's usage-instruction tool (the tool REQ-MCP-015 places in the READ tier
+as "usage-instruction retrieval"), keyed by that capability and not by the runtime's name. The text SHALL be neutral: it
+says what the tool returns and that the server's other tools work without it, and it SHALL NOT instruct the agent to call
+the tool first or at all.
+
+Wherever the product hands that tool's description to a model — the persona's MCP section of REQ-MCP-101 and the tool's
+definition in the model's tool listing — the product-written text SHALL be used in place of the description the server
+reports, for the server whose entry launches the bundled runtime through the reserved command token, whatever the tool is
+renamed to (REQ-MCP-005). Every other tool of that server, and every tool of every other server, keeps its server's own
+description as REQ-MCP-101 states.
+
+Everything else stands: the tool stays in the READ tier and in every built-in grant REQ-MCP-014 and REQ-MCP-015 give it; it is
+listed, granted, renamed, disabled and called exactly as before; and REQ-MCP-101's rendering — order, formatting, the
+description rule for an empty string — is unchanged.
+
+**Why, and what it costs.** The runtime describes the tool imperatively ("IMPORTANT: If you have not yet read the manual,
+call this tool immediately …"), every agent's prompt carried it word for word, and agents obeyed: in the live run of
+2026-09-29 it was called three times and again in the duress run, each call returning 7.1 to 7.5 thousand characters that
+every later request of that agent re-sent — about 60,000 input tokens over 33 requests in one run — and each agent's first
+step went to a manual about a tool it might not need. Agents that need the manual can still fetch it. What is given up: the
+model no longer reads the runtime's own account of when the manual is worth reading, and a later runtime release that
+rewords its description is not seen until the product's text is revisited.
+
+> **Narrows:** REQ-MCP-101
+> **Extends:** REQ-MCP-116
+
+*Raised by the owner, 2026-10-06, ruling OQ-115 as recommended; logged as [R-071](requests.md#r-071).*
+
+> **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (fin21):** the rule held as written. The text lives in
+> the manifest's generator (`apps/desktop/scripts/code-intelligence/manifest.mjs`, `PRODUCT_DESCRIPTIONS`), which emits it as
+> `productDescriptions` and refuses one that names no capability of the tiers; the module was regenerated against the bundled
+> runtime on this host (serena-agent 1.7.0, Python 3.13.15, 24 tools listed) and `--check` compares it byte for byte as before.
+> `filterServerTools` (`packages/config/src/mcp/persona.ts`) is where the description is put, for an entry whose command is the
+> reserved token — the test REQ-MCP-102 already uses to tell the bundled server — matched on the reported name's candidate
+> spellings, so the persona surface, the prompt section, the executor's definition and the narrowing after a list update all
+> carry it. **What was measured.** Two cases in `config/src/mcp/mcp.test.ts`, the surface case red without the change: the
+> manifest's text for the capability and none for another tool, the bundled server's usage tool described anew and its other
+> tool not, the same name on a user's server keeping its own words, the section rendering the product's text and the
+> imperative only under the other server. `code-intel-proof`'s discovery step now asserts the section against the built app.
+> **What was not measured.** A live run against a real model; the next one shows whether agents still open with the manual.
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-mcp-002"></a>
+
+### PD-MCP-002 — every root an isolated run hands its MCP servers is the run's own tree
+
+For a run whose execution root is an isolated working tree (REQ-WORKSPACE-050, REQ-GIT-140), "the workspace root" in the
+following SHALL be read as **that tree's root**, as REQ-MCP-034 already reads it for the project path it appends:
+
+- REQ-MCP-035's filesystem-server path fill-in: the path appended when a filesystem server is given none, and the path
+  substituted for a missing one under the name `filesystem`;
+- REQ-MCP-043's default `cwd` of a stdio server whose entry configures none, which REQ-MCP-050's discovery uses as well;
+- REQ-MCP-070's `lsp_init` call: `{"root": "<the tree's root>"}` for a connection established by that run.
+
+Only what the product filled in moves. A path the user configured — the workspace root itself included — a configured `cwd`,
+and a project-selection argument already present are left exactly as configured. A run in the workspace itself is unchanged,
+and the loaded configuration is never rewritten: the tree's root is a view of it taken for the run.
+
+**Why, and what it costs.** A run in an isolated tree promises that its work stays in the tree. REQ-MCP-034 kept that promise
+for the bundled code-intelligence server, but a filesystem server or a language server named `lsp` that a user adds would
+otherwise read and write the main checkout from a run that promises isolation; no shipped default uses these, so nothing a
+default run launches changes. What is given up: a user who wanted such a server to see the main checkout from an isolated
+run now has to name that path in its configuration. An `lsp` connection is still the session's, so in a session whose agents
+work in different trees the first to connect decides the root.
+
+> **Narrows:** REQ-MCP-035, REQ-MCP-043, REQ-MCP-050, REQ-MCP-070
+
+*Raised by the owner, 2026-10-06, ruling OQ-194 as recommended; logged as [R-071](requests.md#r-071).*
+
+> **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (fin21):** the rule held as written. It extends the
+> rebinding REQ-MCP-034 already had (`mcpConfigurationForExecutionRoot`, `packages/config/src/mcp/index.ts`), read the same
+> exact way: the fill-in moves where the resolved arguments after a filesystem package are the workspace root alone and the
+> configured ones did not name it, the `cwd` where the entry configures none. The default `cwd` moving also moves a runtime
+> launched with the project-from-working-directory option onto the tree, which REQ-MCP-034's clause already asks for. The
+> `lsp_init` root needed a seam: `SessionConnections.connect` (`packages/mcp/src/sessions.ts`) takes the root for the connection
+> it establishes, `McpHost.executorsFor` passes the root it is handed, and the tool port now hands it the execution root where
+> it handed the workspace root (OQ-194's literal reading, kept beside its replacement in `run-host/tools.ts`). **What was
+> measured.** `config/src/mcp/mcp.test.ts` (a new case over nine servers, and two older cases corrected from the literal
+> reading), `mcp/src/mcp.test.ts` (a real fixture server's `lsp_init` given the tree's root) and `run-host/tools.test.ts` (the
+> port's executors handed the worktree), red without the change; and `injection-proof`'s isolated launch, which now carries two
+> fixture servers a user might add and reads the root each was handed. **What was not measured.** A session whose agents work
+> in different trees, where the first `lsp` connection decides the root for all. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

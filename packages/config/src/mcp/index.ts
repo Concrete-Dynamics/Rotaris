@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { availability, findOnPath, resolveCommand, type Availability, type BuiltinLaunch, type ResolvedCommand } from './commands.js';
+import { availability, FILESYSTEM_PACKAGES, findOnPath, resolveCommand, type Availability, type BuiltinLaunch, type ResolvedCommand } from './commands.js';
 import { CODE_INTELLIGENCE_BINDING } from './code-intelligence.js';
 import { describeForRuntime, type RuntimeDescription } from './describe.js';
 import type { Diagnostic } from './diagnostics.js';
@@ -108,40 +108,54 @@ type ProjectBinding = { readonly launchSubcommand: string; readonly projectPathO
 
 /**
  * REQ-MCP-034's isolated-run clause: "For a run against an isolated working tree, the appended path SHALL be that tree's
- * root." The configuration is resolved once per load, against the workspace root (`resolveMcpConfiguration`), so the path
- * its binding stage appended is the ANCHORING root; a run whose execution root is a worktree (REQ-GIT-140's unit tree, the
- * start-session dialog's isolated worktree) takes this view of it, in which every server the stage bound carries the tree's
- * root instead — in its resolved arguments and in the runtime description launch and discovery both read (REQ-MCP-050).
+ * root." The configuration is resolved once per load, against the workspace root (`resolveMcpConfiguration`), so every path
+ * the load filled in is the ANCHORING root; a run whose execution root is a worktree (REQ-GIT-140's unit tree, the
+ * start-session dialog's isolated worktree) takes this view of it, in which each of those paths is the tree's root instead —
+ * in the resolved arguments and in the runtime description launch and discovery both read (REQ-MCP-050).
  *
- * "The stage bound it" is read exactly: the entry's CONFIGURED arguments carry neither project-selection option (a
- * selection already present is left as configured), its resolved arguments carry the launch subcommand, and they end with
- * the project-path option and the workspace root the load appended. Nothing else changes: REQ-MCP-035's fill-in and
- * REQ-MCP-043's default `cwd` name the workspace root, and stay it (OQ-194's literal reading; OQ-195 asks whose project
- * memories the tree-bound runtime then serves).
- * Found unfixed by the default live run at 1763f7f (ADR-0034, Part T's stated gap). Pure; the same object back when
- * nothing is rebound.
+ * Three fills, each rebound only where the load made it, read exactly:
+ *  - REQ-MCP-034's project path: the entry's CONFIGURED arguments carry neither project-selection option (a selection
+ *    already present is left as configured), its resolved arguments carry the launch subcommand, and they end with the
+ *    project-path option and the workspace root the load appended;
+ *  - REQ-MCP-035's filesystem fill-in (`PD-MCP-002`, OQ-194): the resolved arguments after a filesystem package are the
+ *    workspace root alone, and the entry's configured arguments did not name it there itself;
+ *  - REQ-MCP-043/050's default working directory (`PD-MCP-002`): the description's `cwd` is the workspace root and the entry
+ *    configures none — which also moves a runtime launched with the project-from-working-directory option onto the tree.
+ * REQ-MCP-070's `lsp_init` root is the run host's (`McpHost.executorsFor`), which names the same execution root.
+ * Until 2026-10-06 only the first was rebound (OQ-194's literal reading, kept beside its replacement: "REQ-MCP-035's
+ * fill-in and REQ-MCP-043's default `cwd` name the workspace root, and stay it"); a filesystem server a user added would
+ * have read and written the main checkout from a run that promises isolation. OQ-195 asks whose project memories the
+ * tree-bound runtime then serves. Found unfixed by the default live run at 1763f7f (ADR-0034, Part T's stated gap). Pure;
+ * the same object back when nothing is rebound.
  */
 export function mcpConfigurationForExecutionRoot(mcp: McpConfiguration, workspaceRoot: string, executionRoot: string, binding: ProjectBinding | null = CODE_INTELLIGENCE_BINDING): McpConfiguration {
-  if (binding === null || executionRoot === workspaceRoot) return mcp;
+  if (executionRoot === workspaceRoot) return mcp;
   let changed = false;
   const servers: Record<string, McpResolvedServer> = {};
   for (const [name, server] of Object.entries(mcp.servers)) {
-    const rebound = rebindProject(server, workspaceRoot, executionRoot, binding);
+    const rebound = rebindToExecutionRoot(server, workspaceRoot, executionRoot, binding);
     if (rebound !== server) changed = true;
     servers[name] = rebound;
   }
   return changed ? { ...mcp, servers } : mcp;
 }
 
-function rebindProject(server: McpResolvedServer, workspaceRoot: string, executionRoot: string, binding: ProjectBinding): McpResolvedServer {
+function rebindToExecutionRoot(server: McpResolvedServer, workspaceRoot: string, executionRoot: string, binding: ProjectBinding | null): McpResolvedServer {
   const { entry, resolved, description } = server;
   if (entry.type !== 'stdio' || resolved === null || description.transport !== 'stdio') return server;
-  if (entry.args.includes(binding.projectPathOption) || entry.args.includes(binding.projectFromCwdOption)) return server;
-  if (!resolved.args.includes(binding.launchSubcommand)) return server;
-  const n = resolved.args.length;
-  if (n < 2 || resolved.args[n - 2] !== binding.projectPathOption || resolved.args[n - 1] !== workspaceRoot) return server;
-  const args = [...resolved.args.slice(0, n - 1), executionRoot];
-  return { ...server, resolved: { ...resolved, args }, description: { ...description, args: [...args] } };
+  let args = resolved.args;
+  // REQ-MCP-034's project path, where the load appended it.
+  if (binding !== null && !entry.args.includes(binding.projectPathOption) && !entry.args.includes(binding.projectFromCwdOption) && args.includes(binding.launchSubcommand)) {
+    const n = args.length;
+    if (n >= 2 && args[n - 2] === binding.projectPathOption && args[n - 1] === workspaceRoot) args = [...args.slice(0, n - 1), executionRoot];
+  }
+  // PD-MCP-002: REQ-MCP-035's fill-in, where the load made it (appended, or substituted for a missing path).
+  const at = args.findIndex((a) => FILESYSTEM_PACKAGES.has(a));
+  if (at !== -1 && at === args.length - 2 && args[at + 1] === workspaceRoot && entry.args[entry.args.length - 1] !== workspaceRoot) args = [...args.slice(0, at + 1), executionRoot];
+  // PD-MCP-002: REQ-MCP-043/050's default working directory.
+  const cwd = (entry.cwd ?? null) === null && description.cwd === workspaceRoot ? executionRoot : description.cwd;
+  if (args === resolved.args && cwd === description.cwd) return server;
+  return { ...server, resolved: { ...resolved, args: [...args] }, description: { ...description, args: [...args], cwd } };
 }
 
 /**

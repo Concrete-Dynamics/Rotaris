@@ -270,6 +270,15 @@ if (want(2) || want(3)) {
   if (ci.length !== 12) throw new Error(`discovery: the orchestrator's grant holds ${ci.length} names, not 12: ${callable}`);
   if (!section.includes('Project memories:')) throw new Error(`discovery: the memories block is absent from the section:\n${section}`);
   if (!section.includes('- **`code_intelligence`**')) throw new Error(`discovery: the server is not listed with tools:\n${section}`);
+  // PD-MCP-001 (OQ-115): the usage-instruction tool is described in the product's words, read from the manifest that
+  // carries them, and the runtime's own imperative ("If you have not yet read the manual, call this tool immediately")
+  // reaches no prompt (live-run finding L8).
+  const manifestText = readFileSync(join(repo, 'packages', 'config', 'src', 'mcp', 'code-intelligence-manifest.generated.ts'), 'utf8');
+  const usageName = /usageInstructions: '([^']+)'/.exec(manifestText)?.[1];
+  const usageText = /productDescriptions: \{ usageInstructions: '((?:[^'\\]|\\.)*)'/.exec(manifestText)?.[1]?.replace(/\\'/g, "'");
+  if (!usageName || !usageText) throw new Error('discovery: the manifest names no usage-instruction tool or carries no product description for it (PD-MCP-001)');
+  if (!section.includes(`  - \`${usageName}\` — ${usageText}`)) throw new Error(`discovery: the section does not describe ${usageName} in the product's words (PD-MCP-001):\n${section}`);
+  if (/have not yet read the manual/i.test(section)) throw new Error(`discovery: the runtime's own imperative description reached the section (PD-MCP-001):\n${section}`);
   const launchLine = lines(r.log, /mcp code_intelligence: launching /)[0] ?? lines(r.log, /mcp probe:code_intelligence: launching |mcp discovery:code_intelligence: launching /)[0] ?? '';
   const anyLaunch = lines(r.log, /launching .*builtin:code-intelligence/);
   if (anyLaunch.length === 0) throw new Error(`discovery: no launch line for the token:\n${r.log.slice(-2000)}`);
@@ -287,7 +296,7 @@ if (want(2) || want(3)) {
   if (calls.length !== 1 || calls[0].status !== 'ok') throw new Error(`discovery: list_memories did not succeed: ${JSON.stringify(calls)}`);
   const evidence = children.length > 0 ? JSON.parse(children[0].granted_mcp) : null;
   if (evidence && (evidence.granted?.code_intelligence?.length ?? 0) !== 12) throw new Error(`discovery: granted_mcp holds ${evidence.granted?.code_intelligence?.length} names: ${children[0].granted_mcp}`);
-  results.discovery = { grant: ci, listed, discoveryMs, connectMs: Number(/in (\d+) ms/.exec(connected)?.[1]), hook: /hook code_intelligence:(\w+)/.exec(connected)?.[1], sectionHasBlock: true, childEvidence: evidence ? evidence.granted.code_intelligence.length : 'no child row', launches: anyLaunch.length, elapsedMs: r.elapsedMs };
+  results.discovery = { grant: ci, listed, discoveryMs, connectMs: Number(/in (\d+) ms/.exec(connected)?.[1]), hook: /hook code_intelligence:(\w+)/.exec(connected)?.[1], sectionHasBlock: true, usageDescribedByProduct: true, childEvidence: evidence ? evidence.granted.code_intelligence.length : 'no child row', launches: anyLaunch.length, elapsedMs: r.elapsedMs };
   results.binding = { launchLine: (launchLine || anyLaunch[0]).slice(launchLine.indexOf('mcp')).slice(0, 400), projectSwitchingWithheld: !(results.branch?.dev?.toolNames ?? []).includes('activate_project'), listingUnderProject: results.branch?.dev?.toolNames?.length ?? null, isolatedTree: 'not exercised: the proof starts no isolated session (the start-session dialog flow of the Git proof); the binding reads the root the run was configured with' };
   console.log(`[code-intel-proof] 2 discovery: ${listed} listed in ${discoveryMs} ms, grant 12, block present, probe ${results.discovery.hook}, connect ${results.discovery.connectMs} ms; 3 binding: ${anyLaunch.length} launch line(s) carry --project`);
 }

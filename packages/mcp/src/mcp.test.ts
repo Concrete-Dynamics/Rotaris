@@ -217,9 +217,18 @@ describe('SessionConnections (REQ-MCP-066/067/068/069/070)', () => {
     const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined });
     registries.push(s);
     const c = await s.connect('lsp', fixture());
-    expect(c.hook).toEqual({ kind: 'lsp_init', outcome: 'ok', detail: '' });
+    expect(c.hook).toEqual({ kind: 'lsp_init', outcome: 'ok', detail: `root ${dir}` });
     const other = await s.connect('beta', fixture());
     expect(other.hook.kind).toBe('none');
+  });
+  it('PD-MCP-002: lsp_init names the root the demanding run executes in — an isolated run\'s tree (REQ-MCP-070, OQ-194)', async () => {
+    const tree = join(dir, '.rotaris', 'worktrees', 'unit-1');
+    const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined });
+    registries.push(s);
+    const c = await s.connect('lsp', fixture(), tree);
+    expect(c.hook).toEqual({ kind: 'lsp_init', outcome: 'ok', detail: `root ${tree}` });
+    // The connection is the session's: a later demand reuses it, whatever root it names.
+    expect(await s.connect('lsp', fixture(), dir)).toBe(c);
   });
   it('closeAll is idempotent, leaves no process, and a later request fails naming the server', async () => {
     const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined });

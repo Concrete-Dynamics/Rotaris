@@ -86,12 +86,16 @@ export class SessionConnections {
     return this.settled;
   }
 
-  /** REQ-MCP-066/067: opened on first demand under the keyed single-flight; after shutdown, an error naming the server. */
-  connect(name: string, description: ServerDescription): Promise<Connected> {
+  /**
+   * REQ-MCP-066/067: opened on first demand under the keyed single-flight; after shutdown, an error naming the server.
+   * `root` is the root REQ-MCP-070's `lsp_init` names for the connection this call establishes: the root the run that
+   * demands it executes in (`PD-MCP-002`, OQ-194: an isolated run's tree), the session's workspace root when absent.
+   */
+  connect(name: string, description: ServerDescription, root?: string): Promise<Connected> {
     if (this.down) return Promise.reject(new ConnectionsClosed(name));
     const known = this.entries.get(name);
     if (known) return known;
-    const p = this.establish(name, description);
+    const p = this.establish(name, description, root ?? this.deps.workspaceRoot);
     this.entries.set(name, p);
     p.catch(() => { if (this.entries.get(name) === p) this.entries.delete(name); });
     return p;
@@ -139,7 +143,7 @@ export class SessionConnections {
     return this.closing;
   }
 
-  private async establish(name: string, description: ServerDescription): Promise<Connected> {
+  private async establish(name: string, description: ServerDescription, root: string): Promise<Connected> {
     const { clocks, log } = this.deps;
     const budget = this.deps.connectBudgetMs ?? CONNECT_AND_LIST_TIMEOUT_MS;
     const started = clocks.monotonic.now();
@@ -174,7 +178,7 @@ export class SessionConnections {
       onToolsChanged: (fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
       negotiatedVersion: opened.negotiatedVersion(),
       pid: () => opened.pid(),
-      hook: await this.postConnect(name, opened, current),
+      hook: await this.postConnect(name, opened, current, root),
       connectMs: clocks.monotonic.now() - started,
     };
     if (connected.hook.kind === 'lsp_init' && connected.hook.outcome === 'failed') {
@@ -191,14 +195,14 @@ export class SessionConnections {
     return connected;
   }
 
-  private async postConnect(name: string, opened: OpenedClient, tools: readonly ToolInfo[]): Promise<Connected['hook']> {
+  private async postConnect(name: string, opened: OpenedClient, tools: readonly ToolInfo[], root: string): Promise<Connected['hook']> {
     const hookBudget = this.deps.hookBudgetMs ?? HOOK_TIMEOUT_MS;
     if (name === 'lsp') {
       if (!tools.some((t) => t.name === 'lsp_init')) return { kind: 'lsp_init', outcome: 'skipped', detail: 'the server reports no lsp_init tool; offered as it is' };
-      if (this.deps.workspaceRoot === '') return { kind: 'lsp_init', outcome: 'skipped', detail: 'no workspace root is known' };
+      if (root === '') return { kind: 'lsp_init', outcome: 'skipped', detail: 'no workspace root is known' };
       try {
-        await callTool(opened.client, this.deps.clocks.monotonic, 'lsp_init', { root: this.deps.workspaceRoot }, hookBudget);
-        return { kind: 'lsp_init', outcome: 'ok', detail: '' };
+        await callTool(opened.client, this.deps.clocks.monotonic, 'lsp_init', { root }, hookBudget);
+        return { kind: 'lsp_init', outcome: 'ok', detail: `root ${root}` };
       } catch (cause) {
         return { kind: 'lsp_init', outcome: 'failed', detail: String(cause instanceof Error ? cause.message : cause) };
       }

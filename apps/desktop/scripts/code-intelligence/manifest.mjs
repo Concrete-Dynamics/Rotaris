@@ -70,6 +70,16 @@ const CAPABILITIES = {
   onboard: { projectOnboarding: 'onboarding' },
 };
 const NEVER_GRANT = { memoryDeletion: 'delete_memory', memoryRename: 'rename_memory', dashboardOpening: 'open_dashboard' };
+/**
+ * PD-MCP-001 (OQ-115, ruled by the owner under R-071): descriptions WRITTEN BY THE PRODUCT, by capability, that replace
+ * the runtime's own for the tool the capability names wherever the product hands that description to a model. Not the
+ * runtime's answer, so not checked against it beyond the capability existing: the runtime's usage-instruction tool
+ * describes itself imperatively ("IMPORTANT: If you have not yet read the manual, call this tool immediately …"), every
+ * agent obeyed it, and each then re-sent its 7,000-plus characters with every later request (live-run finding L8).
+ */
+const PRODUCT_DESCRIPTIONS = {
+  usageInstructions: "Returns the code-intelligence server's manual: how its symbol, search, edit and memory tools are meant to be used together. The other tools work without it; fetch it only when that guidance would help with the task at hand.",
+};
 const CARDINALITY = { read: 10, edit: 7, memoryWrite: 2, onboard: 1 };
 
 function fail(m) { process.stderr.write(`[code-intel:manifest] REFUSED — ${m}\n`); process.exit(1); }
@@ -213,6 +223,10 @@ for (const [cap, name] of Object.entries(NEVER_GRANT)) {
   if (!vocabulary.includes(name)) fail(`never-grant '${name}' (${cap}) is not in the runtime's tool vocabulary — an upstream rename? (REQ-MCP-015)`);
 }
 for (const name of [...all, ...Object.values(NEVER_GRANT)]) if (!vocabulary.includes(name)) fail(`'${name}' is absent from the vocabulary`);
+for (const [cap, text] of Object.entries(PRODUCT_DESCRIPTIONS)) {
+  if (!Object.values(CAPABILITIES).some((map) => Object.prototype.hasOwnProperty.call(map, cap))) fail(`a product description names '${cap}', which is no capability of the tiers (PD-MCP-001)`);
+  if (typeof text !== 'string' || text.trim() === '') fail(`the product description for '${cap}' is empty (PD-MCP-001)`);
+}
 
 // ---- 4. the module ---------------------------------------------------------------------------------------------
 const q = (s) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
@@ -256,6 +270,8 @@ const lines = [
   '  },',
   '  /** REQ-MCP-015: never in a built-in grant. */',
   `  neverGrant: { ${Object.entries(NEVER_GRANT).map(([cap, name]) => `${cap}: ${q(name)}`).join(', ')} },`,
+  '  /** PD-MCP-001: descriptions written by the product, not reported by the runtime, by capability — each replaces the runtime\'s own description of the tool it names. */',
+  `  productDescriptions: { ${Object.entries(PRODUCT_DESCRIPTIONS).map(([cap, text]) => `${cap}: ${q(text)}`).join(', ')} },`,
   '  /** What the server listed under the shipped arguments, and the runtime\'s whole vocabulary, as generated. */',
   `  reportedByServer: ${arr(server.names)},`,
   `  vocabulary: ${arr(vocabulary)},`,

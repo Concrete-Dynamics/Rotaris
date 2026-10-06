@@ -804,6 +804,9 @@ ${entry}runtime:
     }
     // Discovery and the surface are memoised per root: the worktree's, so a base-tree run's memo is never reused.
     expect(seen.filter((s) => s.call !== 'executorsFor').map((s) => s.root)).toEqual([worktree, worktree]);
+    // PD-MCP-002 (OQ-194): the executors' root, REQ-MCP-070's `lsp_init` root, is the worktree's too; until 2026-10-06 it
+    // was the anchoring workspace root.
+    expect(seen.find((s) => s.call === 'executorsFor')!.root).toBe(worktree);
   });
 
   it('a run in the base tree keeps the workspace root, exactly as configured', async () => {

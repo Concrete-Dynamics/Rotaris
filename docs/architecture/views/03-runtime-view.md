@@ -841,11 +841,17 @@ generated manifest (`start-mcp-server`, the transport and the host-integration c
 `--project <root>` at command resolution for the workspace the configuration was loaded for, and a run whose execution
 root is a worktree is handed the view bound to that tree's root instead (`configurationForExecutionRoot` in
 `run-host/mcp.ts`, read by the tool port's `ready()` and by `session.start`'s discovery ahead of the run, both memoised on
-the execution root; `cwd`, REQ-MCP-035's fill-in and REQ-MCP-070's `lsp_init` root stay the workspace's, OQ-194). Until
+the execution root). Since `PD-MCP-002` (OQ-194, 2026-10-06) the same view moves every root the load filled in for every
+stdio server — REQ-MCP-035's filesystem fill-in and REQ-MCP-043/050's default `cwd` beside the project path — and the
+tool port hands `McpHost.executorsFor` the execution root, which `SessionConnections.connect` passes to REQ-MCP-070's
+`lsp_init`; until then those three stayed the workspace's (OQ-194's literal reading). Until
 2026-10-03 the isolated run's server was bound to the anchoring checkout (ADR-0034, "The isolated-run binding, executed").
 The discovery and connected lines name the project the launch carried (`… (project <root>) listed …`, `…, project <root>)`);
 the grant is the persona's tier union from the manifest (12 or
-19 names; REQ-MCP-014/015). On connection the binding probe calls the memory-listing tool once under 15 s
+19 names; REQ-MCP-014/015). The usage-instruction tool is described in the product's words, which the manifest carries
+by capability (`productDescriptions`, `PD-MCP-001`, OQ-115): `filterServerTools` puts them on the bundled server's tool,
+so the prompt section and the tool definition the model is handed both read them, and the runtime's own imperative
+("call this tool immediately") reaches no prompt. On connection the binding probe calls the memory-listing tool once under 15 s
 (REQ-MCP-071; a failure warns through REQ-MCP-044 and withholds nothing); the prompt's `## MCP servers` entry for the
 server carries the fixed project-memories block iff both gating names are granted (REQ-MCP-102). Measured cold: the
 runtime answers `tools/list` about 4 s after launch, connect about 4.2 s; the first symbol tool on a language provisions

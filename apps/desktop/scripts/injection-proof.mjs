@@ -35,6 +35,10 @@
  *   4. isolated  — New session with isolation on: the run executes in `.rotaris/worktrees/<sid>`, and its workspace
  *                  blocks come from THAT tree — the committed text, under the worktree's paths — while the policy
  *                  (the two switches of launch 2) and every other base stay the base workspace's (REQ-WORKSPACE-050).
+ *                  The code-intelligence server is launched against the worktree (REQ-MCP-034), and so are the two
+ *                  fixture servers the orchestrator carries (PD-MCP-002): `fs_probe`'s filesystem fill-in and both
+ *                  servers' working directory name the worktree, and `lsp`'s `lsp_init`, made by the launch's one
+ *                  scripted call to it, names the worktree's root.
  *
  * The latency half (§3.2, REQ-WORKSPACE-049): a second scratch profile holding a fixture AT the bound — every
  * instruction-file slot discovery can reach filled (14 where the platform has an `/etc` hierarchy, 12 on Windows;
@@ -55,7 +59,7 @@
  * Evidence under `.proof/injection-proof/`: one PNG, one log and one model-call file per launch; `results.json`;
  * `latency.json`. Flags: `--skip-build`, `--skip-latency`, `--latency-runs=<n>` or `--latency-runs <n>` (n ≥ 20).
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { cpus, platform as hostPlatform, release } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -185,11 +189,31 @@ for (const id of PRESENT.filter((i) => !WORKSPACE_IDS.includes(i))) write(files[
 // One skill, so REQ-WORKSPACE-047's "ahead of the skill catalog" has a catalog to be ahead of.
 write(join(workspace, '.agents', 'skills', 'proof-skill', 'SKILL.md'), '---\nname: proof-skill\ndescription: A skill so the catalog unit exists.\n---\nPROOF_SKILL_BODY\n');
 const agentsYaml = join(workspace, '.rotaris', 'agents.yaml');
+/*
+ * PD-MCP-002 (OQ-194): two servers a user might add, both the MCP fixture, carried by the orchestrator beside the shipped
+ * code-intelligence entry — `fs_probe`, a stdio server whose arguments name a filesystem-server package and no path, so
+ * REQ-MCP-035's fill-in appends the root, and `lsp`, whose `lsp_init` REQ-MCP-070 calls with the root. Each records the
+ * working directory and arguments it was launched with (`--launch-file`), and `lsp` every call it received
+ * (`--call-file`), so the isolated launch below reads which root each one was handed. Neither entry configures a `cwd`, so
+ * REQ-MCP-043's default applies to both.
+ */
+const FIXTURE_SERVER = join(app, 'scripts', 'fixtures', 'mcp-fixture-server.mjs');
+const serverLaunches = join(output, 'mcp-launches.jsonl');
+const lspCalls = join(output, 'mcp-lsp-calls.jsonl');
+const yamlString = (v) => JSON.stringify(v);
 write(agentsYaml, [
   '# scratch configuration written by the proof script',
   'models:',
   '  scripted: { provider: scripted, model_id: scripted }',
   'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+  'mcp_servers:',
+  `  fs_probe: { command: ${yamlString(process.execPath)}, args: [${[FIXTURE_SERVER, '--launch-file', serverLaunches, '@modelcontextprotocol/server-filesystem'].map(yamlString).join(', ')}] }`,
+  `  lsp: { command: ${yamlString(process.execPath)}, args: [${[FIXTURE_SERVER, '--launch-file', serverLaunches, '--call-file', lspCalls].map(yamlString).join(', ')}] }`,
+  'personas:',
+  '  orchestrator: { mcp_servers: [code_intelligence, fs_probe, lsp] }',
+  // The isolated launch's one MCP call is not held for an approval nobody is there to give.
+  'runtime:',
+  '  permission_mode: autonomous',
   '',
 ].join('\n'));
 
@@ -268,9 +292,14 @@ if (!afterSystem.includes(blockOf(files['workspace:AGENTS.md'], baseText('worksp
 results.push({ launch: 'switched', received: sourcesOf(afterSystem), absent: [SWITCHED_OFF, OVERRIDE_OFF], oq64: 'switching the override off returned workspace:AGENTS.md to the merge' });
 
 // ── 4. isolated ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// Only this launch's server records are read below: the files start empty here.
+for (const f of [serverLaunches, lspCalls]) writeFileSync(f, '');
 const isolated = await launch('isolated', profile, workspace, {
   ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Say hello from the worktree.>>composer@4400',
+  // One call to the `lsp` server, so its connection — and REQ-MCP-070's `lsp_init` — is made in the isolated run. Its
+  // tools collide with `fs_probe`'s, which sorts first, so they are offered under the `lsp_` prefix.
+  ROTARIS_SCRIPT: 'mcp:lsp.lsp_echo,answer',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '600',
 }, 180_000);
 const bound = /session (\S+) is isolated: the run works in (.+?)(?: on branch \S+)?; the record stays under/.exec(isolated.log);
@@ -297,7 +326,21 @@ const ciBinding = bindingVerdict(isolated.log, worktree);
 if (!ciBinding.ok) fail(`isolated: REQ-MCP-034 — ${ciBinding.detail}`);
 const ciBase = bindingVerdict(allOn.log, workspace);
 if (!ciBase.ok) fail(`all-on: REQ-MCP-034 — ${ciBase.detail}`);
-results.push({ launch: 'isolated', sessionId: bound[1], executionRoot: worktree, received: sourcesOf(isoSystem), codeIntelligence: ciBinding.detail, baseCodeIntelligence: ciBase.detail });
+// PD-MCP-002 (OQ-194): the other two roots an isolated run hands its servers are the tree's as well — REQ-MCP-035's
+// filesystem fill-in, REQ-MCP-043's default working directory (for discovery and the session alike, REQ-MCP-050), and
+// REQ-MCP-070's `lsp_init` root. Until 2026-10-06 all three named the base workspace.
+const real = (p) => { try { return realpathSync(p); } catch { return p; } };
+const readJsonLines = (f) => (existsSync(f) ? readFileSync(f, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l)) : []);
+const launched = readJsonLines(serverLaunches);
+const fsLaunches = launched.filter((l) => l.argv.includes('@modelcontextprotocol/server-filesystem'));
+const lspLaunches = launched.filter((l) => l.argv.includes('--call-file'));
+if (fsLaunches.length === 0 || lspLaunches.length === 0) fail(`isolated: PD-MCP-002 — the fixture servers recorded no launch (fs_probe ${fsLaunches.length}, lsp ${lspLaunches.length}); see mcp-launches.jsonl`);
+for (const l of launched) if (real(l.cwd) !== real(worktree)) fail(`isolated: PD-MCP-002 — a server was launched in ${l.cwd}, not the worktree ${worktree} (REQ-MCP-043's default working directory)`);
+for (const l of fsLaunches) if (real(l.argv.at(-1)) !== real(worktree) || l.argv.includes(workspace)) fail(`isolated: PD-MCP-002 — the filesystem fill-in handed ${l.argv.at(-1)}, not the worktree ${worktree} (REQ-MCP-035): ${JSON.stringify(l.argv)}`);
+const lspInit = readJsonLines(lspCalls).filter((c) => c.name === 'lsp_init');
+if (lspInit.length === 0) fail('isolated: PD-MCP-002 — the lsp server received no lsp_init (was it connected? see isolated.log)');
+for (const c of lspInit) if (real(c.arguments?.root ?? '') !== real(worktree)) fail(`isolated: PD-MCP-002 — lsp_init named ${c.arguments?.root}, not the worktree ${worktree} (REQ-MCP-070)`);
+results.push({ launch: 'isolated', sessionId: bound[1], executionRoot: worktree, received: sourcesOf(isoSystem), codeIntelligence: ciBinding.detail, baseCodeIntelligence: ciBase.detail, userServers: { launches: launched.length, filesystemFillIn: fsLaunches.map((l) => l.argv.at(-1)), cwd: [...new Set(launched.map((l) => l.cwd))], lspInitRoot: lspInit.map((c) => c.arguments?.root) } });
 
 // ═══ The latency half (§3.2, REQ-WORKSPACE-049) ════════════════════════════════════════════════════════════════════
 

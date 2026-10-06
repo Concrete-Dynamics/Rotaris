@@ -5490,7 +5490,13 @@ about 153 s of the 924 s of session wall time, the largest single cost of the ru
 and nothing new is asked: the case adds figures to what a ruling of this question weighs, and what the build proceeds under
 is unchanged.)*
 
-**OQ-115 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open. Raised as OQ-114 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
+**OQ-115 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open until 2026-10-06; ruled then, below. Raised as OQ-114 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** as recommended, the bundled server's binding
+manifest carries a neutral, product-written description for the usage-instruction tool, keyed by capability, which the
+prompt section and the tool's definition use in place of the runtime's own for the server launched through the reserved
+token; the tool stays in the read tier and every grant. Minted as [`PD-MCP-001`](../product/directives.md#pd-mcp-001),
+which narrows REQ-MCP-101 and extends REQ-MCP-116, and built under it (fin21).
 
 `packages/config/src/mcp/prompt.ts:29` renders each server tool's description as REQ-MCP-101 requires, and the bundled
 server's usage-instruction tool describes itself imperatively ("IMPORTANT: If you have not yet read the manual, call this
@@ -9509,7 +9515,13 @@ the appended path SHALL be that tree's root"; REQ-MCP-035, "with no path argumen
 REQ-MCP-043 and REQ-MCP-050, `cwd` "the entry's configured value, or the workspace root when unset"; REQ-MCP-070, `lsp_init`
 "called once with the arguments `{"root": "<workspace_root>"}`". Raised 2026-10-03 by the repair of
 [`fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`](../defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md)
-(fin12, bundle `fin12-worktree-bound-code-intelligence`). Open.)*
+(fin12, bundle `fin12-worktree-bound-code-intelligence`). Open until 2026-10-06; ruled then, below.)*
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** as recommended, for a run in an isolated tree
+REQ-MCP-035's fill-in, the default `cwd` of REQ-MCP-043 and REQ-MCP-050, and REQ-MCP-070's `lsp_init` root all name the
+tree's root, by extending the rebinding that already moved REQ-MCP-034's project path; only what the product filled in
+moves, and a path or `cwd` the user configured stays. Minted as [`PD-MCP-002`](../product/directives.md#pd-mcp-002), which
+narrows REQ-MCP-035, REQ-MCP-043, REQ-MCP-050 and REQ-MCP-070, and built under it (fin21).
 
 REQ-MCP-034 names the isolated tree's root for the one path it appends. The three neighbouring rules say "the workspace root"
 and say nothing of an isolated run, while the requirements domain separates the anchoring workspace (where the record stays)

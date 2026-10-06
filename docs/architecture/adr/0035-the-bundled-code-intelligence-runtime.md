@@ -444,3 +444,13 @@ passed all five scenarios with the bundle present, and `workspace-proof` passed 
 46 passed, 0 failed, 2 skipped). **Not measured:** Windows; a run host killed by a signal, whose step's group still
 survives it (OQ-169); a step that exits by itself and leaves a process it started running in its group: `endSetup`
 reaches only a step still running, so at a quit nothing ends such a process (the fixed note's "Not reached").
+
+**The manifest carries the product's own words for one tool — 2026-10-06 (fin21; `PD-MCP-001`, the owner's ruling of OQ-115
+under R-071).** The manifest was the runtime's answer and nothing else; it now also carries `productDescriptions`, written by
+the product and keyed by capability, which `manifest.mjs` holds beside the tier map and checks only to name a capability of
+the tiers (the runtime is not asked for them, so `--check` still compares a fresh generation byte for byte). The one entry is
+the usage-instruction tool's, whose own description told every agent to read the manual first, so each did and re-sent its
+7,000-plus characters with every later request (live-run finding L8). `filterServerTools` puts the product's text on the
+bundled server's tool, so REQ-MCP-101's section and the tool definition both read it; the tool keeps its place in the read
+tier. Regenerated against the bundled runtime here (serena-agent 1.7.0, Python 3.13.15, 24 tools listed), and
+`code-intel-proof`'s discovery step asserts the section carries the product's sentence and not the runtime's imperative.

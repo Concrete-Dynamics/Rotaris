@@ -351,7 +351,8 @@ export class McpHost {
           execute: async (a, tctx) => {
             const started = this.deps.clocks.monotonic.now();
             try {
-              const c = await connections.connect(server.name, description);
+              // PD-MCP-002: REQ-MCP-070's `lsp_init` names the root this port's run executes in.
+              const c = await connections.connect(server.name, description, workspaceRoot);
               watch(c);
               const r = await connections.call(server.name, description, tool.reported, a as Record<string, unknown>, timeoutMs, tctx.signal);
               return r.isError ? errorObservation(r.text, { outcomeKind: 'mcp', failureKind: 'tool_error' }) : observation(r.text, { outcomeKind: 'mcp' });

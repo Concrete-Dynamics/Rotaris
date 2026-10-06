@@ -411,8 +411,10 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
    * REQ-MCP-034's isolated-run clause: a run in an isolated working tree launches its servers against that tree's root. The
    * configuration is LOOKED UP by the anchoring workspace (it is loaded there) and handed on as the execution root's view;
    * discovery and the surface are memoised per that root, so a base-tree run's memo is never reused for a worktree. The
-   * executors keep `ctx.workspaceRoot`: their only use of it is REQ-MCP-070's `lsp_init` root, which names the workspace
-   * root (OQ-194's literal reading). Until 2026-10-03 all three calls read the loaded configuration and the anchoring root.
+   * executors take the execution root too: their only use of it is REQ-MCP-070's `lsp_init` root, which names the tree
+   * since `PD-MCP-002` (OQ-194, ruled 2026-10-06). The reading it replaces, kept beside it: "The executors keep
+   * `ctx.workspaceRoot`: their only use of it is REQ-MCP-070's `lsp_init` root, which names the workspace root (OQ-194's
+   * literal reading)." Until 2026-10-03 all three calls read the loaded configuration and the anchoring root.
    */
   const mcpRoot = ctx.effectiveRoot ?? ctx.workspaceRoot;
   const withhold = mode === 'restricted' || persona.readOnly;
@@ -458,7 +460,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       };
       const remove = (name: string) => { callable.delete(name); };
       const joined = new Set<string>();
-      for (const e of mcp.executorsFor({ cfg, workspaceRoot: ctx.workspaceRoot, role: ctx.persona, surface, ctx: session, remove, log: (m) => ctx.warn(m) })) {
+      for (const e of mcp.executorsFor({ cfg, workspaceRoot: mcpRoot, role: ctx.persona, surface, ctx: session, remove, log: (m) => ctx.warn(m) })) {
         // REQ-ORCH-153: an MCP tool carries no declaration, so the fail-closed predicate withholds it while the
         // gate is held (ADR-0016's reading, the same one `restricted` and `read_only` already take above). The
         // gate's dispatch check would refuse it anyway; removing it here keeps the listing honest. Every executor

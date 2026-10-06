@@ -1,4 +1,6 @@
 import { compareCodePoints } from '@rotaris/kernel';
+import { codeIntelligenceProductDescription } from './code-intelligence.js';
+import { CODE_INTELLIGENCE_TOKEN } from './commands.js';
 import { debug, info, warn, type Diagnostic, type Staged } from './diagnostics.js';
 import type { McpOrigin, McpServerEntry } from './entry.js';
 
@@ -96,6 +98,13 @@ export function grantDecision(server: string, reported: string, disabled: readon
  */
 export function filterServerTools(server: string, entry: McpServerEntry, discovered: readonly DiscoveredTool[], grant: readonly string[] | undefined): Staged<CallableTool[]> {
   const diagnostics: Diagnostic[] = [];
+  /*
+   * PD-MCP-001 (OQ-115): a tool of the bundled code-intelligence server — the entry whose command is the reserved token,
+   * as REQ-MCP-102 picks it out — for which the product wrote a description carries that one, here, so the prompt's
+   * section (REQ-MCP-101) and the tool definition the model is handed say the same; every other tool keeps its server's.
+   */
+  const bundled = entry.command === CODE_INTELLIGENCE_TOKEN;
+  const describe = (t: DiscoveredTool): string => (bundled ? candidateSpellings(server, t.name).map(codeIntelligenceProductDescription).find((d) => d !== null) ?? t.description : t.description);
   const survivors = discovered.filter((t) => grantDecision(server, t.name, entry.disabled_tools, undefined) !== 'denied');
   const survivorNames = new Set(survivors.map((t) => t.name));
   const out: CallableTool[] = [];
@@ -104,10 +113,10 @@ export function filterServerTools(server: string, entry: McpServerEntry, discove
     const replacement = entry.tool_name_map[t.name];
     if (replacement !== undefined && replacement !== t.name && survivorNames.has(replacement)) {
       diagnostics.push(warn(`mcp ${server}: tool_name_map renames '${t.name}' to '${replacement}', which is the reported name of another surviving tool of the same server; the rename is refused for this tool (REQ-MCP-005)`, 'process', `mcp.rename-collision.${server}.${t.name}`, { server }));
-      out.push({ callable: t.name, reported: t.name, description: t.description, inputSchema: t.inputSchema });
+      out.push({ callable: t.name, reported: t.name, description: describe(t), inputSchema: t.inputSchema });
       continue;
     }
-    out.push({ callable: replacement ?? t.name, reported: t.name, description: t.description, inputSchema: t.inputSchema });
+    out.push({ callable: replacement ?? t.name, reported: t.name, description: describe(t), inputSchema: t.inputSchema });
   }
   out.sort((a, b) => compareCodePoints(a.callable, b.callable));
   return { value: out, diagnostics };

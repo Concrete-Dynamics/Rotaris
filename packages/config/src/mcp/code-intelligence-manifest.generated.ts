@@ -5,8 +5,8 @@
  * language servers index); `pnpm package` regenerates it and refuses on a diff; `pnpm check` tests it against
  * `apps/desktop/scripts/code-intelligence/pins.json` and REQ-MCP-015's counts. Not a configuration surface: never read
  * from disk at run time, never user-editable, never varying by workspace.
- * Generated 2026-09-06 from serena-agent 1.7.0 on Python 3.13.15: 24 tools listed by the server
- * under the shipped arguments (3452 ms to tools/list on the build machine), 52 names in the runtime's vocabulary.
+ * Generated 2026-10-06 from serena-agent 1.7.0 on Python 3.13.15: 24 tools listed by the server
+ * under the shipped arguments (2546 ms to tools/list on the build machine), 52 names in the runtime's vocabulary.
  */
 export const CODE_INTELLIGENCE_MANIFEST = {
   distribution: 'serena-agent',
@@ -40,6 +40,8 @@ export const CODE_INTELLIGENCE_MANIFEST = {
   },
   /** REQ-MCP-015: never in a built-in grant. */
   neverGrant: { memoryDeletion: 'delete_memory', memoryRename: 'rename_memory', dashboardOpening: 'open_dashboard' },
+  /** PD-MCP-001: descriptions written by the product, not reported by the runtime, by capability — each replaces the runtime's own description of the tool it names. */
+  productDescriptions: { usageInstructions: 'Returns the code-intelligence server\'s manual: how its symbol, search, edit and memory tools are meant to be used together. The other tools work without it; fetch it only when that guidance would help with the task at hand.' },
   /** What the server listed under the shipped arguments, and the runtime's whole vocabulary, as generated. */
   reportedByServer: ['activate_project', 'delete_memory', 'edit_memory', 'find_declaration', 'find_implementations', 'find_referencing_symbols', 'find_symbol', 'get_current_config', 'get_diagnostics_for_file', 'get_symbols_overview', 'initial_instructions', 'insert_after_symbol', 'insert_before_symbol', 'list_memories', 'onboarding', 'read_memory', 'rename_memory', 'rename_symbol', 'replace_content', 'replace_in_files', 'replace_symbol_body', 'safe_delete_symbol', 'search_for_pattern', 'write_memory'],
   vocabulary: ['activate_project', 'create_text_file', 'delete_lines', 'delete_memory', 'edit_memory', 'execute_shell_command', 'find_declaration', 'find_file', 'find_implementations', 'find_referencing_symbols', 'find_symbol', 'get_current_config', 'get_diagnostics_for_file', 'get_diagnostics_for_symbol', 'get_symbols_overview', 'initial_instructions', 'insert_after_symbol', 'insert_at_line', 'insert_before_symbol', 'jet_brains_debug', 'jet_brains_find_declaration', 'jet_brains_find_implementations', 'jet_brains_find_referencing_symbols', 'jet_brains_find_symbol', 'jet_brains_get_symbols_overview', 'jet_brains_inline_symbol', 'jet_brains_list_inspections', 'jet_brains_move', 'jet_brains_rename', 'jet_brains_run_inspections', 'jet_brains_safe_delete', 'jet_brains_type_hierarchy', 'list_dir', 'list_memories', 'list_queryable_projects', 'onboarding', 'open_dashboard', 'query_project', 'read_file', 'read_memory', 'remove_project', 'rename_memory', 'rename_symbol', 'replace_content', 'replace_in_files', 'replace_lines', 'replace_symbol_body', 'restart_language_server', 'safe_delete_symbol', 'search_for_pattern', 'serena_info', 'write_memory'],

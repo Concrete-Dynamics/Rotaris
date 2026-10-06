@@ -329,6 +329,17 @@ anchoring project's (OQ-195). Shown by `injection-proof`'s isolated launch, red 
 launch named <the worktree> — discovery: <the workspace>") and green after it, and by the live run's requirements check,
 which now reads the binding the run launched with as well as the session's worktree record.
 
+**The isolated-run binding, extended — 2026-10-06 (fin21; `PD-MCP-002`, the owner's ruling of OQ-194 under R-071; the
+paragraph above kept as stated).** Its "`cwd` and REQ-MCP-035's fill-in are untouched" no longer holds: the same view now
+moves every root the load filled in, for every stdio server, read as exactly as the project path is — REQ-MCP-035's fill-in
+where the resolved arguments after a filesystem package are the workspace root alone and the configured ones did not name it,
+and REQ-MCP-043/050's default `cwd` where the entry configures none (which also moves a runtime launched with the
+project-from-working-directory option). The tool port hands `executorsFor` the execution root, and `SessionConnections.connect`
+passes it to REQ-MCP-070's `lsp_init` for the connection it establishes; a connection is still the session's, so a later demand
+from another root reuses it. Shown by unit cases in `config/src/mcp/mcp.test.ts`, `mcp/src/mcp.test.ts` and
+`run-host/tools.test.ts`, and by `injection-proof`'s isolated launch, which now carries two fixture servers a user might add —
+one taking the filesystem fill-in, one named `lsp` — and reads the root each was handed.
+
 **Launches 6 and 7 driven — 2026-09-28, R-062.** The proof's toggle launch (REQ-MCP-115) and its Settings launch
 (REQ-MCP-054) are now driven through `scripts/lib/driver.mjs`: every click, choice and read waits for its condition
 instead of firing at an offset from the window's load. On a loaded Linux host the offsets had produced two

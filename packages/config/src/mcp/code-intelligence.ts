@@ -65,6 +65,19 @@ export function memoriesBlockApplies(reportedNames: Iterable<string>): boolean {
   return CODE_INTELLIGENCE_MEMORY_GATE.every((n) => names.has(n));
 }
 
+/**
+ * PD-MCP-001 (OQ-115, ruled by the owner under R-071): the description the product wrote for one of the bundled runtime's
+ * tools, by the name the runtime reports, or null when the product wrote none and the runtime's own stands. The manifest
+ * carries the text by capability (`productDescriptions`); the tool stays where REQ-MCP-015 puts it.
+ */
+const PRODUCT_DESCRIPTIONS: ReadonlyMap<string, string> = new Map(
+  Object.entries(CODE_INTELLIGENCE_MANIFEST.productDescriptions).flatMap(([capability, text]) =>
+    Object.values(CODE_INTELLIGENCE_MANIFEST.tiers).flatMap((tier) => (Object.prototype.hasOwnProperty.call(tier, capability) ? [[(tier as Record<string, string>)[capability] as string, text] as const] : []))),
+);
+export function codeIntelligenceProductDescription(reported: string): string | null {
+  return PRODUCT_DESCRIPTIONS.get(reported) ?? null;
+}
+
 export type SetupInvocation = { readonly ok: true; readonly command: string; readonly args: readonly string[] } | { readonly ok: false; readonly reason: string };
 
 /**

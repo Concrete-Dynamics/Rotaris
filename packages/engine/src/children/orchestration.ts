@@ -1195,16 +1195,24 @@ export class IterationChildren implements DelegationOps {
     /*
      * OQ-116 as ruled (R-071, `PD-ORCH-008`, narrowing REQ-ORCH-097's cadence): each call this execution completes joins the
      * session's total as it completes, with the child's own count, so the displayed total follows the record while it runs.
-     * `live` is how many it counted; `spent` is what an attempt REQ-ORCH-088's fallback retry replaced had made, which the
-     * settle counts with the last attempt's (its completed calls are in `live` already).
+     * `live` is how many it counted, over every attempt. What is left is counted per attempt (`unfinished`): an attempt's
+     * calls started and never completed — its outcome's count less the calls it completed, or, for an attempt that raised
+     * and left no outcome, the calls it dispatched less those it completed. `remainder` holds it for the attempts
+     * REQ-ORCH-088's fallback retry replaced. Until fin22 the settle counted `Math.max(made, live)` over the attempts
+     * together, so a replaced attempt's completed calls hid a call the retry started and never completed
+     * (`docs/defects/fixed/a-replaced-attempts-completed-calls-hide-the-retrys-unfinished-call-from-the-count.md`).
      */
     let live = 0;
-    let spent = 0;
+    let remainder = 0;
+    let attemptLive = 0;
+    let attemptStarted = 0;
     const countCall = (): void => {
       if (this.detached) return;
       live += 1;
+      attemptLive += 1;
       deps.countToolCalls?.(1, { taskId: row.task_id, calls: priorCalls + live });
     };
+    const unfinished = (attempt: TurnOutcome | null): number => Math.max(0, (attempt === null ? attemptStarted : attempt.toolCallCount) - attemptLive);
     let error: { type: string; message: string } | null = null;
     let timedOut = false;
     let landing = false;
@@ -1226,6 +1234,8 @@ export class IterationChildren implements DelegationOps {
       timedOut = false;
       landing = false;
       progressing = false;
+      attemptLive = 0;
+      attemptStarted = 0;
       // REQ-ORCH-088: expiry asks the child to land — the turn stops before its next model step — and only
       // the backstop CHILD_LANDING_GRACE later cuts it off. `timedOut` is set at the ceiling, not at the
       // backstop, so the fallback-retry limb below and the report's `Child timed out after <N>s` are
@@ -1270,7 +1280,7 @@ export class IterationChildren implements DelegationOps {
         ...(compression ? { compression } : {}),
         ...(deps.onRequestUsage ? { onRequestUsage: deps.onRequestUsage } : {}),
         onToolCompleted: (call, result) => { stallWatch.toolCompleted(call.callId); progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError); countCall(); },
-        onToolStarted: (call) => stallWatch.toolStarted(call.callId, call.name),
+        onToolStarted: (call) => { attemptStarted += 1; stallWatch.toolStarted(call.callId, call.name); },
         onModelEvent: (kind) => stallWatch.modelEvent(kind),
         // OQ-173: each wait the run holds the child in between its steps, which is not its silence.
         onImposedWait: (wait) => stallWatch.imposedWait(wait),
@@ -1360,7 +1370,7 @@ export class IterationChildren implements DelegationOps {
         deps.writer.appendTimeline('fallback_model', 'rotaris', message, { task_id: row.task_id, from_provider: providerIdentity(resilience.catalogue, from.model), from_model: from.model.modelId, to_provider: providerIdentity(resilience.catalogue, cell.model.model), to_model: cell.model.model.modelId, timeout_seconds: seconds });
         deps.writer.recordIssue({ kind: 'timeout_fallback', severity: 'warning', actor: row.canonical_name, message, metadata: { task_id: row.task_id, requested_model: `${providerIdentity(resilience.catalogue, from.model)}/${from.model.modelId}`, fallback_model: `${providerIdentity(resilience.catalogue, cell.model.model)}/${cell.model.model.modelId}`, timeout_seconds: seconds } });
         deps.warn(message);
-        spent += outcome?.toolCallCount ?? 0;
+        remainder += unfinished(outcome);
         outcome = null;
         error = null;
         // PD-ORCH-005: the retry starts the child's conversation again from its payload, and its record says so.
@@ -1373,13 +1383,13 @@ export class IterationChildren implements DelegationOps {
     if (this.detached) return;
     const cancelled = deps.runSignal.aborted;
     // A resumed child's count carries on from its record; only this run's calls join this run's total.
-    const made = spent + (outcome?.toolCallCount ?? 0);
-    const toolCalls = priorCalls + Math.max(made, live);
+    const unfinishedCalls = remainder + unfinished(outcome);
+    const toolCalls = priorCalls + live + unfinishedCalls;
     this.toolCalls.set(row.task_id, toolCalls);
     // REQ-MONITOR-102: this child's calls join the session-wide total, counted once, whatever it ended as — each completed
     // call as it completed (OQ-116 as ruled), and here the rest: a call started and never completed, or one answered from a
     // replay (REQ-ORCH-141).
-    deps.countToolCalls?.(Math.max(0, made - live), { taskId: row.task_id, calls: toolCalls });
+    deps.countToolCalls?.(unfinishedCalls, { taskId: row.task_id, calls: toolCalls });
     // REQ-CHAT-088: the tool port may have persisted this child's own plan while it ran; settling updates the
     // call count while preserving that document for the scoped transcript and later session refreshes.
     const persistedTodo = deps.dal.childrenOf(deps.sessionId).find((child) => child.task_id === row.task_id)?.todo ?? null;

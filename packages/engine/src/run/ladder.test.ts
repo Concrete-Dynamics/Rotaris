@@ -2277,6 +2277,71 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   });
 
   /*
+   * The fin20 verifier's finding against PD-ORCH-008 (`docs/defects/fixed/a-replaced-attempts-completed-calls-hide-the-retrys-unfinished-call-from-the-count.md`):
+   * the settle counted `priorCalls + Math.max(made, live)`, so a replaced attempt with no outcome but completed calls (in
+   * `live`) covered a call the retry started and never completed (in `made`). Each attempt's remainder — its outcome's
+   * count less the calls it completed — is now counted on its own.
+   */
+  it('PD-ORCH-008: the retry\'s call answered from a replay is counted beside the calls the replaced attempt completed, its outcome lost', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    let fail!: () => void;
+    const failing = new Promise<void>((r) => { fail = r; });
+    // `boom` raises out of the port once the test lets it: the attempt's turn raises with it and leaves no outcome.
+    const tool: TestTool = (name) => (name === 'boom' ? failing.then(() => { throw new Error('the port raised'); }) : undefined);
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer('finished');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      // Attempt 1 completes g1, then starts boom, which raises after the ceiling: no outcome, one call completed.
+      if (turn === 1) return toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Looking.');
+      if (turn === 2) return toolCalls([{ callId: 'b1', name: 'boom', args: {} }], 'Trying.');
+      // The retry asks for g1 again: answered from the replay (REQ-ORCH-141), started and never completed.
+      if (turn === 3) return toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Looking again.');
+      return answer('I did it on the fallback.');
+    };
+    const s = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true, tool });
+    const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(dal.childrenOf(sid)[0]).toMatchObject({ state: 'running', tool_calls: 1 });
+    clock.advance(10_000);
+    fail();
+    await tick();
+    expect((await s.sessions.running(sid)!).status).toBe('completed');
+    expect(timeline(sid)).toContain('fallback_model');
+    expect(issues(sid)).toContain('child_exception');
+    // g1 completed and boom started in attempt 1; the retry's g1 was answered from the replay: three calls, the delegate
+    // the root's fourth. Before the repair the replay hid behind attempt 1's completed g1 and the count read 1.
+    expect(dal.childrenOf(sid)[0]).toMatchObject({ state: 'succeeded', tool_calls: 3 });
+    expect(dal.getSession(sid)!.tool_calls).toBe(4);
+  });
+
+  it('PD-ORCH-008: the replaced attempt\'s own unfinished call is counted from its outcome (the `spent` limb alone)', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    let open!: () => void;
+    const gated = new Promise<void>((r) => { open = r; });
+    const tool: TestTool = (name, a) => (name === 'read_file' ? gated.then(() => ({ text: 'ok', isError: false, status: 'ok' as const, durationMs: 1, label: name, args: a })) : undefined);
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer('finished');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      // Attempt 1: g1 completes; then g1 again (the replay) beside a read the test holds past the ceiling, so the attempt
+      // lands with an outcome counting three calls, two of them completed.
+      if (turn === 1) return toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Looking.');
+      if (turn === 2) return toolCalls([{ callId: 'g1', name: 'grep', args: {} }, { callId: 'r1', name: 'read_file', args: { path: 'slow' } }], 'Reading.');
+      // The retry makes no call.
+      return answer('I did it on the fallback.');
+    };
+    const s = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true, tool });
+    const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    clock.advance(10_000);
+    open();
+    await tick();
+    expect((await s.sessions.running(sid)!).status).toBe('completed');
+    expect(timeline(sid)).toContain('fallback_model');
+    expect(dal.childrenOf(sid)[0]).toMatchObject({ state: 'succeeded', tool_calls: 3 });
+    expect(dal.getSession(sid)!.tool_calls).toBe(4);
+  });
+
+  /*
    * PD-ORCH-004 on REQ-ORCH-088's own path: the parts of the progress rule that only the timeout's machinery can
    * exercise — the fallback retry, the landing grace and the role's window. Each child here runs under a 10 s limit.
    */

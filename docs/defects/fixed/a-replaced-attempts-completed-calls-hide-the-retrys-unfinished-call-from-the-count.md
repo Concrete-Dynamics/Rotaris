@@ -27,3 +27,16 @@ whatever the agent ended as), REQ-ORCH-088 (the retry).
 - `packages/engine/src/children/orchestration.ts` — the attempt loop's `live` and `spent`, and the settle's `toolCalls`.
 - `packages/engine/src/run/ladder.test.ts` — the OQ-116 fallback-retry case beside which the repair's cases stand.
 
+## Outcome
+
+Repaired 2026-10-06 by fin22 (bundle `fin22-summary-and-counts`). `IterationChildren.execute` counts what is left per
+attempt: `unfinished(attempt)` is the attempt's outcome's `toolCallCount` less the calls it completed (`attemptLive`), or,
+for an attempt that raised and left no outcome, the calls it dispatched (`attemptStarted`, from `onToolStarted`) less those
+it completed. `remainder` holds it for each attempt the fallback retry replaced, and the settle counts
+`priorCalls + live + remainder + unfinished(last)`, adding `remainder + unfinished(last)` to the session's total. In the
+example above the child now counts 3 (g1 completed, `boom` dispatched and raised, the retry's g1 replayed) and the session 4
+with the root's delegate.
+
+Pinned by two cases in `packages/engine/src/run/ladder.test.ts`: the raising attempt with the retry's replay (red on the code
+before: the child read 1) and the replaced attempt's own unfinished call alone (the `spent` limb; green before and after).
+`PD-ORCH-008`'s first-execution report carries the correction in place.

@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**A child's unfinished calls are counted per attempt (`PD-ORCH-008`; fin22).** `IterationChildren.execute`'s settle counts
+each attempt's calls started and never completed (`unfinished`: the outcome's count less the attempt's completed calls, or
+its dispatched calls less them when it raised), so an attempt REQ-ORCH-088's fallback replaced no longer hides the retry's.
+The **runtime view**'s `entryToolCalls` paragraph says so. No package, edge, process, channel, command or store column
+changed.
+
 **`summary.md` carries REQ-SESSION-140's sections (fin22).** `renderSummary` renders `SummaryFacts`, read by `summaryFactsOf`
 (`run/summary.ts`) in one read transaction: the task line from `StoreDal.firstPromptRow`, the stop reason only where one is
 recorded, Metrics with `n/a` for what is unavailable, Warnings (mostly-elided artifacts read `n/a`, OQ-205), Agents, Slowest

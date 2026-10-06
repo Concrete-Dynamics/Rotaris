@@ -104,9 +104,11 @@ describe('engine — the run-level agent\'s tools and the session\'s artifact li
 /**
  * docs/defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md (acceptance A20, R-067): the surfaces
  * derived the run-level agent's `{N} tool calls` (REQ-MONITOR-052, REQ-MONITOR-044) as the session's total less the
- * children's, and the root's calls join that total only when its turn returns (REQ-ORCH-097's cadence, OQ-116), so while
- * the root's turn ran it read 0 beside the tools it had used. The session record now carries the run-level agent's own
- * count (`SessionRecord.entryToolCalls`): the roots' calls the total holds, plus the live root's calls it does not yet.
+ * children's, and the root's calls joined that total only when its turn returned (REQ-ORCH-097's cadence, before OQ-116's
+ * ruling), so while the root's turn ran it read 0 beside the tools it had used. The session record carries the run-level
+ * agent's own count (`SessionRecord.entryToolCalls`): the roots' calls the total holds, plus the live root's calls it does
+ * not hold yet. Since OQ-116's ruling (`PD-ORCH-008`) each call joins the total as it completes, so those are only the calls
+ * in flight.
  */
 describe('engine — the run-level agent\'s tool-call count while its turn runs (REQ-MONITOR-044/052)', () => {
   let dir: string;

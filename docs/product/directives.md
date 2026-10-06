@@ -3369,6 +3369,15 @@ per pass, and one more counter on the session's row for a plan cycle's root, whi
 > a pass open long enough to read the total mid-pass; the orchestrator's duress live run should show `sessions.tool_calls`
 > equal to the completed `tool_calls` rows at its deadline. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Corrected 2026-10-06 (fin22).** The first execution counted a child's remainder over its attempts together,
+> `Math.max(made, live)`, so an attempt REQ-ORCH-088's fallback replaced with no outcome (its turn raised) hid, behind the
+> calls it had completed, a call the retry started and never completed — a replay of `g1` read 1 call where 3 were made
+> ([`a-replaced-attempts-completed-calls-hide-the-retrys-unfinished-call-from-the-count.md`](../defects/fixed/a-replaced-attempts-completed-calls-hide-the-retrys-unfinished-call-from-the-count.md)).
+> The remainder is now each attempt's own: its outcome's count less the calls it completed, or, with no outcome, the calls
+> it dispatched less those it completed (`unfinished` in `IterationChildren.execute`). Two cases in `run/ladder.test.ts`:
+> the raising attempt and the retry's replay (red on the code before), and the replaced attempt's own unfinished call (the
+> `spent` limb alone, green before and after).
 
 ---
 

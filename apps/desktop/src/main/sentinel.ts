@@ -17,7 +17,7 @@ import { resolveUserDirs, withoutInheritedSwitches } from '@rotaris/platform';
  * `process.resourcesPath` (electron-builder's `extraResources`), else the source tree's `apps/desktop/resources/` so the
  * development entry (`electron out/main/index.js builtin:code-intelligence …`) and the packaged binary run one code path.
  *
- * OQ-23's reading, taken: the branch is a GENERAL PASS-THROUGH. `start-mcp-server …` makes it the server of REQ-MCP-033;
+ * OQ-23's reading, resolved 2026-09-06 and taken: the branch is a GENERAL PASS-THROUGH. `start-mcp-server …` makes it the server of REQ-MCP-033;
  * the setup subcommands of REQ-MCP-099 reach the runtime unchanged through the same branch. Consequence 3: undocumented,
  * unadvertised, inert if discovered — the worst outcome is a process speaking a protocol on its streams.
  *

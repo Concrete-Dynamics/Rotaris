@@ -413,7 +413,7 @@ describe('the rest of the load', () => {
     expect(loadConfiguration({ ...fresh, keepIgnored: false }).ok).toBe(true);
   });
 
-  describe("OQ-161's reading: the code-intelligence marker's directory is kept out of version control without touching a tracked file", () => {
+  describe("OQ-161's reading, confirmed 2026-10-06 by R-071: the code-intelligence marker's directory is kept out of version control without touching a tracked file", () => {
     const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'init.defaultBranch=main', ...args], { cwd, encoding: 'utf8' });
     const marker = CODE_INTELLIGENCE_MARKER_SEGMENTS[0]!;
 

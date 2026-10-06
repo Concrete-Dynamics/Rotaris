@@ -482,7 +482,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
 /**
  * Defect `a-personas-tool-restrictions-never-narrow-its-grant` (acceptance finding A4, R-067): the loader parsed a
  * persona's `tool_restrictions`, the registry had a stage for it, and nothing connected the two, so a configured
- * restriction removed nothing. Built under OQ-145's reading: the map's keys are role names (REQ-CONFIG-062), and an
+ * restriction removed nothing. Built under OQ-145's reading, confirmed 2026-10-06 by R-071: the map's keys are role names (REQ-CONFIG-062), and an
  * agent's grant is narrowed by the allowed-tool list its OWN persona's map gives its name and by the one the map of the
  * persona that DELEGATED it gives that name; a tool survives only a list that names it (REQ-CONFIG-103).
  */

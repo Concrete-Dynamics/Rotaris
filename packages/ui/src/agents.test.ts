@@ -70,7 +70,7 @@ describe('agents — the shared selection (REQ-MONITOR-042) and the run-level ag
   /*
    * docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md: the
    * run-level agent's compression count summed `session.agents`, which holds the children alone, so a root's own
-   * compressions were counted nowhere. It is the run-wide count the session carries (REQ-MONITOR-086, OQ-159's reading).
+   * compressions were counted nowhere. It is the run-wide count the session carries (REQ-MONITOR-086, OQ-159's reading, confirmed 2026-10-06 by R-071).
    */
   it('REQ-MONITOR-086/281: a root that compressed twice and a child that compressed once read 3 across the run and 1 on the child, each labelled', () => {
     const entry = { persona: 'orchestrator', model: 'scripted/alpha', reasoning: 'high', tools: [] };

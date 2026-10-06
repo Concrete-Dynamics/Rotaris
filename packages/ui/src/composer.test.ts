@@ -95,7 +95,7 @@ describe('REQ-SANDBOX-121: the strip names the confinement backend of the focuse
 });
 
 /*
- * REQ-SHELL-038/039/041/043/044/045/047 with REQ-TOOLS-131/184 and OQ-184's build reading: the strip's items, their order,
+ * REQ-SHELL-038/039/041/043/044/045/047 with REQ-TOOLS-131/184 and OQ-184's build reading, confirmed 2026-10-06 by R-071: the strip's items, their order,
  * names, tooltips and the two thresholds. Before the repair of
  * docs/defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md the strip drew the
  * run's state, the theme's name, the child services and the replica counters, none of the workspace path, model, tokens or

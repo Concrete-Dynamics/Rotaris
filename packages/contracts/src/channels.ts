@@ -446,7 +446,7 @@ export type SessionSnapshot = z.infer<typeof SessionSnapshotSchema>;
  *  - `screen` — a serialisation of the current screen, emitted on attach and on resync so a late attacher can
  *               never show a line twice (ADR-0021); with `closing: true` it is the CLOSING frame of REQ-TOOLS-127,
  *               whose payload is the observation's final PLAIN text and a literal replacement — a display resets
- *               and writes it verbatim (OQ-5's reading, recorded as a reading in ADR-0021's note);
+ *               and writes it verbatim (OQ-5's reading, recorded in ADR-0021's note, closed 2026-09-11 when REQ-TOOLS-127 came to state it);
  *  - `meta`   — carries the whole `TerminalStreamMeta`; applying it twice is applying it once (REQ-SHELL-105).
  * `seq` is per stream and monotonic (REQ-SHELL-104): the run host numbers contiguously; main may MERGE frames of
  * one stream into a larger step under REQ-MONITOR-306's bound (REQ-SHELL-103), so a delivered `seq` may skip

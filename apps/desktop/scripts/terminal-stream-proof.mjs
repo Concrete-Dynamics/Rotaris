@@ -14,7 +14,7 @@
  *      runs — never glued onto the first command's closing text (REQ-TOOLS-127, REQ-SHELL-104);
  *   2. a `bg:` session gets its own stream with its own gapless counter (REQ-TOOLS-107/127);
  *   3. with the interval at 2,000 ms a keystroke arms a flush — the echo is framed in well under the ceiling
- *      (ADR-0021 Decision; OQ-38's reading), and no closer than the 20 ms floor;
+ *      (ADR-0021 Decision; OQ-38's reading, ratified when OQ-38 closed 2026-09-11), and no closer than the 20 ms floor;
  *   4. forty real streams at full tilt never exceed 1,000 frames/s at main's point of delivery, and every byte arrives
  *      in order (REQ-MONITOR-306, REQ-SHELL-103);
  *   4b. Part T2: the same forty streams delivered to TWO windows stay under the bound ACROSS BOTH — REQ-MONITOR-306

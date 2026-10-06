@@ -219,7 +219,7 @@ export function pausedBehindReading(result) {
  * What the poll after the `interrupt` shape met (OQ-147), read from one recorded observation.
  *
  * - `ended`: exit −1 as an `execution_error` whose detail says the paused command ended without an exit status of its
- *   own — the product found the end of the interrupted line, as OQ-147's reading reports it.
+ *   own — the product found the end of the interrupted line, as OQ-147's reading, confirmed 2026-10-06 by R-071, reports it.
  * - `still-running`: a soft pause, "still running" — the defect's signature, a FAIL.
  * - `ended-own`: the command ended with an exit status of its own, so the interrupt reached nothing still running (the
  *   wedge had ended first) — a NOTE.

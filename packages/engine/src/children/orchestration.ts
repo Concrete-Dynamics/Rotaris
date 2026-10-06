@@ -260,7 +260,7 @@ export class IterationChildren implements DelegationOps {
    * REQ-HOOKS-076 / REQ-HOOKS-081 with OQ-154 (the repair of
    * `a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`): the run's `session_end` has begun
    * (`endLifecycle`). A child ended from outside its settle after that — the user's cancel of one paused child, accepted
-   * until the run has ended — fires no `child_completed`, which would follow `session_end`: OQ-154's reading, as for the
+   * until the run has ended — fires no `child_completed`, which would follow `session_end`: OQ-154's reading, confirmed 2026-10-06 by R-071, as for the
    * explicit cancel that lands after `session_end`.
    */
   private lifecycleEnded = false;

@@ -280,7 +280,7 @@ describe('OwnedStdioTransport (ADR-0033, ADR-0007)', () => {
     // A batch runner like npx.cmd: it forwards its arguments to node.
     writeFileSync(join(dir, 'runner.cmd'), `@echo off\r\n"${process.execPath}" %*\r\n`);
     // The description's map is EMPTY (REQ-MCP-043's `env` holds the server's own entries only); PATH and the rest reach
-    // the child through the parent environment the run host supplies (OQ-22's reading; the merge of Parts R and S found
+    // the child through the parent environment the run host supplies (OQ-22's reading, confirmed 2026-10-06 by R-071; the merge of Parts R and S found
     // the child spawned with the map alone, so `npx` never had a PATH).
     const withPath = { ...env, PATH: `${dir};${env['PATH'] ?? ''}` };
     const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined, parentEnv: withPath });

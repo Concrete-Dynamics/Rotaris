@@ -3,7 +3,7 @@ import type { SessionRow } from '@rotaris/store';
 
 /**
  * REQ-SHELL-044/045: what the status strip's tokens and cost items read — the running total of tokens this workspace's
- * runs used (OQ-190's build reading: the workspace's runs, as REQ-SHELL-045's cost is), and the provider-reported cost of
+ * runs used (OQ-190's build reading, confirmed 2026-10-06 by R-071: the workspace's runs, as REQ-SHELL-045's cost is), and the provider-reported cost of
  * those runs so far. The cost is `null` until a session has reported usage (REQ-SHELL-045: "No cost item is present until
  * at least one session has reported usage and a cost figure exists for it"); then the exact sum of the figures the
  * sessions recorded (ADR-0031, summed by the money module), or `n/a` where every session that reported usage ran on a

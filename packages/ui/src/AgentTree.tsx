@@ -48,7 +48,7 @@ export function treeRows(agents: readonly AgentRecord[], collapsed: ReadonlySet<
  * agent's elapsed clock advances — every agent neither ended nor `paused` that holds a spawn timestamp, so running,
  * waiting or queued (REQ-MONITOR-064's "live (running, waiting, or queued)"). It is NOT `AgentRecord.live`: that is
  * REQ-MONITOR-045's running-only sense, which drives the pulse and the inspector's writability and stays as it is. A
- * `paused` agent keeps OQ-100's reading — neither live nor ended, no figure — since nothing runs for it and in
+ * `paused` agent keeps OQ-100's reading (confirmed 2026-10-06 by R-071, `PD-ORCH-005` clause 23) — neither live nor ended, no figure — since nothing runs for it and in
  * REQ-CHAT-008's recovery state the busy status keeps the tick going.
  */
 export function clockAdvances(agent: Pick<AgentRecord, 'presentationState' | 'completedAt' | 'spawnedAt'>): boolean {

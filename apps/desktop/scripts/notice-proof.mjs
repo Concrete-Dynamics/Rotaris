@@ -323,7 +323,7 @@ const s4 = scenario('review-action', { workspaceHook: true });
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. REQ-NOTIFY-045 (OQ-178): the retry action reaches its target. A run fails at its first model call (a 401, which no
 // recovery retries), so the session's last submitted prompt is the one that failed and the composer, submitted, is empty.
-// No failure notice in this build carries the retry as its one action (OQ-178's reading: each failure class names
+// No failure notice in this build carries the retry as its one action (OQ-178's reading, confirmed 2026-10-06 by R-071: each failure class names
 // another), so the proof publishes one carrying it through the REAL store, scoped to the failed session, and clicks it:
 // the window resubmits the last submitted prompt to the session it follows, and a second run of that session starts on
 // it. (Its outcome is the double's: a new iteration's root starts the script again, so it meets the same 401; what is

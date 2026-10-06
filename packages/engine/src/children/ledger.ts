@@ -77,7 +77,7 @@ export function storeChildReport(deps: { readonly writer: SessionWriter; readonl
  * settles a child `cancelled` outside its execution — the user's cancel of one child and its live descendants, the
  * cancel of a paused child at rest, "continue without them", the crash record of an accepted cancel, and the stale-child
  * settle. A child that never started had no conversation, and its closing is recorded all the same, so every terminal
- * child is torn down alike (OQ-152's reading). Lives beside `storeChildReport` because the last two run from the store
+ * child is torn down alike (OQ-152's reading, confirmed 2026-10-06 by R-071). Lives beside `storeChildReport` because the last two run from the store
  * alone, with no `IterationChildren`; the time is the writer's own clock (`SessionWriter.wall`).
  */
 export function writeTeardown(writer: SessionWriter, row: Pick<ChildRow, 'task_id' | 'canonical_name'>, terminal: string, status: string, summary: string): void {

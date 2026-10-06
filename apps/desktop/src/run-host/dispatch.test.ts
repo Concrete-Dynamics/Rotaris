@@ -41,7 +41,7 @@ describe('session.continue carries the decline to the engine (PD-ORCH-005 clause
 });
 
 /**
- * REQ-NOTIFY-045 with REQ-PROVIDER-066 (OQ-178's reading; the repair of
+ * REQ-NOTIFY-045 with REQ-PROVIDER-066 (OQ-178's reading, confirmed 2026-10-06 by R-071; the repair of
  * `docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`): the run host's hop of the
  * retry. A retry launches a run as a prompt does, so the continuation lease is refreshed before the engine is asked, and a
  * lease refusal comes back without the engine ever hearing of it; the engine's refusals reach main with their codes and

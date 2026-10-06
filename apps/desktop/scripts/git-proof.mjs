@@ -429,7 +429,7 @@ const noGit = await launch('no-git', workspace, local, preferences, { ROTARIS_CA
   if (/Error box|dialog/i.test(noGit.log.split('\n').filter((l) => /git view/.test(l)).join('\n'))) throw new Error('a dialog was raised for a missing git');
   const headlines = text(p, '.notice__headline');
   // ADR-0049 holds ONE current notice: the first-launch provider notice, raised 800 ms after the workspace opened, may have replaced it by capture time.
-  // OQ-193's build reading: the item conveys the state in words (REQ-GIT-161), and carries no branch icon, as it shows no branch name.
+  // OQ-193's build reading, confirmed 2026-10-06 by R-071: the item conveys the state in words (REQ-GIT-161), and carries no branch icon, as it shows no branch name.
   if ((p[STRIP_BRANCH_ICON] ?? []).length !== 0) throw new Error('with no git the strip\'s branch item draws a branch icon');
   if (text(p, '[data-testid="strip-branch"]')[0] !== 'no git' || (p[STRIP_BRANCH_MIDDLE] ?? []).length !== 0) throw new Error(`with no git the strip's branch item reads "${text(p, '[data-testid="strip-branch"]')[0]}" (middle-shortened: ${(p[STRIP_BRANCH_MIDDLE] ?? []).length})`);
   results.noGit = { header: 'not a git repository', noticeRaised: true, noticeOnScreenAtCapture: headlines.some((h) => /Working without Git/.test(h)), headlinesAtCapture: headlines, dialog: false, strip: text(p, '[data-testid="strip-branch"]')[0], png: noGit.png };

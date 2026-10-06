@@ -1445,7 +1445,7 @@ export class ForegroundSession {
     // paused call was marked, and the running call waited out the no-output window and soft-paused over a dead process, or
     // waited out its hard cap and reset the session. It is marked now; once its shell holds the terminal again
     // (`shellHoldsTerminal`) the product's own no-op line finds where its line ended (`submitCloser`), and the call ends
-    // there with OQ-147's reading. Where `/proc` does not say who holds the terminal nothing is written while the call
+    // there with OQ-147's reading, confirmed 2026-10-06 by R-071. Where `/proc` does not say who holds the terminal nothing is written while the call
     // runs; the mark is carried into the soft pause, and a poll after it reads it as a C-c sent after the pause.
     let interrupted = false;
     let interruptedAt: number | null = null;
@@ -1668,7 +1668,7 @@ export class ForegroundSession {
   async poll(): Promise<ForegroundResult> {
     // OQ-164 (the verifier's finding on its repair): the interrupt reaches the line the shell is running — the oldest open
     // paused call's — and the polled call may be queued behind it. The no-op line goes after every open paused line, on the
-    // polled one (`closer`), so its printed marker closes them all: the interrupted one with OQ-147's reading, and any whose
+    // polled one (`closer`), so its printed marker closes them all: the interrupted one with OQ-147's reading (confirmed 2026-10-06 by R-071), and any whose
     // line the interrupt discarded as never having run. Looking only at the polled call, nothing was ever written and every
     // poll read "still running" over a dead command and an idle prompt.
     const chain = this.openPaused();

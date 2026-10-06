@@ -225,7 +225,7 @@ export function keepScopeDirIgnored(workspaceRoot: string): void {
   } catch { /* REQ-CONFIG-013: never fails the load */ }
 }
 
-/** OQ-161's reading: the marker's directory in the repository's own exclude file; best-effort, every failure swallowed. */
+/** OQ-161's reading, confirmed 2026-10-06 by R-071: the marker's directory in the repository's own exclude file; best-effort, every failure swallowed. */
 function keepMarkerExcluded(workspaceRoot: string, marker: string): void {
   try {
     const file = repositoryExcludeFile(workspaceRoot);

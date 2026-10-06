@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { workspaceUsage } from './workspace-usage.js';
 
-/** REQ-SHELL-044/045 (OQ-190's build reading): the strip's tokens and cost, over this workspace's runs. */
+/** REQ-SHELL-044/045 (OQ-190's build reading, confirmed 2026-10-06 by R-071): the strip's tokens and cost, over this workspace's runs. */
 describe('workspaceUsage — the status strip\'s tokens and cost', () => {
   const row = (workspace_root: string, tokens_input: number, tokens_output: number, cost: string, cost_qualifier: string) => ({ workspace_root, tokens_input, tokens_output, cost, cost_qualifier });
 

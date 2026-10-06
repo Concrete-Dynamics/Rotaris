@@ -7,7 +7,7 @@ import type { EmulatorFactory, ScreenEmulator } from './emulator.js';
  * agent's foreground PTY (`fg:<agent>`) or a background session (`bg:<ts_id>`, REQ-TOOLS-107/127) — each with
  * its own headless emulator, its own monotonic `seq` (REQ-SHELL-104) and its own flush timer.
  *
- * THE SAMPLING PERIOD IS A CEILING, NOT A METRONOME (ADR-0021 Decision; OQ-38's reading, recorded as a reading):
+ * THE SAMPLING PERIOD IS A CEILING, NOT A METRONOME (ADR-0021 Decision; OQ-38's reading, ratified when OQ-38 closed 2026-09-11 and REQ-CONFIG-117 came to state it):
  * `runtime.terminal_stream_interval_ms` bounds how long output may be withheld from a frame. A keystroke ARMS an
  * immediate flush of the stream's next output, coalesced so that no two frames of one stream are ever closer
  * than `TERMINAL_COALESCE_FLOOR_MS` (20 ms) — the bottom of REQ-TOOLS-126's own range, and since the ipc-hop spike

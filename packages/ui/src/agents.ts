@@ -158,7 +158,9 @@ export interface EntryRole { readonly persona: string; readonly model: string; r
  * PD-ORCH-003 lets a plan cycle run fresh after an iteration), and the run-level agent's chips are the latest root's
  * (`entryToolsOf`: the live run's port and history, else the latest root's history): the name and the stand-in come from
  * the persona whose tools the chips show. The specification does not say which persona is drawn once the entry persona has
- * changed; this is the build's reading, recorded beside OQ-97. Until 2026-10-01 the FIRST root's `agent` row was read, so
+ * changed. The build proceeds under this with no question of its own: OQ-97's side note of 2026-10-01 records it as not
+ * ruled, no requirement having been found against it, and OQ-97's own ruling does not reach it. Until 2026-10-01 the
+ * FIRST root's `agent` row was read, so
  * after an iteration as `orchestrator` and a plan cycle as `reviewer` the inspector drew `orchestrator`'s tools with
  * `reviewer`'s calls marking them; the first repair read the last root's `agent` row alone, and a live root whose first
  * steps were tool calls was drawn as the previous root until its first text, and one that had written no row at all
@@ -429,7 +431,7 @@ export function stalledText(seconds: number | null): string | null {
 
 /**
  * REQ-MONITOR-052/069: the meta line and the context line, the elapsed fallback an em-dash / a hyphen; a stalled agent says so.
- * Its `{state}` is `agentStateLabel`'s over the shown session (REQ-MONITOR-127/130, OQ-165's reading): the run-level agent
+ * Its `{state}` is `agentStateLabel`'s over the shown session (REQ-MONITOR-127/130, OQ-165's reading, ruled 2026-10-06 by R-071): the run-level agent
  * reads the run's `cancelling` while it is live and the session reads it, as a persona window does. Until 2026-10-01 the line
  * read `presentationState` alone, so beside the run header's `Cancelling…` it read `running`
  * (docs/defects/fixed/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md).

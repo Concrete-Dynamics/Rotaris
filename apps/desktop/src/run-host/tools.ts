@@ -270,7 +270,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const resolver = deps.personas(ctx.workspaceRoot);
   const persona = resolver?.resolve(ctx.persona)?.persona ?? BUILT_IN_PERSONAS[ctx.persona as RoleName] ?? BUILT_IN_PERSONAS.orchestrator;
   /*
-   * REQ-TOOLS-006 (4) with REQ-CONFIG-103, under OQ-145's reading: the allowed-tool lists binding this agent — the entry
+   * REQ-TOOLS-006 (4) with REQ-CONFIG-103, under OQ-145's reading, confirmed 2026-10-06 by R-071: the allowed-tool lists binding this agent — the entry
    * its own persona's `tool_restrictions` gives its name, and the entry the delegating persona's map gives it. The reason
    * no restriction ever narrowed a grant, kept beside its replacement (acceptance finding A4, R-067): this call passed the
    * persona's name, tools, `coordinator_only` and `read_only`, and never its map.

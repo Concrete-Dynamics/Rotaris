@@ -288,7 +288,7 @@ describe('the command issued behind a soft-paused one (OQ-164)', () => {
 describe('the poll after the interrupt shape (OQ-147)', () => {
   /*
    * `docs/defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`: before the repair the poll
-   * after `C-c` read a soft pause over a process the interrupt had ended. The repaired product reports OQ-147's reading.
+   * after `C-c` read a soft pause over a process the interrupt had ended. The repaired product reports OQ-147's reading, confirmed 2026-10-06 by R-071.
    */
   const diagnostic = (fields: Record<string, unknown>) => `[terminal_diagnostic] ${JSON.stringify({ backend: 'single-session', command: '', timeout: false, timeout_seconds: 100, warnings: [], ...fields })}`;
   const detail = 'Terminal execution failed before completion: the paused command ended without an exit status of its own: the shell abandoned the rest of its line, as an interrupt (C-c) makes it do, before the next command ran';

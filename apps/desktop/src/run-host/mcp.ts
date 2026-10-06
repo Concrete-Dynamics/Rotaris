@@ -61,7 +61,7 @@ export interface McpHostDeps {
    * acknowledgement stack and the lifetime is the stack's. Channel 2, the `mcp_config` issue, is unchanged.
    */
   readonly acknowledge: (a: { kind: 'warn'; title: string; body?: string }) => void;
-  /** OQ-22's reading: the run host's own environment, which every stdio child inherits under its server's map. */
+  /** OQ-22's reading, confirmed 2026-10-06 by R-071: the run host's own environment, which every stdio child inherits under its server's map. */
   readonly parentEnv: Readonly<Record<string, string>>;
   /**
    * REQ-STARTUP-158 / REQ-STARTUP-007: the version the running desktop reports, read from the one declared place

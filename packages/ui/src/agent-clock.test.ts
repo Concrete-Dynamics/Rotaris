@@ -12,7 +12,7 @@ import { PersonaWindow } from './PersonaWindow.js';
  * holding a spawn timestamp shows its elapsed time on every surface with a slot for it — the tree meta, the Mission
  * table, the inspector meta and the pop-out's context card — and a `waiting` or `queued` one's figure advances with the
  * surface's clock. The clock is gated by its own predicate, never by `AgentRecord.live` (REQ-MONITOR-045, running only),
- * which still drives the motion and the inspector's writability. A `paused` agent keeps OQ-100's reading: no time.
+ * which still drives the motion and the inspector's writability. A `paused` agent keeps OQ-100's reading, confirmed 2026-10-06 by R-071: no time.
  */
 const agent = (over: Partial<AgentRecord>): AgentRecord => ({
   id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'waiting_on_dependencies', presentationState: 'waiting', parentId: 'root:1', dependencies: [], activity: 'do the thing', model: 'scripted/alpha',

@@ -1054,7 +1054,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(r.text).not.toContain('not found');
       // The live stream carries the call's own output again, and nothing of the wrapper or the paused call.
       expect(stripVt(tapped).split('\n').map((l) => l.trim()).filter((l) => l !== '')).toEqual(['own-output']);
-      // The paused call's end frame is its own: its late output and the exit status it ended with. Since OQ-164's reading
+      // The paused call's end frame is its own: its late output and the exit status it ended with. Since OQ-164's reading (the rule since R-071, 2026-10-06)
       // they are reported by the call that waited behind it, not left for a poll.
       expect(earlierOutput(r.text)).toBe('done-later');
       expect(String(diag(r.text)['detail'])).toMatch(/waited behind it: that command ended .* with exit code 0\./);
@@ -1084,7 +1084,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   // A10's verification: REQ-TOOLS-098 tells the agent to interrupt a paused command with `C-c` and `is_input=true`. An
   // interactive `sh` that takes the SIGINT abandons the rest of the wrapper's line, so the paused call's end frame never
   // prints. The shell reaches the next call's line only once the paused one is done, so that call's frame closes the
-  // paused call — with no exit status of its own (OQ-147's reading), never the next call's — and what the paused call
+  // paused call — with no exit status of its own (OQ-147's reading, confirmed 2026-10-06 by R-071), never the next call's — and what the paused call
   // collected ends where the next call begins: before the repair the poll read the later calls' marker frames and the
   // PD-TOOLS-001 snapshot's `__rot_b64__` lines, which encode the shell's whole environment, or "still running" forever.
   it.skipIf(PS)('REQ-TOOLS-098/127/179 (A10): a soft-paused command interrupted with C-c is closed by the next call, with no status borrowed and nothing of the later calls or the snapshot in its poll', async () => {
@@ -1115,7 +1115,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   // or to interrupt with `C-c` and `is_input=true`. The interrupt makes an interactive `sh` abandon the rest of the wrapper's
   // line, so the paused call's end frame never prints, and before the repair nothing else in the stream said the line was
   // done: every poll between the interrupt and the next command read −1, `soft_pause`, "The process may still be running",
-  // over a process that had died. A poll after an interrupt now hands the call over as OQ-147's reading reports it.
+  // over a process that had died. A poll after an interrupt now hands the call over as OQ-147's reading, confirmed 2026-10-06 by R-071, reports it.
   it.skipIf(PS)('REQ-TOOLS-098/179 (OQ-147): a poll after C-c reports the interrupted command as ended, not as still running, and leaves the session answering', async () => {
     const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
     const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
@@ -1246,7 +1246,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   // it does under a paused call. Only the paused call was marked, so the running call waited out the no-output window and
   // soft-paused over a dead process, every poll after it reading "still running", or, given a timeout, waited out the
   // hard cap and reset the session — shell state lost — for a process that had died at the interrupt. A call interrupted
-  // while it runs now ends there, with OQ-147's reading, once the shell holds its terminal again.
+  // while it runs now ends there, with OQ-147's reading (confirmed 2026-10-06 by R-071), once the shell holds its terminal again.
   it.skipIf(PS)('REQ-SHELL-093/REQ-TOOLS-098/179 (OQ-147): the terminal window\'s interrupt while the call still runs ends it with OQ-147\'s reading, neither a soft pause nor a wait for the hard cap', async () => {
     const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 4_000 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
     const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 4_000 });

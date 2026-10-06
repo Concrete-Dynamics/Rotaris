@@ -1759,7 +1759,7 @@ export class Sessions {
       if (openIteration.message !== null && openIteration.message.length > 0) tell({ role: 'user', content: [...openIteration.message] });
     }
     /*
-     * OQ-102's reading beside PD-ORCH-005 clause 17, which governs only a continue that delivers a message, and the repair
+     * OQ-102's reading, confirmed 2026-10-06 by R-071, beside PD-ORCH-005 clause 17, which governs only a continue that delivers a message, and the repair
      * of `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md` (departing from REQ-ORCH-004, as
      * PD-ORCH-005 clause 25 states for these continues since OQ-102's ruling of 2026-10-06): a continue that delivers no
      * message — the Continue action, "continue without them", and the message-limit resolution's 'continue' and
@@ -1954,7 +1954,7 @@ export class Sessions {
         // REQ-SESSION-186: a second activation while the stop is pending forces.
         const force = req.args['force'] === true || run.stop.requested;
         run.stop.request('user_cancelled', force);
-        // Saved `cancelling` through the run, which holds it through its later saves until it rests (OQ-165's reading).
+        // Saved `cancelling` through the run, which holds it through its later saves until it rests (OQ-165's reading, ruled 2026-10-06 by R-071).
         run.stopAccepted();
         return { ok: true };
       }

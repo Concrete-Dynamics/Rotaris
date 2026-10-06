@@ -2467,7 +2467,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
 
     /**
-     * PD-ORCH-005 clause 4 with REQ-CONFIG-094 (OQ-149's reading): a child paused while it held a slot keeps that place
+     * PD-ORCH-005 clause 4 with REQ-CONFIG-094 (OQ-149's reading, confirmed 2026-10-06 by R-071): a child paused while it held a slot keeps that place
      * while its session rests, so no other session takes it, and continuing never puts two on the key. The first session is
      * paused with its child mid-step and comes to rest `interrupted`, its child `paused`.
      */
@@ -5606,7 +5606,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       await settle(() => order.includes('session_end'));
       expect(byName(sid, 'work').state).toBe('paused');
       // While the run's `session_end` hook runs, the user cancels the paused child: it ends `cancelled` (REQ-ORCH-133), and
-      // its `child_completed` is not fired after `session_end` (OQ-154's reading: none fires where the run has announced its end).
+      // its `child_completed` is not fired after `session_end` (OQ-154's reading, confirmed 2026-10-06 by R-071: none fires where the run has announced its end).
       expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
       expect(byName(sid, 'work').state).toBe('cancelled');
       releaseEnd();

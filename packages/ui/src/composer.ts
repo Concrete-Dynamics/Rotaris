@@ -101,7 +101,7 @@ export function statusStripSandboxItem(session: { readonly sandboxed: boolean; r
  * the run's state, the theme's name, each child service and the replica's applied/reset/refused counters, which no
  * requirement places there, and none of REQ-SHELL-038's workspace-path, model, tokens or cost items
  * (docs/defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md).
- * REQ-SANDBOX-121's confinement indicator stands where OQ-184's build reading puts it, right after the file-access flag.
+ * REQ-SANDBOX-121's confinement indicator stands where OQ-184's build reading, confirmed 2026-10-06 by R-071, puts it, right after the file-access flag.
  * The cloud-credit item (REQ-SHELL-046) is present only once a credit balance is available, and this build reads none, so
  * the list never carries it.
  */
@@ -188,7 +188,7 @@ export function statusStripSafetyFlags(f: SafetyFacts, sandbox: { readonly text:
     flag('redaction: always on', REDACTION_EXPLANATION, 'strip-redaction'),
     ...(f.unsavedSettings ? [flag('unsaved settings', UNSAVED_SETTINGS_EXPLANATION, 'strip-unsaved')] : []),
     f.outsideWorkspace ? flag('outside-workspace!', OUTSIDE_WORKSPACE_EXPLANATION, 'strip-file-access') : flag('workspace-scoped', WORKSPACE_SCOPED_EXPLANATION, 'strip-file-access'),
-    // OQ-184's build reading: REQ-SANDBOX-121's indicator right after the file-access flag, at every width.
+    // OQ-184's build reading, confirmed 2026-10-06 by R-071: REQ-SANDBOX-121's indicator right after the file-access flag, at every width.
     ...(sandbox === null ? [] : [{ kind: 'text' as const, ...sandbox }]),
     flag(f.mode, modeExplanation(mode), 'strip-mode'),
   ];
@@ -227,7 +227,7 @@ export interface StripFacts {
   readonly sandbox: { readonly text: string; readonly name: string; readonly title: string; readonly testId: string } | null;
   /** REQ-SHELL-043: the model a run started from this window uses, and the short form the composer's chip shows. */
   readonly model: { readonly name: string; readonly label: string };
-  /** REQ-SHELL-044: the running total of tokens used by this workspace's runs (OQ-190's build reading). */
+  /** REQ-SHELL-044: the running total of tokens used by this workspace's runs (OQ-190's build reading, confirmed 2026-10-06 by R-071). */
   readonly tokens: number;
   /** REQ-SHELL-045: the workspace's reported cost, `n/a`, or null before any session reported usage with a figure. */
   readonly cost: string | null;

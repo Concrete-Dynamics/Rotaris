@@ -220,7 +220,7 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * as a refusal naming the path, which the renderer reports through the transient error surface (REQ-SHELL-112).
    */
   z.object({ kind: z.literal('workspace.openFolder') }),
-  /** REQ-SHELL-044/045: the status strip's tokens and cost — this workspace's runs so far (OQ-190's build reading). */
+  /** REQ-SHELL-044/045: the status strip's tokens and cost — this workspace's runs so far (OQ-190's build reading, confirmed 2026-10-06 by R-071). */
   z.object({ kind: z.literal('workspace.usage') }),
   z.object({ kind: z.literal('shell.switchView'), view: z.string() }),
   /**

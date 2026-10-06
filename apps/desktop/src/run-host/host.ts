@@ -151,7 +151,7 @@ export function createRunHost() {
     publishSetup: (status) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'mcp.setupStatus', status } }),
   });
   // REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — this application's own executable, built in
-  // `code-intelligence-launch.ts`; the sandbox switch main forked this process with rides along (OQ-82's reading).
+  // `code-intelligence-launch.ts`; the sandbox switch main forked this process with rides along (OQ-82's reading, confirmed 2026-10-06 by R-071).
   const { packaged, ...codeIntelligenceLaunch } = codeIntelligenceLaunchFor({ execPath: process.execPath, bundleDir: import.meta.dirname, argv: process.argv });
   log(`mcp: the reserved token launches ${codeIntelligenceLaunch.command} ${codeIntelligenceLaunch.args.join(' ')} (${packaged ? 'packaged' : 'development'})`);
   /**

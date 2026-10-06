@@ -2835,7 +2835,7 @@ export class Run {
 
   /**
    * REQ-SESSION-186's stop, accepted by the stop control (`Sessions.control`, `op: 'cancel'`): saved `cancelling`, and held
-   * there by every later save of the run on its way to rest, as the explicit cancel's is (OQ-165's reading). Until fin22 the
+   * there by every later save of the run on its way to rest, as the explicit cancel's is (OQ-165's reading, ruled 2026-10-06 by R-071). Until fin22 the
    * control wrote the status itself and the run's next save (a token sample, a child's settle, a mode change) wrote `running`
    * again, so every window read `running` for the rest of the graceful stop
    * (`docs/defects/fixed/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md`).

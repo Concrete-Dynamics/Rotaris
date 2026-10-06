@@ -37,7 +37,7 @@ export interface Connected {
 }
 
 export interface SessionDeps {
-  /** OQ-22's reading: what a stdio child inherits under the server's map; the run host supplies its environment. */
+  /** OQ-22's reading, confirmed 2026-10-06 by R-071: what a stdio child inherits under the server's map; the run host supplies its environment. */
   readonly parentEnv?: Readonly<Record<string, string>>;
   /** REQ-STARTUP-158: the product version, sent as `clientInfo.version` (`OpenOptions.clientVersion`). */
   readonly clientVersion: string;

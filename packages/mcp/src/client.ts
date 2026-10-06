@@ -29,7 +29,7 @@ export interface OpenOptions {
   readonly connectTimeoutMs: Millis;
   readonly negotiation?: VersionNegotiationOptions;
   readonly signal?: AbortSignal;
-  /** The parent environment a stdio child inherits under the server's map (OQ-22's reading); omitted = the map alone. */
+  /** The parent environment a stdio child inherits under the server's map (OQ-22's reading, confirmed 2026-10-06 by R-071); omitted = the map alone. */
   readonly parentEnv?: Readonly<Record<string, string>> | undefined;
   /**
    * `clientInfo.version` in the handshake: the product version the running desktop reports (REQ-STARTUP-007,

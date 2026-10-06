@@ -8,7 +8,7 @@ import { Button as DesignButton, Input as DesignInput } from './design-system/in
  *
  * **Non-modal, window-level (ADR-0048), and laid out in flow.** The window holds the prompts (`useReauthPrompt` in the
  * renderer root) and the Workspace view draws the followed session's in its own row of the view's grid, between the run
- * header and the transcript (`WorkspaceView`'s `reauthPrompt` slot, OQ-181's reading of "beside the continuing run"). It
+ * header and the transcript (`WorkspaceView`'s `reauthPrompt` slot, OQ-181's reading of "beside the continuing run", confirmed 2026-10-06 by R-071). It
  * takes its height from the transcript and overlays nothing: no backdrop, no `aria-modal`, no focus trap, and no control
  * of the window or the view is ever under it, at any window size. Its two earlier placements overlaid controls — fixed at
  * the window's corner (the title bar's, the notice's) and then absolute in the rail-and-view region (the run header's

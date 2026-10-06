@@ -25,7 +25,7 @@ export interface OwnedStdioSpec {
   /** REQ-MCP-043's `env`: the map the pipeline resolved (REQ-MCP-090) — the server's own entries, nothing of the parent's. */
   readonly env: Readonly<Record<string, string>>;
   /**
-   * OQ-22's reading: the child inherits the parent process's environment with `env` overlaid. The parent's is the
+   * OQ-22's reading, confirmed 2026-10-06 by R-071: the child inherits the parent process's environment with `env` overlaid. The parent's is the
    * caller's to supply (the library assumes no process); it never enters the nine-value identity (REQ-MCP-047).
    * The merge of Parts R and S (2026-09-05) found it absent: the child was spawned with the map ALONE, so `npx` had no
    * PATH and the `.cmd` wrap's lookup found nothing — the `browser` default still failed with `spawn npx ENOENT`.

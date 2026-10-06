@@ -83,7 +83,7 @@ export function createStreamDisplay(frame: DisplayFrame, factory: EmulatorFactor
  * REQ-SHELL-104/105 — apply one frame. A sequence number at or below the last applied is never applied twice, so a
  * line is never shown twice while retained and fresh output both arrive; a `screen` frame resets and rewrites; a
  * `delta` appends; a `meta` frame synchronises command, truncation and running state idempotently. The closing frame
- * (OQ-5's reading) is a literal replacement: reset, then the plain text with its newlines carried to column 0.
+ * (OQ-5's reading, closed 2026-09-11 when REQ-TOOLS-127 came to state it) is a literal replacement: reset, then the plain text with its newlines carried to column 0.
  *
  * `screen`'s hooks are called only for an applied `screen` frame, from the write queue: `resetReached` once everything
  * queued before the frame has parsed and the reset is next (an empty write ahead of the reset, which is itself queued),

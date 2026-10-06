@@ -49,7 +49,7 @@ export interface Persona {
 }
 
 /**
- * REQ-TOOLS-006 (4) under OQ-145's reading: the allowed-tool lists that bind an agent of `persona` — the entry its own
+ * REQ-TOOLS-006 (4) under OQ-145's reading, confirmed 2026-10-06 by R-071: the allowed-tool lists that bind an agent of `persona` — the entry its own
  * persona's map gives its name, and the entry the map of the persona that DELEGATED it gives that name. The entry agent
  * has no parent agent. A tool survives only the lists that name it (`restrictionsAllow`); an empty answer restricts
  * nothing (REQ-CONFIG-103: "an entity absent from the map is unrestricted").

@@ -26,7 +26,7 @@ import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
 import { clampBudget, storeChildReport, writeCancelledTeardown } from '../children/ledger.js';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
-import type { Persona, PersonaResolver } from '../children/personas.js';
+import { entryInstructionsFor, resolveRole, type Persona, type PersonaResolver } from '../children/personas.js';
 import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
 import { entryOf, excludedModelKeys, isLoaderCopyKey, overridesInForce, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
 import { WaitRegistry, type WaitState } from './waits.js';
@@ -1653,6 +1653,13 @@ export class Run {
     const compression = this.compressionFor(() => this.callsOn(rootResilience.cell), () => this.plannerTodoLines());
     // PD-ORCH-005 revision 4 clause 14: one check per execution of the root, at its first model step.
     const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration);
+    /*
+     * OQ-202 as ruled (R-071, `PD-ORCH-006`): a coordinator its run grants the direct-work bundle (REQ-ORCH-016) is told to
+     * do the work itself, so its instructions agree with the tools it is offered; every other entry keeps its own prompt.
+     * While the plan gate holds the run, REQ-ORCH-153 withholds the bundle's writing and command tools, so the held turn
+     * keeps the prompt it had before the ruling (`turnFn` reads the hold per turn, as the supervisor below does).
+     */
+    const entryInstructions = entryInstructionsFor(config.systemPrompt, this.preflight?.grant ?? null, (this.deps.personas ? this.deps.personas.resolve(config.persona) : resolveRole(config.persona))?.persona ?? null);
     /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
     let rootDetached = false;
     /*
@@ -1689,7 +1696,7 @@ export class Run {
       // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
       // REQ-WORKSPACE-060 (ADR-0063): then the session's always-active context units, read at THIS construction
       // so a skill force-loaded since the last turn reaches this agent (REQ-CONFIG-166).
-      systemPrompt: withContextUnits(withPlaybook(config.systemPrompt, this.preflight?.playbookFor(config.persona) ?? ''), this.deps.contextUnits?.() ?? []), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
+      systemPrompt: withContextUnits(withPlaybook(this.planHeld ? config.systemPrompt : entryInstructions, this.preflight?.playbookFor(config.persona) ?? ''), this.deps.contextUnits?.() ?? []), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
       // PD-ORCH-001: no supervision while the plan gate holds the run. The hold withholds every writing tool,
       // so the only work left is reading the same region repeatedly — REQ-ORCH-101's first trigger, fired by the

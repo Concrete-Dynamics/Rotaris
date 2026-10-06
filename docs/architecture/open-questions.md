@@ -9696,7 +9696,7 @@ under a `single` override": "it makes no file-modifying tool call … every work
 "externally checkable from the run's own records"; REQ-ORCH-025, under which only `single` ends the coordinating status.
 Raised 2026-10-06 from finding G2 of the orchestrator's final default live run at `27a5127` (fin18, bundle
 `fin18-run-record-truth`; raised there as OQ-200 and renumbered OQ-202 when origin/main, which had taken OQ-200 and OQ-201,
-was merged in). Open, the owner's.)*
+was merged in). ~~Open, the owner's.~~ Ruled 2026-10-06.)*
 
 Under REQ-ORCH-016 an `explicit_trivial` or `single_file_change` run grants the entry role `write_file`, `terminal` and the
 rest of the direct-work bundle; no `single` override is in force, so by REQ-ORCH-025 and REQ-ORCH-029 the entry role is still
@@ -9724,6 +9724,18 @@ coordinating status for that run as `single` does (REQ-ORCH-029's exemption wide
 bundle is granted), or whether the coordinator keeps it and the bundle is narrowed to what REQ-ORCH-029 allows (REQ-ORCH-016
 amended); and, either way, whether the instructions the coordinator is given should name the case so it does not spend a turn
 on the contradiction.
+
+**Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** on the simplest runs the coordinator does the work
+itself with the bundle REQ-ORCH-016 grants, and its instructions for that run say so, so the grant and the instructions agree;
+the coordinating status stays, and REQ-ORCH-029 gives way only in its three clauses that forbid doing the work. Carried by
+[`PD-ORCH-006`](../product/directives.md#pd-orch-006), which narrows REQ-ORCH-029. The reading taken where the ruling leaves a
+detail open: "the simplest runs" are every run whose mapping grants the bundle (with the built-in mapping
+`explicit_trivial` and `single_file_change`; a `single` override carries the same grant and is told the same); `delegate`
+stays in the bundle and may still be used; a prompt the configuration supplies is kept whole with the statement after it; and
+a turn the plan gate holds, which REQ-ORCH-153 denies the bundle's writing tools, keeps the coordinating prompt. **Built
+2026-10-06 (fin20):** `entryInstructionsFor` (`packages/engine/src/children/personas.ts`) read by the root turn in
+`packages/engine/src/run/run.ts`; cases in `children/personas.test.ts`, `run/preflight.test.ts` and `run/plan-gate.test.ts`;
+`pnpm fetch-proof` reads the instructions its `explicit_trivial` launch received.
 
 **OQ-203 — Which items of the coordinator's own plan does REQ-ORCH-075's re-queue hold against a task: every non-terminal
 item of the session's plan, or only those the task's own iterations left open?** *(REQ-ORCH-075, "when a report says

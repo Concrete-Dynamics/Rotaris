@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
-import { intentPayloadOf, intentStatusOf, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type Publisher, type ToolPort, type ToolPortContext } from '../index.js';
+import { BUILT_IN_PERSONAS, DIRECT_WORK_INSTRUCTION, intentPayloadOf, intentStatusOf, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type Publisher, type ToolPort, type ToolPortContext } from '../index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -31,14 +31,14 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       playbookFor: (role) => (role === 'orchestrator' ? 'PLAYBOOK\nROUTE: routed text' : ''), budgetCell: { maxActive: 2, maxTotal: 6, maxDepth: 2 }, warnings: [],
     };
   }
-  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | (() => Preflight | Promise<Preflight>) | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void, publisher: Publisher = NONE) {
+  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | (() => Preflight | Promise<Preflight>) | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void, publisher: Publisher = NONE, systemPrompt?: string) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
     const seen: string[] = [];
     const port: ToolPort = { specs: () => [], dispatch: async () => ({ text: '', isError: false, status: 'ok', durationMs: 0, label: '', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false };
     const sessions = new Sessions({
       clocks: clock, publisher, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => `P${++n}`,
-      model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' } }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
+      model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', ...(systemPrompt === undefined ? {} : { systemPrompt }) } }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       tools: (ctx) => { onTools?.(ctx); return port; }, attended: () => true,
       runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' },
       ...(preflight ? { preflight: async (ctx) => { seen.push(ctx.prompt); onPreflight?.(ctx); return typeof preflight === 'function' ? preflight() : preflight; } } : {}),
@@ -63,6 +63,24 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     // REQ-ORCH-014: derived status — classified from the audit
     const status = intentStatusOf(dal.getSession(sid)!, dal.getLaunchAudit(sid)!.payload);
     expect(status).toMatchObject({ phase: 'classified', category: 'single_file_change' });
+  });
+  it('OQ-202 as ruled (PD-ORCH-006): a run that grants the coordinator the direct-work bundle tells it to do the work itself; a coordinating run does not', async () => {
+    const coordinating = BUILT_IN_PERSONAS.orchestrator.systemPrompt;
+    const systemOf = (client: ScriptedModelClient) => client.requests[0]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+    const granted = sessionsWith([answer('done')], preflightOf('direct-work', 'single_file_change'), undefined, undefined, NONE, coordinating);
+    const g = (granted.sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
+    expect((await granted.sessions.running(g)!).status).toBe('completed');
+    const direct = systemOf(granted.client);
+    expect(direct).toContain(DIRECT_WORK_INSTRUCTION);
+    expect(direct).not.toContain('you do not modify files or run commands yourself');
+    // The playbook still follows the instructions (REQ-ORCH-019).
+    expect(direct).toContain('\n\nPLAYBOOK\nROUTE: routed text');
+    const held = sessionsWith([answer('done')], preflightOf('none', 'whole_project'), undefined, undefined, NONE, coordinating);
+    const h = (held.sessions.start(dal, 'C:/ws', 'build the whole thing') as { value: SessionId }).value;
+    expect((await held.sessions.running(h)!).status).toBe('completed');
+    const coordinated = systemOf(held.client);
+    expect(coordinated).toContain('you do not modify files or run commands yourself');
+    expect(coordinated).not.toContain(DIRECT_WORK_INSTRUCTION);
   });
   it('with no pre-flight the fallback intent is recorded, no playbook is appended, and the port sees no grant', async () => {
     const ctxs: ToolPortContext[] = [];

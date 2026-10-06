@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
+**A coordinator granted the direct-work bundle is told to do the work itself (OQ-202; `PD-ORCH-006`, R-071; fin20).**
+`entryInstructionsFor` (`children/personas.ts`) fits the entry turn's instructions to the pre-flight's grant: the built-in
+coordinating prompt becomes its direct-work form, a configured prompt gains the statement after it, and a turn the plan gate
+holds keeps the persona's prompt (`Run`'s root turn). The **runtime view**'s system-prompt paragraph and its entry-port
+sentence say so. No package, edge, process, channel, command or store column changed.
+
 **The run completes only when the coordinator's own plan agrees (REQ-ORCH-029, REQ-ORCH-075, REQ-ORCH-078; fin18).**
 `Run.iterate` returns a task whose root answered `succeeded` with an item of its own plan open to the pending queue, once
 REQ-ORCH-078's corrections into the root's own conversation are spent (`RunConfig.validationRetries`, default 0; a `followUp`

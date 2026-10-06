@@ -16,11 +16,14 @@
  *   7. timeout     — `/slow` (never answers) with `tool_call_timeout: 1` → `timeout`, `timeout_seconds` 1 from the
  *                    run level (REQ-SANDBOX-021).
  *
+ * Launch 1 also reads the instructions the model port received (`ROTARIS_CAPTURE_MODEL_REQUESTS`): the run is
+ * `explicit_trivial`, so the coordinator is told to do the work itself (OQ-202 as ruled, PD-ORCH-006).
+ *
  * Each scenario asserts the tool row's observation from the store's `tool_calls` and the server's request log, and
  * reads the run host's `fetch: egress policy read … in N ms` line for the per-call load's cost.
  * Evidence under `.proof/fetch-proof/`: one log per launch, `results.json`. `--skip-build` skips the build.
  */
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
@@ -92,10 +95,11 @@ function spawnElectron(env) {
   return spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], { timeoutMs: 150_000, cwd: app, env });
 }
 
-async function launch(name, url, runtime) {
+async function launch(name, url, runtime, extra = {}) {
   saveConfiguration(runtime);
   seen.length = 0;
   const result = await spawnElectron({
+    ...extra,
     ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
     ROTARIS_MODEL_DIALECT: 'scripted', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
     // REQ-ORCH-016: the direct-work grant is what hands the entry role `fetch` (no built-in persona declares it).
@@ -125,11 +129,22 @@ const expectText = (r, re) => { if (!re.test(r.result)) throw new Error(`${r.nam
 const results = {};
 try {
   // 1. autonomous, the shipped policy (ask default, empty lists): a loopback fetch succeeds under the mode default.
-  const ok = await launch('ok', `${origin}/ok`, { permission_mode: 'autonomous' });
+  const modelRequests = join(output, 'ok.model-requests.jsonl');
+  writeFileSync(modelRequests, '');
+  const ok = await launch('ok', `${origin}/ok`, { permission_mode: 'autonomous' }, { ROTARIS_CAPTURE_MODEL_REQUESTS: modelRequests });
   if (ok.isError || ok.failureKind !== null) throw new Error(`ok: the fetch failed: ${ok.result}`);
   expectText(ok, new RegExp(`^url: ${origin}/ok\\nfinal_url: ${origin}/ok\\nstatus_code: 200\\ncontent_type: text/plain\\ntruncated: false\\n\\nline one\\nline two\\nline three$`));
   if (ok.seen.join(',') !== '/ok') throw new Error(`ok: the server saw ${JSON.stringify(ok.seen)}`);
-  results.ok = { status: ok.status, lines: 3, truncated: false, seen: ok.seen, loadMs: ok.loadMs };
+  /*
+   * OQ-202 as ruled (R-071, PD-ORCH-006): the run grants the coordinator the direct-work bundle, so the instructions the
+   * model port received tell it to do the work itself, and no longer that it modifies no files and runs no commands.
+   */
+  const orchestratorCalls = readFileSync(modelRequests, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l)).filter((c) => c.who === 'orchestrator');
+  if (orchestratorCalls.length === 0) throw new Error('ok: the model port recorded no orchestrator call, so the instructions are unobserved');
+  const system = orchestratorCalls[0].system;
+  if (!system.includes('For this run you hold the tools to read and write files and run commands yourself')) throw new Error(`ok: the direct-work run's instructions do not say the coordinator does the work itself:\n${system}`);
+  if (system.includes('you do not modify files or run commands yourself')) throw new Error(`ok: the direct-work run's instructions still forbid the tools it is granted:\n${system}`);
+  results.ok = { status: ok.status, lines: 3, truncated: false, seen: ok.seen, loadMs: ok.loadMs, directWorkInstructions: true };
 
   // 2. ask mode: loopback resolves allow through `ask:fetch-local-host`, no dialog (REQ-SANDBOX-040/041).
   const askLocal = await launch('ask-local', `${origin}/ok`, { permission_mode: 'ask' });

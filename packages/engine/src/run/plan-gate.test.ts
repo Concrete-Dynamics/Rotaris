@@ -7,7 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import type { IntentCategory } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
 import { SUPERVISOR_DEFAULTS, type LoopClassifier } from './supervisor.js';
-import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type RuntimePosture, type ToolPort, type ToolPortContext } from '../index.js';
+import { BUILT_IN_PERSONAS, DIRECT_WORK_INSTRUCTION, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type RuntimePosture, type ToolPort, type ToolPortContext } from '../index.js';
 
 /**
  * REQ-ORCH-152/153/154 (ADR-0062): the plan gate end to end through the session manager — the park, what it
@@ -35,9 +35,9 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
   const recorder = () => ({ increment: () => undefined, snapshot: () => undefined });
 
   /** A pre-flight that answers one category and nothing else; the run reads only the intent for the gate's test. */
-  const preflightOf = (category: IntentCategory): Preflight => ({
+  const preflightOf = (category: IntentCategory, grant: Preflight['grant'] = 'none'): Preflight => ({
     intent: { category, confidence: 1, reason: 'fixed by the test', fallback: false, carried_over: false },
-    grant: 'none', route: category === 'question' || category === 'exploration' ? 'answer' : 'work',
+    grant, route: category === 'question' || category === 'exploration' ? 'answer' : 'work',
     resolvedPlaybooks: {}, playbookFor: () => '', budgetCell: null, warnings: [],
   });
 
@@ -53,7 +53,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
   });
 
-  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier; grep?: boolean; preflightHold?: Promise<void> | (() => Promise<void>); tools?: ToolPort; toolsFor?: (ctx: ToolPortContext) => ToolPort } = {}) {
+  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier; grep?: boolean; preflightHold?: Promise<void> | (() => Promise<void>); tools?: ToolPort; toolsFor?: (ctx: ToolPortContext) => ToolPort; grant?: Preflight['grant']; systemPrompt?: string } = {}) {
     const runtime: RuntimePosture = {
       permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' },
       sessionLogLevel: 'WARNING', runStartMode: opts.mode ?? 'plan',
@@ -61,11 +61,11 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     let n = 0;
     const sessions = new Sessions({
       clocks: clock, publisher: recorder(), pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m),
-      mintSessionId: () => `S${++n}`, model: { backend, config: config() }, runtime,
+      mintSessionId: () => `S${++n}`, model: { backend, config: config(opts.systemPrompt === undefined ? {} : { systemPrompt: opts.systemPrompt }) }, runtime,
       sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       // The registry predicate the run host injects; here just enough to exercise the child-admission refusal.
       planWithholds: (tool) => ['write_file', 'terminal', 'haet', 'haet_edit', 'git_commit'].includes(tool),
-      ...(opts.intent ? { preflight: async () => { await (typeof opts.preflightHold === 'function' ? opts.preflightHold() : opts.preflightHold); return preflightOf(opts.intent!); } } : {}),
+      ...(opts.intent ? { preflight: async () => { await (typeof opts.preflightHold === 'function' ? opts.preflightHold() : opts.preflightHold); return preflightOf(opts.intent!, opts.grant); } } : {}),
       // PD-ORCH-001: supervision is only constructed when this dependency answers, which is how the directive's
       // "no supervisor is attached" is observable at all — a run without it looks the same from the outside.
       ...(opts.classifier ? { supervisor: () => ({ config: { ...SUPERVISOR_DEFAULTS, repetitionThreshold: 3 }, classifier: opts.classifier! }), tools: () => grepPort() } : opts.grep ? { tools: () => grepPort() } : {}),
@@ -74,6 +74,16 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     });
     return sessions;
   }
+
+  it('OQ-202 as ruled (PD-ORCH-006): a held turn of a run granted the direct-work bundle keeps the coordinating prompt, the writing tools being withheld', async () => {
+    const { client, backend } = scripted([answer('Step 1: fix the typo.')]);
+    const sessions = sessionsWith(backend, { intent: 'single_file_change', grant: 'direct-work', systemPrompt: BUILT_IN_PERSONAS.orchestrator.systemPrompt });
+    const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+    const system = client.requests[0]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+    expect(system).toContain('you do not modify files or run commands yourself');
+    expect(system).not.toContain(DIRECT_WORK_INSTRUCTION);
+  });
 
   it('parks at the gate: one turn, the plan verbatim, the status and the cycle durable, and no terminal result', async () => {
     const plan = 'Step 1: read the file.\nStep 2: change it.';

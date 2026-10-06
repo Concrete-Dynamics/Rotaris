@@ -1,4 +1,4 @@
-import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, ROLE_SPAWN_ALIASES, type BuiltInRoleName, type PermissionPreset } from '@rotaris/contracts';
+import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, ROLE_SPAWN_ALIASES, type BuiltInRoleName, type IntentGrant, type PermissionPreset } from '@rotaris/contracts';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
 /**
  * Decision 2 of the plan: REQ-ORCH-028's thirteen roles and the two aliases as a BUILT-IN table, each
@@ -111,12 +111,42 @@ export type RoleName = BuiltInRoleName;
 /** REQ-ORCH-034 / REQ-TOOLS-152: the two aliases, resolved only when the target exists (the vocabulary is contracts'). */
 export const ROLE_ALIASES: Readonly<Record<string, RoleName>> = ROLE_SPAWN_ALIASES;
 
+/**
+ * REQ-ORCH-029: the orchestrator's built-in instructions while it coordinates — every run whose entry role holds no
+ * direct-work bundle.
+ */
+const ORCHESTRATOR_COORDINATING = (routing: string): string => `You are the orchestrator. You coordinate: you do not modify files or run commands yourself — every work item reaches a specialist through the delegate tool, and you keep a todo list current for work spanning more than one step. ${routing} Delegate in parallel where work is independent, wait only when you need a result, and finish by answering the user plainly with what was done. Where a choice is genuinely the user's to make and guessing would waste work, ask with ask_questions rather than assuming.`;
+
+/**
+ * OQ-202 as ruled (R-071, `PD-ORCH-006`): what the coordinator is told where its run grants it the direct-work bundle
+ * (REQ-ORCH-016; the built-in mapping grants it on `explicit_trivial` and `single_file_change`, and a `single` override
+ * on every intent, REQ-ORCH-025). It names no delegation, so it holds under `single`, where `delegate` is withheld, as
+ * well as where the bundle still carries it.
+ */
+export const DIRECT_WORK_INSTRUCTION = 'For this run you hold the tools to read and write files and run commands yourself: do the work with them rather than handing it to a specialist, keep a todo list current where the work spans more than one step, and finish by answering the user plainly with what was done.';
+const ORCHESTRATOR_DIRECT_WORK = `You are the orchestrator. ${DIRECT_WORK_INSTRUCTION} Where a choice is genuinely the user's to make and guessing would waste work, ask with ask_questions rather than assuming.`;
+
+/**
+ * OQ-202 as ruled (R-071, `PD-ORCH-006`): the entry role's instructions for the run's grant. A coordinator granted the
+ * direct-work bundle is told to do the work itself, so its instructions and its tool listing agree: the built-in
+ * coordinating prompt is replaced by its direct-work form, and a prompt the configuration supplies (REQ-CONFIG-100's
+ * `system_prompt`) is kept whole with the instruction after it. A run with no grant, and an entry role that is not a
+ * coordinator, keep the prompt they were given.
+ *
+ * The reason this exists, kept beside it: until the ruling the coordinator was granted `write_file` and `terminal` on the
+ * two simplest intents while its prompt said it did not modify files or run commands, and the model spent its first turn
+ * on the contradiction before using them (14.5 s of a 32 s run, the default live run at `27a5127`, finding G2).
+ */
+export function entryInstructionsFor(systemPrompt: string, grant: IntentGrant | null, role: Pick<Persona, 'coordinatorOnly'> | null): string {
+  if (grant !== 'direct-work' || role?.coordinatorOnly !== true) return systemPrompt;
+  if (systemPrompt === BUILT_IN_ORCHESTRATOR_PROMPT) return ORCHESTRATOR_DIRECT_WORK;
+  return systemPrompt === '' ? DIRECT_WORK_INSTRUCTION : `${systemPrompt}\n\n${DIRECT_WORK_INSTRUCTION}`;
+}
+
 const ROUTING = 'Route work to specialists: an ambiguous or under-specified request → requirements-engineer; a question about the repository as it stands → codebase-analyst; a question answerable only from outside the repository → librarian; design → architect; an ordered plan → planner; implementation → coding-agent; testing → tester; documentation → docs-writer; behaviour-preserving restructuring → refactorer; final acceptance → verifier.';
 
 export const BUILT_IN_PERSONAS: Readonly<Record<RoleName, Persona>> = Object.freeze({
-  orchestrator: persona('orchestrator', BUILT_IN_ROLE_TOOLS['orchestrator'],
-    `You are the orchestrator. You coordinate: you do not modify files or run commands yourself — every work item reaches a specialist through the delegate tool, and you keep a todo list current for work spanning more than one step. ${ROUTING} Delegate in parallel where work is independent, wait only when you need a result, and finish by answering the user plainly with what was done. Where a choice is genuinely the user's to make and guessing would waste work, ask with ask_questions rather than assuming.`,
-    { coordinatorOnly: true }),
+  orchestrator: persona('orchestrator', BUILT_IN_ROLE_TOOLS['orchestrator'], ORCHESTRATOR_COORDINATING(ROUTING), { coordinatorOnly: true }),
   'requirements-engineer': persona('requirements-engineer', BUILT_IN_ROLE_TOOLS['requirements-engineer'], 'You clarify ambiguous requests into precise requirements. Read what you need; write nothing; answer with the requirements as you understand them and the questions that remain.'),
   'codebase-analyst': persona('codebase-analyst', BUILT_IN_ROLE_TOOLS['codebase-analyst'], 'You answer questions about the repository as it stands. Read and search; never modify anything; answer with what you found and where.'),
   librarian: persona('librarian', BUILT_IN_ROLE_TOOLS['librarian'], 'You answer questions from outside the repository — documentation and references. You never modify the workspace.'),
@@ -130,6 +160,9 @@ export const BUILT_IN_PERSONAS: Readonly<Record<RoleName, Persona>> = Object.fre
   'ui-verifier': persona('ui-verifier', BUILT_IN_ROLE_TOOLS['ui-verifier'], 'You verify user interfaces by exercising them and report what you observed.'),
   gatekeeper: persona('gatekeeper', BUILT_IN_ROLE_TOOLS['gatekeeper'], 'You decide whether a change may proceed and say why.'),
 });
+
+/** The orchestrator's built-in coordinating prompt, which `entryInstructionsFor` recognises to replace. */
+const BUILT_IN_ORCHESTRATOR_PROMPT = BUILT_IN_PERSONAS.orchestrator.systemPrompt;
 
 /** REQ-ORCH-034: resolve a persona or alias; null when unknown. */
 export function resolveRole(name: string): { persona: Persona; alias: string | null } | null {

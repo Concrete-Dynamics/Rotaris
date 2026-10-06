@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Twenty-eight.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Twenty-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -2833,6 +2833,51 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > **What was not measured.** No built-app quit with a checkpoint operation in flight and an ask made during it was
 > driven; main's `revokePresenter` is wiring no unit reaches. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-orch-006"></a>
+
+### PD-ORCH-006 — a coordinator granted the direct-work bundle does the work itself, and is told so
+
+Where the intent-to-tools mapping grants the entry role the direct-work bundle of REQ-ORCH-016 — with the built-in
+mapping, on a run whose intent is `explicit_trivial` or `single_file_change` — three of REQ-ORCH-029's constraints on the
+coordinator SHALL NOT bind it for that run: it MAY make file-modifying tool calls, it MAY emit a plan, code or a diff of its
+own authorship, and a work item it takes on NEED NOT reach a specialist through a `delegate` call. Its other constraints
+still bind: work spanning more than one step is accompanied by a todo list it keeps current; no two implementation
+delegations for the same todo item are outstanding at once; it does not report the run successful while a todo item is
+non-terminal or disagrees with what happened; and it issues no delegation deeper than depth 3. `delegate` stays in the
+bundle, so it MAY still delegate.
+
+The instructions the entry role is given for that run SHALL say that it holds the tools to read and write files and run
+commands and does the work with them, and SHALL NOT say that it modifies no files or runs no commands. A prompt supplied by
+configuration (REQ-CONFIG-100) is kept whole, with that statement after it. While the plan gate holds the run
+(REQ-ORCH-153), the bundle's writing and command tools are withheld, and the held turn is given the instructions of a
+coordinating run. Every other run keeps REQ-ORCH-029 whole.
+
+**Why, and what it costs.** REQ-ORCH-016 grants the coordinator the bundle on the two simplest intents and REQ-ORCH-029
+forbids it to use it; neither names the other ([OQ-202](../architecture/open-questions.md)). The build applied the grant and
+kept REQ-ORCH-029's sentence in the instructions, so the model was offered `write_file` and `terminal` and told it must not
+use them: in the default live run at `27a5127` the `frictions` scenario's first request spent 14.5 s and 1,034 output tokens
+of a 32.0 s run reasoning about the contradiction before it made the calls itself (finding G2). A trivial change needs no
+delegation, and the grant exists to let the coordinator make it. The cost is that the records of such a run show the
+coordinator's own file-modifying calls, which REQ-ORCH-029 says a coordinating run never shows; a reader of those records
+tells the two apart by the launch audit's `intent_grant`. A `single` override, which REQ-ORCH-025 already takes out of
+REQ-ORCH-029, carries the same grant and is given the same instructions.
+
+> **Narrows:** REQ-ORCH-029
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), which ruled OQ-202 as recommended.*
+
+> **First execution, 2026-10-06 (fin20).** `entryInstructionsFor` (`packages/engine/src/children/personas.ts`) gives the
+> entry role its instructions for the run's grant, read by `Run`'s root turn (`packages/engine/src/run/run.ts`) with the
+> pre-flight's `grant` and the entry persona's `coordinatorOnly`, and the held turn of a run at the plan gate keeps the
+> persona's own prompt. **What was measured.** Four cases in `children/personas.test.ts`, one in `run/preflight.test.ts`
+> (the model's request under `direct-work` and under `none`) and one in `run/plan-gate.test.ts` (a held turn); the run's two
+> were red on the code before, each limb red with it removed. `pnpm fetch-proof` reads the instructions the model port
+> received on its `explicit_trivial` launch. **What was not measured.** No live run: the orchestrator's default live run's
+> `frictions` scenario should show the coordinator's first request answered without reasoning about the contradiction. The
+> row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

@@ -576,7 +576,9 @@ in `configuration.ts`'s header.)
    slot clamps the child policy. Settings → Personas lists the catalogue. **Found: nothing** — the first part of
    this record to run clean against the scripted client on its first execution. **Then, on the first real call
    (the slice, 2026-09-05): the sixteenth defect** — the small model answered the request instead of labelling it
-   and the ladder never descended (entry 18; ADR-0026's third execution).
+   and the ladder never descended (entry 18; ADR-0026's third execution). **Since 2026-10-06 (OQ-202, `PD-ORCH-006`)**
+   a coordinator its run grants the direct-work bundle is told to do the work itself (`entryInstructionsFor`), where
+   its instructions had said it modified nothing while its listing offered the writing tools.
 
 12. **lifecycle hooks (2026-09-03/04):** the set is resolved once at run start from the two `agents.yaml` scopes,
    gated on provenance (a workspace's list runs only under a stored approval keyed by its fingerprint; withheld

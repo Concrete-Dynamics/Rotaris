@@ -63,7 +63,9 @@ sequenceDiagram
 ```
 
 **What an agent's system prompt is made of (ADR-0063).** At every agent construction — the entry turn and each
-child — the role's instructions take its playbook (`withPlaybook`, REQ-ORCH-019) and then the session's
+child — the role's instructions (for the entry turn, fitted first to the run's grant: a coordinator granted the direct-work
+bundle is told to do the work itself, `entryInstructionsFor`, OQ-202 as ruled, `PD-ORCH-006`; a turn the plan gate holds
+keeps the persona's prompt) take its playbook (`withPlaybook`, REQ-ORCH-019) and then the session's
 **always-active context units** (`withContextUnits`, REQ-WORKSPACE-060), in that requirement's order: workspace
 context → the skill catalog → the force-loaded skill bodies → persona memory. **One of the four is not built**
 (persona memory) and is an empty slot in the list rather than a shape a later part must re-cut.
@@ -594,7 +596,8 @@ REQ-TOOLS-089; measured at 1.7–2.5 ms behind the run host, 3–4 ms median in 
 named host and every redirect target before a connection is opened, and reports one of REQ-TOOLS-092's eight
 failure kinds; the `ask` disposition was resolved by the gate's `{mode}:fetch-remote-host` rule before execution.
 The entry role's port is the one at **depth 0** (`isEntryPort`): the pre-flight's grant and the `single` override
-reach that port and no other.
+reach that port and no other. The same grant reaches the entry turn's instructions (`entryInstructionsFor`, `PD-ORCH-006`), so a coordinator offered
+the bundle's writing and command tools is told it does the work with them rather than that it must not.
 
 **The ladder over every model step (Part Q — `run/ladder.ts`, `run/resilience.ts`, `run/waits.ts`; REQ-ORCH-088/090/091/092,
 REQ-NOTIFY-081..092/263).** It sits at the step, not the turn, so a retry re-issues the call over the conversation as it stands

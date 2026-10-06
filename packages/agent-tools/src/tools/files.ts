@@ -339,6 +339,53 @@ function replacementMessage(rel: string, before: string, after: string, oldText:
   return `Edited ${rel}: ${countNoun(k, 'line')} replaced by ${by.length} at line ${start + 1} (+${added} -${removed}).`;
 }
 
+/**
+ * REQ-TOOLS-135's success message for a replace-all (`write_file`'s `edit` and `haet_edit` with `replace_all`, REQ-TOOLS-136's
+ * "every exact occurrence as plain text"): how many occurrences, the lines they touched, how many lines replaced those, and
+ * the lines added and removed. Until fin21 it read "<n> occurrences replaced." and named no line at all, where the requirement
+ * has success messages report lines changed (the fin18 verifier's finding,
+ * docs/defects/fixed/a-replace-all-edit-reports-occurrences-and-no-lines-changed.md).
+ *
+ * Counted region by region, as `replacementMessage` counts its one region, so a file past the diff table's bound is still
+ * counted line by line: each occurrence's region is the whole lines it spans, running on to the end of the line the first
+ * character after it sits on (the next line too when the old string ends in a newline, the boundary case the single edit
+ * meets), and occurrences whose regions overlap or meet become one region. Text outside the regions is the same on both sides, so a
+ * region's replacement is the region's own text with its occurrences replaced.
+ */
+function replaceAllMessage(rel: string, before: string, oldText: string, newText: string, count: number): string {
+  const regions: [number, number][] = [];
+  const lineEnd = (at: number): number => {
+    const nl = before.indexOf('\n', at);
+    return nl === -1 ? before.length : nl + 1;
+  };
+  if (oldText === '') regions.push([0, before.length]);
+  else {
+    for (let at = before.indexOf(oldText); at !== -1; at = before.indexOf(oldText, at + oldText.length)) {
+      const from = at === 0 ? 0 : before.lastIndexOf('\n', at - 1) + 1;
+      // The line the first character after the occurrence sits on: its own last line, or the next one after a newline.
+      const to = lineEnd(at + oldText.length);
+      const last = regions[regions.length - 1];
+      if (last !== undefined && from <= last[1]) last[1] = Math.max(last[1], to);
+      else regions.push([from, to]);
+    }
+  }
+  let replaced = 0;
+  let by = 0;
+  let added = 0;
+  let removed = 0;
+  for (const [from, to] of regions) {
+    const region = before.slice(from, to);
+    const b = splitLines(region);
+    const a = splitLines(oldText === '' ? region.split('').join(newText) : region.split(oldText).join(newText));
+    const changes = lineChanges(b, a);
+    replaced += b.length;
+    by += a.length;
+    added += changes.added;
+    removed += changes.removed;
+  }
+  return `Edited ${rel}: ${countNoun(count, 'occurrence')} replaced, ${countNoun(replaced, 'line')} replaced by ${by} (+${added} -${removed}).`;
+}
+
 /** Apply the single match: a level-1 match replaces the exact span; a window match replaces whole lines. */
 function applyMatch(text: string, lines: readonly string[], m: NonNullable<ReturnType<typeof matchEdit>>, oldText: string, newText: string): string {
   if (m.level === 1 && m.offsets) {
@@ -460,7 +507,7 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
           if (a.replace_all) {
             const count = (before ?? '').split(a.old_string).length - 1;
             if (count === 0) return errorObservation(`old_string was not found in ${rel} (${countNoun(lineCount(before ?? ''), 'line')}). Read the file again or use 'overwrite'.`);
-            return commit((before ?? '').split(a.old_string).join(a.new_string), `Edited ${rel}: ${countNoun(count, 'occurrence')} replaced.`);
+            return commit((before ?? '').split(a.old_string).join(a.new_string), replaceAllMessage(rel, before ?? '', a.old_string, a.new_string, count));
           }
           const m = matchEdit(lines, a.old_string);
           if (!m) return errorObservation(`old_string was not found in ${rel} at any of the four match levels (exact, trailing-whitespace, indentation shift, fuzzy ≥ 0.85); the file has ${countNoun(lineCount(before ?? ''), 'line')}. Read the file again or use 'overwrite'.`);
@@ -553,7 +600,7 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
         const count = before.split(a.old_string).length - 1;
         if (count === 0) return errorObservation(`old_string was not found in ${rel}. Read it again with haet_read.`);
         after = before.split(a.old_string).join(a.new_string);
-        message = `Edited ${rel}: ${countNoun(count, 'occurrence')} replaced.`;
+        message = replaceAllMessage(rel, before, a.old_string, a.new_string, count);
       } else {
         const m = matchEdit(lines, a.old_string);
         if (!m || m.level !== 1) return errorObservation(`old_string was not found exactly in ${rel}. Read it again with haet_read.`);

@@ -158,7 +158,7 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
     const dup = await w.execute({ operation: 'edit', path: 'dup.txt', old_string: 'a', new_string: 'c', replace_all: false }, ctx());
     expect(dup.text).toMatch(/^Found 2 occurrences of old_str at lines 1, 3\./);
     const all = await w.execute({ operation: 'edit', path: 'dup.txt', old_string: 'a', new_string: 'c', replace_all: true }, ctx());
-    expect(all.text).toContain('2 occurrences replaced');
+    expect(all.text).toContain('2 occurrences replaced, 2 lines replaced by 2 (+2 -2)');
     expect(readFileSync(join(root, 'dup.txt'), 'utf8')).toBe('c\nb\nc\n');
     const undo = await w.execute({ operation: 'undo', path: 'dup.txt', replace_all: false }, ctx());
     expect(undo.isError).toBe(false);
@@ -559,6 +559,62 @@ describe('REQ-TOOLS-135: an edit reports the lines it replaced and the lines it 
       if (newString === oldString) continue;
       writeFileSync(join(root, 'src/f.txt'), text);
       const r = await haetEditTool(state, fence).execute({ path: 'src/f.txt', content_hash: sha256(Buffer.from(text)), old_string: oldString, new_string: newString, replace_all: false }, ctx());
+      expect(r.isError, JSON.stringify({ text, oldString, newString })).toBe(false);
+      const counts = /\((\+\d+ -\d+)\)\. content_hash/.exec(r.text)?.[1];
+      expect(`src/f.txt ${counts}`, JSON.stringify({ text, oldString, newString, message: r.text })).toBe(r.diff!.split('\n')[0]);
+      checked += 1;
+    }
+    expect(checked).toBe(300);
+  });
+
+  /*
+   * A replace-all reports lines too (the fin18 verifier's finding,
+   * docs/defects/fixed/a-replace-all-edit-reports-occurrences-and-no-lines-changed.md): until fin21 its message was
+   * "<n> occurrences replaced." and named no line.
+   */
+  const REPLACE_ALL = [
+    ['two occurrences on one line and one on another', 'let a = a + 1;\nkeep\nreturn a;\n', 'a', 'total', 'Edited src/f.txt: 3 occurrences replaced, 2 lines replaced by 2 (+2 -2).'],
+    ['a block that grows, in two places', 'x\nold\ny\nold\nz\n', 'old\n', 'new\nmore\n', 'Edited src/f.txt: 2 occurrences replaced, 4 lines replaced by 6 (+4 -2).'],
+    ['an old string ending in a newline the new one lacks', 'a\nb\nc\nb\nd\n', 'b\n', 'x', 'Edited src/f.txt: 2 occurrences replaced, 4 lines replaced by 2 (+2 -4).'],
+    ['occurrences on adjacent lines', 'q\nq\nq\n', 'q', 'r', 'Edited src/f.txt: 3 occurrences replaced, 3 lines replaced by 3 (+3 -3).'],
+    ['an occurrence at the very start, opening with a newline', '\nx\n\ny\n', '\n', '\n\n', 'Edited src/f.txt: 4 occurrences replaced, 4 lines replaced by 8 (+4 -0).'],
+  ] as const;
+  for (const [shape, start, oldString, newString, message] of REPLACE_ALL) {
+    it(`write_file replace_all: ${shape}`, async () => {
+      writeFileSync(join(root, 'src/f.txt'), start);
+      await readFileTool(state, fence).execute({ path: 'src/f.txt', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+      const r = await writeFileTool(state, fence).execute({ operation: 'edit', path: 'src/f.txt', old_string: oldString, new_string: newString, replace_all: true }, ctx());
+      expect(r.isError).toBe(false);
+      expect(readFileSync(join(root, 'src/f.txt'), 'utf8')).toBe(start.split(oldString).join(newString));
+      expect(r.text.replace(/ \(sha256 [0-9a-f]{64}\)$/, '')).toBe(message);
+      expect(r.diff!.split('\n')[0]).toBe(`src/f.txt ${/\((\+\d+ -\d+)\)/.exec(message)![1]}`);
+    });
+
+    it(`haet_edit replace_all: ${shape}`, async () => {
+      writeFileSync(join(root, 'src/f.txt'), start);
+      const r = await haetEditTool(state, fence).execute({ path: 'src/f.txt', content_hash: sha256(Buffer.from(start)), old_string: oldString, new_string: newString, replace_all: true }, ctx());
+      expect(r.isError).toBe(false);
+      expect(r.text.replace(/ content_hash: [0-9a-f]{64}$/, '')).toBe(message);
+    });
+  }
+
+  it('over 300 seeded random replace-alls, the message\'s counts are always the diff header\'s', async () => {
+    let seed = 0xa11;
+    const rand = (n: number) => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed % n;
+    };
+    const piece = () => ['a', 'b', 'cc', '', '\n', '\n', 'd\n'][rand(7)] as string;
+    let checked = 0;
+    for (let i = 0; checked < 300 && i < 5000; i += 1) {
+      const text = Array.from({ length: 2 + rand(12) }, piece).join('');
+      if (text.length < 2) continue;
+      const from = rand(text.length);
+      const oldString = text.slice(from, from + 1 + rand(Math.min(4, text.length - from)));
+      const newString = Array.from({ length: rand(4) }, piece).join('');
+      if (newString === oldString) continue;
+      writeFileSync(join(root, 'src/f.txt'), text);
+      const r = await haetEditTool(state, fence).execute({ path: 'src/f.txt', content_hash: sha256(Buffer.from(text)), old_string: oldString, new_string: newString, replace_all: true }, ctx());
       expect(r.isError, JSON.stringify({ text, oldString, newString })).toBe(false);
       const counts = /\((\+\d+ -\d+)\)\. content_hash/.exec(r.text)?.[1];
       expect(`src/f.txt ${counts}`, JSON.stringify({ text, oldString, newString, message: r.text })).toBe(r.diff!.split('\n')[0]);

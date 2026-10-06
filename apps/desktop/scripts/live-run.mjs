@@ -62,7 +62,8 @@
  *                 the eighty-second defect's signature?). Neither injected refusal reaches the endpoint,
  *                 so the ladder half costs nothing but retries.
  *   8. terminal  — the TERMINAL under duress, one run, the named shapes replayed from the record: a
- *                 multi-line here-string, forty lines of long output, off Windows an `exec bash` that replaces the
+ *                 multi-line here-string, forty lines of long output, off Windows a here-document longer than the
+ *                 PTY's input line (live-run M1), off Windows an `exec bash` that replaces the
  *                 session's shell (acceptance A9), a bash-ism `/bin/sh` cannot expand (live-run L1) and an `exit 3`
  *                 that ends the session's shell (OQ-144's sibling case), a wedge
  *                 with no `timeout` supplied, one poll of it and a `C-c` with a poll after it (OQ-147), a second wedge
@@ -131,7 +132,7 @@ import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, toolIntervals, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -1906,6 +1907,25 @@ if (wanted.includes('terminal')) {
     // The agent's capture and the terminal window's are meant to be the same rendering of the same bytes: the
     // strip landed for the live stream and the agent's capture was left behind, so the two diverged.
     check(!reading.escaped, 'the agent read a VT-stripped capture', reading.escaped ? 'an escape sequence survived into the recorded result' : 'no escape sequence in the recorded result');
+  }
+
+  // Live-run finding M1: a command past the PTY's input line reaches the shell whole and ends on its own status, never a
+  // soft pause with only the continuation prompt. POSIX only (`terminalShapes`); on Windows nothing is asked. Credited only
+  // where the command the model SENT was past the line (`longCommandReading`): a shorter copy may have fit, and is a NOTE.
+  if (shapeOf('long-command') !== undefined) {
+    const long = attempted('long-command')[0];
+    if (long === undefined) noted('the long command was not attempted', 'no terminal call carried it; the PTY\'s input line is unasked');
+    else {
+      const elapsed = long.elapsedMs ?? NaN;
+      const reading = longCommandReading(long.args.command, long.result, elapsed);
+      const d = diagnosticOf(long.result);
+      const said = `${reading.bytes} bytes sent, outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}, ${Number.isFinite(elapsed) ? Math.round(elapsed) : '?'} ms, printed ${JSON.stringify(reading.printed.slice(0, 60))}, expected ${reading.expected ?? 'none'}`;
+      if (reading.kind === 'short') noted('the long command was sent shorter than the PTY\'s input line', `${said}; under ${PTY_INPUT_LINE_BYTES} bytes the line may have fit, so the carrier is unasked`);
+      else {
+        check(reading.kind !== 'paused', 'a command longer than the PTY\'s input line did not read as a soft pause (live-run M1)', said);
+        check(reading.kind === 'whole', 'it reached the shell whole: exit 0 and the here-document\'s own byte count', said);
+      }
+    }
   }
 
   // Acceptance A9 (OQ-144): a command that replaces the session's shell ends at once as an execution_error, and the session

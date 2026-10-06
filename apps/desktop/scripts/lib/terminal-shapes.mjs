@@ -21,7 +21,28 @@ const PAD = 'x'.repeat(100);
 export const LONG_OUTPUT_LINES = 40;
 
 /**
- * The shapes, in the dialect of one platform: ten on Windows, thirteen elsewhere.
+ * The input line the long-command shape must outgrow: Linux's canonical-mode line discipline keeps 4,095 characters of
+ * one line (termios(3)), and live-run finding M1's 4,304-byte wrapper reached the shell cut there
+ * (`docs/defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md`). A command
+ * this long is longer than its own one-line wrapper could ever be under the cap, whatever the wrapper adds.
+ */
+export const PTY_INPUT_LINE_BYTES = 4_096;
+/** How many rows the long-command shape's here-document carries: enough that the command alone outgrows the line. */
+export const LONG_COMMAND_ROWS = 56;
+
+/**
+ * The long-command shape's command (live-run finding M1): a here-document of `LONG_COMMAND_ROWS` rows read by `wc -c`,
+ * about 4.7 KB, so the one-line carrier ADR-0020 used before 2026-10-06 is past the PTY's input line. Its delimiter is
+ * `ROWS`, never `EOF`, so the here-string shape's pattern does not read it, and it carries no pipe, no `LINE-` and no
+ * `sleep`, so no other shape's does either.
+ */
+function longCommand() {
+  const rows = Array.from({ length: LONG_COMMAND_ROWS }, (_, i) => `row-${String(i + 1).padStart(2, '0')} 0123456789 abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789`);
+  return [`wc -c <<'ROWS'`, ...rows, 'ROWS'].join('\n');
+}
+
+/**
+ * The shapes, in the dialect of one platform: ten on Windows, fourteen elsewhere.
  *
  * `match` is a pattern rather than a substring because the question is whether the SHAPE was issued, not
  * whether the model reproduced this file's whitespace. Too strict and a call that happened reads as a call that
@@ -74,6 +95,11 @@ export function terminalShapes(platform = process.platform) {
     : [
       { id: 'here-string', match: /<<\s*'?EOF/, command: "cat <<'EOF'\nalpha-one\nbeta-two\nEOF" },
       { id: 'long-output', match: /LINE-/, command: `awk 'BEGIN{for(i=1;i<=${LONG_OUTPUT_LINES};i++)printf "LINE-%03d ${PAD}\\n", i}'` },
+      // Live-run finding M1 (pack `2026-10-06T17-41-48-175Z`, requirements #67): a 3,700-character heredoc wrapped to one
+      // physical line of about 4,304 bytes, which the PTY's line discipline cut inside its quote; the shell stood on its
+      // continuation prompt, the command never ran, and the call read as a soft pause with `>` for its output. POSIX only:
+      // the staging that repaired it is the POSIX carrier's, and whether ConPTY caps a line is owed to a Windows run.
+      { id: 'long-command', match: /<<\s*'?ROWS\b/, command: longCommand() },
       // Acceptance finding A9 (OQ-144), the verifier's live run of 2026-09-29 (pack `2026-09-29T22-08-13-005Z`, call #5): the
       // model ran `exec bash`, which keeps the shell's pid and never returns to the wrapper's end frame, so it read as a
       // soft pause after 30,027 ms, and every later call ran under bash. Ahead of `unexpandable` on purpose: that shape
@@ -232,6 +258,34 @@ export function interruptedPollReading(result) {
   const ended = !stillRunning && exit === -1 && d?.failure_kind === 'execution_error' && /without an exit status of its own/.test(String(d?.detail ?? ''));
   const endedOwn = !stillRunning && !ended && exit !== null && exit >= 0;
   return { kind: stillRunning ? 'still-running' : ended ? 'ended' : endedOwn ? 'ended-own' : 'other', exit, outcome: d?.outcome_kind ?? null };
+}
+
+/**
+ * What the `long-command` shape (live-run finding M1) met, read from the command the model actually sent and one recorded
+ * observation, so the check credits the carrier only where the line was in fact past the PTY's input line.
+ *
+ * - `short`: the command as sent is shorter than `PTY_INPUT_LINE_BYTES`, so its line may have fit and the question was
+ *   never asked — a NOTE.
+ * - `paused`: the call soft-paused, or returned exit −1, or took the whole no-output window — M1's signature, a FAIL.
+ * - `whole`: it ended at exit 0 and `wc -c` printed exactly the bytes of the here-document the command carries: the
+ *   command reached the shell whole.
+ * - `other`: none of those (a cut body counts short, a command without its `ROWS` line) — a FAIL in the scenario, since
+ *   a long command that ran and printed the wrong count was cut on the way.
+ */
+export function longCommandReading(command, result, elapsedMs) {
+  const text = String(command ?? '');
+  const bytes = Buffer.byteLength(text);
+  const d = diagnosticOf(result);
+  const exit = typeof d?.exit_code === 'number' ? d.exit_code : null;
+  const printed = (outputOf(result) ?? '').trim();
+  const lines = text.split('\n');
+  const close = lines.findIndex((line, i) => i > 0 && line === 'ROWS');
+  const expected = close === -1 ? null : lines.slice(1, close).reduce((sum, line) => sum + Buffer.byteLength(line) + 1, 0);
+  const counted = /^\d+$/.test(printed) ? Number(printed) : null;
+  if (bytes < PTY_INPUT_LINE_BYTES) return { kind: 'short', bytes, exit, expected, counted, printed };
+  const paused = d?.outcome_kind === 'soft_pause' || exit === -1 || !(Number.isFinite(elapsedMs) && elapsedMs < 30_000);
+  const whole = !paused && exit === 0 && expected !== null && counted === expected;
+  return { kind: paused ? 'paused' : whole ? 'whole' : 'other', bytes, exit, expected, counted, printed };
 }
 
 /**

@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string; readonly prompt?: string }
 
@@ -36,10 +36,11 @@ describe('the terminal shapes the live run replays', () => {
         // Live-run L2's `poll` follows the wedge on both.
         // The interrupt (OQ-147) follows the poll on both, and its prompt asks for the poll after it.
         // `ends-shell` (OQ-144's sibling case) is POSIX only here, and the wedge after it is the call that must report the
-        // respawn. `wedge-again` and the command issued behind it (OQ-164) follow the interrupt on both.
+        // respawn. `wedge-again` and the command issued behind it (OQ-164) follow the interrupt on both. Live-run M1's
+        // `long-command` is POSIX only, ahead of `replaces-shell` so it meets the session's own `/bin/sh`.
         expect(shapes.map((s) => s.id)).toEqual(platform === 'win32'
           ? ['here-string', 'long-output', 'wedge', 'poll', 'interrupt', 'wedge-again', 'behind-paused', 'failed-word', 'diff-exit-1', 'pipe-to-shell']
-          : ['here-string', 'long-output', 'replaces-shell', 'unexpandable', 'ends-shell', 'wedge', 'poll', 'interrupt', 'wedge-again', 'behind-paused', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
+          : ['here-string', 'long-output', 'long-command', 'replaces-shell', 'unexpandable', 'ends-shell', 'wedge', 'poll', 'interrupt', 'wedge-again', 'behind-paused', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
       });
 
       it('matches its own command — the round trip the scenario depends on', () => {
@@ -78,6 +79,49 @@ describe('the terminal shapes the live run replays', () => {
       });
     });
   }
+});
+
+/*
+ * Live-run finding M1: a command past the PTY's input line never reached the shell and read as a soft pause with `>`.
+ * The shape must be long enough to ask that question, its count must be what a real shell prints for it, and the reader
+ * must fail the signature and pass only a count that matches the command the model sent.
+ */
+describe('the long-command check (live-run M1)', () => {
+  const command = terminalShapes('linux').find((s: Shape) => s.id === 'long-command')!.command;
+  const observe = (printed: string, diagnostic: Record<string, unknown>) => [
+    'The command exited.',
+    '[terminal_output]',
+    printed,
+    `[terminal_diagnostic] ${JSON.stringify({ command, warnings: [], ...diagnostic })}`,
+  ].join('\n');
+
+  it('is longer than the PTY\'s input line on its own, before any wrapper', () => {
+    expect(Buffer.byteLength(command)).toBeGreaterThan(PTY_INPUT_LINE_BYTES);
+    expect(command.split('\n').length).toBeGreaterThan(40);
+  });
+
+  it.skipIf(!existsSync('/bin/sh'))('expects the count a real shell prints for it', () => {
+    const run = spawnSync('/bin/sh', ['-c', command], { encoding: 'utf8' });
+    expect(run.status).toBe(0);
+    const reading = longCommandReading(command, observe(run.stdout.trim(), { exit_code: 0, outcome_kind: 'success' }), 120);
+    expect(reading).toMatchObject({ kind: 'whole', counted: reading.expected });
+    expect(reading.expected).toBeGreaterThan(4_000);
+  });
+
+  it('reads M1\'s signature, a soft pause with only the continuation prompt, as paused', () => {
+    expect(longCommandReading(command, observe('>', { exit_code: -1, outcome_kind: 'soft_pause' }), 30_016).kind).toBe('paused');
+    // A late end, past the no-output window, is the same signature even with a status.
+    expect(longCommandReading(command, observe('4472', { exit_code: 0, outcome_kind: 'success' }), 30_500).kind).toBe('paused');
+  });
+
+  it('credits only the count of the command as sent: a cut body is other, a short command is unasked', () => {
+    const reading = longCommandReading(command, observe('17', { exit_code: 0, outcome_kind: 'success' }), 200);
+    expect(reading.kind).toBe('other');
+    const short = "wc -c <<'ROWS'\nrow-01 a\nROWS";
+    expect(longCommandReading(short, observe('9', { exit_code: 0, outcome_kind: 'success' }), 100)).toMatchObject({ kind: 'short', expected: 9, counted: 9 });
+    const unclosed = command.replace(/\nROWS$/, '');
+    expect(longCommandReading(unclosed, observe('4472', { exit_code: 0, outcome_kind: 'success' }), 100)).toMatchObject({ kind: 'other', expected: null });
+  });
 });
 
 describe('the terminal diagnostic reader', () => {

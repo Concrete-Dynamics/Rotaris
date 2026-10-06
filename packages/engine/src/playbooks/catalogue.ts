@@ -10,6 +10,9 @@ export const CATALOGUE: PlaybookCatalogue = Object.freeze({
   ROUTE: {
     routed: 'Your assignment is inside the standard flow: the coordinator routed it to you by need and the rest of the run expects the outcome named in the task.',
     not_routed: 'Your assignment is outside the standard flow. Treat it as narrow: do exactly what the task states, assume nothing about the wider run, and report what you did not do.',
+    // The run's entry role in place of `routed` (`entryCell`): the user's request reached it directly, so it is told so,
+    // never that a coordinator routed it there (K3 of the default live run at c2fdd6a).
+    entry: 'Your assignment is the request itself: it came to you from the user, not from a coordinator, and the outcome the run reports rests with you.',
   },
   AUTONOMY: {
     confirm: 'Confirm before any change that is hard to reverse; where the task leaves a choice open, state the options and pick the least surprising one.',

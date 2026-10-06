@@ -17,7 +17,8 @@
  *                    run level (REQ-SANDBOX-021).
  *
  * Launch 1 also reads the instructions the model port received (`ROTARIS_CAPTURE_MODEL_REQUESTS`): the run is
- * `explicit_trivial`, so the coordinator is told to do the work itself (OQ-202 as ruled, PD-ORCH-006).
+ * `explicit_trivial`, so the coordinator is told to do the work itself (OQ-202 as ruled, PD-ORCH-006), and its playbook's
+ * ROUTE slot is the entry role's own, never the `routed` text a delegated specialist reads (K3 of the live run at c2fdd6a).
  *
  * Each scenario asserts the tool row's observation from the store's `tool_calls` and the server's request log, and
  * reads the run host's `fetch: egress policy read … in N ms` line for the per-call load's cost.
@@ -144,7 +145,9 @@ try {
   const system = orchestratorCalls[0].system;
   if (!system.includes('For this run you hold the tools to read and write files and run commands yourself')) throw new Error(`ok: the direct-work run's instructions do not say the coordinator does the work itself:\n${system}`);
   if (system.includes('you do not modify files or run commands yourself')) throw new Error(`ok: the direct-work run's instructions still forbid the tools it is granted:\n${system}`);
-  results.ok = { status: ok.status, lines: 3, truncated: false, seen: ok.seen, loadMs: ok.loadMs, directWorkInstructions: true };
+  // K3 of the default live run at c2fdd6a: the root's ROUTE slot is the entry role's, never the routed specialist's.
+  if (system.includes('the coordinator routed it to you') || !system.includes('ROUTE: Your assignment is the request itself')) throw new Error(`ok: the root's playbook does not give the entry role its own ROUTE wording:\n${system}`);
+  results.ok = { status: ok.status, lines: 3, truncated: false, seen: ok.seen, loadMs: ok.loadMs, directWorkInstructions: true, entryRoute: true };
 
   // 2. ask mode: loopback resolves allow through `ask:fetch-local-host`, no dialog (REQ-SANDBOX-040/041).
   const askLocal = await launch('ask-local', `${origin}/ok`, { permission_mode: 'ask' });

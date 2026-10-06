@@ -597,7 +597,10 @@ in `configuration.ts`'s header.)
    (the slice, 2026-09-05): the sixteenth defect** — the small model answered the request instead of labelling it
    and the ladder never descended (entry 18; ADR-0026's third execution). **Since 2026-10-06 (OQ-202, `PD-ORCH-006`)**
    a coordinator its run grants the direct-work bundle is told to do the work itself (`entryInstructionsFor`), where
-   its instructions had said it modified nothing while its listing offered the writing tools.
+   its instructions had said it modified nothing while its listing offered the writing tools. **Since 2026-10-06 (K3 of
+   the default live run at `c2fdd6a`)** the entry role's playbook takes the catalogue's `entry` ROUTE variant (`entryCell`)
+   where its row resolves `routed`, so the coordinator is no longer told "the coordinator routed it to you"; a delegated
+   child keeps `routed`.
 
 12. **lifecycle hooks (2026-09-03/04):** the set is resolved once at run start from the two `agents.yaml` scopes,
    gated on provenance (a workspace's list runs only under a stored approval keyed by its fingerprint; withheld

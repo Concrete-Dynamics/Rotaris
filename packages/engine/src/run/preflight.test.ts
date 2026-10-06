@@ -28,7 +28,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     return {
       intent: { category, confidence: 0.9, reason: 'test', fallback: false, carried_over: false }, grant, route: category === 'question' ? 'answer' : 'work',
       resolvedPlaybooks: { orchestrator: { row: 'orchestrator:micro:any', text: 'PLAYBOOK\nROUTE: routed text', cell: { ROUTE: 'routed', AUTONOMY: 'proceed', RESEARCH: 'targeted', CHUNKING: 'single', VERIFY: 'run_checks', ARTIFACT: 'none', OUTPUT: 'report', BUDGET: 'tight' } } },
-      playbookFor: (role) => (role === 'orchestrator' ? 'PLAYBOOK\nROUTE: routed text' : ''), budgetCell: { maxActive: 2, maxTotal: 6, maxDepth: 2 }, warnings: [],
+      playbookFor: (role, asEntry) => (role === 'orchestrator' ? (asEntry ? 'PLAYBOOK\nROUTE: entry text' : 'PLAYBOOK\nROUTE: routed text') : ''), budgetCell: { maxActive: 2, maxTotal: 6, maxDepth: 2 }, warnings: [],
     };
   }
   function sessionsWith(calls: ScriptedCall[], preflight: Preflight | ((ctx: PreflightContext) => Preflight | Promise<Preflight>) | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void, publisher: Publisher = NONE, systemPrompt?: string) {
@@ -58,7 +58,9 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     expect(audit.resolved_playbooks['orchestrator']!.row).toBe('orchestrator:micro:any');
     const system = client.requests[0]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
     expect(system).toMatch(/^You are the orchestrator/);
-    expect(system).toContain('\n\nPLAYBOOK\nROUTE: routed text');
+    // K3 of the default live run at c2fdd6a: the root is given the entry role's form, never a delegated child's.
+    expect(system).toContain('\n\nPLAYBOOK\nROUTE: entry text');
+    expect(system).not.toContain('ROUTE: routed text');
     expect(ctxs[0]).toMatchObject({ persona: 'orchestrator', grant: 'direct-work', intent: 'single_file_change' });
     // REQ-ORCH-014: derived status — classified from the audit
     const status = intentStatusOf(dal.getSession(sid)!, dal.getLaunchAudit(sid)!.payload);
@@ -74,7 +76,8 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     expect(direct).toContain(DIRECT_WORK_INSTRUCTION);
     expect(direct).not.toContain('you do not modify files or run commands yourself');
     // The playbook still follows the instructions (REQ-ORCH-019).
-    expect(direct).toContain('\n\nPLAYBOOK\nROUTE: routed text');
+    expect(direct).toContain('\n\nPLAYBOOK\nROUTE: entry text');
+    expect(direct).not.toContain('ROUTE: routed text');
     const held = sessionsWith([answer('done')], preflightOf('none', 'whole_project'), undefined, undefined, NONE, coordinating);
     const h = (held.sessions.start(dal, 'C:/ws', 'build the whole thing') as { value: SessionId }).value;
     expect((await held.sessions.running(h)!).status).toBe('completed');

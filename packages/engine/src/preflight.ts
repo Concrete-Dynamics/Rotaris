@@ -14,10 +14,17 @@ export interface Preflight {
   readonly intent: IntentResult;
   readonly grant: IntentGrant;
   readonly route: 'answer' | 'work';
-  /** REQ-ORCH-027 / REQ-SESSION-138: per role, the row key, the variant per slot and the rendered text — the audit payload. */
+  /**
+   * REQ-ORCH-027 / REQ-SESSION-138: per role, the row key, the variant per slot and the rendered text — the audit payload.
+   * The entry role's is the form the run's root is given (its ROUTE slot `entry`, `playbookFor(role, true)`).
+   */
   readonly resolvedPlaybooks: Readonly<Record<string, { readonly row: string; readonly cell: Readonly<Record<PlaybookSlot, string>>; readonly text: string } | null>>;
-  /** The rendered text a role's instructions carry; '' for a role with no row. */
-  readonly playbookFor: (role: string) => string;
+  /**
+   * The rendered text a role's instructions carry; '' for a role with no row. `asEntry` asks for the form the run's
+   * entry role is given — the root turn's — whose ROUTE slot says the request came from the user (`entryCell`); a
+   * delegated child of the same role is given the `routed` form (K3 of the default live run at c2fdd6a).
+   */
+  readonly playbookFor: (role: string, asEntry?: boolean) => string;
   /** REQ-ORCH-024: the BUDGET cell as a clamp; null = no clamp. */
   readonly budgetCell: Budget | null;
   readonly warnings: readonly string[];

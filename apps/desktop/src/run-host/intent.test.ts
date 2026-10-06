@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import { RungMemory, type PreflightContext } from '@rotaris/engine';
+import { CATALOGUE, RungMemory, type PreflightContext } from '@rotaris/engine';
 import type { AgentBackend, ModelRef } from '@rotaris/model';
 import { runPreflight, type PreflightDeps } from './intent.js';
 
@@ -43,5 +43,21 @@ describe('run-host/intent — the pre-flight', () => {
     const p = await runPreflight(ctx(), deps);
     expect(calls).toBeGreaterThan(0);
     expect(p.intent).toMatchObject({ category: 'moderate_feature', fallback: true });
+  });
+  /*
+   * K3 of the default live run at c2fdd6a (`docs/defects/fixed/the-entry-roles-route-slot-says-the-coordinator-routed-the-task-to-it.md`):
+   * the root's playbook told the coordinator "the coordinator routed it to you", on a direct-work run too (PD-ORCH-006).
+   */
+  it('REQ-ORCH-019/027: the root is given the entry role\'s ROUTE wording and the audit records it; a delegated child keeps `routed`', async () => {
+    for (const category of ['explicit_trivial', 'moderate_feature'] as const) {
+      const p = await runPreflight(ctx({ intent: { category, confidence: null, reason: 'carried', fallback: false, carried_over: true } }), deps);
+      const root = p.playbookFor('orchestrator', true);
+      expect(root).toContain(`ROUTE: ${CATALOGUE.ROUTE!['entry']}`);
+      expect(root).not.toMatch(/coordinator routed it to you/);
+      expect(p.playbookFor('orchestrator')).toContain(`ROUTE: ${CATALOGUE.ROUTE!['routed']}`);
+      expect(p.playbookFor('coding-agent')).toContain(`ROUTE: ${CATALOGUE.ROUTE!['routed']}`);
+      expect(p.resolvedPlaybooks['orchestrator']).toMatchObject({ cell: { ROUTE: 'entry' }, text: root });
+      expect(p.resolvedPlaybooks['coding-agent']!.cell.ROUTE).toBe('routed');
+    }
   });
 });

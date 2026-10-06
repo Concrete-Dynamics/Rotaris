@@ -55,7 +55,8 @@
  *   6. frictions — one real run engineered to trip the inducible run-autopsy frictions (first-use
  *                 `write_file` without `operation`, a SIGINT stop on a win32 pipe session), read back from
  *                 the store rather than from the model's report. Red by design until the fixes land; the
- *                 exit-trace friction is recorded but not inducible on demand.
+ *                 exit-trace friction is recorded but not inducible on demand. Its root's requests, read from the
+ *                 traffic, also carry the entry role's ROUTE wording (K3 of the default live run at c2fdd6a).
  *   7. faults    — the ENDPOINT misbehaves, on purpose, through the recording proxy: a 429 and a 500 on
  *                 named calls (does the ladder wait, fall back and finish?), then a stream that stops
  *                 mid-answer with the socket held open (is that reported as a user cancellation, which is
@@ -1653,6 +1654,18 @@ if (wanted.includes('frictions')) {
   // about the product, so it is a NOTE, not a pass.
   if (signalDeath.length === 0 && readKilled.length === 0) noted("no background session's end was read back after the agent's signal", signalled ? 'the model did not query the session after send_signal, so the status of its signal death was not observed' : 'no send_signal in the record');
   else check(signalDeath.length === 0, "no background session read failed (exit -1) after the agent's signal", signalDeath.length === 0 ? `${readKilled.length} observation(s) read killed (exit -1)` : `ordinal ${signalDeath[0].ordinal} (${signalDeath[0].agent_name})`);
+  /*
+   * K3 of the default live run at c2fdd6a (docs/defects/fixed/the-entry-roles-route-slot-says-the-coordinator-routed-the-task-to-it.md):
+   * the root's playbook told the coordinator "the coordinator routed it to you", here beside the direct-work statement
+   * (PD-ORCH-006). The root's requests are the ones whose instructions carry that statement, which no child is given.
+   */
+  const systemOf = (record) => { try { const m = JSON.parse(String(record.requestBody ?? '')).messages?.[0]; return m?.role === 'system' ? (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)) : ''; } catch { return ''; } };
+  const rootSystems = readTraffic('frictions').filter((r) => String(r.path ?? '').includes('/chat/completions')).map(systemOf).filter((t) => t.includes('For this run you hold the tools to read and write files and run commands yourself'));
+  if (rootSystems.length === 0) noted("the root's playbook was not observed", RECORD_TRAFFIC ? 'no recorded request carried the direct-work statement' : 'traffic not recorded (--no-record-traffic)');
+  else {
+    const misrouted = rootSystems.filter((t) => t.includes('the coordinator routed it to you') || !t.includes('ROUTE: Your assignment is the request itself'));
+    check(misrouted.length === 0, "the root's ROUTE slot says the request came from the user, not that a coordinator routed it", misrouted.length === 0 ? `${rootSystems.length} root request(s)` : `${misrouted.length} of ${rootSystems.length}: ${JSON.stringify((/ROUTE: [^\n]*/.exec(misrouted[0]) ?? ['no ROUTE line'])[0])}`);
+  }
   // The probe file served its purpose in the record above; the sandbox stays clean for the scenarios after it.
   if (read) {
     check(existsSync(join(workspace, 'friction-probe.txt')), 'the probe file landed in the workspace', 'friction-probe.txt');

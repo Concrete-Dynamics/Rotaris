@@ -70,4 +70,35 @@ describe('REQ-ORCH-019..027 the playbook matrix', () => {
     expect(o.warnings.length).toBe(1);
     expect(o.budgetCell).toEqual({ maxActive: 4, maxTotal: 12, maxDepth: 3 });
   });
+  /*
+   * K3 of the default live run at c2fdd6a (docs/defects/fixed/the-entry-roles-route-slot-says-the-coordinator-routed-the-task-to-it.md):
+   * the entry role was rendered like a delegated specialist, so the coordinator read "the coordinator routed it to you",
+   * on a direct-work run (PD-ORCH-006) too. Its ROUTE slot takes the catalogue's `entry` variant; a delegated child of the
+   * same role still reads `routed`, and a cell marked not routed keeps its narrow text (REQ-ORCH-023).
+   */
+  it('REQ-ORCH-019/020/026, PD-ORCH-006: the entry role is given its own ROUTE wording; a delegated child keeps `routed`', () => {
+    for (const intent of ['moderate_feature', 'explicit_trivial', 'question'] as const) {
+      const r = resolvePlaybooks({ intent, tier: 'medium', roles: ['orchestrator', 'coding-agent'], entryRole: 'orchestrator' });
+      const entry = r.asEntry['orchestrator']!;
+      expect(entry.cell.ROUTE).toBe('entry');
+      expect(entry.text).toContain(`ROUTE: ${CATALOGUE.ROUTE!['entry']}`);
+      expect(entry.text).not.toMatch(/coordinator routed it to you/);
+      expect(entry.row).toBe(r.perRole['orchestrator']!.row);
+      expect({ ...entry.cell, ROUTE: 'routed' }).toEqual(r.perRole['orchestrator']!.cell);
+      expect(r.perRole['orchestrator']!.cell.ROUTE).toBe('routed');
+      expect(r.perRole['coding-agent']!.text).toContain(`ROUTE: ${CATALOGUE.ROUTE!['routed']}`);
+    }
+    expect(CATALOGUE.ROUTE!['entry']).not.toMatch(/coordinator routed/);
+    // The budget the entry role's cell clamps is unchanged by the wording.
+    expect(resolvePlaybooks({ intent: 'question', tier: 'small', roles: ['orchestrator'], entryRole: 'orchestrator' }).budgetCell).toEqual(BUDGET_CELLS['tight']);
+    // REQ-ORCH-026: the variant is listed in the catalogue, so an override may re-word it.
+    const o = resolvePlaybooks({ intent: 'moderate_feature', tier: 'small', roles: ['orchestrator'], entryRole: 'orchestrator', overrides: { ROUTE: { entry: 'The user asked you.' } } });
+    expect(o.warnings).toEqual([]);
+    expect(o.asEntry['orchestrator']!.text).toContain('ROUTE: The user asked you.');
+    // REQ-ORCH-023: a not-routed cell keeps its narrow text, for the entry role too.
+    const nr = resolvePlaybooks({ intent: 'question', tier: 'small', roles: ['tester'], entryRole: 'tester' });
+    expect(nr.asEntry['tester']!.cell.ROUTE).toBe('not_routed');
+    expect(nr.asEntry['tester']!.text).toContain(`ROUTE: ${CATALOGUE.ROUTE!['not_routed']}`);
+    expect(resolvePlaybooks({ intent: 'question', tier: 'small', roles: ['nobody'], entryRole: 'nobody' }).asEntry['nobody']).toBeNull();
+  });
 });

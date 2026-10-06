@@ -1824,10 +1824,11 @@ export class Run {
       rootWatch.activity();
       return runTurn({
       writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: rootName,
-      // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
+      // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given — the entry role's form, whose
+      // ROUTE slot says the request came from the user rather than that a coordinator routed it here (K3, c2fdd6a).
       // REQ-WORKSPACE-060 (ADR-0063): then the session's always-active context units, read at THIS construction
       // so a skill force-loaded since the last turn reaches this agent (REQ-CONFIG-166).
-      systemPrompt: withContextUnits(withPlaybook(this.planHeld ? config.systemPrompt : entryInstructions, this.preflightInEffect?.playbookFor(config.persona) ?? ''), this.deps.contextUnits?.() ?? []), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
+      systemPrompt: withContextUnits(withPlaybook(this.planHeld ? config.systemPrompt : entryInstructions, this.preflightInEffect?.playbookFor(config.persona, true) ?? ''), this.deps.contextUnits?.() ?? []), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
       // PD-ORCH-001: no supervision while the plan gate holds the run. The hold withholds every writing tool,
       // so the only work left is reading the same region repeatedly — REQ-ORCH-101's first trigger, fired by the

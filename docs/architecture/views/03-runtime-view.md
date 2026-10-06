@@ -66,7 +66,10 @@ sequenceDiagram
 child — the role's instructions (for the entry turn, fitted first to the grant the iteration runs under,
 `Run.preflightInEffect` — a resumed iteration's carried grant, `PD-ORCH-005` clause 40: a coordinator granted the direct-work
 bundle is told to do the work itself, `entryInstructionsFor`, OQ-202 as ruled, `PD-ORCH-006`; a turn the plan gate holds
-keeps the persona's prompt) take its playbook (`withPlaybook`, REQ-ORCH-019) and then the session's
+keeps the persona's prompt) take its playbook (`withPlaybook`, REQ-ORCH-019; the entry turn the entry role's form,
+`Preflight.playbookFor(persona, true)`, whose ROUTE slot is the catalogue's `entry` variant where its row resolves `routed`,
+`entryCell`, while a delegated child of the same role reads `routed` — since 2026-10-06, K3 of the default live run at
+`c2fdd6a`; the launch audit records the entry role's cell in that form) and then the session's
 **always-active context units** (`withContextUnits`, REQ-WORKSPACE-060), in that requirement's order: workspace
 context → the skill catalog → the force-loaded skill bodies → persona memory. **One of the four is not built**
 (persona memory) and is an empty slot in the list rather than a shape a later part must re-cut.

@@ -16,6 +16,9 @@ import type { Clocks } from '@rotaris/kernel';
  * playbook overrides live in `<config>/playbooks/` and `<workspace>/.rotaris/playbooks/`. Every read is a
  * fresh read (REQ-CONFIG-014, REQ-ORCH-026's reload).
  */
+/** REQ-ORCH-024: the role whose BUDGET cell clamps the child policy and whose cell the launch audit records as the root's. */
+const ENTRY_ROLE = 'orchestrator';
+
 export interface PreflightDeps {
   readonly clocks: Clocks;
   readonly backend: AgentBackend;
@@ -49,14 +52,18 @@ export async function runPreflight(ctx: PreflightContext, deps: PreflightDeps): 
   const w = readPlaybookOverrides(join(ctx.workspaceRoot, WORKSPACE_SCOPE_DIR, 'playbooks'));
   for (const m of [...g.warnings, ...w.warnings]) warn(m);
   const tier = deps.tier;
-  const resolved = resolvePlaybooks({ intent: intent.category, tier, roles: [...ROLE_VOCABULARY], entryRole: 'orchestrator', overrides: mergePlaybookOverrides(g.overrides, w.overrides) });
+  const resolved = resolvePlaybooks({ intent: intent.category, tier, roles: [...ROLE_VOCABULARY], entryRole: ENTRY_ROLE, overrides: mergePlaybookOverrides(g.overrides, w.overrides) });
   for (const m of resolved.warnings) warn(m);
   const resolvedPlaybooks: Record<string, NonNullable<Preflight['resolvedPlaybooks'][string]> | null> = {};
-  for (const [role, p] of Object.entries(resolved.perRole)) resolvedPlaybooks[role] = p ? { row: p.row, cell: p.cell, text: p.text } : null;
+  // REQ-ORCH-027: the entry role's cell is recorded as the root is given it, its ROUTE slot `entry`.
+  for (const [role, p] of Object.entries(resolved.perRole)) {
+    const given = role === ENTRY_ROLE ? resolved.asEntry[role] ?? null : p;
+    resolvedPlaybooks[role] = given ? { row: given.row, cell: given.cell, text: given.text } : null;
+  }
   return {
     intent, grant, route: isAnswerOnly(intent.category) ? 'answer' : 'work',
     resolvedPlaybooks,
-    playbookFor: (role) => resolved.perRole[role]?.text ?? '',
+    playbookFor: (role, asEntry) => (asEntry ? resolved.asEntry[role] : resolved.perRole[role])?.text ?? '',
     budgetCell: resolved.budgetCell, warnings,
   };
 }

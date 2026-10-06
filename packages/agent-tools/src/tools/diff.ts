@@ -36,6 +36,16 @@ function lcsChanges(before: readonly string[], after: readonly string[]): Change
   return out;
 }
 
+/**
+ * REQ-TOOLS-135: how many lines a change added and removed, by the same line LCS the row's header counts with. The edit
+ * tools pass the replaced region only (the lines outside it are the same on both sides), so the count costs the region,
+ * not the file, and a file past the table's bound is still counted line by line rather than as a whole replacement.
+ */
+export function lineChanges(before: readonly string[], after: readonly string[]): { readonly added: number; readonly removed: number } {
+  const changes = lcsChanges(before, after);
+  return { added: changes.filter((c) => c.sign === '+').length, removed: changes.filter((c) => c.sign === '-').length };
+}
+
 export function renderDiff(path: string, before: string | null, after: string): string {
   // Lines as the file tools count them (`lines.ts`): a final newline ends the last line rather than adding an
   // empty one, which the live run of 2026-09-29 saw drawn as `[2]+ ` under a one-line create.

@@ -141,7 +141,7 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
     await r.execute({ path: 'src/a.ts', offset: 1, limit: 2000, grep_context: 3 }, ctx());
     const e1 = await w.execute({ operation: 'edit', path: 'src/a.ts', old_string: 'const a = 1;', new_string: 'const a = 10;', replace_all: false }, ctx());
     expect(e1.isError).toBe(false);
-    expect(e1.text).toMatch(/^Edited src\/a\.ts: 1 line changed at line 1\. \(sha256 [0-9a-f]{64}\)$/);
+    expect(e1.text).toMatch(/^Edited src\/a\.ts: 1 line replaced by 1 at line 1 \(\+1 -1\)\. \(sha256 [0-9a-f]{64}\)$/);
     expect(e1.diff).toBe('src/a.ts +1 -1\n[1]- const a = 1;\n[1]+ const a = 10;');
     expect(readFileSync(join(root, 'src/a.ts'), 'utf8')).toContain('const a = 10;');
     // level 2: trailing whitespace; level 3: indentation shift; level 4: fuzzy
@@ -459,5 +459,60 @@ describe('todo (REQ-TOOLS-144..147)', () => {
     expect(d).toContain('add_task {phase_id, name, description, state}');
     expect(d).toContain('update {task_id, name, description, state}');
     expect(d).toContain('remove_task {task_id}');
+  });
+});
+
+/**
+ * Live-run finding G6 (default run at 27a5127): a 4-line `old_string` replaced by 9 lines was reported "4 lines changed
+ * at line 38" while the row's diff read `+5 -0`, and the model re-read the file to find out which was true
+ * (docs/defects/fixed/an-edit-reports-the-old-strings-line-count-as-the-lines-it-changed.md). REQ-TOOLS-135's success message
+ * reports what the edit did: the lines it replaced, what replaced them, and the lines added and removed.
+ */
+describe('REQ-TOOLS-135: an edit reports the lines it replaced and the lines it added and removed (write_file, haet_edit)', () => {
+  // The run's shape: a 4-line block at line 38 (here line 3), extended with a 5-line function after it.
+  const BEFORE = ['// head', '', 'export function remaining(todos) {', '  return todos.filter((todo) => !todo.done).length;', '}', '', '// tail', ''].join('\n');
+  const OLD = 'export function remaining(todos) {\n  return todos.filter((todo) => !todo.done).length;\n}\n';
+  const GROWN = `${OLD}\n/** REQ-103: drop every done todo. */\nexport function clearCompleted(todos) {\n  return todos.filter((todo) => !todo.done);\n}\n`;
+  const SHRUNK = 'export const remaining = (todos) => todos.filter((t) => !t.done).length;\n';
+  const SAME = 'export function remaining(list) {\n  return list.filter((todo) => !todo.done).length;\n}\n';
+  const CASES = [
+    ['grows', GROWN, 'Edited src/todos.js: 3 lines replaced by 8 at line 3 (+5 -0).'],
+    ['shrinks', SHRUNK, 'Edited src/todos.js: 3 lines replaced by 1 at line 3 (+1 -3).'],
+    ['keeps its line count', SAME, 'Edited src/todos.js: 3 lines replaced by 3 at line 3 (+2 -2).'],
+  ] as const;
+
+  for (const [shape, next, message] of CASES) {
+    it(`write_file edit: a replacement that ${shape}`, async () => {
+      writeFileSync(join(root, 'src/todos.js'), BEFORE);
+      await readFileTool(state, fence).execute({ path: 'src/todos.js', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+      const r = await writeFileTool(state, fence).execute({ operation: 'edit', path: 'src/todos.js', old_string: OLD, new_string: next, replace_all: false }, ctx());
+      expect(r.isError).toBe(false);
+      expect(r.text.replace(/ \(sha256 [0-9a-f]{64}\)$/, '')).toBe(message);
+      // The counts are the row's own: the diff header says the same `+A -R`.
+      expect(r.diff!.split('\n')[0]).toBe(`src/todos.js ${/\((\+\d+ -\d+)\)/.exec(message)![1]}`);
+    });
+
+    it(`haet_edit: a replacement that ${shape}`, async () => {
+      writeFileSync(join(root, 'src/todos.js'), BEFORE);
+      const r = await haetEditTool(state, fence).execute({ path: 'src/todos.js', content_hash: sha256(Buffer.from(BEFORE)), old_string: OLD, new_string: next, replace_all: false }, ctx());
+      expect(r.isError).toBe(false);
+      expect(r.text.replace(/ content_hash: [0-9a-f]{64}$/, '')).toBe(message);
+      expect(r.diff!.split('\n')[0]).toBe(`src/todos.js ${/\((\+\d+ -\d+)\)/.exec(message)![1]}`);
+    });
+  }
+
+  it('an edit inside one line replaces that line by one, whatever the strings\' own line counts', async () => {
+    writeFileSync(join(root, 'src/todos.js'), BEFORE);
+    await readFileTool(state, fence).execute({ path: 'src/todos.js', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    const r = await writeFileTool(state, fence).execute({ operation: 'edit', path: 'src/todos.js', old_string: '.length', new_string: '', replace_all: false }, ctx());
+    expect(r.text.replace(/ \(sha256 [0-9a-f]{64}\)$/, '')).toBe('Edited src/todos.js: 1 line replaced by 1 at line 4 (+1 -1).');
+  });
+
+  it('a block removed outright is reported removed', async () => {
+    writeFileSync(join(root, 'src/todos.js'), BEFORE);
+    await readFileTool(state, fence).execute({ path: 'src/todos.js', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    const r = await writeFileTool(state, fence).execute({ operation: 'edit', path: 'src/todos.js', old_string: OLD, new_string: '', replace_all: false }, ctx());
+    expect(r.text.replace(/ \(sha256 [0-9a-f]{64}\)$/, '')).toBe('Edited src/todos.js: 3 lines removed at line 3 (+0 -3).');
+    expect(readFileSync(join(root, 'src/todos.js'), 'utf8')).toBe('// head\n\n\n// tail\n');
   });
 });

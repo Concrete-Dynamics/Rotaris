@@ -34,3 +34,26 @@ Default pack `.live-run/runs/2026-10-06T01-30-08-282Z/` (the `live` worktree; gi
 - `packages/agent-tools/src/tools/files.ts:532-534` — `haet_edit`: the same count and message.
 - `packages/agent-tools/src/tools/diff.ts` — `renderDiff`, the row's `+A -R` header, computed from the file before and
   after.
+
+## Repaired — 2026-10-06 (fin18)
+
+Both edit tools build a single replacement's message in one place, `replacementMessage`
+(`packages/agent-tools/src/tools/files.ts`), from what the edit did rather than from `old_string`:
+
+"Edited <path>: <k> lines replaced by <n> at line <start> (+<added> -<removed>)."
+
+`k` is the region the match spans (the old string's lines, at least one), `n` is that region's length after the edit (`k`
+plus the change in the file's line count, since no line outside the region moves), and `+added -removed` is the line LCS
+of the two regions (`lineChanges`, `packages/agent-tools/src/tools/diff.ts`, the same LCS the row's `+A -R` header counts
+with). A replacement that leaves no line reads "<k> lines removed at line <start> (+0 -<k>)". The run's edit would now read
+"4 lines replaced by 9 at line 38 (+5 -0)", beside a row reading `+5 -0`. The words are REQ-TOOLS-135's ("lines …
+replaced"), with the changed lines counted as the diff counts them. `replace_all` keeps "<n> occurrences replaced", which
+was already true; the match-level note of REQ-TOOLS-136 still follows the message; `haet_edit` still ends with its
+`content_hash`.
+
+Pinned in `packages/agent-tools/src/tools/tools.test.ts`, "REQ-TOOLS-135: an edit reports the lines it replaced and the
+lines it added and removed (write_file, haet_edit)": for each tool a replacement that grows (3 lines by 8, `+5 -0`, the
+run's shape), shrinks (3 by 1, `+1 -3`) and keeps its line count (3 by 3, `+2 -2`), each message's counts equal to its diff
+row's header; an edit inside one line ("1 line replaced by 1"), and a block removed outright. All eight were red on the
+code before ("3 lines changed at line 3."). The first write_file test's message assertion follows the new form. No proof
+drives an edit; the live run's `edit` scenario, the orchestrator's after landing, is where the model reads it next.

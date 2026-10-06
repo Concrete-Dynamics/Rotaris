@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync,
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
 import { countNoun, similarity } from '@rotaris/kernel';
-import { renderDiff } from './diff.js';
+import { lineChanges, renderDiff } from './diff.js';
 import { lineCount, splitLines } from './lines.js';
 import { checkFence, relPosix, realPathOf, type FenceConfig } from './fence.js';
 import { errorObservation, observation, type Observation, type ToolExecutor } from './types.js';
@@ -309,6 +309,23 @@ export function matchEdit(lines: readonly string[], oldText: string): { level: 1
 }
 
 /** Apply the single match: a level-1 match replaces the exact span; a window match replaces whole lines. */
+/**
+ * REQ-TOOLS-135's success message for one replacement (`write_file`'s `edit`, and `haet_edit` under REQ-TOOLS-189): the
+ * lines it replaced, how many lines replaced them, where, and the lines it added and removed — what the edit DID. The
+ * replaced region is the `k` lines the match spans from `start`; what replaced them is that region's length after the
+ * edit, the only lines whose number changed being inside it. Until 2026-10-06 the message was "<k> lines changed at line
+ * <n>" with `k` the old string's line count alone: the live run at 27a5127 was told "4 lines changed" for a 4-line block
+ * that became 9, beside a row reading `+5 -0`, and re-read the file to see which was true (live-run finding G6,
+ * docs/defects/fixed/an-edit-reports-the-old-strings-line-count-as-the-lines-it-changed.md).
+ */
+function replacementMessage(rel: string, before: string, after: string, oldText: string, start: number): string {
+  const k = Math.max(1, lineCount(oldText));
+  const n = Math.max(0, k + lineCount(after) - lineCount(before));
+  const { added, removed } = lineChanges(splitLines(before).slice(start, start + k), splitLines(after).slice(start, start + n));
+  const what = n === 0 ? `${countNoun(k, 'line')} removed` : `${countNoun(k, 'line')} replaced by ${n}`;
+  return `Edited ${rel}: ${what} at line ${start + 1} (+${added} -${removed}).`;
+}
+
 function applyMatch(text: string, lines: readonly string[], m: NonNullable<ReturnType<typeof matchEdit>>, oldText: string, newText: string): string {
   if (m.level === 1 && m.offsets) {
     const o = m.offsets[0] as number;
@@ -435,10 +452,9 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
           if (!m) return errorObservation(`old_string was not found in ${rel} at any of the four match levels (exact, trailing-whitespace, indentation shift, fuzzy ≥ 0.85); the file has ${countNoun(lineCount(before ?? ''), 'line')}. Read the file again or use 'overwrite'.`);
           if (m.starts.length > 1) return errorObservation(`Found ${m.starts.length} occurrences of old_str at lines ${m.starts.map((s) => s + 1).join(', ')}. Add surrounding context to make the match unique, or set replace_all.`);
           const start = m.starts[0] as number;
-          const k = Math.max(1, lineCount(a.old_string));
           const after = applyMatch(before ?? '', lines, m, a.old_string, a.new_string);
           const note = m.level > 1 ? ` Match level: ${m.level}${m.level === 4 ? ` (similarity: ${m.similarity!.toFixed(2)}). Verify the result.` : '.'}` : '';
-          return commit(after, `Edited ${rel}: ${countNoun(k, 'line')} changed at line ${start + 1}.${note}`);
+          return commit(after, `${replacementMessage(rel, before ?? '', after, a.old_string, start)}${note}`);
         }
         case 'undo': {
           const previous = state.popUndo(resolved);
@@ -529,9 +545,8 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
         if (!m || m.level !== 1) return errorObservation(`old_string was not found exactly in ${rel}. Read it again with haet_read.`);
         if (m.starts.length > 1) return errorObservation(`Found ${m.starts.length} occurrences of old_str at lines ${m.starts.map((s) => s + 1).join(', ')}. Add surrounding context to make the match unique, or set replace_all.`);
         const start = m.starts[0] as number;
-        const k = Math.max(1, lineCount(a.old_string));
         after = applyMatch(before, lines, m, a.old_string, a.new_string);
-        message = `Edited ${rel}: ${countNoun(k, 'line')} changed at line ${start + 1}.`;
+        message = replacementMessage(rel, before, after, a.old_string, start);
       }
       state.pushUndo(resolved, before);
       atomicWrite(resolved, after);

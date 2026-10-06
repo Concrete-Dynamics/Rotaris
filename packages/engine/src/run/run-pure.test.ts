@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Aggregates } from './aggregates.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
-import { classifyStop, EXECUTION_STATUSES, isBusy, presentationStatus, resultFromStatus, statusForResult, stopCondition, STOP_REASONS, summarise, TERMINAL_RESULTS } from './stop-conditions.js';
+import { classifyStop, EXECUTION_STATUSES, isBusy, openPlanItems, planNotDoneSummary, presentationStatus, resultFromStatus, statusForResult, stopCondition, STOP_REASONS, summarise, TERMINAL_RESULTS } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { Todo } from './todo.js';
 
@@ -80,6 +80,19 @@ describe('engine/run — the closed vocabularies and their total mappings', () =
     expect(rest.message).not.toMatch(/stop|paus|cancel|interrupt/i);
     // Rule 1 reads the stop reason alone: the counts and the failure change nothing.
     expect(summarise({ stopReason: 'user_cancelled', completed: 2, abandoned: 1, lastFailure: 'boom' })).toEqual(rest);
+  });
+});
+
+describe('engine/run — the coordinator\'s own plan and the run\'s completion (REQ-ORCH-029, live-run finding G5)', () => {
+  const plan = (...states: string[]) => ({ phases: [{ tasks: states.slice(0, 2).map((state, i) => ({ name: `a${i}`, state })) }, { tasks: states.slice(2).map((state, i) => ({ name: `b${i}`, state })) }] });
+  it('PENDING, IN_PROGRESS and a state outside REQ-TOOLS-144\'s vocabulary are open; COMPLETED and ABANDONED are terminal; in plan order', () => {
+    expect(openPlanItems(plan('COMPLETED', 'PENDING', 'IN_PROGRESS', 'ABANDONED', 'BLOCKED'))).toEqual(['a1', 'b0', 'b2']);
+    expect(openPlanItems(plan('COMPLETED', 'ABANDONED'))).toEqual([]);
+    expect(openPlanItems(null)).toEqual([]);
+  });
+  it('the iteration summary counts and names the open items', () => {
+    expect(planNotDoneSummary(['Report each command\'s outcome in one line'])).toBe('the coordinator answered with 1 item of its plan not done: Report each command\'s outcome in one line');
+    expect(planNotDoneSummary(['x', 'y'])).toBe('the coordinator answered with 2 items of its plan not done: x; y');
   });
 });
 

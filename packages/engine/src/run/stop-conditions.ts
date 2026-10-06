@@ -89,6 +89,24 @@ export function stopCondition(s: StopInputs): StopReason | null {
   return null;
 }
 
+/**
+ * REQ-ORCH-029: the items of the coordinator's own plan (REQ-TOOLS-144's states) that are not terminal — `PENDING` and
+ * `IN_PROGRESS`, and any state outside the vocabulary (REQ-CHAT-088 shows it open); `COMPLETED` and `ABANDONED` are terminal.
+ * The coordinator "does not report the run successful while a todo item is non-terminal", and REQ-ORCH-069 (1) and
+ * REQ-ORCH-082 read success off the planner's tasks alone, so an iteration whose root answers with one of these open does
+ * not mark its planner task complete (`Run.iterate`, REQ-ORCH-068: it is returned to the pending queue). The repair of
+ * `docs/defects/fixed/the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` (live-run finding G5).
+ */
+export function openPlanItems(plan: { readonly phases: readonly { readonly tasks: readonly { readonly name: string; readonly state: string }[] }[] } | null): string[] {
+  if (plan === null) return [];
+  return plan.phases.flatMap((phase) => phase.tasks).filter((task) => task.state !== 'COMPLETED' && task.state !== 'ABANDONED').map((task) => task.name);
+}
+
+/** REQ-ORCH-067's iteration summary for a task returned to the queue because the coordinator's plan was left open. */
+export function planNotDoneSummary(open: readonly string[]): string {
+  return `the coordinator answered with ${countNoun(open.length, 'item')} of its plan not done: ${open.join('; ')}`;
+}
+
 export type SummarySeverity = 'information' | 'warning' | 'error';
 export interface RunSummary {
   readonly status: 'paused' | 'completed' | 'failed';

@@ -209,8 +209,8 @@ flowchart TB
   I --> TR["turnWithRetry(task) — every retry now happens at the model STEP (Part Q's ladder, §3)"]
   TR --> TURN["turn(): IterationChildren for this iteration,<br/>the root's tool port, runTurn(...)"]
   TURN --> OUT{"outcome"}
-  OUT -- succeeded --> C["todo.complete"]
-  OUT -- partial --> RQ["todo.requeue (abandon at the consecutive-retry limit)"]
+  OUT -- "succeeded, the root's own plan all terminal" --> C["todo.complete"]
+  OUT -- "partial, or succeeded with an item of the coordinator's<br/>own plan open (REQ-ORCH-029; planLeftOpen → the next root)" --> RQ["todo.requeue (abandon at the consecutive-retry limit)"]
   OUT -- failed --> AB["todo.abandon; escalate → the run ends agent_session_aborted"]
   OUT -- "a rest (pause, stop, quit) with an agent unfinished" --> OPEN["leaveIterationOpen(): interruption on the row,<br/>iteration_paused, the task still held — no iteration.end,<br/>checkpoint, hook or count (PD-ORCH-005)"]
   OPEN --> L0
@@ -222,6 +222,15 @@ flowchart TB
   ML -- yes --> PL["pauseAtLimit(): status paused_message_limit + count + limit (durable),<br/>run.paused event to main, no terminal pair; the Run ends"]
   ML -- no --> L0
 ```
+
+**The coordinator's own plan and the task's completion (REQ-ORCH-029, REQ-ORCH-068; since 2026-10-06, live-run finding
+G5).** A root that answers `succeeded` while its own plan (`Run.agentTodo`, REQ-TOOLS-144's states) holds an item that is
+neither `COMPLETED` nor `ABANDONED` (`openPlanItems` in `stop-conditions.ts`) does not complete its planner task:
+REQ-ORCH-069 and REQ-ORCH-082 read success off the planner's tasks, so the task is returned to the pending queue
+(`todo.requeue`, abandoned at the consecutive-retry limit, when `lastFailure` names the open items and the session reads
+failed), `iteration.end` carries `planNotDoneSummary`, and the next iteration's fresh root is told the open items after its
+task (`planLeftOpen` → `planCarry` → `firstMessage`). Under a `single` override (`RuntimePosture.runOverride`,
+`RunDeps.coordinating: false`) the entry role is the worker and nothing of this applies (REQ-ORCH-025).
 
 **Coming to rest (PD-ORCH-005 clauses 2, 3, 9, 10, 11; `Run.restCause`).** A run comes to rest by a pause, a stop (the
 `cancel` operation, graceful or forced) or a quit (`application_shutdown`); `restCause` names which, and is null for the

@@ -6,7 +6,7 @@ import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { Committed, SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
-import { classifyStop, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
+import { classifyStop, openPlanItems, planNotDoneSummary, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { mintTodoId, taskLine, Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
@@ -243,6 +243,11 @@ export interface RunDeps {
   readonly personas?: PersonaResolver | undefined;
   /** REQ-ORCH-084: the message limit in force for the session; null = disabled. */
   readonly messageLimit?: number | null | undefined;
+  /**
+   * REQ-ORCH-029 / REQ-ORCH-025: whether the entry role acts as coordinator — every run except one taken under a `single`
+   * override, where it is the worker. Absent means it does. Read by `Run.iterate` for REQ-ORCH-029's completion constraint.
+   */
+  readonly coordinating?: boolean | undefined;
   /** REQ-ORCH-085: the host told the run paused at the limit, with the count and the limit. */
   readonly onPaused?: ((info: { count: number; limit: number | null; tokens: { input: number; output: number } }) => void) | undefined;
   /**
@@ -528,6 +533,12 @@ export class Run {
    * own words. The repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`.
    */
   private takenUp: { readonly text: string; readonly message: boolean } | null = null;
+  /**
+   * REQ-ORCH-068 with REQ-ORCH-029: the items of the root's own plan an iteration closed with open — its task returned to
+   * the pending queue — told to the next iteration's fresh root as the continuation (`planLeftOpen` → `planCarry`).
+   */
+  private planLeftOpen: readonly string[] = [];
+  private planCarry: readonly string[] = [];
   private appliedEntryModel: ModelRef | null = null;
   /**
    * REQ-MONITOR-142 (OQ-177): the user's entry switch not yet applied to the root's cell, which `rootResilience` applies
@@ -1082,6 +1093,9 @@ export class Run {
     // for a continue's message). The run's own task is the launch content's request. A resumed root carries on from its
     // record and is sent no launch content, so for it this is never read.
     this.takenUp = task.id !== this.deps.taskId && task.text !== (this.deps.taskLabel ?? this.deps.task) ? { text: task.text, message: task.message === true } : null;
+    // REQ-ORCH-068: the items of its plan the previous iteration closed with open reach this iteration's fresh root.
+    this.planCarry = resume ? [] : this.planLeftOpen;
+    this.planLeftOpen = [];
     if (resume) {
       writer.recordIterationInterruption(iteration, null);
       writer.appendTimeline('iteration_resumed', 'rotaris', `Iteration ${iteration}, left open by ${interruptionPhrase(resume.interruption ?? '')}, resumed.`, { iteration, interruption: resume.interruption, root_task_id: resume.root_task_id });
@@ -1117,6 +1131,21 @@ export class Run {
         this.todo.releaseHeld(iteration, false);
         summary = 'the run paused at the user\'s request before the agent finished';
         if (this.rootRecord) this.rootRecord.state = 'cancelled';
+      } else if (report.status === 'succeeded' && this.openRootPlan().length > 0) {
+        /*
+         * REQ-ORCH-029: the coordinator does not report the run successful while an item of its plan is non-terminal, and
+         * REQ-ORCH-069 / REQ-ORCH-082 read success off the planner's tasks — so this task is not marked complete. REQ-ORCH-068's
+         * pending return, with the open items told to the next iteration's root; at the retry limit it is given up on, and
+         * the run reads failed rather than completed (live-run finding G5).
+         */
+        const open = this.openRootPlan();
+        outcome = this.todo.requeue(task) === 'abandoned' ? 'abandoned' : 'partial';
+        this.todo.releaseHeld(iteration, false);
+        summary = planNotDoneSummary(open);
+        this.planLeftOpen = open;
+        this.deps.warn(`iteration ${iteration}: ${summary}; its task is ${outcome === 'abandoned' ? 'given up on at the retry limit' : 'returned to the pending queue'} (REQ-ORCH-029)`);
+        if (outcome === 'abandoned') { this.lastFailure = summary; this.failedModel = null; }
+        if (this.rootRecord) this.rootRecord.state = outcome === 'abandoned' ? 'failed' : 'succeeded';
       } else if (report.status === 'succeeded') {
         outcome = 'succeeded';
         this.todo.complete(task);
@@ -1203,9 +1232,11 @@ export class Run {
     // after the resumed iteration's `iterate()` has set it — so only an execution root is told it (found by the iteration
     // lane review). With no launch content the base is already the selected task's own text (`iterate()`'s `modelTask`).
     const takenUp: ContentPart[] = !execution || launch === undefined || this.takenUp === null ? [] : [{ kind: 'text', text: takenUpText(this.takenUp) }];
+    // REQ-ORCH-068 with REQ-ORCH-029: the items of its plan the previous iteration left open, after the task.
+    const carry: ContentPart[] = !execution || this.planCarry.length === 0 ? [] : [{ kind: 'text', text: planCarryText(this.planCarry) }];
     const offers = execution && this.deps.dal ? offersForFirstMessage(this.deps.dal, this.sessionId, base, this.deps.handoffOffers) : null;
-    if (offers === null && takenUp.length === 0) return launch;
-    return [...base, ...takenUp, ...(offers === null ? [] : [offers])];
+    if (offers === null && takenUp.length === 0 && carry.length === 0) return launch;
+    return [...base, ...takenUp, ...carry, ...(offers === null ? [] : [offers])];
   }
 
   /** PD-ORCH-005 clause 10: what the agent `taskId` is told, when it resumes, of the background sessions it had started. */
@@ -2069,6 +2100,11 @@ export class Run {
   }
 
   /** The tool port calls these for the exact root or child conversation it belongs to. */
+  /** REQ-ORCH-029: the open items of the root's own plan while the entry role acts as coordinator; none under `single`. */
+  private openRootPlan(): string[] {
+    return this.deps.coordinating === false ? [] : openPlanItems(this.agentTodo);
+  }
+
   agentTodoFor(ownerId: string | null, root: boolean): AgentTodoDocument | null {
     if (root) return this.agentTodo;
     if (!ownerId || !this.deps.dal) return null;
@@ -2751,6 +2787,11 @@ export function settleClosedIterations(todo: Todo, dal: StoreDal, sessionId: Ses
  * REQ-ORCH-135). A continue's message is told in PD-ORCH-005 clause 17's words ("so the next iteration takes it up",
  * OQ-102). Attachments are not carried: a task holds its text only (OQ-102).
  */
+/** REQ-ORCH-068 with REQ-ORCH-029: what a fresh root is told of the items of its plan the previous iteration left open. */
+function planCarryText(open: readonly string[]): string {
+  return `The previous iteration on this task ended with ${open.length === 1 ? 'this item' : 'these items'} of your plan not done, so the task is not complete:\n${open.map((name) => `- ${name}`).join('\n')}\nFinish ${open.length === 1 ? 'it' : 'each of them'}, or record ${open.length === 1 ? 'its' : 'each one\'s'} true state in your plan, before you report.`;
+}
+
 function takenUpText(task: { readonly text: string; readonly message: boolean }): string {
   if (task.message) return `The task for this iteration is an earlier message from the user, which the iteration it was sent to did not finish. Work on it now; the latest user request above is a separate task.\n\n${task.text}`;
   return `The task for this iteration is the task below, from the session's todo. Work on it now. What precedes it is what this run was launched with: read it as context, and leave any other work it asks for to its own task.\n\n${task.text}`;

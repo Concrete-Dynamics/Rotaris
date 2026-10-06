@@ -182,6 +182,11 @@ export interface RuntimePosture {
   readonly pauseToolDeadlineMs?: number | undefined;
   /** REQ-ORCH-152 / REQ-CONFIG-476: `runtime.run_start_mode`; absent means `auto` and no gate applies. */
   readonly runStartMode?: 'auto' | 'plan' | undefined;
+  /**
+   * REQ-ORCH-025: `rotaris.delegation_strategy`'s override — under `single` the entry role is the worker, not a coordinator,
+   * and REQ-ORCH-029's constraints do not bind it (`RunDeps.coordinating`). Absent means none.
+   */
+  readonly runOverride?: 'single' | 'swarm' | null | undefined;
 }
 
 export interface SessionsDeps {
@@ -1483,7 +1488,7 @@ export class Sessions {
       ...(runtime?.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: runtime.childStallTimeoutMs as Millis }),
       ...(runtime?.pauseToolDeadlineMs === undefined ? {} : { pauseToolDeadlineMs: runtime.pauseToolDeadlineMs as Millis }),
       ...(this.deps.terminals ? { terminals: this.deps.terminals(sessionId) } : {}),
-      messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
+      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single', onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       // REQ-ORCH-152/153: the plan gate as a launch input; the run settles the hold itself once the intent is known.
       ...(this.planLaunchFor(dal, sessionId, runtime) ?? {}),
       backend: model.backend, config: model.config, tools, permission, configurationSnapshot: setup.value.configurationSnapshot, pid: this.deps.pid, host: this.deps.host,
@@ -1753,7 +1758,7 @@ export class Sessions {
       ...(runtime?.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: runtime.childStallTimeoutMs as Millis }),
       ...(runtime?.pauseToolDeadlineMs === undefined ? {} : { pauseToolDeadlineMs: runtime.pauseToolDeadlineMs as Millis }),
       ...(this.deps.terminals ? { terminals: this.deps.terminals(sessionId) } : {}),
-      messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
+      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single', onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       // REQ-ORCH-152/153/154: a continuation holds again unless approval already released this run, and a revise
       // cycle passes its own number and the changes the user stated.
       ...(this.planLaunchFor(s.dal, sessionId, runtime, plan) ?? {}),

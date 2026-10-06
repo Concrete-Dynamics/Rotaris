@@ -45,13 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-06**
 
-**The run completes only when the coordinator's own plan agrees (REQ-ORCH-029, REQ-ORCH-075; fin18).** `Run.iterate`
-returns a task whose root answered `succeeded` with an item of its own plan open to the pending queue, names the open items
-in `iteration.end` and tells the same task's next root (`planLeftOpen`, keyed by task id); a task answers only for items
-not already open at its first take-up in the run (`planExcused`, OQ-203), so a given-up task's or an earlier run's item
-passes to no later task. `RuntimePosture.runOverride` reaches the run as `RunDeps.coordinating`, false under `single`. The
-**runtime view**'s loop diagram and its paragraph say so. No package, edge, process, channel, command or store column
-changed.
+**The run completes only when the coordinator's own plan agrees (REQ-ORCH-029, REQ-ORCH-075, REQ-ORCH-078; fin18).**
+`Run.iterate` returns a task whose root answered `succeeded` with an item of its own plan open to the pending queue, once
+REQ-ORCH-078's corrections into the root's own conversation are spent (`RunConfig.validationRetries`, default 0; a `followUp`
+that `IterationChildren.runWithChildren` now takes). It names the open items in `iteration.end` and tells the same task's next
+root (`Task.planLeftOpen`); a task answers only for items not already open at its first take-up (`Task.planExcused`, OQ-203).
+Both records live on the planner task in the stored todo, so a continue and a later run read them back. `RuntimePosture.runOverride`
+reaches the run as `RunDeps.coordinating`, false under `single`. The **runtime view**'s loop diagram and its paragraph say
+so. No package, edge, process, channel, command or store column changed (the planner todo's JSON gains two optional task
+fields inside the existing column).
 
 **A continuation's run starts at its `starting` save (REQ-CHAT-158, REQ-SESSION-154; fin18).** `Run.start()` reads the
 row's `updated_at` back right after the `starting` save and writes that as `run_started_at` with the `running` save, where it

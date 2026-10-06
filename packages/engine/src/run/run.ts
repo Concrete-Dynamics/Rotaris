@@ -6,7 +6,7 @@ import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { Committed, SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
-import { classifyStop, openPlanIds, openPlanItems, planCarryText, planNotDoneSummary, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
+import { classifyStop, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planNotDoneSummary, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { mintTodoId, taskLine, Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
@@ -534,18 +534,10 @@ export class Run {
    */
   private takenUp: { readonly text: string; readonly message: boolean } | null = null;
   /**
-   * REQ-ORCH-075 with REQ-ORCH-029 and REQ-ORCH-067 (OQ-203), per planner task id: the ids of the root's plan items already
-   * open when the task was first taken up in this run, which are not held against it (`openRootPlan`). An iteration this
-   * run resumed rather than began finds none recorded: what its task found open was held by the run that began it, so
-   * every open item is held against it.
+   * REQ-ORCH-075 / REQ-ORCH-076: what this iteration's fresh root is told after its task — the items of the coordinator's
+   * plan its task's last iteration closed with open (`Task.planLeftOpen`, kept with the task in the stored todo). Empty for
+   * a resumed root, which carries on from its record.
    */
-  private readonly planExcused = new Map<string, ReadonlySet<string>>();
-  /**
-   * REQ-ORCH-075 / REQ-ORCH-076, per planner task id: the items of the root's own plan the task's last iteration closed
-   * with open — the task returned to the pending queue — told to that same task's next fresh root (`planCarry`), never to
-   * another task's. Dropped when the task completes or is given up on.
-   */
-  private readonly planLeftOpen = new Map<string, readonly string[]>();
   private planCarry: readonly string[] = [];
   private appliedEntryModel: ModelRef | null = null;
   /**
@@ -1101,10 +1093,10 @@ export class Run {
     // for a continue's message). The run's own task is the launch content's request. A resumed root carries on from its
     // record and is sent no launch content, so for it this is never read.
     this.takenUp = task.id !== this.deps.taskId && task.text !== (this.deps.taskLabel ?? this.deps.task) ? { text: task.text, message: task.message === true } : null;
-    // REQ-ORCH-075 (OQ-203): what the task's first take-up in this run finds open is not held against it; the items its own
-    // previous iteration closed with open reach this iteration's fresh root, and no other task's.
-    if (!this.planExcused.has(task.id)) this.planExcused.set(task.id, resume ? new Set() : openPlanIds(this.coordinatorPlan()));
-    this.planCarry = resume ? [] : (this.planLeftOpen.get(task.id) ?? []);
+    // REQ-ORCH-075 (OQ-203): what the task's first take-up finds open is not held against it; the items its own previous
+    // iteration closed with open reach this iteration's fresh root, and no other task's. Both are kept with the task.
+    this.takeUp(task, resume !== null);
+    this.planCarry = resume ? [] : storedIds(task.planLeftOpen);
     if (resume) {
       writer.recordIterationInterruption(iteration, null);
       writer.appendTimeline('iteration_resumed', 'rotaris', `Iteration ${iteration}, left open by ${interruptionPhrase(resume.interruption ?? '')}, resumed.`, { iteration, interruption: resume.interruption, root_task_id: resume.root_task_id });
@@ -1116,6 +1108,8 @@ export class Run {
     let outcome: 'succeeded' | 'failed' | 'partial' | 'cancelled' | 'abandoned' = 'failed';
     let summary = '';
     let escalate = false;
+    /** REQ-ORCH-075: the root answered succeeded with items of its plan open, and the task was returned for them. */
+    let leftPlanOpen = false;
     try {
       const modelTask = this.deps.continuation && task.id === this.deps.taskId ? this.deps.task : task.text;
       const report = resume
@@ -1140,18 +1134,20 @@ export class Run {
         this.todo.releaseHeld(iteration, false);
         summary = 'the run paused at the user\'s request before the agent finished';
         if (this.rootRecord) this.rootRecord.state = 'cancelled';
-      } else if (report.status === 'succeeded' && this.openRootPlan(task.id).length > 0) {
+      } else if (report.status === 'succeeded' && this.openRootPlan(task).length > 0) {
         /*
          * REQ-ORCH-029: the coordinator does not report the run successful while an item of its plan is non-terminal, and
          * REQ-ORCH-069 / REQ-ORCH-082 read success off the planner's tasks — so this task is not marked complete. REQ-ORCH-075's
-         * re-queue of the same task, with the open items told to its next iteration's root; at REQ-ORCH-077's retry limit it
-         * is given up on, and the run reads failed rather than completed (live-run finding G5).
+         * re-queue of the same task, once REQ-ORCH-078's corrections are spent (`turn`), with the open items told to its next
+         * iteration's root; at REQ-ORCH-077's retry limit it is given up on, and the run reads failed rather than completed
+         * (live-run finding G5).
          */
-        const open = this.openRootPlan(task.id);
+        const open = this.openRootPlan(task);
         outcome = this.todo.requeue(task) === 'abandoned' ? 'abandoned' : 'partial';
         this.todo.releaseHeld(iteration, false);
         summary = planNotDoneSummary(open);
-        this.planLeftOpen.set(task.id, open);
+        task.planLeftOpen = open;
+        leftPlanOpen = true;
         this.deps.warn(`iteration ${iteration}: ${summary}; its task is ${outcome === 'abandoned' ? 'given up on at the retry limit' : 'returned to the pending queue'} (REQ-ORCH-029)`);
         if (outcome === 'abandoned') { this.lastFailure = summary; this.failedModel = null; }
         if (this.rootRecord) this.rootRecord.state = outcome === 'abandoned' ? 'failed' : 'succeeded';
@@ -1191,8 +1187,11 @@ export class Run {
       }
     }
     if (this.iterationRest !== null) return await this.leaveIterationOpen(iteration, this.iterationRest);
-    // REQ-ORCH-075: a task completed or given up on carries nothing further, to its own iterations or any other task's.
-    if (task.state === 'complete' || task.state === 'abandoned') { this.planLeftOpen.delete(task.id); this.planExcused.delete(task.id); }
+    // REQ-ORCH-075: a task completed or given up on carries nothing further, to its own iterations or any other task's; an
+    // iteration that closed for another reason than its plan left open leaves nothing to tell the next (a cancelled one
+    // did not finish, and the items the one before it left open still stand).
+    if (task.state === 'complete' || task.state === 'abandoned') { delete task.planLeftOpen; delete task.planExcused; }
+    else if (outcome !== 'cancelled' && !leftPlanOpen) delete task.planLeftOpen;
     // PD-ORCH-005 clause 1: `iteration.end` and the iteration's record closing with its outcome, in one transaction — with
     // the todo its task and held messages were just closed in, so no death before the save below strands them in progress.
     writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome, this.todoJson());
@@ -1745,7 +1744,34 @@ export class Run {
       // OQ-153 with PD-ORCH-005 clause 4: a root resumed into waiting takes no step until a child's report — it is between
       // its turns from the start, and no silence is counted against it while it waits (found by the verifier's review).
       if (start.kind === 'resumed' && start.waiting) rootWatch.betweenTurns();
-      const running = children ? children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : firstTurn(turnFn, start);
+      /*
+       * REQ-ORCH-078: a root that answers succeeded with items of its plan open is sent a correction into its own
+       * conversation, up to the validation-retry setting's count (default 0: none), before `iterate` re-queues its task
+       * (REQ-ORCH-075, "after correction retries are exhausted"). It is the next message of the conversation the answer left,
+       * and a delegation it leads to is waited for as any turn's is. Never for a plan cycle, a turn that stopped where it
+       * stood, or once the run is stopping, pausing or coming to rest. Asked where the root would otherwise be left idle
+       * (`runWithChildren`'s `followUp`), so a root with nothing to correct ends in the same step it always has.
+       */
+      let corrections = 0;
+      const correction = (result: TurnOutcome): string | null => {
+        const planTask = this.iterationTaskRecord();
+        if (corrections >= config.validationRetries || planTask === null || !this.correctionDue(result, iterationOverride === undefined)) return null;
+        const open = this.openRootPlan(planTask);
+        if (open.length === 0) return null;
+        corrections += 1;
+        this.deps.warn(`iteration ${iteration}: ${planNotDoneSummary(open)}; a correction is sent into its conversation (${corrections} of ${config.validationRetries}, REQ-ORCH-078)`);
+        return planCorrectionText(open);
+      };
+      const running = children
+        ? children.runWithChildren(this.rootId, turnFn, start, this.abort.signal, correction)
+        : config.validationRetries <= 0 ? firstTurn(turnFn, start) : (async () => {
+          let result = await firstTurn(turnFn, start);
+          for (let next = correction(result); next !== null; next = correction(result)) {
+            const again = await turnFn(next, result.messages);
+            result = { ...again, toolCallCount: result.toolCallCount + again.toolCallCount };
+          }
+          return result;
+        })();
       /*
        * REQ-SESSION-092 / REQ-MONITOR-129: a stop bounds how long the root is awaited, as a rest bounds a child's execution
        * (`IterationChildren.rest`). Past the grace the root is detached: it is left where it stood — paused by a rest, its
@@ -2115,9 +2141,38 @@ export class Run {
     return this.deps.coordinating === false ? null : this.agentTodo;
   }
 
-  /** REQ-ORCH-029 / REQ-ORCH-075 (OQ-203): the open items of the root's own plan held against the planner task `taskId`. */
-  private openRootPlan(taskId: string): string[] {
-    return openPlanItems(this.coordinatorPlan(), this.planExcused.get(taskId));
+  /** The planner task the current iteration works on, as the todo holds it; null outside an iteration. */
+  private iterationTaskRecord(): Task | null {
+    return this.iterationTask === null ? null : this.todo.task(this.iterationTask.id) ?? null;
+  }
+
+  /** REQ-ORCH-078: whether the root's answer is one a correction may still be sent after — an execution root's, run on. */
+  private correctionDue(result: TurnOutcome, execution: boolean): boolean {
+    return execution && result.report.status === 'succeeded' && result.paused !== true && !this.abort.signal.aborted
+      && !this.stop.requested && !this.pauseRequested && this.restCause === null;
+  }
+
+  /** REQ-ORCH-029 / REQ-ORCH-075 (OQ-203): the open items of the root's own plan held against the planner task `task`. */
+  private openRootPlan(task: Task): string[] {
+    return openPlanItems(this.coordinatorPlan(), new Set(storedIds(task.planExcused)));
+  }
+
+  /**
+   * REQ-ORCH-075 with REQ-ORCH-029 and REQ-ORCH-067 (OQ-203): a task's first take-up records, with the task, the items of the
+   * coordinator's plan already open then, which are not held against it (`Task.planExcused`). The first take-up is the one
+   * no iteration row of the session names the task in yet; every later one — the iteration a continue resumes, a fresh
+   * iteration of a re-queued task, in this run or a later one — reads the record back from the stored todo, so an item its
+   * own earlier iteration left open still holds it, and one a given-up task or an earlier run left open never does. A
+   * record that is not empty is saved at once, so a crash before the task's next save does not lose it.
+   */
+  private takeUp(task: Task, resumed: boolean): void {
+    const dal = this.deps.dal;
+    const taken = resumed || (dal ? dal.iterationsOf(this.sessionId).some((row) => row.todo_task_id === task.id) : task.consecutiveRetries > 0);
+    if (taken) return;
+    const open = [...openPlanIds(this.coordinatorPlan())];
+    if (open.length === 0) { delete task.planExcused; return; }
+    task.planExcused = open;
+    this.saveRunning({});
   }
 
   /** The tool port calls these for the exact root or child conversation it belongs to. */
@@ -2850,4 +2905,12 @@ export function withContextUnits(systemPrompt: string, units: readonly string[])
 
 function describe(e: ModelError): string {
   return [e.headline, e.status === undefined ? '' : `HTTP ${e.status}`, e.providerMessage ?? ''].filter(Boolean).join(' — ');
+}
+
+/**
+ * REQ-ORCH-075 (OQ-203): a task's plan record as the stored todo holds it — strings only, so a record a hand or an earlier
+ * build wrote in another shape reads as none rather than raising.
+ */
+function storedIds(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
 }

@@ -105,8 +105,9 @@ export function openPlanIds(plan: PlanItems | null): Set<string> {
  * `ABANDONED` are terminal — less the items in `excused`. The coordinator "does not report the run successful while a todo
  * item is non-terminal", and REQ-ORCH-069 (1) and REQ-ORCH-082 read success off the planner's tasks alone, so an iteration
  * whose root answers with one of these open does not mark its planner task complete (`Run.iterate`: REQ-ORCH-075's
- * re-queue). `excused` is what was already open when the task was first taken up in the run (OQ-203): an item a given-up
- * task or an earlier run left open is not held against a task REQ-ORCH-067 confines to its own work. The repair of
+ * re-queue). `excused` is what was already open when the task was first taken up (OQ-203; `Task.planExcused`, kept with the
+ * task in the stored todo): an item a given-up task or an earlier run left open is not held against a task REQ-ORCH-067
+ * confines to its own work, and one the task's own earlier iteration left open always is. The repair of
  * `docs/defects/fixed/the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` (live-run finding G5).
  */
 export function openPlanItems(plan: PlanItems | null, excused: ReadonlySet<string> = new Set()): string[] {
@@ -127,9 +128,23 @@ export function planNotDoneSummary(open: readonly string[]): string {
  * (REQ-ORCH-076). No background child is enumerated: an iteration's children are settled when it closes (REQ-ORCH-052).
  */
 export function planCarryText(open: readonly string[]): string {
+  return `The previous iteration on this task declared success with ${countNoun(open.length, 'item')} of your plan not complete, so the task is not complete:\n${planItemsBlock(open)}`;
+}
+
+/**
+ * REQ-ORCH-078: the correction sent into the root's own conversation, up to the validation-retry setting's count, when it
+ * answers succeeded with items of its plan open — before REQ-ORCH-075's re-queue, which follows once they are spent. The
+ * same items and instruction as the continuation marker, said of the answer the root just gave.
+ */
+export function planCorrectionText(open: readonly string[]): string {
+  return `You declared success with ${countNoun(open.length, 'item')} of your plan not complete, so the task is not complete:\n${planItemsBlock(open)}`;
+}
+
+/** The open items named (up to the first five, REQ-ORCH-075) and the instruction to continue from the plan. */
+function planItemsBlock(open: readonly string[]): string {
   const shown = open.slice(0, 5);
   const more = open.length - shown.length;
-  return `The previous iteration on this task declared success with ${countNoun(open.length, 'item')} of your plan not complete, so the task is not complete:\n${shown.map((name) => `- ${name}`).join('\n')}${more > 0 ? `\n(and ${more} more)` : ''}\nContinue from your plan, and do not end your turn until every remaining item is complete or recorded in its true state.`;
+  return `${shown.map((name) => `- ${name}`).join('\n')}${more > 0 ? `\n(and ${more} more)` : ''}\nContinue from your plan, and do not end your turn until every remaining item is complete or recorded in its true state.`;
 }
 
 export type SummarySeverity = 'information' | 'warning' | 'error';

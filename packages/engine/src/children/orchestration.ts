@@ -847,9 +847,12 @@ export class IterationChildren implements DelegationOps {
   /**
    * REQ-ORCH-055/056/057/059/063: one turn, then — while this parent has children not yet terminal, or
    * terminal and unobserved — wait, collect the newly terminal ones, and resume the parent with their reports.
-   * The parent is left idle once nothing of its can change without a child changing state.
+   * The parent is left idle once nothing of its can change without a child changing state — unless `followUp`, asked then
+   * with its last outcome, names a message to send it next: it takes that turn in the same conversation, and the loop goes
+   * on (REQ-ORCH-078's correction of the entry agent). Asked in the same step as the loop's end, so a parent with nothing to
+   * follow up ends exactly as one with no `followUp` does.
    */
-  async runWithChildren(agentId: string, turn: (task: string | null, history: readonly ChatMessage[]) => Promise<TurnOutcome>, start: TurnStart, signal: AbortSignal): Promise<TurnOutcome> {
+  async runWithChildren(agentId: string, turn: (task: string | null, history: readonly ChatMessage[]) => Promise<TurnOutcome>, start: TurnStart, signal: AbortSignal, followUp?: (outcome: TurnOutcome) => string | null): Promise<TurnOutcome> {
     // PD-ORCH-005 clause 4: a fresh agent's payload, or a resumed agent's record — into a model step, or into waiting.
     let outcome = await firstTurn(turn, start);
     let history = outcome.messages;
@@ -861,7 +864,14 @@ export class IterationChildren implements DelegationOps {
       const mine = this.ledger.childrenOf(agentId);
       const pending = mine.filter((c) => !isTerminalChildState(c.state));
       const unobserved = mine.filter((c) => isTerminalChildState(c.state) && c.observed === 0);
-      if (pending.length === 0 && unobserved.length === 0) break;
+      if (pending.length === 0 && unobserved.length === 0) {
+        const next = followUp?.(outcome) ?? null;
+        if (next === null) break;
+        outcome = await turn(next, history);
+        history = outcome.messages;
+        toolCalls += outcome.toolCallCount;
+        continue;
+      }
       if (unobserved.length === 0) await this.awaitTerminal(agentId);
       // REQ-HOOKS-080: a child that has ended is taken once its settle's `child_completed` hook is done — as a parent the
       // settle wakes takes it — never while the hook still runs because the parent found it ended on its own.

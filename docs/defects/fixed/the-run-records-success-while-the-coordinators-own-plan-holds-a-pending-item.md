@@ -15,9 +15,11 @@ Live-run finding: G5 of the final default live run at origin/main `27a5127` (202
 - `REQ-ORCH-029`: while the entry role acts as coordinator "it does not report the run successful while a todo item is
   non-terminal or while a todo item's recorded state disagrees with what happened", a constraint that "MUST hold no
   matter what playbook cell or instruction text is in force" and is "externally checkable from the run's own records".
-- `REQ-ORCH-075`: "when a report says succeeded but the agent's own todo list still holds pending/in-progress items …
-  the same top-level task MUST be re-queued (not abandoned) with a continuation payload"; `REQ-ORCH-076` strips such
-  markers before a new one is appended.
+- `REQ-ORCH-075`: "when a report says succeeded but the agent's own todo list still holds pending/in-progress items after
+  correction retries are exhausted, the same top-level task MUST be re-queued (not abandoned) with a continuation payload";
+  `REQ-ORCH-076` strips such markers before a new one is appended; `REQ-ORCH-078`: "Todo-correction retries MUST reuse the
+  validation-retry setting (default 0): with 0, an incomplete-todo success re-queues without an in-conversation retry; with
+  a positive value, a correction message is sent into the same conversation up to that many times first."
 - `REQ-ORCH-069` (1) and `REQ-ORCH-082` (3) read success off the planner's tasks; `REQ-ORCH-068` gives an iteration three
   ways to resolve its task (complete, given up on, returned to the pending queue).
 
@@ -43,14 +45,23 @@ endpoint), session `5bcf4f82` (`terminal`, classified `exploration`, so the orch
 
 ## Repaired (2026-10-06, fin18)
 
-REQ-ORCH-029 and REQ-ORCH-075 decide it. The coordinator does not report the run successful while a todo item is
-non-terminal (REQ-ORCH-029), and "when a report says succeeded but the agent's own todo list still holds pending/in-progress
-items … the same top-level task MUST be re-queued (not abandoned) with a continuation payload" (REQ-ORCH-075). REQ-ORCH-069
+REQ-ORCH-029, REQ-ORCH-075 and REQ-ORCH-078 decide it. The coordinator does not report the run successful while a todo item
+is non-terminal (REQ-ORCH-029), and "when a report says succeeded but the agent's own todo list still holds pending/in-progress
+items after correction retries are exhausted, the same top-level task MUST be re-queued (not abandoned) with a continuation
+payload" (REQ-ORCH-075), those retries being REQ-ORCH-078's, counted by the validation-retry setting. REQ-ORCH-069
 (1) and REQ-ORCH-082 (3) read success off the planner's tasks, so the planner task is not marked complete. Of REQ-ORCH-068's
 three resolutions that is the pending return; REQ-ORCH-077 gives the task up at the consecutive-retry limit.
 
-- `Run.iterate` (`packages/engine/src/run/run.ts`): a root that answers `succeeded` while its own plan holds an item that is
-  neither `COMPLETED` nor `ABANDONED` (`openPlanItems`, `packages/engine/src/run/stop-conditions.ts`) has its task returned
+- REQ-ORCH-078 (`Run.turn`): a root that answers `succeeded` with an item of its plan open is first sent a correction into
+  its own conversation (`planCorrectionText`), up to `RunConfig.validationRetries` times (`runtime.auto_retries_validation`,
+  default 0: none). The correction is asked for where the root would otherwise be left idle (`IterationChildren.runWithChildren`'s
+  `followUp`), so a delegation it leads to is waited for as any turn's is, and a root with nothing to correct ends in the same
+  step it always did. None is sent for a plan cycle, a turn that stopped where it stood, or once the run is stopping, pausing
+  or coming to rest. (In repair round 2 the correction was first wrapped around the root's turn as an extra `await`; that one
+  step let the explicit cancel's held child start before the finalize sweep, which `children.test.ts`'s REQ-ORCH-052 case
+  caught, so it was moved into the loop.)
+- `Run.iterate` (`packages/engine/src/run/run.ts`): once the corrections are spent, a root that answers `succeeded` while its
+  own plan holds an item that is neither `COMPLETED` nor `ABANDONED` (`openPlanItems`, `packages/engine/src/run/stop-conditions.ts`) has its task returned
   to the pending queue (`todo.requeue`), `iteration.end` closing `partial` with `planNotDoneSummary`. The same task's next
   fresh root is told REQ-ORCH-075's marker after its task (`planCarryText`: how many items, up to the first five named, to
   continue from the plan and not end its turn until each is complete or recorded in its true state). The marker is a part of
@@ -65,17 +76,24 @@ three resolutions that is the pending return; REQ-ORCH-077 gives the task up at 
   when the next task is taken up. The first form of this repair held it against every later task, which was re-queued and
   given up on though its work was done (the verifier's finding, reproduced with a queued prompt behind a given-up task:
   `partial, partial, abandoned, partial, partial, abandoned`), and told the later task's root to finish another task's item.
-  The build now holds against a task only the items that were not open when it was first taken up in the run
-  (`Run.planExcused`), and carries the marker to the same task id alone (`Run.planLeftOpen`, keyed by task, dropped when the
-  task completes or is given up on). An iteration a continue resumes has no record of what its task found open, so every
-  open item is held against it. Excused items stay open in the plan; nothing marks them done.
+  The build holds against a task only the items that were not open when it was first taken up, and carries the marker to the
+  same task alone. Both records are kept with the planner task in the stored todo (`Task.planExcused`, written at the task's
+  first take-up by `Run.takeUp`; `Task.planLeftOpen`, written when an iteration closes for its plan; both removed when the task
+  completes or is given up on), so they survive a pause, a continue, a later run and a restart. The second form of this repair
+  held them in the run's memory, and the verifier of repair round 2 reproduced what that lost: the iteration a continue
+  resumed held a given-up task's item against its own task (`partial, partial, abandoned, partial, partial, abandoned`, the
+  queued prompt's done work recorded abandoned), and a re-queued task taken up by a later run took its own leftover item as
+  excused and completed beside `[COMPLETED, PENDING]` (G5 again). Excused items stay open in the plan; nothing marks them
+  done. A task first taken up by a build without the record has none, so every open item is held against it.
 - Under a `single` override the entry role is the worker (REQ-ORCH-025) and REQ-ORCH-029 does not bind it: the override
   reaches the run as `RunDeps.coordinating` (`RuntimePosture.runOverride`, `packages/engine/src/sessions.ts`, filled by the
   run host's `runtimeFromConfiguration`, which already carried it), and such a run completes as before.
 - The stop conditions are unchanged: with the task returned to the queue, `tasks_complete` cannot be reached while the
   plan is open. The Todo pane's count (`packages/ui/src/TodoPane.tsx`) is unchanged too; what changed is that a run the
-  record calls completed now has a plan that reads every task done beside it. No UI code changed, so the pane is pinned
-  through the projection it draws (`projectSessionTodos`), not by a test in `packages/ui`.
+  record calls completed now has a plan that reads every task done beside it. No UI code changed: the pane is pinned
+  through the projection it draws (`projectSessionTodos`), and what it draws from that projection by
+  `packages/ui/src/todo.test.ts` ("1 of 2 tasks done" for an item left open, "2 of 2" for the plan of a run that completes),
+  a pin that passes with or without the repair.
 
 **Why this is not the inversion REQ-ORCH-028 rejects.** REQ-ORCH-028 and resolution 15(a) of
 `docs/spec/resolutions/01-run-orchestration.md` keep the acceptance role's sign-off out of the run's outcome: "No status,
@@ -102,10 +120,17 @@ Pinned by `packages/engine/src/run/coordinator-plan.test.ts`:
   succeeded`);
 - an item an earlier run left open is not held against the next run's task;
 - an iteration paused and resumed by a continue holds the item its root opened before the pause (`partial, succeeded`);
+- a queued prompt paused in the call that finishes its own item, behind a task given up on, completes on the continue
+  (`partial, partial, abandoned, succeeded`): its take-up record comes back from the stored todo;
+- a task re-queued with its own item open, taken up again by a later run (the first ended at its iteration limit), is not
+  marked complete when its root answers without touching the plan (`partial, partial`), and that root is told the item;
+- with `validationRetries` 1, the correction goes into the root's own conversation and the iteration closes `succeeded`
+  with nothing re-queued; a correction left unanswered is followed by the re-queue (`partial, succeeded`);
 - an `ABANDONED` item is terminal; a `single` run completes on its first iteration.
 
 The first two fail without the repair (each run ended after one `succeeded` iteration); the queued-prompt and earlier-run
 cases fail on the first form of the repair (`partial, partial, abandoned, partial, failed` with the script exhausted); the
-resumed case fails if the resumed iteration takes what is open at the resume as excused. The helpers by
+resumed case fails if the resumed iteration takes what is open at the resume as excused; the continue-after-pause and
+later-run cases fail on the second form (`3d25edf`), and so do both correction cases (no correction was sent). The helpers by
 `packages/engine/src/run/run-pure.test.ts`. The built app shows the repair in the next default live run's `terminal`
 scenario (the orchestrator's; an agent's live-run launch is refused).

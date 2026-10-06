@@ -9746,17 +9746,24 @@ and a later task's root is told to finish another task's work, which REQ-ORCH-06
 belong to which task. The verifier reproduced the literal reading with a queued prompt (REQ-CHAT-040) behind a task given up
 on: outcomes `partial, partial, abandoned, partial, partial, abandoned`, the second task's done work recorded as abandoned.
 
-**What the build proceeds under.** A task answers for the open items of the plan that were not already open when it was first
-taken up in the run (`Run.planExcused`, `openPlanItems`'s `excused`, `packages/engine/src/run/`): an item it opened, or
-one its own earlier iteration left open, holds it; an item a given-up task, an earlier run or anything before its take-up
-left open does not. The continuation that names the open items (REQ-ORCH-075's marker) goes to the same task's next fresh
-root only, and is dropped when the task completes or is given up on. An iteration a continue resumes, rather than one the run
-began, has no record of what its task found open (the run that began it held that in memory), so every open item is held
-against it. An excused item is not altered: it stays open in the plan the Todo pane counts, and a run in which a task was
-given up on reads failed by REQ-ORCH-082 anyway. Pinned by `packages/engine/src/run/coordinator-plan.test.ts`.
+**What the build proceeds under.** A task answers for every open item of the plan that was not already open when the task
+was first taken up — its first iteration in the session, the one no iteration row names it in yet — and for no other. That
+take-up record is kept with the planner task in the stored todo (`Task.planExcused`, `packages/engine/src/run/todo.ts`;
+`Run.takeUp` and `openPlanItems`'s `excused`, `packages/engine/src/run/`), so every later iteration of the task reads the same
+record back: the one a continue resumes, and a fresh iteration of the re-queued task in the same run or a later one. An item
+the task opened, or one its own earlier iteration left open, therefore always holds it; an item a given-up task, an earlier
+run or anything else left open before the task was first taken up never does. The continuation that names the open items
+(REQ-ORCH-075's marker) is kept with the task too (`Task.planLeftOpen`), goes to the same task's next fresh root only, and is
+dropped when the task completes or is given up on. An excused item is not altered: it stays open in the plan the Todo pane
+counts, and a run in which a task was given up on reads failed by REQ-ORCH-082 anyway. A task first taken up by a build
+before this record existed has none, so every open item is held against it. Pinned by
+`packages/engine/src/run/coordinator-plan.test.ts`. (The first form of this reading held the record in the run's memory, so
+the run a continue built had none: an iteration it resumed held a given-up task's item against its own task, and a fresh
+iteration of a re-queued task in a later run took the task's own leftover item as excused and completed beside it. The
+verifier of fin18's second repair round reproduced both; the record has been kept with the task since.)
 
 **What a ruling decides.** Whether REQ-ORCH-075 and REQ-ORCH-029 range over the whole session plan (and a stale item then
 blocks every later task, or must be closed by someone before the run can succeed) or over the items a task owns, and if the
-latter, how ownership is decided and recorded: by what was open at the task's take-up (as built, held in memory), by a
+latter, how ownership is decided and recorded: by what was open at the task's first take-up (as built, kept with the planner task), by a
 mark on the item (REQ-TOOLS-144's schema has no field for it), or otherwise; and whether a person's own addition to the agent
 plan (REQ-CHAT-090) during a task is held against it, as it is built now.

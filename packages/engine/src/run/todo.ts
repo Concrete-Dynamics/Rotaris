@@ -46,6 +46,19 @@ export interface Task {
    * that later takes it up is sent its text as the task to work on (`Run.firstMessage`, OQ-102).
    */
   message?: true;
+  /**
+   * REQ-ORCH-075 with REQ-ORCH-029 and REQ-ORCH-067 (OQ-203): the ids of the coordinator's plan items already open when this
+   * task was first taken up, which are not held against it. Kept with the task in the stored todo, so the iteration a
+   * continue resumes and a later run's fresh iteration read the same record back; absent when nothing was open then, and
+   * removed when the task completes or is given up on.
+   */
+  planExcused?: string[];
+  /**
+   * REQ-ORCH-075 / REQ-ORCH-076: the items of the coordinator's plan this task's last iteration closed with open, told to the
+   * task's next fresh root and to no other task's. Kept with the task for the same reason; removed when an iteration of it
+   * closes otherwise, and when the task completes or is given up on.
+   */
+  planLeftOpen?: string[];
 }
 export interface Phase {
   /**

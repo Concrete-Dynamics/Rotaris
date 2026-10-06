@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Aggregates } from './aggregates.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
-import { classifyStop, EXECUTION_STATUSES, isBusy, openPlanIds, openPlanItems, planCarryText, planNotDoneSummary, presentationStatus, resultFromStatus, statusForResult, stopCondition, STOP_REASONS, summarise, TERMINAL_RESULTS } from './stop-conditions.js';
+import { classifyStop, EXECUTION_STATUSES, isBusy, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planNotDoneSummary, presentationStatus, resultFromStatus, statusForResult, stopCondition, STOP_REASONS, summarise, TERMINAL_RESULTS } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { Todo } from './todo.js';
 
@@ -104,6 +104,10 @@ describe('engine/run — the coordinator\'s own plan and the run\'s completion (
     expect(seven).toContain('with 7 items of your plan');
     expect(seven).toContain('- i5\n(and 2 more)');
     expect(seven).not.toContain('- i6');
+  });
+  it('REQ-ORCH-078\'s correction names the same items, said of the answer the root just gave', () => {
+    expect(planCorrectionText(['Report each command\'s outcome in one line'])).toBe('You declared success with 1 item of your plan not complete, so the task is not complete:\n- Report each command\'s outcome in one line\nContinue from your plan, and do not end your turn until every remaining item is complete or recorded in its true state.');
+    expect(planCorrectionText(['i1', 'i2', 'i3', 'i4', 'i5', 'i6'])).toContain('- i5\n(and 1 more)');
   });
   it('the iteration summary counts and names the open items', () => {
     expect(planNotDoneSummary(['Report each command\'s outcome in one line'])).toBe('the coordinator answered with 1 item of its plan not done: Report each command\'s outcome in one line');

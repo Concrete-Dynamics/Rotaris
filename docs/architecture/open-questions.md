@@ -10539,3 +10539,80 @@ line, a free-text result) is free text and is cut; the result, a single text, is
 **What a ruling decides.** Whether the 2,000 characters measure the JSON text or each value; whether the cap or "never
 truncated" yields when a path or an identifier is longer than the cap; and whether a key-name reading of "path, identifier,
 timestamp" is the test, or the tool's declared schema should say which arguments are which.
+
+**OQ-210 — Is a published artifact's `body_markdown` the submitted body or the rendered document, and may the submitted body
+be stored twice?** *(REQ-LIBRARY-087, which keeps each artifact's Markdown document "on disk as a file the record references
+and never holds inside itself"; REQ-LIBRARY-090, that document's rendering; REQ-LIBRARY-093, "whose `body_markdown` is the
+submitted body unchanged, whose `key_findings` is that same body"; REQ-LIBRARY-094, REQ-LIBRARY-099 and REQ-LIBRARY-134, which
+read and write the one or the other; REQ-SESSION-002, the per-session files. Raised 2026-10-06 by finacc3's acceptance round 1
+(finding F16), repairing
+[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../defects/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
+the artifact store's first execution (Part U) said it raised this tension, in `packages/engine/src/artifacts/sidecar.ts` and in
+[ADR-0003](adr/0003-files-are-the-system-of-record.md)'s execution note ("Open question, not a settled reading"), and no entry
+was ever written, so the owner was never asked. Open, the owner's.)*
+
+REQ-LIBRARY-087 fixes the on-disk document as REQ-LIBRARY-090's rendering and forbids the record holding it; REQ-LIBRARY-093 says
+a publish's `body_markdown` is the submitted body unchanged. Both cannot be literally true of one stored thing without a second
+place to store the submitted body, which neither requirement provides.
+
+**What the build proceeds under** (`packages/engine/src/artifacts/store.ts` `publish`, `sidecar.ts` `renderSidecar`). The
+record's `body_markdown` is the document: the file the record names (`body_file`) holds REQ-LIBRARY-090's rendering, and the
+submitted body survives unchanged inside it as the Key Findings section and in the record's `key_findings` column, so the
+submitted body is stored twice, once in the column and once in the file. REQ-LIBRARY-099's section filter reads the record's
+columns and never parses the document; REQ-LIBRARY-094's edit overwrites the document and nothing else, so after an edit the
+column keeps the body as published; REQ-LIBRARY-134's fallback for an empty stored body is the same rendering.
+
+**What a ruling decides.** Whether `body_markdown` is the rendered document (as built) or the submitted body, with the
+rendering derived; whether the submitted body may be kept both in `key_findings` and in the document; and whether an edit of
+the document should also reach `key_findings`.
+
+**OQ-211 — Is an artifact's consumer recorded as the reading agent's persona or as its instance?** *(REQ-LIBRARY-099, "every
+successful read marks the reading persona as a consumer"; REQ-LIBRARY-096, "marking an artifact consumed appends the actor at
+most once and persists"; REQ-LIBRARY-093, whose `created_by` names "the publishing agent instance by its canonical name rather
+than by its persona, so two instances sharing a persona stay distinguishable in every artifact listing"; REQ-MONITOR-044,
+REQ-MONITOR-052 and REQ-MONITOR-069, whose received-artifact links read the consumers. Raised 2026-10-06 by finacc3's
+acceptance round 1 (finding F16), repairing
+[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../defects/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
+`ArtifactStore.markConsumed`'s comment (`packages/engine/src/artifacts/store.ts`) said this was "raised as an open question
+rather than settled here", and no entry was ever written. Open, the owner's.)*
+
+REQ-LIBRARY-099 names the reading persona; REQ-LIBRARY-096 names the actor, without saying whether that is a persona or an
+agent instance.
+
+**What the build proceeds under** (`markConsumed`, and the artifact port's `artifact_read` in
+`packages/engine/src/artifacts/port.ts`). The consumer recorded is the reading agent's canonical instance name, the name
+REQ-LIBRARY-093 gives `created_by`: a child's canonical name, and a root's `root_canonical_name` (since the repair of
+[`a-roots-publish-names-its-persona-as-its-author.md`](../defects/fixed/a-roots-publish-names-its-persona-as-its-author.md),
+2026-09-29). REQ-LIBRARY-093's reason, that two instances of one persona stay distinguishable, applies as much to who read an
+artifact, and the persona can be recovered from the instance where the reverse cannot. The agent surfaces' received links
+(REQ-MONITOR-044/052/069) match an agent's consumer entries by that name. Two instances of one persona that read one artifact
+are two consumers.
+
+**What a ruling decides.** Whether the consumer is the instance (as built) or the persona, and so whether two instances of one
+persona reading an artifact record one consumer or two.
+
+**OQ-212 — Which built-in personas may publish an artifact?** *(REQ-TOOLS-001 and REQ-TOOLS-002, the names a persona may
+declare, `artifact_write` among them; REQ-TOOLS-004, which removes `artifact_write` "declared by a persona that lacks
+`can_publish_artifacts: true`"; REQ-CONFIG-106, `can_publish_artifacts` "(bool, default false)", without which the role is not
+handed the tool; REQ-TOOLS-007; REQ-ORCH-016, whose direct-work bundle names `artifact_read` and `artifact_list` and not
+`artifact_write`; REQ-ORCH-028's role vocabulary, which names the built-in roles and not their tools; REQ-LIBRARY-097 and
+REQ-LIBRARY-101. Raised 2026-10-06 by finacc3's acceptance round 1 (finding F16), repairing
+[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../defects/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
+`packages/contracts/src/roles.ts` said "that no built-in persona does is recorded as an open question", and no entry was ever
+written. Open, the owner's.)*
+
+The specification defines the tool, its gate and its prerequisite, but no built-in persona's tool list, so it does not say
+whether any built-in role publishes.
+
+**What the build proceeds under** (`BUILT_IN_ROLE_TOOLS`, `packages/contracts/src/roles.ts`). No built-in persona declares
+`artifact_write`, and the direct-work bundle does not add it, so with the shipped defaults no agent publishes an artifact
+through the tool: the artifacts in a session are the child reports the engine materialises (REQ-LIBRARY-092), and a
+workspace's personas publish only where its configuration declares `artifact_write` for them (the artifacts proof declares it
+for its orchestrator). `artifact_read` and `artifact_list` join every persona's read group. Whether that configuration also
+needs `can_publish_artifacts: true`, as REQ-CONFIG-106 and REQ-TOOLS-004 say, is not this question: the build hands the tool
+over whatever the flag says, recorded as a defect,
+[`can-publish-artifacts-is-read-and-never-gates-artifact-write.md`](../defects/can-publish-artifacts-is-read-and-never-gates-artifact-write.md).
+
+**What a ruling decides.** Whether any built-in role (the orchestrator, the planner, the architect, the codebase analyst, the
+librarian or another) declares `artifact_write` and carries `can_publish_artifacts: true` by default, or publishing stays a grant
+a workspace's configuration gives.

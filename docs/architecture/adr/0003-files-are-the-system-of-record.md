@@ -349,4 +349,5 @@ of one stored thing without a second storage location, which neither requirement
 document is the record's `body_markdown`**, and the submitted body survives unchanged inside it as the Key Findings
 section and in the `key_findings` column. `REQ-LIBRARY-099`'s section filter therefore reads the record's columns and
 never parses the document; `REQ-LIBRARY-094`'s edit overwrites the document and nothing else; `REQ-LIBRARY-134`'s
-fallback for an empty stored body is that same rendering. Open question, not a settled reading.
+fallback for an empty stored body is that same rendering. ~~Open question, not a settled reading.~~ *No entry was written
+for it then; raised as [OQ-210](../open-questions.md) on 2026-10-06 (acceptance finding F16), the owner's.*

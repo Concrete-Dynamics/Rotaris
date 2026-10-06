@@ -297,7 +297,7 @@ export class ArtifactStore {
    * "the actor". The CANONICAL INSTANCE NAME is recorded, because REQ-LIBRARY-093's reason for `created_by`
    * — two instances sharing a persona must stay distinguishable in every artifact listing — applies with
    * equal force to who consumed one, and the persona is recoverable from the name where the reverse is not.
-   * Raised as an open question rather than settled here.
+   * The owner's, raised as OQ-211 (2026-10-06; this comment claimed it raised before any entry existed, F16).
    */
   markConsumed(ref: string, actor: string): void {
     const record = this.lookup(ref);

@@ -20,8 +20,8 @@ import type { ArtifactRecord, RanCommand } from './record.js';
  * body survives unchanged inside it as the Key Findings section (and unchanged in the `key_findings`
  * column). REQ-LIBRARY-099's section filter therefore reads the record's columns and never parses the
  * document, REQ-LIBRARY-094's edit overwrites the document and nothing else, and REQ-LIBRARY-134's fallback
- * for an empty stored body is this same rendering. The tension is raised as an open question rather than
- * resolved by silently storing the body twice.
+ * for an empty stored body is this same rendering. The tension is the owner's, raised as OQ-210 (2026-10-06):
+ * Part U said it raised it and no entry was written until acceptance finding F16 found the claim unbacked.
  *
  * A second decision where the requirement is silent: `edited_at` is written only when the record has one.
  * The requirement names "the record's timestamps" and lists the optional members without it, but `edited_at`

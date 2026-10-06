@@ -5467,6 +5467,17 @@ the host's load at each launch (`apps/desktop/scripts/lib/live-answers.mjs`, `li
 to what a ruling of this question decides: whether the bound should allow for a self-hosted endpoint shared by concurrent
 runs.)*
 
+*(Added 2026-10-06, a further case of the intent bound (F2) and the report summariser (F1), from finding G4 of the
+orchestrator's final default live run at `27a5127` (pack `.live-run/runs/2026-10-06T01-30-08-282Z/`, the self-hosted
+endpoint; `live-run PASSED`). Nine classifications took 59.9 s on the critical path, and two of them (`resume`'s launch,
+`resume/model-traffic.jsonl` #0, 11,980 ms; `requirements`' launch, `requirements/model-traffic.jsonl` #0, 11,971 ms) were
+cut at the 12 s bound while still reasoning, with 3.5k to 3.8k reasoning characters and no answer, and took REQ-ORCH-007's
+fallback. The report summariser held its parent's wait for 93.1 s in all (`requirements` 55.3 s, `terminal` 19.6 s,
+`resume` 11.2 s, `edit` 7.0 s), each pass ending within 10 ms of the `wait_for_tasks` or foreground `delegate` it held:
+about 153 s of the 924 s of session wall time, the largest single cost of the run. Nothing here is a defect of the code,
+and nothing new is asked: the case adds figures to what a ruling of this question weighs, and what the build proceeds under
+is unchanged.)*
+
 **OQ-115 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open. Raised as OQ-114 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `packages/config/src/mcp/prompt.ts:29` renders each server tool's description as REQ-MCP-101 requires, and the bundled

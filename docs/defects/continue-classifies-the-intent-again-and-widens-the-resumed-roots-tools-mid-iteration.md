@@ -113,3 +113,27 @@ session `0aa37938`: the launch's classification (traffic #0, 11,964 ms) and the 
 12.0 s to the Continue's critical path. The widening half was not exercised: 24 tools before (traffic #2) and 24 after
 (traffic #8), and no `resumed_under_changed_instructions` issue. The header half holds: `resume.png` reads "Intent:
 moderate_feature (continued from the previous run)". No code changed: the note waits on the owner's ruling.
+
+Observed again at origin/main `27a5127` (live run 2026-10-06, finding G1 of its autopsy), in a new shape: the playbook
+changed mid-iteration, not the grant. Default pack `.live-run/runs/2026-10-06T01-30-08-282Z/` of the `live` worktree
+(git-ignored; the self-hosted endpoint), session `4b497643`:
+
+- The launch's classification fell back at the 12 s bound: `resume/model-traffic.jsonl` #0 was cut at 11,980 ms with
+  3,837 reasoning characters and no answer, and the launch ran on the fallback `moderate_feature`.
+- The Continue classified the same prompt again and succeeded: traffic #5, from 01:34:27.211, 8,598 ms →
+  `small_feature` (0.82); timeline #10 `run_continuation_intent`; transcript row 14 "Intent classified: small_feature".
+  The fresh result replaced the launch's fallback, as REQ-ORCH-013's carry-over allows.
+- The resumed orchestrator's system prompt (traffic #8) differs from the one it started under (traffic #4) in exactly
+  three playbook lines: CHUNKING "Divide the work into milestones…" → "Work in small steps…", VERIFY "Prove the change:
+  run the full verification…" → "Run the checks that cover what you changed…", ARTIFACT "Leave a short written
+  summary…" → "Produce no artifact beyond your report." The grant did not change: 24 tools before and after.
+- Issue 1 (01:34:35.942, warning) `resumed_under_changed_instructions`, metadata `instructions_changed: true,
+  tools_changed: false`, although no persona was edited and the user changed nothing. The children's prompts did not
+  change (traffic #2/#6 and #3/#7 identical).
+- The header's intent half holds: the status reads the continuation's intent (`resume/resume.png`).
+- Cost: 8.6 s of classification on the Continue's critical path (20.6 s with the launch's 12.0 s, in an 87.7 s
+  session), and a coordinator told in the middle of its iteration to verify and report less than it started under.
+
+No code changed: the note stays open and waits on the owner's ruling of
+[OQ-162](../architecture/open-questions.md). (The same scenario's run timing, which started after this classification,
+is a separate defect: `docs/defects/fixed/a-continuations-run-timing-starts-after-its-pre-flight-where-a-launchs-counts-it.md`.)

@@ -1745,7 +1745,9 @@ maintained, and is not consulted — so there is nothing for the store to disagr
    expressible in `REQ-SESSION-089`'s existing vocabulary but not itself stated by any requirement
    (OQ-47). ADR-0002 has since settled the part of OQ-47 that was an inter-record disagreement — the
    workspace service is keyed by resolved path, this store by identifier, and the two key different
-   objects — but this behaviour is still architecture-invented on a specification silence.
+   objects — but this behaviour is still architecture-invented on a specification silence *(ratified 2026-10-06,
+   [R-071](../../product/requests.md#r-071), as OQ-47's ruling: a second open workspace presenting one
+   identifier opens without a store)*.
 10. **`REQ-SESSION-089`'s graceful degradation is gone by ruling, and the amended requirement says so.** The
     event store, the session state and the lock are one object; there is no partial failure left. The
     previous version listed this as an amendment owed; it has landed, in `REQ-SESSION-089` and

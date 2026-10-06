@@ -123,7 +123,8 @@ product cannot say the rates were ignored, because no surface has a way to say i
 The gap is recorded as an open defect note (`docs/defects/fixed/configured-per-token-prices-take-no-effect.md`) and
 not built around, which is what consequence 1 above rules for exactly this case. The two routes that are not
 covered at all — a price read from any provider's discovery payload, and a provider-reported per-request cost
-with no qualifier in `REQ-MONITOR-166`'s closed set — are **OQ-62**, raised the same day.
+with no qualifier in `REQ-MONITOR-166`'s closed set — are **OQ-62**, raised the same day *(deferred 2026-10-06 by
+[R-071](../../product/requests.md#r-071), until after the first release)*.
 
 ## Part of it was built without it — 2026-09-16 (`PD-MONITOR-001`)
 

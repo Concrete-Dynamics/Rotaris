@@ -358,7 +358,8 @@ a bar, its title and its answers on one row, its words drawn again when the gate
 takes the rest (the run is stopped on it, REQ-ORCH-153; it is the reading area, PD-ORCH-002 revision 2). The decision is untouched: the level never said which of two in-flow panels gives way, and the
 build's answer is the one the run is stopped on keeps the room. That it is drawn in the view that
 shows the run, and not while another view is shown, is the build's reading of "beside the continuing run", raised as
-[OQ-181](../open-questions.md). The decision holds for this placement: the level is still an in-window panel, non-modal,
+[OQ-181](../open-questions.md) *(ruled 2026-10-06, [R-071](../../product/requests.md#r-071): the placement and
+visibility accepted as built)*. The decision holds for this placement: the level is still an in-window panel, non-modal,
 with no focus trap, and nothing else in the window is under it. It is fed by main on its own channel
 (`reauth:prompt`, channel 13), ~~to the one window that follows the session~~ — also corrected: to every main window,
 each drawing the followed session's prompt alone (REQ-NOTIFY-030), with `reauth.read` for a window that mounts later.

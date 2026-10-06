@@ -592,7 +592,8 @@ were weighed and two are unavailable:
   a launch started from", whose value the requirement says "is a file path and nothing else". A status
   flag is none of those, and adding one would need an amendment for a channel we do not need.
 - **A launch argument.** Refused. `REQ-STARTUP-152` and `REQ-STARTUP-002` state the product has no
-  argument vocabulary, no subcommand and no flag, and ADR-0055 already carries **OQ-43** for the one
+  argument vocabulary, no subcommand and no flag, and ADR-0055 already carries **OQ-43** *(ruled 2026-10-06,
+  [R-071](../../product/requests.md#r-071): `PD-STARTUP-002`)* for the one
   sentinel argument the internal-child branches need. Deepening a question this record does not own, for
   a second use, is the wrong direction.
 - **The marker the stub already writes into the tree it placed.** **Chosen.** The fast path already reads
@@ -1286,7 +1287,9 @@ this build pins no machine tools"; the manifest pins two. `REQ-STARTUP-142` want
 manifest and listing Git and ripgrep. Recorded and not repaired — the build was told to leave what the notices file lists
 alone while **OQ-73** is open, and OQ-73's gate-review addendum already says the generator's reader follows the shape
 machine setup decides (`../../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`).
-*Repaired 2026-09-28 under R-062, OQ-73 still open:* the generator now reads this manifest in `SetupManifestSchema`'s
+*Repaired 2026-09-28 under R-062, OQ-73 still open (deferred 2026-10-06 by
+[R-071](../../product/requests.md#r-071), with the release pipeline's notices and signing):*
+the generator now reads this manifest in `SetupManifestSchema`'s
 shape (a copy of the field names, held to the schema by `notices.test.ts`, because `tools/notices` imports nothing from
 `packages/`) and lists Git 2.55.0 and ripgrep 15.2.0 with their four fields. It states that machine setup, which would
 download them, is not yet in the build. It lists `@playwright/mcp` 0.0.80 under a third sub-heading for

@@ -538,7 +538,9 @@ than by the workers.
    `REQ-STARTUP-155`'s 5 s first-paint budget must absorb (ADR-0055).
 4. **Project-supplied regular expressions run unbounded** by requirement. The worker-thread placement
    makes them terminable; **whether they should be terminated, and what the user is told, is not
-   specified** (OQ-25). Note the pattern arrives with a checked-out repository, not from the user.
+   specified** (OQ-25; *ruled 2026-10-06, [R-071](../../product/requests.md#r-071): no limit on a project's
+   pattern, and a pass is terminated on the user's cancel alone, the user told only "cancelled"*). Note the
+   pattern arrives with a checked-out repository, not from the user.
 5. The board's ratchets shrink only and the tombstone log grows only (`REQ-TRACE-116`, `REQ-TRACE-130`,
    `REQ-TRACE-136`), and the retirement date comes from an **injectable clock** (`REQ-TRACE-140`) — the
    `WallClock` port of ADR-0006, not a global.

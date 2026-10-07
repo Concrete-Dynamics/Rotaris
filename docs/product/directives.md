@@ -2789,13 +2789,14 @@ the final live runs' findings L4 and N3. Revision 5 ruled under the same delegat
 >   result as a model would, and `done` completes the list. Four proofs whose coordinator delegates implementation after its
 >   list were moved to it; `mcp-proof`'s children are restricted to reading, so its `plan` stays.
 >
-> **What was measured.** `children/todo-item.test.ts` (six cases) and twelve end-to-end cases in `children/children.test.ts`:
+> **What was measured.** `children/todo-item.test.ts` (six cases) and thirteen end-to-end cases in `children/children.test.ts`:
 > before any list an unnamed delegation is admitted; after it an unnamed one is refused naming the open items and a named one
 > admitted and stored; a read-only role delegates unnamed; one step's list and delegation; an unknown id refused for any role;
 > a COMPLETED or ABANDONED item refused to implementation and admitted read-only; a held item refused naming its holder, two
 > items in parallel, the item freed once its holder ended; a read-only child never holds; a child waiting on its dependencies
-> holds; a follow-up never refused as unnamed; a child's own plan; a continuation inheriting. Each refusal is red with its
-> check removed. In the built app, `pnpm mission-proof` item 1e: a two-item list, `alpha` named the first item, `beta` naming
+> holds; a follow-up never refused as unnamed; a follow-up refused while another implementation child holds its stored item
+> and admitted once that child ended (added by the review, which found no case reaching `followUp`'s check); a child's own
+> plan; a continuation inheriting. Each refusal is red with its check removed. In the built app, `pnpm mission-proof` item 1e: a two-item list, `alpha` named the first item, `beta` naming
 > it while alpha ran was refused "held by alpha (coding-agent, task_id …, state running)", `gamma` naming none was refused with
 > both items listed, `delta` named the second and ran; the children's records held `565a0565` and `a4257486`, the session
 > completed, and both refusals were logged citing REQ-ORCH-028 and REQ-ORCH-029. **What was not measured.** No live run: the

@@ -2303,6 +2303,45 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(children(sid)).toHaveLength(1);
     });
 
+    /*
+     * The follow-up's own refusal (`followUp`): it keeps its stored item and is refused while another outstanding
+     * implementation child of the plan holds that item, and admitted once the holder has ended. Red with the check removed
+     * (the review of fin29: no case reached it).
+     */
+    it('(c) a follow-up by session_id is refused while another implementation child holds its stored item, and admitted once that child ends', async () => {
+      let firstId = '';
+      const observed: string[] = [];
+      const hold = gate();
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([todoCall('t1', ['IN_PROGRESS', 'PENDING', 'PENDING'])]);
+          if (turn === 2) return toolCalls([del('d1', 'coding-agent', 'first', { todo_item: '0000000a', run_in_background: false })]);
+          // `first` has ended, so its item is free: `second` takes it, and holds it until the gate opens.
+          if (turn === 3) return toolCalls([del('d2', 'coding-agent', 'second', { todo_item: '0000000a', task: 'TASK: HOLD second' })]);
+          if (turn === 4) return toolCalls([del('d3', 'coding-agent', 'first-again', { session_id: firstId, task: 'TASK: more' })]);
+          if (turn === 5) { hold.open(); return toolCalls([{ callId: 'w1', name: 'wait_for_tasks', args: { task_ids: [] } }]); }
+          if (turn === 6) return toolCalls([del('d4', 'coding-agent', 'first-again', { session_id: firstId, task: 'TASK: more', run_in_background: false })]);
+          if (turn === 7) return toolCalls([todoCall('done', ['COMPLETED', 'COMPLETED', 'COMPLETED'])]);
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return childAnswer(req, hold.p);
+      }, { tool: (name, a, ctx, builtIn) => {
+        if (name === 'delegate' && firstId === '') return builtIn().then((r) => { firstId = /task_id: (bg_[0-9a-f]{8})/.exec(r.text)?.[1] ?? ''; observed.push(r.text); return r; });
+        return tools(observed)(name, a, ctx, builtIn);
+      } });
+      const sid = (sessions.start(dal, 'C:/ws', 'build it') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      const rows = children(sid);
+      const second = rows.find((c) => c.canonical_name === 'second')!;
+      expect(observed[1]).toMatch(/^Task 'second': queued/);
+      expect(observed[2]).toBe(`Task 'first-again': rejected — session_id '${firstId}' serves todo item '0000000a', which second (coding-agent, task_id ${second.task_id}, state ${/state (\w+)\)/.exec(observed[2]!)?.[1] ?? '?'}) now holds: no two delegations to personas that write workspace files serve one todo item at once. Wait for second with wait_for_tasks, then follow this child up.`);
+      expect(observed[2]).toMatch(/state (queued|starting|running)\)/);
+      expect(observed[3]).toMatch(/^Task 'first': queued — Following up first/);
+      expect(rows.map((c) => [c.canonical_name, c.todo_item])).toEqual([['first', '0000000a'], ['second', '0000000a']]);
+      expect(warnings.some((w) => w.includes("first's follow-up was refused") && w.includes('(REQ-ORCH-028)'))).toBe(true);
+    });
+
     it('a child keeps its own plan: it names its own item, and the root\'s id is not one of its plan', async () => {
       const observed: string[] = [];
       const hold = gate();

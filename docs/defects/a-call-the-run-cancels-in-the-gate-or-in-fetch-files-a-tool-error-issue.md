@@ -21,8 +21,9 @@ which records this and does not repair it. Recorded by fin31, not repaired.
 ## Specs
 
 - PD-ORCH-005 clause 3: a call the rest cut off is recorded as interrupted.
-- PD-TOOLS-013 narrows REQ-SESSION-136 so a call recorded as interrupted files no outcome-driven issue; these two paths
-  record a cancel under another kind, so the narrowing does not reach them.
+- PD-TOOLS-013 extends REQ-SESSION-136 (its disposition block; `PD-SESSION-003` holds the narrowing) so a call recorded
+  as interrupted files no outcome-driven issue; these two paths record a cancel under another kind, so the extension does
+  not reach them.
 - REQ-TOOLS-092 (fetch's closed vocabulary) has no cancellation kind; ADR-0023's reading records the cancel as
   `network_error`.
 

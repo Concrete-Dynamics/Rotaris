@@ -36,7 +36,7 @@ export function resolveUserDirs(e: DirEnv = { platform: process.platform, env: p
   const { join } = e.platform === 'win32' ? win32 : posix;
   switch (e.platform) {
     case 'win32': {
-      const local = e.env['LOCALAPPDATA'] ?? join(e.home, 'AppData', 'Local');
+      const local = localAppDataDirectory(e.env['LOCALAPPDATA'], join(e.home, 'AppData', 'Local'));
       // Both under the LOCAL profile: the roaming half is exactly what the requirement excludes.
       // REQ-CONFIG-001 spells the global configuration scope `%LOCALAPPDATA%\rotaris\rotaris\`; until 2026-09-29 this
       // answered `rotaris\config`, a name the requirement never spells (repaired under R-067;
@@ -62,17 +62,31 @@ export function resolveUserDirs(e: DirEnv = { platform: process.platform, env: p
 }
 
 /**
- * An XDG base-directory variable's value, or its default where the XDG Base Directory Specification says a variable
- * "either not set or empty" takes it. The one reading of the configuration home, so `resolveUserDirs` and
- * `resolvePreferenceRoot` never part over it. Until finacc3 the first read the variables with `??` and the second with
- * `||`, so `XDG_CONFIG_HOME=` put the configuration directory at the relative path `rotaris` while the preference store
- * fell back to `~/.config`
- * (`docs/defects/fixed/an-empty-xdg-config-home-puts-the-configuration-directory-at-a-relative-path.md`). A relative
- * value, which the same specification calls invalid, is still used as it stands
- * (`docs/defects/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
+ * An XDG base-directory variable's value, or its default where the XDG Base Directory Specification says the variable does
+ * not name one: "either not set or empty" takes the default, and "all paths set in these environment variables must be
+ * absolute. If an implementation encounters a relative path in any of these variables it should consider the path invalid
+ * and ignore it." The one reading of the configuration and data homes, so `resolveUserDirs` and `resolvePreferenceRoot` never
+ * part over them. Until finacc3 the first read the variables with `??` and the second with `||`, so `XDG_CONFIG_HOME=` put
+ * the configuration directory at the relative path `rotaris` while the preference store fell back to `~/.config`
+ * (`docs/defects/fixed/an-empty-xdg-config-home-puts-the-configuration-directory-at-a-relative-path.md`); until fin30 a
+ * relative value was still used as it stood, so the per-user directories landed under the working directory
+ * (`docs/defects/fixed/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`). The variables are read off
+ * Windows and macOS alone, so "absolute" is POSIX's: a Windows spelling such as `D:/x` names nothing a POSIX launch can resolve.
  */
 export function xdgBaseDirectory(value: string | undefined, fallback: string): string {
-  return value === undefined || value === '' ? fallback : value;
+  return value === undefined || value === '' || !posix.isAbsolute(value) ? fallback : value;
+}
+
+/**
+ * `LOCALAPPDATA`'s value, or `<home>\AppData\Local` where it names no directory: unset, empty, or relative (`rel`, or `C:rel`,
+ * which is relative to drive C's current directory). The one reading of it, so `resolveUserDirs` and `resolvePreferenceRoot`
+ * never part over it. Until fin30 both took it with `??`, so `set LOCALAPPDATA=` put the configuration directory, the data
+ * directory and the preference store at `rotaris\rotaris`, `rotaris\data` and `Rotaris\Rotaris`, relative to the working
+ * directory (`docs/defects/fixed/an-empty-localappdata-puts-the-per-user-directories-at-a-relative-path.md`). REQ-STARTUP-145's
+ * per-user location is never one relative to wherever the application happened to be started.
+ */
+export function localAppDataDirectory(value: string | undefined, fallback: string): string {
+  return value === undefined || value === '' || !win32.isAbsolute(value) ? fallback : value;
 }
 
 /** Fixed sub-locations inside the data directory. Fixed-length by construction where a path budget matters (ADR-0058 c.13). */

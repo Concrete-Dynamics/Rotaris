@@ -25,7 +25,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
-import { app as appDirectory, buildDesktop, cleanEnvironment, dataDirFor, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
+import { app as appDirectory, buildDesktop, cleanEnvironment, dataDirFor, electron, evidenceDirectory, findDatabases, hostSwitches, mainEntry, proofIsolationEnv, scratchHomeFor } from './lib/harness.mjs';
 import { exitWithin, overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { startApp } from './lib/driver.mjs';
 
@@ -740,6 +740,52 @@ try {
         await closeAll();
         check(`REQ-STARTUP-145: with XDG_RUNTIME_DIR ${label}, the ended launch leaves no socket behind, here or in the working directory`,
           !existsSync(endpoint) && strays().length === 0, `endpoint ${existsSync(endpoint) ? 'still present' : 'removed'}; strays ${JSON.stringify(strays())}`);
+      }
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 13c — relative XDG base directories are ignored, as the XDG Base Directory Specification says (REQ-STARTUP-145).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * Until fin30 `xdgBaseDirectory` passed a relative value through, so a launch with `XDG_DATA_HOME=rel-data` kept its
+     * machine identifier, its instance record and its workspace stores under `<working directory>/rel-data/rotaris`, this
+     * proof's `apps/desktop` (`docs/defects/fixed/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
+     * Now both variables are ignored and the launch takes the defaults below the scratch HOME the harness gives it.
+     *
+     * What this asserts is the product's own per-user state (`resolveUserDirs`, `resolvePreferenceRoot`). Electron's own
+     * profile is not among it: main never places it, so Chromium still puts it at `$XDG_CONFIG_HOME/<name>` taken as it
+     * stands, `rel-config/Electron` here — recorded on its own
+     * (`docs/defects/electrons-own-profile-is-written-outside-the-per-user-directories.md`) and reported in the detail
+     * below rather than failed, because this repair does not reach it.
+     */
+    if (process.platform === 'win32' || process.platform === 'darwin') {
+      skip('REQ-STARTUP-145: a relative XDG base directory is ignored', `${process.platform} reads no XDG base-directory variable`);
+    } else {
+      // The product's own directories under each relative value: the data directory and the configuration directory.
+      const relative = ['rel-config', 'rel-data'];
+      const ours = [join('rel-data', 'rotaris'), join('rel-config', 'rotaris')];
+      const strays = () => relative.filter((name) => existsSync(join(appDirectory, name)));
+      const oursMade = () => ours.filter((name) => existsSync(join(appDirectory, name)));
+      const before = strays();
+      try {
+        const s = await launch('relative-xdg', { workspace: A, extra: { XDG_CONFIG_HOME: 'rel-config', XDG_DATA_HOME: 'rel-data' } });
+        const home = scratchHomeFor(s.local);
+        const dataDir = join(home, '.local', 'share', 'rotaris');
+        // The store is opened after the window paints, so it is waited for rather than read at once.
+        const began = Date.now();
+        while (findDatabases(join(dataDir, 'workspaces')).length === 0 && Date.now() - began < 30_000) await sleep(200);
+        const stores = findDatabases(join(dataDir, 'workspaces'));
+        const made = oursMade();
+        const electronProfile = existsSync(join(appDirectory, 'rel-config')) ? readdirSync(join(appDirectory, 'rel-config')) : [];
+        check('REQ-STARTUP-145: a launch with relative XDG_CONFIG_HOME and XDG_DATA_HOME keeps its per-user state under its home, never under the working directory',
+          stores.length === 1 && existsSync(join(dataDir, 'machine-id')) && existsSync(join(dataDir, 'instance.json')) && made.length === 0,
+          `${stores.length} store(s) under ${dataDir}; machine-id ${existsSync(join(dataDir, 'machine-id')) ? 'there' : 'missing'}; the product's own made in the working directory: ${JSON.stringify(made)}; Electron's own profile under rel-config (a separate note): ${JSON.stringify(electronProfile)}`);
+        await closeAll();
+      } finally {
+        // Whatever an unrepaired build made in the working directory is not left in the repository.
+        for (const name of strays()) if (!before.includes(name)) rmSync(join(appDirectory, name), { recursive: true, force: true });
       }
     }
   }

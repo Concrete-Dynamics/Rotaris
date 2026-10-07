@@ -36,8 +36,9 @@ socket, as the proof harness sets one, since the scratch data directory's own pa
 `$HOME/.config/Rotaris/Rotaris/`, nothing under the working directory, and loaded its main window.
 A relative value, which the same specification calls invalid, is not part of this repair: a first attempt rejected any value
 `posix.isAbsolute` refuses, and `apps/desktop/scripts/lib/proof-isolation.test.ts` failed three cases, since the proof harness
-models a POSIX launch planned from a Windows host with values like `D:/repo/.proof/…`. It is recorded on its own
-(`docs/defects/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
+models a POSIX launch planned from a Windows host with values like `D:/repo/.proof/…`. It was recorded on its own and repaired
+by fin30, which settled those cross-host cases first
+(`docs/defects/fixed/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
 
 ## Specs
 

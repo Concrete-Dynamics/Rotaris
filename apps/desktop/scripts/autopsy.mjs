@@ -28,7 +28,7 @@
  */
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { workspacesRootFor } from './lib/harness.mjs';
 import { nullSummaryLine, zeroCostLine } from './lib/autopsy-coherence.mjs';
@@ -63,11 +63,13 @@ function findDatabases(root, out = []) {
 
 function newestDatabase() {
   const roots = [];
-  if (process.platform === 'win32' && process.env.LOCALAPPDATA) roots.push(workspacesRootFor(process.env.LOCALAPPDATA, 'win32'));
+  // Each variable only where the product reads it: set and absolute (`xdgBaseDirectory` and `localAppDataDirectory`,
+  // `packages/platform/src/dirs.ts`, since fin30 ignore an empty or relative value and take the default below).
+  if (process.platform === 'win32' && process.env.LOCALAPPDATA && isAbsolute(process.env.LOCALAPPDATA)) roots.push(workspacesRootFor(process.env.LOCALAPPDATA, 'win32'));
   // `XDG_DATA_HOME` first, then the fallback the product uses when it is unset. Naming only the fallback
   // meant a POSIX machine that sets the variable — every driven launch does, since 2026-09-22 — had its
   // store looked for in a directory the product had never written to.
-  if (process.env.XDG_DATA_HOME) roots.push(join(process.env.XDG_DATA_HOME, 'rotaris', 'workspaces'));
+  if (process.env.XDG_DATA_HOME && isAbsolute(process.env.XDG_DATA_HOME)) roots.push(join(process.env.XDG_DATA_HOME, 'rotaris', 'workspaces'));
   roots.push(join(homedir(), '.local', 'share', 'rotaris', 'workspaces'));
   roots.push(tmpdir());
   let best = null;

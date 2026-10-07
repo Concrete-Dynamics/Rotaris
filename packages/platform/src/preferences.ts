@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { posix, win32 } from 'node:path';
 import { pathKey } from './canonical.js';
-import { xdgBaseDirectory } from './dirs.js';
+import { localAppDataDirectory, xdgBaseDirectory } from './dirs.js';
 import { guardedRead, replaceDocument, replaceDocumentSync } from './document.js';
 
 export const PREFERENCE_KEYS = {
@@ -180,8 +180,8 @@ export interface PreferenceRootEnv { readonly platform: NodeJS.Platform; readonl
  * ADR-0042: benchmark override, configuration home, then the platform's machine-local settings location. The configuration
  * home (`XDG_CONFIG_HOME`, REQ-UIBENCH-039) is honoured on Linux alone, as OQ-33 was ruled (R-071): on Windows and macOS
  * the benchmark-private variable carries the same job. That is the branch `resolveUserDirs` reads it on, so the preference
- * store and the rest of the per-user state never part, and through the same reading (`xdgBaseDirectory`: an empty value takes
- * the default). Until fin22 it was read before the platform branch, on every platform
+ * store and the rest of the per-user state never part, and through the same reading (`xdgBaseDirectory`: an empty or relative
+ * value takes the default; on Windows `localAppDataDirectory`, the same for `LOCALAPPDATA`). Until fin22 it was read before the platform branch, on every platform
  * (`docs/defects/fixed/the-preference-root-honours-xdg-config-home-on-every-platform.md`).
  */
 export function resolvePreferenceRoot(e: PreferenceRootEnv = { platform: process.platform, env: process.env, home: homedir() }): string {
@@ -190,7 +190,7 @@ export function resolvePreferenceRoot(e: PreferenceRootEnv = { platform: process
   const { join } = e.platform === 'win32' ? win32 : posix;
   const overridden = e.env['ROTARIS_PREFERENCES_ROOT'];
   if (overridden) return overridden;
-  if (e.platform === 'win32') return join(e.env['LOCALAPPDATA'] ?? join(e.home, 'AppData', 'Local'), 'Rotaris', 'Rotaris');
+  if (e.platform === 'win32') return join(localAppDataDirectory(e.env['LOCALAPPDATA'], join(e.home, 'AppData', 'Local')), 'Rotaris', 'Rotaris');
   if (e.platform === 'darwin') return join(e.home, 'Library', 'Application Support', 'Rotaris', 'Rotaris');
   return join(xdgBaseDirectory(e.env['XDG_CONFIG_HOME'], join(e.home, '.config')), 'Rotaris', 'Rotaris');
 }

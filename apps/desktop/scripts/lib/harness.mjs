@@ -252,12 +252,20 @@ export function launchOptions({ local, preferences, home, extra = {} }) {
  * `workspace-proof`'s scenario 13b takes it away to drive the fallback.
  */
 export function proofIsolationEnv({ profileRoot, local, preferences, home, platform = process.platform }) {
-  // The POSIX pair is spelled with POSIX separators even when the harness runs on Windows: a POSIX launch
-  // reads these values, and a Windows-spelled value is a path no POSIX machine would resolve. `dirs.ts`
-  // reads them as opaque strings (the platform parameter supplies the separator), so spelling them here
-  // is what makes the isolation decidable on the platform that reads them.
+  // The POSIX pair is spelled with POSIX separators even when the harness runs on Windows, where the pair is
+  // inert: a Windows-spelled value is a path no POSIX machine would resolve.
   const data = posix.join(toPosix(local), 'rotaris', 'data');
   const config = posix.join(toPosix(local), 'rotaris', 'config');
+  // A POSIX launch reads the pair, and since fin30 the product ignores a value that is not absolute, as the XDG Base
+  // Directory Specification says (`xdgBaseDirectory`, `packages/platform/src/dirs.ts`): a profile a POSIX machine cannot
+  // resolve would quietly put the launch's per-user state under its scratch HOME's defaults, or under the operator's,
+  // rather than where this harness's directory rules look. A launch runs on the host that plans it, so its profile is
+  // that host's own absolute path; one spelled for another host (`D:/repo/.proof/…` for a Linux launch, which
+  // `proof-isolation.test.ts` once modelled) is refused here, loudly, instead
+  // (`docs/defects/fixed/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
+  if (platform !== 'win32' && !posix.isAbsolute(data)) {
+    throw new Error(`proofIsolationEnv: a ${platform} launch reads XDG_DATA_HOME, and ${data} is not an absolute POSIX path`);
+  }
   const digest = createHash('sha256').update(data).digest('hex').slice(0, 12);
   const runtime = join(tmpdir(), `rotaris-proof-${digest}`);
   const roaming = profileRoot !== undefined

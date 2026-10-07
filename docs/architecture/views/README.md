@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**An empty or relative per-user variable takes its default (REQ-STARTUP-145, REQ-CONFIG-001; finacc3 A2-06, A2-07; fin30).**
+`xdgBaseDirectory` (`platform/dirs.ts`) now also ignores a relative `XDG_CONFIG_HOME` or `XDG_DATA_HOME`, as the XDG Base
+Directory Specification says, and `localAppDataDirectory` beside it is the one reading of `LOCALAPPDATA`: unset, empty or
+relative takes `<home>\AppData\Local`. `resolveUserDirs` and `resolvePreferenceRoot` read both through them, so neither can
+answer a directory relative to the working directory. The proof harness's `proofIsolationEnv` refuses a POSIX launch whose
+profile is not an absolute POSIX path. The **process view**'s configuration-files row and the **state-ownership view**'s
+`preferences.json` row say so. No package, edge, process, channel, command or store column changed.
+
 **The hand-over socket lives where a unix socket fits, and never relative to the working directory (REQ-STARTUP-145,
 REQ-STARTUP-161, REQ-STARTUP-164; finacc3 A2-04, A2-05; fin30).** `socketDirectoryCandidates` (`platform/instance.ts`) orders
 `XDG_RUNTIME_DIR`, the data directory and a private `rotaris-<uid>` below the temporary directory or `/tmp`, keeping each only

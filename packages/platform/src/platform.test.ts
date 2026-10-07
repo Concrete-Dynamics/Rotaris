@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
 import { millis, mintMachineId, FakeClock, type MachineId } from '@rotaris/kernel';
-import { replaceDocument, replaceDocumentSync, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, dataLayout, claimInstance, endpointFor, nodeClocks, findExecutable, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout, composerDraftKey } from './index.js';
+import { replaceDocument, replaceDocumentSync, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, dataLayout, claimInstance, endpointFor, nodeClocks, findExecutable, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout, composerDraftKey, xdgBaseDirectory, localAppDataDirectory } from './index.js';
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rotaris-platform-')); });
@@ -58,6 +58,42 @@ describe('platform — per-user directories (REQ-STARTUP-145)', () => {
       const prefs = resolvePreferenceRoot({ platform: 'linux', env, home });
       expect(prefs.slice(0, prefs.length - '/Rotaris/Rotaris'.length)).toBe(dirs.config.slice(0, dirs.config.length - '/rotaris'.length));
     }
+  });
+  it('on Linux a relative XDG variable is ignored and takes its default, as the XDG Base Directory Specification says (REQ-CONFIG-001, REQ-STARTUP-145)', () => {
+    // "All paths set in these environment variables must be absolute. If an implementation encounters a relative path in
+    // any of these variables it should consider the path invalid and ignore it." Until fin30 `xdgBaseDirectory` passed a
+    // relative value through, so the per-user directories landed under whatever the working directory was
+    // (docs/defects/fixed/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md). A Windows spelling is
+    // relative to a POSIX machine too: it names no directory a Linux launch can resolve.
+    const home = '/home/me';
+    for (const value of ['rotaris-config', './cfg', '../cfg', 'D:/cfg', 'D:\\cfg']) {
+      const env = { XDG_CONFIG_HOME: value, XDG_DATA_HOME: value };
+      expect(resolveUserDirs({ platform: 'linux', env, home })).toEqual({ config: '/home/me/.config/rotaris', data: '/home/me/.local/share/rotaris' });
+      // The preference store reads the same variable through the same rule, so the two never part over it.
+      expect(resolvePreferenceRoot({ platform: 'linux', env, home })).toBe('/home/me/.config/Rotaris/Rotaris');
+    }
+    // An absolute value still governs, and each variable is judged on its own.
+    expect(resolveUserDirs({ platform: 'linux', env: { XDG_CONFIG_HOME: 'cfg', XDG_DATA_HOME: '/x/data' }, home })).toEqual({ config: '/home/me/.config/rotaris', data: '/x/data/rotaris' });
+    expect(xdgBaseDirectory('/x/cfg', '/fallback')).toBe('/x/cfg');
+    expect(xdgBaseDirectory('x/cfg', '/fallback')).toBe('/fallback');
+  });
+  it('on Windows an empty or relative LOCALAPPDATA takes <home>\\AppData\\Local, for the directories and the preference store alike (REQ-CONFIG-001, REQ-STARTUP-145)', () => {
+    // Until fin30 both read `LOCALAPPDATA` with `??`, so `set LOCALAPPDATA=` answered `rotaris\rotaris`, `rotaris\data` and
+    // `Rotaris\Rotaris`, every one relative to the working directory
+    // (docs/defects/fixed/an-empty-localappdata-puts-the-per-user-directories-at-a-relative-path.md). Decided here off
+    // Windows because the platform is a parameter; `C:rel` is relative to drive C's current directory, not absolute.
+    const home = 'C:\\Users\\me';
+    for (const value of ['', 'rel', 'C:rel']) {
+      const env = { LOCALAPPDATA: value };
+      expect(resolveUserDirs({ platform: 'win32', env, home })).toEqual({ config: 'C:\\Users\\me\\AppData\\Local\\rotaris\\rotaris', data: 'C:\\Users\\me\\AppData\\Local\\rotaris\\data' });
+      expect(resolvePreferenceRoot({ platform: 'win32', env, home })).toBe('C:\\Users\\me\\AppData\\Local\\Rotaris\\Rotaris');
+    }
+    // A set, absolute value still governs both, and they still agree on the directory they share.
+    const set = { LOCALAPPDATA: 'D:\\Local' };
+    expect(resolveUserDirs({ platform: 'win32', env: set, home }).config).toBe('D:\\Local\\rotaris\\rotaris');
+    expect(resolvePreferenceRoot({ platform: 'win32', env: set, home })).toBe('D:\\Local\\Rotaris\\Rotaris');
+    expect(localAppDataDirectory('\\\\server\\share\\Local', 'C:\\fallback')).toBe('\\\\server\\share\\Local');
+    expect(localAppDataDirectory(undefined, 'C:\\fallback')).toBe('C:\\fallback');
   });
   it('the sub-locations are spelled by the platform asked about, not the host asking (R3 separator residue)', () => {
     // The defect this pins: a bare host-bound `join` spelled the Windows answer with POSIX separators

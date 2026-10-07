@@ -356,6 +356,43 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
       expect(ForegroundSession.clean(screen, S, E)).toBe('own-line\ndone-later');
     }
   });
+  /*
+   * docs/defects/fixed/at-the-20-column-floor-an-interrupted-calls-poll-intermittently-carries-the-next-calls-wrapper-echo.md:
+   * after C-c, dash prints a line end and its prompt (`\n# `) when it takes the interrupt, and the line discipline echoes
+   * the next call's wrapper as it arrives. When the wrapper is written first, the echo begins on the `^C` row and the
+   * prompt lands INSIDE it — measured at 20 columns, before the end statement's closing `"`. The joined match no longer
+   * met the wrapper, the row carrying its head (`printf '%s`) was dropped by the stray-echo filter and took the leading
+   * `__r` of the next call's start marker with it, so the cut at that marker (`until`) never happened and the rest of
+   * the echo reached the interrupted call's poll.
+   */
+  it('REQ-TOOLS-127/128: the next call\'s echo is cut from a paused call\'s poll wherever the shell\'s prompt lands inside it', () => {
+    const S = '__rot_0123456789abcdef01234567_s';
+    const E = '__rot_0123456789abcdef01234567_e';
+    const N = '__rot_bbbbbbbbbbbbbbbbbbbbbbbb';
+    const wide = 'Q'.repeat(300);
+    const echo = `printf '%s\\n' '${N}_s'; command eval 'printf '\\''%s\\n'\\'' '\\''${wide}'\\'''; printf '${N}_e:%s\\n' "$?"`;
+    /** What a `cols`-wide screen keeps of a stream: a row per line end, each line broken at the width, trimmed as the emulator trims. */
+    const screenOf = (stream: string, cols: number): string => stream.split('\n').flatMap((line) => {
+      const rows: string[] = [];
+      for (let i = 0; i < Math.max(1, line.length); i += cols) rows.push(line.slice(i, i + cols).trimEnd());
+      return rows;
+    }).join('\n');
+    for (const cols of [20, 30, 80]) {
+      for (let k = 0; k < echo.length; k += 1) {
+        const stream = `${S}\n^C${echo.slice(0, k)}\n# ${echo.slice(k)}\n${N}_s\nQQ\n${N}_e:0\n# `;
+        const poll = ForegroundSession.clean(screenOf(stream, cols), S, E, [`${N}_s`]);
+        for (const leaked of ['__rot_', 'QQQ', '"$?"', 'command eval']) expect(poll, `${cols} columns, prompt at ${k}`).not.toContain(leaked);
+        // Past the head and its first marker character nothing of the echo is left. The `^C` it shares a row with is kept
+        // where the cut falls at the head's column, and goes with the row where the joined match still meets the echo
+        // (a prompt inside the command's own text, which the match's body takes in). A prompt inside the first sixteen
+        // characters of an echo leaves at most that much of it behind the `^C`.
+        if (k >= 16) expect(['^C', ''], `${cols} columns, prompt at ${k}: ${JSON.stringify(poll)}`).toContain(poll);
+      }
+    }
+    // The observed shape, verbatim in form: at 20 columns, the prompt one character before the end statement's last.
+    const observed = `${S}\n^C${echo.slice(0, -1)}\n# ${echo.slice(-1)}\n${N}_s`;
+    expect(ForegroundSession.clean(screenOf(observed, 20), S, E, [`${N}_s`])).toBe('^C');
+  });
   it('REQ-TOOLS-127 (A10): the echo a shell\'s own line editor draws of a wrapper wider than the screen — one row, scrolled sideways — is dropped from the capture', () => {
     // `two-terminal-pty-tests-fail-on-main-in-this-environment`: bash's readline on a `dumb` terminal does not wrap a wide
     // line, it scrolls it on one row whose head is `<`, so the joined match never met it. The row, verbatim in shape from

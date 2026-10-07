@@ -578,6 +578,13 @@ export function printsMarker(text: string, marker: string): boolean {
 const ECHOED_POSIX_WRAPPER = /printf ?'%s\\n' ?'__rot_[0-9a-f]{24}_s'; ?command ?eval ?(?:(?!printf ?'%s\\n' ?'__rot_)[\s\S])*?; ?printf ?'__rot_[0-9a-f]{24}_e:%s\\n' ?"\$\?"/g;
 
 /**
+ * The head of a POSIX wrapper's echo up to the first character of its start marker (`wrapCommand`). Behind a paused call's
+ * own start frame, an echo of a wrapper is a later call's, and a paused call closed by that call is cut where it begins
+ * (`cleanLines`, `until`).
+ */
+const ECHOED_POSIX_HEAD = "printf '%s\\n' '_";
+
+/**
  * Rows read as one text: joined with no separator, so a frame or an echo the screen broke across rows is met whole, with
  * the row each offset falls on. The emulator gives the screen's rows (`ScreenEmulator.text`), and a row wraps wherever the
  * screen's width falls (REQ-TOOLS-128: the display resizes the foreground PTY, down to its 20-column floor); the markers
@@ -1296,7 +1303,10 @@ export class ForegroundSession {
     // printed it. Rare, load-dependent and real: measured under a concurrently running suite on Linux,
     // 2026-09-16. A row that ENDS with the marker is the marker's row whatever stands in front of it, and the
     // marker is a per-call nonce, so no command can spell one to cut its own capture short (consequence 1).
-    const lines = withoutEchoedWrappers(screenText.split('\n')).filter((l) => !l.includes('Write-Output (') && !l.includes("printf '%s"));
+    const unmatched = withoutEchoedWrappers(screenText.split('\n'));
+    const strayEcho = (l: string): boolean => l.includes('Write-Output (') || l.includes("printf '%s");
+    const keptIndex = unmatched.flatMap((l, i) => (strayEcho(l) ? [] : [i]));
+    const lines = keptIndex.map((i) => unmatched[i] as string);
     // Every marker below is looked for across row breaks (`joinedRows`), never within one row: a frame is as wide as its
     // nonce (`__rot_` + 24 digits + `_s` is 32 columns, the end frame 34 or more), and the display may narrow the screen
     // to 20 columns (REQ-SHELL-100), where every frame wraps.
@@ -1308,14 +1318,34 @@ export class ForegroundSession {
     const rows = joinedRows(lines);
     const startAt = firstRowEnd(rows, start);
     let kept = startAt >= 0 ? lines.slice(startAt + 1) : lines;
-    // A paused call closed with no frame of its own (A10) stops at the first row that carries the next call's start
-    // marker in any form — printed, or in an echo of its wrapper that escaped the removal above: what follows is the
-    // next call's, and after that the product's snapshot.
+    // A paused call closed with no frame of its own (A10) stops where the next call begins — its start marker in any form,
+    // printed or in an echo of its wrapper that escaped the removal above — since what follows is the next call's, and
+    // after that the product's snapshot. It is looked for in the rows BEFORE the stray-echo filter: the row carrying an
+    // unmatched echo's head (`printf '%s\n' '__r`) carries the first characters of that marker, and dropping the row
+    // first left a marker nobody could find (docs/defects/fixed/at-the-20-column-floor-an-interrupted-calls-poll-intermittently-carries-the-next-calls-wrapper-echo.md).
+    // The echo goes unmatched when the shell's own output lands inside it: after C-c, dash prints a line end and its
+    // prompt when it takes the interrupt, and when the next call's wrapper is written first the line discipline is
+    // already echoing it, so the prompt splits the echo (measured at 20 columns, before the end statement's closing
+    // `"`). The echo's head and the first character of its marker (`printf '%s\n' '_`) are cut at the column they begin,
+    // which keeps the `^C` the echo shares a row with; a marker that stands whole is cut at its row, which drops the
+    // prompt in front of a printed one. Between them they find the echo wherever one prompt splits it, at most its first
+    // sixteen characters left behind where the prompt lands among them. A paused command that itself prints that head
+    // loses the rest of this poll from there, where the stray-echo filter already dropped the row.
     if (until !== null) {
       const markers = typeof until === 'string' ? [until] : until;
-      const keptRows = joinedRows(kept);
-      const found = markers.map((m) => keptRows.text.indexOf(m)).filter((at) => at >= 0);
-      if (found.length > 0) kept = kept.slice(0, keptRows.rowAt(Math.min(...found)));
+      const firstKept = startAt >= 0 ? (keptIndex[startAt] as number) + 1 : 0;
+      const tail = unmatched.slice(firstKept);
+      const tailRows = joinedRows(tail);
+      const marked = markers.map((m) => tailRows.text.indexOf(m)).filter((at) => at >= 0);
+      const markerRow = marked.length > 0 ? tailRows.rowAt(Math.min(...marked)) : tail.length;
+      const head = tailRows.text.indexOf(ECHOED_POSIX_HEAD);
+      const headRow = head >= 0 ? tailRows.rowAt(head) : tail.length;
+      if (head >= 0 && headRow <= markerRow) {
+        const lead = (tail[headRow] as string).slice(0, head - (headRow === 0 ? 0 : tailRows.rowEnd(headRow - 1))).trimEnd();
+        kept = [...tail.slice(0, headRow), ...(lead === '' ? [] : [lead])].filter((l) => !strayEcho(l));
+      } else if (markerRow < tail.length) {
+        kept = tail.slice(0, markerRow).filter((l) => !strayEcho(l));
+      }
     }
     let body = kept.join('\n');
     // The end frame is cut at its FIRST occurrence, wherever it sits. Removing whole LINES that began with it

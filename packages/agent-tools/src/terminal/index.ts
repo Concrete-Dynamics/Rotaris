@@ -447,12 +447,12 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
         // PD-TOOLS-013: the run cancelled the call — a pause past the tool deadline, a stop, a quit, the explicit cancel, an
         // agent's cancellation or its limit; which one, the turn's interrupted result says. No timeout is named: the call
         // did not reach its bound. What became of the session and what was restored are said as for a reset.
-        const session = r.killStatus === 'session_reset'
-          ? `its process tree was ended and the terminal session was restarted, so shell state (working directory, variables, aliases, background jobs) was lost.${restoreNote}`
-          : 'its process tree was ended, and restarting the terminal session failed.';
+        const restarted = r.killStatus === 'session_reset'
+          ? `the terminal session was restarted, so shell state (working directory, variables, aliases, background jobs) was lost.${restoreNote}`
+          : 'restarting the terminal session failed.';
         detail = r.cancelled === 'before'
-          ? `Terminal execution was cancelled by the run before the command was written, so it never ran and has no exit code; ${session}`
-          : `Terminal execution was cancelled by the run before the command completed, so it has no exit code; ${session}`;
+          ? `Terminal execution was cancelled by the run before the command was written, so it never ran and has no exit code; ${restarted}`
+          : `Terminal execution was cancelled by the run before the command completed, so it has no exit code; its process tree was ended and ${restarted}`;
       } else if (r.timedOut) {
         // The REQ-TOOLS-099 contract stands — 124, session_reset, state lost — and the detail says both.
         detail = `The command exceeded its timeout of ${timeoutMs / 1000} seconds; the terminal session was forcibly restarted to terminate the process tree, and shell state (working directory, variables, aliases, background jobs) was lost${r.killStatus === 'reset_failed' ? ' — restarting the session failed' : ''}.${restoreNote}${r.error ? ` (${r.error})` : ''}`;

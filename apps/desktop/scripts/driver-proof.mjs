@@ -376,7 +376,8 @@ try {
 /*
  * 13d — PD-TOOLS-013 (OQ-226; live-run P2 at a68f121): a foreground terminal call the application's quit cuts is recorded as
  * interrupted, not as a hard timeout. The scripted coordinator, granted the direct-work bundle, runs `sleep 60` with a
- * 100 s bound; once its record is open (`running`), the quit is sent, and the store is read after the exit. Before the
+ * 100 s bound; once its record is open (`running`) and the command has marked that it runs, the quit is sent, and the
+ * store is read after the exit. Before the
  * repair the call read `timeout`, exit 124, "exceeded its timeout of 100 seconds", and filed `terminal_timeout` at `error`.
  */
 const cutWorkspace = join(output, 'cut-workspace');
@@ -393,7 +394,10 @@ const cut = await startApp({
   root: join(output, 'cut-app'), workspace: cutWorkspace, timeoutMs: 90_000,
   extra: {
     ROTARIS_SCRIPT: 'terminal:wedge,answer', ROTARIS_INTENT_SCRIPT: 'explicit_trivial',
-    ROTARIS_SCRIPT_TERMINAL_ARGS: JSON.stringify({ wedge: { command: process.platform === 'win32' ? 'Start-Sleep -Seconds 60' : 'sleep 60', timeout: 100 } }),
+    // The command marks that it runs before it sleeps, so the quit is sent once the command is under way and the cut is
+    // the mid-command one; a quit inside the first call's handshake is the other variant ("before the command was
+    // written"), which `terminal.test.ts` pins. Under load the open record alone came too early (292 ms in, 2026-10-07).
+    ROTARIS_SCRIPT_TERMINAL_ARGS: JSON.stringify({ wedge: { command: process.platform === 'win32' ? `Set-Content -Path '${join(cutWorkspace, 'running.txt')}' -Value ran; Start-Sleep -Seconds 60` : `printf ran > '${join(cutWorkspace, 'running.txt')}'; sleep 60`, timeout: 100 } }),
   },
 });
 const c = cut.driver;
@@ -410,6 +414,7 @@ try {
   await until(() => c.eval(COMPOSER_FOCUSED), (v) => v === true, { timeoutMs: 10_000, what: 'the composer holding focus' });
   await c.type('run the long command', { enter: true });
   await until(() => { try { return cutCalls(); } catch { return []; } }, (rows) => rows.some((r) => r.status === 'running'), { timeoutMs: 60_000, what: "the terminal call's open record" });
+  await until(() => existsSync(join(cutWorkspace, 'running.txt')), (ran) => ran === true, { timeoutMs: 30_000, what: 'the terminal command running' });
   const quitting = await c.quit();
   const exited = await exitWithin(cut.child, 60_000);
   check('13d: the quit during a running terminal call exits', quitting?.how === 'quit' && exited?.code === 0, `reply ${JSON.stringify(quitting)}; ${exited === null ? 'still running after 60 s' : `exited ${exited.code ?? exited.signal}`}`);

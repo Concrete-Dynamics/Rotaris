@@ -464,6 +464,8 @@ Given `haet_edit` is called, when the SHA-256 digest of the file's current bytes
 
 `haet_edit` matches `old_string` at level 1 of REQ-TOOLS-136 only — exact text, with no trailing-whitespace normalization, no indentation shift, and no fuzzy window — because the anchoring hash exists precisely to make the edit exact; a failure to match reports the path and directs the caller to read the file again, and multiple occurrences with `replace_all` false are reported as REQ-TOOLS-136 reports them. Writes are atomic and enter the same per-path undo history as REQ-TOOLS-132's writes. A successful edit reports the file's new `content_hash`, so consecutive edits chain without an intervening read.
 
+> **Narrowed by [`PD-TOOLS-014`](../product/directives.md#pd-tools-014), 2026-10-07.** The failure-to-match clause above still governs every miss but one: when the hash is current, `replace_all` is false and `old_string` matches exactly one window at REQ-TOOLS-136 level 2 or 3, the edit is still refused and nothing is written, and the reply names the level, the lines and what differs, states that the hash is still current and quotes the window as one JSON string instead of only directing a re-read.
+
 ### 16. Search Tools (grep, glob)
 
 **REQ-TOOLS-138** — Both search tools are read-only, workspace-confined, and use no shell or network. `grep` accepts `pattern` (regex; an invalid pattern returns `Invalid regex pattern: <detail>`), `paths` (a list; a singular `path` key and a bare-string `paths` value are normalized), and `max_matches` (default 100). Output is one `file:line:content` line per match, or `No matches found`.

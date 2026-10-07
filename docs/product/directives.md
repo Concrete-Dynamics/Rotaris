@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Eighty-three.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Eighty-four.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -6127,6 +6127,61 @@ PD-ORCH-015 (P1) was assigned the number before it.*
 > step, `reads4`, makes the four calls in one step, since every other scripted step speaks "Calling read_file." and would meet
 > the message limb first. The text met the code in no other place. **What was not measured:** a live run since the change. The
 > row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-tools-014"></a>
+
+### PD-TOOLS-014 — a `haet_edit` miss that matches but for whitespace names the level and quotes the file's lines
+
+**The case, stated exhaustively.** `haet_edit` or its alias `haet` is called with a `content_hash` equal to the SHA-256 of the
+file's current bytes, `old_string` and `new_string` different, `replace_all` false; `old_string` matches nowhere at REQ-TOOLS-136
+level 1; and it matches at level 2 (each line equal once trailing whitespace, a carriage return included, is ignored) or level 3
+(each line equal once one uniform leading prefix is added or removed). Everything outside this case is REQ-TOOLS-189's,
+exactly as written.
+
+**One window.** The edit SHALL NOT be applied, the file SHALL NOT be written, no undo entry SHALL be pushed, and the read
+record SHALL NOT change; the call fails. Its reply SHALL open with the sentence `old_string was not found exactly in <path>.`
+and then:
+
+1. name the match level in the specification's words ("match level 2" or "match level 3") and the window's 1-based line range;
+2. say in words what differs: at level 2, the lines whose trailing whitespace or carriage return differs; at level 3, the
+   leading prefix the file's lines carry in addition to, or instead of, `old_string`'s, quoted as JSON with its length;
+3. state that the caller's content_hash is still current and that nothing was written;
+4. ask that `new_string` carry the file's indentation and line endings;
+5. quote the window's exact text — the file's lines over that range joined by `\n`, so that sent back as `old_string` with the
+   same hash it matches at level 1 — as one JSON string, when that string is at most 30,000 characters. A longer window SHALL
+   NOT be quoted, and the reply SHALL direct `haet_read` with that window's offset and limit instead;
+6. end with: if these are not the lines meant, read the file again with `haet_read`.
+
+The facts SHALL come before the quote, so that REQ-SESSION-136's 2,000-character error record keeps them.
+
+**Several windows.** When more than one window matches at the deciding level, the reply SHALL open with the same sentence,
+name the level and each window's starting line, quote nothing, and direct `haet_read` with an offset and limit.
+
+**Unchanged.** A level-4 match and no match reply as REQ-TOOLS-189 fixes ("… Read it again with haet_read."); `replace_all`
+true keeps its own miss; the stale-hash refusal keeps its words and its rule that it SHALL NOT quote the file's content; and
+`haet_edit` still applies a level-1 match only. REQ-TOOLS-136's levels are unchanged, and `write_file` is untouched.
+
+**Why, and what it costs.** The final duress live run at `a68f121` (finding D5; pack `2026-10-07T07-09-30-708Z`, session
+`e6747bd0`) measured the miss as built: wave3 failed 6 of its 14 `haet_edit` calls with "not found exactly" and followed each
+near miss with a `sed -n … | cat -A` probe (#293, #298, #305, #322), and wave3b did the same after #382 (#380, #385, #386) —
+7 failed edits, about 14 extra steps and 63 s inside the two children the 1200 s ceiling cut off. Replayed through the build's
+`matchEdit` over `docs/verification.md` rebuilt from the store (every `haet_edit`'s hash checked against the rebuilt bytes),
+#292, #297, #304, #315, #321 and #382 each match one window at level 3; #290 only at level 4. The build had computed that fact
+and discarded it, and a re-read shows the caller the same invisible whitespace it misjudged. The quote is safe because it is
+sent only after the hash matched: it is text the caller's hash already names, and the stale-hash case, where the content has
+moved, keeps its rule. A JSON string is chosen over REQ-TOOLS-134's `N: line` form because these misses are about characters
+nobody can see — a trailing space, a tab, a `\r`. On a CRLF file a multi-line `old_string` written with LF matches only at
+level 2, and the quote shows the `\r`. Applying at level 2 or 3 was rejected: `write_file`'s level-3 apply writes `new_string`
+unshifted, so a caller wrong about the indentation in `old_string` would land a mis-indented block beside a success, and a
+level-2 apply drops trailing spaces and `\r`. What it costs: each near miss is still one failed call and one `tool_error` issue
+(REQ-SESSION-136); a second implementation built from the specification alone returns the plain miss; and a near-miss reply
+carries up to the window's size.
+
+> **Narrows:** REQ-TOOLS-189
+
+*Raised under the owner's delegation, 2026-10-07, ruling live-run finding D5 (OQ-231); logged as [R-072](requests.md#r-072).*
 
 ---
 

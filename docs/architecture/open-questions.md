@@ -11619,3 +11619,61 @@ is armed from `runtime.loop_classification_timeout` uncapped by REQ-NOTIFY-106's
 **Not yet measured:** a live run; the next should show no `loop_supervisor_activation` with `trigger: raw-count` unless the
 agent's last three messages with text were normalised-equal or its last four tool calls were identical in name and whole
 arguments.
+
+**OQ-231 — Does a `haet_edit` miss that matches at REQ-TOOLS-136 level 2 or 3 say so?** *(REQ-TOOLS-189, `haet_edit`
+matches at level 1 only "because the anchoring hash exists precisely to make the edit exact", and "a failure to match reports
+the path and directs the caller to read the file again"; its stale-hash clause, whose message "SHALL NOT quote the file's
+current content"; REQ-TOOLS-136, the four match levels — level 2 trailing whitespace, level 3 a uniform indentation shift;
+REQ-TOOLS-134, the read's line format and its 30,000-character output cap; REQ-SESSION-136, the `tool_error` issue a failed
+call files. Raised 2026-10-07 from finding D5 of the final duress live run at `a68f121` (pack `2026-10-07T07-09-30-708Z` of
+the live worktree, session `e6747bd0`, the self-hosted endpoint), and ruled the same day.)*
+
+wave3 (`wave3-verify-all`) failed 6 of its 14 `haet_edit` calls with "old_string was not found exactly" (#290, #292, #297,
+#304, #315, #321), and after each near miss ran `sed -n … | cat -A` to see the file's whitespace (#293, #298, #305, #322);
+its continuation wave3b did the same after #382 (#380, #385, #386, `awk … indent=`). The autopsy priced it at 7 failed edits,
+about 14 extra steps and about 63 s, all inside the two children the 1200 s ceiling cut off, and seven `tool_error` issues
+(7 to 12 and 18). The build already knew: `matchEdit` (`packages/agent-tools/src/tools/files.ts`) runs every level, and the
+miss branch discards a level-2 or level-3 match (`if (!m || m.level !== 1)`). Recorded as
+[`haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md`](../defects/haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md).
+
+**Replayed before the build (fin32, 2026-10-07).** `docs/verification.md` was rebuilt from the pack's store — wave3's
+`write_file` #289, then every successful `haet_edit` and code-intelligence `replace_content` in ordinal order, each
+`haet_edit`'s `content_hash` checked equal to the rebuilt bytes' SHA-256 — and each miss's `old_string` run through the
+build's own `matchEdit`. #292, #297, #304, #315, #321 and #382 each match **one window at level 3** (the file's lines one
+space deeper or shallower than `old_string`'s; #304's first line one space shallower); #290 matches at level 4 only
+(similarity 0.908: its first line named citations the file did not hold). None matched at level 2. So 6 of the 7 "not found
+exactly" misses of the two children were a single level-3 window.
+
+**What the build proceeds under.** REQ-TOOLS-189 as written: any miss at level 1 answers "old_string was not found exactly in
+<path>. Read it again with haet_read.", whatever a lower level found.
+
+**What a ruling decides.** Whether the edit applies at level 2 or 3 (as `write_file`'s does), whether the miss names the near
+match and quotes it while the edit stays exact, or whether the reply stands as built.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** when `haet_edit` (or `haet`)
+holds a current hash, `replace_all` is false, and `old_string` misses at level 1 but matches exactly one window at REQ-TOOLS-136
+level 2 or 3, the edit is refused and nothing is written. The reply names the path, the match level and the window's lines,
+and says in words what differs: trailing whitespace or carriage returns on the named lines, or the leading prefix the file
+carries in addition to or instead of `old_string`'s, quoted as JSON. It then states that the held content_hash is still
+current, asks that `new_string` carry the file's whitespace, and quotes the window's text as one JSON string, up to 30,000
+characters. When several windows match at level 2 or 3, the reply names the level and their lines and quotes nothing. Level 4,
+no match, `replace_all` and the stale-hash refusal keep today's replies, and `haet_edit` still applies a level-1 match only.
+Recorded as [`PD-TOOLS-014`](../product/directives.md#pd-tools-014), which narrows REQ-TOOLS-189's failure-to-match clause.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: keep the edit refused; name the matched lines and the
+level, say what differs in words, quote the lines in REQ-TOOLS-134's `N: line` format and state that the hash is current, as a
+directive narrowing REQ-TOOLS-189's miss clause. *Advocate B (the system's lens)*: the same refusal and facts, the quote as one
+JSON string, `replace_all` left unchanged, as a directive extending REQ-TOOLS-189 — and, inferred rather than measured, a CRLF
+file on Windows (the only platform shipped, PD-STARTUP-001) where a multi-line `old_string` written with LF matches only at
+level 2 and a re-read cannot show the `\r`. **The ruling followed both**: the position they share; from B the JSON quote (an
+`N: line` quote shows neither a trailing space nor a `\r`), the CRLF case and `replace_all` unchanged; from A the 30,000-character
+cap and the disposition Narrows, since in this case the reply no longer sends the caller to read again.
+
+**The readings rejected, with their reasons.** *Applying the edit at level 2 or 3*: `applyMatch` writes `new_string` over a
+level-3 window unshifted, and a caller whose `old_string` had the wrong indentation almost always wrote `new_string` from the
+same belief, so the block would land at the wrong depth (a Markdown paragraph turned code block, a Python or YAML meaning
+changed) beside a success; at level 2 it would drop trailing spaces (a Markdown hard break) and `\r` (mixed line endings);
+and it undoes the exactness REQ-TOOLS-189 gives as the hash's whole reason. *Confirming the miss as built*: the build computes
+the fact, discards it, and points the caller at a re-read that shows nothing new; the measured cost stays inside ceiling-bound
+children. **Costs kept on record:** each near miss is still one failed call and one `tool_error` issue; a second
+implementation built from the specification alone returns the plain miss; replies grow by up to the window's size.

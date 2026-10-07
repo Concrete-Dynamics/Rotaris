@@ -170,7 +170,7 @@ paragraph says so. No package, edge, process, channel, command or store column c
 **An error-path tool record marks the cut it makes (REQ-SESSION-194, REQ-SESSION-136; fin23, live-run M3).**
 `SessionWriter.settleToolCall` cuts an error's `args` and `result` with `run/cut.ts`, so a cut value ends with `...` inside
 its 2,000 characters where it was a bare `slice`; the arguments keep their shape (`cutArguments`: only free-text values cut,
-a path, identifier, count or timestamp never; OQ-209, ruled 2026-10-07 as `PD-SESSION-003`, below). The **runtime view**'s store table says so. No package, edge, process,
+a path, identifier, count or timestamp never; OQ-209, ruled 2026-10-07 as `PD-SESSION-003`, above). The **runtime view**'s store table says so. No package, edge, process,
 channel, command or store column changed.
 
 **A terminal command too long for one PTY line is staged in a script (REQ-TOOLS-096, ADR-0020; fin23, live-run M1).** A POSIX
@@ -186,7 +186,7 @@ The **runtime view**'s file-tools paragraph says so. No package, edge, process, 
 
 **`summary.md`'s Tool errors line is the issues record's (REQ-SESSION-140, REQ-SESSION-136; fin23).** `warningLines`
 (`run/summary.ts`) reads `issues_by_kind.tool_error`, the figure the Metrics section's Issues line prints, where it read the
-tool-outcomes histogram's `tool_error` bucket. The histogram is unchanged (REQ-SESSION-139; its `mcp` bucket was OQ-208's, ruled 2026-10-07, below).
+tool-outcomes histogram's `tool_error` bucket. The histogram is unchanged (REQ-SESSION-139; its `mcp` bucket was OQ-208's, ruled 2026-10-07, above).
 The scripted client gains a `badterm` step, a terminal call its schema refuses, which `sessions-proof`'s seed launch takes.
 The **runtime view**'s repair paragraph says so. No package, edge, process, channel, command or store column changed.
 
@@ -204,7 +204,7 @@ changed.
 
 **`summary.md` carries REQ-SESSION-140's sections (fin22).** `renderSummary` renders `SummaryFacts`, read by `summaryFactsOf`
 (`run/summary.ts`) in one read transaction: the task line from `StoreDal.firstPromptRow`, the stop reason only where one is
-recorded, Metrics with `n/a` for what is unavailable, Warnings (mostly-elided artifacts read `n/a` while OQ-207 was open, its note left open — a count since `PD-SESSION-002`, below; the denials name the permission audit on every count, and `timeouts` is labelled as every tool call that timed out), Agents, Slowest
+recorded, Metrics with `n/a` for what is unavailable, Warnings (mostly-elided artifacts read `n/a` while OQ-207 was open, its note left open — a count since `PD-SESSION-002`, above; the denials name the permission audit on every count, and `timeouts` is labelled as every tool call that timed out), Agents, Slowest
 Tools and the inspection note; the counts are `sessionMetrics` (`export.ts`, which the metrics document now wraps), over
 `StoreDal.toolCallDigestOf` and `auditDigestOf`, two new statements over the existing tables. `SummaryWriter.rebuild` guards
 every read and skips a superseded rebuild; `costLabelOf` moved to `run/cost-label.ts` and is re-exported where it was. The

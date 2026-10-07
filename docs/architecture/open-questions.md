@@ -10600,12 +10600,12 @@ On fetch it followed B. The terminal-worded timeout issue an MCP or fetch timeou
 Built by fin28 (`apps/desktop/src/run-host/mcp.ts`, `packages/agent-tools/src/tools/fetch.ts`); the fetch half is
 [`a-fetch-calls-record-carries-its-tools-name-as-outcome-kind.md`](../defects/fixed/a-fetch-calls-record-carries-its-tools-name-as-outcome-kind.md).
 
-Every MCP tool call's record carries `outcome_kind: 'mcp'`, the call succeeding or failing alike
-(`apps/desktop/src/run-host/mcp.ts`, the `execute` of each MCP tool executor the run host builds). The histogram follows REQ-SESSION-139's letter and
-files each under the bucket its record names, so `summary.md`'s Tool outcomes line and the metrics document read
+Until the 2026-10-07 ruling, every MCP tool call's record carried `outcome_kind: 'mcp'`, the call succeeding or failing alike
+(`apps/desktop/src/run-host/mcp.ts`, the `execute` of each MCP tool executor the run host builds). The histogram followed REQ-SESSION-139's letter and
+filed each under the bucket its record named, so `summary.md`'s Tool outcomes line and the metrics document read
 `mcp <n>` beside `success`, `tool_error`, `invalid_request`: in the c2a9444 default live run's pack
 (`.live-run/runs/2026-10-06T17-41-48-175Z/workspace.db`) the edit, requirements and terminal sessions each have such a
-bucket. `mcp` names the tool's family, not how the call ended; a reader of the histogram cannot tell an MCP call that
+bucket. `mcp` names the tool's family, not how the call ended; a reader of the histogram could not tell an MCP call that
 succeeded from one that failed. The specification does not say whether REQ-SESSION-136's "only when applicable" makes an
 `outcome_kind` applicable to an MCP call at all, and gives an MCP call no outcome vocabulary of its own: REQ-TOOLS-112's
 set (`success`, `shell_failure`, …) is the terminal's.
@@ -10623,7 +10623,7 @@ bucket of its own.
 the terminal's, the only vocabulary the specification gives the field, so under REQ-SESSION-136's "only when applicable"
 an `outcome_kind` applies to a record whose tool has one, and an MCP call's record would carry none. REQ-SESSION-139 then
 derives its bucket from `status` and `is_error`, `success` or `tool_error`, and the histogram tells an MCP call that failed
-from one that succeeded. The build is not changed by this recommendation: it proceeds as stated above until the owner rules.
+from one that succeeded. The build was not changed by this recommendation: it proceeded as stated above until the 2026-10-07 ruling.
 
 **OQ-209 — An error-path tool record's arguments are "truncated to 2000 characters", and paths and identifiers are "never
 truncated": which governs, and what do the 2,000 characters measure?** *(REQ-SESSION-136, "On error, recorded args/result

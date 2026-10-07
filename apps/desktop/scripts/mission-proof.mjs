@@ -15,6 +15,8 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *                    the table with one row per agent and state text, elapsed advancing between two probes 1.5 s apart.
  *   1b. waiting    — the model's slot cap one, two children waiting behind it: every row's Elapsed cell and tree meta
  *                    carries a figure, and a waiting row's advances (REQ-MONITOR-107/111).
+ *   1d. timed out  — a child cut off at a 3 s per-agent timeout, with and without progress: the tree and table tags, the
+ *                    inspector's and the persona window's line, and their geometry (PD-CONFIG-003 revision 3, OQ-234).
  *   2. parity      — the Mission tree, the Overview card and the Workspace sidebar probed in one run: identical ids and
  *                    states; then a 23-agent record (20 seeded) refreshed with Mission visible, the apply-to-paint time.
  *   3. pause       — a child selected → Pause refused with the explanation, no control sent; the run selected → accepted,
@@ -217,6 +219,73 @@ const s1c = scenario('todo-list-owed');
   const warned = /began the task's second work item with no todo list of its own; the call was refused \(REQ-ORCH-029\)/.test(r.log);
   expect(warned, 'the refusal was not logged as a warning citing REQ-ORCH-029 (see todo-list-owed.log)');
   results.todoListOwed = { calls: shape, children: kids.map((k) => k.canonical_name), toolErrors, warningInLog: warned };
+}
+
+// 1d. PD-CONFIG-003 revision 3 (OQ-234, the R-072 consortium's CN1; the repair of
+// docs/defects/fixed/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md): a child its per-agent timeout stops says
+// so where its failure shows. The limit is set to 3 s (`runtime.child_timeout`), so the seconds form is what is read here;
+// the minutes forms are pinned by packages/ui/src/agent-timeout.test.ts. Launch A: a child that completed a call (making
+// progress) — selected in the Workspace sidebar, the inspector's line under its unchanged meta line, the tree row's tag on a
+// line of its own (the persona keeps its width), the persona window's line under its state; then Mission's table and tree.
+// Launch B: a child that made no call — the table's tag titled with the line, no "while making progress", the card not
+// scrolled sideways. Before the repair every one of these read `failed` and nothing else.
+const TIMEOUT_LINE = (progress) => `Cut off at its per-agent timeout of 3 seconds${progress ? ' while making progress' : ''}. Settings › Runtime › Per-agent timeout sets this limit for runs started from now.`;
+const evalsOf = (log) => [...log.matchAll(/capture: eval-at \d+ .*? → (\{.*\})\s*$/gm)].map((m) => JSON.parse(m[1]));
+// The replica's run-start decline is REQ-SESSION-161's own recovery, read from the code and left as a diagnostic
+// (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md, "The declined increment at run
+// start"); it met this item's first launch at a load of 15 on 4 CPUs, before any click. Every other console line still fails it.
+const unexpected = (errors) => errors.filter((l) => !/\[replica\] declined increment on [^:]+: earliest-changed \d+ precedes oldest held \d+/.test(l));
+const s1d = scenario('timed-out', ['  child_timeout: 3']);
+{
+  const box = 'const box = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; };';
+  const geometry = `(() => { ${box} const row = document.querySelector('.agent-row'); const line = document.querySelector('[data-testid="inspector-timeout"]'); const path = line?.querySelector('.agent-timeout__path'); const lh = parseFloat(getComputedStyle(path).lineHeight) || 0; return { kind: 'workspace', treeRow: box(row), treeMain: box(row?.querySelector('.agent-row__main')), treePersona: box(row?.querySelector('.agent-row__persona')), treeMeta: box(row?.querySelector('.agent-row__meta')), treeMetaClass: row?.querySelector('.agent-row__meta')?.className ?? null, tag: box(row?.querySelector('[data-testid="agent-timed-out"]')), personaLineHeight: parseFloat(getComputedStyle(row.querySelector('.agent-row__persona')).lineHeight) || 0, meta: document.querySelector('[data-testid="inspector-meta"]')?.textContent ?? null, metaThenLine: document.querySelector('[data-testid="inspector-meta"]')?.nextElementSibling === line, line: line?.textContent ?? null, lineBox: box(line), pathBox: box(path), pathLineHeight: lh, inspectorScroll: (() => { const b = document.querySelector('.inspector__body'); return b ? [b.scrollWidth, b.clientWidth] : null; })() }; })()`;
+  // The end probes carry `data-*` attributes only, so the tags' class and title are read by an evaluation once Mission shows them.
+  const missionTags = `(() => { const read = (el) => el ? { text: el.textContent, className: el.className, title: el.getAttribute('title'), description: el.getAttribute('aria-description') } : null; return { kind: 'mission-tags', table: read(document.querySelector('.agent-table__row [data-testid="agent-timed-out"]')), tree: read(document.querySelector('.mission__run-row + .agent-tree [data-testid="agent-timed-out"]')), state: document.querySelector('.agent-table__state-text')?.textContent ?? null }; })()`;
+  const r = await launch('timed-out', s1d, {
+    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'read,wait:6000,answer', ROTARIS_CAPTURE_PROMPT: 'delegate one long job',
+    ROTARIS_CAPTURE_CLICKS: '.agent-row@~20000;;.inspector:has([data-testid="inspector-timeout"]) .inspector__actions .btn>>Pop out@~45000',
+    ROTARIS_CAPTURE_EVAL_AT: `${geometry}>>[data-testid="inspector-timeout"]@~45000;;${missionTags}>>.agent-table__row [data-testid="agent-timed-out"]@~70000`,
+    ROTARIS_CAPTURE_PNG_WHEN: '[data-testid="inspector-timeout"]', ROTARIS_CAPTURE_PNG_AT: `${join(output, 'timed-out-workspace.png')}@~45000`,
+    ROTARIS_CAPTURE_PERSONA_PROBE_AT: '[data-testid="persona-timeout"]@~50000;;[data-testid="persona-agent-state"]@~50000',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '8000', ROTARIS_CAPTURE_END_VIEW: '3', ROTARIS_CAPTURE_END_VIEW_MS: '3000',
+    ROTARIS_CAPTURE_PROBE: '.agent-table__row [data-testid="agent-timed-out"];;.agent-table__state-text;;.mission__run-row + .agent-tree [data-testid="agent-timed-out"]',
+  });
+  const db = open(s1d); const row = session(db); const kids = children(db, row.session_id);
+  const report = JSON.parse(db.prepare('SELECT report FROM children WHERE session_id = ?').get(row.session_id).report);
+  db.close();
+  expect(row.execution_status === 'completed' && kids.length === 1 && kids[0].state === 'failed', `the run ended ${row.execution_status} with ${JSON.stringify(kids.map((k) => k.state))}`);
+  expect(report.errors.some((e) => e.type === 'timeout' && e.message === 'Child timed out after 3s') && typeof report.cut_off?.statement === 'string', `the stored report: ${JSON.stringify({ errors: report.errors, cut_off: report.cut_off })}`);
+  const g = evalsOf(r.log).find((e) => e.kind === 'workspace');
+  expect(g, 'no geometry reading in the Workspace (see timed-out.log)');
+  expect(g.meta === 'failed · ' + g.meta.split(' · ')[1] + ' · 1 tool call' && g.metaThenLine, `the inspector's meta line "${g.meta}" or its order (REQ-MONITOR-052's form)`);
+  expect(g.line === TIMEOUT_LINE(true), `the inspector's line: "${g.line}"`);
+  expect(g.pathBox && g.pathBox.h <= Math.ceil(g.pathLineHeight) + 1, `the control's path wrapped: ${JSON.stringify(g.pathBox)} at line height ${g.pathLineHeight}`);
+  expect(g.inspectorScroll && g.inspectorScroll[0] <= g.inspectorScroll[1], `the inspector scrolls sideways: ${JSON.stringify(g.inspectorScroll)}`);
+  expect(g.tag && /agent-row__meta--stacked/.test(g.treeMetaClass ?? '') && g.treePersona.h <= Math.ceil(g.personaLineHeight) + 1, `the sidebar row: persona ${JSON.stringify(g.treePersona)} at line height ${g.personaLineHeight}, main ${JSON.stringify(g.treeMain)}, meta ${g.treeMetaClass} (the tag squeezed the persona onto two lines)`);
+  const persona = personaProbesAt(r.log, '~50000', '[data-testid="persona-timeout"]')?.[0]?.text ?? null;
+  const personaState = personaProbesAt(r.log, '~50000', '[data-testid="persona-agent-state"]')?.[0]?.text ?? null;
+  expect(persona === TIMEOUT_LINE(true) && personaState === 'failed', `the persona window: state "${personaState}", line "${persona}"`);
+  const tags = evalsOf(r.log).find((e) => e.kind === 'mission-tags');
+  expect(tags, 'no reading of the Mission view\'s tags (see timed-out.log)');
+  const tableTag = tags.table; const treeTag = tags.tree;
+  expect(tableTag?.text === 'timed out' && /\btag-fail\b/.test(tableTag.className) && tableTag.title === TIMEOUT_LINE(true) && tableTag.description === TIMEOUT_LINE(true), `the Mission table's tag: ${JSON.stringify(tableTag)}`);
+  expect(treeTag?.text === 'timed out' && /\btag-fail\b/.test(treeTag.className) && treeTag.title === TIMEOUT_LINE(true), `the Mission tree's tag: ${JSON.stringify(treeTag)}`);
+  expect(tags.state === 'failed' && endProbe(r.log, '.agent-table__state-text')?.[0]?.text === 'failed', 'the table row no longer reads failed');
+  expect(unexpected(r.errors).length === 0, `renderer errors: ${unexpected(r.errors).join(' | ')}`);
+  results.timedOut = { replicaDeclines: r.errors.length - unexpected(r.errors).length, report: { error: 'Child timed out after 3s', cutOff: true }, workspace: g, personaWindow: { state: personaState, line: persona }, missionTable: tableTag.title, missionTree: treeTag.title, png: [join(output, 'timed-out-workspace.png'), r.png] };
+
+  const tableGeometry = `(() => { const tbl = document.querySelector('.agent-table'); const row = tbl.querySelector('.agent-table__row'); const card = tbl.parentElement; return { kind: 'mission', title: row.querySelector('[data-testid="agent-timed-out"]').getAttribute('title'), cells: [...row.children].map((c) => Math.round(c.getBoundingClientRect().width)), rowHeight: Math.round(row.getBoundingClientRect().height), cardScroll: [card.scrollWidth, card.clientWidth], tagOwnLine: (() => { const t = row.querySelector('[data-testid="agent-timed-out"]').getBoundingClientRect(); const s = row.querySelector('.agent-table__state-text').getBoundingClientRect(); return t.top >= s.bottom - 1; })() }; })()`;
+  const r2 = await launch('timed-out-idle', s1d, {
+    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:6000,answer', ROTARIS_CAPTURE_PROMPT: 'delegate one idle job',
+    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_EVAL_AT: `${tableGeometry}>>.agent-table__row [data-testid="agent-timed-out"]@~45000`,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
+  });
+  const t = evalsOf(r2.log).find((e) => e.kind === 'mission');
+  expect(t && t.cardScroll[0] <= t.cardScroll[1] && t.tagOwnLine, `the Mission table with the tag: ${JSON.stringify(t)} (the card scrolled sideways, or the tag sat beside the state)`);
+  expect(t.title === TIMEOUT_LINE(false), `the idle child's tag title: "${t.title}"`);
+  expect(unexpected(r2.errors).length === 0, `renderer errors: ${unexpected(r2.errors).join(' | ')}`);
+  results.timedOutIdle = { table: t, png: r2.png };
 }
 
 // 2. Parity across the three trees, then the 23-agent refresh with Mission visible.

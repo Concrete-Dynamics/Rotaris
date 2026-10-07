@@ -4064,6 +4064,31 @@ REQ-NOTIFY-100, REQ-NOTIFY-261, OQ-217 and revision 2's notice detail.*
 > its timeout issue at `error` and its report's cut-off statement. **NOT REACHED:** the control itself — the live harness never
 > sets it and no launch captured Settings — so a person raising the limit, the relief the directive offers, has not run
 > against a real model. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Revision 3's first execution, 2026-10-07, built under [R-072](requests.md#r-072) (fin33):** the revision held as written,
+> and the drawing needed one rule the clause leaves to the design. **Found:** "after its state" read as beside it squeezed the
+> rows — in the built app (1440 × 900, load about 15 on 4 CPUs) the tag beside `failed · 1m 7s` cut the Workspace sidebar
+> row's persona column from 112 px to 35 px, breaking "coding-agent" over two lines (row 44 → 61 px), and widened the Mission
+> table's state cell by 70 px, so the card scrolled 14 px sideways; and the inspector broke "Per-agent" from "timeout" at the
+> hyphen. The tag now takes a line of its own under the state (row 50 px, the persona 112 px and one line; the state cell
+> 78 px, the card 910 of 910 px) and the control's path is kept on one line (213 px). The same squeeze under the stalled badge,
+> which shares the slot, is recorded, not repaired
+> ([`the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md`](../defects/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md)).
+> The limit is written "<N> seconds" except that one second reads "1 second", the way "1 minute" does. **As built.**
+> `childTimedOutMessage` and `timedOutOf` (`packages/engine/src/children/cut-off.ts`), `AgentRecord.timedOut`
+> (`packages/contracts/src/children.ts`) filled by `toAgentRecord` (`packages/engine/src/sessions.ts`), `TIMED_OUT_TAG`,
+> `timeoutLimitText`, `perAgentTimeoutPath` and `timeoutLine` (`packages/ui/src/agents.ts`) over `RUNTIME_CATEGORY_LABEL` and
+> `PER_AGENT_TIMEOUT_LABEL` (`packages/ui/src/settings/config-state.ts`, which Settings renders), `TimeoutLine.tsx`, and the
+> four surfaces (`AgentTree.tsx`, `AgentTable.tsx`, `Inspector.tsx`, `PersonaWindow.tsx`). **What was measured.**
+> `cut-off.test.ts`, `activity.test.ts`, `children.test.ts`'s two cut-off cases and `agent-timeout.test.ts`, red on the source
+> before; `pnpm mission-proof` item 1d (a 3 s limit, so the seconds form): a child making progress read "Cut off at its
+> per-agent timeout of 3 seconds while making progress. …" in the inspector under `failed · 10s · 1 tool call`, in its persona
+> window under `failed`, and as the title of both Mission tags; a child that made no call read it without "while making
+> progress"; driven (`pnpm app:drive`) at a 60 s limit, "1 minute while making progress", and at the 1000 px floor the sidebar
+> row (295 px) and the inspector drawer (289 px) with no sideways scroll. **What was not measured.** A cut-off in a live run
+> (the orchestrator's: D2's 45-minute duress run, where any child cut off should read "45 minutes"), and the `ui-review`
+> pack (skipped: it renders no cut-off agent; the geometry above was read from the built app instead). The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

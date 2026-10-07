@@ -49,9 +49,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 revision 3, REQ-MONITOR-040, REQ-MONITOR-044, REQ-MONITOR-052, REQ-MONITOR-069; OQ-234 ruled under R-072, fin33).**
 `AgentRecord` gains `timedOut` (`{ limitSeconds, makingProgress } | null`), which `toAgentRecord` derives from the stored
 report (`timedOutOf` in `packages/engine/src/children/cut-off.ts`, reading the error the settle now writes through
-`childTimedOutMessage`); the tree and Mission-table rows draw a `tag-fail` "timed out", and the inspector and the persona
-window's instance tab the line `timeoutLine` (`packages/ui/src/agents.ts`) words, whose path is built from the labels Settings
-renders (`RUNTIME_CATEGORY_LABEL`, `PER_AGENT_TIMEOUT_LABEL` in `settings/config-state.ts`, and the rail's `Settings`). The
+`childTimedOutMessage`); the tree and Mission-table rows draw a `tag-fail` "timed out" on a line of its own under the state
+(`.agent-row__meta--stacked`, measured so the sidebar's persona keeps its width), and the inspector and the persona window's
+instance tab the line `timeoutLine` (`packages/ui/src/agents.ts`) words, drawn by `TimeoutLine.tsx` with the control's path on
+one line, whose path is built from the labels Settings renders (`RUNTIME_CATEGORY_LABEL`, `PER_AGENT_TIMEOUT_LABEL` in
+`settings/config-state.ts`, and the rail's `Settings`); `pnpm mission-proof` item 1d shows it. The
 **runtime view**'s agent-record paragraph, the **state ownership view**'s cut-off row and the **seams view** §8 say so. One
 field on the existing session-record channel; no package, edge, process, command or store column changed.
 

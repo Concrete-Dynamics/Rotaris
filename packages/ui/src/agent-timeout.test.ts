@@ -13,7 +13,7 @@ import { pendingFrom } from './settings/config-state.js';
 
 /**
  * PD-CONFIG-003 revision 3 (OQ-234, the R-072 consortium's CN1), the repair of
- * docs/defects/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md: a delegated agent its per-agent timeout
+ * docs/defects/fixed/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md: a delegated agent its per-agent timeout
  * stopped read `failed` and nothing else on every surface (the final duress live run at `a68f121`, `bg_dcecf655` and
  * `bg_98fa54d7`), and nothing named the control that moves the limit. Now the tree row and the Mission-table row carry a
  * "timed out" tag after the state, and the inspector (under its meta line) and the persona window's instance tab (under its
@@ -41,7 +41,8 @@ const persona = (a: AgentRecord) => renderToStaticMarkup(createElement(PersonaWi
   onSteer: async () => ({ ok: true as const }), onCancel: async () => ({ ok: true as const }),
 }));
 const text = (html: string) => html.replace(/<!-- -->/g, '').replace(/&#x27;/g, "'");
-const byTestId = (html: string, id: string) => text(html).match(new RegExp(`data-testid="${id}"[^>]*>([^<]*)<`))?.[1] ?? null;
+/** The text of the element carrying the test id, its own inline spans included. */
+const byTestId = (html: string, id: string) => text(html).match(new RegExp(`data-testid="${id}"[^>]*>((?:[^<]|<span[^>]*>[^<]*</span>)*)<`))?.[1]?.replace(/<[^>]+>/g, '') ?? null;
 
 const PROGRESS = agent({ timedOut: { limitSeconds: 1200, makingProgress: true } });
 const IDLE = agent({ id: 'bg_98fa54d7', name: 'wave3b-finish-verification', timedOut: { limitSeconds: 1250, makingProgress: false } });
@@ -87,8 +88,8 @@ describe('PD-CONFIG-003 revision 3: where a cut-off agent shows', () => {
       expect(tag?.[0]).toContain(`title="${timeoutLine(PROGRESS.timedOut!)}"`);
       expect(tag?.[0]).toContain(`aria-description="${timeoutLine(PROGRESS.timedOut!)}"`);
     }
-    // After the state: the tree's meta label reads `failed · <elapsed>` and then the tag.
-    expect(text(tree(PROGRESS))).toMatch(/class="agent-row__meta mono">failed · 20m 4s <span class="[^"]*\btag-fail\b[^"]*"[^>]*data-testid="agent-timed-out"/);
+    // After the state: the tree's meta label reads `failed · <elapsed>` and then the tag, on a line of its own (stacked).
+    expect(text(tree(PROGRESS))).toMatch(/class="agent-row__meta mono agent-row__meta--stacked">failed · 20m 4s <span class="[^"]*\btag-fail\b[^"]*"[^>]*data-testid="agent-timed-out"/);
     expect(text(table(PROGRESS))).toMatch(/<span class="agent-table__state-text">failed<\/span> <span class="[^"]*\btag-fail\b[^"]*"[^>]*data-testid="agent-timed-out"/);
     // REQ-MONITOR-041's row tooltip is unchanged: the delegation task.
     expect(text(tree(PROGRESS))).toContain('title="verify the whole result"');
@@ -99,6 +100,8 @@ describe('PD-CONFIG-003 revision 3: where a cut-off agent shows', () => {
     expect(byTestId(html, 'inspector-meta')).toBe('failed · 20m 4s · 58 tool calls');
     expect(byTestId(html, 'inspector-timeout')).toBe(timeoutLine(PROGRESS.timedOut!));
     expect(html).toMatch(/data-testid="inspector-meta">[^<]*<\/div><div class="inspector__timeout text-secondary" data-testid="inspector-timeout">/);
+    // The control's path stays on one line.
+    expect(html).toContain('<span class="agent-timeout__path">Settings \u203a Runtime \u203a Per-agent timeout</span>');
     expect(byTestId(text(inspector(IDLE)), 'inspector-timeout')).toBe('Cut off at its per-agent timeout of 1250 seconds. Settings › Runtime › Per-agent timeout sets this limit for runs started from now.');
   });
 

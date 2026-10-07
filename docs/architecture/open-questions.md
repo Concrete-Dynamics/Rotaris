@@ -11810,7 +11810,7 @@ reports). Each row read `failed` and nothing else. "Child timed out after 1200s"
 the timeline, and no screen shows any of them; `AgentRecord` carries no end cause; the report artifact copies only the status
 and the summary, so the one cause a person could read was the summariser's text (finding D9). The control that moves the limit
 lives in Settings › Runtime, in minutes. Recorded as
-[`a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md`](../defects/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
+[`a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md`](../defects/fixed/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
 What the specification does not settle is whether a surface that shows the agent ends with the limit and a pointer to its
 control, and which surfaces those are.
 
@@ -11837,3 +11837,15 @@ looping child's line does not suggest a longer limit would have helped; from B t
 REQ-MONITOR-052's actions stay as listed. It departs from both in writing the path in the shape revision 2 built
 ("Settings › Runtime › <control>"), so the two timeouts follow one rule, and in stating no current value, which Settings shows
 one step away.
+
+**Built 2026-10-07 (fin33).** The settle writes REQ-ORCH-088's error through `childTimedOutMessage` and `timedOutOf` reads it
+back with the cut-off statement (`packages/engine/src/children/cut-off.ts`); `toAgentRecord` fills `AgentRecord.timedOut` for an
+agent presented `failed`; `timeoutLine` (`packages/ui/src/agents.ts`) words the line once, its path built from the labels
+Settings renders. Found while drawing it: the tag beside the state squeezed the sidebar row's persona onto two lines and
+scrolled the Mission card sideways, so it takes a line of its own under the state; recorded in PD-CONFIG-003's first execution
+of revision 3. Pinned by `cut-off.test.ts`, `activity.test.ts`, `children.test.ts` and `agent-timeout.test.ts` (red on
+`b90d27f`); shown by `pnpm mission-proof` item 1d. Repaired note:
+[`a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md`](../defects/fixed/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
+**For the live run:** at D2's 45-minute duress launch, a child cut off reads "Cut off at its per-agent timeout of 45 minutes
+while making progress. …" in the inspector and its persona window, and its rows carry the tag; the record carries
+`timedOut: { limitSeconds: 2700, makingProgress: true }`. Not reached until a live run cuts a child off.

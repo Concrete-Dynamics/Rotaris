@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentRecord, SessionRecord, TranscriptRow } from '@rotaris/contracts';
-import { agentArtifacts, agentStateLabel, chipStates, compressionLine, countNoun, instancesOf, mcpFateText, personaArtifacts, resolvedTools, rowsOf, stalledText, timeoutLine } from './agents.js';
+import { agentArtifacts, agentStateLabel, chipStates, compressionLine, countNoun, instancesOf, mcpFateText, personaArtifacts, resolvedTools, rowsOf, stalledText } from './agents.js';
+import { TimeoutLine } from './TimeoutLine.js';
 import { AgentArtifactLinks, ArtifactLinkList } from './ArtifactLinks.js';
 import { AgentCancelConfirm } from './AgentCancelConfirm.js';
 import { elapsedLabel, elapsedShown } from './AgentTree.js';
@@ -122,7 +123,7 @@ export function PersonaWindow(props: PersonaWindowProps) {
             <span className="text-secondary mono" data-testid="persona-agent-state">{agentStateLabel(shown, session)}</span>
           </div>
           {/* PD-CONFIG-003 revision 3 (OQ-234): directly under the instance's state, the inspector's line, worded once. */}
-          {shown.timedOut !== null && <div className="persona-window__timeout text-secondary" data-testid="persona-timeout">{timeoutLine(shown.timedOut)}</div>}
+          {shown.timedOut !== null && <TimeoutLine timedOut={shown.timedOut} className="persona-window__timeout text-secondary" testId="persona-timeout" />}
           <section className="card persona-window__transcript" aria-label={`${shown.name} transcript`} data-testid="persona-transcript" data-rows={own.length}>
             <div className="ov-card__head"><span className="card-kicker">Agent transcript</span><span className="card-meta">{countNoun(own.length, 'row')}</span></div>
             <div className="transcript persona-window__rows" role="log" aria-live="polite">

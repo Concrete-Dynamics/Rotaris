@@ -851,6 +851,12 @@
    system's `tag-fail` "timed out" — the failed state's own tone (the dot's `--rt-danger-300` family) — sized as the stalled
    tag it replaces; a terminal agent is never stalled, so the two never share the slot. */
 .agent-row__timed-out { font-size: var(--rt-text-2xs); }
+/* Measured in the built app (2026-10-07): beside the state the tag squeezed the Workspace sidebar row's persona column from
+   112 px to 35 px, wrapping "coding-agent" over two lines (row 44 → 61 px), and widened the Mission table's state cell by
+   70 px so the card scrolled 14 px sideways. So it takes a line of its own under the state, right-aligned in the row's meta
+   label and left-aligned in the table's state cell: the persona keeps 112 px (row 50 px) and the card fits (state cell 78 px). */
+.agent-row__meta--stacked { display: inline-flex; flex-direction: column; align-items: flex-end; gap: var(--rt-space-1); }
+.agent-table__state .agent-row__timed-out { display: flex; width: fit-content; margin-top: var(--rt-space-1); }
 @media (prefers-reduced-motion: reduce) { .agent-row__dot--running { animation: none; } }
 
 /* Part AD — REQ-CHAT-085..091: the editable task-plan strip in the workspace sidebar. */
@@ -1611,6 +1617,7 @@
 /* PD-CONFIG-003 revision 3: the cut-off line under the meta line, in the body face at the inspector's small step — a
    sentence, not a figure, so not the meta line's mono — wrapping inside the pane. */
 .inspector__timeout, .persona-window__timeout { font-size: var(--rt-text-xs); overflow-wrap: anywhere; }
+.agent-timeout__path { white-space: nowrap; }
 .inspector__ring { display: flex; align-items: center; gap: var(--rt-space-3, 12px); }
 .inspector__ring-caption { display: flex; flex-direction: column; gap: 2px; font-size: var(--rt-text-2xs, 10px); }
 /* The controls column holds model identifiers that do not break (`openai-compatible--…`),

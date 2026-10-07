@@ -152,7 +152,7 @@ describe('PD-ORCH-004: admitting a continuation', () => {
 /**
  * PD-CONFIG-003 revision 3 (OQ-234): the agent surfaces read the limit a child ran under back from REQ-ORCH-088's error in
  * its stored report, so one formatter writes the form and one parser reads it
- * (docs/defects/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
+ * (docs/defects/fixed/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
  */
 describe('PD-CONFIG-003 revision 3: the timeout error, written once and read back', () => {
   const stored = (over: Record<string, unknown> = {}): string => JSON.stringify({ agent_name: 'build', role: 'coding-agent', status: 'failed', summary: 's', key_findings: [], last_response: '', final_response: '', ...over });

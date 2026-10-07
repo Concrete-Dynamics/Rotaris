@@ -394,6 +394,15 @@ describe('the live run\'s recording proxy', () => {
       expect(proxy.stats().faultsFired).toHaveLength(2);
     });
 
+    it('a fired `pace` names the path its call was counted on, as every other fired rule does', async () => {
+      const piece = `data: ${JSON.stringify({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: '{}' } }] } }] })}\n\n`;
+      const target = await upstream((_req, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(`${piece}data: [DONE]\n\n`); });
+      // The first rule watching the call decides its key: here a `status` rule on `/completions`, never reached.
+      const { proxy } = await proxyTo(target, [{ kind: 'status', at: 99, status: 500, path: '/completions' }, { kind: 'pace', every: true, delayMs: 5 }]);
+      await (await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' })).text();
+      expect(proxy.stats().faultsFired).toEqual([{ kind: 'pace', at: 'every', path: '/completions' }]);
+    });
+
     it('a `pace` rule passes a call with no tool-call piece at once and records nothing paced', async () => {
       const target = await upstream((_req, res) => { res.writeHead(200); res.end('{"ok":true}'); });
       const { proxy, sink } = await proxyTo(target, [{ kind: 'pace', every: true, delayMs: 5_000 }]);

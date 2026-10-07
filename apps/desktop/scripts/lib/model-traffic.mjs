@@ -94,12 +94,13 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
    * A rule names the path it watches (`/chat/completions` unless it says otherwise) and the **1-based index**
    * of the call on that path it fires at, because "the second completion" is a reproduction and "some
    * completion" is a coincidence — `codebase.md`'s strongest finding of 2026-09-12 is that sixty negative runs
-   * proved nothing because none of them carried the input that failed. Each rule fires at most once.
+   * proved nothing because none of them carried the input that failed. Each rule fires at most once. The `key` it
+   * returns beside the rule is the path the call was counted on, which every fired record names.
    */
   const ruleFor = (path) => {
-    if (faults.length === 0) return null;
+    if (faults.length === 0) return { rule: null, key: null };
     const watched = faults.filter((f) => path.includes(f.path ?? '/chat/completions'));
-    if (watched.length === 0) return null;
+    if (watched.length === 0) return { rule: null, key: null };
     const key = watched[0].path ?? '/chat/completions';
     const index = (calls.get(key) ?? 0) + 1;
     calls.set(key, index);
@@ -107,7 +108,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
     if (rule !== null) { rule.spent = true; fired.push({ kind: rule.kind, at: rule.at, path: key }); everFired.push({ kind: rule.kind, at: rule.at, path: key }); }
     // A rule with `every: true` (the `pace` kind) acts on every call of its path; it is recorded as fired by the call it
     // actually acted on (`paceFired`), since most calls carry nothing it paces.
-    return rule ?? watched.find((f) => f.every === true) ?? null;
+    return { rule: rule ?? watched.find((f) => f.every === true) ?? null, key };
   };
   const paceFired = (rule, key) => { fired.push({ kind: rule.kind, at: rule.at ?? 'every', path: key }); everFired.push({ kind: rule.kind, at: rule.at ?? 'every', path: key }); };
 
@@ -135,7 +136,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
     const sentChunks = [];
     const backChunks = [];
     const headers = { ...clientReq.headers, host: upstream.host };
-    const rule = ruleFor(path);
+    const { rule, key: ruleKey } = ruleFor(path);
     const note = rule === null ? {} : { fault: { kind: rule.kind, at: rule.at ?? 'every', ...(rule.status ? { status: rule.status } : {}), ...(rule.afterChunks === undefined ? {} : { afterChunks: rule.afterChunks }), ...(rule.delayMs === undefined ? {} : { delayMs: rule.delayMs }) } };
 
     /** The endpoint's answer once its headers arrive; null while it is still thinking. */
@@ -299,7 +300,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
             if (rest !== '') paceEvent(rest);
             void pace.chain.then(() => {
               if (ended || letGo) return;
-              if (pace.events > 0) paceFired(rule, rule.path ?? '/chat/completions');
+              if (pace.events > 0) paceFired(rule, ruleKey);
               clientRes.end();
               settle('complete', paced());
             });

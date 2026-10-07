@@ -498,3 +498,82 @@ describe('engine/children/report — OQ-111: the pass reads the start and the mo
     expect(r!.edited_files).toEqual(['docs/api.md', 'docs/overview.md']);
   });
 });
+
+/*
+ * OQ-217, ruled 2026-10-07 under the owner's delegation (R-072): the summarising pass is told how a failed child ended, and no
+ * pass can raise a failed child's status. Until the ruling the pass was given no outcome, and 2 of the 5 timed-out children of
+ * the duress runs at c2fdd6a and c2a9444 got summaries that read as success
+ * (docs/defects/fixed/a-timed-out-childs-report-summary-reads-as-success.md,
+ * docs/defects/fixed/the-summarising-pass-can-raise-a-failed-childs-report-status.md).
+ */
+describe('engine/children/report — OQ-217: the pass is told how a failed child ended (REQ-ORCH-088, REQ-ORCH-108, REQ-ORCH-110, REQ-ORCH-112)', () => {
+  const STATEMENT = 'Cut off while making progress: this child completed a tool call within the final 90s before its 1200s limit expired.';
+  const work: ChatMessage[] = [
+    say('user', 'TASK: write docs/api.md'),
+    call('w1', 'write_file', { operation: 'create', path: 'docs/api.md', content: '# API' }), result('w1', 'write_file', 'created docs/api.md'),
+    call('t1', 'terminal', { command: 'node --test' }), result('t1', 'terminal', observation('ran node --test', '# pass 3', { exit_code: 0, status: 'exited' })),
+  ];
+  function summariser(answer: Record<string, unknown> = { summary: 'The agent completed the requested documentation task.', key_findings: [], next_actions: [], tags: [], edited_files: [] }) {
+    const asked: string[] = [];
+    const backend = {
+      runTurn: async (req: { messages: { content: { text: string }[] }[] }) => {
+        asked.push(req.messages[0]!.content[0]!.text);
+        return { status: 'succeeded' as const, usage: { input: 1, output: 1 }, text: JSON.stringify(answer) };
+      },
+    };
+    const s: SummariserDeps = { backend: backend as never, model: { providerId: 'a', modelId: 'a1', dialect: 'chat' }, thinking: 'unset', timers: new FakeClock().timers, credentialFor: () => async () => 'k' };
+    return { asked, s };
+  }
+  const factsOf = (ask: string): string => ask.slice(ask.indexOf('Facts:\n') + 'Facts:\n'.length, ask.indexOf('\n\nTranscript:\n'));
+  const timedOut = (over: Partial<ReportInput> = {}): ReportInput => input({ status: 'failed', messages: work, toolCallCount: 2, lastText: 'Now updating the index.', finalTextIsFinal: false, errors: [{ type: 'timeout', message: 'Child timed out after 1200s' }], cutOffStatement: STATEMENT, ...over });
+
+  it('a timed-out child cut off while making progress: the facts open with the Outcome line and the statement, ahead of the edited files, and the ask carries the instruction', async () => {
+    const { asked, s } = summariser();
+    await produceReport(timedOut(), s, new AbortController().signal);
+    const facts = factsOf(asked[0]!);
+    expect(facts.startsWith(`Outcome: failed — Child timed out after 1200s. ${STATEMENT}\nEdited files: docs/api.md`)).toBe(true);
+    expect(asked[0]).toContain("The facts open with an Outcome line: the run's own record of how the agent ended.");
+    expect(asked[0]).toContain('The first sentence of your summary states that outcome and its reason plainly');
+    expect(asked[0]).toContain('Never describe the task as completed or finished, and never claim work was left undone beyond what the transcript shows.');
+  });
+
+  it('the outcome as the run recorded it: a model failure\'s headline, and `no_activity` in the issue\'s own words; several reasons joined', () => {
+    expect(reportFacts(work, { status: 'failed', errors: [{ type: 'model', message: 'The provider returned 500' }] }).split('\n')[0]).toBe('Outcome: failed — The provider returned 500');
+    expect(reportFacts([], { status: 'failed', errors: [{ type: 'incomplete_execution', message: 'no_activity' }] }).split('\n')[0]).toBe('Outcome: failed — ended with no activity after one re-prompt');
+    expect(reportFacts([], { status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 60s' }, { type: 'model', message: 'stream closed' }] }).split('\n')[0]).toBe('Outcome: failed — Child timed out after 60s; stream closed');
+    expect(reportFacts([], { status: 'failed', errors: [] }).split('\n')[0]).toBe('Outcome: failed');
+  });
+
+  it('a succeeded child: no Outcome line and no outcome instruction — the request is as it was', async () => {
+    const { asked, s } = summariser({ summary: 'wrote the api document', key_findings: [], next_actions: [], tags: [], edited_files: [] });
+    await produceReport(input({ messages: work, toolCallCount: 2 }), s, new AbortController().signal);
+    expect(factsOf(asked[0]!)).toBe(reportFacts(work));
+    expect(factsOf(asked[0]!).startsWith('Edited files: docs/api.md')).toBe(true);
+    expect(asked[0]).not.toContain('Outcome');
+    expect(reportFacts(work, { status: 'succeeded', errors: [] })).toBe(reportFacts(work));
+  });
+
+  it('a facts block past the 12,000-character bound keeps the Outcome line: it stands at the head, which OQ-120\'s cut keeps', () => {
+    const many: ChatMessage[] = Array.from({ length: 400 }, (_, i) => call(`t${i}`, 'terminal', { command: `node scripts/check-${i}.js --with a long argument list to fill the block` }));
+    const facts = reportFacts(many, { status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 1200s' }], cutOffStatement: STATEMENT });
+    expect(facts.length).toBeLessThanOrEqual(TRANSCRIPT_CAP + 40);
+    expect(facts).toMatch(/characters omitted\]$/);
+    expect(facts.startsWith(`Outcome: failed — Child timed out after 1200s. ${STATEMENT}\n`)).toBe(true);
+  });
+
+  it('a pass answering status succeeded or partial for a failed child stores failed; partial for a succeeded child still stores partial (REQ-ORCH-112)', async () => {
+    for (const answered of ['succeeded', 'partial']) {
+      const { s } = summariser({ summary: 'Timed out after 1200 s; the document was written.', status: answered, key_findings: [], next_actions: [], tags: [], edited_files: [] });
+      const r = await produceReport(timedOut(), s, new AbortController().signal);
+      expect({ answered, status: r!.status }).toEqual({ answered, status: 'failed' });
+    }
+    const { s } = summariser({ summary: 'wrote half of it', status: 'partial', key_findings: [], next_actions: [], tags: [], edited_files: [] });
+    expect((await produceReport(input({ messages: work, toolCallCount: 2 }), s, new AbortController().signal))!.status).toBe('partial');
+  });
+
+  it('the no-model fallback is unchanged: its summary is still the child\'s own words, the outcome in its errors', () => {
+    const r = fallbackReport(timedOut(), 'no summariser is configured');
+    expect(r.summary).toBe('Now updating the index.');
+    expect(r.errors.map((e) => e.type)).toEqual(['timeout', 'summary_failure']);
+  });
+});

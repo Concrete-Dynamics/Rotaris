@@ -89,6 +89,13 @@ no todo list of its own for it (`GateDeps.todoList`, `isWorkItem` in `packages/a
 (§4, the gate's order) say so. One module joins `@rotaris/agent-tools`; no edge, process, channel, command or store column
 changed (the two task facts ride in the existing `sessions.todo` document).
 
+**The report's pass is told how a failed child ended, and cannot raise its status (OQ-217, REQ-ORCH-108, REQ-ORCH-110,
+REQ-ORCH-088, R-072).** `reportFacts` opens a non-succeeded child's facts with `outcomeLine`'s Outcome line (status, end
+reasons, PD-ORCH-004's statement, which `IterationChildren` now passes as `ReportInput.cutOffStatement`), ahead of the edited
+files so OQ-120's head-keeping cut keeps it; `produceReport`'s ask adds the three sentences that line calls for; `shape` keeps
+a non-succeeded child's status whatever the pass returns. The **runtime view**'s children paragraph says so. No package,
+edge, process, channel, command or store column changed.
+
 **`delegate`'s description names what each persona's child would be granted (PD-TOOLS-006 revision 4, OQ-216, R-072).**
 `createToolPort` builds each agent's `delegate` with a catalogue `delegateCatalogue` resolves through `resolveAgentGrant`, the
 one declared-to-granted function the agent's own port now applies, and `renderDelegateCatalogue` (`agent-tools`) states each

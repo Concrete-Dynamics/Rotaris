@@ -976,7 +976,11 @@ which reads the task as given (the ledger row's, the payload's blocks ahead of i
 part of the transcript within 12,000 characters, the omission marked between them, beside the report's deterministic
 facts — edited files (a write the record answers as refused, or cut before it started, is not one; a write cut off
 while under way is), commands and exit codes (OQ-111; OQ-120 asks the facts' bound). The task is kept whole within the
-12,000, exempt from the 2,000 per event every other event keeps (OQ-119 as ruled, `PD-ORCH-007`);
+12,000, exempt from the 2,000 per event every other event keeps (OQ-119 as ruled, `PD-ORCH-007`). For a child the runner
+settled other than `succeeded`, the facts open with an **Outcome line** — the status, the end reasons the run recorded and,
+for a child cut off while making progress, PD-ORCH-004's statement (`ReportInput.cutOffStatement`) — and the ask tells the
+pass to state it first and never to call the task completed; a pass can never raise such a child's status (`shape`; OQ-217,
+R-072). A succeeded child's request is as it was;
 the parent resumes with the report. Every exit from an iteration leaves every child record terminal — except a rest
 (PD-ORCH-005), which leaves every unfinished child `paused`.
 

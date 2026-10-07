@@ -10869,7 +10869,7 @@ REQ-ORCH-110, the pass's bounds and its fallback, silent on what the pass is giv
 to the terminal state; OQ-111, which gave the pass the run's deterministic facts; OQ-120, the facts' 12,000-character bound
 keeping its head; `PD-ORCH-004`, the cut-off statement. Raised 2026-10-07 from the final live runs' findings L5 (the
 `c2fdd6a` duress autopsy) and N5 (the `c2a9444` duress autopsy), recorded in
-[`a-timed-out-childs-report-summary-reads-as-success.md`](../defects/a-timed-out-childs-report-summary-reads-as-success.md),
+[`a-timed-out-childs-report-summary-reads-as-success.md`](../defects/fixed/a-timed-out-childs-report-summary-reads-as-success.md),
 and ruled the same day under the owner's delegation; the consortium's question L5.)*
 
 Two of the five timed-out children of the two duress runs got summaries that read as success beneath status `failed`:
@@ -10888,7 +10888,7 @@ REQ-ORCH-110 states it, and no summarising pass can raise a status the runner se
 silence on the pass's inputs, as OQ-111 did, and needs no directive: REQ-ORCH-088, REQ-ORCH-108, REQ-ORCH-110,
 REQ-ORCH-112 and PD-ORCH-004 keep their text. The status guard brings the build into line with REQ-ORCH-088 and
 REQ-ORCH-112 as written
-([`the-summarising-pass-can-raise-a-failed-childs-report-status.md`](../defects/the-summarising-pass-can-raise-a-failed-childs-report-status.md)).
+([`the-summarising-pass-can-raise-a-failed-childs-report-status.md`](../defects/fixed/the-summarising-pass-can-raise-a-failed-childs-report-status.md)).
 
 The two recommendations weighed, and the ruling followed **both**:
 - **Advocate A (the user's lens)** recommended giving the pass the run's status and recorded end reason as one more
@@ -10904,3 +10904,18 @@ The two recommendations weighed, and the ruling followed **both**:
 Both rejected a label beside the summary (it leaves the false sentence stored), a run-written prefix or a separate reason
 field (each needs a directive over REQ-ORCH-111 or REQ-LIBRARY-088), and confirming the behaviour as built. OQ-111 is the
 precedent: its facts took report denials from 5 of 7 to 0 of 6 with this model.
+
+*Built 2026-10-07 (fin27, `fin27-delegate-and-summariser`); its first execution, reported here as the ruling's record.*
+`reportFacts` opens a non-succeeded child's facts with `outcomeLine`'s Outcome line, the ask gains the three sentences when it
+is present, `shape` keeps a non-succeeded child's status, and `orchestration.ts` hands PD-ORCH-004's statement on as
+`ReportInput.cutOffStatement` (`packages/engine/src/children/report.ts`, `orchestration.ts`). The first execution found
+nothing against the ruling and settled two readings it left to the build. "Outcome: failed" is written with the status the
+runner settled, since a cancelled child never reaches the pass (it takes the fallback) and `failed` is the only other status
+a pass sees; and where the run recorded no end reason the line reads "Outcome: failed" alone, which a child whose turn
+failed with no report of its own can produce. Unit cases in `report.test.ts` (the line and the instruction, the reasons'
+words, the head kept past the 12,000-character bound, the status guard; each red on the code before) and the two PD-ORCH-004
+cut-off cases in `children.test.ts` (the request a scripted run sends carries the line, with the statement and without it).
+**Not yet measured:** the duress live run, which should show every failed child's summarising request opening its facts with
+"Outcome: failed — Child timed out after 1200s" (and the statement where the child was making progress), each such stored
+summary stating the limit in its first sentence and claiming no completion, every such report's status `failed`, and
+OQ-111's count of zero denials holding.

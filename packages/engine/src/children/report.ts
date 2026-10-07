@@ -61,6 +61,12 @@ export interface ReportInput {
    * pass keeps it as the transcript's start. Absent, the transcript's first event is its start.
    */
   readonly task?: string;
+  /**
+   * OQ-217 (ruled 2026-10-07 under R-072): PD-ORCH-004's statement for a child REQ-ORCH-088's limit cut off while it was
+   * making progress — the statement only, without the paths or the continuation offer. Runner-owned; the summarising pass
+   * is told it in the Outcome line and never writes it.
+   */
+  readonly cutOffStatement?: string | undefined;
 }
 
 export interface SummariserDeps {
@@ -155,6 +161,24 @@ function marker(n: number): string {
   return `… [${n} characters omitted] …`;
 }
 
+/** OQ-217: a bare category message in an end reason, written in the words its issue uses. */
+const CATEGORY_WORDS: Readonly<Record<string, string>> = { no_activity: 'ended with no activity after one re-prompt' };
+
+/**
+ * OQ-217 (ruled 2026-10-07 under R-072): the Outcome line for a child the runner settled other than `succeeded` — its
+ * status, its end reasons as the run recorded them (joined by "; ", a bare category in its issue's words) and, for a child
+ * cut off while making progress, PD-ORCH-004's statement; cut to 2,000 characters. Null for a succeeded child: the runner's
+ * `succeeded` means only that the turn ended with an answer, and stating it would invite a completion claim over a child
+ * whose answer was that it could not do the work.
+ */
+export function outcomeLine(outcome: Pick<ReportInput, 'status' | 'errors' | 'cutOffStatement'> | undefined): string | null {
+  if (!outcome || outcome.status === 'succeeded') return null;
+  const reasons = (outcome.errors ?? []).map((e) => CATEGORY_WORDS[e.message] ?? e.message).filter((m) => m.trim() !== '').join('; ');
+  let line = `Outcome: ${outcome.status}${reasons ? ` — ${reasons}` : ''}`;
+  if (outcome.cutOffStatement) line += `${/[.!?]$/.test(line) ? '' : '.'} ${outcome.cutOffStatement}`;
+  return cut(line, EVENT_CAP);
+}
+
 /**
  * OQ-111: the report's deterministic facts — the files the child edited and the commands it ran with their outcomes —
  * given to the pass beside the transcript, so a summary written over a transcript whose middle is omitted cannot deny
@@ -162,11 +186,18 @@ function marker(n: number): string {
  * functions that fill the report's fields; the pass condenses them and never writes them. Each command is cut to 2,000
  * characters and the block to 12,000, REQ-ORCH-110's two figures, so the pass stays bounded — the build's reading, raised
  * as OQ-120 and confirmed as built by its ruling of 2026-10-06 (R-071), a cut block keeping its head.
+ *
+ * OQ-217 (ruled 2026-10-07 under R-072): for a child the runner settled other than `succeeded`, the block opens with the
+ * Outcome line (`outcomeLine`), at its head so the cut that keeps the head always keeps it; a succeeded child's block is
+ * as it was. The reason it was not there, kept beside the repair: until the ruling the pass was given no outcome, and 2 of
+ * the 5 timed-out children of the duress runs at c2fdd6a and c2a9444 got summaries that read as success.
  */
-export function reportFacts(messages: readonly ChatMessage[]): string {
+export function reportFacts(messages: readonly ChatMessage[], outcome?: Pick<ReportInput, 'status' | 'errors' | 'cutOffStatement'>): string {
   const edited = editedFilesFrom(messages);
   const ran = commandsFrom(messages);
+  const head = outcomeLine(outcome);
   const lines = [
+    ...(head === null ? [] : [head]),
     `Edited files: ${edited.length > 0 ? edited.join(', ') : '(none)'}`,
     `Commands run: ${ran.length > 0 ? '' : '(none)'}`.trimEnd(),
     ...ran.map((c) => `- ${cut(c.command, EVENT_CAP)} → ${c.exit_code === null ? 'no exit code' : `exit code ${c.exit_code}`}`),
@@ -356,6 +387,13 @@ export function deterministicTesterReport(input: ReportInput): ChildReport | nul
   };
 }
 
+/**
+ * The pass's object to a report, the run's fields owned by the run. OQ-217 (ruled 2026-10-07 under R-072): a child the
+ * runner settled other than `succeeded` keeps that status whatever `status` key the pass returns — REQ-ORCH-088 records a
+ * timed-out child failed and REQ-ORCH-112 maps the status to its terminal state — while a succeeded child's status is still
+ * normalised from the pass, so a pass may lower it (`partial`). The reason, kept beside the guard: the status was read from
+ * the pass first for every child, so a pass answering `succeeded` over a failed child stored a report its state contradicted.
+ */
 function shape(raw: unknown, input: ReportInput): ChildReport | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const o = { ...(raw as Record<string, unknown>) };
@@ -364,7 +402,7 @@ function shape(raw: unknown, input: ReportInput): ChildReport | null {
   const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
   if (typeof o['summary'] !== 'string' || o['summary'].trim() === '') return null;
   return {
-    agent_name: input.agentName, role: input.role, status: normaliseReportStatus(str(o['status']) || input.status), summary: o['summary'],
+    agent_name: input.agentName, role: input.role, status: input.status !== 'succeeded' ? input.status : normaliseReportStatus(str(o['status']) || input.status), summary: o['summary'],
     key_findings: list(o['key_findings']), last_response: input.lastText, final_response: input.finalTextIsFinal ? input.lastText : '',
     edited_files: editedFilesFrom(input.messages, list(o['edited_files'])), commands: commandsFrom(input.messages),
     errors: [...(input.errors ?? [])], next_actions: list(o['next_actions']),
@@ -383,7 +421,12 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
   if (tester) return tester;
   if (!s) return fallbackReport(input, unsummarised);
   const transcript = reportTranscript(input.messages, input.task);
-  const facts = reportFacts(input.messages);
+  const facts = reportFacts(input.messages, input);
+  /*
+   * OQ-217 (ruled 2026-10-07 under R-072): where the facts open with an Outcome line, the ask says what it is and how the
+   * summary states it. A succeeded child's ask is as it was.
+   */
+  const outcomeAsk = outcomeLine(input) === null ? '' : " The facts open with an Outcome line: the run's own record of how the agent ended. The first sentence of your summary states that outcome and its reason plainly; the summary then condenses what the agent did, agreeing with the facts, and what the transcript shows remained, if it shows anything. Never describe the task as completed or finished, and never claim work was left undone beyond what the transcript shows.";
   const timeout = s.timeoutMs ?? SUMMARY_TIMEOUT_MS;
   let complaint = '';
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -393,7 +436,7 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
     signal.addEventListener('abort', onAbort, { once: true });
     const timer = s.timers.after(timeout, () => controller.abort());
     try {
-      const ask = `Condense the transcript below into a JSON object with exactly these keys: "summary" (one paragraph), "key_findings" (an array of short strings), "next_actions" (array of strings), "edited_files" (array of paths), "tags" (from: research, planning, implementation, review, verification, errors). Report only what happened; do not continue the task. The facts below are the run's own record of what the agent did, taken from its whole transcript: your summary must agree with them and never deny them. The transcript keeps its start (the task as given) and its most recent part; where its middle is marked omitted, what is not shown there is not evidence that it did not happen.${complaint ? `\n\nYour previous attempt was unusable: ${complaint}` : ''}\n\nFacts:\n${facts}\n\nTranscript:\n${transcript}`;
+      const ask = `Condense the transcript below into a JSON object with exactly these keys: "summary" (one paragraph), "key_findings" (an array of short strings), "next_actions" (array of strings), "edited_files" (array of paths), "tags" (from: research, planning, implementation, review, verification, errors). Report only what happened; do not continue the task. The facts below are the run's own record of what the agent did, taken from its whole transcript: your summary must agree with them and never deny them.${outcomeAsk} The transcript keeps its start (the task as given) and its most recent part; where its middle is marked omitted, what is not shown there is not evidence that it did not happen.${complaint ? `\n\nYour previous attempt was unusable: ${complaint}` : ''}\n\nFacts:\n${facts}\n\nTranscript:\n${transcript}`;
       const resolved = s.resolve ? s.resolve({ model: s.model, thinking: s.thinking }, input.agentModel) : { model: s.model, thinking: s.thinking };
       if ('withheld' in resolved) return fallbackReport(input, resolved.withheld);
       const choice = resolved;

@@ -11,6 +11,11 @@
  * session whose first task wrote a list and whose queued second task did not reads as listed (the engine's tests pin the
  * per-task rule, `packages/engine/src/run/coordinator-plan.test.ts`). Nor does it tell a plan cycle's calls (which neither count
  * nor are refused) from an iteration's: the tool-call record names no iteration, and no live-run scenario runs in plan mode.
+ *
+ * A session launched under the `single` run override (REQ-ORCH-025, `rotaris.delegation_strategy`) is skipped: its entry role
+ * is the worker, not a coordinator, and REQ-ORCH-029's constraints do not bind it (`RunDeps.coordinating`). The override is
+ * read from the session's launch audit (`launch_audits.payload`'s `config_snapshot.delegation_strategy`, REQ-SESSION-138),
+ * which records the launch alone; a continuation run under another override reads as the launch's.
  */
 export const WORK_ITEM_TOOLS = new Set(['delegate', 'write_file', 'haet_edit', 'haet', 'terminal', 'git_commit']);
 
@@ -19,7 +24,8 @@ const ran = (call) => call.status !== 'blocked' && call.failureKind !== 'invalid
 
 /**
  * `sessions`: `{ scenario, rootNames: string[], calls: { ordinal, tool_name, agent_name, status, failureKind }[],
- * agentPlanTasks: number | null }[]`, the calls in ordinal order. Returns, over every session: `unlisted` — each root work
+ * agentPlanTasks: number | null, runOverride?: string | null }[]`, the calls in ordinal order. Returns `single` — the sessions
+ * skipped as launched under the `single` override — and, over every other session: `unlisted` — each root work
  * item that ran as the session's second or later before any accepted root `todo` call (REQ-ORCH-029 breached); `refused` —
  * each root call the gate refused for want of a list (`todo_list_owed`); `multiStep` — the sessions whose root ran two or more
  * work items; `withoutPlan` — those of them whose stored todo carries no agent plan with a task.
@@ -29,7 +35,9 @@ export function coordinatorTodoReading(sessions) {
   const refused = [];
   const multiStep = [];
   const withoutPlan = [];
+  const single = [];
   for (const s of sessions) {
+    if (s.runOverride === 'single') { single.push(s.scenario); continue; }
     const roots = new Set(s.rootNames);
     let items = 0;
     let listed = false;
@@ -46,7 +54,16 @@ export function coordinatorTodoReading(sessions) {
       if ((s.agentPlanTasks ?? 0) < 1) withoutPlan.push(s.scenario);
     }
   }
-  return { read: sessions.map((s) => s.scenario), unlisted, refused, multiStep, withoutPlan };
+  return { read: sessions.map((s) => s.scenario), single, unlisted, refused, multiStep, withoutPlan };
+}
+
+/** The run override a session was launched under (`single`, `swarm`), from its launch audit's payload, or null for none or unreadable. */
+export function launchRunOverride(payloadJson) {
+  if (typeof payloadJson !== 'string' || payloadJson === '') return null;
+  try {
+    const strategy = JSON.parse(payloadJson)?.config_snapshot?.delegation_strategy;
+    return strategy === 'single' || strategy === 'swarm' ? strategy : null;
+  } catch { return null; }
 }
 
 /** The number of tasks the stored todo's agent plan holds (`sessions.todo`'s version-2 envelope), or null for none. */

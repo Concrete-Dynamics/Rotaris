@@ -135,7 +135,7 @@ import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
-import { agentPlanTaskCount, coordinatorTodoReading } from './lib/coordinator-todo.mjs';
+import { agentPlanTaskCount, coordinatorTodoReading, launchRunOverride } from './lib/coordinator-todo.mjs';
 import { stallIssueCadence } from './lib/stall-issue-cadence.mjs';
 import { conclusive, pacedWindows, stallsWhileStreaming } from './lib/paced-arguments.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
@@ -947,6 +947,7 @@ function checkCoordinatorTodo() {
         rootNames: db.prepare('SELECT DISTINCT root_persona FROM iterations WHERE session_id = ?').all(sessionId).map((row) => row.root_persona),
         calls: readToolCalls(sessionId),
         agentPlanTasks: agentPlanTaskCount(db.prepare('SELECT todo FROM sessions WHERE session_id = ?').get(sessionId)?.todo ?? null),
+        runOverride: launchRunOverride(db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sessionId)?.payload ?? null),
       })));
     } finally { db.close(); }
   } catch (cause) {
@@ -957,6 +958,7 @@ function checkCoordinatorTodo() {
   check(r.unlisted.length === 0, 'no coordinator\'s second work item ran before it wrote a todo list of its own (REQ-ORCH-029, OQ-213)', r.unlisted.length === 0 ? `${r.multiStep.length} multi-step session(s): ${r.multiStep.join(', ') || 'none'}` : r.unlisted.map(at).join(', '));
   check(r.withoutPlan.length === 0, 'every multi-step coordinating session stores an agent plan (REQ-ORCH-029, REQ-TOOLS-147)', r.withoutPlan.length === 0 ? `${r.multiStep.length} multi-step session(s)` : `no agent plan stored: ${r.withoutPlan.join(', ')}`);
   if (r.refused.length > 0) noted('the gate refused a coordinator\'s second work item until it wrote its todo list (OQ-213)', r.refused.map(at).join(', '));
+  if (r.single.length > 0) noted('sessions launched under the `single` run override were not read for the coordinator\'s todo list (REQ-ORCH-025)', r.single.join(', '));
 }
 
 /**
@@ -1260,7 +1262,10 @@ if (wanted.includes('edit')) {
   const log = await launch('edit', {
     // One run, several mechanisms at once: the implementation and its tests are written by two children working in
     // PARALLEL, each under a declared write scope (PD-TOOLS-006), and priced at configured rates (PD-MONITOR-001).
-    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js and export it, and add tests for it to src/todos.test.js. Do the two in parallel: in ONE turn, delegate two coding-agent children in the background, one for the implementation with write_scope ["src/todos.js"] and one for the tests with write_scope ["src/todos.test.js"], then wait for both with wait_for_tasks. You hold no terminal, so tell each child to run `node --test` in the terminal before it reports, and tell me whether the suite passed. Delegate nothing else, and answer as soon as both have reported.',
+    // OQ-213 (REQ-ORCH-029): the coordinator's second delegation is refused until it has written a todo list of its own,
+    // so the prompt asks for the list first, which keeps the two delegations in one turn; a coordinator that skips it
+    // meets one refusal, writes the list and delegates again, and the checks below read only the delegations that ran.
+    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js and export it, and add tests for it to src/todos.test.js. First write your todo list with the todo tool, one task for the implementation and one for the tests. Then do the two in parallel: in ONE turn, delegate two coding-agent children in the background, one for the implementation with write_scope ["src/todos.js"] and one for the tests with write_scope ["src/todos.test.js"], then wait for both with wait_for_tasks. You hold no terminal, so tell each child to run `node --test` in the terminal before it reports, and tell me whether the suite passed. Delegate nothing else, and answer as soon as both have reported.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000', ROTARIS_CAPTURE_PROBE: DURATION_PROBES.join(';;'),
   }, EDIT_WAIT_MS + 90_000);
   check(!/capture: wait for result timed out/.test(log), 'the run reached its result inside the wait');
@@ -1352,7 +1357,7 @@ if (wanted.includes('resume')) {
   const READ_PAUSED = "(document.body.dataset.pausedRead = '1', JSON.stringify({ paused: document.querySelectorAll('.agent-row[data-state=\"paused\"]').length, count: document.getElementById('composer-resume-count')?.textContent ?? null, run: document.querySelector('[data-testid=\"run-header\"]')?.dataset.state ?? null }))";
   const CONTINUE = 'body[data-paused-read="1"] button[aria-label="Continue run"]';
   const log = await launch('resume', {
-    ROTARIS_CAPTURE_PROMPT: 'Write two short notes in parallel. In ONE turn, delegate two coding-agent children in the background: one reads src/todos.js and then writes docs/notes-functions.md listing each exported function with one sentence on what it does; the other reads src/todos.test.js and then writes docs/notes-tests.md listing each test with one sentence on what it checks. Wait for both with wait_for_tasks, then reply with the two file names. Delegate nothing else.',
+    ROTARIS_CAPTURE_PROMPT: 'Write two short notes in parallel. First write your todo list with the todo tool, one task per note. Then, in ONE turn, delegate two coding-agent children in the background: one reads src/todos.js and then writes docs/notes-functions.md listing each exported function with one sentence on what it does; the other reads src/todos.test.js and then writes docs/notes-tests.md listing each test with one sentence on what it checks. Wait for both with wait_for_tasks, then reply with the two file names. Delegate nothing else.',
     ROTARIS_CAPTURE_CLICKS: [`${PAUSE}@~${EDIT_WAIT_MS}`, `${CONTINUE}@~${EDIT_WAIT_MS}`].join(';;'),
     ROTARIS_CAPTURE_EVAL_AT: `${READ_PAUSED}>>button[aria-label="Continue run"]@~${EDIT_WAIT_MS}`,
     ROTARIS_CAPTURE_WAIT: `js:document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed'`,
@@ -1390,14 +1395,23 @@ if (wanted.includes('resume')) {
       const entries = db.prepare('SELECT seq, kind, body, at FROM agent_messages WHERE session_id = ? AND task_id = ? ORDER BY seq').all(sid, id);
       return { id, before: entries.filter((e) => e.at <= pausedAt), after: entries.filter((e) => e.at > pausedAt) };
     });
-    check(records.length > 0 && records.every((r) => r.before.length > 0 && r.after.length > 0), 'each resumed child\'s record continues across the pause (clause 1)', records.map((r) => `${r.id}: ${r.before.length} before, ${r.after.length} after`).join('; '));
+    /*
+     * A staggered start is tolerated (OQ-213): a coordinator that skipped its todo list has its second delegation refused
+     * once, so that child can be accepted only just before the Pause lands and be paused before it records a first entry.
+     * Such a child must still carry on after the continue; at least one child must cross the pause with entries on both
+     * sides, which is what clause 1 is measured on.
+     */
+    const crossed = records.filter((r) => r.before.length > 0);
+    const unstarted = records.filter((r) => r.before.length === 0);
+    check(crossed.length > 0 && records.every((r) => r.after.length > 0), 'each resumed child\'s record continues across the pause (clause 1)', records.map((r) => `${r.id}: ${r.before.length} before, ${r.after.length} after`).join('; '));
+    if (unstarted.length > 0) noted('children paused before their first recorded entry (a staggered start), read on their entries after the continue alone', unstarted.map((r) => r.id).join(', '));
     /*
      * What the model was sent. The last entry a child recorded before the pause can only reach a request made after
      * it, and the pause stops every agent before its next model step (clause 15), so a request carrying it is the
      * resumed step. A fragment is looked for as the request body spells it: plain words, no quote, backslash or line.
      */
     const traffic = readTraffic('resume').filter((r) => String(r.path ?? '').includes('/chat/completions'));
-    const carried = records.map((r) => {
+    const carried = crossed.map((r) => {
       const last = r.before.at(-1);
       let text = '';
       try {

@@ -11334,3 +11334,49 @@ with a longer one, which is what the ruling's own test ("Recorded." keeps the an
 `packages/engine/src/run/coordinator-plan.test.ts` (seven red on `a68f121`) and `run-pure.test.ts`; shown by `pnpm
 part-h-proof`'s `plan-correction` launch. First execution reported in [`PD-ORCH-015`](../product/directives.md#pd-orch-015)
 and in [`first-executions.md`](first-executions.md); the live terminal scenario waits on the orchestrator's next default run.
+
+**OQ-222 — Do six back-pointers that name a directive whose disposition block omits their requirement mark reaches the
+register left out, or are they cross-references written in a back-pointer's shape?** *(`docs/product/README.md`, "The
+back-pointer, in place": "Use `Superseded by`, `Narrowed by` or `Extended by` to match the disposition"; `PD-TOOLS-002`'s
+Narrows line and `PD-LIBRARY-002`'s Extends and `New:` lines; the notes at REQ-SANDBOX-104 (Narrowed by `PD-TOOLS-002`),
+REQ-MONITOR-173, REQ-WORKSPACE-041, REQ-LIBRARY-017 and REQ-NOTIFY-251 (Extended by `PD-LIBRARY-002`), and at domain 14's
+introduction, which names no requirement. Raised 2026-10-06 by the F15 repair, which recorded the six as
+[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md`](../defects/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)
+and left the reading per note to the directive's owner; opened here 2026-10-07 as the R-072 consortium's question BP1,
+the number the round assigned it, and ruled the same day.)*
+
+The generated register (`SUPERSEDED_BY`, `NARROWED_BY`, `EXTENDED_BY`) records nothing for five of the six requirements
+under the directive their note names (REQ-WORKSPACE-041 only as narrowed by `PD-WORKSPACE-002`), so a reader of code is
+told the requirement is untouched while the specification file says a directive reaches it. Either a disposition block
+omits a requirement its rule reaches, or a note is a cross-reference in the shape of a back-pointer.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** five of the six notes mark
+reaches that their directives' disposition blocks left out, and each block now names its requirement under the verb its
+note already carries. `PD-TOOLS-002` Narrows REQ-SANDBOX-104, together with REQ-TOOLS-071 and REQ-TOOLS-072, because its
+rule names each of the three by identifier and removes the same downgrade clause from each; `PD-LIBRARY-002` Extends
+REQ-MONITOR-173, REQ-WORKSPACE-041, REQ-LIBRARY-017 and REQ-NOTIFY-251, and its `New:` line is retired. REQ-LIBRARY-017
+is recorded under Extends because its clauses bind an analysis that a run triggered, and the directive reads it so
+("no clause here is relaxed"). The note in domain 14's introduction names no requirement, so it is relabelled as a
+cross-reference written in its own words. `back-pointers.test.ts` drops its known list: one case asserts that every note
+agrees with the register, a converse case asserts that every register entry has its note, and both lists start empty
+once the missing notes at REQ-TOOLS-069 and REQ-SHELL-119 are written. The generator refuses a `New:` line that names a
+requirement and `New` beside another verb, the route this defect came in by. No directive is minted or revised: the two
+disposition blocks are completed in place, each with a dated italic line beneath it, on the precedent of F15
+(`PD-ORCH-014`'s REQ-CONFIG-135 line) and `PD-WORKSPACE-001`'s third execution; no rule text and no requirement text
+changes, and no product behaviour changes. R-071's ruling on OQ-65 stands.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: the five reaches enter the disposition blocks under
+their notes' verbs, the introduction becomes a cross-reference in the REQ-CONFIG-464 shape, the known list is deleted,
+and the notes at REQ-WORKSPACE-041 and REQ-MONITOR-173 gain a sentence each so they stay true after OQ-65 and ADR-0065
+decision 7; it named REQ-TOOLS-071, REQ-TOOLS-072 and REQ-LIBRARY-125 as unrecorded reaches. *Advocate B (the system's
+lens)*: the same five entries and the introduction relabelled, plus this entry, a converse check that every register
+entry has its note (with the notes at REQ-TOOLS-069 and REQ-SHELL-119 written so it starts empty), a generator refusal
+of a `New:` line naming an identifier or standing beside another verb, and REQ-TOOLS-071 added to the Narrows line. **The
+ruling followed both**: A's note amendments, B's entry, converse check and generator refusal, and REQ-TOOLS-071 and
+REQ-TOOLS-072, which the rule names and narrows the same way as REQ-SANDBOX-104. `PD-LIBRARY-002`'s other candidate
+reaches have arguable verbs and go to a note of their own, with two further questions the advocates raised:
+[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../defects/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
+[`pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`](../defects/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md)
+and
+[`the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md`](../defects/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md),
+recorded and not repaired.

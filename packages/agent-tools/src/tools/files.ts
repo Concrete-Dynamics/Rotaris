@@ -187,7 +187,9 @@ function missingPathMessage(resolved: string, rel: string, memoryTools?: MemoryN
   const wanted = basename(resolved).toLowerCase();
   let names: string[] = [];
   try {
-    names = readdirSync(parent);
+    // The same skip as the directory listing (REQ-TOOLS-134, REQ-TOOLS-140 with PD-TOOLS-012): two listings of one
+    // directory agree, and a close match is drawn only from what is listed.
+    names = readdirSync(parent).filter((n) => !IGNORE_COMPONENTS.has(n));
   } catch {
     return `File not found: ${rel}. ${unlistableParent(parent, dirname(rel))}`;
   }

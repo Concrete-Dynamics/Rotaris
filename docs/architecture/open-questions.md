@@ -10967,6 +10967,9 @@ recommended the same revision, minted as `PD-TOOLS-012` extending REQ-TOOLS-140,
 OQ-161's. The ruling followed **both**, in B's shape for the record; A's later sentence in the agents' instructions waits on
 measurement. A scan rooted inside an ignored component, which the ruling found still walked, is a separate question, OQ-219.
 **Built 2026-10-07 (fin27):** `IGNORE_COMPONENTS` takes `CODE_INTELLIGENCE_MARKER_SEGMENTS[0]` from `@rotaris/config`; the
-one set feeds the walker and `listing` (`files.ts`). Pinned by the case "the code-intelligence marker directory is a
+one set feeds the walker and `listing` (`files.ts`). The ruling's premise that the parent listing of a missing path already
+skipped `.rotaris` was false: it skipped nothing, recorded and repaired in the same bundle
+([`a-missing-paths-parent-listing-shows-the-ignore-components.md`](../defects/fixed/a-missing-paths-parent-listing-shows-the-ignore-components.md)),
+so it now reads the same set. Pinned by the case "the code-intelligence marker directory is a
 hard-coded ignore component, named by the manifest" in `packages/agent-tools/src/tools/tools.test.ts`, red on `d12f1f2`.
 Findings L3, N6 and H3 close with it; the next duress live run is the measurement.

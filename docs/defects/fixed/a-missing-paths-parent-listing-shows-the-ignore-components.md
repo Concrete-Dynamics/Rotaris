@@ -21,3 +21,12 @@ directory and parent listings as inheriting the marker directory by reference.
   `listing` beside it filters by `IGNORE_COMPONENTS`.
 - `packages/agent-tools/src/tools/search.ts` — `IGNORE_COMPONENTS`, the one set both listings should read.
 - `packages/agent-tools/src/tools/tools.test.ts` — the read_file cases.
+
+## Outcome — repaired 2026-10-07 (fin27)
+
+`missingPathMessage` (`packages/agent-tools/src/tools/files.ts`) filters the parent's names by `IGNORE_COMPONENTS`, the set
+the directory listing reads, before it lists them and before it scores close matches, so the two listings of one directory
+agree and no suggestion names a hidden entry. The listing's format (bare names, `Contents of <dir>:`) is unchanged. Pinned by
+the case "a missing path's parent listing skips the ignore components, as the directory listing does" in
+`packages/agent-tools/src/tools/tools.test.ts`, red before the repair (`.serena` listed, and `.rotaris` and `node_modules`
+beside it).

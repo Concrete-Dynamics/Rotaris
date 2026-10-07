@@ -90,6 +90,22 @@ describe('read_file (REQ-TOOLS-134)', () => {
     expect(r.text).toContain('Contents of src:');
     expect(r.text).toContain('Did you mean: a.ts, b.ts?');
   });
+  it('a missing path\'s parent listing skips the ignore components, as the directory listing does (REQ-TOOLS-134, PD-TOOLS-012)', async () => {
+    const marker = CODE_INTELLIGENCE_MARKER_SEGMENTS[0] as string;
+    mkdirSync(join(root, marker), { recursive: true });
+    mkdirSync(join(root, '.rotaris'), { recursive: true });
+    writeFileSync(join(root, ...CODE_INTELLIGENCE_MARKER_SEGMENTS), 'project_name: x\n');
+    const missing = await readFileTool(state, fence).execute({ path: 'READNE.md', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(missing.isError).toBe(true);
+    expect(missing.text).toContain('Contents of .:');
+    expect(missing.text).toContain('README.md');
+    expect(missing.text).toContain('src');
+    for (const hidden of [marker, '.rotaris', 'node_modules']) expect(missing.text).not.toContain(hidden);
+    expect(missing.text).toContain('Did you mean: README.md?');
+    // a close match is drawn from what the listing shows, never from a hidden name
+    const near = await readFileTool(state, fence).execute({ path: 'node_module', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(near.text).not.toContain('node_modules');
+  });
   it('a path under a file says the parent is a file; a path under nothing keeps the absent answer (REQ-TOOLS-134)', async () => {
     writeFileSync(join(root, '.git'), `gitdir: ${join(outside, 'worktrees', 'w')}\n`);
     const t = readFileTool(state, fence);

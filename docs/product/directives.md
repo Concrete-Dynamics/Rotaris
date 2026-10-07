@@ -5413,11 +5413,14 @@ logged as [R-072](requests.md#r-072).*
 
 > **First execution, 2026-10-07, built under [R-072](requests.md#r-072):** the rule held as written. `IGNORE_COMPONENTS`
 > (`packages/agent-tools/src/tools/search.ts`) takes `CODE_INTELLIGENCE_MARKER_SEGMENTS[0]` from `@rotaris/config`, and the
-> one set already fed both the scan's walker and `read_file`'s listing (`listing`, `files.ts`), so nothing else changed.
+> one set already fed both the scan's walker and `read_file`'s directory listing (`listing`, `files.ts`). **Found:** the parent
+> listing of a missing path read the directory unfiltered, so it listed every ignore component, `.rotaris` included; it now
+> reads the same set
+> ([`a-missing-paths-parent-listing-shows-the-ignore-components.md`](../defects/fixed/a-missing-paths-parent-listing-shows-the-ignore-components.md)).
 > **What was measured.** The case "the code-intelligence marker directory is a hard-coded ignore component, named by the
 > manifest" in `packages/agent-tools/src/tools/tools.test.ts`, red on `d12f1f2` (glob `**/*` listed
 > `.serena/memories/m.md` and `.serena/project.yml`): glob, grep, the root listing and a missing path's parent listing
-> skip the directory, and its marker file named by path is served. **What was not measured.** No live run: the next duress
+> skip the directory, and its marker file named by path is served; and the parent-listing case beside it, red on `d12f1f2`. **What was not measured.** No live run: the next duress
 > run is the measurement (file-tool rows under the directory near zero, no marker files in the delivered overview, `git
 > status` still clean). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 

@@ -144,6 +144,9 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-040** — `improvement_collector_model` (nullable string, default null) is a first-class startup model slot with an independent thinking-mode override, persisted and round-tripped like other model slots; the minimal bootstrap configuration template includes both keys as null. When unset it falls back to the medium-tier model.
 
 **REQ-LIBRARY-041** — The desktop Settings view MUST expose the master switch as a runtime toggle row labelled "Improvement loop", loading from and saving back to `runtime.improvement_collector_enabled`, and participating in unsaved-changes detection.
+  > **Extended by [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 2, 2026-10-07.** Beside the toggle
+  > row, Settings exposes "Improvement analysis timeout" over `runtime.improvement_collector_timeout`, in seconds clamped
+  > 10–600, loading from and saving back to the key and participating in unsaved-changes detection.
 
 ### 7. Persistence of improvement artifacts
 

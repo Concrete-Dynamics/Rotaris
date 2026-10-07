@@ -5604,7 +5604,9 @@ each requirement below as written, and each written figure cost the run time or 
   already declared a loop on counts (recorded as D3, a defect of the fallback's own).
 - **The improvement analysis (F4).** No post-run analysis completed in either run: `improvement_artifacts` holds no row.
   Each scenario quit within 3 s of its run ending, and REQ-LIBRARY-127 cancels an analysis in progress at shutdown; the
-  six analyst calls took 22 to 134 s at the endpoint, three of them beyond REQ-CONFIG-118's 60 s bound.
+  six analyst calls took 22 to 134 s at the endpoint, three of them beyond REQ-CONFIG-118's 60 s bound. *(2026-10-07: the
+  bound now has a Settings control, 10–600 s, and a timed-out analysis says so in its notice — OQ-223, PD-CONFIG-003
+  revision 2; the 60 s default stands.)*
 - **The recursive-delete rule (F5).** The starter deny rule refused `rm -rf /tmp/mut` on a scratch path outside the
   workspace (`edit`, tool call #38), as REQ-TOOLS-039 states it.
 - **The continuation that starts from nothing.** `PD-ORCH-004` gives a continuation no part of the continued child, and
@@ -11218,3 +11220,44 @@ at continuing, with the session excluded. Neither settled two things, which the 
 dialog and forces the worktree, and a forced placement says so.
 [`a-base-tree-session-continues-beside-another-run-in-its-workspace.md`](../defects/fixed/a-base-tree-session-continues-beside-another-run-in-its-workspace.md)
 records the unbuilt resume half, written before its code.
+
+**OQ-223 — Does Settings › Runtime keep an "Improvement analysis timeout" control, and on what terms?** *(REQ-CONFIG-256's
+"Written keys are exactly", REQ-CONFIG-263's Tier B overlay, REQ-CONFIG-323's four runtime policy toggles, REQ-CONFIG-325's
+"two numeric policy limits" and REQ-CONFIG-417's destination 1, none naming `runtime.improvement_collector_timeout`;
+REQ-LIBRARY-041, the improvement domain's one Settings row, the toggle; REQ-CONFIG-118 and REQ-LIBRARY-039, the key and its
+60 s default; REQ-NOTIFY-100 and REQ-LIBRARY-023/124, a timed-out analysis and its notice; OQ-114's F4, the measured analyst
+calls. Raised 2026-10-07 by the R-072 consortium as its question IT1, from
+[`the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`](../defects/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md)
+(noticed while building OQ-218), and recorded here as OQ-223, the number the round assigned it. ~~Open.~~ **Ruled
+2026-10-07.**)*
+
+The runtime policy card draws a numeric "Improvement analysis timeout" control after the "Improvement loop" toggle, over
+`runtime.improvement_collector_timeout` in seconds, committed by Save. No list the specification keeps names the key — the
+desktop save's written keys, the Tier B overlay, the card's toggles, destination 1 — and the build left it out of
+`TIER_B_RUNTIME_KEYS` too, so its on-screen value never reached a run unsaved; it got through only because
+`DesktopSaveSchema` accepted any runtime key. Its hint names "the collector", it takes any positive number and has no unit
+suffix. Whether the control stays (a directive) or goes (covered by the lists), the specification does not say.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** Settings › Runtime keeps the
+"Improvement analysis timeout" control directly after the "Improvement loop" toggle. It shows whole seconds with a "seconds"
+suffix, is clamped at the widget to 10–600, starts from the effective `runtime.improvement_collector_timeout` (60 by
+default), is committed by Save, and is laid on the next run start by Tier B. A stored value outside 10–600 is shown clamped
+with its exact seconds stated beneath and is kept until the field changes. When a post-run analysis reaches the limit, the
+zero-proposal notice's detail says so. All of this is [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 2,
+and the desktop save's runtime keys become a closed list that the screen's runtime keys must equal (REQ-CONFIG-256).
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: keep the control and make it complete under a revision 2
+of PD-CONFIG-003 — the seconds suffix, a 10–600 clamp, Save, the Tier B overlay, the four lists, a hint a person can act
+on — and have a timed-out analysis's notice say so; the bound that decides whether the analyst's chosen model finishes
+belongs beside the toggle it qualifies, and OQ-218 settled the same day that a kept ceiling is one the person can move.
+*Advocate B (the system's lens)*: remove the control, keep the key file-only as REQ-CONFIG-118 and REQ-LIBRARY-039 state it
+— covered work with no directive — and close the desktop save's runtime key set so REQ-CONFIG-256's "exactly" is enforced.
+**The ruling followed A**: OQ-114's F4 timed three of six analyst calls past the 60 s that R-071 kept, a timed-out review
+read as an ordinary empty one, and removing a working control just before ship would leave that outcome with no on-screen
+remedy; B's counter-evidence (analysts cut about 4 s in) measured the live harness's quit. From B it took the closed save
+list, the equality tests that would have caught this defect, and the objection to a delegation-titled directive, answered by
+widening PD-CONFIG-003's heading. It departs from A on the dispositions: REQ-CONFIG-323's four toggles are untouched
+(extended), and REQ-CONFIG-325's "two numeric policy limits" is the count that changes (narrowed). R-071 is not revised: the
+60 s default stands.
+[`a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md`](../defects/a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md)
+records the notice's half, written before its code.

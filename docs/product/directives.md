@@ -3824,7 +3824,12 @@ provider. The owner kept the built behaviour. What it costs: the list is longer,
 
 <a id="pd-config-003"></a>
 
-### PD-CONFIG-003 — the Runtime category offers the per-agent timeout as a third delegation limit, in minutes
+### PD-CONFIG-003 — the Runtime category's two timeouts: the per-agent timeout as a third delegation limit, in minutes, and the improvement analysis timeout, in seconds
+
+*Revision 2 (2026-10-07, R-072, the ruling of OQ-223) — the heading widens to name both of the Runtime category's timeouts,
+and the clause marked "— revision 2" below is added; revision 1's text stands unchanged beside it. Revision 1's heading
+was: "PD-CONFIG-003 — the Runtime category offers the per-agent timeout as a third delegation limit, in minutes", and its
+disposition: "Narrows: REQ-CONFIG-322, REQ-CONFIG-256, REQ-CONFIG-417 / Extends: REQ-CONFIG-263".*
 
 Settings › Runtime › **Delegation limits** SHALL show a third numeric control, "Per-agent timeout", after the depth cap and
 the fan-out limit: whole minutes with a "minutes" suffix (REQ-CONFIG-325's pattern), clamped at the widget to **1–240**. It
@@ -3838,6 +3843,20 @@ each **delegated** agent, that the step in flight gets up to 30 s more (PD-ORCH-
 progress hands its work back to its parent, and that the value applies to runs started from now. The Overview caps line is
 unchanged (REQ-MONITOR-169). PD-ORCH-004 is not revised: its default and its limit stay as they are; this directive only
 lets the user move the limit.
+
+**The improvement analysis timeout — revision 2.** Settings › Runtime › **Runtime policy** SHALL show "Improvement analysis
+timeout" directly after the "Improvement loop" toggle: whole seconds with a "seconds" suffix (REQ-CONFIG-325's pattern),
+clamped at the widget to **10–600**, initialised from the effective `runtime.improvement_collector_timeout` (REQ-CONFIG-118,
+REQ-LIBRARY-039), so a default install reads **60**. It is committed by Save into the workspace file (REQ-CONFIG-256) and laid
+on the next run start by Tier B whether saved or not (REQ-CONFIG-262, REQ-CONFIG-263). A stored value outside 10–600 is shown
+clamped, a line beneath states the stored seconds, and it is never rewritten until the field changes (REQ-CONFIG-446,
+REQ-CONFIG-419). The hint says, in plain words, how long the background review of a finished run may take, that a longer
+review ends with no proposals, that it never holds up the person's work, that it is used while the improvement loop is on,
+and that it applies to runs started from now. A post-run analysis that reaches the limit SHALL say so in REQ-LIBRARY-124's
+zero-proposal notice's detail, giving the limit in seconds and naming this control; that notice's title and its absence of an
+action stay as they are (REQ-NOTIFY-100, REQ-LIBRARY-023). The desktop save's runtime keys SHALL be a closed list —
+REQ-CONFIG-256's eight, `child_timeout`, `improvement_collector_timeout` and the six confinement and egress fields — that the
+screen's runtime keys equal, and a save naming any other runtime key is refused.
 
 **As built.** `child_timeout` in `RuntimeViewSchema` (`packages/contracts/src/config.ts`) and the snapshot
 (`packages/config/src/snapshot.ts`), `TIER_B_RUNTIME_KEYS` (`packages/config/src/tiers.ts`), `DesktopSave.runtime`
@@ -3855,8 +3874,19 @@ same limit bounds a parent's resume attempt and a wait; a user who lowers it to 
 240-minute ceiling is a chosen figure, twelve times the default, with no derivation behind it; a file may still state a
 longer value, which the control shows clamped and keeps.
 
-> **Narrows:** REQ-CONFIG-322, REQ-CONFIG-256, REQ-CONFIG-417
-> **Extends:** REQ-CONFIG-263
+*Revision 2's why, and what it costs.* OQ-223, ruled 2026-10-07 under the owner's delegation (R-072, advocate A followed).
+OQ-114's F4 timed six analyst calls on the owner's endpoint at 22 to 134 s, three past the 60 s default R-071 kept, and a
+timed-out review read like an empty one; the bound that decides whether the analyst's chosen model finishes belongs beside
+the toggle it qualifies, and two timeouts on one screen follow one rule (OQ-218). The control had been built with no record
+tracing it, and it reached the file only because the save took any runtime key; the closed list is what would have caught
+it. What it costs: a longer bound spends tokens, and it delays later analyses, which run one at a time (REQ-LIBRARY-123);
+quitting still cancels an analysis in flight (REQ-LIBRARY-127), so a live run that quits within seconds is not helped; 10
+and 600 are chosen figures (600 is ten times the default, about 4.5 times the slowest measured call); `retrospective_timeout`
+and REQ-NOTIFY-100's other five bounds stay file-only; and the runtime policy card carries one field beyond REQ-CONFIG-323's
+four toggles, which black-box conformance may note. R-071's 60 s default is not revised.
+
+> **Narrows:** REQ-CONFIG-322, REQ-CONFIG-256, REQ-CONFIG-417, REQ-CONFIG-325
+> **Extends:** REQ-CONFIG-263, REQ-CONFIG-323, REQ-LIBRARY-041
 
 *Raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the ruling of
 [OQ-218](../architecture/open-questions.md) (T1). Cites, without changing them: REQ-MONITOR-286, REQ-CONFIG-113,
@@ -3864,6 +3894,10 @@ REQ-ORCH-088, REQ-CONFIG-446, REQ-NOTIFY-100 and PD-ORCH-004 revision 5. The rul
 as extended; both are already extended by PD-WORKSPACE-002 and the symbol generator admits one directive per verb, so this
 directive names them as narrowed — it changes their exact enumerations, which is what narrowing records (found while
 building).*
+
+*Revision 2 raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the
+ruling of [OQ-223](../architecture/open-questions.md) (IT1). Cites, without changing them: REQ-CONFIG-118, REQ-LIBRARY-039,
+REQ-LIBRARY-023, REQ-LIBRARY-124, REQ-NOTIFY-100, REQ-CONFIG-446, REQ-CONFIG-419 and OQ-114's kept 60 s.*
 
 > **First execution, 2026-10-07, built under [R-072](requests.md#r-072):** the directive held as written. **What was
 > measured.** `settings/child-timeout.test.ts` (the minutes and seconds both ways, the stored-value line, a stored 1250 s and

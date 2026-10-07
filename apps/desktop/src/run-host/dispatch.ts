@@ -564,9 +564,21 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       const r = await setHookToggle(hostEnv, configDir, req.agent, req.hookId, req.on);
       return r.ok ? { kind: 'ack' } : { kind: 'refused', code: 'hooks.policy', headline: 'The hook policy could not be saved', detail: r.error.reason };
     }
-    case 'runs.active':
-      // ADR-0013: the registry's predicate. Sessions are not keyed by workspace yet; the count is instance-wide.
-      return { kind: 'runs.count', workspaceId: req.workspaceId, count: sessions.activeRunCount() };
+    case 'runs.active': {
+      // ADR-0013: the registry's predicate. PD-SHELL-009: a workspace's id counts that workspace's runs (REQ-SHELL-021's gate
+      // 3, the close of one of several main windows, the restore's refusal); the empty id counts the instance's (the last
+      // window's close, the update's close). A workspace this run host does not hold has no run here.
+      if (req.workspaceId === '') return { kind: 'runs.count', workspaceId: '', count: sessions.activeRunCount() };
+      const s = stores.get(req.workspaceId);
+      return { kind: 'runs.count', workspaceId: req.workspaceId, count: s ? sessions.activeRunCount(s.root) : 0 };
+    }
+    case 'runs.stopWorkspace': {
+      // PD-SHELL-009: the stop control's graceful stop, applied to the workspace's active runs alone (PD-ORCH-005 clauses 3, 9, 10, 21).
+      const s = stores.get(req.workspaceId);
+      const stopped = s ? sessions.stopActiveIn(s.root) : [];
+      log(`runs: the close of a window on ${s?.root ?? req.workspaceId} stopped ${stopped.length === 0 ? 'no run' : stopped.join(', ')} (PD-SHELL-009)`);
+      return { kind: 'runs.stopped', workspaceId: req.workspaceId, sessionIds: stopped };
+    }
     case 'checkpoint.list': {
       // REQ-GIT-050: rows only, no Git; REQ-GIT-092/093's verdict stamped on; REQ-GIT-094's repair on this open.
       const s = stores.get(req.workspaceId);

@@ -30,9 +30,29 @@ REQ-SHELL-055 (Escape and the close control as the returning answer). `PD-ORCH-0
 - `apps/desktop/src/main/exit.ts` — `closeThroughGuards`, the quit's pass over the same guards.
 - `apps/desktop/src/main/index.ts` — `confirmClose` beside `createUpdater`, the one place the active-run confirmation is asked (OQ-86), and `activeRunCount`, the run host's `runs.active`.
 
-## Outcome so far
+## Outcome
 
-**Open on [OQ-206](../architecture/open-questions.md).** The repair below is built, and the note stays open until OQ-206
+**Repaired 2026-10-07 (fin28, bundle `fin28-window-gate-timeout`), under [OQ-206](../../architecture/open-questions.md)'s
+ruling of that day ([R-072](../../product/requests.md#r-072)), recorded as
+[`PD-SHELL-009`](../../product/directives.md#pd-shell-009).** Closing a main window ends the active runs of its own project
+and asks first. The last main window's close asks REQ-SHELL-119's question over the instance's count, as before. The close of
+one of several asks "Close this window while a run is active?" (`windowCloseBox`, `apps/desktop/src/main/close-confirmation.ts`)
+while the window's own workspace has a run active — the run host's `runs.active` now keyed by the session row's
+`workspace_root` (`Sessions.activeRunCount(workspaceRoot?)`, `packages/engine/src/sessions.ts`) — and its Yes awaits the run
+host's `runs.stopWorkspace` (`Sessions.stopActiveIn`: the stop control's graceful stop, so the sessions rest `paused` by
+`stop`) before the close guard confirms the close. The stopped sessions are kept in `QuitState.stoppedByClose`
+(`apps/desktop/src/main/exit.ts`): the closing window's approval dialog and question dock answer nothing, an approval queued
+behind it is not reported unshown, and their notices are held back until their rest is published. A window with no active
+run of its own closes without asking; REQ-SHELL-021's gate 3 counts the requesting window's workspace; a quit outside any
+window asks nothing, as before. Pinned by `close-confirmation.test.ts`, `exit.test.ts`, `commands/session.test.ts`,
+`dispatch.test.ts`, `main-windows.test.ts` (two windows closed in one gesture) and `run.test.ts` (the keyed count and the
+workspace stop), fourteen cases red on the source before the change; shown by `pnpm part-j-proof`'s two-window launch
+(`pair-app`). The Windows logout claim this note's repair relied on is recorded apart:
+[`a-windows-logout-skips-the-orderly-shutdown.md`](../a-windows-logout-skips-the-orderly-shutdown.md).
+
+## Outcome so far (2026-10-06, kept as written)
+
+**Open on [OQ-206](../../architecture/open-questions.md).** The repair below is built, and the note stays open until OQ-206
 is ruled: the requirements do not settle which closes ask, and the build asks at the close of the last main window only,
 not at the close of one of several, nor at a quit Electron starts on its own account (SIGTERM, logout, `app.quit()`).
 When OQ-206 is ruled, the build is made to agree with the ruling (or confirmed as built) and the note moves to
@@ -51,7 +71,7 @@ box that cannot be shown, leaves the window, its state and the run as they were,
 is open asks nothing more. A count that cannot be read asks.
 
 Which closes ask is not settled by the requirements, written for one main window: raised as
-[OQ-206](../architecture/open-questions.md), with the reading the build proceeds under — asked only when no other main
+[OQ-206](../../architecture/open-questions.md), with the reading the build proceeds under — asked only when no other main
 window stays open (only that close ends a run, REQ-STARTUP-161), and not on a quit Electron starts on its own account
 (`before-quit`, which REQ-SHELL-119's "user-initiated close" does not name), so the application's quit
 (`closeThroughGuards`) still asks the renderer's guards alone. The switch's outgoing window closes beside its replacement

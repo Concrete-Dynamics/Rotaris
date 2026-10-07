@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**Closing one of several main windows ends its own project's runs, asking first (PD-SHELL-009, REQ-STARTUP-046, REQ-SHELL-119,
+REQ-SHELL-122; OQ-206 ruled under R-072, fin28).** The run host's `runs.active` counts the named workspace's runs (the session
+row's `workspace_root`, `Sessions.activeRunCount(workspaceRoot?)`) and the empty id the instance's; a new request
+`runs.stopWorkspace` → `runs.stopped` stops a workspace's active runs as the stop control does (`Sessions.stopActiveIn`).
+`confirmActiveRunClose` asks `windowCloseBox` at a close that leaves another main window open, and its Yes awaits the stop
+before the close is confirmed; `QuitState.stoppedByClose` withdraws the stopped sessions' approval dialogs, queued approvals
+and question-dock cancellations and holds back their notices until their rest. The **process view**'s close paragraph and the
+**runtime view**'s control table say so. One request and one reply kind on the main ↔ run host channel; no package, edge,
+process, command or store column changed.
 **`can_publish_artifacts` gates `artifact_write` (REQ-CONFIG-106, REQ-TOOLS-004, REQ-TOOLS-150; OQ-212 ruled under R-072).**
 `Persona` gains `canPublishArtifacts`, false for every built-in role and carried from a role's configuration by
 `personaResolverFor`; `createToolPort` passes it to the registry's prerequisites, which removes a declared `artifact_write`

@@ -203,3 +203,37 @@ describe('the handshake carries the shared-quota caps the catalogue declares (PD
     expect(host.sharedQuotaCaps).toEqual({ deepseek: 3, 'claude-code': 2 });
   });
 });
+
+/**
+ * PD-SHELL-009: the run host's hop of the keyed count and of a workspace stop. A workspace's id counts and stops that
+ * workspace's runs, through the store it names, and the empty id counts the instance's (the last window's close, the
+ * update's close). Before, every count was instance-wide, so REQ-SHELL-021's gate 3 refused an idle window's switch over
+ * another project's run.
+ */
+describe('runs.active counts the workspace it names, and runs.stopWorkspace stops that workspace alone (PD-SHELL-009)', () => {
+  const hostFor = (seen: unknown[]) => ({
+    log: () => undefined,
+    stores: new Map([['W1', { root: '/ws/one' }], ['W2', { root: '/ws/two' }]]),
+    sessions: {
+      activeRunCount: (root?: string) => { seen.push(['count', root]); return root === undefined ? 3 : root === '/ws/one' ? 2 : 1; },
+      stopActiveIn: (root: string) => { seen.push(['stop', root]); return root === '/ws/one' ? ['S1', 'S2'] : []; },
+    },
+  }) as unknown as RunHost;
+
+  it('counts the named workspace through its store, the instance for the empty id, and nothing for a workspace it does not hold', async () => {
+    const seen: unknown[] = [];
+    const host = hostFor(seen);
+    expect(await dispatch({ kind: 'runs.active', workspaceId: 'W1' }, host)).toEqual({ kind: 'runs.count', workspaceId: 'W1', count: 2 });
+    expect(await dispatch({ kind: 'runs.active', workspaceId: '' }, host)).toEqual({ kind: 'runs.count', workspaceId: '', count: 3 });
+    expect(await dispatch({ kind: 'runs.active', workspaceId: 'W9' }, host)).toEqual({ kind: 'runs.count', workspaceId: 'W9', count: 0 });
+    expect(seen).toEqual([['count', '/ws/one'], ['count', undefined]]);
+  });
+
+  it('stops the named workspace\'s runs and answers the sessions it stopped', async () => {
+    const seen: unknown[] = [];
+    const host = hostFor(seen);
+    expect(await dispatch({ kind: 'runs.stopWorkspace', workspaceId: 'W1' }, host)).toEqual({ kind: 'runs.stopped', workspaceId: 'W1', sessionIds: ['S1', 'S2'] });
+    expect(await dispatch({ kind: 'runs.stopWorkspace', workspaceId: 'W9' }, host)).toEqual({ kind: 'runs.stopped', workspaceId: 'W9', sessionIds: [] });
+    expect(seen).toEqual([['stop', '/ws/one']]);
+  });
+});

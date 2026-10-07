@@ -10450,9 +10450,38 @@ presented before anything is torn down", its text conveying "that closing the wi
 "with runs active, a user-initiated close asks 'Quit while a run is active?'"; REQ-STARTUP-161, several main windows in one
 instance; REQ-STARTUP-047 with REQ-SHELL-018, the switch's close; `PD-ORCH-005` clause 3, a quit leaves unfinished agents
 `paused`. Raised 2026-10-06 by the repair of
-[`closing-a-window-while-a-run-is-active-asks-no-confirmation.md`](../defects/closing-a-window-while-a-run-is-active-asks-no-confirmation.md)
-(fin22, bundle `fin22-window-strip-config`), which stays open on it. Raised on that branch as OQ-205 and renumbered
-OQ-206 at its landing, OQ-205 being the `swarm` question `fin22-record-tidy` raised first on main. Open.)*
+[`closing-a-window-while-a-run-is-active-asks-no-confirmation.md`](../defects/fixed/closing-a-window-while-a-run-is-active-asks-no-confirmation.md)
+(fin22, bundle `fin22-window-strip-config`), which stayed open on it. Raised on that branch as OQ-205 and renumbered
+OQ-206 at its landing, OQ-205 being the `swarm` question `fin22-record-tidy` raised first on main. ~~Open.~~ **Ruled
+2026-10-07.**)*
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** closing a main window ends the
+active runs of the project open in it, and asks REQ-STARTUP-046's confirmation first. The close of the last main window asks,
+as built, while the run host counts any run active in the instance ("Quit while a run is active?"). The close of one of
+several windows asks while that window's own workspace has a run active ("Close this window while a run is active?",
+"…while {n} runs are active?"); its Yes stops those runs as the stop control does before the window closes (PD-ORCH-005
+clauses 3, 9, 10 and 21: agents rest `paused` by `stop`, Continue resumes them, and approvals are withdrawn), and the stopped
+runs' later notices are held back from the window that stays (REQ-STARTUP-046's last sentence). A window with no active run
+of its own closes without asking. REQ-SHELL-021's gate 3 counts only the requesting window's workspace. A quit that starts
+outside any window (a signal, the end of the desktop session, the driver's or the capture's quit) asks no active-run
+confirmation, as built. Recorded as [`PD-SHELL-009`](../product/directives.md#pd-shell-009), which narrows REQ-STARTUP-046,
+REQ-SHELL-119 and REQ-SHELL-122; the ruling also named REQ-SHELL-021, which PD-SHELL-001 already narrows and the symbol
+generator admits one narrowing directive per requirement, so gate 3's change is carried through REQ-SHELL-122, whose test
+the gate applies (found while building, 2026-10-07).
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: ask at the close of a window whose own workspace has a
+run active, with its own title, and have its Yes stop those runs, so that every active run always has a window and the box
+is true wherever it is shown; leave a quit outside any window unasked. *Advocate B (the system's lens)*: confirm as built —
+ask only at the last window's close, where "closing the window ends it" is true — and record that as a directive narrowing
+REQ-STARTUP-046 and REQ-SHELL-119. **The ruling followed A**: B's own risks (a run left executing where no window shows it,
+its approvals opening over another project, the other window's switch refused about a run it never showed) are not the
+product working under PD-SHELL-002, and PD-ORCH-005 makes the stop resumable. From B it kept: no question at a quit outside
+any window, the corrected logout claim (on Windows, Electron emits no `before-quit` at a logout or shutdown —
+[`a-windows-logout-skips-the-orderly-shutdown.md`](../defects/a-windows-logout-skips-the-orderly-shutdown.md), recorded, not
+repaired), a separate defect note for that, and the test of two windows closed in one gesture. macOS Dock Quit is a
+person's quit outside any window and is to be reopened when a macOS release is authorized (IC-3, PD-STARTUP-001).
+[`closing-a-window-while-a-run-is-active-asks-no-confirmation.md`](../defects/fixed/closing-a-window-while-a-run-is-active-asks-no-confirmation.md)
+closes with it.
 
 Both requirements were written when the instance held one main window and its close was the quit. Since REQ-STARTUP-161
 the run host keeps executing while any main window stays, and the run host's count of active runs is instance-wide

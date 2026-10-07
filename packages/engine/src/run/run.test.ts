@@ -472,6 +472,33 @@ describe('engine/run — the run loop end to end against a real store and a scri
     }
   });
 
+  it('PD-SHELL-009: the count keys by workspace, and a workspace stop rests only that workspace\'s runs, paused by `stop`, the other run untouched', async () => {
+    const aborted: string[] = [];
+    const backend: AgentBackend = { ownsTheLoop: false, runTurn: (_i, _s, signal) => new Promise<TurnReport>((resolve) => { signal.addEventListener('abort', () => { aborted.push('x'); resolve({ status: 'failed', text: '', usage: { input: 0, output: 0 }, error: modelError({ code: 'aborted', headline: 'aborted', transient: false }) }); }); }) };
+    const { sessions } = sessionsWith(backend);
+    const a = (sessions.start(dal, 'C:/ws', 'a') as { value: SessionId }).value;
+    const b = (sessions.start(dal, 'C:/other', 'b') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 5));
+    // REQ-SHELL-122's count, keyed (REQ-SHELL-021's gate 3 and the close of one of several windows) and instance-wide.
+    expect(sessions.activeRunCount()).toBe(2);
+    expect(sessions.activeRunCount('C:/ws')).toBe(1);
+    expect(sessions.activeRunCount('C:/other')).toBe(1);
+    expect(sessions.activeRunCount('C:/none')).toBe(0);
+    expect(sessions.stopActiveIn('C:/ws')).toEqual([a]);
+    await sessions.running(a);
+    // PD-ORCH-005 clauses 3 and 21: the stop control's rest — `paused`, `user_cancelled`, the iteration left open by `stop`.
+    expect(dal.getSession(a)!.execution_status).toBe('paused');
+    expect(dal.getSession(a)!.stop_reason).toBe('user_cancelled');
+    expect(dal.iterationsOf(a).at(-1)).toMatchObject({ state: 'open', interruption: 'stop' });
+    expect(sessions.isRunActive(b)).toBe(true);
+    expect(sessions.activeRunCount('C:/ws')).toBe(0);
+    expect(sessions.activeRunCount()).toBe(1);
+    // A second stop of the same workspace finds nothing to stop; the other workspace's run is still executing.
+    expect(sessions.stopActiveIn('C:/ws')).toEqual([]);
+    await sessions.closeAll();
+    expect(dal.getSession(b)!.stop_reason).toBe('application_shutdown');
+  });
+
   it('OQ-42: quarantines sibling runs, refuses admission and probes explicit reopen recovery', async () => {
     let entered = 0;
     const backend: AgentBackend = { ownsTheLoop: false, runTurn: (_i, _s, signal) => new Promise<TurnReport>((resolve) => {

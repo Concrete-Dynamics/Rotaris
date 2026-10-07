@@ -8,6 +8,7 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { unpressedClicks } from './lib/capture-clicks.mjs';
 import { STEER_CLICKS, STEER_REST_CLICKS, STEER_REST_TYPE, STEER_REST_WHATS, STEER_TYPE, STEER_WHATS, steerPendingAtPause } from './lib/steer-rest.mjs';
 import { STEER_EARLY_CLICKS, STEER_EARLY_TYPE, SUBSCRIBE_HOLD_MS, steerEarlyReading } from './lib/steer-early.mjs';
+import { startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
 
 /**
  * The control channel's first execution in the built app (Part J step 3): a queued message consumed at the
@@ -17,7 +18,9 @@ import { STEER_EARLY_CLICKS, STEER_EARLY_TYPE, SUBSCRIBE_HOLD_MS, steerEarlyRead
  * scripted step; the
  * message-limit pause with its dialog answered "double", then the relaunch finding a session paused at the
  * limit and its dialog answered "cancel"; a user-initiated quit during a run, its active-run confirmation answered Yes, and
- * the same close declined, the run going on to its own end (REQ-STARTUP-046); a root the quit cut before its first reply
+ * the same close declined, the run going on to its own end (REQ-STARTUP-046); with two main windows open, an idle window's
+ * close asking nothing and the running window's close asking PD-SHELL-009's window box, its Yes resting the run `paused` by
+ * `stop` before the window closed; a root the quit cut before its first reply
  * in a later iteration, resumed by the relaunch's Continue at the step after the one cut. Every assertion reads the store.
  */
 const require = createRequire(import.meta.url);
@@ -366,6 +369,77 @@ const declinedLog = await launch('quit-declined', s6b, { ROTARIS_SCRIPT: 'read,r
   if (session.stop_reason === 'application_shutdown' || session.execution_status !== 'completed') throw new Error(`the declined close did not leave the run executing to its own end: ${JSON.stringify(session)}`);
   if (!typed.some((p) => p.content === 'still here')) throw new Error(`the window that stayed did not accept input after the Cancel (REQ-STARTUP-046): ${JSON.stringify(typed)}`);
   results.quitDeclined = { session, confirmation: 'asked; answered Cancel', inputAfterCancel: typed.find((p) => p.content === 'still here') };
+}
+
+// 5c. Two main windows (PD-SHELL-009, ruling OQ-206 under R-072): closing a window ends the active runs of its own project,
+// asking first. A driven launch, so each window is closed through its own title-bar command (`window.close`, the person's
+// close): window A runs a held scripted turn while window B, on another project, is idle. Closing B (one of two) asks
+// nothing and A's run keeps executing; B is opened again, and closing A (one of two) asks "Close this window while a run is
+// active?", answered Yes (`ROTARIS_CAPTURE_ANSWERS`, which needs the capture flag; its own finish is set past the launch's
+// end), and A's session rests `paused`, `user_cancelled`, its iteration open by `stop`, before the window closes. The last
+// window's quit then asks nothing: no run is active anywhere.
+const PAIR_WINDOW_BOX = /capture: message box "Close this window while a run is active\?" \| Close this window while a run is active\? \| A run is still executing in this project\. Closing this window ends it: Rotaris will stop the run, and work in flight may not finish\. Choose Cancel to return to the window and let it finish\. \| buttons \["Cancel","Yes"\] default 0 → answered (\d)/;
+const pairA = scenario('pair-a', []);
+const pairB = scenario('pair-b', []);
+{
+  const pairRoot = join(output, 'pair-app');
+  const started = await startApp({
+    root: pairRoot, workspace: pairA.workspace, timeoutMs: 90_000,
+    extra: { ROTARIS_SCRIPT: 'read,wait:120000,answer', ROTARIS_CAPTURE_PROJECT_FOLDER: pairB.workspace, ROTARIS_CAPTURE_PNG: join(output, 'pair-unused.png'), ROTARIS_CAPTURE_AFTER_MS: '170000', ROTARIS_CAPTURE_ANSWERS: '1' },
+  });
+  const d = started.driver;
+  const readLog = () => (existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '');
+  const windowsOf = async () => { const r = await d.windows(); return Array.isArray(r?.windows) ? r.windows : []; };
+  const storeOf = () => findDatabases(started.local).map((file) => {
+    const db = new Database(file, { readonly: true });
+    try { return { file, sessions: db.prepare('SELECT session_id, workspace_root, execution_status, stop_reason FROM sessions').all(), iterations: db.prepare('SELECT session_id, iteration, state, interruption FROM iterations ORDER BY iteration').all() }; }
+    finally { db.close(); }
+  });
+  const pairSessionA = () => storeOf().flatMap((s) => s.sessions.map((row) => ({ ...row, iterations: s.iterations.filter((i) => i.session_id === row.session_id) }))).find((row) => String(row.workspace_root).endsWith('pair-a/workspace') || String(row.workspace_root).endsWith('pair-a\\workspace'));
+  let failure = null;
+  const reading = {};
+  try {
+    await d.waitFor('.nav-item', { timeoutMs: 30_000 });
+    await d.click('.nav-item', { text: 'Workspace' });
+    await d.waitFor('.composer__input', { timeoutMs: 10_000 });
+    await d.chord('Ctrl+L');
+    await until(() => d.eval("document.activeElement?.classList.contains('composer__input') === true"), (v) => v === true, { timeoutMs: 10_000, what: 'the composer holding focus' });
+    await d.type('hold this run while the windows close', { enter: true });
+    await d.waitFor('[data-testid="run-header"][data-state="running"]', { timeoutMs: 30_000 });
+    // B, the idle window, on the other project; then B's own close, one of two windows: nothing is asked.
+    await d.command({ kind: 'workspace.choose', newWindow: true });
+    await until(windowsOf, (w) => w.length === 2, { timeoutMs: 30_000, what: 'two main windows' });
+    await d.useWindow('pair-b/workspace');
+    await d.command({ kind: 'window.close' });
+    await d.useWindow();
+    await until(windowsOf, (w) => w.length === 1, { timeoutMs: 15_000, what: "the idle window closed by its own close" });
+    reading.idleClose = { boxes: (readLog().match(/capture: message box /g) ?? []).length, aStatus: pairSessionA()?.execution_status ?? null };
+    if (reading.idleClose.boxes !== 0) throw new Error(`the idle window's close asked a box (PD-SHELL-009: a window with no active run of its own closes without asking); see pair-app.log`);
+    if (reading.idleClose.aStatus !== 'running') throw new Error(`the idle window's close touched the other project's run: ${JSON.stringify(pairSessionA())}`);
+    // B again; then A's own close, one of two windows with its project's run active: the window box, answered Yes.
+    await d.command({ kind: 'workspace.choose', newWindow: true });
+    await until(windowsOf, (w) => w.length === 2, { timeoutMs: 30_000, what: 'two main windows again' });
+    await d.useWindow('pair-a/workspace');
+    await d.command({ kind: 'window.close' });
+    await d.useWindow();
+    await until(windowsOf, (w) => w.length === 1 && String(w[0]?.workspace ?? '').includes('pair-b'), { timeoutMs: 30_000, what: "the running window closed after its confirmation, the idle one staying" });
+    const rested = await until(pairSessionA, (row) => row?.execution_status === 'paused', { timeoutMs: 45_000, what: "A's session resting after its window's close" });
+    reading.runningClose = { session: rested };
+  } catch (cause) {
+    failure = cause instanceof Error ? cause.message : String(cause);
+  }
+  const stopped = await stopApp(started, { graceMs: 30_000, quitMs: 15_000 });
+  const log = readLog();
+  writeFileSync(join(output, 'pair-app.log'), log);
+  if (stopped.overran) throw new Error(stopOverrunMessage('pair', stopped, log));
+  if (failure) throw new Error(`the two-window launch: ${failure}; see pair-app.log`);
+  const boxes = [...log.matchAll(/capture: message box "([^"]*)"/g)].map((m) => m[1]);
+  if (boxes.length !== 1 || PAIR_WINDOW_BOX.exec(log)?.[1] !== '1') throw new Error(`the running window's close did not ask PD-SHELL-009's window box exactly once, answered Yes (boxes asked: ${JSON.stringify(boxes)}); see pair-app.log`);
+  if (!/close: window \d+'s close stopped session\(s\) \S+ before it closed \(PD-SHELL-009\)/.test(log)) throw new Error('main did not record the stop before the window closed; see pair-app.log');
+  const session = reading.runningClose.session;
+  if (session.stop_reason !== 'user_cancelled') throw new Error(`the window's close did not stop the run as the stop control does: ${JSON.stringify(session)}`);
+  if (!session.iterations.some((i) => i.state === 'open' && i.interruption === 'stop')) throw new Error(`the stopped run's iteration is not left open by \`stop\` (PD-ORCH-005 clause 3): ${JSON.stringify(session.iterations)}`);
+  results.pairWindows = { idleClose: reading.idleClose, runningClose: { session, box: 'Close this window while a run is active? — answered Yes' }, boxesAsked: boxes, quit: { exit: stopped.exit } };
 }
 
 // 6. A root resumed before its first reply in a later iteration (the repair of

@@ -33,7 +33,8 @@ export interface ExitDeps {
 /**
  * PD-ORCH-005 clause 9: the application's quit, as main can tell it. A quit is the process exiting at once
  * (`exitCleanly`), or every main window's close confirmed by its guard; a quit Electron starts on its own account
- * (SIGTERM, the desktop's logout, `app.quit()`) is turned into the second before any window closes (`before-quit` in
+ * (SIGTERM, the desktop's logout where Electron emits `before-quit` — on Windows it emits none at a logout or shutdown,
+ * `docs/defects/a-windows-logout-skips-the-orderly-shutdown.md` — `app.quit()`) is turned into the second before any window closes (`before-quit` in
  * `index.ts`). While it is under way, what a closing surface would send as a person's answer — REQ-TOOLS-063's Deny
  * for an approval dialog, REQ-CHAT-101's cancellation from the question dock — is the quit's, and is not sent: the run
  * host's `shutdown` withdraws the approval or the question instead, and a withdrawal is never recorded as an answer.
@@ -43,6 +44,8 @@ export interface ExitDeps {
 export class QuitState {
   #exiting = false;
   readonly #closing = new Set<number>();
+  /** PD-SHELL-009: the sessions a window's close stopped, by whether their rest has yet been seen. */
+  readonly #stoppedByClose = new Map<string, 'stopping' | 'rested'>();
 
   /** The process is about to exit at once. */
   exiting(): void { this.#exiting = true; }
@@ -52,6 +55,31 @@ export class QuitState {
   /** Whether the application is quitting: the process exiting, or no main window staying. */
   quitting(mainWindows: readonly { readonly wcId: number; readonly destroyed: boolean }[]): boolean {
     return this.#exiting || mainWindows.every((w) => w.destroyed || this.#closing.has(w.wcId));
+  }
+
+  /**
+   * PD-SHELL-009: the close of one of several main windows stopped these sessions' runs (`runs.stopWorkspace`) before the
+   * window closed. Like the quit's shutdown, that stop withdraws what they wait on (PD-ORCH-005 clause 9): an approval
+   * dialog or a question dock the closing window held for one of them answers nothing as it closes, and an approval queued
+   * behind it is not reported unshown. And as REQ-STARTUP-046's last sentence has it, no notice of theirs appears on the
+   * window that stays while they come to rest.
+   */
+  stoppedByClose(sessionIds: readonly string[]): void {
+    for (const id of sessionIds) this.#stoppedByClose.set(id, 'stopping');
+  }
+  /** Whether the session's waits are the window close's stop to withdraw, and its notices held back. */
+  withdrawnByClose(sessionId: string): boolean {
+    return this.#stoppedByClose.has(sessionId);
+  }
+  /**
+   * A publication of the session's status. Its rest (not active) is the stop having landed; a later active status is a new
+   * run the person started (Continue from another window), whose waits and notices are its own again.
+   */
+  observeStatus(sessionId: string, active: boolean): void {
+    const held = this.#stoppedByClose.get(sessionId);
+    if (held === undefined) return;
+    if (!active) this.#stoppedByClose.set(sessionId, 'rested');
+    else if (held === 'rested') this.#stoppedByClose.delete(sessionId);
   }
 }
 
@@ -70,9 +98,12 @@ export async function closeThroughGuards(guards: readonly { ask(): Promise<boole
   return true;
 }
 
-/** REQ-TOOLS-063 under PD-ORCH-005 clause 9: an approval dialog that closed unanswered answers Deny unless the quit closed it. */
-export function dialogCloseAnswersDeny(state: { readonly answered: boolean; readonly quitting: boolean }): boolean {
-  return !state.answered && !state.quitting;
+/**
+ * REQ-TOOLS-063 under PD-ORCH-005 clause 9: an approval dialog that closed unanswered answers Deny unless the quit closed it,
+ * or (PD-SHELL-009) its window's close stopped the run that asked it — the stop withdraws it instead.
+ */
+export function dialogCloseAnswersDeny(state: { readonly answered: boolean; readonly quitting: boolean; readonly withdrawnByClose?: boolean }): boolean {
+  return !state.answered && !state.quitting && state.withdrawnByClose !== true;
 }
 
 /** A child window that never reports `closed` must not hold the process open: the exit happens regardless. */

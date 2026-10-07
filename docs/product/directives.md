@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Seventy-seven.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Seventy-eight.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -4850,6 +4850,86 @@ narrow widths and never hides this one, and a record that predates the backend's
 > **Narrows:** REQ-SHELL-038, REQ-SHELL-047, REQ-SANDBOX-121
 
 *Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), the ruling of OQ-184.*
+
+---
+
+<a id="pd-shell-009"></a>
+
+### PD-SHELL-009 — closing a main window ends its own project's runs, and asks first
+
+Closing a main window SHALL end the active runs of the project open in it, and SHALL ask REQ-STARTUP-046's confirmation
+first, after REQ-SHELL-119's earlier guards. Which close asks what:
+
+- **The last main window.** A person's close of the main window that leaves no other main window open asks REQ-SHELL-119's
+  question ("Quit while a run is active?", "Quit while {n} runs are active?") while the run host counts any run active in
+  the instance (REQ-SHELL-122's count, instance-wide). Its Yes is the application's quit, whose shutdown stops every run
+  (PD-ORCH-005 clause 3). This is as built before this directive.
+- **One of several main windows.** A person's close of a main window that leaves another main window open asks "Close this
+  window while a run is active?" ("Close this window while {n} runs are active?") while the closing window's own workspace
+  has a run active — REQ-SHELL-122's count taken over that workspace's sessions alone. The box conveys REQ-STARTUP-046's
+  three things: a run is still executing in this project, closing this window ends it (Rotaris will stop the run, and work
+  in flight may not finish), and the alternative is Cancel, to return to the window and let it finish. It offers Cancel and
+  Yes, Cancel first, the default, and Escape's and the box's close control's answer (REQ-SHELL-055). Its **Yes stops those
+  runs as the stop control does** (REQ-SESSION-186's graceful stop) before the window closes: under PD-ORCH-005 clauses 3,
+  9, 10 and 21 their agents rest `paused` by `stop`, Continue resumes them, the approvals and questions they wait on are
+  withdrawn and never answered (the closing window's approval dialog and question dock answer nothing), and their background
+  terminal sessions end. No notice of those runs appears on a window that stays while they come to rest (REQ-STARTUP-046's
+  last sentence). Cancel, or a box that cannot be shown, aborts the close and changes nothing. A count that cannot be read
+  is a run active.
+- **A window with no active run of its own** closes without asking, whatever runs in other projects, and touches no run.
+  So does a window that holds no workspace and leaves another main window open.
+- **REQ-SHELL-021's gate 3** counts the requesting window's own workspace (through REQ-SHELL-122, whose test "a run is
+  active" is the gate's; REQ-SHELL-021 itself is already narrowed by PD-SHELL-001, and the generator admits one narrowing
+  directive per requirement, so this directive narrows the count rather than the gate): a window whose project has no run active may
+  open another project while another window's project runs, and the window whose project runs is declined with "Finish the
+  active run before opening another project." as before. A switch's outgoing window therefore closes asking nothing, its
+  workspace's count being zero once the gate has passed; a run started in between is asked about at that close, and a
+  Cancel there discards the replacement (REQ-STARTUP-047).
+- **A quit that starts outside any window** — a signal, the end of the desktop session where Electron emits `before-quit`,
+  the driver's or the capture's quit — asks no active-run confirmation, as built; it asks only the renderer's
+  unsaved-settings guard, and its shutdown leaves the runs as PD-ORCH-005 clause 3 says.
+
+**As built.** `confirmActiveRunClose`, `activeRunCloseBox` and `windowCloseBox` (`apps/desktop/src/main/close-confirmation.ts`),
+wired in `confirmRunsAtClose` (`apps/desktop/src/main/index.ts`), which awaits the run host's `runs.stopWorkspace` before the
+close guard confirms the close, so the stop reaches the run host before the window's presenter is revoked; the stopped
+sessions are kept in `QuitState.stoppedByClose` (`apps/desktop/src/main/exit.ts`), which `dialogCloseAnswersDeny`, the
+question dock's cancellation (`apps/desktop/src/main/commands/session.ts`), the unshown-approval report and the notice
+relay read until the session's rest is published. The run host's count and stop are keyed by the session row's
+`workspace_root` (`Sessions.activeRunCount(workspaceRoot?)`, `Sessions.stopActiveIn`, `packages/engine/src/sessions.ts`;
+`runs.active` and `runs.stopWorkspace` in `apps/desktop/src/run-host/dispatch.ts`).
+
+**Why, and what it costs.** OQ-206, ruled 2026-10-07 under the owner's delegation (R-072). Before this, the close of one of
+several windows asked nothing and ended nothing: the run kept executing and spending where no window showed it, its
+approvals and pause dialogs opened over an unrelated project (`ownerOfSession` falls back to the active window), the other
+window's switch was refused with "Finish the active run" about a run it never showed, and the last close told the person to
+return to a window that never held the run. PD-SHELL-002 has each project's runs live in the window open on that project;
+this directive makes the box true at every close that shows it. What it costs: a window can no longer be closed with its
+run left going — a person who wants the run to carry on minimizes the window instead; a logout warns about nothing (on
+Windows Electron emits no `before-quit` at a logout or shutdown at all,
+[`a-windows-logout-skips-the-orderly-shutdown.md`](../defects/a-windows-logout-skips-the-orderly-shutdown.md)); and macOS
+Dock Quit is a person's quit outside any window, which asks nothing — to be reopened when a macOS release is authorized
+(IC-3, PD-STARTUP-001).
+
+> **Narrows:** REQ-STARTUP-046, REQ-SHELL-119, REQ-SHELL-122
+
+*Raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the ruling of
+[OQ-206](../architecture/open-questions.md) (advocate A, the user's lens, followed).*
+
+> **First execution, 2026-10-07, built under [R-072](requests.md#r-072):** the directive held as written, and one claim the
+> record carried was false. The run host's per-workspace predicate ADR-0013 names as its registry's job was not built: every
+> count was instance-wide (`runs.active`'s "Sessions are not keyed by workspace yet"); it now keys by the session row's
+> `workspace_root`, which REQ-SHELL-021's gate 3 and the restore's refusal (REQ-SESSION-201), which already passed the
+> window's workspace id, now read. The record's claim that "the desktop's logout" reaches `before-quit` holds on Linux and
+> macOS only; on Windows Electron's own typings say neither `before-quit` nor `will-quit` is emitted at a logout or shutdown
+> (recorded as a defect, not repaired here). **What was measured.** `close-confirmation.test.ts`, `exit.test.ts`,
+> `commands/session.test.ts`, `dispatch.test.ts`, `main-windows.test.ts` (the two-window gesture) and `run.test.ts` (the
+> keyed count and the workspace stop resting the run `paused` by `stop`, the other workspace's run untouched), fourteen
+> cases red on the source before this change; and `part-j-proof`'s two-window launch (`pair-app`), driven: the idle
+> window's close asked nothing and left the other project's run `running`, the running window's close asked "Close this
+> window while a run is active?" once, answered Yes, and its session rested `paused`, `user_cancelled`, its iteration open by
+> `stop`, before the window closed; the last window's quit asked nothing. **What was not measured.** A held-back notice and a
+> withdrawn approval dialog in the built app (both pinned by unit tests only); a Windows host (IC-3). The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

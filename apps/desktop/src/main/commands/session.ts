@@ -23,9 +23,9 @@ export function confinementRefusalNotice(r: { readonly headline: string; readonl
  * a refusal into a notice where the surface has nowhere to show one.
  */
 export function sessionCommands(
-  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services'>,
+  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'withdrawnByClose'>,
 ): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.chooseNextModel' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.retry' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.release' | 'session.reconcile' | 'session.pageOlder'> {
-  const { capturing, clocks, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runFailures, runHost, services } = ctx;
+  const { capturing, clocks, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runFailures, runHost, services, withdrawnByClose } = ctx;
   return {
     'session.continue': async (req) => {
       const r = await runHost.request({ kind: 'session.continue', sessionId: req.sessionId, action: req.action, ...(req.withoutPaused === true ? { withoutPaused: true } : {}) }, millis(10_000));
@@ -183,9 +183,14 @@ export function sessionCommands(
     'session.control': async (req, { senderId }) => {
       // PD-CHAT-002 revision 2 with PD-ORCH-005 clause 9: the question dock cancels its prompt as its window unloads
       // (REQ-CHAT-101). A dismissal the application's quit causes cancels nothing: the cancellation is not sent, the run
-      // host's `shutdown` withdraws the question instead, and a withdrawn question is never an answer.
+      // host's `shutdown` withdraws the question instead, and a withdrawn question is never an answer. PD-SHELL-009: the same
+      // for a dock whose window's close stopped the session's run — the stop withdraws the question.
       if (req.request.op === 'cancelQuestions' && quitting()) {
         log(`question ${String(req.request.args['requestId'] ?? '')} left for the quit to withdraw: its dock closed with the application (PD-ORCH-005 clause 9)`);
+        return { ok: true, value: { ok: true } };
+      }
+      if (req.request.op === 'cancelQuestions' && withdrawnByClose?.(req.request.sessionId) === true) {
+        log(`question ${String(req.request.args['requestId'] ?? '')} left for the stop to withdraw: its window's close stopped session ${req.request.sessionId} (PD-SHELL-009, PD-ORCH-005 clause 9)`);
         return { ok: true, value: { ok: true } };
       }
       // ADR-0010 channel 1 across ADR-0013's boundary: the same arguments, the same `{ok, value?}`.

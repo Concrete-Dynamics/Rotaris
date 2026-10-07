@@ -3304,8 +3304,39 @@ export class Sessions {
     return isActiveStatus(s.writer.currentStatus);
   }
 
-  activeRunCount(): number {
-    return [...this.live.keys()].filter((id) => this.isRunActive(id)).length;
+  /**
+   * REQ-SHELL-122's count. With no root it is the whole instance's; with a root it is that workspace's alone — the live
+   * sessions whose session row names it (PD-SHELL-009: REQ-SHELL-021's gate 3 and a close of one of several main windows
+   * count the window's own workspace; ADR-0013's per-workspace predicate).
+   */
+  activeRunCount(workspaceRoot?: string): number {
+    return [...this.live.keys()].filter((id) => this.isRunActive(id) && (workspaceRoot === undefined || this.inWorkspace(id, workspaceRoot))).length;
+  }
+
+  /**
+   * PD-SHELL-009: the close of one of several main windows stops the active runs of its workspace as the stop control does
+   * — REQ-SESSION-186's graceful stop, the `cancel` op without force — so each rests `paused` with interruption `stop`, its
+   * pending approvals and questions withdrawn and its background terminal sessions ended (PD-ORCH-005 clauses 3, 9, 10 and
+   * 21). A run whose stop is already pending is left to it and not forced. Answers the sessions it stopped or found
+   * stopping; a run that accepts no stop (its end already written) is not among them.
+   */
+  stopActiveIn(workspaceRoot: string): SessionId[] {
+    const stopped: SessionId[] = [];
+    for (const [id, s] of this.live) {
+      const run = s.run;
+      if (!run || run.isEnded || !run.acceptsStop || !this.inWorkspace(id, workspaceRoot)) continue;
+      if (!run.stop.requested) {
+        s.presence.returned();
+        run.stop.request('user_cancelled', false);
+        run.stopAccepted();
+      }
+      stopped.push(id);
+    }
+    return stopped;
+  }
+
+  private inWorkspace(sessionId: SessionId, workspaceRoot: string): boolean {
+    return this.live.get(sessionId)?.dal.getSession(sessionId)?.workspace_root === workspaceRoot;
   }
 
   attach(sessionId: SessionId): boolean {

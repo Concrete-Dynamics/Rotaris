@@ -12,7 +12,7 @@ import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
 import { startDriver, type AuxiliaryWindow } from './driver.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
-import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
+import { isActiveStatus, REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
 import { requirementColumnFoldsKey, type PreferenceKey } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
@@ -871,8 +871,9 @@ async function main(): Promise<void> {
       dialogPayloads.delete(dlgWcId);
       if (mainWindows.openDialog(w.wcId) === entry) mainWindows.setOpenDialog(w.wcId, null);
       // REQ-TOOLS-063: closing the window answers Deny; a request already answered or cancelled asks nothing more.
-      // PD-ORCH-005 clause 9: a dialog the application's quit closed answers nothing — the shutdown withdraws it.
-      if (dialogCloseAnswersDeny({ answered: entry.answered, quitting: quitting() })) void runHost.request({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option: 'deny' } } }, millis(5_000)).catch(() => undefined);
+      // PD-ORCH-005 clause 9: a dialog the application's quit closed answers nothing — the shutdown withdraws it; so does one
+      // whose window's close stopped the run that asked it (PD-SHELL-009) — the stop withdraws it.
+      if (dialogCloseAnswersDeny({ answered: entry.answered, quitting: quitting(), withdrawnByClose: quit.withdrawnByClose(payload.session_id) })) void runHost.request({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option: 'deny' } } }, millis(5_000)).catch(() => undefined);
       clocks.timers.after(millis(50), () => { void presentNext(w); });
     });
     try {
@@ -1024,7 +1025,11 @@ async function main(): Promise<void> {
   // ADR-0044: main RELAYS a publication unchanged; the number on it is the run host's.
   runHost.onEvent((e) => {
     if (e.kind === 'publish.increment') relay.relaySequenced(CHANNEL.transcriptIncrement, e.payload);
-    else if (e.kind === 'publish.snapshot') relay.relaySequenced(CHANNEL.sessionSnapshot, e.payload);
+    else if (e.kind === 'publish.snapshot') {
+      // PD-SHELL-009: a session a window's close stopped is seen to rest, or a later run of it to start.
+      quit.observeStatus(e.payload.sessionId, isActiveStatus(e.payload.session.executionStatus));
+      relay.relaySequenced(CHANNEL.sessionSnapshot, e.payload);
+    }
     else if (e.kind === 'improvement.job') improvementCoordinator.enqueue(e.job);
     else if (e.kind === 'presenter.poll') {
       // ADR-0019: the reply carries the windows main holds; answered at once, never from a blocked loop.
@@ -1052,6 +1057,11 @@ async function main(): Promise<void> {
         const open = mainWindows.openDialog(candidate.wcId);
         if (open && open.requestId === e.requestId) { open.answered = true; if (!open.win.isDestroyed()) open.win.close(); }
       });
+    }
+    else if (e.kind === 'notice.publish' && quit.withdrawnByClose(e.sessionId)) {
+      // REQ-STARTUP-046's last sentence under PD-SHELL-009: no notice of a run its window's close stopped appears on the
+      // window that stays while it comes to rest.
+      log(`notice "${e.title}" for session ${e.sessionId} held back: its window's close stopped the run (REQ-STARTUP-046, PD-SHELL-009)`);
     }
     else if (e.kind === 'notice.publish') {
       // REQ-NOTIFY-028: the run host names the session its notice concerns, so a notice about one run survives the
@@ -1291,19 +1301,35 @@ async function main(): Promise<void> {
     closeConfirmed: (wcId) => { quit.closeConfirmed(wcId); },
     closeGuard: (wcId, guard) => { if (guard) closeGuards.set(wcId, guard); else closeGuards.delete(wcId); },
     /*
-     * REQ-STARTUP-046 / REQ-SHELL-119 guard 3 (OQ-206): a person's close of the last main window staying asks while the run
-     * host counts a run active; with another main window staying, the close ends nothing and asks nothing. The count is
-     * instance-wide, as at REQ-SHELL-021's gate 3. The box is `activeRunCloseBox`, over the closing window.
+     * REQ-STARTUP-046 / REQ-SHELL-119 guard 3 under PD-SHELL-009: a person's close of the last main window staying asks while
+     * the run host counts a run active anywhere in the instance (`activeRunCloseBox`); the close of one of several asks while
+     * the window's own workspace has a run active (`windowCloseBox`), and its Yes stops those runs before the close is
+     * confirmed, so the stop reaches the run host before the window's presenter is revoked. The sessions it stopped are kept
+     * (`QuitState.stoppedByClose`): their waits are the stop's to withdraw and their notices are held back. The box is shown
+     * over the closing window.
      */
-    confirmRunsAtClose: (wcId, win) => confirmActiveRunClose({
-      othersStaying: () => anotherMainWindowStays(mainWindows.ordered(), wcId, (id) => quit.isClosing(id)),
-      activeRuns: async () => {
-        const active = await runHost.request({ kind: 'runs.active', workspaceId: '' }, millis(5_000)).catch(() => null);
-        return active?.kind === 'runs.count' ? active.count : null;
-      },
-      ask: (box) => askBox(win.isDestroyed() ? null : win, box),
-      log,
-    }),
+    confirmRunsAtClose: (wcId, win) => {
+      const workspaceId = mainWindows.ordered().find((m) => m.wcId === wcId)?.workspaceId;
+      return confirmActiveRunClose({
+        othersStaying: () => anotherMainWindowStays(mainWindows.ordered(), wcId, (id) => quit.isClosing(id)),
+        activeRuns: async () => {
+          const active = await runHost.request({ kind: 'runs.active', workspaceId: '' }, millis(5_000)).catch(() => null);
+          return active?.kind === 'runs.count' ? active.count : null;
+        },
+        workspaceRuns: workspaceId ? async () => {
+          const active = await runHost.request({ kind: 'runs.active', workspaceId }, millis(5_000)).catch(() => null);
+          return active?.kind === 'runs.count' ? active.count : null;
+        } : undefined,
+        stopWorkspaceRuns: workspaceId ? async () => {
+          const r = await runHost.request({ kind: 'runs.stopWorkspace', workspaceId }, millis(5_000));
+          if (r.kind !== 'runs.stopped') throw new Error(`the run host answered ${r.kind}`);
+          quit.stoppedByClose(r.sessionIds);
+          log(`close: window ${wcId}'s close stopped ${r.sessionIds.length === 0 ? 'no run' : `session(s) ${r.sessionIds.join(', ')}`} before it closed (PD-SHELL-009)`);
+        } : undefined,
+        ask: (box) => askBox(win.isDestroyed() ? null : win, box),
+        log,
+      });
+    },
     log,
   });
 
@@ -1344,7 +1370,8 @@ async function main(): Promise<void> {
     // PD-ORCH-005 clause 9: a quit's closing windows answer nothing; the run host's shutdown withdraws the request.
     unshownApprovals: (approvals) => {
       if (quitting()) return;
-      for (const approval of approvals) void runHost.request({ kind: 'approval.shown', requestId: approval.request_id, ok: false, error: 'its main window closed before it was shown' }, millis(5_000)).catch(() => undefined);
+      // PD-SHELL-009: one its window's close stopped the run of is the stop's to withdraw, as the quit's is.
+      for (const approval of approvals.filter((a) => !quit.withdrawnByClose(a.session_id))) void runHost.request({ kind: 'approval.shown', requestId: approval.request_id, ok: false, error: 'its main window closed before it was shown' }, millis(5_000)).catch(() => undefined);
     },
     // REQ-STARTUP-043/114: the update check, initiated from the post-show activation of every main window and nowhere else.
     postShowActivation: (window) => { void updater.activate({ windowId: window.wcId }); },
@@ -1636,6 +1663,7 @@ async function main(): Promise<void> {
     enqueueImprovement: (job) => improvementCoordinator.enqueue(job),
     chooseSave, chooseExportPath, chooseDirectory, chooseSkillFile,
     openHookReview, restoreFlow, checkpointOp, quitting, authFallback,
+    withdrawnByClose: (sessionId) => quit.withdrawnByClose(sessionId),
   };
   /**
    * Every command this product answers, filed under its kind. `CommandHandlers` is total over
@@ -1810,7 +1838,9 @@ async function main(): Promise<void> {
   });
 
   /*
-   * PD-ORCH-005 clause 9: a quit Electron starts on its own account — SIGTERM, the desktop's logout, `app.quit()` —
+   * PD-ORCH-005 clause 9: a quit Electron starts on its own account — SIGTERM, the desktop's logout where Electron emits
+   * `before-quit` (on Windows it emits none at a logout or shutdown: `docs/defects/a-windows-logout-skips-the-orderly-shutdown.md`),
+   * `app.quit()` —
    * closes every window at once, an approval dialog before its main window's close guard has answered, and the dialog's
    * close would be sent as the person's Deny. Such a quit is turned into the main windows' guarded close, all or none
    * (`closeThroughGuards`): every guard is asked, every close is confirmed, and only then does any window close, so a

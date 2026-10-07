@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmation.js';
 import {
   guardClose,
   MainWindows,
@@ -30,6 +31,8 @@ function harness(options: {
   readonly remembered?: string;
   readonly failLoads?: ReadonlySet<number>;
   readonly postShowActivation?: (wcId: number) => void;
+  /** The run host's count for a workspace id, as REQ-SHELL-021's gate 3 asks it (PD-SHELL-009: keyed by workspace). */
+  readonly runsIn?: (workspaceId: string) => number;
 } = {}) {
   const actions: string[] = [];
   const notices: { windowId: number; title: string; action?: string }[] = [];
@@ -108,7 +111,7 @@ function harness(options: {
       return new Promise((resolve) => { openResolvers.set(workspace, resolve); });
     },
     closeGuard: async () => true,
-    activeRunCount: async () => 0,
+    activeRunCount: async (workspaceId) => options.runsIn?.(workspaceId) ?? 0,
     persistWorkspace: async (workspace) => { actions.push(`persist:${workspace}`); },
     raiseTransient: (windowId, _kind, title, _body, action) => {
       notices.push({ windowId, title, ...(action === undefined ? {} : { action: action.label }) });
@@ -578,5 +581,74 @@ describe('a main window\'s close guard, as the application\'s quit drives it (PD
     guard.confirm();
     guard.close();
     expect(log).toEqual(['confirmed', 'close', 'passed']);
+  });
+});
+
+describe("REQ-SHELL-021's gate 3 counts the requesting window's own workspace (PD-SHELL-009)", () => {
+  it('an idle window opens another project while another window\'s project runs; the window holding the run is declined', async () => {
+    const h = harness({ runsIn: (workspaceId) => (workspaceId === 'id:C:/a' ? 1 : 0) });
+    const running = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    await h.mainWindows.open(running.wcId, 'C:/a');
+    const idle = await h.mainWindows.build({ workspace: 'C:/b', origin: 'open-request' });
+    await h.mainWindows.open(idle.wcId, 'C:/b');
+    h.folders.push('C:/c');
+    const switched = await h.mainWindows.choose(idle.wcId, { newWindow: false });
+    expect(switched.ok && (switched.value as { workspace?: string }).workspace).toBe('C:/c');
+    h.folders.push('C:/d');
+    const declined = await h.mainWindows.choose(running.wcId, { newWindow: false });
+    expect(declined).toEqual({ ok: true, value: { cancelled: true, declined: 'Finish the active run before opening another project.' } });
+    expect(h.notices).toContainEqual({ windowId: running.wcId, title: 'Finish the active run before opening another project.' });
+    expect(h.mainWindows.ordered().map((w) => w.workspace).sort()).toEqual(['C:/a', 'C:/c']);
+  });
+});
+
+describe('two main windows closed in one gesture each ask about their own project alone (PD-SHELL-009, REQ-STARTUP-046)', () => {
+  /** Two guarded windows over one QuitState-like closing set: `a` holds a running workspace, `b` an idle one. */
+  function pair(answerA: number) {
+    const log: string[] = [];
+    const closing = new Set<number>();
+    const listeners = new Map<number, (event: { preventDefault(): void }) => void>();
+    const destroyed = new Set<number>();
+    const windows = [1, 2].map((wcId) => {
+      const win: GuardedWindow & { attempt(): void } = {
+        on: (_e, l) => { listeners.set(wcId, l); },
+        isDestroyed: () => destroyed.has(wcId),
+        close: () => { win.attempt(); },
+        attempt: () => { let held = false; listeners.get(wcId)?.({ preventDefault: () => { held = true; } }); if (!held) { destroyed.add(wcId); log.push(`closed ${wcId === 1 ? 'a' : 'b'}`); } },
+      };
+      return { wcId, win };
+    });
+    const runs = new Map([[1, 1], [2, 0]]);
+    for (const { wcId, win } of windows) {
+      const name = wcId === 1 ? 'a' : 'b';
+      guardClose(win, async () => true, () => closing.add(wcId), () => confirmActiveRunClose({
+        othersStaying: () => anotherMainWindowStays(windows, wcId, (id) => closing.has(id)),
+        activeRuns: async () => [...runs.values()].reduce((x, y) => x + y, 0),
+        workspaceRuns: async () => runs.get(wcId)!,
+        stopWorkspaceRuns: async () => { log.push(`stop ${name}`); runs.set(wcId, 0); },
+        ask: async (box) => { log.push(`ask ${name}: ${box.message}`); return wcId === 1 ? answerA : 0; },
+        log: () => undefined,
+      }));
+    }
+    return { log, attemptBoth: () => { for (const { win } of windows) win.attempt(); }, destroyed };
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it('the running window asks the window box and the idle one closes unasked; Cancel keeps the running window and ends no run', async () => {
+    const p = pair(0);
+    p.attemptBoth();
+    await settle(); await settle();
+    expect(p.log).toEqual(['ask a: Close this window while a run is active?', 'closed b']);
+    expect(p.destroyed.has(1)).toBe(false);
+  });
+
+  it('Yes there stops that project\'s run before its window closes', async () => {
+    const p = pair(1);
+    p.attemptBoth();
+    await settle(); await settle();
+    expect(p.log.filter((l) => l.startsWith('ask'))).toEqual(['ask a: Close this window while a run is active?']);
+    expect(p.log).toContain('closed b');
+    expect(p.log.indexOf('stop a')).toBeGreaterThan(-1);
+    expect(p.log.indexOf('stop a')).toBeLessThan(p.log.indexOf('closed a'));
   });
 });

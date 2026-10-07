@@ -308,7 +308,8 @@ REQ-ORCH-059's open-todo reminder lines: `completionNotification` appends up to 
 parent's, its own todo's).
 
 **Coming to rest (PD-ORCH-005 clauses 2, 3, 9, 10, 11; `Run.restCause`).** A run comes to rest by a pause, a stop (the
-`cancel` operation, graceful or forced) or a quit (`application_shutdown`); `restCause` names which, and is null for the
+`cancel` operation, graceful or forced, and since 2026-10-07 the close of one of several main windows, which applies the
+graceful stop to its workspace's active runs through `Sessions.stopActiveIn` — PD-SHELL-009) or a quit (`application_shutdown`); `restCause` names which, and is null for the
 explicit cancel (the reserved run id: `StopRequest.final`), for a stop the run raised itself (`agent_session_aborted`)
 and while the plan gate holds (**PD-ORCH-005 clause 15**: a stop or a quit during a plan cycle ends its agents and
 records no interruption; a forced stop is a stop). What waits on a person is released by `waitsWithdrawnBy`, which reads

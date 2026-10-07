@@ -146,7 +146,10 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.pageOlder'), sessionId: z.string(), beforeIndex: z.number().int() }),
   /** ADR-0010 channel 1: a control against a live run, answered `{ok, value?}` and never raised (REQ-MONITOR-005/007). */
   z.object({ kind: z.literal('session.control'), request: ControlRequestSchema }),
+  /** REQ-SHELL-122's count: a non-empty `workspaceId` counts that workspace's active runs (PD-SHELL-009), an empty one the instance's. */
   z.object({ kind: z.literal('runs.active'), workspaceId: z.string() }),
+  /** PD-SHELL-009: the close of one of several main windows stops its workspace's active runs as the stop control does. */
+  z.object({ kind: z.literal('runs.stopWorkspace'), workspaceId: z.string().min(1) }),
   /** ADR-0019: the presenter is a capability main registers per window and revokes on close; the poll reply carries the windows it holds. */
   z.object({ kind: z.literal('presenter.register'), windowId: z.string().min(1) }),
   /**
@@ -489,8 +492,10 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.page'), sessionId: z.string(), rows: z.array(TranscriptRowSchema), oldest: z.boolean() }),
   z.object({ kind: z.literal('ack') }),
   z.object({ kind: z.literal('control.result'), result: ControlResultSchema }),
-  /** ADR-0013's predicate for a workspace: how many runs this instance is executing there. */
+  /** ADR-0013's predicate for a workspace (PD-SHELL-009): how many runs this instance is executing there, or in all, for an empty id. */
   z.object({ kind: z.literal('runs.count'), workspaceId: z.string(), count: z.number().int().nonnegative() }),
+  /** PD-SHELL-009: the sessions a workspace stop asked to stop (or found already stopping). */
+  z.object({ kind: z.literal('runs.stopped'), workspaceId: z.string(), sessionIds: z.array(z.string()) }),
   z.object({ kind: z.literal('workspace.backedUp'), destination: z.string(), bytes: z.number().int(), sessions: z.number().int(), takenAtUtc: z.string() }),
   z.object({ kind: z.literal('workspace.restore.assessment'), assessment: RestoreAssessmentSchema }),
   z.object({ kind: z.literal('workspace.restored'), report: RestoreReportSchema }),

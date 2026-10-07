@@ -700,7 +700,8 @@ export interface CloseGuard {
  * that allows, `confirmRuns` (the active-run confirmation, guard 3; REQ-STARTUP-046, `close-confirmation.ts`), which
  * declines when it cannot answer. A declined close changes nothing. A close attempted while the guards are still being
  * asked is held and adds no second question. The application's quit asks `ask` alone (`closeThroughGuards`): it is not
- * a person's close of the window (OQ-206).
+ * a person's close of the window (PD-SHELL-009). Under PD-SHELL-009 a `confirmRuns` that allows the close of one of several
+ * windows has already stopped the window's own runs, so the stop precedes `confirmed` and the presenter's revoke.
  */
 export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, confirmed: () => void, confirmRuns?: () => Promise<boolean>): CloseGuard {
   let closeConfirmed = false;

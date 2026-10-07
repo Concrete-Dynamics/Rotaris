@@ -190,3 +190,13 @@ the controls address the continued run as they addressed the first. `session.res
 session id the sending window resolved; the registry adds `continueSession` — a session command, since a paused
 session has no live run to control (REQ-MONITOR-011) — beside the four predicates it already supplied. A pause
 window resolves through that command and main closes it on success. **Found: nothing.**
+
+**Sixth execution, 2026-10-07, the per-workspace predicate (PD-SHELL-009, OQ-206 ruled under R-072; fin28).** Consequence 3
+says the registry supplies the predicate "for this session, for this workspace". **Found: the workspace half was not built.**
+`activeRunCount` counted the whole instance, and the run host's `runs.active` answered every workspace id with that count
+("Sessions are not keyed by workspace yet"), so REQ-SHELL-021's gate 3 refused an idle window's switch over another
+project's run. It is built now: `activeRunCount(workspaceRoot?)` counts the live sessions whose session row's
+`workspace_root` is the root (no root: the instance, as the last window's close and the update's close ask), and
+`stopActiveIn(workspaceRoot)` applies the stop control's graceful stop to that workspace's active runs for the close of one
+of several main windows. `run.test.ts` pins both (two workspaces, one stopped `paused` by `stop`, the other untouched);
+`dispatch.test.ts` pins the run host's hop. The consequence's text stands; what it claimed is now true.

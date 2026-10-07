@@ -34,7 +34,7 @@ interface Harness {
   readonly reported: ReportInput[];
   readonly svcAsked: WorkspaceServiceRequest[];
   readonly hostAsked: RunHostRequest[];
-  readonly ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services'>;
+  readonly ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'withdrawnByClose'>;
   /** REQ-NOTIFY-030/032: the sessions whose held failure `session.subscribe` released. */
   readonly focused: string[];
   /** PD-ORCH-005 clause 9: what `quitting()` answers. */
@@ -298,6 +298,17 @@ describe('PD-CHAT-002 revision 2 and PD-ORCH-005 clause 9: a question the quit c
     // Any other control still goes through while the quit is under way.
     await sessionCommands(h.ctx)['session.control']({ kind: 'session.control', request: { op: 'pause', sessionId: 'S1', args: {} } }, windowOn('ws-1'));
     expect(h.hostAsked.map((r) => (r as { request: { op: string } }).request.op)).toEqual(['pause']);
+  });
+
+  it('PD-SHELL-009: the dock\'s cancel for a session its window\'s close stopped is the stop\'s to withdraw; another session\'s still goes through', async () => {
+    const h = harness(() => ({ kind: 'ack' }), () => ({ kind: 'control.result', result: { ok: true } }));
+    const ctx = { ...h.ctx, withdrawnByClose: (sessionId: string) => sessionId === 'S1' };
+    expect(await sessionCommands(ctx)['session.control'](cancel, windowOn('ws-1'))).toEqual({ ok: true, value: { ok: true } });
+    expect(h.hostAsked).toEqual([]);
+    expect(h.logs.some((l) => /left for the stop to withdraw/.test(l))).toBe(true);
+    const other = { kind: 'session.control', request: { op: 'cancelQuestions', sessionId: 'S2', args: { requestId: 'Q2' } } } as const;
+    await sessionCommands(ctx)['session.control'](other, windowOn('ws-1'));
+    expect(h.hostAsked).toEqual([{ kind: 'session.control', request: other.request }]);
   });
 });
 

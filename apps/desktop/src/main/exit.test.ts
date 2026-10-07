@@ -184,6 +184,26 @@ describe('PD-ORCH-005 clause 9: what the application\'s quit closes answers noth
     expect(dialogCloseAnswersDeny({ answered: false, quitting: true })).toBe(false);
     expect(dialogCloseAnswersDeny({ answered: true, quitting: false })).toBe(false);
   });
+
+  it('PD-SHELL-009: a dialog its window\'s close stopped the run of answers nothing — the stop withdraws it — and any other still answers Deny', () => {
+    const q = new QuitState();
+    q.stoppedByClose(['S1']);
+    expect(dialogCloseAnswersDeny({ answered: false, quitting: false, withdrawnByClose: q.withdrawnByClose('S1') })).toBe(false);
+    expect(dialogCloseAnswersDeny({ answered: false, quitting: false, withdrawnByClose: q.withdrawnByClose('S2') })).toBe(true);
+  });
+
+  it('PD-SHELL-009: a stopped session stays withdrawn through its rest, and a later run the person starts is its own again', () => {
+    const q = new QuitState();
+    q.observeStatus('S1', true);
+    expect(q.withdrawnByClose('S1')).toBe(false);
+    q.stoppedByClose(['S1']);
+    q.observeStatus('S1', true);
+    expect(q.withdrawnByClose('S1')).toBe(true);
+    q.observeStatus('S1', false);
+    expect(q.withdrawnByClose('S1')).toBe(true);
+    q.observeStatus('S1', true);
+    expect(q.withdrawnByClose('S1')).toBe(false);
+  });
 });
 
 describe('PD-ORCH-005 clause 9: a quit Electron starts closes the main windows through their guards, all or none (exit.ts)', () => {

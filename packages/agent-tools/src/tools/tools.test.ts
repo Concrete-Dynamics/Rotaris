@@ -462,6 +462,19 @@ describe('PD-TOOLS-014: a haet_edit miss that matches but for whitespace names t
     expect(miss.text.length).toBeLessThan(1_000);
   });
 
+  it('an empty or whitespace-only old_string is no near miss: its level-2 "window" is a blank line whose quote could never match exactly, so the plain reply stands', async () => {
+    // Review of fin32: `matchEdit` finds an empty old_string at level 2 on any blank line (the file's last, after its final
+    // newline, among them), and the near-miss reply quoted "" and promised it would match exactly — a retry loop with no exit.
+    const before = 'alpha\nbeta\n';
+    const hash = write('e.md', before);
+    for (const old_string of ['', '  ', '\t\n']) {
+      const miss = await edit('e.md', hash, old_string, 'x');
+      expect(miss).toMatchObject({ isError: true, text: 'old_string was not found exactly in e.md. Read it again with haet_read.' });
+    }
+    expect(readFileSync(join(root, 'e.md'), 'utf8')).toBe(before);
+    await noHistory('e.md');
+  });
+
   it('level 4, no match, a replace_all miss and a stale hash keep their replies as REQ-TOOLS-189 fixes them', async () => {
     const hash = write('k.ts', 'const alpha = 1;\nconst beta = 2;\n');
     const fuzzy = await edit('k.ts', hash, 'const alpha = 7;', 'x');

@@ -780,7 +780,9 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
       } else {
         const m = matchEdit(lines, a.old_string);
         // PD-TOOLS-014: a level-2 or level-3 near miss says so; a level-4 match and no match keep REQ-TOOLS-189's reply.
-        if (m && (m.level === 2 || m.level === 3)) return errorObservation(nearMissMessage(rel, lines, m, a.old_string));
+        // An old_string with no visible character is no near miss: its "window" is blank lines, and a blank quote could
+        // never match at level 1 as clause 5 promises (an empty one never does), so the caller would retry it forever.
+        if (m && (m.level === 2 || m.level === 3) && /\S/.test(a.old_string)) return errorObservation(nearMissMessage(rel, lines, m, a.old_string));
         if (!m || m.level !== 1) return errorObservation(`old_string was not found exactly in ${rel}. Read it again with haet_read.`);
         if (m.starts.length > 1) return errorObservation(`Found ${m.starts.length} occurrences of old_str at lines ${m.starts.map((s) => s + 1).join(', ')}. Add surrounding context to make the match unique, or set replace_all.`);
         const start = m.starts[0] as number;

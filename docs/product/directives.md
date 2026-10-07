@@ -6273,6 +6273,14 @@ carries up to the window's size.
 > duress runs are the measurement, read by `live-run.mjs`'s NOTE (`lib/near-miss-edits.mjs`: near misses, terminal probes
 > before the next edit, target 0, and retries that succeeded). No proof script drives `haet_edit` in the built app; the
 > executor runs unchanged inside the run host. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Found by the bundle's review, 2026-10-07, before it landed:** the build first took every level-2 or level-3 result as a
+> near miss, and `matchEdit` finds an empty or whitespace-only `old_string` at level 2 on any blank line; the reply then quoted
+> `""` (or a blank line) and promised it would match exactly, which clause 5's quote never can, so the caller retried the same
+> string forever. The miss branch now answers through `nearMissMessage` only when `old_string` holds a visible character, and an
+> empty or whitespace-only `old_string` keeps REQ-TOOLS-189's plain reply; with a visible character every matching window holds
+> it, so the quote is non-empty text of the file and clause 5 holds. Pinned by a seventh case under "PD-TOOLS-014", red on the
+> code before ([`haet-edit-quotes-an-empty-window-for-a-blank-old-string`](../defects/fixed/haet-edit-quotes-an-empty-window-for-a-blank-old-string.md)).
 
 ---
 

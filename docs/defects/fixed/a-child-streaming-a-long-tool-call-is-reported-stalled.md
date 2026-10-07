@@ -87,3 +87,13 @@ seconds` about 9.8 s into a 246-piece `write_file` whose arguments streamed for 
 (inside its 11.1 s and 12.3 s spans). On the repaired head, packs
 `2026-10-07T00-16-35-425Z` (220 pieces over 13.3 s) and `2026-10-07T00-26-10-472Z` (220 pieces over 26.4 s): no `stall`
 issue in the session, passed; `docs/architecture/first-executions.md` carries the row.
+
+## First duress execution — 2026-10-07
+
+The final duress live run at `a68f121` (pack `2026-10-07T07-09-30-708Z` of the live worktree, session `e6747bd0`, the
+self-hosted endpoint, read by its autopsy) is the repair's first execution on real streams under duress, with no paced proxy:
+two children streamed `write_file` arguments past the 90 s stall bound with no text token — e (`wave2e-decisions`) in req 140,
+from about 07:28:26 to 07:30:17.7 (about 111 s), and wave3 (`wave3-verify-all`) in req 181, from about 07:49:14 to 07:50:47.1
+(about 93 s). Neither was reported stalled: the session holds 0 `stall` issues and 0 `stall_recovered` timeline entries, and
+its session log 0 WARNING lines. The repair held as written; the row is in
+[`../../architecture/first-executions.md`](../../architecture/first-executions.md).

@@ -10647,6 +10647,13 @@ an `outcome_kind` applies to a record whose tool has one, and an MCP call's reco
 derives its bucket from `status` and `is_error`, `success` or `tool_error`, and the histogram tells an MCP call that failed
 from one that succeeded. The build was not changed by this recommendation: it proceeded as stated above until the 2026-10-07 ruling.
 
+**First live execution with MCP failures present, 2026-10-07** (the final duress live run at `a68f121`, pack
+`2026-10-07T07-09-30-708Z` of the live worktree, session `e6747bd0`): as ruled. wave3b's two failed code-intelligence
+`replace_content` calls, #377 and #378, carry `failure_kind: tool_error` and no `outcome_kind`; `summary.md`'s Tool outcomes
+read "success 387, tool_error 16, rejected 0, unknown 0, suspicious_success 1", 404 calls in all with no `mcp` bucket, and its
+Tool errors line, 16, equals the issues record's 16 `tool_error` entries — the first live run in which an MCP failure is
+counted under the ruling. The row is in [`first-executions.md`](first-executions.md).
+
 **OQ-209 — An error-path tool record's arguments are "truncated to 2000 characters", and paths and identifiers are "never
 truncated": which governs, and what do the 2,000 characters measure?** *(REQ-SESSION-136, "On error, recorded args/result
 are truncated to 2000 characters"; REQ-SESSION-194, which names "the truncated arguments and results of an error-path tool
@@ -10937,6 +10944,14 @@ saying the limit bounds delegated agents, and the defect note on the unlisted an
 ([`the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`](../defects/fixed/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md),
 recorded, not repaired). The 240-minute ceiling is a chosen figure, twelve times the default; a file can still state a longer
 value.
+
+**First live execution of the default case, 2026-10-07** (the final duress live run at `a68f121`, pack
+`2026-10-07T07-09-30-708Z` of the live worktree, session `e6747bd0`, the self-hosted endpoint): as ruled. The run host logged
+`child_timeout=1200 s` (`duress/app.log` lines 13 and 24), and the two working children were cut off at 1,200 s — wave3 landing
+at the ceiling +4.25 s, its continuation wave3b at +0.44 s. NOT REACHED: the control, which the live harness never sets and no
+launch captured, so the relief this ruling offers — a person raising the limit — is still unmeasured against a real model.
+Reported in place in [`PD-CONFIG-003`](../product/directives.md#pd-config-003); the row is in
+[`first-executions.md`](first-executions.md).
 
 **OQ-220 — Which todo item does a delegation answer for?** *(REQ-ORCH-028 and REQ-ORCH-029, "no two implementation delegations
 for the same todo item are outstanding at once"; resolution 15 (b) of `docs/spec/resolutions/01-run-orchestration.md`, ownership

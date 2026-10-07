@@ -4018,6 +4018,15 @@ REQ-LIBRARY-023, REQ-LIBRARY-124, REQ-NOTIFY-100, REQ-CONFIG-446, REQ-CONFIG-419
 > unsaved-settings guard holds the person in Settings, as for the per-agent timeout), a timed-out analysis's notice in the
 > built app, and the `ui-review` pack (skipped: the control repeats the per-agent timeout's measured geometry, 66 px). The
 > row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **First live execution, the default case, 2026-10-07** (the final duress live run at `a68f121`, pack
+> `2026-10-07T07-09-30-708Z` of the live worktree, session `e6747bd0`, the self-hosted endpoint, read by its autopsy): the
+> directive held as written where its default governs. The run host's configuration line read `child_timeout=1200 s`
+> (`duress/app.log` lines 13 and 24), and the two children that worked past twenty minutes were cut off at 1,200 s and landed
+> inside the 30 s allowance: wave3 (`wave3-verify-all`) at the ceiling +4.25 s and its continuation wave3b at +0.44 s, each with
+> its timeout issue at `error` and its report's cut-off statement. **NOT REACHED:** the control itself — the live harness never
+> sets it and no launch captured Settings — so a person raising the limit, the relief the directive offers, has not run
+> against a real model. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

@@ -142,6 +142,7 @@ import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
 import { agentPlanTaskCount, coordinatorTodoReading, launchRunOverride } from './lib/coordinator-todo.mjs';
 import { PAUSE, pauseEvalSteps, pauseReading } from './lib/resume-pause.mjs';
 import { typingAllowanceMs } from './lib/prompt-typing.mjs';
+import { nearMissReading } from './lib/near-miss-edits.mjs';
 import { stallIssueCadence } from './lib/stall-issue-cadence.mjs';
 import { conclusive, pacedWindows, stallsWhileStreaming } from './lib/paced-arguments.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
@@ -991,6 +992,27 @@ function checkCoordinatorTodo() {
 }
 
 /**
+ * PD-TOOLS-014 (OQ-231, R-072) over every preserved session (`lib/near-miss-edits.mjs`): each `haet_edit`/`haet` refusal
+ * that named a match level, whether the same agent probed the file through its terminal before its next edit (finding D5 of
+ * the final duress run at `a68f121`: every near miss was followed by a `cat -A` or `awk` probe; the directive's target is
+ * 0), and whether that next edit succeeded on the same path. Its NOTEs are the directive's first-execution count; a run
+ * with no near miss says so.
+ */
+function checkNearMissEdits() {
+  if (preservedSessions.length === 0) return;
+  let r;
+  try {
+    r = nearMissReading(preservedSessions.map(({ scenario, sessionId }) => ({ scenario, calls: readToolCalls(sessionId) })));
+  } catch (cause) {
+    check(false, 'the haet_edit calls of every session the run kept were read for PD-TOOLS-014', cause instanceof Error ? cause.message : String(cause));
+    return;
+  }
+  const at = (m) => `${m.scenario} #${m.ordinal} (${m.agent}, level ${m.level})`;
+  if (r.misses.length === 0) { noted('no haet_edit miss matched at match level 2 or 3', 'PD-TOOLS-014\'s near-miss reply was not asked'); return; }
+  noted('haet_edit misses that matched but for whitespace (PD-TOOLS-014)', `${r.misses.length}: ${r.misses.map(at).join(', ')}; followed by a terminal call of the same agent before its next edit: ${r.probed.length}${r.probed.length === 0 ? '' : ` (${r.probed.map(at).join(', ')})`}; next edit on the same path succeeded: ${r.retried.length}`);
+}
+
+/**
  * REQ-SESSION-140 for each session the run drove (`lib/summary-sections.mjs`): its `summary.md` carries the requirement's
  * sections in its order, the stop-reason line only where a stop reason is recorded, every Warnings kind, and a Tool errors
  * line that agrees with the file's own Issues line (REQ-SESSION-136). Until fin23 no live run read the file.
@@ -1113,6 +1135,7 @@ function finish(code) {
   // Every session's tool-call record, read while the sandbox still holds the store (`checkToolRecord`).
   checkToolRecord();
   checkCoordinatorTodo();
+  checkNearMissEdits();
   results.finishedAt = new Date().toISOString();
   results.checks = checks;
   // The store goes into the pack BEFORE `cleanup` takes the sandbox — on every exit path through `finish`,

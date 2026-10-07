@@ -311,7 +311,20 @@ export function haetReadTool(state: FileToolState, fence: FenceConfig): ToolExec
  * a line matches); levels 2–4 are line windows of the old text's height. Returns the line indices of every
  * match at the deciding level and, at level 1, the character offsets to replace at.
  */
-export function matchEdit(lines: readonly string[], oldText: string): { level: 1 | 2 | 3 | 4; starts: number[]; offsets?: number[]; similarity?: number } | null {
+export interface EditMatch {
+  level: 1 | 2 | 3 | 4;
+  starts: number[];
+  offsets?: number[];
+  similarity?: number;
+  /**
+   * Level 3 only, one per start: the leading prefix that tells the window from `old_string`, and whether the file's lines
+   * carry it in addition to `old_string`'s (`deeper`) or `old_string`'s carry it and the file's do not. Read by
+   * `PD-TOOLS-014`'s near-miss reply; `write_file` ignores it.
+   */
+  shifts?: { prefix: string; deeper: boolean }[];
+}
+
+export function matchEdit(lines: readonly string[], oldText: string): EditMatch | null {
   const text = lines.join('\n');
   const offsets: number[] = [];
   if (oldText.length > 0) {
@@ -328,6 +341,7 @@ export function matchEdit(lines: readonly string[], oldText: string): { level: 1
   for (let i = 0; i < windows; i += 1) if (eq(rtrim(at(i)), rtrim(oldLines))) l2.push(i);
   if (l2.length) return { level: 2, starts: l2 };
   const l3: number[] = [];
+  const shifts: { prefix: string; deeper: boolean }[] = [];
   const indent = (s: string) => /^\s*/.exec(s)?.[0] ?? '';
   for (let i = 0; i < windows; i += 1) {
     const w = at(i);
@@ -336,9 +350,12 @@ export function matchEdit(lines: readonly string[], oldText: string): { level: 1
     const shift = indent(first).length - indent(firstOld).length;
     if (shift === 0) continue;
     const shifted = oldLines.map((l) => (shift > 0 ? `${indent(first).slice(0, shift)}${l}` : l.startsWith(indent(firstOld).slice(0, -shift)) ? l.slice(-shift) : null));
-    if (shifted.every((x) => x !== null) && eq(w, shifted as string[])) l3.push(i);
+    if (shifted.every((x) => x !== null) && eq(w, shifted as string[])) {
+      l3.push(i);
+      shifts.push(shift > 0 ? { prefix: indent(first).slice(0, shift), deeper: true } : { prefix: indent(firstOld).slice(0, -shift), deeper: false });
+    }
   }
-  if (l3.length) return { level: 3, starts: l3 };
+  if (l3.length) return { level: 3, starts: l3, shifts };
   let best: { i: number; s: number } | null = null;
   for (let i = 0; i < windows; i += 1) {
     const s = similarity(at(i).join('\n'), oldText);
@@ -426,8 +443,57 @@ function replaceAllMessage(rel: string, before: string, oldText: string, newText
   return `Edited ${rel}: ${countNoun(count, 'occurrence')} replaced, ${countNoun(replaced, 'line')} replaced by ${by} (+${added} -${removed}).`;
 }
 
+/** REQ-TOOLS-134's cap on a read's output, which `PD-TOOLS-014` borrows for the near-miss quote. */
+const NEAR_MISS_QUOTE_CAP = 30_000;
+
+/**
+ * `PD-TOOLS-014`: the reply of a `haet_edit` miss whose `old_string` matches at REQ-TOOLS-136 level 2 or 3. The edit stays
+ * refused (REQ-TOOLS-189 matches at level 1 only); what changes is that the fact `matchEdit` already computed reaches the
+ * caller — which lines, which level, what differs — and, for one window, the window's own text, so a retry needs neither a
+ * read nor a shell probe. The final duress run at `a68f121` (finding D5) spent seven failed edits and their `cat -A` probes
+ * on six such misses (docs/defects/fixed/haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md).
+ *
+ * The quote is the file's lines joined by `\n` — a substring of the file — so sent back as `old_string` it matches at level 1.
+ * It is JSON because the difference is whitespace nobody can see in a plain quote. The facts come before it, so the
+ * 2,000-character error record (REQ-SESSION-136) keeps them. Sent only after the hash matched: the text is what the
+ * caller's hash already names, and the stale-hash refusal, which never quotes, is not reached here.
+ */
+function nearMissMessage(rel: string, lines: readonly string[], m: EditMatch, oldText: string): string {
+  const k = oldText.split('\n').length;
+  const head = `old_string was not found exactly in ${rel}.`;
+  const kind = m.level === 2 ? 'match level 2 (trailing whitespace)' : 'match level 3 (indentation shift)';
+  const range = (start: number) => (k === 1 ? `line ${start + 1}` : `lines ${start + 1}-${start + k}`);
+  if (m.starts.length > 1) {
+    const reads = m.starts.map((s) => `offset ${s + 1} limit ${k}`).join('; ');
+    return `${head} It matches at ${kind} in ${m.starts.length} places, starting at lines ${m.starts.map((s) => s + 1).join(', ')}; nothing was written. Read the one you mean with haet_read (${reads}) and send its exact text as old_string.`;
+  }
+  const start = m.starts[0] as number;
+  const window = lines.slice(start, start + k);
+  let differs: string;
+  if (m.level === 2) {
+    const oldLines = oldText.split('\n');
+    const trail = (x: string) => /\s*$/.exec(x)?.[0] ?? '';
+    const diff = window.flatMap((line, i) => (line === oldLines[i] ? [] : [`line ${start + i + 1} ends in ${JSON.stringify(trail(line))} in the file and ${JSON.stringify(trail(oldLines[i] as string))} in old_string`]));
+    const shown = diff.slice(0, 10).join('; ');
+    differs = `They differ only in trailing whitespace or carriage returns: ${shown}${diff.length > 10 ? `; and ${countNoun(diff.length - 10, 'more line')}` : ''}.`;
+  } else {
+    const shift = m.shifts?.[0] as { prefix: string; deeper: boolean };
+    const what = `${JSON.stringify(shift.prefix)} (${countNoun(shift.prefix.length, 'character')})`;
+    differs = shift.deeper
+      ? `Every line of the file carries the leading prefix ${what} in addition to old_string's indentation.`
+      : `Every line of old_string carries the leading prefix ${what} that the file's lines do not.`;
+  }
+  const facts = `${head} It matches ${range(start)} at ${kind}. ${differs} Your content_hash is still current and nothing was written. Give new_string the file's indentation and line endings.`;
+  const fallback = 'If these are not the lines you meant, read the file again with haet_read.';
+  const quote = JSON.stringify(window.join('\n'));
+  if (quote.length > NEAR_MISS_QUOTE_CAP) {
+    return `${facts} The window is too long to quote here (${quote.length} characters as JSON); read it with haet_read (offset ${start + 1} limit ${k}) and send its exact text as old_string with the same content_hash. ${fallback}`;
+  }
+  return `${facts} Sent back as old_string with the same content_hash, the file's text over ${range(start)} matches exactly, as this JSON string: ${quote} ${fallback}`;
+}
+
 /** Apply the single match: a level-1 match replaces the exact span; a window match replaces whole lines. */
-function applyMatch(text: string, lines: readonly string[], m: NonNullable<ReturnType<typeof matchEdit>>, oldText: string, newText: string): string {
+function applyMatch(text: string, lines: readonly string[], m: EditMatch, oldText: string, newText: string): string {
   if (m.level === 1 && m.offsets) {
     const o = m.offsets[0] as number;
     return `${text.slice(0, o)}${newText}${text.slice(o + oldText.length)}`;
@@ -653,7 +719,7 @@ const haetEditSchema = z.object({
 export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'haet_edit' | 'haet' = 'haet_edit'): ToolExecutor<z.infer<typeof haetEditSchema>> {
   return {
     name,
-    description: 'Hash-anchored exact edit: replace old_string with new_string in a file whose current SHA-256 equals content_hash (from haet_read). Reports the new content_hash.',
+    description: 'Hash-anchored exact edit: replace old_string with new_string in a file whose current SHA-256 equals content_hash (from haet_read). Reports the new content_hash. A miss that differs from the file only in trailing whitespace or a uniform indentation shift is refused, names the lines and quotes the file\'s text; a retry with that text needs the same content_hash and no read.',
     schema: haetEditSchema,
     /**
      * REQ-TOOLS-032's recoverable refusal, with the expected shape named: the run's first uses omitted
@@ -713,6 +779,8 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
         message = replaceAllMessage(rel, before, a.old_string, a.new_string, count);
       } else {
         const m = matchEdit(lines, a.old_string);
+        // PD-TOOLS-014: a level-2 or level-3 near miss says so; a level-4 match and no match keep REQ-TOOLS-189's reply.
+        if (m && (m.level === 2 || m.level === 3)) return errorObservation(nearMissMessage(rel, lines, m, a.old_string));
         if (!m || m.level !== 1) return errorObservation(`old_string was not found exactly in ${rel}. Read it again with haet_read.`);
         if (m.starts.length > 1) return errorObservation(`Found ${m.starts.length} occurrences of old_str at lines ${m.starts.map((s) => s + 1).join(', ')}. Add surrounding context to make the match unique, or set replace_all.`);
         const start = m.starts[0] as number;

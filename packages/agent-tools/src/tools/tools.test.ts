@@ -382,6 +382,101 @@ describe('haet_read / haet_edit (REQ-TOOLS-137/189)', () => {
   });
 });
 
+describe('PD-TOOLS-014: a haet_edit miss that matches but for whitespace names the level and quotes the file\'s lines', () => {
+  // Final duress live run at a68f121, finding D5: six of the seven "not found exactly" misses of the two cut-off testers
+  // matched one window at level 3, and each was followed by a `cat -A` probe. The edit stays refused; the reply carries the fact.
+  const write = (rel: string, text: string) => { writeFileSync(join(root, rel), text); return sha256(readFileSync(join(root, rel))); };
+  const quoteOf = (text: string): string => JSON.parse(/as this JSON string: ("(?:[^"\\]|\\.)*") If these are not/.exec(text)![1]!) as string;
+  const edit = (path: string, hash: string, old_string: string, new_string: string, replace_all = false) =>
+    haetEditTool(state, fence).execute({ path, content_hash: hash, old_string, new_string, replace_all }, ctx());
+  const noHistory = async (path: string) =>
+    expect(await writeFileTool(state, fence).execute({ operation: 'undo', path, replace_all: false }, ctx())).toMatchObject({ isError: true, text: `No edit history for ${path}.` });
+
+  it('level 2 (trailing spaces): refused, nothing written, the lines named, the window quoted; a retry with the quote on the same hash applies at level 1', async () => {
+    const before = 'alpha  \nbeta\ngamma\n';
+    const hash = write('t.md', before);
+    const miss = await edit('t.md', hash, 'alpha\nbeta', 'ALPHA\nbeta');
+    expect(miss.isError).toBe(true);
+    expect(miss.text.startsWith('old_string was not found exactly in t.md. It matches lines 1-2 at match level 2 (trailing whitespace).')).toBe(true);
+    expect(miss.text).toContain('line 1 ends in "  " in the file and "" in old_string');
+    expect(miss.text).toContain('Your content_hash is still current and nothing was written.');
+    expect(miss.text).toContain("Give new_string the file's indentation and line endings.");
+    expect(miss.text.endsWith('If these are not the lines you meant, read the file again with haet_read.')).toBe(true);
+    expect(quoteOf(miss.text)).toBe('alpha  \nbeta');
+    expect(readFileSync(join(root, 't.md'), 'utf8')).toBe(before);
+    await noHistory('t.md');
+    const retry = await edit('t.md', hash, quoteOf(miss.text), 'ALPHA  \nbeta');
+    expect(retry.isError).toBe(false);
+    expect(retry.text).not.toMatch(/Match level/);
+    expect(readFileSync(join(root, 't.md'), 'utf8')).toBe('ALPHA  \nbeta\ngamma\n');
+  });
+
+  it('level 2 on a CRLF file: an LF old_string names the carriage returns, the quote carries them, and the retry leaves no LF-only line', async () => {
+    const hash = write('crlf.txt', 'one\r\ntwo\r\nthree\r\n');
+    const miss = await edit('crlf.txt', hash, 'one\ntwo', 'ONE\ntwo');
+    expect(miss.text).toContain('match level 2');
+    expect(miss.text).toContain('line 1 ends in "\\r" in the file and "" in old_string; line 2 ends in "\\r" in the file and "" in old_string');
+    const quote = quoteOf(miss.text);
+    expect(quote).toBe('one\r\ntwo\r');
+    const retry = await edit('crlf.txt', hash, quote, 'ONE\r\ntwo\r');
+    expect(retry.isError).toBe(false);
+    const after = readFileSync(join(root, 'crlf.txt'), 'utf8');
+    expect(after).toBe('ONE\r\ntwo\r\nthree\r\n');
+    expect(/(^|[^\r])\n/.test(after)).toBe(false);
+  });
+
+  it('level 3: the prefix the file carries in addition to, or instead of, old_string\'s, quoted as JSON with its length — two spaces more, one fewer, a tab', async () => {
+    const deeper = write('d.ts', 'fn() {\n  if (x) {\n    y();\n  }\n}\n');
+    const more = await edit('d.ts', deeper, 'if (x) {\n  y();\n}', 'if (z) {\n  y();\n}');
+    expect(more.text).toContain('It matches lines 2-4 at match level 3 (indentation shift). Every line of the file carries the leading prefix "  " (2 characters) in addition to old_string\'s indentation.');
+    expect(quoteOf(more.text)).toBe('  if (x) {\n    y();\n  }');
+    const retry = await edit('d.ts', deeper, quoteOf(more.text), '  if (z) {\n    y();\n  }');
+    expect(retry.isError).toBe(false);
+    // the `N: ` separator copied into old_string: one space too many (#304's shape)
+    const shallower = write('s.md', '8. **x**\n   y\n');
+    const fewer = await edit('s.md', shallower, ' 8. **x**\n    y', '8. **X**\n   y');
+    expect(fewer.text).toContain('It matches lines 1-2 at match level 3 (indentation shift). Every line of old_string carries the leading prefix " " (1 character) that the file\'s lines do not.');
+    expect(quoteOf(fewer.text)).toBe('8. **x**\n   y');
+    const tabbed = write('t.go', 'func f() {\n\treturn 1\n\t// done\n}\n');
+    const tab = await edit('t.go', tabbed, 'return 1\n// done', 'return 2\n// done');
+    expect(tab.text).toContain('Every line of the file carries the leading prefix "\\t" (1 character)');
+    expect(quoteOf(tab.text)).toBe('\treturn 1\n\t// done');
+    expect(sha256(readFileSync(join(root, 's.md')))).toBe(shallower);
+    expect(sha256(readFileSync(join(root, 't.go')))).toBe(tabbed);
+  });
+
+  it('several windows: the level and each window\'s starting line are named, nothing is quoted, haet_read is directed with offset and limit', async () => {
+    const hash = write('w.txt', 'x \ny\nx \ny\n');
+    const miss = await edit('w.txt', hash, 'x\ny', 'X\ny');
+    expect(miss.text).toBe('old_string was not found exactly in w.txt. It matches at match level 2 (trailing whitespace) in 2 places, starting at lines 1, 3; nothing was written. Read the one you mean with haet_read (offset 1 limit 2; offset 3 limit 2) and send its exact text as old_string.');
+    expect(miss.text).not.toContain('JSON string');
+  });
+
+  it('a window over 30,000 characters is not quoted; the reply names its offset and limit', async () => {
+    const long = 'a'.repeat(30_001);
+    const hash = write('long.txt', `head\n${long}\n`);
+    const miss = await edit('long.txt', hash, `${long} `, 'b');
+    expect(miss.text).toContain('It matches line 2 at match level 2 (trailing whitespace).');
+    expect(miss.text).toContain('The window is too long to quote here (30003 characters as JSON); read it with haet_read (offset 2 limit 1)');
+    expect(miss.text).not.toContain(long);
+    expect(miss.text.length).toBeLessThan(1_000);
+  });
+
+  it('level 4, no match, a replace_all miss and a stale hash keep their replies as REQ-TOOLS-189 fixes them', async () => {
+    const hash = write('k.ts', 'const alpha = 1;\nconst beta = 2;\n');
+    const fuzzy = await edit('k.ts', hash, 'const alpha = 7;', 'x');
+    expect(matchEdit(['const alpha = 1;', 'const beta = 2;', ''], 'const alpha = 7;')?.level).toBe(4);
+    expect(fuzzy).toMatchObject({ isError: true, text: 'old_string was not found exactly in k.ts. Read it again with haet_read.' });
+    expect(await edit('k.ts', hash, 'nothing like it', 'x')).toMatchObject({ isError: true, text: 'old_string was not found exactly in k.ts. Read it again with haet_read.' });
+    expect(await edit('k.ts', hash, 'const alpha = 1; ', 'x', true)).toMatchObject({ isError: true, text: 'old_string was not found in k.ts. Read it again with haet_read.' });
+    const stale = await edit('k.ts', 'b'.repeat(64), 'const alpha = 1; ', 'x');
+    expect(stale.text).toMatch(/changed since the hash you hold was taken/);
+    expect(stale.text).not.toContain('const alpha');
+    expect(stale.text).not.toMatch(/match level|[0-9a-f]{64}/);
+    await noHistory('k.ts');
+  });
+});
+
 describe('grep and glob (REQ-TOOLS-138..141)', () => {
   it('grep returns file:line:content, honours the ignore components and gitignore, skips binaries, refuses a bad regex', async () => {
     writeFileSync(join(root, '.gitignore'), 'ignored/\n*.log\n');

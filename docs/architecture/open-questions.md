@@ -11634,7 +11634,7 @@ its continuation wave3b did the same after #382 (#380, #385, #386, `awk … inde
 about 14 extra steps and about 63 s, all inside the two children the 1200 s ceiling cut off, and seven `tool_error` issues
 (7 to 12 and 18). The build already knew: `matchEdit` (`packages/agent-tools/src/tools/files.ts`) runs every level, and the
 miss branch discards a level-2 or level-3 match (`if (!m || m.level !== 1)`). Recorded as
-[`haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md`](../defects/haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md).
+[`haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md`](../defects/fixed/haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md).
 
 **Replayed before the build (fin32, 2026-10-07).** `docs/verification.md` was rebuilt from the pack's store — wave3's
 `write_file` #289, then every successful `haet_edit` and code-intelligence `replace_content` in ordinal order, each
@@ -11677,3 +11677,31 @@ and it undoes the exactness REQ-TOOLS-189 gives as the hash's whole reason. *Con
 the fact, discards it, and points the caller at a re-read that shows nothing new; the measured cost stays inside ceiling-bound
 children. **Costs kept on record:** each near miss is still one failed call and one `tool_error` issue; a second
 implementation built from the specification alone returns the plain miss; replies grow by up to the window's size.
+**Built 2026-10-07 (fin32):** `nearMissMessage` and the level-3 `shifts` of `matchEdit`'s `EditMatch`
+(`packages/agent-tools/src/tools/files.ts`); pinned by five cases under "PD-TOOLS-014" in
+`packages/agent-tools/src/tools/tools.test.ts`, red on the code before, and one guarding the unchanged replies; the pack's six
+level-3 misses replayed through the built tool each name their lines and apply when their quote is sent back on the same hash.
+Every one of the six carried the same extra space in its `new_string` too, so `write_file`'s unshifted level-3 apply is raised
+as OQ-233. The next default and duress live runs are the measurement (`live-run.mjs`'s near-miss NOTE). Finding D5 closes
+with it.
+
+**OQ-233 — When `write_file`'s edit matches at REQ-TOOLS-136 level 3, is `new_string` shifted by the same prefix?**
+*(REQ-TOOLS-136, the four match levels and "a window match replaces whole lines", silent on whether the replacement takes
+the shift that let `old_string` match; REQ-TOOLS-135, the edit's report, which names the level. Raised 2026-10-07 by the
+R-072 consortium while ruling OQ-231 (finding D5 of the final duress live run at `a68f121`), which does not decide it, and
+recorded by fin32. The number lies in the range the round assigned fin33 (OQ-233 onward); whichever of the two lands second
+takes the next free number. Open.)*
+
+`applyMatch` (`packages/agent-tools/src/tools/files.ts`) writes `new_string` over a level-3 window exactly as given, unshifted,
+and reports "Match level: 3." beside the success; the case "level 3" in `packages/agent-tools/src/tools/tools.test.ts` pins it
+with a `new_string` that happens to sit at the file's depth. A caller whose `old_string` had the wrong indentation usually
+wrote `new_string` from the same belief: in OQ-231's replay of the `a68f121` duress pack, all six level-3 misses of `haet_edit`
+carried one space more than the file in both strings. Through `write_file` such an edit would have succeeded with the block one
+space off — in Markdown a list item or code block changed, in Python or YAML a meaning changed — beside a success. Shifting
+`new_string` by the same prefix breaks the opposite case, the one the test pins, where the caller wrote `new_string` at the
+file's depth. The specification fixes neither reading.
+
+**What the build proceeds under.** The unshifted write, as built.
+
+**What a ruling decides.** Whether a level-3 `write_file` edit shifts `new_string` by the window's prefix, writes it as given
+(the build), or is refused with OQ-231's near-miss facts, as `haet_edit`'s now is.

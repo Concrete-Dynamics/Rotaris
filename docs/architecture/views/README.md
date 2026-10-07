@@ -88,6 +88,8 @@ run cancelled the call; `classify.ts` adds the kind to both vocabularies. The ga
 result interrupted and files no issue, and the metrics count it under `interrupted`, not Timeouts. The **runtime view**'s
 rest paragraph says so. No package, edge, process, channel, command or store column changed.
 
+**A `haet_edit` near miss names its level and quotes the file's lines (PD-TOOLS-014, OQ-231; finding D5 of the final duress run at `a68f121`; fin32).** `matchEdit` (`agent-tools/src/tools/files.ts`) returns an `EditMatch` whose level-3 result carries each window's `shifts` (the prefix, and whether the file carries it in addition to `old_string`'s); `haetEditTool`'s miss branch answers a single level-2 or level-3 window through `nearMissMessage` and leaves REQ-TOOLS-189's reply to a level-4 match or none. Nothing is written on either path. `live-run.mjs` counts the near misses and the terminal probes after them (`lib/near-miss-edits.mjs`). The **runtime view**'s file-tools paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **An empty or relative per-user variable takes its default (REQ-STARTUP-145, REQ-CONFIG-001; finacc3 A2-06, A2-07; fin30).**
 `xdgBaseDirectory` (`platform/dirs.ts`) now also ignores a relative `XDG_CONFIG_HOME` or `XDG_DATA_HOME`, as the XDG Base
 Directory Specification says, and `localAppDataDirectory` beside it is the one reading of `LOCALAPPDATA`: unset, empty or

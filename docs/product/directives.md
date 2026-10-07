@@ -6183,6 +6183,24 @@ carries up to the window's size.
 
 *Raised under the owner's delegation, 2026-10-07, ruling live-run finding D5 (OQ-231); logged as [R-072](requests.md#r-072).*
 
+> **First execution, 2026-10-07, built under [R-072](requests.md#r-072) (fin32):** the rule held as written. `matchEdit`
+> (`packages/agent-tools/src/tools/files.ts`) returns an `EditMatch` whose level-3 result carries each window's `shifts`;
+> `haetEditTool`'s miss branch answers a level-2 or level-3 match through `nearMissMessage` and keeps REQ-TOOLS-189's reply for
+> a level-4 match or none; `haet_edit`'s description gains the sentence. **What was measured.** Five cases under "PD-TOOLS-014"
+> in `packages/agent-tools/src/tools/tools.test.ts`, each red on the code before (trailing spaces; a CRLF file with an LF
+> `old_string`, the quote carrying `\r` and the retry leaving no LF-only line; two spaces more, one fewer and a tab; several
+> windows; a window over 30,000 characters), and a sixth guarding the unchanged replies (level 4, no match, `replace_all`, the
+> stale hash naming no hash and quoting nothing). The pack's own misses, replayed through the built tool over
+> `docs/verification.md` rebuilt from the store: #290 still reads the plain miss (level 4); #292, #297, #304, #315, #321 and
+> #382 each name their lines at match level 3 and "the leading prefix \" \" (1 character) that the file's lines do not", and
+> each quote sent back with the same hash applied (6 of 6). **Found:** every one of the six carried the same extra space in
+> `new_string`, so a retry with the quote and the model's own `new_string` would still write the block one space deep; the
+> reply's "Give new_string the file's indentation" is the only guard, and `write_file`'s level-3 apply, which writes such a
+> `new_string` unshifted beside a success, is raised as OQ-233. **What was not measured.** No live run: the next default and
+> duress runs are the measurement, read by `live-run.mjs`'s NOTE (`lib/near-miss-edits.mjs`: near misses, terminal probes
+> before the next edit, target 0, and retries that succeeded). No proof script drives `haet_edit` in the built app; the
+> executor runs unchanged inside the run host. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <!--

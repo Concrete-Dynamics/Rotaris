@@ -31,6 +31,22 @@ worktree, session `e6747bd0`, the self-hosted endpoint).
 
 ## Relevant files
 
-- `packages/agent-tools/src/tools/files.ts:314` — `matchEdit`, the four levels (shared with `write_file`'s edit).
-- `packages/agent-tools/src/tools/files.ts:715-716` — `haetEditTool`'s miss branch.
+- `packages/agent-tools/src/tools/files.ts:314` (at `a68f121`) — `matchEdit`, the four levels (shared with `write_file`'s edit).
+- `packages/agent-tools/src/tools/files.ts:715-716` (at `a68f121`) — `haetEditTool`'s miss branch.
 - `packages/agent-tools/src/tools/tools.test.ts` — the `haet_read / haet_edit` cases.
+
+## Repaired — 2026-10-07 (fin32, under PD-TOOLS-014)
+
+`matchEdit` now returns an `EditMatch` whose level-3 result carries each window's `shifts` (the prefix, and whether the file
+carries it in addition to `old_string`'s); `haetEditTool`'s miss branch answers a level-2 or level-3 match through
+`nearMissMessage`: the lines, the level, what differs (each line's trailing whitespace in the file and in `old_string`, or the
+JSON-quoted prefix with its length), that the hash is still current and nothing was written, a request that `new_string`
+carry the file's indentation and line endings, and — for one window up to 30,000 characters as JSON — the window's text as one
+JSON string that matches at level 1 when sent back. Several windows name their starting lines and quote nothing. A level-4
+match, no match, `replace_all` and the stale hash read as before. Pinned by five cases under "PD-TOOLS-014" in
+`packages/agent-tools/src/tools/tools.test.ts`, red on the code before, and a sixth guarding the unchanged replies. Replayed
+over the pack: #292, #297, #304, #315, #321 and #382 now name their lines at match level 3, and each quote applied on the same
+hash; #290 keeps the plain reply. `live-run.mjs` counts near misses and the terminal probes after them
+(`apps/desktop/scripts/lib/near-miss-edits.mjs`); the next live runs are the measurement. Noticed while repairing and raised,
+not repaired: `write_file`'s level-3 apply writes `new_string` unshifted
+([OQ-233](../../architecture/open-questions.md)).

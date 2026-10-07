@@ -199,10 +199,11 @@ answered; a statement in it proved false; a measured alternative proved better.
 **Protected invariants**: an improvement never weakens them without the owner's explicit approval:
 - `CLAUDE.md`'s hard boundary binds every agent the skill starts;
 - the reviewer never built what it reviews, reads the full diff and the requirement texts itself, may repair
-  blocking findings in place in its own commits, and lands only with zero blocking findings remaining and the gate
-  green on the exact head it pushes; the builder runs the quick checks, and the full gate runs once per landing, on
-  the pushed head (the owner, 2026-10-07: "Maybe one implementer, one fix, and then merge." and "Uh, yes, go ahead
-  and make the change. I approve it."); no step of its checklist or of the builder's rules is removed or loosened;
+  blocking findings in place in its own commits, and lands only with zero blocking findings remaining and the gate,
+  which it runs itself, green on the exact head it pushes; the builder runs the quick checks, and the full gate runs
+  once per landing, on the pushed head (the owner, 2026-10-07: "Maybe one implementer, one fix, and then merge." and
+  "Uh, yes, go ahead and make the change. I approve it."); no step of its checklist or of the builder's rules is
+  removed or loosened;
 - the record obligations and boundaries `references/repository.md` states may be added to, or corrected toward
   their authorities, never dropped;
 - the gate runs on the exact head that is pushed, before every push; main's history stays linear, a rebase and a

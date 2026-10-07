@@ -444,7 +444,9 @@ const pairB = scenario('pair-b', []);
     await until(() => d.eval("document.activeElement?.classList.contains('composer__input') === true"), (v) => v === true, { timeoutMs: 10_000, what: "B's composer holding focus" });
     await d.type("B's own run, on B's base tree", { enter: true });
     const pairSessionB = () => storeOf().flatMap((s) => s.sessions).find((row) => String(row.workspace_root).endsWith('pair-b/workspace') || String(row.workspace_root).endsWith('pair-b\\workspace'));
-    reading.idleLaunch = await until(pairSessionB, (row) => row !== undefined && !['starting', 'running', 'waiting', 'background'].includes(row.execution_status), { timeoutMs: 60_000, what: "B's run ending" });
+    // A new session's row is written `idle` before its run starts (`SessionWriter`), so `idle` is not an end: read under
+    // load, the row was caught there between its creation and its run's first status, and the launch was failed as unended.
+    reading.idleLaunch = await until(pairSessionB, (row) => row !== undefined && !['idle', 'starting', 'running', 'waiting', 'background'].includes(row.execution_status), { timeoutMs: 60_000, what: "B's run ending" });
     if (reading.idleLaunch.worktree !== null && reading.idleLaunch.worktree !== '' || reading.idleLaunch.execution_status !== 'completed') throw new Error(`B's unchecked launch did not run on B's base tree to its end (PD-GIT-001): ${JSON.stringify(reading.idleLaunch)}`);
     await d.useWindow('pair-a/workspace');
     await d.command({ kind: 'window.close' });

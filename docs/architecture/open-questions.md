@@ -11462,3 +11462,26 @@ written: the symbol generator admits one directive per verb on a requirement, an
 REQ-TOOLS-112 and `PD-SESSION-003` REQ-SESSION-136, so PD-TOOLS-013 narrows REQ-TOOLS-100 and extends those two. Pinned by
 the cases named in the repaired note and `pnpm driver-proof`'s launch 13d, a quit during `sleep 60`, red before and green
 after.
+
+**OQ-227 — What does `single_file_change` mean to the intent classifier?** *(REQ-ORCH-006, the taxonomy and the three meanings
+it fixes, none for `single_file_change`; PD-ORCH-011, "`explicit_trivial` and `single_file_change` are the two smallest
+edits"; PD-ORCH-006, the direct-work bundle a `single_file_change` grants; REQ-ORCH-021, the micro group. Raised 2026-10-07
+by fin30's repair of finacc3 A2-03,
+[`slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md`](../defects/fixed/slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md).
+Numbered past the round's assigned OQ-221 to OQ-224; raised as OQ-225, renumbered OQ-227 at landing because origin/main took
+OQ-225 (the REQ-ORCH-029 hold, PD-ORCH-015) and OQ-226 (fin31, PD-TOOLS-013). Open.)*
+
+The classifier's instructions (`CLASSIFIER_SYSTEM_PROMPT`, `packages/engine/src/intent/classifier.ts`) say what the
+specification says and no more: `single_file_change` is one of "the two smallest edits". A live model classified "Add a
+--json flag to the CLI that prints the effective configuration as JSON, with a unit test for it." as `single_file_change`
+(0.82) once in two runs. Under PD-ORCH-006 that category grants the coordinator the direct-work bundle, so a feature and its
+test would be worked by the coordinator alone, with no delegation. Nothing in the specification says that is wrong, and
+nothing says the category means one file.
+
+**What the build proceeds under.** The instructions are unchanged. `slice-proof` reads `single_file_change` as out of reach of
+that prompt (its name, `lib/live-answers.mjs`) and asks once more on one such answer, going red on a second; the product is
+held to nothing about it.
+
+**What a ruling decides.** Whether `single_file_change` means an edit confined to one file (and the classifier is told so,
+beside REQ-ORCH-006's three fixed meanings), whether a request that names a test beside its change is out of its reach,
+and whether PD-ORCH-006's direct-work grant should follow the category or the size of the change.

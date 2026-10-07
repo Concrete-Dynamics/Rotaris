@@ -8,7 +8,7 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { primingProblem } from './lib/priming-report.mjs';
 import { proofEndpoint } from './lib/endpoint-registry.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
-import { answerlessCompletion, answerRows, INTENTS, intentVerdict, toldNoAnswer } from './lib/live-answers.mjs';
+import { answerlessCompletion, answerRows, INTENTS, intentOutcome, intentVerdict, toldNoAnswer } from './lib/live-answers.mjs';
 import { hostLoad, keepEvidence, keepRed } from './lib/proof-reds.mjs';
 
 /**
@@ -48,7 +48,8 @@ import { hostLoad, keepEvidence, keepRed } from './lib/proof-reds.mjs';
  *   3b. intents      — three more real runs, one prompt per intent family: the classifier's answer is a category
  *                      from the small slot, never the fallback (Part L; the first real run fell to it), and one of the
  *                      categories REQ-ORCH-006 and REQ-ORCH-021 leave in reach of the prompt (`INTENTS`, with the
- *                      reason for each, in `lib/live-answers.mjs`).
+ *                      reason for each, in `lib/live-answers.mjs`). One answer outside them is asked once more, the
+ *                      first kept as `intents-<n>.attempt-1.*`; a second is a red naming both (`intentOutcome`).
  *   4. spike6        — spike 6's live half against the same endpoint and model, with the same key (the figures go
  *                      into spikes/responses-dialect.md).
  *   5. sign-out      — Sign out from the providers card; the file gone, the snapshot kept.
@@ -408,16 +409,29 @@ scenario = 'intents';
 // fall back, into a category REQ-ORCH-006 and REQ-ORCH-021 leave in reach of its prompt (`INTENTS`, each with its reason,
 // `lib/live-answers.mjs`). Until 2026-10-04 the README question accepted `question` alone and went red on the model's
 // `explicit_trivial (0.99)` (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`).
+// Since 2026-10-07 (finacc3 A2-03) one answer outside the accepted set asks the prompt once more, as an answerless run is
+// made once more: the first launch's log is kept as `intents-<n>.attempt-1.log`, and a second answer outside the set is
+// the red, naming both (`intentOutcome`). A fallback or a missing intent line is a red at once.
 results.intents = [];
 for (const [i, c] of INTENTS.entries()) {
   const name = `intents-${i + 1}`;
-  const log = replay('intents') ? readFileSync(join(output, `${name}.log`), 'utf8') : await launch(name, {
-    ROTARIS_CAPTURE_PROMPT: c.prompt, ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '1500',
-  }, RUN_WAIT_MS + 60_000);
-  assertNoCredential(log, name);
-  const verdict = intentVerdict(log, c);
-  if (verdict.problem !== null) throw new Error(`${name}: ${verdict.problem}`);
-  results.intents.push({ prompt: c.prompt, category: verdict.category, accepted: c.accept, confidence: verdict.confidence, rung: verdict.rung, rungNotes: verdict.rungNotes });
+  const verdicts = [];
+  for (;;) {
+    const log = replay('intents') ? readFileSync(join(output, `${name}.log`), 'utf8') : await launch(name, {
+      ROTARIS_CAPTURE_PROMPT: c.prompt, ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '1500',
+    }, RUN_WAIT_MS + 60_000);
+    assertNoCredential(log, name);
+    verdicts.push(intentVerdict(log, c));
+    const outcome = intentOutcome(verdicts, c);
+    if (outcome.kind === 'red') throw new Error(`${name}: ${outcome.problem}`);
+    if (outcome.kind === 'done') {
+      results.intents.push({ prompt: c.prompt, category: outcome.verdict.category, accepted: c.accept, confidence: outcome.verdict.confidence, rung: outcome.verdict.rung, rungNotes: outcome.verdict.rungNotes, earlier: outcome.earlier.map((v) => ({ category: v.category, confidence: v.confidence, rung: v.rung })) });
+      break;
+    }
+    if (replay('intents')) throw new Error(`${name}: a replayed log is outside the accepted set and cannot be asked once more: ${verdicts[0].problem}`);
+    for (const ext of ['log', 'png']) if (existsSync(join(output, `${name}.${ext}`))) renameSync(join(output, `${name}.${ext}`), join(output, `${name}.attempt-1.${ext}`));
+    console.error(`slice-proof: ${name} classified "${c.prompt}" as ${verdicts[0].category}${verdicts[0].confidence === null ? '' : ` (${verdicts[0].confidence})`}, outside ${c.accept.join(', ')}; that is the model's call once, not a requirement's. Asking once more; the first answer is kept as ${name}.attempt-1.log.`);
+  }
 }
 
 scenario = 'spike6';

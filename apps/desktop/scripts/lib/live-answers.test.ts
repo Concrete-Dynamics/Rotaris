@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { INTENT_CATEGORIES, INTENT_GROUPS } from '@rotaris/contracts';
-import { answerlessCompletion, answerRows, INTENTS, intentVerdict, toldNoAnswer } from './live-answers.mjs';
+import { answerlessCompletion, answerRows, INTENTS, intentOutcome, intentVerdict, toldNoAnswer } from './live-answers.mjs';
 
 const RUN4_INTENTS_1 = '[main 2026-10-03T06:02:51.969Z] info    run host: intent: explicit_trivial (0.99) via json_schema';
 const RUN5_INTENTS_3 = '[main 2026-10-03T06:06:10.115Z] info    run host: intent: moderate_feature (fallback: the classification call timed out after 12 s)';
@@ -66,6 +66,32 @@ describe('the intent scenario accepts what REQ-ORCH-006 and REQ-ORCH-021 leave i
   });
 });
 
+/*
+ * finacc3 A2-03 (docs/defects/fixed/slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md): r1 classified the flag
+ * prompt `single_file_change (0.82)` and the re-run `moderate_feature`-range at 0.95. One answer outside the set is the
+ * sampled model's call, as one answerless run is: the prompt is asked once more, and a second answer outside the set is the
+ * red, naming both. A fallback or a missing line is a red at once: those are the product's.
+ */
+describe('scenario 3b asks once more on one answer outside the accepted set, and only then', () => {
+  const R1_INTENTS_3 = "[main 2026-10-07T04:08:50.000Z] info    run host: intent: single_file_change (0.82) via json_schema";
+  it('a first answer outside the set asks the prompt once more; within the set it is done', () => {
+    expect(intentOutcome([intentVerdict(R1_INTENTS_3, flag)], flag)).toEqual({ kind: 'again' });
+    expect(intentOutcome([intentVerdict(line('moderate_feature'), flag)], flag)).toMatchObject({ kind: 'done', verdict: { category: 'moderate_feature' } });
+    expect(intentOutcome([intentVerdict(R1_INTENTS_3, flag), intentVerdict(line('small_feature'), flag)], flag)).toMatchObject({ kind: 'done', verdict: { category: 'small_feature' }, earlier: [{ category: 'single_file_change' }] });
+  });
+  it('a second answer outside the set is the red, and it names both', () => {
+    const out = intentOutcome([intentVerdict(R1_INTENTS_3, flag), intentVerdict(line('explicit_trivial'), flag)], flag);
+    expect(out.kind).toBe('red');
+    expect(out.problem).toMatch(/twice/);
+    expect(out.problem).toMatch(/single_file_change \(0\.82\)/);
+    expect(out.problem).toMatch(/explicit_trivial/);
+  });
+  it('a fallback or a missing intent line is a red at once, never asked again', () => {
+    expect(intentOutcome([intentVerdict(RUN5_INTENTS_3, flag)], flag)).toMatchObject({ kind: 'red', problem: expect.stringMatching(/^the classifier fell back/) });
+    expect(intentOutcome([intentVerdict('[main] info    run host: session started', flag)], flag)).toMatchObject({ kind: 'red', problem: 'no intent line in the log' });
+  });
+});
+
 describe('a run that completed without the model writing an answer (run 2 of 2026-10-03)', () => {
   const completed = { execution_status: 'completed', stop_reason: 'tasks_complete' };
   const terminal = [{ kind: 'usage.update' }, { kind: 'result' }, { kind: 'session.end' }];
@@ -102,6 +128,8 @@ describe('slice-proof reads its answers through this module and keeps its reds',
     expect(proof).not.toMatch(/const INTENTS = \[/);
     expect(proof).toMatch(/import \{[^}]*\bINTENTS\b[^}]*\} from '\.\/lib\/live-answers\.mjs'/);
     expect(proof).toMatch(/intentVerdict\(log, c\)/);
+    expect(proof).toMatch(/intentOutcome\(/);
+    expect(proof).toMatch(/\.attempt-1\.log/);
   });
   it('re-runs scenario 3 once on an answerless completion, keeping the first attempt, and keeps every red', () => {
     expect(proof).toMatch(/answerlessCompletion\(/);

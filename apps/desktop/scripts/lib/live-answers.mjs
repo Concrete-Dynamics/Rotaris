@@ -67,8 +67,30 @@ export function intentVerdict(log, intent) {
     const bound = /timed out/.test(line) ? ' (REQ-ORCH-007\'s fallback at REQ-ORCH-008\'s bound, which OQ-114\'s ruling of 2026-10-06 keeps at 12 s for this release)' : '';
     return { ...verdict, problem: `the classifier fell back: ${line.trim()}${bound}` };
   }
-  if (!intent.accept.includes(category)) return { ...verdict, problem: `"${intent.prompt}" classified as ${category}, outside what REQ-ORCH-006 and REQ-ORCH-021 leave in reach of it: ${intent.accept.join(', ')}` };
+  if (!intent.accept.includes(category)) return { ...verdict, outOfSet: true, problem: `"${intent.prompt}" classified as ${category}, outside what REQ-ORCH-006 and REQ-ORCH-021 leave in reach of it: ${intent.accept.join(', ')}` };
   return { ...verdict, problem: null };
+}
+
+/**
+ * What scenario 3b does next for one prompt, from its verdicts so far (`intentVerdict`, one per launch): `done` with the
+ * verdict that counts (and any `earlier` attempt), `again` to ask the prompt once more, or `red` with the problem.
+ *
+ * finacc3 A2-03 (`docs/defects/fixed/slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md`): r1 classified the
+ * flag prompt `single_file_change (0.82)` and the lone re-run within the set at 0.95. One answer outside the set is the
+ * sampled model's call, as one answerless run is (PD-ORCH-009): the prompt is asked once more, and a second answer outside
+ * the set is the red, naming both. REQ-ORCH-006 gives `single_file_change` no meaning the classifier could be held to
+ * (OQ-227 asks whether it should). A fallback (REQ-ORCH-007) and a missing intent line are the product's and stay reds at once.
+ */
+export function intentOutcome(verdicts, intent) {
+  const last = verdicts[verdicts.length - 1];
+  const earlier = verdicts.slice(0, -1);
+  if (last.problem === null) return { kind: 'done', verdict: last, earlier };
+  if (last.outOfSet === true && verdicts.length === 1) return { kind: 'again' };
+  if (last.outOfSet === true) {
+    const said = verdicts.map((v) => `${v.category}${v.confidence === null ? '' : ` (${v.confidence})`}`).join(', then ');
+    return { kind: 'red', problem: `"${intent.prompt}" classified outside what REQ-ORCH-006 and REQ-ORCH-021 leave in reach of it twice: ${said}; in reach: ${intent.accept.join(', ')}` };
+  }
+  return { kind: 'red', problem: last.problem };
 }
 
 /** An agent row that carries an answer: text beyond a fragment. */

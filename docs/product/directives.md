@@ -5470,7 +5470,11 @@ advocate A's change of behaviour and advocate B's confirmation as built and foll
 > `artifacts/artifacts.test.ts` (seven red on the code before), one in `session-resume.test.ts` (red before), the block
 > definition in `contracts/src/artifacts.test.ts` and the Preview's source in `library/ArtifactInspector.test.ts`;
 > `pnpm artifacts-proof`'s launch 4 asserts the Preview renders no frontmatter line, and passed (its inspector opened at the
-> artifact's title). **What was not measured.** No built-app launch edits an artifact and then supersedes or re-reports it:
+> artifact's title). The built-app evidence for the Preview is `pnpm artifacts-proof`'s, its probe and its screenshots,
+> where the plan had named `pnpm app:drive`, which was not run (corrected by fin30, 2026-10-07, which added launch 4's
+> `inspector-preview.png`, taken while the Preview tab is shown: the launch's closing screenshot shows the Markdown tab and
+> the saved edit; the fin30 run shows the dialog's Preview opening at "The scripted plan", no frontmatter line drawn).
+> **What was not measured.** No built-app launch edits an artifact and then supersedes or re-reports it:
 > that survival is measured on the real store on disk by the unit tests. The orchestrator's live run should show unedited
 > artifacts read as before. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 

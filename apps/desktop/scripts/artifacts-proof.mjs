@@ -21,7 +21,7 @@
  *                  `can_publish_artifacts: true`; the session log records REQ-TOOLS-004's `artifact_publish_not_granted`
  *                  removal at warning, and the scripted publish stores no artifact.
  *   4. inspector — the inspector opens on the selected row, its Preview starts below the frontmatter
- *                  (PD-LIBRARY-003), the Markdown tab is edited and saved, the table's
+ *                  (PD-LIBRARY-003; captured as `inspector-preview.png`), the Markdown tab is edited and saved, the table's
  *                  status cell gains ` · edited`, and opening the same id again RE-RAISES the one dialog
  *                  (REQ-LIBRARY-131/132/133).
  *   5. missing   — the body file is deleted underneath a stored session; on a relaunch that resumes it the
@@ -394,6 +394,9 @@ let edited = null;
       '[data-testid="library-artifacts-inspect"]@18600',   // REQ-LIBRARY-131: the same id again
     ].join(';;'),
     ROTARIS_CAPTURE_TYPE_AT: 'EDITED@16000',
+    // PD-LIBRARY-003 (f): the Preview as drawn, before the Markdown tab is taken at 14500 (the end-of-launch capture shows
+    // the Markdown tab and the saved edit).
+    ROTARIS_CAPTURE_PNG_AT: `${join(output, 'inspector-preview.png')}@14100`,
     ROTARIS_CAPTURE_PROBE_AT: [
       '[data-testid="artifact-inspector"]@13800',
       '[data-testid="artifact-inspector-meta"]@13800',
@@ -419,6 +422,7 @@ let edited = null;
   // PD-LIBRARY-003 (f), OQ-210's ruling: the Preview starts below the document's frontmatter, which rendered as a run-on
   // paragraph (`id: "art_…" slug: "…" …`) between two rules on every artifact before it.
   if (/\b(?:id|slug|kind|created_at): "/.test(preview[0].text)) throw new Error(`the Preview rendered the frontmatter (PD-LIBRARY-003): ${JSON.stringify(preview[0].text.slice(0, 200))}`);
+  if (!existsSync(join(output, 'inspector-preview.png'))) throw new Error('the Preview was not captured (inspector-preview.png)');
   if (dirty !== 'yes') throw new Error(`the editor did not take the typed characters (dirty=${dirty})`);
   if (status !== 'Saved.') throw new Error(`the footer did not read "Saved.": ${status}`);
   if (statusCells.length !== 1 || statusCells[0].data['data-edited'] !== 'yes' || !statusCells[0].text.endsWith(' · edited')) throw new Error(`the row's status cell did not gain " · edited": ${JSON.stringify(statusCells)}`);
@@ -433,7 +437,7 @@ let edited = null;
   const body = readFileSync(join(filesDir(s.session_id), record.body_file), 'utf8');
   if (!body.includes('EDITED')) throw new Error('the typed characters did not reach the body file');
   edited = { sessionId: s.session_id, id: record.id, slug: record.slug, bodyFile: record.body_file, directory: filesDir(s.session_id) };
-  results.inspector = { meta, previewStart: preview[0].text.slice(0, 80), dirty, status, statusCell: statusCells[0].text, raisedOnReopen: reopened[0].data['data-raised'], dialogs: reopened.length, editedAt: record.edited_at, bodyCarriesEdit: true };
+  results.inspector = { meta, previewStart: preview[0].text.slice(0, 80), dirty, status, statusCell: statusCells[0].text, raisedOnReopen: reopened[0].data['data-raised'], dialogs: reopened.length, editedAt: record.edited_at, bodyCarriesEdit: true, previewPng: join(output, 'inspector-preview.png'), png: r.png };
 }
 
 // ---- 5. A body file deleted underneath: the record stays listed and the inspector reports the failure ----------

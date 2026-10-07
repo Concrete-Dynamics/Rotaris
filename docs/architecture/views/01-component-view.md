@@ -284,7 +284,10 @@ the proof also takes the writer's list of git's redirecting variables from `buil
 packaged application through `scripts/lib/bounded-launch.mjs`'s `spawnBounded`, as every proof launch a script starts
 itself does since 2026-09-29 (`fetch-proof`'s, `workspace-proof`'s hand-over and `mcp-console-spike`'s since 2026-09-30),
 so a launch that overruns its bound is ended and reported as a failure with its log tail. The driven launch is ended by
-`lib/driver.mjs`'s `stopApp`; `code-intel-proof`'s branch and `live-run`'s `runElectron` keep their own bounds, for the
+`lib/driver.mjs`'s `stopApp`, or by its `endLaunch` from a proof's own `finally`. Since 2026-10-07 (finacc3 A2-19) a launch
+ends with its whole process group: a driven launch leads a group of its own as a bounded one does, and once the main
+process has exited `bounded-launch.mjs`'s `drainGroup` gives the rest of the group three seconds, then SIGKILLs and names
+what is left; `code-intel-proof`'s branch and `live-run`'s `runElectron` keep their own bounds, for the
 reasons `scripts/lib/launch-sites.test.ts` names beside them. **Edges unchanged**:
 `apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts reach the tools and never the
 reverse, and no product code imports either.

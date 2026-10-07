@@ -84,6 +84,11 @@ the first that can hold a file, and a claim whose listen fails gives its record 
 The **process view**'s instance-claim row and the **sequences view**'s launch diagram (the refused branch) say so. No package,
 edge, process, channel, command or store column changed.
 
+**A proof's launch ends with its whole process group (finacc3 A2-19; fin30).** A driven launch leads a process group of its
+own, and `spawnBounded`, `stopApp` and the new `endLaunch` drain the group once the main process has exited (`drainGroup`:
+three seconds, then SIGKILL, each straggler named). The **component view**'s scripts paragraph says so. Harness only: no
+package, edge, process, channel, command or store column changed.
+
 **A timeout's issue names the call that ran out of time, and summary.md's terminal counts flag the cap (REQ-SESSION-136,
 REQ-SESSION-133, REQ-SESSION-140; finacc3 A2-08 and A2-09, fin30).** `outcomeIssues` (`packages/agent-tools/src/gate.ts`)
 files `terminal_timeout` for every timeout as before, but says "A terminal command exceeded its timeout." only where the

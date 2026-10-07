@@ -10729,3 +10729,57 @@ carried by `personaResolverFor` and read by `createToolPort` in place of the sto
 a pinning test that no built-in role declares the tool or carries the flag (`children/personas.test.ts`); and the artifacts
 proof's orchestrator granted with both keys, with a launch (3b) that declares the tool without the flag and finds the
 removal in the session log at warning and no artifact stored, which passed.
+
+**OQ-213 — Which todo list does REQ-ORCH-029 hold the coordinator to on multi-step work, what is "more than one step", and
+how is the clause held "no matter what … instruction text is in force"?** *(REQ-ORCH-029, "work spanning more than one step is
+accompanied by a todo list it keeps current", a constraint that "MUST hold no matter what playbook cell or instruction text
+is in force" and is "externally checkable from the run's own records"; REQ-ORCH-004 and REQ-ORCH-068, the planner plan the run
+writes and resolves itself; REQ-TOOLS-144 and REQ-TOOLS-147, the `todo` tool's list, the agent's own and "the run's primary
+progress display"; REQ-ORCH-059, "Open-todo reminder lines are appended"; REQ-ORCH-025, `single`; REQ-CONFIG-100, a configured
+`system_prompt`. Raised 2026-10-07 from live-run finding K2 of the final default live runs (packs at `c2fdd6a` and
+`c2a9444`): on 3 of the 6 multi-step runs (edit, resume, frictions) the coordinator delegated more than once and wrote no plan
+of its own, the task-plan strip read "Planner plan" with one row, the prompt itself, and the inspector read "todo not used";
+on the requirements and terminal runs it planned unasked. Recorded as
+[`the-coordinator-keeps-no-todo-list-of-its-own-on-multi-step-work.md`](../defects/the-coordinator-keeps-no-todo-list-of-its-own-on-multi-step-work.md).
+Ruled the same day.)*
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the todo list REQ-ORCH-029
+requires of the coordinator is its own plan, the one the `todo` tool writes; the run's planner plan does not satisfy the
+clause. While the entry role acts as coordinator in an execution iteration and holds `todo`, the run refuses at dispatch the
+call that would start the current task's second work item until the entry role has made an accepted `todo` write for that
+task, and logs each refusal as a warning citing REQ-ORCH-029. A work item is a `delegate` call, or on a direct-work grant a
+call of a tool the registry declares as writing workspace files or running commands. Nothing is seeded from the planner plan,
+and REQ-ORCH-059's open-todo reminder lines are built so the coordinator sees its open items as children finish. No directive:
+this builds REQ-ORCH-029 as written, and `PD-ORCH-006` already keeps the todo clause on direct-work runs. Two readings are this
+entry's ruling: the list is the agent plan, and "more than one step" means the task's second work item. If a later round treats
+the work-item reading as a narrowing, it lands as a revision of `PD-ORCH-006`, the one narrowing slot REQ-ORCH-029 admits.
+
+The consortium weighed two recommendations. **Advocate A** (the user's lens) read the clause the same way and proposed a
+reminder the run injects into the result of the task's second work item while the coordinator keeps no plan for it, logged as
+a warning, rejecting both a refusal (red refused rows and an extra model step on healthy runs) and seeding the list from the
+planner plan. **Advocate B** (the system's lens) proposed the refusal at dispatch, held through the entry port's gate beside
+REQ-ORCH-153's plan-gate check, with the work-item count and the write kept with the planner task as `planExcused` is. **The
+ruling followed B**: A's reminder is still text, which REQ-ORCH-029 says may not decide the question, and the live packs show
+the persona text skipped on half the multi-step runs; the specification already holds such limits with refusals at dispatch
+(REQ-ORCH-030, REQ-ORCH-153), and a gate refusal settles `blocked`, files no `tool_error` issue, fires at most once per task and
+never on a coordinator that already planned. From A it took the logged warning line, the test that a configured
+`system_prompt` is still covered, and the reading of "step" as a work item. The engine glossary's "Todo list" names the planner
+plan, and the specification uses the phrase for both lists, so the glossary gains a separate "Agent plan" entry.
+
+**OQ-220 — Which todo item does a delegation answer for?** *(REQ-ORCH-028 and REQ-ORCH-029, "no two implementation delegations
+for the same todo item are outstanding at once"; resolution 15 (b) of `docs/spec/resolutions/01-run-orchestration.md`, ownership
+"per todo item and at no other granularity"; REQ-TOOLS-144, the plan's schema; REQ-TOOLS-152, the `delegate` call's
+arguments. Raised 2026-10-07 by fin27's build of OQ-213's ruling, at that ruling's instruction. Numbered past the
+round's assigned OQ-213 to OQ-219. Open.)*
+
+OQ-213's refusal makes a multi-step coordinator keep a todo list of its own, which is the precondition for REQ-ORCH-029's
+per-item constraint, not its measurement. A `delegate` call names no todo item (`packages/agent-tools/src/tools/delegation.ts`),
+and neither the child ledger nor the plan's items record one, so whether two outstanding implementation delegations serve one
+item or two cannot be read from the run's records, which REQ-ORCH-029 says each of its constraints must be.
+
+**What the build proceeds under.** The constraint is instructed and not measured: nothing refuses or records a second
+implementation delegation for one item, as before OQ-213.
+
+**What a ruling decides.** Whether a delegation names the todo item it serves (a `delegate` argument, a field on the plan's
+item, or a link the run infers), whether a second implementation delegation for an item already served is refused at dispatch,
+and what a delegation that names no item counts as.

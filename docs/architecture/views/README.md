@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**`can_publish_artifacts` gates `artifact_write` (REQ-CONFIG-106, REQ-TOOLS-004, REQ-TOOLS-150; OQ-212 ruled under R-072).**
+`Persona` gains `canPublishArtifacts`, false for every built-in role and carried from a role's configuration by
+`personaResolverFor`; `createToolPort` passes it to the registry's prerequisites, which removes a declared `artifact_write`
+without it as `artifact_publish_not_granted`. The **seams view**'s tool invariants say so. No package, edge, process, channel,
+command or store column changed.
+
 **An artifact's body is its document, and a person's edit of it survives and travels (PD-LIBRARY-003, OQ-210 ruled under
 R-072).** `ArtifactStore.rerender` rewrites only the leading frontmatter (`renderFrontmatter`, `splitFrontmatter` in
 `@rotaris/contracts`) of a document a person edited, on supersession and on re-materialisation; `latestArtifactText` and

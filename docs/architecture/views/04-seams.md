@@ -189,6 +189,10 @@ Invariants:
   in its own map and in the map of `ToolPortContext.parentPersona`, the persona that delegated the agent. A public tool
   and an MCP tool alike survive only when every list names it (`restrictionsAllow`); an MCP tool is taken off the
   surface before the executors and the prompt section are drawn from it, so what is printed is what is callable (REQ-MCP-062).
+  `artifact_write` survives only while the persona's `can_publish_artifacts` is true (REQ-CONFIG-106, REQ-TOOLS-150;
+  `Persona.canPublishArtifacts`, carried by `personaResolverFor` with the same stated-or-built-in rule as `coordinator_only`),
+  and is otherwise removed as the prerequisite `artifact_publish_not_granted` (REQ-TOOLS-004); no built-in role declares it
+  or carries the flag (OQ-212).
 - The gate decides; the executor never asks. An approval travels `gate → presenter → main → dialog` — see
   [`06-sequences.md` §2](06-sequences.md#2-a-permission-approval-end-to-end).
 - A tool that reaches the filesystem states its read roots; a tool that reaches the network reads the egress

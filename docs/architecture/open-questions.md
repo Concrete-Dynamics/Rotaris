@@ -10640,7 +10640,7 @@ handed the tool; REQ-TOOLS-007; REQ-ORCH-016, whose direct-work bundle names `ar
 REQ-LIBRARY-101. Raised 2026-10-06 by finacc3's acceptance round 1 (finding F16), repairing
 [`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
 `packages/contracts/src/roles.ts` said "that no built-in persona does is recorded as an open question", and no entry was ever
-written. Open, the owner's.)*
+written. ~~Open, the owner's.~~ **Ruled 2026-10-07 under the owner's delegation.**)*
 
 The specification defines the tool, its gate and its prerequisite, but no built-in persona's tool list, so it does not say
 whether any built-in role publishes.
@@ -10651,9 +10651,27 @@ through the tool: the artifacts in a session are the child reports the engine ma
 workspace's personas publish only where its configuration declares `artifact_write` for them (the artifacts proof declares it
 for its orchestrator). `artifact_read` and `artifact_list` join every persona's read group. Whether that configuration also
 needs `can_publish_artifacts: true`, as REQ-CONFIG-106 and REQ-TOOLS-004 say, is not this question: the build hands the tool
-over whatever the flag says, recorded as a defect,
-[`can-publish-artifacts-is-read-and-never-gates-artifact-write.md`](../defects/can-publish-artifacts-is-read-and-never-gates-artifact-write.md).
+over whatever the flag says, recorded as a defect (repaired with this question's ruling, below),
+[`can-publish-artifacts-is-read-and-never-gates-artifact-write.md`](../defects/fixed/can-publish-artifacts-is-read-and-never-gates-artifact-write.md).
 
 **What a ruling decides.** Whether any built-in role (the orchestrator, the planner, the architect, the codebase analyst, the
 librarian or another) declares `artifact_write` and carries `can_publish_artifacts: true` by default, or publishing stays a grant
 a workspace's configuration gives.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** confirmed as built. No built-in
+persona declares `artifact_write` or carries `can_publish_artifacts: true`, so with the shipped defaults a session's artifacts
+are the child reports the engine materialises (REQ-LIBRARY-092). A workspace grants a role publishing through its configuration
+with both keys REQ-CONFIG-106 names: `artifact_write` in the role's `tools:` list, restated in full (REQ-CONFIG-101), and
+`can_publish_artifacts: true` beside it. Wherever the flag is false the tool is withheld and the removal recorded as
+`artifact_publish_not_granted` (REQ-TOOLS-004, REQ-TOOLS-150). The ruling departs from no requirement's text, so **no
+directive** was minted (OQ-52's precedent). **The two recommendations weighed:** advocate A (the user's lens) recommended
+confirming as built, since the user already receives every specialist's work as a child report and a built-in publisher would
+write each body twice and add duplicate Library rows, and repairing the gate alongside; advocate B (the system's lens)
+recommended confirming as built, since three requirements treat publishing as a deliberate grant and no requirement names a
+built-in publisher, which makes the gate repair a pure subtraction. The ruling **followed both**, taking the concrete steps
+from each. **Built by bundle `fin28-artifacts` the same day:** `Persona.canPublishArtifacts` (false for every built-in role),
+carried by `personaResolverFor` and read by `createToolPort` in place of the store's presence, repairing
+[`can-publish-artifacts-is-read-and-never-gates-artifact-write.md`](../defects/fixed/can-publish-artifacts-is-read-and-never-gates-artifact-write.md);
+a pinning test that no built-in role declares the tool or carries the flag (`children/personas.test.ts`); and the artifacts
+proof's orchestrator granted with both keys, with a launch (3b) that declares the tool without the flag and finds the
+removal in the session log at warning and no artifact stored, which passed.

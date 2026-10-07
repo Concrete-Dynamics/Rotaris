@@ -18,8 +18,10 @@ export type BuiltInRoleName = (typeof BUILT_IN_ROLE_NAMES)[number];
  * `artifact_list` as the way to reach what it left out — a marker naming a tool no persona declares would be
  * false on its face. `artifact_write` is deliberately NOT here: publishing is a grant (REQ-TOOLS-004 keeps a
  * reason code for withholding it), so a persona that should publish declares it in configuration
- * (REQ-TOOLS-002). That no built-in persona does is the owner's, raised as OQ-212 (2026-10-06; this comment claimed it
- * recorded before any entry existed, F16).
+ * (REQ-TOOLS-002) and carries `can_publish_artifacts: true` beside it (REQ-CONFIG-106). ~~That no built-in persona does is
+ * the owner's, raised as OQ-212 (2026-10-06; this comment claimed it recorded before any entry existed, F16).~~ OQ-212,
+ * ruled 2026-10-07 under the owner's delegation (R-072): confirmed as built — no built-in persona declares `artifact_write`
+ * or carries the flag, and `personas.test.ts` in the engine fails on one that comes to.
  */
 /**
  * OQ-61, ruled 2026-09-18: `git_read` joins the read group with the search tools rather than as a

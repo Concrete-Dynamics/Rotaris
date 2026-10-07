@@ -76,7 +76,7 @@ describe('PD-TOOLS-006 — the disclosure block', () => {
 });
 
 describe('PD-TOOLS-006 revision 3 (OQ-112) — a write scope is for a persona that can write files (REQ-TOOLS-152, REQ-TOOLS-006)', () => {
-  const p = (name: string, tools: readonly string[], extra: Partial<Persona> = {}): Persona => ({ name, tools, coordinatorOnly: false, readOnly: false, systemPrompt: '', implementer: false, ...extra });
+  const p = (name: string, tools: readonly string[], extra: Partial<Persona> = {}): Persona => ({ name, tools, coordinatorOnly: false, readOnly: false, canPublishArtifacts: false, systemPrompt: '', implementer: false, ...extra });
 
   it('a persona writes files when it would be granted write_file, haet_edit or haet after the controls', () => {
     expect(writesFiles(BUILT_IN_PERSONAS['codebase-analyst'])).toBe(false);

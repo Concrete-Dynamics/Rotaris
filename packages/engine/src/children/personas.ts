@@ -11,6 +11,12 @@ export interface Persona {
   readonly tools: readonly string[];
   readonly coordinatorOnly: boolean;
   readonly readOnly: boolean;
+  /**
+   * REQ-CONFIG-106: the role's `can_publish_artifacts` — the grant without which a declared `artifact_write` is withheld
+   * (REQ-TOOLS-150) and its removal recorded as `artifact_publish_not_granted` (REQ-TOOLS-004). False for every built-in role:
+   * OQ-212, ruled 2026-10-07 under the owner's delegation (R-072), keeps publishing a grant a workspace's configuration makes.
+   */
+  readonly canPublishArtifacts: boolean;
   readonly systemPrompt: string;
   /** REQ-ORCH-028: a role whose tools write workspace files holds implementation delegations. */
   readonly implementer: boolean;
@@ -102,7 +108,7 @@ export interface PersonaResolver {
 const IMPLEMENTER_TOOLS: ReadonlySet<string> = new Set(['write_file', 'haet_edit', 'haet', 'terminal']);
 
 function persona(name: string, tools: readonly string[], prompt: string, extra: Partial<Persona> = {}): Persona {
-  return { name, tools, coordinatorOnly: false, readOnly: false, systemPrompt: prompt, implementer: tools.some((t) => IMPLEMENTER_TOOLS.has(t)), ...extra };
+  return { name, tools, coordinatorOnly: false, readOnly: false, canPublishArtifacts: false, systemPrompt: prompt, implementer: tools.some((t) => IMPLEMENTER_TOOLS.has(t)), ...extra };
 }
 
 export const ROLE_VOCABULARY = BUILT_IN_ROLE_NAMES;

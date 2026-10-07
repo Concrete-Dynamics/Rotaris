@@ -6,7 +6,7 @@ import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset } from '@rotaris/contracts';
 import { CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, loadConfiguration, renderMcpSection, type LoadedConfiguration, type PersonaMcpSurface } from '@rotaris/config';
 import { anySchema, gitReadTool, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type ToolExecutor } from '@rotaris/agent-tools';
-import { SessionWriter, UserPresence, type ToolPortContext } from '@rotaris/engine';
+import { SessionWriter, UserPresence, type ArtifactOps, type ToolPortContext } from '@rotaris/engine';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { personaResolverFor, runtimeFromConfiguration, type ConfiguredRun } from './configuration.js';
 import type { McpHost } from './mcp.js';
@@ -706,6 +706,51 @@ ${coder('    tool_restrictions:\n      coding-agent: [read_file, grep, terminal]
     expect(warnings.some((w) => w.includes("the tool name 'grep' collides with a native tool of coding-agent"))).toBe(true);
     expect(p.promptSection?.()).toBe('## MCP servers\n\n- `srv`');
     expect(p.grant?.()?.mcp.granted).toEqual({ srv: [] });
+  });
+
+  /*
+   * OQ-212, ruled 2026-10-07 under R-072, and the repair of
+   * docs/defects/fixed/can-publish-artifacts-is-read-and-never-gates-artifact-write.md: REQ-CONFIG-106 and REQ-TOOLS-150 hand a
+   * role `artifact_write` only while its `can_publish_artifacts` is true, and REQ-TOOLS-004 records the removal otherwise. The
+   * tool port passed the artifact store's presence as the grant, so a declared tool was handed over whatever the flag said.
+   */
+  const store: ArtifactOps = { write: () => ({ ok: true, id: 'art_00000001', slug: 's' }), read: () => ({ ok: true, text: '' }), list: () => [] };
+  const publisher = (flag: string) => `  orchestrator:
+    name: orchestrator
+    model: selected
+    tools: [read_file, artifact_read, artifact_list, artifact_write]
+${flag}`;
+  const notGranted = "tool 'artifact_write' removed from orchestrator by prerequisite (artifact_publish_not_granted) (REQ-TOOLS-004/006)";
+
+  it('REQ-CONFIG-106 / REQ-TOOLS-004 (OQ-212): a persona declaring `artifact_write` without `can_publish_artifacts: true` is not handed it, and the removal is logged at warning', async () => {
+    const p = port(publisher(''), 'orchestrator', { artifacts: store });
+    await p.ready?.();
+    expect(p.resolvedTools?.()).toEqual(['read_file', 'artifact_read', 'artifact_list']);
+    expect(p.specs().map((s) => s.name)).not.toContain('artifact_write');
+    expect(warnings).toContain(notGranted);
+    const r = await p.dispatch({ callId: 'c1', name: 'artifact_write', rawArgs: JSON.stringify({ slug: 's', title: 't', body: 'b', tags: [] }), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' }, new AbortController().signal);
+    expect(r.isError).toBe(true);
+    // The flag stated false is the same grant withheld.
+    warnings.length = 0;
+    const stated = port(publisher('    can_publish_artifacts: false\n'), 'orchestrator', { artifacts: store });
+    await stated.ready?.();
+    expect(stated.resolvedTools?.()).not.toContain('artifact_write');
+    expect(warnings).toContain(notGranted);
+  });
+
+  it('REQ-TOOLS-150 (OQ-212): the same persona with `can_publish_artifacts: true` keeps `artifact_write`', async () => {
+    const p = port(publisher('    can_publish_artifacts: true\n'), 'orchestrator', { artifacts: store });
+    await p.ready?.();
+    expect(p.resolvedTools?.()).toEqual(['read_file', 'artifact_read', 'artifact_list', 'artifact_write']);
+    expect(p.specs().map((s) => s.name)).toContain('artifact_write');
+    expect(warnings.filter((w) => w.includes("'artifact_write'"))).toEqual([]);
+  });
+
+  it('OQ-212: the built-in orchestrator declares no `artifact_write`, so it holds none and logs no removal for it', async () => {
+    const p = port('', 'orchestrator', { artifacts: store });
+    await p.ready?.();
+    expect(p.resolvedTools?.()).not.toContain('artifact_write');
+    expect([...warnings, ...infos].filter((l) => l.includes("'artifact_write'"))).toEqual([]);
   });
 });
 

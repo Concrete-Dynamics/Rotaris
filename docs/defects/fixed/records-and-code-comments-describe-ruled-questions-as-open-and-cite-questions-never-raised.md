@@ -53,7 +53,7 @@ Repaired 2026-10-06 by finacc3's acceptance repair (bundle `finacc3-accept1-3`).
   rendered document and the submitted body is kept twice), OQ-211 (an artifact's consumer is the reading instance's
   canonical name) and OQ-212 (no built-in persona declares `artifact_write`). The three comments and ADR-0003's execution
   note cite them; ADR-0003's "Open question, not a settled reading" is struck and kept. Raising OQ-212 found
-  [`can-publish-artifacts-is-read-and-never-gates-artifact-write.md`](../can-publish-artifacts-is-read-and-never-gates-artifact-write.md),
+  [`can-publish-artifacts-is-read-and-never-gates-artifact-write.md`](can-publish-artifacts-is-read-and-never-gates-artifact-write.md),
   recorded and not repaired here.
 - **The four comments** name OQ-103 (with `PD-ORCH-005` clause 26), OQ-120, OQ-125 and OQ-146 as ruled on 2026-10-06.
 - **The record**: `codebase.md` (OQ-37, OQ-56), `first-release-plan.md` (OQ-58, OQ-59, OQ-67 twice, OQ-114 to OQ-116,

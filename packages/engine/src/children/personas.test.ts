@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BUILT_IN_ROLE_TOOLS } from '@rotaris/contracts';
 import { BUILT_IN_PERSONAS, DIRECT_WORK_INSTRUCTION, entryInstructionsFor, runOverrideLayer, SWARM_HEADING, SWARM_INSTRUCTION, SWARM_PLAN_HELD_NOTE } from './personas.js';
 
 describe('engine/personas — the entry role\'s instructions for its grant (OQ-202 as ruled, PD-ORCH-006; REQ-ORCH-016/029)', () => {
@@ -62,5 +63,21 @@ describe('engine/personas — the run override\'s layer of the entry role\'s ins
   });
   it('OQ-205\'s reading until it is ruled: a run granted the direct-work bundle carries no `swarm` text beside PD-ORCH-006\'s statement', () => {
     expect(runOverrideLayer('swarm', 'direct-work', orchestrator)).toBe('');
+  });
+});
+
+/**
+ * OQ-212, ruled 2026-10-07 under the owner's delegation (R-072): no built-in role publishes. Publishing is a grant a workspace's
+ * configuration makes with both keys REQ-CONFIG-106 names, so a built-in role that came to declare `artifact_write` or carry
+ * the flag would be a decision, and this fails on it.
+ */
+describe('engine/personas — no built-in persona publishes (OQ-212; REQ-CONFIG-106, REQ-TOOLS-004, REQ-TOOLS-150)', () => {
+  it('no built-in role declares `artifact_write`, in the contracts table or the persona table', () => {
+    for (const [role, tools] of Object.entries(BUILT_IN_ROLE_TOOLS)) expect({ role, publishes: tools.includes('artifact_write') }).toEqual({ role, publishes: false });
+    for (const [role, p] of Object.entries(BUILT_IN_PERSONAS)) expect({ role, publishes: p.tools.includes('artifact_write') }).toEqual({ role, publishes: false });
+  });
+
+  it('every built-in persona\'s `canPublishArtifacts` is false', () => {
+    for (const [role, p] of Object.entries(BUILT_IN_PERSONAS)) expect({ role, flag: p.canPublishArtifacts }).toEqual({ role, flag: false });
   });
 });

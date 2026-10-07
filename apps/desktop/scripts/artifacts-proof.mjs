@@ -17,6 +17,9 @@
  *                  REQ-MONITOR-065/089).
  *   3. bad tag   — an invalid tag refuses the publish WHOLE: the observation is REQ-LIBRARY-089's wording, and
  *                  no row, no file and no partial state are left behind.
+ *   3b. not granted — OQ-212 and REQ-CONFIG-106: the orchestrator declares `artifact_write` WITHOUT
+ *                  `can_publish_artifacts: true`; the session log records REQ-TOOLS-004's `artifact_publish_not_granted`
+ *                  removal at warning, and the scripted publish stores no artifact.
  *   4. inspector — the inspector opens on the selected row, its Preview starts below the frontmatter
  *                  (PD-LIBRARY-003), the Markdown tab is edited and saved, the table's
  *                  status cell gains ` · edited`, and opening the same id again RE-RAISES the one dialog
@@ -74,17 +77,19 @@ writeFileSync(join(workspace, 'README.md'), '# Artifacts proof workspace\n');
 /**
  * The global configuration. `code_intelligence` is switched off: Part T's shipped entry starts a bundled
  * runtime (~4.5 s) ahead of every run, and this proof measures the artifact store rather than that runtime.
- * The personas declare `artifact_write` — no BUILT-IN persona does, because publishing is a grant
- * (REQ-TOOLS-002/004), and the gap is recorded in the handoff.
+ * The orchestrator is granted publishing with both keys REQ-CONFIG-106 names, `artifact_write` in its `tools:` and
+ * `can_publish_artifacts: true` beside it: no BUILT-IN persona publishes (OQ-212, ruled 2026-10-07 under R-072), so the
+ * grant is the workspace's to make. `publish: false` drops the flag and keeps the declaration, which launch 3b reads
+ * (REQ-TOOLS-004's `artifact_publish_not_granted`).
  */
-function globalYaml({ personas = {} } = {}) {
+function globalYaml({ personas = {}, publish = true } = {}) {
   return [
     '# scratch configuration written by the artifacts proof',
     'models:', '  scripted: { provider: scripted, model_id: scripted }',
     'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
     'mcp_servers:', '  code_intelligence: { enabled: false }',
     'personas:',
-    '  orchestrator: { tools: [read_file, grep, glob, delegate, todo, artifact_read, artifact_list, artifact_write] }',
+    `  orchestrator: { tools: [read_file, grep, glob, delegate, todo, artifact_read, artifact_list, artifact_write]${publish ? ', can_publish_artifacts: true' : ''} }`,
     ...Object.entries(personas).map(([role, v]) => `  ${role}: ${v}`),
     '',
   ].join('\n');
@@ -342,6 +347,30 @@ const results = {};
   if (bodies.length !== 0) throw new Error(`a refused publish left ${bodies.length} file(s) behind: ${bodies.join(', ')}`);
   const shown = probe(r.log, '[data-testid="library-artifacts-empty"]');
   results.badTag = { observation, rows: rows.length, bodyFiles: bodies.length, emptyStateShown: shown.length === 1, emptyLabel: shown[0]?.text ?? '' };
+}
+
+// ---- 3b. OQ-212: `artifact_write` declared without `can_publish_artifacts: true` is withheld and the removal recorded --
+{
+  const r = await launch('not-granted', {
+    ROTARIS_CAPTURE_PROMPT: 'publish without the grant', ROTARIS_CAPTURE_PROMPT_MS: '1200',
+    ROTARIS_SCRIPT: 'artifact:artifact_write,answer',
+    ROTARIS_CAPTURE_AFTER_MS: '9000',
+  }, { files: { global: globalYaml({ publish: false }) } });
+  const db = new Database(oneDatabase(), { readonly: true });
+  const s = latestSession(db);
+  const rows = artifacts(db, s.session_id);
+  const writes = toolRows(db, s.session_id, 'artifact_write');
+  db.close();
+  if (rows.length !== 0) throw new Error(`a role without can_publish_artifacts published ${rows.length} artifact(s) (REQ-CONFIG-106, REQ-TOOLS-150)`);
+  const logFile = join(filesDir(s.session_id), 'session.log');
+  const sessionLog = existsSync(logFile) ? readFileSync(logFile, 'utf8') : '';
+  const removal = "tool 'artifact_write' removed from orchestrator by prerequisite (artifact_publish_not_granted)";
+  const removalLines = sessionLog.split('\n').filter((l) => l.includes(removal));
+  if (removalLines.length === 0) throw new Error(`the session log does not record REQ-TOOLS-004's artifact_publish_not_granted removal (${existsSync(logFile) ? 'present' : 'absent'}: ${logFile}); see not-granted.log`);
+  if (!removalLines.every((l) => /WARN/i.test(l))) throw new Error(`the removal is not logged at warning: ${JSON.stringify(removalLines)}`);
+  const attempt = writes[0] ? { status: writes[0].status, isError: writes[0].is_error, observation: String(writes[0].entry.result ?? writes[0].entry.error ?? '').slice(0, 200) } : null;
+  if (attempt !== null && attempt.isError !== 1) throw new Error(`the withheld artifact_write was not refused: ${JSON.stringify(attempt)}`);
+  results.notGranted = { rows: rows.length, removal: removalLines[0], removals: removalLines.length, attempt, elapsedMs: r.elapsedMs };
 }
 
 // ---- 4. The inspector: open, edit, save, ` · edited`, and ONE dialog on re-opening -----------------------------

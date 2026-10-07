@@ -222,6 +222,36 @@ personas:
   });
 });
 
+describe('can_publish_artifacts reaches the persona (REQ-CONFIG-106, OQ-212)', () => {
+  it('REQ-CONFIG-106: the flag is carried where a role states it, and is false everywhere else, built-in roles included', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), `default_persona: orchestrator
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+  orchestrator:
+    name: Orchestrator
+    model: selected
+    can_publish_artifacts: true
+  planner:
+    name: Planner
+    model: selected
+`);
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: join(dir, 'ws') });
+    if (!loaded.ok) throw new Error('configuration');
+    const personas = personaResolverFor(loaded.value, true, () => undefined);
+    expect(personas.resolve('orchestrator')!.persona.canPublishArtifacts).toBe(true);
+    expect(personas.resolve('planner')!.persona.canPublishArtifacts).toBe(false);
+    expect(personas.resolve('verifier')!.persona.canPublishArtifacts).toBe(false);
+  });
+});
+
 /**
  * PD-ORCH-005 clause 4: a continue that resumes an open iteration restores its root with its identity, persona
  * included, so the run is set up as the persona that root ran as — even when `default_persona` has changed since.

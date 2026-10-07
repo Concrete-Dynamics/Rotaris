@@ -32,3 +32,21 @@ configuration needs `can_publish_artifacts: true` beside it.
 - `packages/agent-tools/src/registry.ts`: `canPublishArtifacts` and the `artifact_publish_not_granted` removal.
 - `apps/desktop/scripts/artifacts-proof.mjs`: `globalYaml`, the orchestrator declaring `artifact_write` with no flag.
 - `docs/architecture/open-questions.md`: OQ-212, the built-in personas' side of the same tool.
+
+## Outcome
+
+Repaired 2026-10-07 by bundle `fin28-artifacts`, with OQ-212's ruling under R-072 (confirmed as built: no built-in persona
+publishes; publishing is a grant made with both keys). `Persona` (`packages/engine/src/children/personas.ts`) gains
+`canPublishArtifacts`, false for every built-in role; `personaResolverFor` (`apps/desktop/src/run-host/configuration.ts`)
+carries a role's `can_publish_artifacts` with the same stated-or-built-in rule as `coordinator_only`; and `createToolPort`
+(`apps/desktop/src/run-host/tools.ts`) passes `artifacts !== undefined && persona.canPublishArtifacts`, with the falsified
+reason kept beside its replacement. A declared `artifact_write` without the flag is now removed as
+`artifact_publish_not_granted` and logged at warning.
+
+Pinned by `apps/desktop/src/run-host/tools.test.ts` (the flag absent or false withholds the tool from the listing and the
+callable set and logs the removal, red on the code before; the flag true keeps it; the built-in orchestrator holds none and logs
+nothing), `configuration.test.ts` (the flag carried when stated, false otherwise) and `packages/engine/src/children/personas.test.ts`
+(no built-in role declares the tool or carries the flag). `pnpm artifacts-proof` grants its orchestrator both keys and adds
+launch 3b, which declares the tool without the flag: the session log carried
+`WARNING tool 'artifact_write' removed from orchestrator by prerequisite (artifact_publish_not_granted) (REQ-TOOLS-004/006)` and
+no artifact was stored; the whole proof passed (2026-10-07, load average 11.4 on four CPUs).

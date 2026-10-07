@@ -237,6 +237,9 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       tools,
       coordinatorOnly: stated(role, 'coordinator_only') ? entry!.coordinator_only : base?.coordinatorOnly ?? false,
       readOnly: stated(role, 'read_only') ? entry!.read_only : base?.readOnly ?? false,
+      // REQ-CONFIG-106 (OQ-212, R-072): the flag the loader read and nothing carried until the repair of
+      // can-publish-artifacts-is-read-and-never-gates-artifact-write.md; the tool port grants `artifact_write` by it.
+      canPublishArtifacts: stated(role, 'can_publish_artifacts') ? entry!.can_publish_artifacts : base?.canPublishArtifacts ?? false,
       systemPrompt: prompt,
       implementer: tools.some((t) => ['write_file', 'haet_edit', 'haet', 'terminal'].includes(t)),
       // REQ-CONFIG-094 (live-run finding D5): the `models:` key beside the reference, a synthetic copy (REQ-CONFIG-081)

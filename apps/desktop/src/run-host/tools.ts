@@ -336,14 +336,19 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     },
   }) as ToolExecutor);
   // ONE resolution feeds the prompt listing and the callable set (REQ-TOOLS-010).
-  // `canPublishArtifacts` follows the store's presence: REQ-TOOLS-004 reserves `artifact_publish_not_granted`
-  // for a build that withholds publishing separately, and no requirement in this part names such a grant — a
-  // persona that must not publish declares no `artifact_write` (REQ-TOOLS-002). Recorded as a decision taken.
+  // `canPublishArtifacts` is the persona's `can_publish_artifacts` (REQ-CONFIG-106) where a store exists: a declared
+  // `artifact_write` is handed over only while the flag is true (REQ-TOOLS-150), and is otherwise removed and recorded as
+  // `artifact_publish_not_granted` (REQ-TOOLS-004). OQ-212, ruled 2026-10-07 under R-072, keeps every built-in role's flag
+  // false. The reason this stood on before, falsified by REQ-CONFIG-106 and REQ-TOOLS-004 and kept here: ~~"follows the
+  // store's presence: REQ-TOOLS-004 reserves `artifact_publish_not_granted` for a build that withholds publishing
+  // separately, and no requirement in this part names such a grant — a persona that must not publish declares no
+  // `artifact_write` (REQ-TOOLS-002). Recorded as a decision taken."~~
+  // (docs/defects/fixed/can-publish-artifacts-is-read-and-never-gates-artifact-write.md)
   const resolved = resolveToolSet({ name: ctx.persona, tools: declared, coordinatorOnly: persona.coordinatorOnly && delegationAvailable && !directWork, readOnly: persona.readOnly, toolRestrictions: restrictions }, {}, {
     // Part AC: `userPromptChannel` is attendedness (REQ-TOOLS-053/069) — an unattended run has no surface to put a
     // prompt in front of, so the registry removes `ask_questions` with `user_prompt_channel_absent`. It stood at a
     // literal `false` until this part, because there was no executor for it to be true of.
-    delegationRuntime: delegationAvailable, userPromptChannel: ctx.attended(), artifactStore: artifacts !== undefined, canPublishArtifacts: artifacts !== undefined, terminalBackend: executors.has('terminal'), executors: new Set(executors.keys()),
+    delegationRuntime: delegationAvailable, userPromptChannel: ctx.attended(), artifactStore: artifacts !== undefined, canPublishArtifacts: artifacts !== undefined && persona.canPublishArtifacts, terminalBackend: executors.has('terminal'), executors: new Set(executors.keys()),
   }, isEntry);
   /*
    * REQ-TOOLS-006: "every removal is logged together with the persona and the control that removed it", at no level the

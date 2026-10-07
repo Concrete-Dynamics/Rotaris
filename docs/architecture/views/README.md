@@ -66,6 +66,7 @@ before the close is confirmed; `QuitState.stoppedByClose` withdraws the stopped 
 and question-dock cancellations and holds back their notices until their rest. The **process view**'s close paragraph and the
 **runtime view**'s control table say so. One request and one reply kind on the main ↔ run host channel; no package, edge,
 process, command or store column changed.
+
 **`can_publish_artifacts` gates `artifact_write` (REQ-CONFIG-106, REQ-TOOLS-004, REQ-TOOLS-150; OQ-212 ruled under R-072).**
 `Persona` gains `canPublishArtifacts`, false for every built-in role and carried from a role's configuration by
 `personaResolverFor`; `createToolPort` passes it to the registry's prerequisites, which removes a declared `artifact_write`

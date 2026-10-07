@@ -85,7 +85,9 @@ export interface ElidedAttachments {
  * PD-SESSION-002 (REQ-SESSION-140's mostly-elided artifacts): the attached artifacts a delegated agent's
  * `PRIOR AGENT CONTEXT (FULL)` block left out because they did not fit its budget (REQ-LIBRARY-098), counted over the
  * timeline's `context_selection` entries. Each pair of agent and artifact counts once, however many times that agent's
- * payload was assembled (a REQ-ORCH-088 retry rebuilds it and writes a second entry). An entry with no task id, or whose
+ * payload was assembled. `execute` builds the blocks once per execution, so a REQ-ORCH-088 retry within it writes no second
+ * entry; another execution of the same child does (a resumed child's retry in a later run, or a follow-up of a child that
+ * never started, PD-ORCH-005 clause 22). An entry with no task id, or whose
  * `attached_elided` is absent, not an array, or holds something other than ids, contributes nothing it cannot name.
  */
 export function elidedAttachmentsOf(rows: readonly Pick<ElidedAttachmentRow, 'task_id' | 'attached_elided'>[]): ElidedAttachments {

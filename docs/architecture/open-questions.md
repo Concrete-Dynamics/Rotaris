@@ -10548,7 +10548,9 @@ attached artifact left out of the child's full-context block and counting it fro
 advocate B (the system's lens) recommended confirming the `n/a` line as built, reading the warning as REQ-SESSION-133's
 context-selection record that this store keeps no ring of. The diagnostic itself is kept, whole, on the uncapped timeline,
 so B's `n/a` would hide a fact the store holds. A was corrected twice: the count is of distinct agent-and-artifact pairs, since
-a REQ-ORCH-088 retry rebuilds a child's payload and writes a second entry; and the conflict A noticed is wider than its wording,
+~~a REQ-ORCH-088 retry rebuilds a child's payload and writes a second entry~~ another execution of the same child (a resumed
+child's REQ-ORCH-088 retry in a later run, or a follow-up of a child that never started) assembles its payload again and writes
+a second entry, while a retry within one execution reuses the blocks it built (narrowed by fin30); and the conflict A noticed is wider than its wording,
 recorded in [`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../defects/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md).
 "Mostly" here means "wholly", a cost the directive states. Built by fin28 (`elidedAttachmentsOf` and `warningLines` in
 `packages/engine/src/run/summary.ts`, `StoreDal.elidedAttachmentRowsOf`); the note

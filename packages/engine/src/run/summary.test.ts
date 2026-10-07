@@ -125,7 +125,8 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
     expect(elidedAttachmentsOf([])).toEqual({ artifacts: 0, agents: 0 });
     expect(elidedAttachmentsOf([e('bg_a', [])])).toEqual({ artifacts: 0, agents: 0 });
     expect(elidedAttachmentsOf([e('bg_a', ['art_1', 'art_2'])])).toEqual({ artifacts: 2, agents: 1 });
-    // A REQ-ORCH-088 retry rebuilds the same child's payload and writes a second entry naming the same ids.
+    // Another execution of the same child (a resumed child's REQ-ORCH-088 retry in a later run) writes a second entry
+    // naming the same ids; a retry within one execution reuses its blocks and writes none.
     expect(elidedAttachmentsOf([e('bg_a', ['art_1', 'art_2']), e('bg_a', ['art_2', 'art_1'])])).toEqual({ artifacts: 2, agents: 1 });
     // Two children left out of the same artifact are two pairs.
     expect(elidedAttachmentsOf([e('bg_a', ['art_1']), e('bg_b', ['art_1'])])).toEqual({ artifacts: 2, agents: 2 });

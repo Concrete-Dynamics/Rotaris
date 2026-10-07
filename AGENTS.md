@@ -17,7 +17,9 @@ proof scripts, so the evidence for an area can be found without reading forty sc
 
 ## The proof scripts — which one covers what
 
-`pnpm check` (symbols, typecheck, lint, tests) is the gate every commit passes. Beside it sit the **proof
+`pnpm check` (symbols, typecheck, lint, tests) is the gate every commit passes; in an orchestrated build it runs on the
+exact head each landing pushes, its builders committing on the quick checks (the owner, 2026-10-07; the skill's
+CHANGELOG). Beside it sit the **proof
 scripts**: each launches the **built** application against a scratch profile and measures a mechanism in the
 product rather than in a unit test. Every one is a first execution's evidence, and the area it covers is the
 area it re-verifies.

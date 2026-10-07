@@ -114,7 +114,7 @@ the only places `electron` is imported. Engine code takes time from the clock po
 
 ```
 pnpm install --prefer-offline                 # a fresh worktree also needs: node node_modules/electron/install.js
-pnpm check                                    # symbols + typecheck + lint + tests — all four green before a commit
+pnpm check                                    # symbols + typecheck + lint + tests — all four green before a commit (an orchestrated build: on each head it lands)
 pnpm vitest run <path>                        # the narrowest verification; tests sit beside the unit they cover
 pnpm typecheck | pnpm lint | pnpm symbols     # the pieces, when the whole gate is too slow
 pnpm build && electron apps/desktop/out/main/index.js

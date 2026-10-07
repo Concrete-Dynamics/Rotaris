@@ -136,10 +136,13 @@ old-label journal `wf_old` resumes a passed verification at `review`.
 `gate`, the budget, and the needs-owner cap. `docs/clean-room/agent-workflow.md` names no stage of the workflow (its
 "an orchestrated build's integration worktree is one" still holds), and `AGENTS.md`'s summary ("independent
 verification per bundle, repair rounds, serialized merges") still holds of the review stage; neither changes. CLAUDE.md
-annotates `pnpm check` "all four green before a commit": no commit reaches main without `pnpm check` green on the exact
-head pushed, as before; what changes, as the owner approved, is that a builder hands over after the quick checks and
-the tests beside what it changed, not after a full gate of its own (a builder's intermediate commits were never each
-gated, before or after).
+annotated `pnpm check` "all four green before a commit" and AGENTS.md called it "the gate every commit passes": no
+commit reaches main without `pnpm check` green on the exact head pushed, as before; what changes, as the owner
+approved, is that a builder hands over after the quick checks and the tests beside what it changed (a builder's
+intermediate commits were never each gated, before or after). The orchestrator therefore amended both lines on the
+owner's words, as it amended CLAUDE.md for the rebase rule on 2026-10-04: CLAUDE.md's now ends "(an orchestrated
+build: on each head it lands)", and AGENTS.md's adds "in an orchestrated build it runs on the exact head each landing
+pushes, its builders committing on the quick checks (the owner, 2026-10-07; the skill's CHANGELOG)".
 
 **Verified** under Node 24. `node scripts/orchestration.mjs self-test`: "self-test: all checks passed". `pnpm check`
 from 05:12 to 05:19 UTC on 2026-10-07, every code change of this entry in the tree: "Test Files 360 passed | 5 skipped

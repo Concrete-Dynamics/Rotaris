@@ -23,7 +23,8 @@ reading of an XDG base-directory variable: a value that is unset or empty takes 
 Specification says ("either not set or empty" takes the default). `resolveUserDirs`'s Linux branch reads `XDG_CONFIG_HOME` and `XDG_DATA_HOME` through it, and
 `resolvePreferenceRoot` (`packages/platform/src/preferences.ts`) reads `XDG_CONFIG_HOME` through it too, so the preference
 store and the configuration directory can no longer part over the variable's value. Pinned by
-`packages/platform/src/platform.test.ts` ("on Linux an empty or relative XDG variable takes its default…"), which fails on
+`packages/platform/src/platform.test.ts` ("on Linux an empty XDG variable takes its default, as the XDG Base Directory
+Specification says (REQ-CONFIG-001, REQ-STARTUP-145)"), which fails on
 the old `??` reading (`expected 'rotaris' to be '/home/me/.config/rotaris'`) and also holds the two roots together for an
 unset, empty and absolute value. Shown on the built app (Linux, 2026-10-07, load about 2 on 4 CPUs), launched for
 40 s under `xvfb-run` with `env -i`, an isolated `HOME`, `XDG_CONFIG_HOME=` and `XDG_DATA_HOME=`, from an empty scratch

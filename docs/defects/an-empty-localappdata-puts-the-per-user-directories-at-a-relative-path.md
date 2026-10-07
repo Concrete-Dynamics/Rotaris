@@ -5,7 +5,7 @@ empty (`set LOCALAPPDATA=`) is used as it stands: the configuration directory be
 directory `rotaris\data`, both relative to whatever the process's working directory is. `resolvePreferenceRoot`
 (`packages/platform/src/preferences.ts`) reads it the same way, so the preference store lands at a relative
 `Rotaris\Rotaris` too; the three agree, but none is a per-user location. The fallback both already carry
-(`<home>\AppData\Local`) is what an empty value should take, as the Linux branch now does for an empty or relative
+(`<home>\AppData\Local`) is what an empty value should take, as the Linux branch now does for an empty
 `XDG_CONFIG_HOME` and `XDG_DATA_HOME` (`xdgBaseDirectory`).
 
 Windows sets `LOCALAPPDATA` for every interactive session, so an empty one needs an environment a launcher or a user emptied.

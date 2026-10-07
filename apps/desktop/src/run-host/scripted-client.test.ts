@@ -42,6 +42,27 @@ async function taken(clock: FakeClock, client: ReturnType<typeof scriptedClient>
   }
 }
 
+/** Every tool call one step streams, in order, with its arguments. */
+async function calls(client: ReturnType<typeof scriptedClient>, messages: readonly ChatMessage[]): Promise<{ name: string; args: string }[]> {
+  const out: { name: string; args: string }[] = [];
+  for await (const part of client.stream(request(messages))) if (part.ok && part.value.kind === 'tool-call') out.push({ name: part.value.name, args: part.value.argsDelta });
+  return out;
+}
+
+describe('scriptedClient — `reads4` (fin32, PD-ORCH-016; part-h-proof\'s raw-count fallback launches)', () => {
+  afterEach(() => { vi.unstubAllEnvs(); });
+
+  it('`reads4:varied` reads four different files in one step; `reads4:same` reads one file four times', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'reads4:varied');
+    const varied = await calls(scriptedClient(new FakeClock(), () => undefined), [text('system', ORCHESTRATOR_SYSTEM), text('user', 'go')]);
+    expect(varied.map((c) => c.name)).toEqual(['read_file', 'read_file', 'read_file', 'read_file']);
+    expect(new Set(varied.map((c) => c.args)).size).toBe(4);
+    vi.stubEnv('ROTARIS_SCRIPT', 'reads4:same');
+    const same = await calls(scriptedClient(new FakeClock(), () => undefined), [text('system', ORCHESTRATOR_SYSTEM), text('user', 'go')]);
+    expect(same.map((c) => c.args)).toEqual(Array(4).fill(JSON.stringify({ path: 'README.md' })));
+  });
+});
+
 describe('scriptedClient — the step a call takes', () => {
   let clock: FakeClock;
   beforeEach(() => { clock = new FakeClock(); });

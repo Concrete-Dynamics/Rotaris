@@ -560,7 +560,9 @@ Before every model step, in this order: `shouldPause()` (a rest, a landing or RE
 pending **steering** injected as a marked user message (`steering_injected`, the supervisor's counter reset) →
 the **loop supervisor**'s `check()` (`continue` | `inject` a corrective user message | `escalate` — the turn
 fails with `circuit_breaker_escalation`; no supervisor is attached at all for the turn a plan-gate hold covers,
-`PD-ORCH-001`) → the 100-step belt → **context compression when the agent has reached
+`PD-ORCH-001`; when the classification fails or is cut on a raw-count trigger, the fallback's evidence is the last three
+messages with text normalised-equal or, since `PD-ORCH-016` (OQ-232, fin32), the last four tool calls identical in name
+and whole arguments — four calls of one tool with differing arguments are counts alone) → the 100-step belt → **context compression when the agent has reached
 its threshold** (Part AH, below) → the model step (streamed into its own `agent`
 row, and — from Part Z — into a **`thinking` row** for anything the provider marks as deliberation; the sink
 discarded every reasoning delta before that, so no streamed-reasoning row had ever existed, REQ-CHAT-163).

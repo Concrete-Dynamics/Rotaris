@@ -5680,6 +5680,14 @@ is unchanged.)*
 carry the sentence; every figure is unchanged. Pinned by `cut-off.test.ts` and `delegation.test.ts`'s "OQ-114 as ruled"
 cases, each red on the wording before.
 
+*(Added 2026-10-07, a further case of the loop-classification bound (F3), from finding D6 of the final duress live run at
+`a68f121` (session `e6747bd0`) and [OQ-232](#oq-232)'s ruling. All three classifications of that run were cut at the 2.0 s
+bound (requests 149, 201 and 284, at 1,915, 1,975 and 1,979 ms), and across the three duress packs on the reasoning model
+all 9 were (`c2fdd6a` 4, `c2a9444` 2, `a68f121` 3), so with such a model REQ-ORCH-104's fallback decides every raw-count
+activation. The bound is kept as ruled on 2026-10-06; what changed is the fallback's evidence, by
+[`PD-ORCH-016`](../product/directives.md#pd-orch-016), whose cost the run measured: one 24.5 s step of a child told to pause
+over four reads of its own document.)*
+
 **OQ-115 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open until 2026-10-06; ruled then, below. Raised as OQ-114 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** as recommended, the bundled server's binding
@@ -11509,3 +11517,56 @@ held to nothing about it.
 **What a ruling decides.** Whether `single_file_change` means an edit confined to one file (and the classifier is told so,
 beside REQ-ORCH-006's three fixed meanings), whether a request that names a test beside its change is out of its reach,
 and whether PD-ORCH-006's direct-work grant should follow the category or the size of the change.
+
+<a id="oq-232"></a>
+
+**OQ-232 — When the loop classifier is cut on a raw-count trigger, are four consecutive calls of one tool evidence of a loop
+whatever their arguments?** *(REQ-ORCH-104, the raw-count fallback's "≥ 4 consecutive same-tool calls — never from counts
+alone"; REQ-NOTIFY-109, "back-to-back invocations of the same tool"; REQ-ORCH-101, the product's one comparison of two
+actions, the tool name and the whole arguments; REQ-NOTIFY-102, no corrective message where no loop occurs; REQ-ORCH-100,
+the raw count of 60; REQ-CONFIG-467 and OQ-114, the 2.0 s classification bound kept; OQ-126, the message limb. Raised
+2026-10-07 from finding D6 of the final duress live run at `a68f121`, recorded in
+[`the-raw-count-fallback-declares-a-loop-on-four-reads-of-different-files.md`](../defects/fixed/the-raw-count-fallback-declares-a-loop-on-four-reads-of-different-files.md),
+and ruled the same day under the owner's delegation; the consortium's question D6.)*
+
+The duress pack `2026-10-07T07-09-30-708Z` (session `e6747bd0`) holds the limb's first live firing. At
+`wave2e-decisions`'s 60th call the classification (request 149) was cut at 1,915 ms, and the fallback found calls #229 to
+#232: four `read_file` calls in two steps over `test/extra.test.js` and `docs/decisions.md`, a child checking its own
+document. Timeline entry 43 (07:33:11.581, `trigger: raw-count`) told it "Pause and reassess read_file around
+docs/decisions.md …", and the child spent request 150 (24.5 s, about 5 kB of reasoning) answering "nothing foreign — only my
+own writes". The build compares the last four calls by tool name alone (ADR-0059 decision 5), as the text reads; the
+specification does not say whether a read-only tool counts, or whether "same-tool" means the same action as REQ-ORCH-101's
+repetition trigger does.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** when the loop classifier fails or
+is cut on a raw-count trigger, REQ-ORCH-104's fallback counts four or more consecutive tool calls as evidence of a loop only
+when they are the same action under REQ-ORCH-101 — the same tool name and identical whole arguments. Calls of one tool with
+differing arguments count as counts alone, whatever the tool's facet, and no tool family is exempted. The message limb as
+OQ-126 ruled it, the repetition, cycle and stuck rules, the deterministic message and the 2.0 s classification bound kept
+under OQ-114 are unchanged. This is [`PD-ORCH-016`](../product/directives.md#pd-orch-016), which narrows REQ-ORCH-104 and
+REQ-NOTIFY-109 (numbered 016: fin31's PD-ORCH-015 was assigned before it).
+
+The two recommendations weighed, and the ruling followed **A**:
+- **Advocate A (the user's lens)** recommended comparing whole actions by REQ-ORCH-101's rule, with no tool family exempted
+  and the 2.0 s bound kept, as a directive narrowing both requirements: with this model every classification is cut, so the
+  fallback's accuracy is what the user lives with, the limb's one live firing was false, and comparing whole actions covers
+  reads and edits alike with a rule the product already has.
+- **Advocate B (the system's lens)** recommended confirming the build: the text takes the tool as the unit, requiring
+  identical arguments leaves the limb nearly redundant beside the repetition trigger, reading one file in shifting windows is
+  the circling only this limb can see, and the cost — one step per three or four duress runs — is bounded.
+
+The ruling agreed with B that the build is faithful, so a change needs a directive, and with both that no tool family is
+exempted and the bound stays. On the limb it followed A: 9 of 9 classifications cut falsify ADR-0059's "activations are rare"
+for this model, the one live firing was false, and the classifier's one late answer had judged a child's edits and
+verification reads to be no loop. B's strongest point is the directive's stated cost: after the change the limb adds
+evidence only where identical calls follow a pending raw-count trigger, and a single-tool loop with varied arguments is left
+to the third activation's escalation, the stall watch or the ceiling.
+
+*Built 2026-10-07 (fin32, `fin32-child-reports-and-limits`); its first execution is reported in PD-ORCH-016's entry.*
+`rawFallbackHasEvidence` compares the last four tool events by `fingerprint`; `supervisor.test.ts` and `pnpm part-h-proof`'s
+`raw-count-varied` and `raw-count-same` launches pin it. Beside the ruling, recorded and not repaired: the classification timer
+is armed from `runtime.loop_classification_timeout` uncapped by REQ-NOTIFY-106's remaining budget
+([`the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`](../defects/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md)).
+**Not yet measured:** a live run; the next should show no `loop_supervisor_activation` with `trigger: raw-count` unless the
+agent's last three messages with text were normalised-equal or its last four tool calls were identical in name and whole
+arguments.

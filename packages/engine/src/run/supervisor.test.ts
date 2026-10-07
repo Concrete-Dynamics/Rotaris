@@ -112,11 +112,41 @@ describe('loop supervisor (REQ-ORCH-099..107)', () => {
       expect((await s.check()).kind).toBe('inject');
     });
 
-    it('four consecutive same-tool calls are still evidence in tool-only steps', async () => {
+    // PD-ORCH-016 (OQ-232, ruled 2026-10-07 under R-072): four consecutive calls are evidence only when they are the same
+    // action by REQ-ORCH-101's comparison — the tool name and the whole arguments. This case read `inject` before the ruling.
+    it('PD-ORCH-016: four consecutive calls of one tool with different arguments are counts alone, in tool-only steps too', async () => {
       const s = raw();
       for (let i = 0; i < 3; i += 1) step(s, '', ['read_file', `{"path":"x${i}.ts"}`], ['edit_file', `{"path":"x${i}.ts"}`]);
       for (let i = 0; i < 4; i += 1) step(s, '', ['grep', `{"q":"${i}"}`]);
-      expect((await s.check()).kind).toBe('inject');
+      expect(await s.check()).toEqual({ kind: 'continue' });
+    });
+
+    /**
+     * The a68f121 duress run's D6 (session e6747bd0): at wave2e-decisions's 60th call the classification was cut, and the
+     * fallback read #229 to #232 — four read_file calls in two steps over test/extra.test.js and docs/decisions.md — as a
+     * loop; timeline 43 read "Pause and reassess read_file around docs/decisions.md …" and the child spent a 24.5 s step on it.
+     */
+    it('PD-ORCH-016: a child reading two files of its own in two steps, assistant text between them, is not told to pause (D6)', async () => {
+      const s = new LoopSupervisor(sessionId, config({ toolThreshold: 2, repetitionThreshold: 99, cycleThreshold: 99 }), reject, new FakeClock());
+      step(s, 'Re-reading the tests the decisions cite.', ['read_file', '{"path":"test/extra.test.js","start_line":1,"end_line":120}'], ['read_file', '{"path":"docs/decisions.md","start_line":1,"end_line":80}']);
+      step(s, 'Now the rest of both.', ['read_file', '{"path":"test/extra.test.js","start_line":121,"end_line":304}'], ['read_file', '{"path":"docs/decisions.md","start_line":81,"end_line":160}']);
+      expect(await s.check()).toEqual({ kind: 'continue' });
+    });
+
+    it('PD-ORCH-016: an edit series on one document, four edits with different arguments, is counts alone', async () => {
+      const s = raw();
+      for (let i = 0; i < 2; i += 1) step(s, '', ['read_file', `{"path":"docs/v${i}.md"}`]);
+      for (let i = 0; i < 4; i += 1) step(s, `Correcting finding ${i}.`, ['haet_edit', `{"path":"docs/verification.md","old_string":"n${i}","new_string":"m${i}"}`]);
+      expect(await s.check()).toEqual({ kind: 'continue' });
+    });
+
+    it('PD-ORCH-016: four identical calls after a pending raw-count trigger are still evidence, and the message names the path', async () => {
+      const s = raw();
+      for (let i = 0; i < 3; i += 1) step(s, '', ['grep', `{"q":"${i}"}`], ['glob', `{"p":"${i}"}`]);
+      for (let i = 0; i < 4; i += 1) step(s, i % 2 === 0 ? 'Reading it again.' : '', ['read_file', '{"path":"docs/decisions.md"}']);
+      const decision = await s.check();
+      expect(decision.kind).toBe('inject');
+      expect(decision.kind === 'inject' ? decision.message : '').toContain('read_file around docs/decisions.md');
     });
   });
 

@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**The raw-count fallback reads four consecutive calls as evidence only when they are the same action (PD-ORCH-016; OQ-232,
+the a68f121 duress run's D6, fin32).** `rawFallbackHasEvidence` (`engine/src/run/supervisor.ts`) compares the last four tool
+events by `fingerprint` (the name and the whole arguments) where it compared the name. The scripted client gains a
+verification step, `reads4`, which `part-h-proof` drives. The **runtime view**'s turn-loop paragraph says so. No package,
+edge, process, channel, command or store column changed.
+
 **A failed child's Outcome line says whose outcome it is (OQ-217; the a68f121 duress run's D9, fin32).** `outcomeLine`
 (`engine/src/children/report.ts`) heads the line "Outcome of this agent, not of the session:", and the summarising ask names
 the agent and forbids a first sentence about the run or the session failing. The **runtime view**'s report paragraph says

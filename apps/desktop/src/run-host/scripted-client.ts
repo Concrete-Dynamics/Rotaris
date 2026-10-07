@@ -539,6 +539,19 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         }
         log(`scripted: the step ${step} names no callable tool (the listing holds ${(req.tools ?? []).map((t) => t.name).join(', ')}); answering instead`);
       }
+      // reads4:varied | reads4:same — ONE step with four `read_file` calls, of four different files or of the same file four
+      // times, behind a single sentence (fin32, PD-ORCH-016: `part-h-proof`'s raw-count fallback launches). Each other step
+      // speaks "Calling read_file." before its one call, which is REQ-ORCH-104's message limb on its own, so four such steps
+      // could never show the tool limb alone. Verification only.
+      const reads = /^reads4:(varied|same)$/.exec(step);
+      if (reads && (req.tools ?? []).some((t) => t.name === 'read_file')) {
+        const paths = reads[1] === 'varied' ? ['README.md', 'NOTES.md', 'docs/a.md', 'docs/b.md'] : ['README.md', 'README.md', 'README.md', 'README.md'];
+        yield ok<StreamPart>({ kind: 'text', delta: `Reading ${reads[1] === 'varied' ? 'four files' : 'one file four times'}. ` });
+        for (const [i, path] of paths.entries()) yield ok<StreamPart>({ kind: 'tool-call', callId: `${callId}-${i}`, name: 'read_file', argsDelta: JSON.stringify({ path }) });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 24 } });
+        yield finished('other');
+        return;
+      }
       // fetch:<url> — everything after the first `fetch:` is the URL (the fetch proof's step).
       const tool = step.startsWith('fetch:') ? { name: 'fetch', args: { url: step.slice('fetch:'.length) } } : TOOL_STEPS[step];
       if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {

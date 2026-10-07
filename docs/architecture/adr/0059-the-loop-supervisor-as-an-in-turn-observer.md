@@ -68,6 +68,10 @@ next user message; "escalate" ends the turn failed with the signal. Chosen.
    deterministic "pause and reassess" message naming the circled tool and a path anchor drawn from its
    arguments; raw count → a loop only when the last three assistant messages are normalised-equal or the
    last four tool calls share a name; stuck → always recover. `loop_detected: false` is a no-op.
+   *Since 2026-10-07 ([`PD-ORCH-016`](../../product/directives.md#pd-orch-016), OQ-232): the last four tool
+   calls must be **the same action** — the same name and the whole arguments, REQ-ORCH-101's `fingerprint` —
+   where they shared a name. "Share a name" is kept above as the reading the build first took; see the
+   fifth execution below.*
 6. **Escalation** (`REQ-ORCH-106`): the turn ends failed with the signal; the issue
    `circuit_breaker_escalation` is recorded with the wording "child aborted after repeated activations";
    a child's report carries the signal (`errors[].type`); the root's failure ends the run
@@ -86,7 +90,10 @@ next user message; "escalate" ends the turn failed with the signal. Chosen.
    interrupted by an activation that fired before it. Acceptable — the requirement pauses "the child", and
    the child is between steps when it is asked.
 2. The classifier's call sits on the turn's critical path for up to the timeout (2.0 s) once per
-   activation. Activations are rare by construction.
+   activation. Activations are rare by construction. *Falsified for a model that reasons before it answers,
+   2026-10-07, and kept beside its correction: the raw count activates every 60 calls or 60 messages, and in the
+   three duress packs on such a model all 9 classifications were cut at the bound, so the fallback of decision 5
+   decided every raw-count activation (the fifth execution below).*
 3. The consecutive counter's reset on steering waits on steering.
 
 ## Revisit if
@@ -139,3 +146,17 @@ report (REQ-ORCH-096). "Revisit if" clause one is met. **Found: nothing.**
 ## Fourth execution — 2026-09-08, editable task-plan source routing
 
 Part AD exercised the planner todo through the desktop edit surface (REQ-CHAT-085..091). The first execution found a source-routing defect at the established `run.editTodo` seam: the visible agent-maintained document could take priority while edits always changed the loop planner document. The run now retains the planner and root-agent documents in one versioned JSON envelope inside the existing `sessions.todo` field, projects the source decision once, and routes edits through that decision. Child-owned documents remain on their child records. Every accepted edit still calls `noteUserInstruction()` and persists before projection. Temporary `local-<n>` ids live solely in the renderer; the run assigns the durable 8-hex id before any record or model-visible payload exists. The focused proof is `pnpm todo-proof` with evidence in `.todo-proof/results.json`.
+
+## Fifth execution — 2026-10-07, the raw-count tool limb's first live firing and PD-ORCH-016
+
+**Found by the final duress live run at `a68f121`** (session `e6747bd0`, finding D6): the tool limb of decision 5
+fired live for the first time — `fixed/tool-only-steps-read-as-three-identical-messages.md` had left it "unchanged"
+and "Not reached live". At `wave2e-decisions`'s 60th call the classification was cut at 1,915 ms, and the fallback
+read four `read_file` calls over two files of the child's own work (#229 to #232) as a loop: timeline entry 43
+told it to "Pause and reassess read_file around docs/decisions.md …", which cost it a 24.5 s step. All three
+classifications of the run were cut at 2.0 s (9 of 9 across the three duress packs), which falsifies consequence 2's
+"activations are rare" for such a model (kept above, beside its correction). Ruled under the owner's delegation
+(R-072) as OQ-232 and carried by [`PD-ORCH-016`](../../product/directives.md#pd-orch-016): the limb compares the
+last four tool events by `fingerprint` — the comparison REQ-ORCH-101's triggers already use — where it compared
+`event.name` (fin32). Pinned by `supervisor.test.ts`'s REQ-ORCH-104 block and `pnpm part-h-proof`'s
+`raw-count-varied` and `raw-count-same` launches. **Not measured:** a live run since the change.

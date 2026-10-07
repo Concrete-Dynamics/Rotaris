@@ -187,12 +187,19 @@ export class LoopSupervisor {
    * tools, so a message that normalises to nothing is no assistant message and never evidence: three tool-only steps are
    * three steps with no message, not three identical ones (live-run finding D3, the repair of
    * `tool-only-steps-read-as-three-identical-messages.md`). The last three messages are the last three with text.
+   *
+   * PD-ORCH-016 (OQ-232, ruled 2026-10-07 under R-072) narrows the tool limb: the last four tool calls are evidence only when
+   * they are the same action by REQ-ORCH-101's comparison — the tool name and the whole arguments (`fingerprint`), none of
+   * them disregarded. Calls of one tool with differing arguments are counts alone, whatever the tool's facet; assistant text
+   * between the calls still does not break the run. The reason it compared names, kept beside its replacement: ADR-0059
+   * decision 5 read "same-tool" as the tool's name, and its first live firing, at the duress run at `a68f121` (finding D6),
+   * was four reads of two files by a child checking its own document, told to "Pause and reassess".
    */
   private rawFallbackHasEvidence(events: readonly SupervisorEvent[]): boolean {
     const messages = events.flatMap((event) => (event.kind === 'message' && normaliseMessage(event.text) !== '' ? [normaliseMessage(event.text)] : []));
     if (messages.length >= 3 && new Set(messages.slice(-3)).size === 1) return true;
-    const tools = events.filter((event): event is Extract<SupervisorEvent, { kind: 'tool' }> => event.kind === 'tool');
-    return tools.length >= 4 && new Set(tools.slice(-4).map((event) => event.name)).size === 1;
+    const tools = events.filter((event) => event.kind === 'tool');
+    return tools.length >= 4 && new Set(tools.slice(-4).map(fingerprint)).size === 1;
   }
 
   private excerpt(): string {

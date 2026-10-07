@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -96,6 +96,46 @@ if (loopSession?.stop_reason !== 'agent_session_aborted') throw new Error(`loop 
 if (loopActivations.length !== 3) throw new Error(`expected three supervisor activations; found ${loopActivations.length}`);
 if (loopIssues.length !== 1) throw new Error(`expected one circuit_breaker_escalation issue; found ${loopIssues.length}`);
 
+// PD-ORCH-016 (OQ-232, ruled 2026-10-07 under R-072; fin32): when the classification is cut on a raw-count trigger, four
+// consecutive calls are evidence only when they are the same action. The duress live run at a68f121 (finding D6) told a child
+// reading two files of its own to "Pause and reassess". Two launches, the tool threshold at 4 and the repetition and cycle
+// triggers out of reach, the classifier held past its 2.0 s bound: four reads of four files in one step (no activation), and
+// four reads of one file (one, naming it). One step, so REQ-ORCH-104's message limb has one sentence and cannot decide.
+const rawCases = [
+  { name: 'raw-count-varied', script: 'reads4:varied,answer', activations: 0 },
+  { name: 'raw-count-same', script: 'reads4:same,answer', activations: 1 },
+];
+const rawObserved = {};
+for (const c of rawCases) {
+  const root = join(output, c.name);
+  const ws = join(root, 'workspace');
+  const local = join(root, 'local');
+  mkdirSync(join(ws, 'docs'), { recursive: true });
+  mkdirSync(local, { recursive: true });
+  for (const f of ['README.md', 'NOTES.md', 'docs/a.md', 'docs/b.md']) writeFileSync(join(ws, f), `# ${f}\n`);
+  scratchAgentsYaml(ws);
+  writeFileSync(join(ws, '.rotaris', 'agents.yaml'), `${readFileSync(join(ws, '.rotaris', 'agents.yaml'), 'utf8')}circuit_breaker:\n  tool_call_threshold: 4\n  repetition_threshold: 99\n  cycle_threshold: 99\n`);
+  await launch(c.name, ws, local, join(root, 'preferences'), {
+    ROTARIS_SCRIPT: c.script,
+    ROTARIS_LOOP_SCRIPT: 'timeout',
+    ROTARIS_CAPTURE_PROMPT: 'read the files',
+    ROTARIS_CAPTURE_AFTER_MS: '12000',
+  });
+  const db = new Database(oneDatabase(local), { readonly: true });
+  const session = db.prepare('SELECT execution_status, stop_reason FROM sessions').get();
+  const activations = db.prepare("SELECT message, metadata FROM timeline WHERE name = 'loop_supervisor_activation' ORDER BY ordinal").all();
+  const reads = db.prepare("SELECT tool_name, status, entry FROM tool_calls WHERE tool_name = 'read_file' ORDER BY ordinal").all();
+  db.close();
+  rawObserved[c.name] = { session, activations, reads: reads.map((r) => JSON.parse(r.entry).args) };
+  if (reads.length !== 4) throw new Error(`${c.name}: expected four read_file calls, found ${reads.length}`);
+  if (activations.length !== c.activations) throw new Error(`${c.name}: expected ${c.activations} loop_supervisor_activation entries, found ${activations.length}: ${JSON.stringify(activations)} (PD-ORCH-016)`);
+  for (const a of activations) {
+    if (JSON.parse(a.metadata ?? '{}').trigger !== 'raw-count') throw new Error(`${c.name}: the activation's trigger is not raw-count: ${a.metadata}`);
+    if (!/read_file around README\.md/.test(a.message ?? '')) throw new Error(`${c.name}: the corrective message does not name the repeated read: ${a.message}`);
+  }
+}
+writeFileSync(join(output, 'raw-count-observed.json'), `${JSON.stringify(rawObserved, null, 2)}\n`);
+
 const resumeRoot = join(output, 'resume');
 const resumeWorkspace = join(resumeRoot, 'workspace');
 const resumeLocal = join(resumeRoot, 'local');
@@ -190,6 +230,7 @@ if (agentStates.length < 2 || agentStates.some((state) => state !== 'COMPLETED')
 const result = {
   planCorrection: { session: correctionSessionShown, iterations: correctionIterations, heldRows: heldRows.length, todoCalls: todoCalls.length, agentStates, screenshot: 'plan-correction.png' },
   loop: { session: loopSession, activations: loopActivations.length, issues: loopIssues, toolCalls: loopCalls.length, screenshot: 'loop-supervisor.png' },
+  rawCountFallback: Object.fromEntries(Object.entries(rawObserved).map(([k, v]) => [k, { status: v.session?.execution_status, activations: v.activations.length }])),
   resume: { before, after, userRows, continuationRows: continuationRows.length, staleChild, locks: locks.length, ordinals, iterationEnds: iterationEnds.map((entry) => entry.message), screenshots: ['resume-before.png', 'resume-after.png'] },
 };
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(result, null, 2)}\n`);

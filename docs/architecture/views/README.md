@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**A timeout's issue names the call that ran out of time, and summary.md's terminal counts flag the cap (REQ-SESSION-136,
+REQ-SESSION-133, REQ-SESSION-140; finacc3 A2-08 and A2-09, fin30).** `outcomeIssues` (`packages/agent-tools/src/gate.ts`)
+files `terminal_timeout` for every timeout as before, but says "A terminal command exceeded its timeout." only where the
+observation carries the terminal's `outcome_kind: 'timeout'`; an MCP call or a fetch, which settle with
+`failure_kind: 'timeout'` alone, read "The '<tool>' call did not complete within its time allowance.". `warningLines`
+(`run/summary.ts`) prints Terminal failures, Terminal suspicious successes and Timeouts as `at least N`, naming what each ring
+dropped, once both the tool-call record and the issues record have dropped rows. The **runtime view**'s rings row and its
+`summary.md` paragraph say so. No package, edge, process, channel, command or store column changed.
+
 **Settings presents the per-agent timeout as a third delegation limit, in minutes (PD-CONFIG-003, REQ-MONITOR-286; OQ-218
 ruled under R-072, fin28).** `RuntimeViewSchema` and the snapshot carry `child_timeout` (seconds); `PendingSettings.runtime`
 holds it, the Runtime category's Delegation limits draws it in whole minutes (1–240), and it is saved by the desktop save

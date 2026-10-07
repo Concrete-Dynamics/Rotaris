@@ -10595,7 +10595,8 @@ dropping `mcp` so the histogram stops hiding a failed MCP call (the c2a9444 dure
 `mcp 17`), with fetch recorded as a defect; advocate B (the system's lens) recommended the same for MCP, since one tool's
 failures landed in two buckets (a schema refusal in `tool_error`, a server failure in `mcp`), and ruling fetch with it.
 On fetch it followed B. The terminal-worded timeout issue an MCP or fetch timeout files is recorded separately, in
-[`an-mcp-or-fetch-timeout-files-a-terminal-timeout-issue-that-names-a-terminal-command.md`](../defects/an-mcp-or-fetch-timeout-files-a-terminal-timeout-issue-that-names-a-terminal-command.md).
+[`an-mcp-or-fetch-timeout-files-a-terminal-timeout-issue-that-names-a-terminal-command.md`](../defects/fixed/an-mcp-or-fetch-timeout-files-a-terminal-timeout-issue-that-names-a-terminal-command.md)
+(repaired by fin30: the message names the call that ran out of time).
 Built by fin28 (`apps/desktop/src/run-host/mcp.ts`, `packages/agent-tools/src/tools/fetch.ts`); the fetch half is
 [`a-fetch-calls-record-carries-its-tools-name-as-outcome-kind.md`](../defects/fixed/a-fetch-calls-record-carries-its-tools-name-as-outcome-kind.md).
 

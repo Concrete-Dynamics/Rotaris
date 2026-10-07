@@ -12,7 +12,8 @@
  *                    every handshake tells the server `rotaris` at the version `apps/desktop/package.json` declares
  *                    (REQ-STARTUP-158 — the client carried a literal `0.1.0` until 2026-09-27).
  *   2. call        — `echo` end to end (tool.start before tool.finish, the result text, the row succeeded); `slow` beyond
- *                    `request_timeout: 2` fails naming the server and the connection serves the following `echo` (003/069).
+ *                    `request_timeout: 2` fails naming the server and the connection serves the following `echo` (003/069);
+ *                    its `terminal_timeout` issue names the call, never a terminal command (REQ-SESSION-136, finacc3 A2-08).
  *  2b. schema      — `echo` without its required `text` is refused at the gate (`invalid_request`, REQ-TOOLS-032's text, a
  *                    `tool_error` issue referencing it) and never reaches the fixture; `beta_echo` with an extra property
  *                    reaches it exactly as written (live-run finding G3).
@@ -394,14 +395,19 @@ const ROUND_OVER = `(() => {
   const echo = toolRows(db, s.session_id, 'echo');
   const starts = eventOrdinals(db, s.session_id, 'tool.start');
   const finishes = eventOrdinals(db, s.session_id, 'tool.finish');
+  const issues = db.prepare('SELECT kind, message, evidence_ref FROM issues WHERE session_id = ? ORDER BY ordinal').all(s.session_id);
   db.close();
   if (slow.length !== 1 || slow[0].status !== 'failed' || !/alpha.*did not answer.*within its allowance of 2 s/.test(String(slow[0].entry.result ?? slow[0].entry.error ?? ''))) throw new Error(`slow did not fail on its allowance: ${JSON.stringify(slow)}`);
   if (echo.length !== 1 || echo[0].status !== 'ok') throw new Error(`echo after the timeout did not succeed: ${JSON.stringify(echo)}`);
+  // REQ-SESSION-136: the timeout files `terminal_timeout` referencing the call, in the call's own words: no terminal command
+  // ran (finacc3 A2-08; until then the message read "A terminal command exceeded its timeout.").
+  const timedOut = issues.filter((i) => i.evidence_ref === `tool_call_evidence#${slow[0].entry.call_id}`);
+  if (timedOut.length !== 1 || timedOut[0].kind !== 'terminal_timeout' || /terminal/i.test(timedOut[0].message) || !/^The '[^']*slow' call did not complete within its time allowance\.$/.test(timedOut[0].message)) throw new Error(`the MCP timeout's issue does not name the call that timed out (finacc3 A2-08): ${JSON.stringify(issues)}`);
   if (starts.length < 2 || finishes.length < 2 || starts[0].ordinal >= finishes[0].ordinal) throw new Error('tool.start was not observed before tool.finish');
   const connected = lines(r.log, /mcp alpha: connected for the session/);
   if (connected.length !== 1) throw new Error(`alpha connected ${connected.length} times; the connection should have served both calls`);
   const firstCall = /in (\d+) ms/.exec(connected[0])?.[1];
-  results.call = { slow: slow[0].status, slowText: String(slow[0].entry.result ?? '').slice(0, 160), echo: echo[0].status, startBeforeFinish: true, connectMs: Number(firstCall), sessionLaunches: pidLines('alpha').length };
+  results.call = { slow: slow[0].status, slowText: String(slow[0].entry.result ?? '').slice(0, 160), timeoutIssue: timedOut[0].message, echo: echo[0].status, startBeforeFinish: true, connectMs: Number(firstCall), sessionLaunches: pidLines('alpha').length };
 }
 
 // ---- 2b. A call that fails the advertised input schema is refused at the gate -----------------------------------

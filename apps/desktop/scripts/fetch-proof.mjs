@@ -14,7 +14,8 @@
  *   5. denied      — `network_denied_hosts: ['127.0.0.1']` → `egress_denied`; THE SERVER SAW NOTHING (REQ-SANDBOX-022).
  *   6. 404         — `/404` → `http_error`, status 404, the body rendered under `[fetch_output]` (REQ-TOOLS-092).
  *   7. timeout     — `/slow` (never answers) with `tool_call_timeout: 1` → `timeout`, `timeout_seconds` 1 from the
- *                    run level (REQ-SANDBOX-021).
+ *                    run level (REQ-SANDBOX-021); its `terminal_timeout` issue names the fetch, never a terminal command
+ *                    (REQ-SESSION-136, finacc3 A2-08).
  *
  * Launch 1 also reads the instructions the model port received (`ROTARIS_CAPTURE_MODEL_REQUESTS`): the run is
  * `explicit_trivial`, so the coordinator is told to do the work itself (OQ-202 as ruled, PD-ORCH-006), and its playbook's
@@ -122,6 +123,7 @@ async function launch(name, url, runtime, extra = {}, strategy = null) {
   const session = db.prepare('SELECT session_id, execution_status, stop_reason FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
   const rows = db.prepare("SELECT status, is_error, entry FROM tool_calls WHERE session_id = ? AND tool_name = 'fetch' ORDER BY ordinal").all(session.session_id);
   const approvals = db.prepare("SELECT COUNT(*) AS n FROM events WHERE session_id = ? AND kind = 'approval.requested'").get(session.session_id).n;
+  const issues = db.prepare('SELECT kind, message, evidence_ref FROM issues WHERE session_id = ? ORDER BY ordinal').all(session.session_id);
   db.close();
   if (session.execution_status !== 'completed') throw new Error(`${name}: the run ended ${session.execution_status} (${session.stop_reason})`);
   if (rows.length !== 1) throw new Error(`${name}: expected one fetch tool row; found ${rows.length}`);
@@ -129,7 +131,7 @@ async function launch(name, url, runtime, extra = {}, strategy = null) {
   const loads = [...log.matchAll(/egress policy read from the saved configuration in ([\d.]+) ms/g)].map((m) => Number(m[1]));
   if (loads.length !== 1) throw new Error(`${name}: expected one per-call policy read in the log; found ${loads.length}`);
   const diagnostic = (() => { const m = /\[fetch_diagnostic\]\n(\{.*\})/.exec(entry.result); return m ? JSON.parse(m[1]) : null; })();
-  return { name, session: session.session_id, status: rows[0].status, isError: rows[0].is_error === 1, failureKind: entry.failure_kind ?? null, result: entry.result, diagnostic, seen: [...seen], approvals, loadMs: loads[0] };
+  return { name, session: session.session_id, callId: entry.call_id, status: rows[0].status, isError: rows[0].is_error === 1, failureKind: entry.failure_kind ?? null, result: entry.result, diagnostic, seen: [...seen], approvals, issues, loadMs: loads[0] };
 }
 const expectText = (r, re) => { if (!re.test(r.result)) throw new Error(`${r.name}: the observation did not match ${re}:\n${r.result}`); };
 const results = {};
@@ -198,7 +200,11 @@ try {
   if (slow.diagnostic?.timeout_seconds !== 1) throw new Error(`timeout: timeout_seconds ${slow.diagnostic?.timeout_seconds}`);
   expectText(slow, /did not complete within 1 s, the deadline supplied by the owning run's runtime\.tool_call_timeout\./);
   if (slow.seen.join(',') !== '/slow') throw new Error(`timeout: the server saw ${JSON.stringify(slow.seen)}`);
-  results.timeout = { failureKind: slow.failureKind, timeoutSeconds: slow.diagnostic.timeout_seconds, seen: slow.seen, loadMs: slow.loadMs };
+  // REQ-SESSION-136: the timeout files `terminal_timeout` referencing the fetch, in the fetch's own words: no terminal
+  // command ran (finacc3 A2-08; until then the message read "A terminal command exceeded its timeout.").
+  const timedOut = slow.issues.filter((i) => i.evidence_ref === `tool_call_evidence#${slow.callId}`);
+  if (timedOut.length !== 1 || timedOut[0].kind !== 'terminal_timeout' || timedOut[0].message !== "The 'fetch' call did not complete within its time allowance.") throw new Error(`timeout: the issue does not name the fetch that timed out (finacc3 A2-08): ${JSON.stringify(slow.issues)}`);
+  results.timeout = { failureKind: slow.failureKind, timeoutSeconds: slow.diagnostic.timeout_seconds, seen: slow.seen, issue: timedOut[0].message, loadMs: slow.loadMs };
 
   // 8. PD-ORCH-006 revision 3 (OQ-205 as ruled, R-072): a `swarm` run the mapping grants the direct-work bundle is told to
   // do the work itself, carries no `swarm` layer, and is offered the bundle with `delegate` in it.

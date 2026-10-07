@@ -458,6 +458,23 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect(h.rec.issues[0]).toMatchObject({ kind: 'tool_error', evidence_ref: 'tool_call_evidence#c-grep' });
   });
 
+  it('REQ-SESSION-136: a timeout files terminal_timeout in the words of the call that ran out of time (finacc3 A2-08)', async () => {
+    // Before the repair every timeout's issue said "A terminal command exceeded its timeout.", so an MCP call the server
+    // did not answer in its allowance, and a fetch that ran out of time, each told the reader a terminal command timed
+    // out when none ran. The kind stays the one REQ-SESSION-136 fixes for a timeout; only the message follows the call.
+    const timedOut = (name: string) => simpleExecutor(name, name, z.object({}), async () => ({ text: `${name} ran out of time`, isError: true, failureKind: 'timeout' }));
+    const terminalTimedOut = simpleExecutor('terminal', 't', z.object({ command: z.string() }), async () => ({ text: 'killed', isError: true, outcomeKind: 'timeout', failureKind: 'timeout', exitCode: 124 }));
+    const h = harness({ preset: 'autonomous', extraExecutors: [['fetch', timedOut('fetch')], ['mcp__docs__search', timedOut('mcp__docs__search')], ['terminal', terminalTimedOut]] });
+    await h.gate.dispatch(h.call('terminal', { command: 'sleep 999' }), new AbortController().signal);
+    await h.gate.dispatch(h.call('fetch', {}), new AbortController().signal);
+    await h.gate.dispatch(h.call('mcp__docs__search', {}), new AbortController().signal);
+    expect(h.rec.issues.map((i) => i['kind'])).toEqual(['terminal_timeout', 'terminal_timeout', 'terminal_timeout']);
+    expect(h.rec.issues[0]).toMatchObject({ severity: 'error', message: 'A terminal command exceeded its timeout.', evidence_ref: 'tool_call_evidence#c-terminal' });
+    expect(h.rec.issues[1]).toMatchObject({ severity: 'error', message: "The 'fetch' call did not complete within its time allowance.", evidence_ref: 'tool_call_evidence#c-fetch', metadata: { tool: 'fetch', outcome_kind: '', failure_kind: 'timeout' } });
+    expect(h.rec.issues[2]).toMatchObject({ severity: 'error', message: "The 'mcp__docs__search' call did not complete within its time allowance.", evidence_ref: 'tool_call_evidence#c-mcp__docs__search' });
+    for (const i of h.rec.issues.slice(1)) expect(String(i['message'])).not.toMatch(/terminal/i);
+  });
+
   it('REQ-SESSION-136: each call the gate refuses as invalid_request files one tool_error issue referencing its tool-call record (live-run a71-6)', async () => {
     // Before the repair none of these filed an issue: the gate's refusals returned before `outcomeIssues`, so the duress
     // run's two schema-invalid `write_file` calls were failures in the record that no issue referenced.

@@ -525,7 +525,10 @@ export class Gate {
     const meta = { tool: call.name, outcome_kind: obs.outcomeKind ?? '', failure_kind: obs.failureKind ?? '' };
     if (obs.outcomeKind === 'shell_failure') this.deps.sink.issue({ kind: 'terminal_shell_failure', severity: 'error', actor, message: `A terminal command failed (exit ${obs.exitCode ?? '?'}).`, evidence_ref: ref, metadata: meta });
     else if (obs.outcomeKind === 'suspicious_success') this.deps.sink.issue({ kind: 'terminal_suspicious_success', severity: 'warning', actor, message: `A terminal command exited 0 with output that looks like a failure: ${(obs.warnings ?? []).join('; ')}`, evidence_ref: ref, metadata: meta });
-    else if (obs.outcomeKind === 'timeout' || obs.failureKind === 'timeout') this.deps.sink.issue({ kind: 'terminal_timeout', severity: 'error', actor, message: 'A terminal command exceeded its timeout.', evidence_ref: ref, metadata: meta });
+    // REQ-SESSION-136 fixes the kind for every timeout; the message names what ran out of time. Only the terminal's
+    // classification carries `outcome_kind: 'timeout'` (REQ-TOOLS-112); an MCP call or a fetch settles with
+    // `failure_kind: 'timeout'` alone, and ran no terminal command (finacc3 A2-08).
+    else if (obs.outcomeKind === 'timeout' || obs.failureKind === 'timeout') this.deps.sink.issue({ kind: 'terminal_timeout', severity: 'error', actor, message: obs.outcomeKind === 'timeout' ? 'A terminal command exceeded its timeout.' : `The '${call.name}' call did not complete within its time allowance.`, evidence_ref: ref, metadata: meta });
     // PD-ORCH-005: a call the run's rest cut short did not fail; it is recorded as interrupted, and raises no issue.
     else if (obs.isError && obs.failureKind !== INTERRUPTED_FAILURE_KIND) this.deps.sink.issue({ kind: 'tool_error', severity: 'warning', actor, message: `The '${call.name}' call failed: ${obs.text.slice(0, 200)}`, evidence_ref: ref, metadata: meta });
   }

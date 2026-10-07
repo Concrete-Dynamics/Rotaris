@@ -35,4 +35,4 @@ retention cap the counts read `at least`, and the Tool errors line is still held
 repaired build, its seed's whole rings reading plain (`Permission denials: 0`, `Tool errors: 1`); no proof or live scenario
 fills a ring past its cap on the built app, so the `at least` form is shown by the unit tests only. Terminal failures,
 suspicious successes and Timeouts, which this finding did not name, are recorded on their own in
-`docs/defects/summary-md-terminal-failures-and-timeouts-read-short-past-the-cap-with-no-flag.md`.
+`docs/defects/fixed/summary-md-terminal-failures-and-timeouts-read-short-past-the-cap-with-no-flag.md` (repaired by fin30).

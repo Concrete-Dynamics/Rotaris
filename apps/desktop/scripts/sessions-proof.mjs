@@ -188,6 +188,9 @@ const A = latestSession().session_id;
   const toolErrors = /^- Tool errors: (\d+) \(counted from the issues record/m.exec(seedMd)?.[1];
   const issuesLine = /^- Issues: .*$/m.exec(seedMd)?.[0] ?? '';
   expect(toolErrors === '1' && /\btool_error 1\b/.test(issuesLine) && /^- Tool outcomes: .*\binvalid_request 1\b/m.test(seedMd), `A's Tool errors line (${toolErrors}) against its Issues line ("${issuesLine}") and its outcomes:\n${seedMd}`);
+  // REQ-SESSION-133 (finacc3 A2-09): with both rings whole, Terminal failures, suspicious successes and Timeouts read plain;
+  // past both caps they read `at least N` with what each ring dropped (pinned beside `warningLines` in summary.test.ts).
+  expect(/^- Terminal failures: \d+$/m.test(seedMd) && /^- Terminal suspicious successes: \d+$/m.test(seedMd) && /^- Timeouts: \d+ \(tool calls that timed out, a terminal's among them\)$/m.test(seedMd), `A's terminal and timeout lines:\n${seedMd}`);
   const slowest = seedMd.slice(seedMd.indexOf('## Slowest Tools'));
   expect(/^1\. \S+ — \d+ ms \(/m.test(slowest), `A's Slowest Tools names no call:\n${slowest}`);
   results.seed = { sessionId: A, png: seed.png, summarySections: order.length, stopReason, toolErrors: Number(toolErrors), issuesLine };

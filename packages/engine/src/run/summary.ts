@@ -218,6 +218,16 @@ function warningLines(f: SummaryFacts): string[] {
   const audit = m.records_kept.permission_audit.dropped;
   const issues = m.records_kept.issues.dropped;
   const entries = (dropped: number): string => (dropped > 0 ? `; ${droppedNote(dropped, 'entries')}` : '');
+  /*
+   * REQ-SESSION-133 (finacc3 A2-09): Terminal failures, suspicious successes and Timeouts are each the larger of a count over
+   * the tool-call record and one over the issues record (`sessionMetrics`). REQ-SESSION-136 files one issue for each such
+   * call — a timeout of an MCP call or a fetch included (finacc3 A2-08) — so either reading is the run's whole count while
+   * its ring is whole, and the figure is a lower bound only once both have dropped rows. Until A2-09 the three read plain.
+   */
+  const calls = m.records_kept.tool_calls.dropped;
+  const short = calls > 0 && issues > 0;
+  const bothDropped = `${calls} older tool-call records and ${issues} older issues dropped by the retention cap`;
+  const outcome = (n: number): string => (short ? `at least ${n} (${bothDropped})` : String(n));
   return [
     `- Stale-input drops: ${NA} (the model-input record is ${NOT_KEPT})`,
     elided.artifacts === 0
@@ -237,10 +247,11 @@ function warningLines(f: SummaryFacts): string[] {
      * under PD-ORCH-005 is one and files no issue.
      */
     `- Tool errors: ${atLeast(m.issues_by_kind['tool_error'] ?? 0, issues)} (counted from the issues record, where each tool_error issue is an entry${entries(issues)})`,
-    `- Terminal failures: ${m.terminal_shell_failures}`,
-    `- Terminal suspicious successes: ${m.suspicious_successes}`,
-    // The metrics document's `timeouts`: every tool call that timed out, the terminal's among them, or the terminal's issues.
-    `- Timeouts: ${m.timeouts} (tool calls that timed out, a terminal's among them)`,
+    `- Terminal failures: ${outcome(m.terminal_shell_failures)}`,
+    `- Terminal suspicious successes: ${outcome(m.suspicious_successes)}`,
+    // The metrics document's `timeouts`: every tool call that timed out, the terminal's among them, read from the tool-call
+    // record or from the `terminal_timeout` issues, which every timeout files.
+    `- Timeouts: ${short ? `at least ${m.timeouts}` : m.timeouts} (tool calls that timed out, a terminal's among them${short ? `; ${bothDropped}` : ''})`,
   ];
 }
 

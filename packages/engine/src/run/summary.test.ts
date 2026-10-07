@@ -186,6 +186,34 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
     expect(section(issuesOnly, 'Metrics')).toContain('- Permission decisions: 2 (1 denied); mode changes: 0');
   });
 
+  /*
+   * REQ-SESSION-133, REQ-SESSION-140: Terminal failures, suspicious successes and Timeouts are each the larger of a count over
+   * the tool-call record and one over the issues record (REQ-SESSION-136 files one issue for each such call, a timeout of an
+   * MCP call or a fetch included). Either reading is the run's whole count while its ring is whole, so the figure is a lower
+   * bound only once both rings have dropped rows. Until finacc3 A2-09 the three read plain whatever the cap had dropped
+   * (`docs/defects/fixed/summary-md-terminal-failures-and-timeouts-read-short-past-the-cap-with-no-flag.md`).
+   */
+  it('Terminal failures, suspicious successes and Timeouts read as a lower bound once both rings they are counted from have dropped rows (finacc3 A2-09)', () => {
+    const row = rowOf();
+    const rec = (n: number, outcome_kind: string | null, failure_kind: string | null) =>
+      ({ call_id: `c${n}`, agent_name: 'Ada', tool_name: n === 3 ? 'fetch' : 'terminal', status: 'failed', elapsed_ms: n, is_error: 1, outcome_kind, failure_kind });
+    const records = [rec(1, 'shell_failure', null), rec(2, 'suspicious_success', null), rec(3, null, 'timeout')];
+    const issues = [{ kind: 'terminal_shell_failure' }, { kind: 'terminal_suspicious_success' }, { kind: 'terminal_timeout' }];
+    const lines = (toolCallsDropped: number, issuesDropped: number) => section(renderSummary(factsOf(row, { metrics: sessionMetrics(row, records, [], issues, 0, issuesDropped, toolCallsDropped) })), 'Warnings');
+    const capped = lines(12, 4);
+    const both = '12 older tool-call records and 4 older issues dropped by the retention cap';
+    expect(capped).toContain(`- Terminal failures: at least 1 (${both})`);
+    expect(capped).toContain(`- Terminal suspicious successes: at least 1 (${both})`);
+    expect(capped).toContain(`- Timeouts: at least 1 (tool calls that timed out, a terminal's among them; ${both})`);
+    // Either ring whole, its reading is the whole count, and the figure stands plain.
+    for (const [calls, iss] of [[0, 0], [12, 0], [0, 4]] as const) {
+      const whole = lines(calls, iss);
+      expect(whole).toContain('- Terminal failures: 1');
+      expect(whole).toContain('- Terminal suspicious successes: 1');
+      expect(whole).toContain("- Timeouts: 1 (tool calls that timed out, a terminal's among them)");
+    }
+  });
+
   it('Agents lists each agent with its counted calls, n/a where the record holds no count', () => {
     const md = renderSummary(factsOf(rowOf(), { agents: [
       { name: 'Ada', persona: 'orchestrator', role: 'iteration 1 root', state: 'closed (completed)', toolCalls: 3 },

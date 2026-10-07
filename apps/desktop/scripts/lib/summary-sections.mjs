@@ -7,7 +7,8 @@
  * The requirement's order: a `# Session <id>` heading; status, workspace, created and updated; the task; the stop reason
  * only where one is recorded; Metrics; Warnings (the kinds it names, the permission audit named beside the denials);
  * Agents; Slowest Tools; the closing inspection note. The Outcome block (OQ-60 as ruled) is the build's own and is not
- * read here. Beside the order, one agreement the file owes itself: the Warnings line's tool errors are the Issues line's
+ * read here. The mostly-elided artifacts line carries a count from the timeline's context_selection entries, never `n/a`
+ * (PD-SESSION-002). Beside the order, one agreement the file owes itself: the Warnings line's tool errors are the Issues line's
  * `tool_error` entries (REQ-SESSION-136; `docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
  *
  * Nothing here is product code. It runs only from the live run.
@@ -52,6 +53,10 @@ export function summaryReading(md, { sessionId, stopReason }) {
     if (at === -1) { problems.push(`Warnings has no "${kind}" line, or not in its place`); continue; }
     next = at + 1;
   }
+  // PD-SESSION-002 (OQ-207, ruled 2026-10-07): the mostly-elided artifacts are counted from the timeline's context_selection
+  // entries, which no cap trims, so the line carries a plain count and names that record; until the ruling it read `n/a`.
+  const elided = warnings.find((l) => l.startsWith('- Mostly-elided artifacts: '));
+  if (elided !== undefined && !/^- Mostly-elided artifacts: \d+ \(.*context_selection/.test(elided)) problems.push(`the mostly-elided artifacts line carries no count from the context_selection entries: "${elided}"`);
   const denials = warnings.find((l) => l.startsWith('- Permission denials: '));
   if (denials !== undefined && !denials.includes('permission audit')) problems.push('the permission denials do not name the permission audit');
   // A count over a ring the retention cap has dropped rows of reads `at least N` (REQ-SESSION-133; finacc3 F10).

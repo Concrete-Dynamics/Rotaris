@@ -10458,11 +10458,30 @@ Warnings section, which covers "stale-input drops, mostly-elided artifacts, repo
 errors, and terminal failures, suspicious successes and timeouts"; REQ-SESSION-139, REQ-SESSION-133. Raised 2026-10-06 by
 fin22 (bundle `fin22-summary-and-counts`) while repairing
 [`summary-md-carries-none-of-the-sections-its-requirement-lists.md`](../defects/fixed/summary-md-carries-none-of-the-sections-its-requirement-lists.md);
-the one gap it leaves stays open in
-[`summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`](../defects/summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md)
-until this is ruled. Raised on the branch as OQ-205 and renumbered twice as `origin/main` was merged in: OQ-206, since
+the one gap it leaves stayed open in
+[`summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`](../defects/fixed/summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md)
+until this was ruled. Raised on the branch as OQ-205 and renumbered twice as `origin/main` was merged in: OQ-206, since
 main's OQ-205 (a `swarm` run on a granted intent) took that number first, then OQ-207, since main's OQ-206 (which closes of a main
-window ask the active-run confirmation) took that one. Open, the owner's.)*
+window ask the active-run confirmation) took that one. ~~Open, the owner's.~~ Ruled 2026-10-07.)*
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a mostly-elided artifact is an
+artifact that a delegating agent attached to a delegated agent (`attach_artifacts`) and that the agent's
+`PRIOR AGENT CONTEXT (FULL)` block left out because it did not fit the budget. The record that counts one is REQ-LIBRARY-098's
+context-selection diagnostic, which the build writes as the timeline's `context_selection` entry, and each agent-and-artifact
+pair counts once. `summary.md`'s Warnings line shows that count (`0` when nothing was left out) and says what it counts and
+where it is counted from. [`PD-SESSION-002`](../product/directives.md#pd-session-002) extends REQ-SESSION-140 with this
+definition and leaves out the sibling index's dropped entries and the continuation handoff's 6,000-character cut. The ruling
+weighed two recommendations and **followed A**: advocate A (the user's lens) recommended defining the warning as an
+attached artifact left out of the child's full-context block and counting it from `attached_elided`, as a directive;
+advocate B (the system's lens) recommended confirming the `n/a` line as built, reading the warning as REQ-SESSION-133's
+context-selection record that this store keeps no ring of. The diagnostic itself is kept, whole, on the uncapped timeline,
+so B's `n/a` would hide a fact the store holds. A was corrected twice: the count is of distinct agent-and-artifact pairs, since
+a REQ-ORCH-088 retry rebuilds a child's payload and writes a second entry; and the conflict A noticed is wider than its wording,
+recorded in [`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../defects/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md).
+"Mostly" here means "wholly", a cost the directive states. Built by fin28 (`elidedAttachmentsOf` and `warningLines` in
+`packages/engine/src/run/summary.ts`, `StoreDal.elidedAttachmentRowsOf`); the note
+[`summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`](../defects/fixed/summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md)
+is repaired.
 
 Every other kind the Warnings section names has a definition and a record: a permission denial is an audit entry
 (REQ-SESSION-137), a tool error and the three terminal outcomes are tool-call outcomes and issues (REQ-SESSION-136), and a
@@ -10471,10 +10490,11 @@ stale-input drop and a report downgrade are counts REQ-SESSION-139 takes over th
 REQ-SESSION-140 and nowhere else: no requirement says what eliding an artifact is, what share of it makes it "mostly"
 elided, or which record would count one. The nearest thing the build has is a delegated child's payload, whose sibling
 index and attached artifacts can be elided to fit its budget (`sibling_index_elided`, `attached_elided` in the
-`context_injected` timeline metadata, REQ-TOOLS-152 / REQ-LIBRARY-098); that is an artifact left out of a payload, not an
+`context_selection` timeline entry, REQ-TOOLS-152 / REQ-LIBRARY-098; corrected 2026-10-07 from "`context_injected` timeline
+metadata", a name the build never wrote); that is an artifact left out of a payload, not an
 artifact mostly elided, and reading it as the warning would be inventing the definition.
 
-**What the build proceeds under.** The line is written and reads `n/a`, never `0` (REQ-SESSION-140's rule for an unavailable
+**What the build proceeded under until the ruling** (superseded; kept as the record of it). The line is written and reads `n/a`, never `0` (REQ-SESSION-140's rule for an unavailable
 value): `- Mostly-elided artifacts: n/a (no record measures how much of an artifact was elided)`, beside the stale-input
 drops and report downgrades, which read `n/a` for the records the store does not keep (`warningLines` in
 `packages/engine/src/run/summary.ts`).

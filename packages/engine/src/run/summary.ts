@@ -1,6 +1,6 @@
-import { millis, type Millis, type SessionId, type Timers } from '@rotaris/kernel';
+import { countNoun, millis, type Millis, type SessionId, type Timers } from '@rotaris/kernel';
 import { replaceDocument, type RetryLadder } from '@rotaris/platform';
-import type { SessionRow, StoreDal, TimelineRow } from '@rotaris/store';
+import type { ElidedAttachmentRow, SessionRow, StoreDal, TimelineRow } from '@rotaris/store';
 import { NOT_KEPT, sessionMetrics, type SessionMetrics } from '../export.js';
 import { costLabelOf } from './cost-label.js';
 import { cut } from './cut.js';
@@ -71,16 +71,49 @@ export interface SummaryFacts {
   readonly task: string | null;
   readonly metrics: SessionMetrics;
   readonly agents: readonly SummaryAgent[];
+  /** PD-SESSION-002: the attached artifacts delegated agents were not given (`elidedAttachmentsOf`). */
+  readonly elidedAttachments: ElidedAttachments;
 }
 
-type SummaryDal = Pick<StoreDal, 'readTransaction' | 'getSession' | 'latestTimelineEntry' | 'firstPromptRow' | 'toolCallDigestOf' | 'auditDigestOf' | 'issuesOf' | 'ringState' | 'iterationsOf' | 'planRootsOf' | 'childrenOf'>;
+/** PD-SESSION-002: how many distinct agent-and-artifact pairs were left out, and how many agents they concern. */
+export interface ElidedAttachments {
+  readonly artifacts: number;
+  readonly agents: number;
+}
+
+/**
+ * PD-SESSION-002 (REQ-SESSION-140's mostly-elided artifacts): the attached artifacts a delegated agent's
+ * `PRIOR AGENT CONTEXT (FULL)` block left out because they did not fit its budget (REQ-LIBRARY-098), counted over the
+ * timeline's `context_selection` entries. Each pair of agent and artifact counts once, however many times that agent's
+ * payload was assembled (a REQ-ORCH-088 retry rebuilds it and writes a second entry). An entry with no task id, or whose
+ * `attached_elided` is absent, not an array, or holds something other than ids, contributes nothing it cannot name.
+ */
+export function elidedAttachmentsOf(rows: readonly Pick<ElidedAttachmentRow, 'task_id' | 'attached_elided'>[]): ElidedAttachments {
+  const pairs = new Set<string>();
+  const agents = new Set<string>();
+  for (const row of rows) {
+    if (row.task_id === null || row.attached_elided === null) continue;
+    let ids: unknown;
+    try { ids = JSON.parse(row.attached_elided); } catch { continue; }
+    if (!Array.isArray(ids)) continue;
+    for (const id of ids) {
+      if (typeof id !== 'string' || id === '') continue;
+      pairs.add(JSON.stringify([row.task_id, id]));
+      agents.add(row.task_id);
+    }
+  }
+  return { artifacts: pairs.size, agents: agents.size };
+}
+
+type SummaryDal = Pick<StoreDal, 'readTransaction' | 'getSession' | 'latestTimelineEntry' | 'firstPromptRow' | 'toolCallDigestOf' | 'auditDigestOf' | 'issuesOf' | 'ringState' | 'iterationsOf' | 'planRootsOf' | 'childrenOf' | 'elidedAttachmentRowsOf'>;
 
 /**
  * REQ-SESSION-140 / REQ-SESSION-006: the facts of one session's summary, from the state and the evidence records in ONE read
  * transaction, so no section comes from a different save than another. The tool-call record and the permission audit are read
  * without their serialised entries (`toolCallDigestOf`, `auditDigestOf`): every save rebuilds this, and a record of 5,000
  * calls' arguments and results is not read to be counted. The outcome is `sessionOutcomeOf`'s (OQ-60 as ruled), so every
- * rebuild — a run's, a continuation's, a repair's — presents a recovered session's correction entry.
+ * rebuild — a run's, a continuation's, a repair's — presents a recovered session's correction entry. The mostly-elided
+ * artifacts (PD-SESSION-002) read two fields of each `context_selection` timeline entry, never its message.
  */
 export function summaryFactsOf(dal: SummaryDal, sessionId: SessionId): SummaryFacts | undefined {
   return dal.readTransaction(() => {
@@ -91,7 +124,8 @@ export function summaryFactsOf(dal: SummaryDal, sessionId: SessionId): SummaryFa
     const toolCalls = dal.toolCallDigestOf(sessionId);
     const metrics = sessionMetrics(row, toolCalls, dal.auditDigestOf(sessionId), dal.issuesOf(sessionId),
       dal.ringState(sessionId, 'permission_audit').dropped, dal.ringState(sessionId, 'issues').dropped, dal.ringState(sessionId, 'tool_calls').dropped);
-    return { row, outcome, task: prompt === undefined ? null : prompt.body, metrics, agents: agentsOf(dal, sessionId, metrics) };
+    const elidedAttachments = elidedAttachmentsOf(dal.elidedAttachmentRowsOf(sessionId));
+    return { row, outcome, task: prompt === undefined ? null : prompt.body, metrics, agents: agentsOf(dal, sessionId, metrics), elidedAttachments };
   });
 }
 
@@ -129,6 +163,8 @@ function agentsOf(dal: SummaryDal, sessionId: SessionId, metrics: SessionMetrics
 }
 
 const NA = 'n/a';
+/** PD-SESSION-002: what the Mostly-elided artifacts line counts, in the line's own words. */
+const ELIDED_WHAT = 'attached artifacts a delegated agent was not given because they did not fit its context budget';
 const count = (n: number | null): string => (n === null ? NA : String(n));
 /**
  * REQ-SESSION-133: a count over a capped ring describes what is stored, so once the cap has dropped rows of it the count is a
@@ -168,18 +204,25 @@ function metricsLines(f: SummaryFacts): string[] {
 }
 
 /**
- * REQ-SESSION-140's Warnings, every kind it names on its own line. The three whose record this store does not keep read
- * `n/a`, never `0`: stale-input drops (the model-input record), report downgrades (the report-validation record), and
- * mostly-elided artifacts, which no requirement defines and no record measures (OQ-207: the build proceeds under `n/a`).
+ * REQ-SESSION-140's Warnings, every kind it names on its own line. The two whose record this store does not keep read
+ * `n/a`, never `0`: stale-input drops (the model-input record) and report downgrades (the report-validation record).
+ * Mostly-elided artifacts are PD-SESSION-002's (OQ-207, ruled 2026-10-07 under R-072): the attached artifacts a delegated
+ * agent was not given because they did not fit its context budget, counted from the uncapped timeline's
+ * `context_selection` entries, so the count reads plain, `0` when nothing was left out. Until that ruling the line read
+ * `n/a (no record measures how much of an artifact was elided)`.
  */
-function warningLines(m: SessionMetrics): string[] {
+function warningLines(f: SummaryFacts): string[] {
+  const m = f.metrics;
+  const elided = f.elidedAttachments;
   // REQ-SESSION-133 (finacc3 F10): each count over a capped ring the cap has dropped rows of reads `at least`, with how many.
   const audit = m.records_kept.permission_audit.dropped;
   const issues = m.records_kept.issues.dropped;
   const entries = (dropped: number): string => (dropped > 0 ? `; ${droppedNote(dropped, 'entries')}` : '');
   return [
     `- Stale-input drops: ${NA} (the model-input record is ${NOT_KEPT})`,
-    `- Mostly-elided artifacts: ${NA} (no record measures how much of an artifact was elided)`,
+    elided.artifacts === 0
+      ? `- Mostly-elided artifacts: 0 (${ELIDED_WHAT}; counted from the timeline's context_selection entries)`
+      : `- Mostly-elided artifacts: ${elided.artifacts} (${ELIDED_WHAT}, across ${countNoun(elided.agents, 'agent')}; counted from the timeline's context_selection entries, which name each)`,
     `- Report downgrades: ${NA} (the report-validation record is ${NOT_KEPT})`,
     `- Permission denials: ${atLeast(m.permission_denials, audit)} (counted from the permission audit, where each is an entry${entries(audit)})`,
     /*
@@ -237,7 +280,7 @@ export function renderSummary(f: SummaryFacts): string {
   if (s.stop_reason !== null && s.stop_reason !== '') lines.push(`- Stop reason: ${s.stop_reason}`);
   if (f.outcome) lines.push('', '## Outcome', '', `${f.outcome.status} (${f.outcome.severity}): ${f.outcome.message}`);
   lines.push('', '## Metrics', '', ...metricsLines(f));
-  lines.push('', '## Warnings', '', ...warningLines(f.metrics));
+  lines.push('', '## Warnings', '', ...warningLines(f));
   lines.push('', '## Agents', '', ...(f.agents.length === 0 ? ['- none recorded'] : f.agents.map(agentLine)));
   lines.push('', '## Slowest Tools', '', ...slowestLines(f.metrics));
   lines.push('', SUMMARY_INSPECTION_NOTE, '');

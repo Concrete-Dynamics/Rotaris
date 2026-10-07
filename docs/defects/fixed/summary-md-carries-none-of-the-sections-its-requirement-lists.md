@@ -36,9 +36,9 @@ OQ-60's Outcome block, kept as ruled, after it; Metrics, in which tokens of a se
 not established read `n/a`; Warnings, one line per kind REQ-SESSION-140 lists (a denial names the permission audit;
 stale-input drops and report downgrades read `n/a` for the records this store does not keep, and mostly-elided artifacts read
 `n/a` under [OQ-207](../../architecture/open-questions.md), which asks what the requirement means by one — that one kind is
-**not** built, and stays open in
-[`summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`](../summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md)
-until the question is ruled); Agents (each
+**not** built, and stayed open in
+[`summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`](summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md)
+until the question was ruled; ruled 2026-10-07 under R-072 and built by fin28 as `PD-SESSION-002`, a count); Agents (each
 iteration's root, each plan cycle's root, each child, and any name only the tool-call record carries, with its counted calls,
 `n/a` where none is held); Slowest Tools, the top five by `elapsed_ms`; and the closing inspection note naming Export records…
 and `session.log`. The counts are `sessionMetrics` (`packages/engine/src/export.ts`), the metrics document's own figures, read

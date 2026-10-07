@@ -178,6 +178,9 @@ const A = latestSession().session_id;
   const stopReason = sessionRow(A).stop_reason;
   expect(stopReason ? seedMd.includes(`- Stop reason: ${stopReason}`) : !seedMd.includes('Stop reason'), `A's stop-reason line (recorded: ${stopReason}):\n${seedMd}`);
   expect(/^- Stale-input drops: n\/a/m.test(seedMd) && !/^- (Tokens|Cost): 0$/m.test(seedMd), `A's Warnings or an unavailable value:\n${seedMd}`);
+  // PD-SESSION-002 (OQ-207, ruled 2026-10-07): the mostly-elided artifacts are counted from the timeline's context_selection
+  // entries; the seed delegates nothing, so the line reads a plain 0 naming that record, where it read n/a until the ruling.
+  expect(/^- Mostly-elided artifacts: 0 \(attached artifacts a delegated agent was not given .*context_selection entries\)$/m.test(seedMd), `A's mostly-elided artifacts line:\n${seedMd}`);
   // REQ-SESSION-136 on REQ-SESSION-140's Warnings: the refused terminal call (`badterm`) is a `tool_error` issue, and the Tool
   // errors line counts it although its record's outcome is `invalid_request`. Until fin23 the line read the histogram's
   // `tool_error` bucket and said 0 beside "Issues: 1 (tool_error 1)"

@@ -25,7 +25,7 @@ function md(r: SessionRow = row(), dropped: { audit?: number; issues?: number } 
     { call_id: 'c3', agent_name: 'Ada', tool_name: 'terminal', status: 'failed', elapsed_ms: 9, is_error: 1, outcome_kind: 'shell_failure', failure_kind: null },
   ];
   const issues = [{ kind: 'tool_error' }, { kind: 'tool_error' }, { kind: 'terminal_shell_failure' }];
-  const facts: SummaryFacts = { row: r, outcome: null, task: 'Build it.', metrics: sessionMetrics(r, records, [], issues, dropped.audit ?? 0, dropped.issues ?? 0, 0), agents: [] };
+  const facts: SummaryFacts = { row: r, outcome: null, task: 'Build it.', metrics: sessionMetrics(r, records, [], issues, dropped.audit ?? 0, dropped.issues ?? 0, 0), agents: [], elidedAttachments: { artifacts: 0, agents: 0 } };
   return renderSummary(facts);
 }
 
@@ -47,6 +47,15 @@ describe('summaryReading (REQ-SESSION-140)', () => {
   it('a Warnings kind missing, or the denials not naming the permission audit, is named', () => {
     expect(summaryReading(md().replace(/^- Report downgrades: .*$/m, ''), { sessionId: 'S-1', stopReason: 'tasks_complete' }).problems).toEqual(['Warnings has no "Report downgrades" line, or not in its place']);
     expect(summaryReading(md().replace(/\(counted from the permission audit[^)]*\)/, ''), { sessionId: 'S-1', stopReason: 'tasks_complete' }).problems).toEqual(['the permission denials do not name the permission audit']);
+  });
+
+  // PD-SESSION-002 (OQ-207, ruled 2026-10-07): the line carries a count from the context_selection entries, never n/a.
+  it('the mostly-elided artifacts line that read n/a before PD-SESSION-002 is named; a count from the context_selection entries reads clean', () => {
+    expect(md()).toMatch(/^- Mostly-elided artifacts: 0 \(.*context_selection entries\)$/m);
+    const before = md().replace(/^- Mostly-elided artifacts: .*$/m, '- Mostly-elided artifacts: n/a (no record measures how much of an artifact was elided)');
+    expect(summaryReading(before, { sessionId: 'S-1', stopReason: 'tasks_complete' }).problems).toEqual(['the mostly-elided artifacts line carries no count from the context_selection entries: "- Mostly-elided artifacts: n/a (no record measures how much of an artifact was elided)"']);
+    const counted = md().replace(/^- Mostly-elided artifacts: .*$/m, "- Mostly-elided artifacts: 2 (attached artifacts a delegated agent was not given because they did not fit its context budget, across 1 agent; counted from the timeline's context_selection entries, which name each)");
+    expect(summaryReading(counted, { sessionId: 'S-1', stopReason: 'tasks_complete' })).toEqual({ ok: true, problems: [] });
   });
 
   it('the Tool errors line that read one histogram bucket before fin23 disagrees with its Issues line, and is named', () => {

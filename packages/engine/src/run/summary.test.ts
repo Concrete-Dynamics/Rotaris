@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { asSessionId, FakeClock } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal, type SessionRow } from '@rotaris/store';
 import { sessionMetrics } from '../export.js';
-import { RECOVERY_ENTRY, renderSummary, sessionOutcomeOf, SUMMARY_INSPECTION_NOTE, summaryFactsOf, SummaryWriter, type SummaryFacts } from './summary.js';
+import { elidedAttachmentsOf, RECOVERY_ENTRY, renderSummary, sessionOutcomeOf, SUMMARY_INSPECTION_NOTE, summaryFactsOf, SummaryWriter, type SummaryFacts } from './summary.js';
 
 /** OQ-60 as ruled (R-071): the outcome a session's readers present, and `summary.md`'s Outcome block. */
 describe('run/summary — a session\'s outcome (OQ-60 as ruled; REQ-ORCH-082, REQ-SESSION-062)', () => {
@@ -40,7 +40,7 @@ function rowOf(over: Partial<SessionRow> = {}): SessionRow {
 }
 
 function factsOf(row: SessionRow, over: Partial<SummaryFacts> = {}): SummaryFacts {
-  return { row, outcome: null, task: null, metrics: sessionMetrics(row, [], [], [], 0, 0, 0), agents: [], ...over };
+  return { row, outcome: null, task: null, metrics: sessionMetrics(row, [], [], [], 0, 0, 0), agents: [], elidedAttachments: { artifacts: 0, agents: 0 }, ...over };
 }
 
 /** The lines of one `## <name>` section, its blank lines dropped. */
@@ -90,12 +90,12 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
     expect(spent).toContain('- Cost: 0.12 reported by the provider');
   });
 
-  it('Warnings names every kind REQ-SESSION-140 lists; the three no record measures read n/a, the denials name the permission audit', () => {
+  it('Warnings names every kind REQ-SESSION-140 lists; the two whose record is not kept read n/a, the denials name the permission audit', () => {
     const row = rowOf();
     const metrics = sessionMetrics(row, [], [{ kind: 'decision', decision: 'deny', source: 'rule' }, { kind: 'decision', decision: 'allow', source: 'rule' }], [{ kind: 'terminal_timeout' }, { kind: 'terminal_shell_failure' }], 0, 0, 0);
     expect(section(renderSummary(factsOf(row, { metrics })), 'Warnings')).toEqual([
       '- Stale-input drops: n/a (the model-input record is not kept by this store)',
-      '- Mostly-elided artifacts: n/a (no record measures how much of an artifact was elided)',
+      "- Mostly-elided artifacts: 0 (attached artifacts a delegated agent was not given because they did not fit its context budget; counted from the timeline's context_selection entries)",
       '- Report downgrades: n/a (the report-validation record is not kept by this store)',
       '- Permission denials: 1 (counted from the permission audit, where each is an entry)',
       '- Tool errors: 0 (counted from the issues record, where each tool_error issue is an entry)',
@@ -105,6 +105,32 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
     ]);
     // The audit is named whatever the count, a session with no denial included (the fin22 verifier's optional finding).
     expect(section(renderSummary(factsOf(row, { metrics: sessionMetrics(row, [], [], [], 0, 0, 0) })), 'Warnings')).toContain('- Permission denials: 0 (counted from the permission audit, where each is an entry)');
+  });
+
+  /*
+   * PD-SESSION-002 (OQ-207, ruled 2026-10-07 under R-072). Until the ruling the line read
+   * `n/a (no record measures how much of an artifact was elided)` in every summary.md of every session
+   * (`docs/defects/fixed/summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`).
+   */
+  it('Mostly-elided artifacts counts the attached artifacts delegated agents were not given, with the agents and the record it is counted from (PD-SESSION-002)', () => {
+    const one = renderSummary(factsOf(rowOf(), { elidedAttachments: { artifacts: 1, agents: 1 } }));
+    expect(section(one, 'Warnings')).toContain("- Mostly-elided artifacts: 1 (attached artifacts a delegated agent was not given because they did not fit its context budget, across 1 agent; counted from the timeline's context_selection entries, which name each)");
+    const two = renderSummary(factsOf(rowOf(), { elidedAttachments: { artifacts: 3, agents: 2 } }));
+    expect(section(two, 'Warnings')).toContain("- Mostly-elided artifacts: 3 (attached artifacts a delegated agent was not given because they did not fit its context budget, across 2 agents; counted from the timeline's context_selection entries, which name each)");
+    expect(section(two, 'Warnings').join('\n')).not.toMatch(/Mostly-elided artifacts: n\/a/);
+  });
+
+  it('elidedAttachmentsOf counts distinct agent-and-artifact pairs: none, one entry, a retry\'s second entry, two children, malformed metadata (PD-SESSION-002)', () => {
+    const e = (task_id: string | null, ids: unknown) => ({ task_id, attached_elided: ids === null ? null : typeof ids === 'string' ? ids : JSON.stringify(ids) });
+    expect(elidedAttachmentsOf([])).toEqual({ artifacts: 0, agents: 0 });
+    expect(elidedAttachmentsOf([e('bg_a', [])])).toEqual({ artifacts: 0, agents: 0 });
+    expect(elidedAttachmentsOf([e('bg_a', ['art_1', 'art_2'])])).toEqual({ artifacts: 2, agents: 1 });
+    // A REQ-ORCH-088 retry rebuilds the same child's payload and writes a second entry naming the same ids.
+    expect(elidedAttachmentsOf([e('bg_a', ['art_1', 'art_2']), e('bg_a', ['art_2', 'art_1'])])).toEqual({ artifacts: 2, agents: 1 });
+    // Two children left out of the same artifact are two pairs.
+    expect(elidedAttachmentsOf([e('bg_a', ['art_1']), e('bg_b', ['art_1'])])).toEqual({ artifacts: 2, agents: 2 });
+    // Malformed metadata contributes nothing: no task, no array, text that is not JSON, an id that is not a string.
+    expect(elidedAttachmentsOf([e(null, ['art_1']), e('bg_a', null), e('bg_a', '{not json'), e('bg_a', '"art_1"'), e('bg_b', [7, '', 'art_5'])])).toEqual({ artifacts: 1, agents: 1 });
   });
 
   /*
@@ -259,11 +285,23 @@ describe('run/summary — summaryFactsOf reads one session\'s record (REQ-SESSIO
     expect(summaryFactsOf(dal, sid)!.outcome).toEqual({ status: 'interrupted', severity: 'warning', message: 'recovered.' });
   });
 
+  it('the mostly-elided artifacts are read from the timeline\'s context_selection entries, in the same read (PD-SESSION-002)', () => {
+    const entry = (name: string, metadata: Record<string, unknown>) => dal.insertTimeline(sid, dal.nextTimelineOrdinal(sid), 't', name, 'rotaris', 'm', JSON.stringify(metadata), String(dal.nextTimelineOrdinal(sid)).padStart(12, '0'), 'info');
+    entry('context_selection', { task_id: 'bg_c1', attached_included: 1, attached_elided: ['art_2', 'art_3'] });
+    entry('context_selection', { task_id: 'bg_c1', attached_included: 1, attached_elided: ['art_2', 'art_3'] });
+    entry('context_selection', { task_id: 'bg_c2', attached_included: 0, attached_elided: [] });
+    entry('run_end', { attached_elided: ['art_9'] });
+    const facts = summaryFactsOf(dal, sid)!;
+    expect(facts.elidedAttachments).toEqual({ artifacts: 2, agents: 1 });
+    expect(section(renderSummary(facts), 'Warnings')[1]).toMatch(/^- Mostly-elided artifacts: 2 \(.*across 1 agent; counted from the timeline's context_selection entries, which name each\)$/);
+  });
+
   it('a session with no record of any kind reads no task, no agents and no slowest calls', () => {
     const md = renderSummary(summaryFactsOf(dal, sid)!);
     expect(md).toContain('- Task: —');
     expect(section(md, 'Agents')).toEqual(['- none recorded']);
     expect(section(md, 'Slowest Tools')).toEqual(['- none recorded']);
+    expect(section(md, 'Warnings')[1]).toMatch(/^- Mostly-elided artifacts: 0 \(/);
   });
 });
 

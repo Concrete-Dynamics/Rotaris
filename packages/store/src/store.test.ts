@@ -784,6 +784,24 @@ describe('store — v4: the evidence rings (ADR-0024, REQ-SESSION-133/135/136/13
     r.db.close();
     forgetSpelling(r.dir);
   });
+  it('the summary reads each context_selection entry\'s task and elided attachments, in order, over the primary key (PD-SESSION-002)', () => {
+    const { r, dal, sid } = open('9c');
+    const entry = (ordinal: number, name: string, metadata: string) => dal.insertTimeline(sid, ordinal, `t${ordinal}`, name, 'rotaris', 'm', metadata, String(ordinal).padStart(12, '0'), 'info');
+    entry(1, 'context_selection', JSON.stringify({ task_id: 'bg_a', attached_included: 1, attached_elided: ['art_1', 'art_2'] }));
+    entry(2, 'run_start', JSON.stringify({ task_id: 'bg_x', attached_elided: ['art_9'] }));
+    entry(3, 'context_selection', '{not json');
+    entry(4, 'context_selection', JSON.stringify({ task_id: 7, attached_elided: 'art_3' }));
+    entry(5, 'context_selection', JSON.stringify({ task_id: 'bg_b', attached_elided: [] }));
+    const rows = dal.elidedAttachmentRowsOf(sid);
+    expect(rows.map((x) => [x.ordinal, x.task_id, x.attached_elided === null ? null : JSON.parse(x.attached_elided)])).toEqual([
+      [1, 'bg_a', ['art_1', 'art_2']], [3, null, null], [4, null, null], [5, 'bg_b', []],
+    ]);
+    const plan = r.db.prepare("EXPLAIN QUERY PLAN SELECT ordinal FROM timeline WHERE session_id = ? AND name = 'context_selection' ORDER BY ordinal").all(sid) as { detail: string }[];
+    expect(plan.map((p) => p.detail).join(' | ')).toMatch(/PRIMARY KEY|USING INDEX sqlite_autoindex/);
+    expect(plan.map((p) => p.detail).join(' | ')).not.toMatch(/TEMP B-TREE/);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
   it('the ring reads and the settle are served by the primary key — no index is declared and none is scanned (spike 8)', () => {
     const { r, dal, sid } = open('95');
     for (const sql of ['SELECT * FROM permission_audit WHERE session_id = ? ORDER BY ordinal', 'SELECT * FROM tool_calls WHERE session_id = ? ORDER BY ordinal', 'SELECT * FROM issues WHERE session_id = ? ORDER BY ordinal']) {

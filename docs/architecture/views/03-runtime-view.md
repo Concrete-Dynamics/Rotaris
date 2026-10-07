@@ -1594,8 +1594,11 @@ of §5 and none a channel: each is a request answered once.
   `summaryFactsOf`, one read transaction over the row, the correction entry, the first submitted prompt
   (`StoreDal.firstPromptRow`), the tool-call record and the permission audit read without their serialised entries
   (`toolCallDigestOf`, `auditDigestOf`), the issues, the iterations, plan roots and children; its counts are the metrics
-  document's (`sessionMetrics` in `export.ts`). Its Warnings line for mostly-elided artifacts reads `n/a` while OQ-207 is
-  open (recorded open in `docs/defects/`); its Tool errors line counts the issues record's `tool_error` entries
+  document's (`sessionMetrics` in `export.ts`). Its Warnings line for mostly-elided artifacts is `PD-SESSION-002`'s (OQ-207,
+  ruled 2026-10-07; fin28): the distinct agent-and-artifact pairs the timeline's `context_selection` entries name as
+  `attached_elided` — attachments a delegated agent's `PRIOR AGENT CONTEXT (FULL)` block left out for its budget — read in
+  the same transaction (`StoreDal.elidedAttachmentRowsOf`, `elidedAttachmentsOf`), a plain count, `0` when none, where it read
+  `n/a` before; its Tool errors line counts the issues record's `tool_error` entries
   (REQ-SESSION-136's "any other failure"), as its Issues line does, never the histogram's `tool_error` bucket, which a
   record carrying an `outcome_kind` never reaches (fin23; the histogram's `mcp` bucket is OQ-208's). A count over the
   permission audit or the issues record — Permission denials, Tool errors, and the Metrics lines printing the same figures —

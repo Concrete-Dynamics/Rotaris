@@ -236,6 +236,15 @@ export interface ToolCallDigestRow {
   readonly outcome_kind: string | null;
   readonly failure_kind: string | null;
 }
+/**
+ * PD-SESSION-002: one `context_selection` timeline entry as the summary reads it — its task id and its `attached_elided`
+ * array as JSON text, each NULL where the entry's metadata holds no such field of that type.
+ */
+export interface ElidedAttachmentRow {
+  readonly ordinal: number;
+  readonly task_id: string | null;
+  readonly attached_elided: string | null;
+}
 /** REQ-SESSION-140: a permission-audit entry's index columns, without the serialised entry. */
 export type AuditDigestRow = Pick<AuditRow, 'ordinal' | 'kind' | 'decision' | 'source'>;
 export interface ToolCallRow {
@@ -540,6 +549,12 @@ export class StoreDal {
       maxTimelineOrdinal: db.prepare('SELECT max(ordinal) AS m FROM timeline WHERE session_id = ?'),
       timelineOf: db.prepare('SELECT * FROM timeline WHERE session_id = ? ORDER BY ordinal'),
       latestTimelineEntry: db.prepare('SELECT * FROM timeline WHERE session_id = ? AND name = ? ORDER BY ordinal DESC LIMIT 1'),
+      // PD-SESSION-002: summary.md's mostly-elided artifacts — the task and the elided attachment ids of each
+      // `context_selection` entry, never the entry's message; a field of the wrong type, or metadata that is not JSON, reads NULL.
+      elidedAttachmentRowsOf: db.prepare(`SELECT ordinal,
+        CASE WHEN json_valid(metadata) AND json_type(metadata, '$.task_id') = 'text' THEN json_extract(metadata, '$.task_id') END AS task_id,
+        CASE WHEN json_valid(metadata) AND json_type(metadata, '$.attached_elided') = 'array' THEN json_extract(metadata, '$.attached_elided') END AS attached_elided
+        FROM timeline WHERE session_id = ? AND name = 'context_selection' ORDER BY ordinal`),
       listLocks: db.prepare('SELECT * FROM session_locks'),
       getLock: db.prepare('SELECT * FROM session_locks WHERE session_id = ?'),
       // REQ-SESSION-046: claimed by an operation that either succeeds or reports the existing holder.
@@ -1149,6 +1164,15 @@ export class StoreDal {
    */
   latestTimelineEntry(id: SessionId, name: string): TimelineRow | undefined {
     return this.stmts['latestTimelineEntry']!.get(id, name) as TimelineRow | undefined;
+  }
+  /**
+   * PD-SESSION-002 (REQ-SESSION-140, REQ-LIBRARY-098): every `context_selection` timeline entry of the session, in write
+   * order, as its task id and its `attached_elided` array's JSON text — the attachments a delegated agent's
+   * `PRIOR AGENT CONTEXT (FULL)` block left out. Read over the (session_id, ordinal) primary key; the timeline has no
+   * retention cap, so nothing it read can have been dropped.
+   */
+  elidedAttachmentRowsOf(id: SessionId): ElidedAttachmentRow[] {
+    return this.stmts['elidedAttachmentRowsOf']!.all(id) as ElidedAttachmentRow[];
   }
 
   listLocks(): LockRow[] {

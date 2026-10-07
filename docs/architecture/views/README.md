@@ -58,6 +58,14 @@ R-072).** `ArtifactStore.rerender` rewrites only the leading frontmatter (`rende
 inspector's Preview renders from below the frontmatter (`previewSource`). The **runtime view**'s `artifacts` row and its
 continuation paragraph say so. No package, edge, process, channel, command or store column changed.
 
+**`summary.md`'s mostly-elided artifacts are counted (`PD-SESSION-002`, REQ-SESSION-140, REQ-LIBRARY-098; OQ-207 ruled
+2026-10-07 under R-072; fin28).** `summaryFactsOf` (`run/summary.ts`) reads each `context_selection` timeline entry's
+`task_id` and `attached_elided` through the new `StoreDal.elidedAttachmentRowsOf`, a statement over the timeline's primary
+key in the same read transaction, and `elidedAttachmentsOf` counts the distinct agent-and-artifact pairs; `warningLines`
+writes the count, `0` when none, where the line read `n/a`. The live run's reader (`lib/summary-sections.mjs`) refuses an
+`n/a` line. The **runtime view**'s `summary.md` paragraph says so. No package, edge, process, channel, command or store column
+changed.
+
 **A tool call's streamed arguments are model events (REQ-ORCH-089, REQ-ORCH-090, REQ-NOTIFY-112, REQ-CHAT-164; finacc3 F02).**
 `StreamPart` gains `tool-input`, which `AiSdkModelClient.stream` yields for the SDK's `tool-input-start` and `tool-input-delta`
 parts; the call still arrives once, whole, as `tool-call`. The stall watch counts it as output (`OUTPUT_EVENTS`), the first one
@@ -128,7 +136,7 @@ changed.
 
 **`summary.md` carries REQ-SESSION-140's sections (fin22).** `renderSummary` renders `SummaryFacts`, read by `summaryFactsOf`
 (`run/summary.ts`) in one read transaction: the task line from `StoreDal.firstPromptRow`, the stop reason only where one is
-recorded, Metrics with `n/a` for what is unavailable, Warnings (mostly-elided artifacts read `n/a` while OQ-207 is open, its note left open; the denials name the permission audit on every count, and `timeouts` is labelled as every tool call that timed out), Agents, Slowest
+recorded, Metrics with `n/a` for what is unavailable, Warnings (mostly-elided artifacts read `n/a` while OQ-207 was open, its note left open — a count since `PD-SESSION-002`, below; the denials name the permission audit on every count, and `timeouts` is labelled as every tool call that timed out), Agents, Slowest
 Tools and the inspection note; the counts are `sessionMetrics` (`export.ts`, which the metrics document now wraps), over
 `StoreDal.toolCallDigestOf` and `auditDigestOf`, two new statements over the existing tables. `SummaryWriter.rebuild` guards
 every read and skips a superseded rebuild; `costLabelOf` moved to `run/cost-label.ts` and is re-exported where it was. The

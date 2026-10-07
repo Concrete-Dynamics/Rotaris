@@ -79,6 +79,7 @@ Shown in the built app against `katalyst` by `live-run.mjs --only=faults`'s new 
 tool-call argument piece slowly through the recording proxy under a 10 s stall threshold (`AGENTS.md`, the `faults`
 section). On the product before the repair (`43b3fca`, the new harness copied in), pack `2026-10-07T00-21-02-195Z`: red,
 three `stall` issues written while agents streamed paced arguments — the root warned `no model event or token for 10
-seconds` 29.5 s into a 246-piece `write_file`, and a delegated child twice. On the repaired head, packs
+seconds` about 9.8 s into a 246-piece `write_file` whose arguments streamed for 29.5 s, and a delegated child twice
+(inside its 11.1 s and 12.3 s spans). On the repaired head, packs
 `2026-10-07T00-16-35-425Z` (220 pieces over 13.3 s) and `2026-10-07T00-26-10-472Z` (220 pieces over 26.4 s): no `stall`
 issue in the session, passed; `docs/architecture/first-executions.md` carries the row.

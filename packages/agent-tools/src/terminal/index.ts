@@ -3,7 +3,7 @@ import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { Clocks } from '@rotaris/kernel';
-import { errorObservation, observation, type Observation, type ToolContext, type ToolExecutor } from '../tools/types.js';
+import { errorObservation, INTERRUPTED_FAILURE_KIND, observation, type Observation, type ToolContext, type ToolExecutor } from '../tools/types.js';
 import { BackgroundManager, DEFAULT_BACKGROUND_TIMEOUT_S, type BackgroundOwner, type BackgroundSession } from './background.js';
 import { classifyOutcome, diagnosticBlock, outputSection, outputWarnings, renderAction, type FailureKind } from './classify.js';
 import { ForegroundSession, keystroke, type PausedEnd, type PtyFactory, type RestoreOutcome, type ShellBackend } from './foreground.js';
@@ -347,7 +347,12 @@ const POWERSHELL_SHELL = 'On Windows the shell is PowerShell, not bash: `&&`, `;
  * on Linux too the watch is off where the handshake went unanswered or a soft-paused command holds the shell (OQ-144).
  */
 const posixShell = (file: string, platform: NodeJS.Platform): string => `The shell is \`${file}\`, a POSIX shell that may not be bash: write POSIX syntax — bash arrays, \`\${PIPESTATUS[…]}\`, \`[[ … ]]\`, process substitution \`<(…)\` and \`source\` may be unavailable, and a command that uses them fails with a nonzero exit code. Do not replace the shell with \`exec <program>\`: ${platform === 'linux' ? 'such a call normally fails, and the program is ended and the shell restarted.' : 'such a call reads as still running, and every later call runs in that program.'}`;
-const TERMINAL_USE = 'One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; a new command issued meanwhile waits behind it, and its result reports how the paused one ended; stdout and stderr share the captured terminal stream. failure_kind is one of `timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`; `sandbox_unavailable` means the command never executed because this host could not apply the OS-level confinement the session requires — the cause is the host\'s configuration, neither a retry nor a reformulated command helps, and the detail and output should be relayed to the user.';
+/**
+ * PD-TOOLS-013 (OQ-226): the `error_class` of a call its run cancelled — the builder's reading, as the ruling allows; the
+ * product's other classes name what failed (`TimeoutError`, `ExecutionError`), and this one names that nothing did.
+ */
+export const INTERRUPTED_ERROR_CLASS = 'InterruptedError';
+const TERMINAL_USE = 'One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; a new command issued meanwhile waits behind it, and its result reports how the paused one ended; stdout and stderr share the captured terminal stream. failure_kind is one of `timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`, `interrupted`; `interrupted` means the run cancelled the call (a pause, a stop, a quit or a cancel) before the command completed, not that it timed out; `sandbox_unavailable` means the command never executed because this host could not apply the OS-level confinement the session requires — the cause is the host\'s configuration, neither a retry nor a reformulated command helps, and the detail and output should be relayed to the user.';
 export function terminalDescription(backend: ShellBackend | null | undefined, platform: NodeJS.Platform = process.platform): string {
   const shell = backend?.kind === 'powershell' ? POWERSHELL_SHELL : backend?.kind === 'posix' ? posixShell(backend.file, platform) : `${POWERSHELL_SHELL} ${posixShell('/bin/sh', platform)}`;
   return `Run a command in a persistent shell session (working directory and variables persist across calls). ${shell} ${TERMINAL_USE}`;
@@ -426,7 +431,9 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
       if (!r.softPaused) manager.endForeground(key, ctx.agentName, { exitCode: r.exitCode, finalText: r.output });
       const label = `${resetNote ? '[RESET] ' : ''}${a.command}`;
       const warnings = r.exitCode !== null && r.exitCode >= 0 ? outputWarnings(a.command, r.output, r.exitCode) : [];
-      const assigned: FailureKind | null = r.timedOut ? 'timeout' : r.error && !r.softPaused ? 'execution_error' : null;
+      // PD-TOOLS-013 (OQ-226): a call its run cancelled is `interrupted`, checked ahead of the hard timeout and the failure
+      // before completion; until 2026-10-07 it read `timeout` (live-run P2 at a68f121).
+      const assigned: FailureKind | null = r.cancelled ? INTERRUPTED_FAILURE_KIND : r.timedOut ? 'timeout' : r.error && !r.softPaused ? 'execution_error' : null;
       const failureKind = relabelIfLauncherFailed(wrapped.confined, assigned, r.exitCode, r.output);
       const { outcomeKind, severity } = classifyOutcome({ failureKind, exitCode: r.exitCode, output: r.output, command: a.command }, warnings);
       let detail: string;
@@ -436,6 +443,16 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
       const restoreNote = restoreSentence(r.restore);
       if (failureKind === 'sandbox_unavailable') {
         detail = LAUNCHER_FAILED_DETAIL;
+      } else if (r.cancelled) {
+        // PD-TOOLS-013: the run cancelled the call — a pause past the tool deadline, a stop, a quit, the explicit cancel, an
+        // agent's cancellation or its limit; which one, the turn's interrupted result says. No timeout is named: the call
+        // did not reach its bound. What became of the session and what was restored are said as for a reset.
+        const session = r.killStatus === 'session_reset'
+          ? `its process tree was ended and the terminal session was restarted, so shell state (working directory, variables, aliases, background jobs) was lost.${restoreNote}`
+          : 'its process tree was ended, and restarting the terminal session failed.';
+        detail = r.cancelled === 'before'
+          ? `Terminal execution was cancelled by the run before the command was written, so it never ran and has no exit code; ${session}`
+          : `Terminal execution was cancelled by the run before the command completed, so it has no exit code; ${session}`;
       } else if (r.timedOut) {
         // The REQ-TOOLS-099 contract stands — 124, session_reset, state lost — and the detail says both.
         detail = `The command exceeded its timeout of ${timeoutMs / 1000} seconds; the terminal session was forcibly restarted to terminate the process tree, and shell state (working directory, variables, aliases, background jobs) was lost${r.killStatus === 'reset_failed' ? ' — restarting the session failed' : ''}.${restoreNote}${r.error ? ` (${r.error})` : ''}`;
@@ -491,9 +508,11 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
       const diag = diagnosticBlock({
         backend: BACKEND_NAME, command: a.command, detail, exit_code: r.exitCode, failure_kind: failureKind, kill_status: r.killStatus, outcome_kind: outcomeKind, outcome_severity: severity,
         output_truncated: r.truncated ? true : null, session_reinitialized: r.sessionReinitialized, timeout: r.timedOut, timeout_seconds: timeoutMs / 1000, warnings, working_directory: cwd,
-        error_class: failureKind === 'sandbox_unavailable' ? SANDBOX_ERROR_CLASS : r.timedOut ? 'TimeoutError' : r.error ? 'ExecutionError' : null,
+        error_class: failureKind === 'sandbox_unavailable' ? SANDBOX_ERROR_CLASS : r.cancelled ? INTERRUPTED_ERROR_CLASS : r.timedOut ? 'TimeoutError' : r.error ? 'ExecutionError' : null,
       });
-      const isError = severity === 'error';
+      // PD-TOOLS-013: the one kind whose severity (`warning`) does not say it failed — the call did not complete, so it is an
+      // error result, and the row settles `failed`, never `ok`.
+      const isError = severity === 'error' || failureKind === INTERRUPTED_FAILURE_KIND;
       return {
         text: `${detail}${earlierOutput}\n${outputSection(r.output, r.timedOut)}\n${diag}`, isError, outcomeKind, exitCode: r.exitCode, failureKind, warnings, label: `$ ${label}`,
       };

@@ -11422,7 +11422,7 @@ run's terminal session (`5df89df3`), call `#36`, the re-run child's 45 s wedge, 
 recorded `failed`, `timeout`, exit 124, "The command exceeded its timeout of 100 seconds; … (the call was cancelled)";
 issue 10 is `terminal_timeout` at `error`, and `summary.md` reads "Timeouts: 1". The console's NOTE said the hard cap was
 not reached. Recorded as
-[`a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md`](../defects/a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md).
+[`a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md`](../defects/fixed/a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md).
 
 **What the build proceeded under, until 2026-10-07.** Both abort branches of `ForegroundSession.run`
 (`packages/agent-tools/src/terminal/foreground.ts`) returned 124 and `timedOut: true` with the error "the call was
@@ -11452,3 +11452,10 @@ replaced and ended shells stands. The ruling's directive number was written as `
 `PD-TOOLS-013`. Noticed while ruling and recorded, not repaired: the gate's catch and fetch still file a `tool_error` for
 a call the run cancels
 ([`a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md`](../defects/a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md)).
+**Built 2026-10-07 (fin31):** `ForegroundResult.cancelled` and both abort branches of `ForegroundSession.run` (no exit code,
+`timedOut: false`), the `interrupted` kind, `InterruptedError` and the cancel's detail in `terminal/index.ts`, and the kind in
+both vocabularies of `classify.ts`; `gate.ts` and `export.ts` unchanged. The ruling's dispositions could not stand as
+written: the symbol generator admits one directive per verb on a requirement, and `PD-TOOLS-009` already narrows
+REQ-TOOLS-112 and `PD-SESSION-003` REQ-SESSION-136, so PD-TOOLS-013 narrows REQ-TOOLS-100 and extends those two. Pinned by
+the cases named in the repaired note and `pnpm driver-proof`'s launch 13d, a quit during `sleep 60`, red before and green
+after.

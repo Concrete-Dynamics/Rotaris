@@ -6010,6 +6010,22 @@ stated above, exhaustively. Found while building, 2026-10-07.*
 *Raised under the owner's delegation, 2026-10-07, ruling OQ-226 (the consortium's ruling of finding P2 of the final default
 live run at `a68f121`); logged as [R-072](requests.md#r-072).*
 
+> **First execution, 2026-10-07, built under [R-072](requests.md#r-072) (fin31):** the rule held as written, and the ruling's
+> dispositions did not: the generator admits one directive per verb on a requirement, so REQ-TOOLS-112 and REQ-SESSION-136,
+> already narrowed by `PD-TOOLS-009` and `PD-SESSION-003`, are named as extended (above). `ForegroundSession.run`
+> (`packages/agent-tools/src/terminal/foreground.ts`) returns `cancelled` with no exit code from both abort branches, and
+> `terminal/index.ts` records the call `interrupted` / `warning`, `InterruptedError`, `is_error` true; the gate's existing
+> `interrupted` branch files no issue, and `sessionMetrics` counts the call under `interrupted`, not Timeouts, with neither
+> changed. **Found nothing else**: the turn already answered the call as interrupted (`callSignal.aborted`), so the cause
+> sentence the agent reads on Continue was in place, and only the body under it was false. **What was measured.**
+> `terminal.test.ts`'s handshake cancel case, its new mid-command cancel case (`sleep 5` cancelled at 300 ms: `interrupted`,
+> the restore named, no timeout, the next call in the restored directory with the variable) and its classify case, each red
+> on `71176df`; `gate.test.ts` and `summary.test.ts` as guards; `pnpm driver-proof`'s launch 13d, a quit during `sleep 60`
+> under a 100 s bound in the built app, red on `71176df` (`timeout`, 124, "exceeded its timeout of 100 seconds",
+> `terminal_timeout` at `error`) and green after (`interrupted`, no exit code, `kill_status` `session_reset`, no issue).
+> **What was not measured.** No live run: the next default live run's quit is the measurement.
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <!--

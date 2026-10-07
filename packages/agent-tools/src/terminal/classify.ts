@@ -5,8 +5,13 @@ import { countNoun } from '@rotaris/kernel';
  * the pipeline check; REQ-TOOLS-098/100: the `[terminal_output]` section that is never omitted and the
  * `[terminal_diagnostic]` block with sorted keys and null-valued keys dropped.
  */
-export type FailureKind = 'timeout' | 'invalid_request' | 'execution_error' | 'sandbox_unavailable';
-export type OutcomeKind = 'success' | 'shell_failure' | 'suspicious_success' | 'soft_pause' | 'timeout' | 'invalid_request' | 'execution_error' | 'background_running' | 'background_terminal' | 'sandbox_unavailable';
+/**
+ * PD-TOOLS-013 (OQ-226, ruled 2026-10-07 under R-072): `interrupted` is the fifth failure kind and the eleventh outcome kind —
+ * a foreground call its run cancelled before the command completed (PD-ORCH-005 clause 3's "recorded as interrupted"), the
+ * word the question and delegation tools already carry (`INTERRUPTED_FAILURE_KIND`).
+ */
+export type FailureKind = 'timeout' | 'invalid_request' | 'execution_error' | 'sandbox_unavailable' | 'interrupted';
+export type OutcomeKind = 'success' | 'shell_failure' | 'suspicious_success' | 'soft_pause' | 'timeout' | 'invalid_request' | 'execution_error' | 'background_running' | 'background_terminal' | 'sandbox_unavailable' | 'interrupted';
 export type Severity = 'info' | 'warning' | 'error';
 export type BackgroundStatus = 'running' | 'completed' | 'failed' | 'killed' | 'timeout';
 
@@ -101,6 +106,9 @@ export function classifyOutcome(f: TerminalFacts, warnings: readonly string[]): 
       case 'invalid_request': return { outcomeKind: 'invalid_request', severity: 'warning' };
       case 'execution_error': return { outcomeKind: 'execution_error', severity: 'error' };
       case 'sandbox_unavailable': return { outcomeKind: 'sandbox_unavailable', severity: 'error' };
+      // PD-TOOLS-013: a cancel the run chose is neither a clean finish nor a fault — REQ-TOOLS-112 reads a background session
+      // ended deliberately (`killed`) as `warning` on the same ground.
+      case 'interrupted': return { outcomeKind: 'interrupted', severity: 'warning' };
     }
   }
   if (f.backgroundStatus) {

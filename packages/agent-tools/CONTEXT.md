@@ -103,12 +103,14 @@ an aggregate delivery bound taken across every window together. — `REQ-TOOLS-1
 `REQ-MONITOR-306`
 
 **Outcome kind**:
-The classification of how a command ended, distinct from its exit code. — `REQ-TOOLS` §12
+The classification of how a command ended, distinct from its exit code. `interrupted` is the run having
+cancelled the call before the command completed, never a timeout. — `REQ-TOOLS` §12, `PD-TOOLS-013`
 
 **Failure kind**:
 Why a call failed, drawn from a per-tool vocabulary — `timeout`, `invalid_request`,
-`execution_error`, `sandbox_unavailable` for the terminal. — `REQ-SANDBOX` terminal observation
-additions
+`execution_error`, `sandbox_unavailable` and `interrupted` for the terminal; `interrupted` is also the
+question and delegation tools' word for a call the run's rest cut short. — `REQ-SANDBOX` terminal
+observation additions, `REQ-TOOLS-100`, `PD-TOOLS-013`, `PD-ORCH-005`
 
 **Path fence**:
 The boundary confining the file and search tools to the workspace. Reaching outside it is a

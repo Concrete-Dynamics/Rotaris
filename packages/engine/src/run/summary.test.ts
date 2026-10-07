@@ -164,6 +164,23 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
     expect(metrics.tool_outcomes).toEqual({ success: 1, tool_error: 3, rejected: 0, unknown: 0, invalid_request: 1, execution_error: 1, shell_failure: 1 });
   });
 
+  // PD-TOOLS-013 (OQ-226): a terminal call its run cancelled is recorded `interrupted` and files no issue, so it lands in the
+  // histogram's `interrupted` bucket and neither Timeouts nor Issues counts it; a real hard timeout beside it still does.
+  // Live-run P2 at a68f121: the quit's cancel of call #36 read "Timeouts: 1" and "terminal_timeout 1".
+  it('a cancelled terminal call is counted under interrupted, and Timeouts counts only the hard timeout', () => {
+    const row = rowOf();
+    const records = [
+      { call_id: 'c1', agent_name: 'Ada', tool_name: 'terminal', status: 'failed', elapsed_ms: 3505, is_error: 1, outcome_kind: 'interrupted', failure_kind: 'interrupted' },
+      { call_id: 'c2', agent_name: 'Ada', tool_name: 'terminal', status: 'failed', elapsed_ms: 1000, is_error: 1, outcome_kind: 'timeout', failure_kind: 'timeout' },
+    ];
+    const metrics = sessionMetrics(row, records, [], [{ kind: 'terminal_timeout' }], 0, 0, 0);
+    expect(metrics.tool_outcomes).toMatchObject({ interrupted: 1, timeout: 1 });
+    expect(metrics.timeouts).toBe(1);
+    const alone = sessionMetrics(row, records.slice(0, 1), [], [], 0, 0, 0);
+    expect(alone.timeouts).toBe(0);
+    expect(section(renderSummary(factsOf(row, { metrics: alone })), 'Warnings')).toContain('- Timeouts: 0 (tool calls that timed out, a terminal\'s among them)');
+  });
+
   /*
    * REQ-SESSION-133: a count over a capped ring describes what is stored. Until finacc3 (F10) Permission denials and Tool
    * errors — and the Metrics lines that print the same figures — read as whole after the cap had dropped rows

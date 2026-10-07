@@ -283,6 +283,20 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect((await plain.gate.dispatch(plain.call('todo', { operation: 'list' }), new AbortController().signal)).interrupted).toBeUndefined();
   });
 
+  it('PD-TOOLS-013 (OQ-226): a terminal call its run cancelled settles failed and interrupted and files no issue, while a real hard timeout still files terminal_timeout', async () => {
+    const termSchema = z.object({ command: z.string(), timeout: z.number().optional() });
+    const cancelled = harness({ preset: 'autonomous', extraExecutors: [['terminal', simpleExecutor('terminal', 't', termSchema, async () => ({ text: 'Terminal execution was cancelled by the run before the command completed', isError: true, failureKind: INTERRUPTED_FAILURE_KIND, outcomeKind: 'interrupted', exitCode: null }))]] });
+    const r = await cancelled.gate.dispatch(cancelled.call('terminal', { command: 'sleep 45', timeout: 100 }), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'failed', isError: true, interrupted: true });
+    expect(cancelled.rec.settles.at(-1)).toMatchObject({ failure_kind: 'interrupted', outcome_kind: 'interrupted' });
+    expect(cancelled.rec.issues).toEqual([]);
+    const timedOut = harness({ preset: 'autonomous', extraExecutors: [['terminal', simpleExecutor('terminal', 't', termSchema, async () => ({ text: 'The command exceeded its timeout of 1 seconds', isError: true, failureKind: 'timeout', outcomeKind: 'timeout', exitCode: 124 }))]] });
+    const t = await timedOut.gate.dispatch(timedOut.call('terminal', { command: 'sleep 45', timeout: 1 }), new AbortController().signal);
+    expect(t.interrupted).toBeUndefined();
+    expect(timedOut.rec.issues).toHaveLength(1);
+    expect(timedOut.rec.issues[0]).toMatchObject({ kind: 'terminal_timeout', severity: 'error' });
+  });
+
   it('REQ-TOOLS-055: a timeout of 0 registers no deadline; only an answer or a cancellation releases the wait', async () => {
     const h = harness({ timeoutMs: 0 });
     const p = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);

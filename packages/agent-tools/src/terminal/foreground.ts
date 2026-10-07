@@ -81,6 +81,13 @@ export interface ForegroundResult {
    */
   readonly earlier?: readonly PausedEnd[];
   /**
+   * PD-TOOLS-013 (OQ-226): the run cancelled the call (its tool context's signal) — before the command was written, so it
+   * never ran (`'before'`), or while it ran (`'during'`). The process tree was ended and the session restarted with
+   * PD-TOOLS-001's snapshot re-applied, as on a hard timeout, but the call is no hard timeout: no exit code, `timedOut`
+   * false. Absent on every other result.
+   */
+  readonly cancelled?: 'before' | 'during';
+  /**
    * OQ-144 (the shell-exit case): the session's shell had ended between calls — no call was waiting on it — so this call
    * respawned it, re-applied PD-TOOLS-001's snapshot, and ran in the fresh shell; what the restore did.
    */
@@ -1405,11 +1412,13 @@ export class ForegroundSession {
     if (opts.signal?.aborted) {
       // Cancelled before the command was written: the reading of a cancel below — the session restarts, PD-TOOLS-001's
       // snapshot is re-applied — with nothing of the command's to report, because it never ran.
+      // PD-TOOLS-013 (OQ-226): no exit code and no timeout. FALSIFIED, kept beside its replacement: this returned 124 and
+      // `timedOut: true`, so a cancel read as REQ-TOOLS-099's hard timeout (live-run P2 at a68f121).
       this.active = null;
       this.state = 'resetting';
       const reset = this.resetNow();
       const restore: RestoreOutcome = reset ? await this.restoreState() : { status: 'failed' };
-      return withRespawn({ output: '', exitCode: 124, timedOut: true, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: CANCELLED_ERROR, sessionReinitialized: reinit, truncated: false, restore });
+      return withRespawn({ output: '', exitCode: null, timedOut: false, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: CANCELLED_ERROR, sessionReinitialized: reinit, truncated: false, restore, cancelled: 'before' });
     }
     const nonce = randomBytes(12).toString('hex');
     const start = `__rot_${nonce}_s`;
@@ -1648,12 +1657,18 @@ export class ForegroundSession {
     // timeout or abort: REQ-TOOLS-097/099 — the whole tree goes, the session restarts, shell state is lost.
     // PD-TOOLS-001 narrows what "lost" means afterwards: the cwd and exported variables snapshotted after
     // the last completed command are re-applied to the fresh shell, and the outcome names what was restored.
-    // The REQ-TOOLS-099 contract stands — 124, session_reset, state lost — and the detail says both.
+    // The REQ-TOOLS-099 contract stands for the hard timeout — 124, session_reset, state lost — and the detail says both.
+    // PD-TOOLS-013 (OQ-226): an abort is the run's cancel, not the hard bound, so it carries no exit code and no timeout;
+    // whichever bound settled the call first (`outcome.kind`) decides. FALSIFIED, kept beside its replacement: both read
+    // 124 and `timedOut: true`, and a quit's cancel after 3,505 ms was recorded as a 100 s timeout (live-run P2 at a68f121).
     this.active = null;
     this.state = 'resetting';
     const reset = this.resetNow();
     const restore: RestoreOutcome = reset ? await this.restoreState() : { status: 'failed' };
-    const r = { ...finish({ exitCode: 124, timedOut: true, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: outcome.kind === 'abort' ? CANCELLED_ERROR : null }), restore };
+    const killStatus = reset ? 'session_reset' as const : 'reset_failed' as const;
+    const r: ForegroundResult = outcome.kind === 'abort'
+      ? { ...finish({ exitCode: null, timedOut: false, softPaused: false, killStatus, error: CANCELLED_ERROR }), restore, cancelled: 'during' }
+      : { ...finish({ exitCode: 124, timedOut: true, softPaused: false, killStatus, error: null }), restore };
     screen.dispose();
     return r;
   }

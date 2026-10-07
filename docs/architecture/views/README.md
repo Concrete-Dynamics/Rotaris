@@ -60,6 +60,14 @@ true state. `Run.iterate`'s plan-open branch stores `Task.heldAnswer` (6,000 cha
 **runtime view**'s loop diagram and its two paragraphs say so. No package, edge, process, channel, command or store column
 changed (the planner todo's JSON gains one optional task field inside the existing column).
 
+**A terminal call its run cancels reads `interrupted` (PD-TOOLS-013, REQ-TOOLS-100, REQ-TOOLS-112, REQ-SESSION-136; OQ-226
+ruled under R-072, fin31).** `ForegroundResult` gains `cancelled` (`'before'`, `'during'`); both abort branches of
+`ForegroundSession.run` return no exit code and `timedOut: false`, and `terminal/index.ts` assigns the failure kind
+`interrupted` (`INTERRUPTED_FAILURE_KIND`), `InterruptedError`, `is_error` true at severity `warning`, and a detail that the
+run cancelled the call; `classify.ts` adds the kind to both vocabularies. The gate's existing `interrupted` branch marks the
+result interrupted and files no issue, and the metrics count it under `interrupted`, not Timeouts. The **runtime view**'s
+rest paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **An empty or relative per-user variable takes its default (REQ-STARTUP-145, REQ-CONFIG-001; finacc3 A2-06, A2-07; fin30).**
 `xdgBaseDirectory` (`platform/dirs.ts`) now also ignores a relative `XDG_CONFIG_HOME` or `XDG_DATA_HOME`, as the XDG Base
 Directory Specification says, and `localAppDataDirectory` beside it is the one reading of `LOCALAPPDATA`: unset, empty or

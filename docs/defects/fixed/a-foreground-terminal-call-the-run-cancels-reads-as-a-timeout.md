@@ -15,6 +15,21 @@ exit 124, "The command exceeded its timeout of 100 seconds; … (the call was ca
 that run. On Continue, the agent would read that its wedge hit the 100 s bound. The same encoding answers a cancel that
 lands during OQ-144's first-call handshake, where the command was never written.
 
+**Repaired 2026-10-07 (fin31), under [`PD-TOOLS-013`](../../product/directives.md#pd-tools-013) (OQ-226).**
+`ForegroundResult` gains `cancelled` (`'before'`, `'during'`), and both abort branches of `ForegroundSession.run` return no
+exit code and `timedOut: false`, keeping the reset, the restore and `CANCELLED_ERROR`; the hard-timeout branch alone keeps
+124. `terminal/index.ts` assigns the failure kind `interrupted` ahead of `timeout`, `error_class` `InterruptedError`,
+`is_error` true at severity `warning`, output under `[terminal_output]`, and a detail that the run cancelled the call
+(before the command was written, or before it completed), what became of the session and what was restored, naming no
+timeout; `classify.ts` adds `interrupted` to both vocabularies and to test 1. The gate's existing `interrupted` branch then
+marks the result interrupted and files no issue, and the metrics count it under `interrupted`, not Timeouts. **Pinned by**
+`packages/agent-tools/src/terminal/terminal.test.ts` (the handshake cancel case and the new mid-command cancel case, both
+red before; the classify case, red before), `packages/agent-tools/src/gate.test.ts` and
+`packages/engine/src/run/summary.test.ts` (guards: no issue, Timeouts 0), and `pnpm driver-proof`'s launch 13d, which quits
+while `sleep 60` runs under a 100 s bound: red on the source before (`timeout`, exit 124, "exceeded its timeout of 100
+seconds", a `terminal_timeout` issue at `error`), green after (`interrupted`, no exit code, `InterruptedError`, warning,
+no issue).
+
 ## Specs
 
 - REQ-TOOLS-097: the hard-timeout observation of REQ-TOOLS-099 is returned "on reaching" the hard bound, and a cancel does

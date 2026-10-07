@@ -22,9 +22,11 @@
  * (`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`; before the repair it was `running` with no
  * stop reason). And the driver reaches the windows beside a main window: in that second launch the run's approval
  * dialog is answered with its own button and a persona window is probed through a role selector
- * (`docs/defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md`).
+ * (`docs/defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md`). Since 2026-10-07 a further launch
+ * (13d) quits while a foreground `terminal` call runs and reads its record: PD-TOOLS-013's `interrupted`, no exit code, no
+ * timeout and no issue (`docs/defects/fixed/a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md`).
  *
- * Evidence under `.proof/driver-proof/`: `app.log`, `screen.png`, `shots/`, `run-app.log`, `results.json`.
+ * Evidence under `.proof/driver-proof/`: `app.log`, `screen.png`, `shots/`, `run-app.log`, `cut-app.log`, `results.json`.
  * `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -368,6 +370,71 @@ try {
   f.close();
   try { if (family.child.exitCode === null && family.child.pid) process.kill(family.child.pid); } catch { /* already gone after the quit */ }
   writeFileSync(join(output, 'family-app.log'), existsSync(family.logFile) ? readFileSync(family.logFile, 'utf8') : '');
+  writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);
+}
+
+/*
+ * 13d — PD-TOOLS-013 (OQ-226; live-run P2 at a68f121): a foreground terminal call the application's quit cuts is recorded as
+ * interrupted, not as a hard timeout. The scripted coordinator, granted the direct-work bundle, runs `sleep 60` with a
+ * 100 s bound; once its record is open (`running`), the quit is sent, and the store is read after the exit. Before the
+ * repair the call read `timeout`, exit 124, "exceeded its timeout of 100 seconds", and filed `terminal_timeout` at `error`.
+ */
+const cutWorkspace = join(output, 'cut-workspace');
+mkdirSync(join(cutWorkspace, '.rotaris'), { recursive: true });
+writeFileSync(join(cutWorkspace, 'README.md'), '# driver proof, a terminal call the quit cuts\n');
+writeFileSync(join(cutWorkspace, '.rotaris', 'agents.yaml'), [
+  'models:', '  scripted: { provider: scripted, model_id: scripted }',
+  'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+  'runtime:', '  permission_mode: autonomous', '  allow_unsandboxed_autonomous: true',
+  'mcp_servers:', '  code_intelligence: { enabled: false }',
+  'rotaris:', '  delegation_strategy: single', '',
+].join('\n'));
+const cut = await startApp({
+  root: join(output, 'cut-app'), workspace: cutWorkspace, timeoutMs: 90_000,
+  extra: {
+    ROTARIS_SCRIPT: 'terminal:wedge,answer', ROTARIS_INTENT_SCRIPT: 'explicit_trivial',
+    ROTARIS_SCRIPT_TERMINAL_ARGS: JSON.stringify({ wedge: { command: process.platform === 'win32' ? 'Start-Sleep -Seconds 60' : 'sleep 60', timeout: 100 } }),
+  },
+});
+const c = cut.driver;
+const cutCalls = () => {
+  // Read while the app writes it: before the run's first save there is no database, which `oneDatabase` throws on.
+  const db = new Database(oneDatabase(cut.local), { readonly: true, fileMustExist: true });
+  try { return db.prepare("SELECT status, elapsed_ms, entry FROM tool_calls WHERE tool_name = 'terminal' ORDER BY ordinal").all(); } finally { db.close(); }
+};
+try {
+  await c.waitFor('.nav-item', { timeoutMs: 30_000 });
+  await c.click('.nav-item', { text: 'Workspace' });
+  await c.waitFor('.composer__input', { timeoutMs: 10_000 });
+  await c.chord('Ctrl+L');
+  await until(() => c.eval(COMPOSER_FOCUSED), (v) => v === true, { timeoutMs: 10_000, what: 'the composer holding focus' });
+  await c.type('run the long command', { enter: true });
+  await until(() => { try { return cutCalls(); } catch { return []; } }, (rows) => rows.some((r) => r.status === 'running'), { timeoutMs: 60_000, what: "the terminal call's open record" });
+  const quitting = await c.quit();
+  const exited = await exitWithin(cut.child, 60_000);
+  check('13d: the quit during a running terminal call exits', quitting?.how === 'quit' && exited?.code === 0, `reply ${JSON.stringify(quitting)}; ${exited === null ? 'still running after 60 s' : `exited ${exited.code ?? exited.signal}`}`);
+  const db = new Database(oneDatabase(cut.local), { readonly: true });
+  const rows = db.prepare("SELECT status, elapsed_ms, entry FROM tool_calls WHERE tool_name = 'terminal' ORDER BY ordinal").all();
+  const issues = db.prepare('SELECT kind, severity FROM issues').all();
+  db.close();
+  const entry = rows.length === 1 ? JSON.parse(rows[0].entry) : {};
+  const result = String(entry.result ?? '');
+  check('PD-TOOLS-013: the terminal call the quit cut is recorded interrupted, with no exit code and no timeout',
+    rows.length === 1 && rows[0].status === 'failed' && entry.failure_kind === 'interrupted' && entry.outcome_kind === 'interrupted' && (entry.exit_code ?? null) === null
+      && /"outcome_severity":"warning"/.test(result) && /"timeout":false/.test(result) && /"kill_status":"session_reset"/.test(result),
+    `${rows.length} terminal record(s); status ${rows[0]?.status}, ${Math.round(rows[0]?.elapsed_ms ?? 0)} ms; failure_kind ${entry.failure_kind}, outcome_kind ${entry.outcome_kind}, exit_code ${entry.exit_code ?? 'none'}; ${(/\[terminal_diagnostic\] (.*)$/m.exec(result)?.[1] ?? '(no diagnostic)').replace(/"detail":"[^"]*",?/, '').slice(0, 300)}`);
+  check('PD-TOOLS-013: its result says the run cancelled the call and names no timeout',
+    /cancelled by the run before the command completed/.test(result) && !/exceeded its timeout/.test(result),
+    result.split('\n')[0]?.slice(0, 240) ?? '(no result)');
+  check('PD-TOOLS-013: the cut call files no terminal_timeout and no tool_error issue',
+    !issues.some((i) => i.kind === 'terminal_timeout' || i.kind === 'tool_error'),
+    `issues ${JSON.stringify(issues)}`);
+} catch (cause) {
+  check('13d: the terminal-cut scenario ran to the end', false, `it threw instead: ${cause instanceof Error ? cause.message : String(cause)}`);
+} finally {
+  c.close();
+  try { if (cut.child.exitCode === null && cut.child.pid) process.kill(cut.child.pid); } catch { /* already gone after the quit */ }
+  writeFileSync(join(output, 'cut-app.log'), existsSync(cut.logFile) ? readFileSync(cut.logFile, 'utf8') : '');
   writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);
 }
 

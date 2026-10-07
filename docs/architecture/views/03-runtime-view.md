@@ -362,7 +362,11 @@ after a root given up on), so a child's step that ignored the cancel writes noth
 rests nothing (one the run raises itself, a plan cycle's). The repair of `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. Every agent the rest leaves paused, the root included, has any call it never
 returned from or raised out of answered in its record as interrupted, its row settled (`answerOpenCalls`, which the crash
 record uses for a dead run's agents too), so a resume sends a conversation whose every call has its result; a call of
-that step that completed keeps what it returned, read back from its settled row. A child the stop's grace gave up on
+that step that completed keeps what it returned, read back from its settled row. A foreground `terminal` call the cut
+lands in reports the cancel itself (PD-TOOLS-013, OQ-226; 2026-10-07): `ForegroundSession.run` ends the tree, restarts the
+session with PD-TOOLS-001's snapshot and returns `cancelled` with no exit code, and `terminal/index.ts` records it
+`interrupted` / `warning`, `InterruptedError`, a detail that the run cancelled it, so the gate marks it interrupted and
+files no issue — until then it read as REQ-TOOLS-099's hard timeout (124, `terminal_timeout`). A child the stop's grace gave up on
 (`IterationChildren.outlast` keeps which, `givenUpOn`) returns without its count, so once its calls are answered the rest
 counts the calls its record shows beyond its `children.tool_calls` into the session's total, with that count, in one
 transaction (`countGivenUpOn` → `SessionWriter.countToolCalls`, REQ-MONITOR-102), as the root given up on is counted — so

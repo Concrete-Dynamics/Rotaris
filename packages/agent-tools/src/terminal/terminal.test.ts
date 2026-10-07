@@ -113,6 +113,8 @@ it.each([
 describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () => {
   it('classifies in the fixed order and renders the diagnostic block with sorted keys and nulls dropped', () => {
     expect(classifyOutcome({ failureKind: 'timeout', exitCode: 124, output: '', command: 'x' }, [])).toEqual({ outcomeKind: 'timeout', severity: 'error' });
+    // PD-TOOLS-013 (OQ-226): a call its run cancelled is test 1's `interrupted` / warning, whatever else it carries.
+    expect(classifyOutcome({ failureKind: 'interrupted', exitCode: null, output: 'partial', command: 'x' }, [])).toEqual({ outcomeKind: 'interrupted', severity: 'warning' });
     expect(classifyOutcome({ exitCode: 0, output: '', command: 'x', backgroundStatus: 'killed' }, [])).toEqual({ outcomeKind: 'background_terminal', severity: 'warning' });
     expect(classifyOutcome({ exitCode: -1, output: '', command: 'x' }, [])).toEqual({ outcomeKind: 'soft_pause', severity: 'warning' });
     expect(classifyOutcome({ exitCode: 2, output: '', command: 'x' }, [])).toEqual({ outcomeKind: 'shell_failure', severity: 'error' });
@@ -912,8 +914,12 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       // Before the repair: 5 s and `success`, exit 0 — the cancel was lost and the command ran to its end. With the
       // signal off the handshake alone, the call waits out the three-second startup before it is cancelled.
       expect(took).toBeLessThan(1_500);
-      expect(diag(r.text)).toMatchObject({ exit_code: 124, kill_status: 'session_reset', failure_kind: 'timeout' });
-      expect(r.text).toContain('the call was cancelled');
+      // PD-TOOLS-013 (OQ-226): a cancel is no hard timeout. Before it: 124, `timeout` and "exceeded its timeout".
+      expect(diag(r.text)).toMatchObject({ kill_status: 'session_reset', failure_kind: 'interrupted', outcome_kind: 'interrupted', outcome_severity: 'warning', error_class: 'InterruptedError', timeout: false });
+      expect(diag(r.text)).not.toHaveProperty('exit_code');
+      expect(r).toMatchObject({ isError: true, failureKind: 'interrupted', outcomeKind: 'interrupted', exitCode: null });
+      expect(r.text).toContain('cancelled by the run before the command was written, so it never ran');
+      expect(r.text).not.toContain('exceeded its timeout');
       expect(existsSync(marker)).toBe(false);
       // The session is usable after it: the next call runs on the restarted shell.
       const next = await t.execute(args({ command: SH.echo('after'), timeout: 15 }), ctx());
@@ -940,6 +946,32 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(output(next.text)).toBe('after');
       expect(existsSync(marker)).toBe(false);
     } finally { await m.dispose(); rmSync(dir, { recursive: true, force: true }); }
+  }, 30_000);
+  it.skipIf(PS)('PD-TOOLS-013 (OQ-226): a call its run cancels mid-command reads `interrupted`, names the restore and no timeout, and the next call runs in the restarted session', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 20_000 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 20_000 });
+    const sub = realpathSync(mkdtempSync(join(root, 'cancelled-')));
+    try {
+      expect(diag((await t.execute(args({ command: `${SH.setVar('ROTARIS_CANCELLED', 'kept')}; cd '${sub}'`, timeout: 15 }), ctx())).text)).toMatchObject({ exit_code: 0 });
+      const stop = new AbortController();
+      const call = t.execute(args({ command: `${SH.echo('before-cancel')}; ${SH.sleep(5)}; ${SH.echo('late')}`, timeout: 20 }), ctx(stop.signal));
+      setTimeout(() => stop.abort(), 300);
+      const r = await call;
+      // Before the repair: exit 124, `timeout` / error, `TimeoutError`, "The command exceeded its timeout of 20 seconds".
+      expect(r).toMatchObject({ isError: true, failureKind: 'interrupted', outcomeKind: 'interrupted', exitCode: null });
+      expect(diag(r.text)).toMatchObject({ failure_kind: 'interrupted', outcome_kind: 'interrupted', outcome_severity: 'warning', error_class: 'InterruptedError', kill_status: 'session_reset', timeout: false });
+      expect(diag(r.text)).not.toHaveProperty('exit_code');
+      expect(r.text).toContain('Terminal execution was cancelled by the run before the command completed, so it has no exit code');
+      expect(r.text).toContain('were restored');
+      expect(r.text).not.toContain('exceeded its timeout');
+      expect(r.text).toContain('[terminal_output]');
+      expect(r.text).not.toContain('[partial_terminal_output]');
+      expect(output(r.text)).toContain('before-cancel');
+      // The session restarted with PD-TOOLS-001's snapshot: the next call runs, in the directory and with the variable.
+      const next = await t.execute(args({ command: `${SH.echoVar('ROTARIS_CANCELLED')}; pwd`, timeout: 15 }), ctx());
+      expect(diag(next.text)).toMatchObject({ exit_code: 0, session_reinitialized: true });
+      expect((output(next.text) ?? '').split('\n').map((l) => l.trim())).toEqual(['kept', sub]);
+    } finally { await m.dispose(); }
   }, 30_000);
   it('ADR-0020 c.1: a command that echoes attacker-chosen marker text cannot forge the exit status', async () => {
     const t = await tool();

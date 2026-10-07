@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
-import { buildContinuationPayload, entryRootsOf, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type SessionWriter, type TodoDocument, type ToolPort } from './index.js';
+import { ArtifactStore, buildContinuationPayload, entryRootsOf, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type SessionWriter, type TodoDocument, type ToolPort } from './index.js';
 import { recordedRootNames } from './children/naming.js';
-import type { SessionRecord } from '@rotaris/contracts';
+import { splitFrontmatter, type SessionRecord } from '@rotaris/contracts';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -214,6 +214,37 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     // A published document states its body once: its summary is the body's first line (REQ-LIBRARY-093).
     artifact('a0000006', 'notes', 'First line.', '2026-09-27T06:00:00.000Z', null, 'agent_published', 'First line.\nSecond line.');
     expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: a0000006 — notes (agent_published, published)\nFirst line.\nSecond line.\nTodo:');
+  });
+
+  it('PD-LIBRARY-003 (e), OQ-210: an artifact a person edited is carried as its document, without its frontmatter and marked `edited`; one whose document cannot be read falls back to its columns', () => {
+    const sid = asSessionId('S-edited');
+    const at = new Date(clock.instant()).toISOString();
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
+    const files = join(dir, 'sessions', sid);
+    const store = new ArtifactStore({ dal, sessionId: sid, directory: () => files, wall: clock, warn: () => undefined });
+    const report = store.materialiseChildReport({ taskId: 'bg_00000e01', canonicalName: 'reconcile', persona: 'coding-agent', status: 'failed', summary: 'The reconciliation was completed.', keyFindings: ['all rows match'], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
+    if (!report.ok) throw new Error('report');
+    const id = report.value.record.id;
+    const payloadOf = () => buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined, store);
+    // Unedited: the columns, as before.
+    expect(payloadOf()).toContain(`Artifact: ${id} — reconcile report (child_report, failed)\nThe reconciliation was completed.\nKey findings:\n- all rows match\nTodo:`);
+    const saved = store.body(id);
+    if (!saved.ok) throw new Error('body');
+    const frontmatter = splitFrontmatter(saved.value.text).frontmatter!;
+    expect(store.editBody(id, `${frontmatter}\n# reconcile report\n\nCorrected by hand: the reconciliation was NOT completed.\n\n`).ok).toBe(true);
+    const edited = payloadOf();
+    expect(edited).toContain(`Artifact: ${id} — reconcile report (child_report, failed, edited)\n# reconcile report\n\nCorrected by hand: the reconciliation was NOT completed.\nTodo:`);
+    expect(edited).not.toContain('id: "');
+    expect(edited).not.toContain('The reconciliation was completed.');
+    // Within the same 6,000 characters.
+    expect(store.editBody(id, `${frontmatter}${'w'.repeat(9_000)}`).ok).toBe(true);
+    const long = payloadOf();
+    expect(long.slice(long.indexOf('Artifact: '), long.indexOf('\nTodo:')).length).toBe(6_000);
+    // A document that cannot be read: the columns, unmarked.
+    rmSync(join(files, report.value.record.bodyFile));
+    expect(payloadOf()).toContain(`Artifact: ${id} — reconcile report (child_report, failed)\nThe reconciliation was completed.`);
+    // No store at hand: the columns too.
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain(`(child_report, failed)\nThe reconciliation was completed.`);
   });
 
   it('PD-ORCH-004 revision 3 (found by phase 6\'s fourth review): an offer counts as told only when the conversation holds the offer itself, never for a mere mention of its task id', () => {

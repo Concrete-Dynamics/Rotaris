@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, type SessionId } from '@rotaris/kernel';
-import { normaliseArtifactTags } from '@rotaris/contracts';
+import { normaliseArtifactTags, splitFrontmatter } from '@rotaris/contracts';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { ArtifactStore } from './store.js';
 import { artifactOps } from './port.js';
@@ -449,5 +449,146 @@ describe('engine/artifacts — the session artifact store', () => {
     expect(ops.list({ kind: null, persona: null, tags: [], limit: 999, includeSuperseded: false })).toHaveLength(5);
     expect(ops.list({ kind: 'child_report', persona: null, tags: [], limit: 20, includeSuperseded: false })).toEqual([]);
     expect(ops.list({ kind: null, persona: 'planner', tags: [], limit: 20, includeSuperseded: false })).toHaveLength(5);
+  });
+
+  /**
+   * PD-LIBRARY-003 (OQ-210, ruled 2026-10-07 under R-072): a person's saved edit survives every later re-render, which
+   * rewrites only the document's leading frontmatter. The repair of
+   * docs/defects/fixed/a-re-render-writes-over-a-persons-saved-artifact-edit.md: `rerender` wrote `renderSidecar(record)`
+   * over the whole document on supersession and re-materialisation while `edited_at` and ` · edited` stayed.
+   */
+  describe('PD-LIBRARY-003 — a re-render keeps a person\'s edit', () => {
+    const docOf = (id: string) => readFileSync(join(dir, 'files', `artifact-${id}.md`), 'utf8');
+    const edited = (id: string) => { const before = docOf(id); const split = splitFrontmatter(before); return `${split.frontmatter ?? ''}\n# The plan, corrected by hand\n\nThe reconciliation was NOT completed.\n`; };
+
+    it('an edit, then a publish that supersedes it: the edited text stays under a frontmatter block carrying `superseded_by` and `edited_at`', () => {
+      const store = storeFor();
+      const first = publish(store);
+      if (!first.ok) throw new Error('publish');
+      clock.advance(1000);
+      const text = edited(first.value.id);
+      expect(store.editBody(first.value.id, text).ok).toBe(true);
+      clock.advance(1000);
+      const second = publish(store, { slug: 'the-plan-again', supersedes: first.value.id });
+      if (!second.ok) throw new Error('publish');
+      const after = docOf(first.value.id);
+      const split = splitFrontmatter(after);
+      expect(split.rest).toBe(splitFrontmatter(text).rest);
+      expect(split.frontmatter).toContain(`superseded_by: ${JSON.stringify(second.value.id)}`);
+      expect(split.frontmatter).toContain(`edited_at: ${JSON.stringify(store.lookup(first.value.id)!.editedAt)}`);
+      expect(after).not.toContain('## Key Findings');
+    });
+
+    it('an edit, then `supersede()`: the same', () => {
+      const store = storeFor();
+      const first = publish(store);
+      const second = publish(store, { slug: 'other' });
+      if (!first.ok || !second.ok) throw new Error('publish');
+      expect(store.editBody(first.value.id, edited(first.value.id)).ok).toBe(true);
+      expect(store.supersede(second.value.id, first.value.id).ok).toBe(true);
+      const split = splitFrontmatter(docOf(first.value.id));
+      expect(split.rest).toBe('\n# The plan, corrected by hand\n\nThe reconciliation was NOT completed.\n');
+      expect(split.frontmatter).toContain(`superseded_by: ${JSON.stringify(second.value.id)}`);
+    });
+
+    it('an edit, then a re-materialisation of the same task: the text stays, the frontmatter shows the new status, `edited_at` is kept', () => {
+      const store = storeFor();
+      const report = (status: string, summary: string) => store.materialiseChildReport({ taskId: 'bg_e', canonicalName: 'tester-1', persona: 'tester', status, summary, keyFindings: [summary], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
+      const first = report('failed', 'it failed');
+      if (!first.ok) throw new Error('report');
+      const id = first.value.record.id;
+      clock.advance(1000);
+      expect(store.editBody(id, edited(id)).ok).toBe(true);
+      const editedAt = store.lookup(id)!.editedAt;
+      clock.advance(1000);
+      const again = report('succeeded', 'it passed on a retry');
+      expect(again.ok && again.value.created).toBe(false);
+      const split = splitFrontmatter(docOf(id));
+      expect(split.rest).toBe('\n# The plan, corrected by hand\n\nThe reconciliation was NOT completed.\n');
+      expect(split.frontmatter).toContain('status: "succeeded"');
+      expect(split.frontmatter).toContain(`edited_at: ${JSON.stringify(editedAt)}`);
+      expect(store.lookup(id)!.editedAt).toBe(editedAt);
+    });
+
+    it('a person who deleted the frontmatter gets a fresh block in front of their text; a later re-render does not stack another', () => {
+      const store = storeFor();
+      const first = publish(store);
+      const second = publish(store, { slug: 'other' });
+      const third = publish(store, { slug: 'third' });
+      if (!first.ok || !second.ok || !third.ok) throw new Error('publish');
+      expect(store.editBody(first.value.id, '# only my words\n').ok).toBe(true);
+      expect(store.supersede(second.value.id, first.value.id).ok).toBe(true);
+      const once = docOf(first.value.id);
+      expect(once.startsWith('---\n')).toBe(true);
+      expect(splitFrontmatter(once).rest).toBe('\n# only my words\n');
+      expect(store.supersede(third.value.id, first.value.id).ok).toBe(true);
+      const twice = docOf(first.value.id);
+      expect(twice.match(/^---$/gm)).toHaveLength(2);
+      expect(splitFrontmatter(twice).rest).toBe('\n# only my words\n');
+      expect(splitFrontmatter(twice).frontmatter).toContain(`superseded_by: ${JSON.stringify(third.value.id)}`);
+    });
+
+    it('a document that opens with a `---` rule followed by prose stays whole under a block put in front of it', () => {
+      const store = storeFor();
+      const first = publish(store);
+      const second = publish(store, { slug: 'other' });
+      if (!first.ok || !second.ok) throw new Error('publish');
+      const prose = '---\nThis is a rule, then prose, not frontmatter.\n---\nMore prose.\n';
+      expect(store.editBody(first.value.id, prose).ok).toBe(true);
+      expect(store.supersede(second.value.id, first.value.id).ok).toBe(true);
+      const after = docOf(first.value.id);
+      expect(after.endsWith(`\n${prose}`)).toBe(true);
+      expect(splitFrontmatter(after).rest).toBe(`\n${prose}`);
+      expect(splitFrontmatter(after).frontmatter).toContain(`id: ${JSON.stringify(first.value.id)}`);
+    });
+
+    it('an edited document that cannot be read is left as it is, and a warning says so', () => {
+      let refuse = false;
+      const writes: string[] = [];
+      const store = storeFor({
+        read: (f) => { if (refuse) throw Object.assign(new Error('permission denied'), { code: 'EACCES' }); return readFileSync(join(dir, 'files', f), 'utf8'); },
+        write: (f, c) => { writes.push(f); writeFileSync(join(dir, 'files', f), c, 'utf8'); },
+      });
+      // The injected writer does not create the directory, so the first publish lands with the real one.
+      storeFor().publish({ slug: 'seed', title: 'seed', body: 'seed', tags: [], createdBy: 'x', persona: 'x' });
+      const first = publish(store);
+      const second = publish(store, { slug: 'other' });
+      if (!first.ok || !second.ok) throw new Error('publish');
+      expect(store.editBody(first.value.id, '# mine\n').ok).toBe(true);
+      writes.length = 0;
+      refuse = true;
+      expect(store.supersede(second.value.id, first.value.id).ok).toBe(true);
+      expect(writes).not.toContain(`artifact-${first.value.id}.md`);
+      expect(docOf(first.value.id)).toBe('# mine\n');
+      expect(warnings.some((w) => w.includes(first.value.id) && w.includes('permission denied'))).toBe(true);
+    });
+
+    it('an edited document that is absent is written whole from the record', () => {
+      const store = storeFor();
+      const first = publish(store);
+      const second = publish(store, { slug: 'other' });
+      if (!first.ok || !second.ok) throw new Error('publish');
+      expect(store.editBody(first.value.id, '# mine\n').ok).toBe(true);
+      rmSync(join(dir, 'files', `artifact-${first.value.id}.md`));
+      expect(store.supersede(second.value.id, first.value.id).ok).toBe(true);
+      expect(docOf(first.value.id)).toBe(renderSidecar(store.lookup(first.value.id)!));
+    });
+
+    it('an unedited document is re-rendered whole, as before', () => {
+      const store = storeFor();
+      const first = publish(store);
+      const second = publish(store, { slug: 'other' });
+      if (!first.ok || !second.ok) throw new Error('publish');
+      expect(store.supersede(second.value.id, first.value.id).ok).toBe(true);
+      expect(docOf(first.value.id)).toBe(renderSidecar(store.lookup(first.value.id)!));
+    });
+
+    it('(b) a published body whose first line is indented is carried unchanged by the Key Findings section; only blank lines around it are dropped', () => {
+      const store = storeFor();
+      const body = '    indented code first\nthen prose';
+      const r = publish(store, { body: `\n\n${body}\n\n` });
+      if (!r.ok) throw new Error('publish');
+      expect(docOf(r.value.id)).toContain(`## Key Findings\n\n${body}\n`);
+    });
   });
 });

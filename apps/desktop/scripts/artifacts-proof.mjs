@@ -17,7 +17,8 @@
  *                  REQ-MONITOR-065/089).
  *   3. bad tag   — an invalid tag refuses the publish WHOLE: the observation is REQ-LIBRARY-089's wording, and
  *                  no row, no file and no partial state are left behind.
- *   4. inspector — the inspector opens on the selected row, the Markdown tab is edited and saved, the table's
+ *   4. inspector — the inspector opens on the selected row, its Preview starts below the frontmatter
+ *                  (PD-LIBRARY-003), the Markdown tab is edited and saved, the table's
  *                  status cell gains ` · edited`, and opening the same id again RE-RAISES the one dialog
  *                  (REQ-LIBRARY-131/132/133).
  *   5. missing   — the body file is deleted underneath a stored session; on a relaunch that resumes it the
@@ -386,6 +387,9 @@ let edited = null;
   if (opened.length !== 1) throw new Error(`the inspector did not open: ${JSON.stringify(opened)}`);
   if (!/^art_[0-9A-Za-z]{8} · agent_published · published · by /.test(meta)) throw new Error(`the metadata line is not REQ-LIBRARY-131's: ${meta}`);
   if (preview.length !== 1 || !preview[0].text.includes('scripted body')) throw new Error(`the Preview tab did not render the body: ${JSON.stringify(preview)}`);
+  // PD-LIBRARY-003 (f), OQ-210's ruling: the Preview starts below the document's frontmatter, which rendered as a run-on
+  // paragraph (`id: "art_…" slug: "…" …`) between two rules on every artifact before it.
+  if (/\b(?:id|slug|kind|created_at): "/.test(preview[0].text)) throw new Error(`the Preview rendered the frontmatter (PD-LIBRARY-003): ${JSON.stringify(preview[0].text.slice(0, 200))}`);
   if (dirty !== 'yes') throw new Error(`the editor did not take the typed characters (dirty=${dirty})`);
   if (status !== 'Saved.') throw new Error(`the footer did not read "Saved.": ${status}`);
   if (statusCells.length !== 1 || statusCells[0].data['data-edited'] !== 'yes' || !statusCells[0].text.endsWith(' · edited')) throw new Error(`the row's status cell did not gain " · edited": ${JSON.stringify(statusCells)}`);
@@ -400,7 +404,7 @@ let edited = null;
   const body = readFileSync(join(filesDir(s.session_id), record.body_file), 'utf8');
   if (!body.includes('EDITED')) throw new Error('the typed characters did not reach the body file');
   edited = { sessionId: s.session_id, id: record.id, slug: record.slug, bodyFile: record.body_file, directory: filesDir(s.session_id) };
-  results.inspector = { meta, dirty, status, statusCell: statusCells[0].text, raisedOnReopen: reopened[0].data['data-raised'], dialogs: reopened.length, editedAt: record.edited_at, bodyCarriesEdit: true };
+  results.inspector = { meta, previewStart: preview[0].text.slice(0, 80), dirty, status, statusCell: statusCells[0].text, raisedOnReopen: reopened[0].data['data-raised'], dialogs: reopened.length, editedAt: record.edited_at, bodyCarriesEdit: true };
 }
 
 // ---- 5. A body file deleted underneath: the record stays listed and the inspector reports the failure ----------

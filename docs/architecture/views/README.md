@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**An artifact's body is its document, and a person's edit of it survives and travels (PD-LIBRARY-003, OQ-210 ruled under
+R-072).** `ArtifactStore.rerender` rewrites only the leading frontmatter (`renderFrontmatter`, `splitFrontmatter` in
+`@rotaris/contracts`) of a document a person edited, on supersession and on re-materialisation; `latestArtifactText` and
+`buildContinuationPayload` take the session's `ArtifactStore` and carry an edited artifact's document marked `edited`; the
+inspector's Preview renders from below the frontmatter (`previewSource`). The **runtime view**'s `artifacts` row and its
+continuation paragraph say so. No package, edge, process, channel, command or store column changed.
+
 **A tool call's streamed arguments are model events (REQ-ORCH-089, REQ-ORCH-090, REQ-NOTIFY-112, REQ-CHAT-164; finacc3 F02).**
 `StreamPart` gains `tool-input`, which `AiSdkModelClient.stream` yields for the SDK's `tool-input-start` and `tool-input-delta`
 parts; the call still arrives once, whole, as `tool-call`. The stall watch counts it as output (`OUTPUT_EVENTS`), the first one

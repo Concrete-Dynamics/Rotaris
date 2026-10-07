@@ -26,7 +26,7 @@ import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
 import type { DelegationOps } from './children/delegation.js';
 import { DEFAULT_BUDGET, holdsModelSlot, storeChildReport, userCancellation, writeCancelledTeardown, type Budget } from './children/ledger.js';
-import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, splitFrontmatter, trimBlankLines, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
 import { costLabelOf } from './run/cost-label.js';
 import { recoveryEntryOf, sessionOutcomeOf, summaryFactsOf, SummaryWriter } from './run/summary.js';
@@ -665,14 +665,24 @@ function continuedTaskId(dal: StoreDal, sessionId: SessionId, todo: TodoDocument
  * they compare as text. Its id leads, so no cut reaches it (REQ-SESSION-194). A published document's summary is its
  * body's first line and its key findings its body (REQ-LIBRARY-093), so it is stated once, as its body. The repair of
  * `the-continuation-payload-says-no-artifact-is-recorded.md` (OQ-99).
+ *
+ * PD-LIBRARY-003 (e), OQ-210's ruling (R-072): an artifact a person edited is carried as its DOCUMENT, read through the
+ * session's artifact store, with its frontmatter removed and the blank lines around it dropped, within the same 6,000
+ * characters, and its header ends `edited`, so a person's correction reaches the next agent. An unedited artifact, one
+ * whose document cannot be read or is empty (the store's fallback), or a call with no store is carried from its
+ * columns as before; the columns keep their published values through an edit (REQ-LIBRARY-094).
  */
-export function latestArtifactText(dal: StoreDal, sessionId: SessionId): string {
+export function latestArtifactText(dal: StoreDal, sessionId: SessionId, artifacts: ArtifactStore | null = null): string {
   const records = dal.artifactsOf(sessionId).flatMap((r) => { const a = toArtifactRecord(r); return a && a.supersededBy === null ? [a] : []; });
   const iteration = dal.iterationsOf(sessionId).at(-1);
   const cycle = dal.planCyclesOf(sessionId).at(-1);
   const root = cycle !== undefined && iteration !== undefined && cycle.opened_at > iteration.opened_at ? undefined : iteration?.root_task_id;
   const latest = records.findLast((a) => a.conversationId === root) ?? records.at(-1);
   if (!latest) return 'Artifact: (none recorded in this session)';
+  const document = latest.editedAt !== null && artifacts !== null ? artifacts.body(latest.id) : null;
+  if (document?.ok === true && !document.value.fallback) {
+    return cut(`Artifact: ${latest.id} — ${cut(latest.title, 80)} (${latest.kind}, ${latest.status}, edited)\n${trimBlankLines(splitFrontmatter(document.value.text).rest)}`, 6_000);
+  }
   const header = `Artifact: ${latest.id} — ${cut(latest.title, 80)} (${latest.kind}, ${latest.status})`;
   const findings = latest.keyFindings.trim();
   const body = latest.kind === 'agent_published' ? findings : `${latest.summary}${findings === '' ? '' : `\nKey findings:\n${findings}`}`;
@@ -690,7 +700,7 @@ function toldSinceLastAnswer(messages: readonly ChatMessage[]): ReadonlySet<stri
   return new Set(messages.slice(lastAnswer + 1).filter((m) => m.role === 'user').map(textOfMessage));
 }
 
-export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt: string, todo: TodoDocument | undefined): string {
+export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt: string, todo: TodoDocument | undefined, artifacts: ArtifactStore | null = null): string {
   const recentRows = dal.residentRows(row.session_id as SessionId)
     .filter((event) => (event.kind === 'user' || event.kind === 'agent') && event.body.trim() !== '')
     .slice(-6);
@@ -707,7 +717,7 @@ export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt:
     'This is a follow-up within an existing session. Prior session context is authoritative; continue from its recorded state.',
     '', 'Latest user request:', prompt,
     '', 'Authoritative session handoff:',
-    latestArtifactText(dal, row.session_id as SessionId),
+    latestArtifactText(dal, row.session_id as SessionId, artifacts),
     `Todo:\n${shownTasks.join('\n') || '- (empty)'}`,
     `Progress: ${cut(row.progress ?? '(none recorded)', 700)}`,
     ...[openOffersText(dal, row.session_id as SessionId)].filter((t) => t !== ''),
@@ -1616,7 +1626,7 @@ export class Sessions {
     const held = this.holdForContinue(s);
     if (!held.ok) return held;
     hold.release = held.value.release;
-    const payload = buildContinuationPayload(s.dal, stored, prompt, todo.value);
+    const payload = buildContinuationPayload(s.dal, stored, prompt, todo.value, s.artifacts);
     const attachments = persistAttachments(this.deps.sessionFilesDir(s.dal, sessionId), inputs);
     if (!attachments.ok) return err({ code: 'attachment-invalid', reason: attachments.reason });
     beginning?.();
@@ -2414,7 +2424,7 @@ export class Sessions {
     const lastPrompt = latestRequestOf(s.dal, stored);
     const todo = parseTodoDocument(stored);
     if (!todo.ok) return todo;
-    const payload = buildContinuationPayload(s.dal, stored, lastPrompt, todo.value);
+    const payload = buildContinuationPayload(s.dal, stored, lastPrompt, todo.value, s.artifacts);
     const runtimeWithLimit: RunSetup = { ...setup.value, runtime: { ...setup.value.runtime, messageLimit: limit } };
     // OQ-162 as ruled (R-071): the Continue action brings nothing new, so it classifies nothing and carries the intent in effect.
     this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), runtimeWithLimit, [], undefined, opts.withoutPaused === true ? 'decline' : { message: null }, true, 'carry');
@@ -2462,7 +2472,7 @@ export class Sessions {
     if (!held.ok) return err(held.error);
     hold.release = held.value.release;
     const lastPrompt = latestRequestOf(s.dal, stored);
-    const payload = `${buildContinuationPayload(s.dal, stored, lastPrompt, todo.value)}\n\n${planSection(decided.decision, decided.plan, decided.changes)}`;
+    const payload = `${buildContinuationPayload(s.dal, stored, lastPrompt, todo.value, s.artifacts)}\n\n${planSection(decided.decision, decided.plan, decided.changes)}`;
     beginning();
     /*
      * The decision's own launch appends no task: the held run's todo carries the gated work (REQ-ORCH-004 / OQ-104). Its
@@ -2929,7 +2939,7 @@ export class Sessions {
     const resolved = s.writer.resolvePlanGate(cycle, decision, 'idle', decision === 'approve', null);
     if (!resolved.ok) return err({ code: resolved.error.code, reason: 'reason' in resolved.error ? resolved.error.reason : resolved.error.code });
     const lastPrompt = latestRequestOf(s.dal, stored);
-    const payload = `${buildContinuationPayload(s.dal, s.dal.getSession(sessionId)!, lastPrompt, todo.value)}\n\n${planSection(decision, text, changes)}`;
+    const payload = `${buildContinuationPayload(s.dal, s.dal.getSession(sessionId)!, lastPrompt, todo.value, s.artifacts)}\n\n${planSection(decision, text, changes)}`;
     // REQ-ORCH-004 / REQ-ORCH-154 (OQ-104): a plan decision states no new top-level task — the held run's todo already
     // carries the gated work — so the relaunch appends none; appending the last request again would duplicate it. After
     // a hold that followed a resumed iteration (PD-ORCH-003 revision 2) that todo also carries the continue's message,

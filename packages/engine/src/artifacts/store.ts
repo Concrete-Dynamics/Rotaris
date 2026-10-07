@@ -1,10 +1,10 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { toIsoUtc, type SessionId, type WallClock } from '@rotaris/kernel';
-import { isArtifactStatus, kebabSlug, normaliseArtifactTags, type ArtifactSection } from '@rotaris/contracts';
+import { isArtifactStatus, kebabSlug, normaliseArtifactTags, splitFrontmatter, type ArtifactSection } from '@rotaris/contracts';
 import type { ArtifactInsert, ArtifactRow, StoreDal } from '@rotaris/store';
 import { bodyFileName, deriveImportance, firstLineSummary, mintArtifactId, toArtifactRecord, uniqueSlug, type ArtifactRecord, type EditedFile, type HighlightPath, type RanCommand, type Snippet } from './record.js';
-import { renderCommand, renderSidecar } from './sidecar.js';
+import { renderCommand, renderFrontmatter, renderSidecar } from './sidecar.js';
 
 /** PD-LIBRARY-001: the column's serialised form, snake-cased like every other list stored here. */
 function commandRows(commands: readonly RanCommand[]): readonly { command: string; exit_code: number | null }[] {
@@ -248,12 +248,38 @@ export class ArtifactStore {
     return ok(record);
   }
 
-  /** REQ-LIBRARY-095: both sidecars are re-rendered when a supersession links them. */
+  /**
+   * REQ-LIBRARY-095: both sidecars are re-rendered when a supersession links them; REQ-LIBRARY-092's re-materialisation
+   * re-renders the one it updates.
+   *
+   * PD-LIBRARY-003 (d), OQ-210's ruling: a document a person edited (`edited_at` set) keeps the edit. Only its leading
+   * frontmatter block is rewritten from the record, or a fresh block is put in front of the text when none remains, and
+   * everything after it stays as saved. A document that is absent is written whole from the record; one that cannot be
+   * read is left as it is, with a warning, because the application never writes a rendering over a person's edit. Before
+   * the ruling the whole rendering was written over an edited document too, while `edited_at` and ` · edited` stayed
+   * (docs/defects/fixed/a-re-render-writes-over-a-persons-saved-artifact-edit.md).
+   */
   private rerender(id: string): void {
     const record = this.lookup(id);
     if (!record) return;
-    try { this.writeFile(record.bodyFile, renderSidecar(record)); }
-    catch (cause) { this.deps.warn(`The document of artifact ${id} could not be re-rendered: ${String(cause instanceof Error ? cause.message : cause)}`); }
+    const reason = (cause: unknown) => String(cause instanceof Error ? cause.message : cause);
+    let content = renderSidecar(record);
+    if (record.editedAt !== null) {
+      let saved: string | null = null;
+      try { saved = this.readFile(record.bodyFile); }
+      catch (cause) {
+        if ((cause as { code?: unknown } | null)?.code !== 'ENOENT') {
+          this.deps.warn(`The edited document of artifact ${id} could not be read, so it was left as it is and not re-rendered: ${reason(cause)}`);
+          return;
+        }
+      }
+      if (saved !== null) {
+        const split = splitFrontmatter(saved);
+        content = split.frontmatter === null ? `${renderFrontmatter(record)}\n${saved}` : `${renderFrontmatter(record)}${split.rest}`;
+      }
+    }
+    try { this.writeFile(record.bodyFile, content); }
+    catch (cause) { this.deps.warn(`The document of artifact ${id} could not be re-rendered: ${reason(cause)}`); }
   }
 
   /**

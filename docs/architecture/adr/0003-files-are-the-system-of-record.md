@@ -350,4 +350,11 @@ document is the record's `body_markdown`**, and the submitted body survives unch
 section and in the `key_findings` column. `REQ-LIBRARY-099`'s section filter therefore reads the record's columns and
 never parses the document; `REQ-LIBRARY-094`'s edit overwrites the document and nothing else; `REQ-LIBRARY-134`'s
 fallback for an empty stored body is that same rendering. ~~Open question, not a settled reading.~~ *No entry was written
-for it then; raised as [OQ-210](../open-questions.md) on 2026-10-06 (acceptance finding F16), the owner's.*
+for it then; raised as [OQ-210](../open-questions.md) on 2026-10-06 (acceptance finding F16), the owner's.* **Ruled
+2026-10-07 under the owner's delegation (R-072) and minted as
+[`PD-LIBRARY-003`](../../product/directives.md#pd-library-003):** the document is the body, as decided here, and the
+submitted body is kept twice on purpose. The ruling added what this execution had not tested: a re-render of a document a
+person edited (supersession, re-materialisation) wrote the whole rendering over the edit while `edited_at` stayed, and now
+rewrites only the frontmatter; the Key Findings section drops only the blank lines around the body, where it was trimmed;
+the follow-up handoff carries an edited document; and the inspector's Preview starts below the frontmatter. Built by bundle
+`fin28-artifacts` the same day.

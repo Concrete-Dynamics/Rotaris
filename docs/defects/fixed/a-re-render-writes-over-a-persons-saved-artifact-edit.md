@@ -30,3 +30,20 @@ Noticed 2026-10-07 by both advocates of the R-072 consortium on OQ-210 and confi
 - `packages/engine/src/artifacts/sidecar.ts`: `renderSidecar`, the Key Findings section's `.trim()`.
 - `packages/engine/src/sessions.ts`: `latestArtifactText` and `buildContinuationPayload`, the handoff's text.
 - `packages/engine/src/artifacts/artifacts.test.ts`: no case of an edit followed by a re-render.
+
+## Outcome
+
+Repaired 2026-10-07 by bundle `fin28-artifacts`, building [`PD-LIBRARY-003`](../../product/directives.md#pd-library-003)
+(OQ-210's ruling under R-072). `ArtifactStore.rerender` now reads a document whose record carries `edited_at` and rewrites only
+its leading frontmatter block (`renderFrontmatter`, split out of `renderSidecar`; `splitFrontmatter` in
+`packages/contracts/src/artifacts.ts`), or puts a fresh block in front when none remains; a document it cannot read is left as
+it is with a warning, and an absent one is written whole. `latestArtifactText` and `buildContinuationPayload` take the
+session's `ArtifactStore` and carry an edited artifact's document, frontmatter removed, marked `edited`. The Key Findings
+section drops only the blank lines around the body (`trimBlankLines`), so a first line's indentation survives. The inspector's
+Preview renders from below the frontmatter (`previewSource`).
+
+Pinned by `packages/engine/src/artifacts/artifacts.test.ts` (`PD-LIBRARY-003 — a re-render keeps a person's edit`: seven of
+its nine cases red on the code before, the absent and unedited cases holding the old behaviour), `session-resume.test.ts`
+(the handoff case, red before), `packages/contracts/src/artifacts.test.ts` and `packages/ui/src/library/ArtifactInspector.test.ts`.
+`pnpm artifacts-proof` (launch 4) now asserts the Preview renders no frontmatter line, and passed; the re-render's survival of an
+edit is measured on the real store on disk by the unit tests, not in the built app.

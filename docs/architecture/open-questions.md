@@ -10556,7 +10556,7 @@ read and write the one or the other; REQ-SESSION-002, the per-session files. Rai
 [`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
 the artifact store's first execution (Part U) said it raised this tension, in `packages/engine/src/artifacts/sidecar.ts` and in
 [ADR-0003](adr/0003-files-are-the-system-of-record.md)'s execution note ("Open question, not a settled reading"), and no entry
-was ever written, so the owner was never asked. Open, the owner's.)*
+was ever written, so the owner was never asked. ~~Open, the owner's.~~ **Ruled 2026-10-07 under the owner's delegation.**)*
 
 REQ-LIBRARY-087 fixes the on-disk document as REQ-LIBRARY-090's rendering and forbids the record holding it; REQ-LIBRARY-093 says
 a publish's `body_markdown` is the submitted body unchanged. Both cannot be literally true of one stored thing without a second
@@ -10572,6 +10572,25 @@ column keeps the body as published; REQ-LIBRARY-134's fallback for an empty stor
 **What a ruling decides.** Whether `body_markdown` is the rendered document (as built) or the submitted body, with the
 rendering derived; whether the submitted body may be kept both in `key_findings` and in the document; and whether an edit of
 the document should also reach `key_findings`.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the body is the document, as
+built, and a person's edit of it survives and travels. An artifact's `body_markdown` is its document on disk, created as
+REQ-LIBRARY-090's rendering. A publish keeps the submitted body unchanged in two places, `key_findings` and the document's Key
+Findings section (which now drops only the blank lines around it, where it was trimmed, so a first line's indentation
+survives), and a person's edit changes only the document: `key_findings` and every other column keep their published values
+(REQ-LIBRARY-094). A saved edit survives every later re-render, which rewrites only the document's leading frontmatter, and it
+is what the product passes on: the follow-up handoff carries an edited artifact's document marked `edited`, and the inspector's
+Preview shows every document starting below its frontmatter. Minted as
+[`PD-LIBRARY-003`](../product/directives.md#pd-library-003), which narrows REQ-LIBRARY-093 and REQ-LIBRARY-095 and extends
+REQ-SESSION-115 and REQ-LIBRARY-132. **The two recommendations weighed:** advocate A (the user's lens) recommended a change of
+behaviour, confirming the first two points and making the edit survive a re-render and reach the handoff, without a
+directive; advocate B (the system's lens) recommended confirming as built with a directive that narrows REQ-LIBRARY-093's
+`body_markdown` clause, and repairing the re-render that overwrites an edit. The ruling **followed both**: B's directive and
+re-render repair, A's handoff, read-failure rule and indentation catch, and it added the Preview's start below the
+frontmatter; it left out A's optional notice on a section-filtered read. The defect both found,
+[`a-re-render-writes-over-a-persons-saved-artifact-edit.md`](../defects/fixed/a-re-render-writes-over-a-persons-saved-artifact-edit.md),
+was repaired by bundle `fin28-artifacts` the same day (`ArtifactStore.rerender`, `latestArtifactText`, the inspector's
+`previewSource`).
 
 **OQ-211 — Is an artifact's consumer recorded as the reading agent's persona or as its instance?** *(REQ-LIBRARY-099, "every
 successful read marks the reading persona as a consumer"; REQ-LIBRARY-096, "marking an artifact consumed appends the actor at

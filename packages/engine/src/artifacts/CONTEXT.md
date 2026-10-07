@@ -33,8 +33,9 @@ artifact store
 
 **Sidecar**:
 The artifact's Markdown document: frontmatter, a title heading, then the fixed sections Summary, Key
-Findings, Highlight Paths, Snippets, Edited Files, Created Files. — `REQ-LIBRARY` session artifact
-store
+Findings, Highlight Paths, Snippets, Edited Files, Created Files. It is the record's body
+(`PD-LIBRARY-003`); a person's edit replaces it, and a later re-render rewrites only its frontmatter. —
+`REQ-LIBRARY` session artifact store, `PD-LIBRARY-003`
 
 **Context block**:
 Artifact material placed into a child's payload — the **prior sibling artifact index** (one line per

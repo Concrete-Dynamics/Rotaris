@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { splitFrontmatter } from '@rotaris/contracts';
 import { ConfirmDialog } from '../ConfirmDialog.js';
 import { Markdown } from '../markdown/Markdown.js';
 import { Button as DesignButton, TextArea as DesignTextArea } from '../design-system/index.js';
@@ -15,7 +16,8 @@ import { Button as DesignButton, TextArea as DesignTextArea } from '../design-sy
  * "Preview" is first and is rendered Markdown through ADR-0051's renderer — the same module the transcript
  * will use, never a second way of rendering — and re-renders on every keystroke; "Markdown" is second and is
  * a plain-text editor in a measured monospace face. Save persists ONLY the body (REQ-LIBRARY-094 keeps the
- * metadata immutable) and the footer then reads "Saved." or `Save failed: <err>`. A load failure leaves the
+ * metadata immutable) and the footer then reads "Saved." or `Save failed: <err>`. The Preview starts below the
+ * document's frontmatter (PD-LIBRARY-003); the Markdown tab carries the whole document. A load failure leaves the
  * editor read-only with Save disabled; an empty stored body falls back to the rendered sidecar form of the
  * record, which the load reports as such.
  */
@@ -41,6 +43,15 @@ export interface ArtifactInspectorProps {
   readonly onSave: (id: string, body: string) => Promise<{ ok: true; editedAt: string } | { ok: false; reason: string }>;
   readonly onClose: (id: string) => void;
   readonly onOpenLink?: ((href: string) => void) | undefined;
+}
+
+/**
+ * PD-LIBRARY-003 (f), OQ-210's ruling (R-072): the Preview renders the document from below its leading frontmatter block,
+ * which the header's metadata line already states and which rendered as a run-on paragraph between two rules on every
+ * artifact. The Markdown tab shows and edits the whole document, frontmatter included, and Save writes what it shows.
+ */
+export function previewSource(text: string): string {
+  return splitFrontmatter(text).rest;
 }
 
 /** REQ-LIBRARY-131's metadata line, exactly. */
@@ -112,8 +123,9 @@ export function ArtifactInspector({ id, raised, onLoad, onSave, onClose, onOpenL
       </div>
       <div className="artifact-inspector__body">
         {tab === 'preview'
-          // REQ-LIBRARY-132: the preview re-renders on every keystroke — it reads `text`, not the saved body.
-          ? <Markdown source={text} onOpenLink={onOpenLink} className="artifact-inspector__preview" testId="artifact-preview" />
+          // REQ-LIBRARY-132: the preview re-renders on every keystroke — it reads `text`, not the saved body — and
+          // PD-LIBRARY-003 (f) starts it below the frontmatter.
+          ? <Markdown source={previewSource(text)} onOpenLink={onOpenLink} className="artifact-inspector__preview" testId="artifact-preview" />
           : (
             <DesignTextArea className="input artifact-inspector__editor mono" aria-label="Artifact Markdown" data-testid="artifact-editor"
               value={text} readOnly={readOnly} spellCheck={false} onChange={(e) => setText(e.currentTarget.value)} />

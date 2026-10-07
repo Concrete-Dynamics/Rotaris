@@ -279,10 +279,17 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-092** — Materializing a child report MUST be idempotent keyed on the task id (falling back to the canonical agent name only for a record that carries no task id, so two children with different task ids never share or overwrite one artifact — accepted amendment 2026-09-29, OQ-113): a re-materialization updates in place, preserving id, slug, title, creation time, supersession links, consumers, and edit timestamp, instead of duplicating. Every terminal child report is materialized (kind `child_report`), and a timeline diagnostic event of kind `artifact_published` is recorded with the artifact id linked back onto the record.
 
 **REQ-LIBRARY-093** — Publishing MUST create a record whose `kind` is `agent_published` and whose `status` is `published`, whose `body_markdown` is the submitted body unchanged, whose `key_findings` is that same body, and whose `summary` is the body's first line truncated to at most 280 characters. `created_by` MUST name the publishing agent instance by its canonical name rather than by its persona, so two instances sharing a persona stay distinguishable in every artifact listing. A publish that names a supersedes target by id or by slug MUST mark that target superseded by the new record and MUST record the reverse link on the new record (REQ-LIBRARY-095).
+  > **Narrowed by [`PD-LIBRARY-003`](../product/directives.md#pd-library-003), 2026-10-07.** The record's
+  > `body_markdown` is the Markdown document REQ-LIBRARY-087 keeps on disk, created as REQ-LIBRARY-090's rendering, not
+  > the submitted body by itself. The submitted body is kept unchanged twice, in `key_findings` and as the document's Key
+  > Findings section, which drops only the blank lines around it.
 
 **REQ-LIBRARY-094** — Body editing MUST overwrite only the Markdown body and stamp `edited_at`; everything else on the record — its slug, its title, its tags, its snippets, and its source ids — stays immutable through every editing surface. An unknown reference fails with `Unknown artifact: '<ref>'`.
 
 **REQ-LIBRARY-095** — Supersession MUST link both directions, re-render both sidecars, and refuse self-supersession (`An artifact cannot supersede itself`) and unknown ids.
+  > **Narrowed by [`PD-LIBRARY-003`](../product/directives.md#pd-library-003), 2026-10-07.** The re-render of a sidecar
+  > a person edited rewrites only its leading frontmatter block from the record, or puts a fresh block in front when none
+  > remains, and keeps everything after it as saved; one that cannot be read is left as it is.
 
 **REQ-LIBRARY-096** — Listing MUST hide superseded artifacts by default, require ALL given tags when tags are supplied, and sort ascending by creation time; lookup accepts id or slug; marking an artifact consumed appends the actor at most once and persists.
 
@@ -395,6 +402,8 @@ Exporting MUST write nothing to the store, MUST NOT create, restore or repair a 
 **REQ-LIBRARY-131** — The artifact inspector MUST be modeless (multiple may be open); opening the same artifact id again re-raises the existing visible dialog instead of duplicating it. Size 720×560; window title `Artifact · <slug>`; header shows the artifact title in heading style and a monospace metadata line `<id> · <kind> · <status>[ · by <producer-or-persona>][ · edited]`.
 
 **REQ-LIBRARY-132** — The body MUST offer two tabs — "Preview" (rendered Markdown) first and "Markdown" (plain-text editor) second — where the preview re-renders on every editor keystroke and the editor uses a measured monospace font so tables and fenced blocks stay aligned while typing.
+  > **Extended by [`PD-LIBRARY-003`](../product/directives.md#pd-library-003), 2026-10-07.** The Preview renders the
+  > document from below its leading frontmatter block; the Markdown tab shows and edits the whole document.
 
 **REQ-LIBRARY-133** — Save MUST persist only the Markdown body (metadata immutable per REQ-LIBRARY-094), after which the listing shows the ` · edited` marker. The footer status shows "Saved." on success and `Save failed: <err>` on failure.
 

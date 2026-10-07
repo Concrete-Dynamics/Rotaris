@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Seventy-two.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Seventy-three.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -5110,6 +5110,72 @@ meanwhile.*
 > wherever its start is (`packages/engine/src/run/presence.ts`). **What was measured.** `contracts.test.ts` and
 > `presence.test.ts`, each red on `37f7a98`. **What was not measured.** No built-app or live run marked a user away.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-library-003"></a>
+
+### PD-LIBRARY-003 — an artifact's body is its document, and a person's edit of it survives and travels
+
+**(a) The body.** The record's `body_markdown` SHALL be the Markdown document REQ-LIBRARY-087 keeps on disk, created as
+REQ-LIBRARY-090's rendering.
+
+**(b) The submitted body, kept twice.** A publish SHALL keep the submitted body unchanged in `key_findings` and as the
+document's Key Findings section. The section drops only the blank lines before the body's first line and after its last.
+Both copies are intended.
+
+**(c) An edit.** An edit replaces the document and stamps `edited_at`. `key_findings`, `summary` and every other column keep
+their published values, as REQ-LIBRARY-094 is written, and REQ-LIBRARY-099's section filter reads those columns.
+
+**(d) A re-render keeps the edit.** A re-render of a record a person has edited SHALL rewrite the document's leading
+frontmatter block from the record, or put a block in front when none remains, and keep everything after it as saved. This
+covers REQ-LIBRARY-095's supersession and REQ-LIBRARY-092's re-materialisation. A document that cannot be read is left as it
+is; a document that is absent is written whole from the record.
+
+**(e) The handoff carries the edit.** REQ-SESSION-115's handoff SHALL carry an edited artifact as its document with the
+frontmatter removed, within the same 6,000 characters, and its header marks it `edited`. An unedited artifact, or one whose
+document cannot be read, is carried from its columns as before.
+
+**(f) The Preview.** The inspector's Preview (REQ-LIBRARY-132) SHALL render the document from below its leading frontmatter
+block. The Markdown tab shows and edits the whole document.
+
+A frontmatter block is one whose first line is `---`, which closes at the next `---` line, and in which every line between is
+a `key: value` line.
+
+**Why, and what it costs.** REQ-LIBRARY-087, REQ-ORCH-149 and REQ-SESSION-002 all make an artifact's body a file on disk that
+the record never holds, and REQ-LIBRARY-093 says a publish's `body_markdown` is the submitted body unchanged: both cannot be
+literally true of one stored thing ([OQ-210](../architecture/open-questions.md)). The build kept the document as the body and
+the submitted body in `key_findings` and the Key Findings section, which REQ-LIBRARY-088, 093 and 087 together require; this
+directive records that departure from REQ-LIBRARY-093's text. Confirming it exposed a defect: a re-render wrote the rendering
+of the columns over a document a person had saved, while `edited_at` and ` · edited` stayed
+([the defect note](../defects/fixed/a-re-render-writes-over-a-persons-saved-artifact-edit.md)). If the document is the body,
+a re-render of an edited one refreshes only what the record owns, its frontmatter, and the person's correction is what the
+next agent is handed. What it costs: an agent reading a published artifact sees its first line twice (in Summary and in Key
+Findings) and a few hundred characters of frontmatter, which spend REQ-LIBRARY-098's budget a little faster; a large
+published body is stored both in the record and on disk; after an edited child report is re-materialised the document keeps
+the person's text while the columns, the Library summary and the section filter show the new report, so the two can
+disagree, and ` · edited` is what says so; a person who deleted the frontmatter sees it come back at the next re-render; and
+REQ-LIBRARY-134's empty-body fallback applies only to an empty or truncated file.
+
+> **Narrows:** REQ-LIBRARY-093, REQ-LIBRARY-095
+> **Extends:** REQ-SESSION-115, REQ-LIBRARY-132
+
+*Raised under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the ruling of OQ-210, which weighed
+advocate A's change of behaviour and advocate B's confirmation as built and followed both.*
+
+> **First execution, 2026-10-07 (bundle `fin28-artifacts`).** Clause (d) found a defect, the one the ruling named: a re-render
+> wrote the whole rendering over an edited document
+> ([the note](../defects/fixed/a-re-render-writes-over-a-persons-saved-artifact-edit.md)). `ArtifactStore.rerender`
+> (`packages/engine/src/artifacts/store.ts`) now rewrites only the frontmatter (`renderFrontmatter`, `splitFrontmatter` in
+> `packages/contracts/src/artifacts.ts`); `latestArtifactText` (`packages/engine/src/sessions.ts`) carries an edited document
+> marked `edited`; `renderSidecar`'s Key Findings section drops only blank lines; the inspector's Preview starts below the
+> frontmatter (`previewSource`). Clauses (a), (b) and (c) held as built. **What was measured.** Nine cases in
+> `artifacts/artifacts.test.ts` (seven red on the code before), one in `session-resume.test.ts` (red before), the block
+> definition in `contracts/src/artifacts.test.ts` and the Preview's source in `library/ArtifactInspector.test.ts`;
+> `pnpm artifacts-proof`'s launch 4 asserts the Preview renders no frontmatter line, and passed (its inspector opened at the
+> artifact's title). **What was not measured.** No built-app launch edits an artifact and then supersedes or re-reports it:
+> that survival is measured on the real store on disk by the unit tests. The orchestrator's live run should show unedited
+> artifacts read as before. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

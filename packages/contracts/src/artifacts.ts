@@ -82,3 +82,38 @@ export const ArtifactsStateSchema = z.object({
   warnings: z.array(z.string()),
 });
 export type ArtifactsStatePayload = z.infer<typeof ArtifactsStateSchema>;
+
+/**
+ * PD-LIBRARY-003 (OQ-210, ruled 2026-10-07 under R-072): an artifact's document opens with a frontmatter block, and a
+ * re-render of a document a person edited rewrites that block alone. A block is one whose first line is `---`, which
+ * closes at the next `---` line, and in which every line between is a `key: value` line; anything else (a `---` rule
+ * followed by prose, a document with no closing line) is no block, and the whole text is `rest`. `frontmatter` keeps
+ * both fence lines and the closing line's own line break, so `frontmatter + rest` is the text exactly.
+ *
+ * Here and not in the engine because two processes read it: the store's re-render and the handoff (engine) and the
+ * inspector's Preview (ui), which renders the document from below the block.
+ */
+const FRONTMATTER_LINE = /^[A-Za-z0-9_][A-Za-z0-9_.-]*:(?:[ \t].*)?$/;
+export function splitFrontmatter(text: string): { readonly frontmatter: string | null; readonly rest: string } {
+  const first = /^---[ \t]*\r?\n/.exec(text);
+  if (!first) return { frontmatter: null, rest: text };
+  let at = first[0].length;
+  while (at <= text.length) {
+    const end = text.indexOf('\n', at);
+    const raw = end === -1 ? text.slice(at) : text.slice(at, end);
+    const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+    const next = end === -1 ? text.length : end + 1;
+    if (/^---[ \t]*$/.test(line)) return { frontmatter: text.slice(0, next), rest: text.slice(next) };
+    if (!FRONTMATTER_LINE.test(line) || end === -1) return { frontmatter: null, rest: text };
+    at = next;
+  }
+  return { frontmatter: null, rest: text };
+}
+
+/**
+ * PD-LIBRARY-003 clause (b): the blank lines before a text's first line and after its last are dropped, and nothing
+ * else — a first line's indentation is part of what was submitted (REQ-LIBRARY-093's "unchanged").
+ */
+export function trimBlankLines(text: string): string {
+  return text.replace(/^(?:[ \t]*\r?\n)+/, '').replace(/(?:\r?\n[ \t]*)+$/, '');
+}

@@ -1,4 +1,4 @@
-import { type CommandOutcome, type ProcessReply, type WorktreeBinding } from '@rotaris/contracts';
+import { ISOLATION_REQUIRED_HINT, type CommandOutcome, type ProcessReply, type WorktreeBinding } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
 import { millis } from '@rotaris/kernel';
 import { randomUUID } from 'node:crypto';
@@ -26,6 +26,11 @@ export function sessionCommands(
   ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'withdrawnByClose'>,
 ): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.chooseNextModel' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.retry' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.release' | 'session.reconcile' | 'session.pageOlder'> {
   const { capturing, clocks, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runFailures, runHost, services, withdrawnByClose } = ctx;
+  /** PD-GIT-001: the runs a launch in the workspace would share a tree with, or null when the run host's count cannot be read. */
+  const sharingRunCount = async (workspaceId: string): Promise<number | null> => {
+    const active = await runHost.request({ kind: 'runs.active', workspaceId, scope: 'sharing' }, millis(5_000)).catch(() => null);
+    return active?.kind === 'runs.count' ? active.count : null;
+  };
   return {
     'session.continue': async (req) => {
       const r = await runHost.request({ kind: 'session.continue', sessionId: req.sessionId, action: req.action, ...(req.withoutPaused === true ? { withoutPaused: true } : {}) }, millis(10_000));
@@ -83,21 +88,23 @@ export function sessionCommands(
       let sessionId: string | undefined;
       const root = canonicalPath(w.workspace);
       const svc = services.get(root);
-      // REQ-MONITOR-251 / REQ-GIT-120: the 2nd+ concurrent launch is placed in a worktree. The dialog
-      // locks isolation on (REQ-GIT-119), but a start arriving without an explicit tree — e.g. a retry
-      // holding pre-dialog launch options — must not share the base tree with the live run, so main
-      // force-creates the default isolated tree instead of refusing or colliding. REQ-GIT-120 says "whenever ANY run is
-      // active", so the count asked is the instance's (the empty id), not this workspace's: since PD-SHELL-009 keyed
-      // `runs.active` by workspace, a named id would no longer count a run in another project.
+      // REQ-MONITOR-251 / REQ-GIT-120 under PD-GIT-001 (OQ-224): a launch beside a run it would share a working tree with is
+      // placed in a worktree. The dialog locks isolation on (REQ-GIT-119) from the same count (`session.newId`), but a start
+      // arriving without an explicit tree — a retry holding pre-dialog launch options, or a run that became active after the
+      // dialog opened — must not share the base tree with the live run, so main force-creates the default isolated tree and
+      // says so. The count is the run host's `scope: 'sharing'` for this window's workspace: its own runs, and any whose tree
+      // is its folder, inside it or around it; a run of an unrelated project never counts. A count that cannot be read
+      // forces too. (fin28's repair round 1 asked the instance's count here, reading REQ-GIT-120's "any" as the whole
+      // instance: that reading is replaced by PD-GIT-001.)
       let effectiveIsolation = req.isolation;
       const effectiveAttach = req.attach;
       let forcedSessionId: string | undefined;
       if (!effectiveIsolation && !effectiveAttach) {
-        const active = await runHost.request({ kind: 'runs.active', workspaceId: '' }, millis(5_000)).catch(() => null);
-        if (active?.kind === 'runs.count' && active.count > 0) {
+        const sharing = await sharingRunCount(w.workspaceId);
+        if (sharing === null || sharing > 0) {
           forcedSessionId = mainWindows.takeMintedSession(w.wcId) ?? randomUUID();
           effectiveIsolation = { branch: `rotaris/session/${forcedSessionId}` };
-          log(`concurrent start while ${active.count} run(s) active: force-creating isolated worktree ${effectiveIsolation.branch} (REQ-MONITOR-251)`);
+          log(`concurrent start while ${sharing === null ? 'the active-run count could not be read' : `${sharing} run(s) share this workspace's tree`}: force-creating isolated worktree ${effectiveIsolation.branch} (REQ-MONITOR-251, PD-GIT-001)`);
         }
       }
       if (effectiveIsolation || effectiveAttach) {
@@ -156,15 +163,21 @@ export function sessionCommands(
       // REQ-NOTIFY-058 / REQ-NOTIFY-029: a starting run clears the standing notice only where it is unscoped or
       // scoped to this same session; a notice about another session survives, whatever order the events arrived in.
       await notices.clearForRunStart(r.sessionId);
+      // PD-GIT-001: a placement main forced is said, after the run start's clear and scoped to the new session, so a launch the
+      // dialog showed on the base tree never lands in a worktree unannounced.
+      if (forcedSessionId !== undefined && binding) raiseNotice('info', ISOLATION_REQUIRED_HINT, `This session runs on branch ${binding.branch}.`, undefined, r.sessionId);
       // REQ-SHELL-078: a new session starts — every persona window and its cache go.
       w.personaWindows.destroyAll('a new session started');
       return { ok: true, value: { sessionId: r.sessionId } };
     },
-    'session.newId': (_req, { w }) => {
+    'session.newId': async (_req, { w }) => {
       // REQ-GIT-118: the id the launch dialog shows; the next isolated or attached start takes it.
       const sessionId = randomUUID();
       mainWindows.setMintedSession(w.wcId, sessionId);
-      return { ok: true, value: { sessionId } };
+      // REQ-GIT-119 under PD-GIT-001: the dialog's lock is main's answer to the one count `session.start` forces on —
+      // required above zero or when the count cannot be read. A window with no workspace shares no tree.
+      const sharing = w.workspaceId ? await sharingRunCount(w.workspaceId) : 0;
+      return { ok: true, value: { sessionId, isolationRequired: sharing === null || sharing > 0 } };
     },
     'session.resume': async (req, { w }) => {
       if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before loading a session' };

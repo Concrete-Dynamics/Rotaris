@@ -63,6 +63,7 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
     log: (m: string) => { logs.push(m); },
     mainWindows: {
       takeMintedSession: () => 'minted-1',
+      setMintedSession: () => undefined,
       beginStart: (wcId: number, sessionId: string) => { starts.push({ op: 'begin', wcId, sessionId, hostAskedBefore: hostAsked.length }); },
       endStart: (wcId: number, sessionId: string) => { starts.push({ op: 'end', wcId, sessionId, hostAskedBefore: hostAsked.length }); },
     } as unknown as CommandContext['mainWindows'],
@@ -195,23 +196,63 @@ describe('session.start, driven without a process behind it', () => {
   });
 
   /*
-   * REQ-GIT-120 / REQ-MONITOR-251: "whenever ANY run is active" a launch without an explicit tree is forced into one. Since
-   * PD-SHELL-009 the run host's `runs.active` counts the named workspace alone, so this host answers the way the keyed
-   * count does with a run in another project and none in this one: the start must still ask the instance's count.
+   * PD-GIT-001 (OQ-224): the start asks the run host ONE count for the window's workspace — the runs a launch there would
+   * share a tree with — and forces the default tree on it. fin28's repair round 1 had it ask the instance's count (the empty
+   * id), so a launch in an idle project was forced into a worktree by another project's run; that reading is replaced.
    */
-  it("a launch in an idle project while another project's run is active is still forced into a worktree (REQ-GIT-120)", async () => {
+  const SHARED_TREE_HINT = 'Another run is already active, so this session gets its own Git worktree. Two runs sharing one working tree would overwrite each other\'s edits.';
+  it("a launch in an idle project while another project's run is active shares its own base tree (PD-GIT-001)", async () => {
     const h = harness(
       () => ({ ...created, kind: 'worktree.created' }),
       (req) => (req.kind === 'runs.active'
         ? { kind: 'runs.count', workspaceId: req.workspaceId, count: req.workspaceId === '' ? 1 : 0 }
-        : { kind: 'session.started', sessionId: 'minted-1' }),
+        : { kind: 'session.started', sessionId: (req as { sessionId: string }).sessionId }),
     );
     const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'));
-    expect(out).toEqual({ ok: true, value: { sessionId: 'minted-1' } });
-    expect(h.hostAsked[0]).toEqual({ kind: 'runs.active', workspaceId: '' });
+    expect(out.ok).toBe(true);
+    expect(h.hostAsked[0]).toEqual({ kind: 'runs.active', workspaceId: 'ws-1', scope: 'sharing' });
+    expect(h.svcAsked).toEqual([]);
+    expect(h.hostAsked.find((r) => r.kind === 'session.start')).not.toHaveProperty('effectiveRoot');
+    expect(h.raised).toEqual([]);
+  });
+
+  it('a launch while a run shares this workspace\'s tree is forced into a worktree, and says so in an informational notice naming the branch (PD-GIT-001)', async () => {
+    const h = harness(
+      () => ({ ...created, kind: 'worktree.created' }),
+      (req) => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: req.workspaceId, count: 1 } : { kind: 'session.started', sessionId: 'minted-1' }),
+    );
+    expect(await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'))).toEqual({ ok: true, value: { sessionId: 'minted-1' } });
+    expect(h.hostAsked[0]).toEqual({ kind: 'runs.active', workspaceId: 'ws-1', scope: 'sharing' });
     expect(h.svcAsked).toEqual([expect.objectContaining({ kind: 'worktree.create', branch: 'rotaris/session/minted-1' })]);
     expect(h.hostAsked.find((r) => r.kind === 'session.start')).toMatchObject({ sessionId: 'minted-1', effectiveRoot: created.path });
     expect(h.logs.some((l) => l.includes('force-creating isolated worktree rotaris/session/minted-1'))).toBe(true);
+    // Raised after the run start's clear, scoped to the new session, so the clear does not take it away.
+    expect(h.cleared).toEqual(['minted-1']);
+    expect(h.raised).toEqual([{ severity: 'info', headline: SHARED_TREE_HINT, detail: `This session runs on branch ${created.branch}.` }]);
+  });
+
+  it('a count that cannot be read forces the worktree, as a run active does (PD-GIT-001)', async () => {
+    const h = harness(
+      () => ({ ...created, kind: 'worktree.created' }),
+      (req) => (req.kind === 'runs.active' ? Promise.reject(new Error('no reply to runs.active within 5000 ms')) : { kind: 'session.started', sessionId: 'minted-1' }),
+    );
+    expect(await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'))).toEqual({ ok: true, value: { sessionId: 'minted-1' } });
+    expect(h.svcAsked).toEqual([expect.objectContaining({ kind: 'worktree.create', branch: 'rotaris/session/minted-1' })]);
+    expect(h.raised).toEqual([expect.objectContaining({ severity: 'info', headline: SHARED_TREE_HINT })]);
+  });
+
+  it("session.newId answers the dialog's lock from the same count: required above zero or unreadable, not at zero (PD-GIT-001, REQ-GIT-119)", async () => {
+    const ask = async (reply: (req: RunHostRequest) => Promise<ProcessReply> | ProcessReply) => {
+      const h = harness(() => ({ kind: 'ack' }), reply);
+      const out = await sessionCommands(h.ctx)['session.newId']({ kind: 'session.newId' }, windowOn('ws-1'));
+      return { out, asked: h.hostAsked };
+    };
+    const busy = await ask((req) => ({ kind: 'runs.count', workspaceId: (req as { workspaceId: string }).workspaceId, count: 2 }));
+    expect(busy.out).toEqual({ ok: true, value: { sessionId: expect.stringMatching(/^[0-9a-f-]{36}$/), isolationRequired: true } });
+    expect(busy.asked).toEqual([{ kind: 'runs.active', workspaceId: 'ws-1', scope: 'sharing' }]);
+    expect((await ask(() => ({ kind: 'runs.count', workspaceId: 'ws-1', count: 0 }))).out).toEqual({ ok: true, value: { sessionId: expect.any(String), isolationRequired: false } });
+    expect((await ask(() => Promise.reject(new Error('gone')))).out).toEqual({ ok: true, value: { sessionId: expect.any(String), isolationRequired: true } });
+    expect((await ask(() => ({ kind: 'refused', code: 'x', headline: 'no' }))).out).toEqual({ ok: true, value: { sessionId: expect.any(String), isolationRequired: true } });
   });
 
   it('a launch with no run active anywhere shares the base tree (REQ-GIT-120)', async () => {

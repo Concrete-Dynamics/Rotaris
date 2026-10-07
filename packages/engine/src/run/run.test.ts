@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot, TranscriptIncrement } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall, type TurnReport } from '@rotaris/model';
-import { parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type LiveTerminal, type PortToolResult, type Publisher, type RunConfig, type RunNotice, type RunResult, type SessionsDeps, type ToolPort } from '../index.js';
+import { BASE_TREE_BUSY_REFUSAL, parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, treesOverlap, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type LiveTerminal, type PortToolResult, type Publisher, type RunConfig, type RunNotice, type RunResult, type SessionsDeps, type ToolPort } from '../index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -556,6 +556,95 @@ describe('engine/run — the run loop end to end against a real store and a scri
     await sessions.running(a);
     expect(dal.getSession(a)!.execution_status).toBe('completed');
     expect(sessions.stoppableRunCount('C:/ws')).toBe(0);
+  });
+
+  describe('PD-GIT-001 (OQ-224): the runs a launch or a continue in a workspace would share a working tree with', () => {
+    /** A run that holds its turn until it is stopped. */
+    const holding = (): AgentBackend => ({ ownsTheLoop: false, runTurn: (_i, _s, signal) => new Promise<TurnReport>((resolve) => { signal.addEventListener('abort', () => resolve({ status: 'failed', text: '', usage: { input: 0, output: 0 }, error: modelError({ code: 'aborted', headline: 'aborted', transient: false }) })); }) });
+    const binding = (path: string) => ({ worktree_path: path, branch: 'rotaris/session/x', base_branch: 'main', base_revision: 'r', created_by_session: true, merge_status: 'ready' as const, integration_session_id: null });
+
+    it('trees overlap when one is the other, lies inside it or contains it, compared whole by component', () => {
+      expect(treesOverlap('/w/repo', '/w/repo', 'linux')).toBe(true);
+      expect(treesOverlap('/w/repo/app', '/w/repo', 'linux')).toBe(true);
+      expect(treesOverlap('/w/repo', '/w/repo/app', 'linux')).toBe(true);
+      expect(treesOverlap('/w/repo2', '/w/repo', 'linux')).toBe(false);
+      expect(treesOverlap('/w/repo', '/w/repo2', 'linux')).toBe(false);
+      expect(treesOverlap('/w/other', '/w/repo', 'linux')).toBe(false);
+      // The canonical rule on Windows is case-insensitive.
+      expect(treesOverlap('C:\\Work\\Repo\\app', 'c:\\work\\repo', 'win32')).toBe(true);
+      expect(treesOverlap('C:\\Work\\Repo2', 'C:\\Work\\Repo', 'win32')).toBe(false);
+    });
+
+    it("counts the workspace's own runs whatever tree they run in, and any run whose tree is its folder, inside it or around it — never an unrelated project's", async () => {
+      const { sessions } = sessionsWith(holding());
+      const repo = join(dir, 'repo');
+      const a = (sessions.start(dal, repo, 'a') as { value: SessionId }).value;
+      const b = (sessions.start(dal, join(repo, 'app'), 'b') as { value: SessionId }).value;
+      const outer = join(dir, 'outer');
+      const c = (sessions.start(dal, outer, 'c', { worktree: binding(join(outer, '.rotaris', 'worktrees', 'c')) }) as { value: SessionId }).value;
+      await new Promise((r) => setTimeout(r, 5));
+      expect(sessions.activeRunsSharing(repo)).toBe(2);
+      expect(sessions.activeRunsSharing(join(repo, 'app'))).toBe(2);
+      expect(sessions.activeRunsSharing(join(repo, 'app', 'src'))).toBe(2);
+      expect(sessions.activeRunsSharing(join(dir, 'repo2'))).toBe(0);
+      expect(sessions.activeRunsSharing(join(dir, 'unrelated'))).toBe(0);
+      // The outer workspace's isolated run belongs to it, and writes in a tree inside it; an inner folder shares none of it.
+      expect(sessions.activeRunsSharing(outer)).toBe(1);
+      expect(sessions.activeRunsSharing(join(outer, 'sub'))).toBe(0);
+      // A continue asks with its own session excluded.
+      expect(sessions.activeRunsSharing(repo, a)).toBe(1);
+      expect(sessions.activeRunsSharing(repo, b)).toBe(1);
+      await sessions.closeAll();
+      expect(sessions.activeRunsSharing(repo)).toBe(0);
+      void c;
+    });
+
+    it("REQ-GIT-120's refusal: a base-tree session is not continued while another run shares its workspace's tree; it is when that run is in an unrelated project, or once the run has ended, and it is loaded throughout", async () => {
+      const { sessions } = sessionsWith(holding());
+      const ws = join(dir, 'ws');
+      const s1 = (sessions.start(dal, ws, 'first') as { value: SessionId }).value;
+      await new Promise((r) => setTimeout(r, 5));
+      expect(sessions.control({ op: 'cancel', sessionId: s1, args: {} })).toEqual({ ok: true });
+      await sessions.running(s1);
+      expect(dal.getSession(s1)!.execution_status).toBe('paused');
+      // An unrelated project's run is no reason to refuse.
+      const elsewhere = (sessions.start(dal, join(dir, 'elsewhere'), 'other project') as { value: SessionId }).value;
+      await new Promise((r) => setTimeout(r, 5));
+      expect(sessions.activeRunsSharing(ws, s1)).toBe(0);
+      // Another base-tree run of the same workspace: every path that would start a further run of s1 is refused, nothing written.
+      const s2 = (sessions.start(dal, ws, 'second') as { value: SessionId }).value;
+      await new Promise((r) => setTimeout(r, 5));
+      const rows = dal.residentRows(s1).length;
+      expect(sessions.prompt(s1, 'go on')).toEqual({ ok: false, error: { code: 'base-tree-busy', reason: BASE_TREE_BUSY_REFUSAL } });
+      expect(sessions.retry(s1)).toEqual({ ok: false, error: { code: 'base-tree-busy', reason: BASE_TREE_BUSY_REFUSAL } });
+      expect(sessions.continueSession(s1, 'continue')).toEqual({ ok: false, error: { code: 'base-tree-busy', reason: BASE_TREE_BUSY_REFUSAL } });
+      expect(dal.residentRows(s1)).toHaveLength(rows);
+      expect(dal.getSession(s1)!.execution_status).toBe('paused');
+      expect(dal.getLock(s1)).toBeUndefined();
+      // Loading (focusing) it stays allowed (PD-SHELL-002).
+      expect(sessions.resume(dal, ws, s1).ok).toBe(true);
+      // Once the other run has ended, it continues.
+      expect(sessions.control({ op: 'cancel', sessionId: s2, args: {} })).toEqual({ ok: true });
+      await sessions.running(s2);
+      expect(sessions.prompt(s1, 'go on').ok).toBe(true);
+      await sessions.closeAll();
+      void elsewhere;
+    });
+
+    it('REQ-GIT-120: an isolated session continues while another run is active in its workspace', async () => {
+      const { sessions } = sessionsWith(holding());
+      const ws = join(dir, 'iso');
+      const tree = join(ws, '.rotaris', 'worktrees', 'one');
+      mkdirSync(tree, { recursive: true });
+      const s1 = (sessions.start(dal, ws, 'first', { worktree: binding(tree) }) as { value: SessionId }).value;
+      await new Promise((r) => setTimeout(r, 5));
+      expect(sessions.control({ op: 'cancel', sessionId: s1, args: {} })).toEqual({ ok: true });
+      await sessions.running(s1);
+      expect(sessions.start(dal, ws, 'second').ok).toBe(true);
+      await new Promise((r) => setTimeout(r, 5));
+      expect(sessions.prompt(s1, 'go on').ok).toBe(true);
+      await sessions.closeAll();
+    });
   });
 
   it('OQ-42: quarantines sibling runs, refuses admission and probes explicit reopen recovery', async () => {

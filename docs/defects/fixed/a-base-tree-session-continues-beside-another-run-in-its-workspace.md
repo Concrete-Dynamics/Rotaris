@@ -20,3 +20,14 @@ focusing a session stays allowed (PD-SHELL-002).
 
 - `packages/engine/src/sessions.ts` — `promptHeld`, `continueSessionHeld`, `relaunchPlanDecision`, `planDecisionHeld`: the
   paths that start a further run of an existing session; `resume` (a load), which stays unrefused.
+
+## Repaired — 2026-10-07, fin29 (PD-GIT-001; REQ-GIT-120, REQ-MONITOR-256, REQ-MONITOR-258)
+
+`Sessions.baseTreeBusy` (`packages/engine/src/sessions.ts`) refuses, with `BASE_TREE_BUSY_REFUSAL` — REQ-GIT-120's words — a
+session with no worktree binding whenever `activeRunsSharing(its workspace, itself excluded)` is above zero, at the four paths
+that start a further run of it: `promptHeld` (a message at rest, and the retry through it), `continueSessionHeld` (Continue
+and the message limit's raise; its cancel, which starts no run, is not refused), `relaunchPlanDecision` and
+`planDecisionHeld`. Each refuses before anything is written (the plan decision gives back the lock it had taken, as every refusal there does); loading (`resume`) stays allowed
+(PD-SHELL-002). Pinned by `run.test.ts`'s "REQ-GIT-120's refusal" case (refused for the prompt, the retry and Continue beside a
+base-tree run of the same workspace, nothing written and no lock taken; allowed beside an unrelated project's run and once
+that run has ended; loaded throughout) and "an isolated session continues", the first red with the refusal removed.

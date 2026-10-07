@@ -202,7 +202,13 @@ of several main windows. `run.test.ts` pins both (two workspaces, one stopped `p
 `dispatch.test.ts` pins the run host's hop. The consequence's text stands; what it claimed is now true. The keyed count's
 readers are REQ-SHELL-021's gate 3, the restore's refusal and the close of one of several windows; `session.start`'s forced
 isolation (REQ-GIT-120: "whenever any run is active") asks the instance's count with the empty id, so a launch in an idle
-project while another project's run executes is still placed in a worktree (`commands/session.test.ts`'s REQ-GIT-120 case). *Corrected 2026-10-07 by fin29 (fin28 reviewers' finding d), the claim above kept:* "the close of one of several windows"
+project while another project's run executes is still placed in a worktree (`commands/session.test.ts`'s REQ-GIT-120 case).
+*Falsified 2026-10-07 by PD-GIT-001 (OQ-224, ruled under R-072; fin29), the claim above kept:* "asks the instance's count" read
+REQ-GIT-120's "any" as the whole instance, which the ruling replaced: the launch path and the launch dialog now ask one
+per-workspace count, `activeRunsSharing(workspaceRoot)` (`runs.active` with `scope: 'sharing'`), which counts the
+workspace's own runs and any run whose tree is the workspace's folder, inside it or around it, so a launch in an idle project
+while another project's run executes shares its own base tree; and the run host refuses a base-tree continue on the same
+count with its own session excluded. Consequence 3's "for this workspace" is the predicate this reading builds. *Corrected 2026-10-07 by fin29 (fin28 reviewers' finding d), the claim above kept:* "the close of one of several windows"
 is no longer a reader of `activeRunCount`. That count reads `isRunActive`, which holds for a run whose end is written but
 which is still ending, a run `stopActiveIn` does not stop, so the box counted runs its Yes could not stop. The close now asks
 `runs.active` with `scope: 'stoppable'`, answered by `stoppableRunCount(workspaceRoot)`, which counts with `stopActiveIn`'s

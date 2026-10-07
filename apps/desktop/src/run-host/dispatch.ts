@@ -571,7 +571,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       // `scope: 'stoppable'` counts with `runs.stopWorkspace`'s own predicate (the window close's box, PD-SHELL-009).
       if (req.workspaceId === '') return { kind: 'runs.count', workspaceId: '', count: sessions.activeRunCount() };
       const s = stores.get(req.workspaceId);
-      const count = !s ? 0 : req.scope === 'stoppable' ? sessions.stoppableRunCount(s.root) : sessions.activeRunCount(s.root);
+      // `scope: 'sharing'` counts the runs a launch there would share a tree with (PD-GIT-001: the launch dialog, `session.start`).
+      const count = !s ? 0 : req.scope === 'stoppable' ? sessions.stoppableRunCount(s.root) : req.scope === 'sharing' ? sessions.activeRunsSharing(s.root) : sessions.activeRunCount(s.root);
       return { kind: 'runs.count', workspaceId: req.workspaceId, count };
     }
     case 'runs.stopWorkspace': {

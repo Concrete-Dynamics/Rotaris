@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
-import { confinementMessage, NO_CONFINEMENT_DISCLOSURE, owesNoConfinementDisclosure, SANDBOX_MODE_NAMES, validateBranchName, type ConfinementVerdict, type SandboxModeName } from '@rotaris/contracts';
+import { confinementMessage, ISOLATION_REQUIRED_HINT, NO_CONFINEMENT_DISCLOSURE, owesNoConfinementDisclosure, SANDBOX_MODE_NAMES, validateBranchName, type ConfinementVerdict, type SandboxModeName } from '@rotaris/contracts';
 import { Button as DesignButton, Checkbox as DesignCheckbox, Input as DesignInput, Select as DesignSelect, layoutContractAttributes, type UiLayoutContract } from './design-system/index.js';
 
 /**
@@ -53,8 +53,19 @@ export interface StartSessionDialogProps {
 }
 
 export const ISOLATION_HINT = 'Choose an isolated Git worktree when this task may run beside other sessions.';
-export const ISOLATION_REQUIRED_HINT = 'Another run is already active, so this session gets its own Git worktree. Two runs sharing one working tree would overwrite each other\'s edits.';
+/** REQ-GIT-119's hint, from its one home in `@rotaris/contracts`, which main's forced-placement notice says too (PD-GIT-001). */
+export { ISOLATION_REQUIRED_HINT };
 export const ISOLATION_REQUIRED_TOOLTIP = 'Required while another run is active.';
+/**
+ * REQ-GIT-119 under PD-GIT-001 (OQ-224): whether the dialog locks isolation on, read from main's `session.newId` answer —
+ * the same count `session.start` forces a worktree on. Only an explicit `isolationRequired: false` leaves it unlocked: an
+ * answer that does not say (a count that could not be read) locks it, as the start would force it. Until 2026-10-07 the
+ * renderer decided this itself from its own workspace's session list, while main forced on another count
+ * (`docs/defects/fixed/the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md`).
+ */
+export function isolationRequiredOf(newId: unknown): boolean {
+  return !(typeof newId === 'object' && newId !== null && (newId as { isolationRequired?: unknown }).isolationRequired === false);
+}
 /**
  * REQ-SANDBOX-130's disclosure, re-exported from its one home in `@rotaris/contracts`. It was
  * declared here first, when this dialog was the only surface that carried it; REQ-SANDBOX-130 names

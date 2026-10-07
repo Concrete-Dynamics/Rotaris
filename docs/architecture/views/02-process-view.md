@@ -286,9 +286,16 @@ its hold at its `cancelling`, a session never continued kept its notices held fo
 held.) The event relay asks `QuitState.holdsBack` of every run host event, and `unshownApprovals` filters through
 `QuitState.unshownToReport`. A window whose
 workspace has no active run closes unasked. REQ-SHELL-021's gate 3 and the restore's refusal send their window's workspace
-id and so count that workspace alone; `session.start`'s forced isolation (REQ-GIT-120, REQ-MONITOR-251: "whenever any run is
+id and so count that workspace alone. ~~`session.start`'s forced isolation (REQ-GIT-120, REQ-MONITOR-251: "whenever any run is
 active") sends the empty id, so a launch without an explicit tree is placed in a worktree while a run executes in any
-project.
+project.~~ *Replaced 2026-10-07 by PD-GIT-001 (OQ-224; fin29).* `session.newId` and `session.start` ask one count,
+`runs.active {workspaceId, scope: 'sharing'}` (`Sessions.activeRunsSharing`: the window's workspace's own runs, and any run
+whose tree is its folder, inside it or around it; a run of an unrelated project never counts). `session.newId` answers
+`{sessionId, isolationRequired}` — above zero or unreadable — and the launch dialog shows that answer as REQ-GIT-119's lock;
+`session.start` forces the default tree for a launch without an explicit tree on the same answer and, when it forces, raises
+an informational notice scoped to the new session carrying REQ-GIT-119's hint and the branch. The run host refuses to start
+a further run of a base-tree session (a message at rest, Continue, the retry, the plan gate's relaunch) while that count,
+with the session excluded, is above zero, with REQ-GIT-120's words.
 
 **The session browser's actions (Part U).** Renderer → main: `session.repair {sessionId?}` (one stale session, or every
 stale session when the id is absent — REQ-SESSION-060/182) → `{report: {repaired[{sessionId, from, to: interrupted,

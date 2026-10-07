@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -1090,8 +1090,7 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
   // REQ-SANDBOX-119/120/130: the dialog shows this host's own verdict, never a hardcoded answer.
   const launchConfinement = useConfinement();
   const openStartDialog = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
-    const current = replica.getState();
-    const [id, config, list] = await Promise.all([bridge.command({ kind: 'session.newId' }), bridge.command({ kind: 'config.read' }), bridge.command({ kind: 'session.list' })]);
+    const [id, config] = await Promise.all([bridge.command({ kind: 'session.newId' }), bridge.command({ kind: 'config.read' })]);
     if (!id.ok) return { ok: false, reason: id.detail ?? id.headline };
     const sandboxMode = config.ok ? (config.value as ConfigSnapshot).runtime.sandbox_mode : 'off';
     // REQ-ORCH-152: the persisted mode is what the dialog preselects; it holds none of its own.
@@ -1103,13 +1102,9 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
      * produces the advisory rather than suppresses it.
      */
     const permissionMode = config.ok ? (config.value as ConfigSnapshot).runtime.permission_mode : 'ask';
-    // REQ-MONITOR-251 / REQ-GIT-119: the 2nd+ concurrent launch is forced into a worktree. Any busy
-    // session in this workspace — focused or background — locks isolation on in the dialog.
-    const currentBusy = current.session !== null && isBusy(current.session.executionStatus);
-    const listBusy = list.ok
-      ? ((list.value as { sessions: SessionListItemPayload[] }).sessions.some((s) => s.busy || isBusy(s.status)))
-      : false;
-    setLaunch({ sessionId: (id.value as { sessionId: string }).sessionId, sandboxMode, runStartMode, runActive: currentBusy || listBusy, permissionMode, allowUnsandboxedAutonomous: false });
+    // REQ-MONITOR-251 / REQ-GIT-119 under PD-GIT-001: the dialog locks isolation on exactly when main's answer says a run
+    // shares this workspace's tree (or the count could not be read) — the one count `session.start` forces a worktree on.
+    setLaunch({ sessionId: (id.value as { sessionId: string }).sessionId, sandboxMode, runStartMode, runActive: isolationRequiredOf(id.value), permissionMode, allowUnsandboxedAutonomous: false });
     return { ok: true };
   }, []);
   const acceptLaunch = useCallback(async (options: LaunchOptions) => {

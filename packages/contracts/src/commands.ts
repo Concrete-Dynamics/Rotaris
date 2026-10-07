@@ -93,7 +93,11 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * never both (REQ-GIT-158 makes that refusal unreachable); and the sandbox mode.
    */
   z.object({ kind: z.literal('session.start'), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), isolation: z.object({ branch: z.string().min(1) }).optional(), attach: z.object({ path: z.string().min(1) }).optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
-  /** REQ-GIT-118: the id the launch dialog shows in its default branch; main mints it and uses it for the next isolated start. */
+  /**
+   * REQ-GIT-118: the id the launch dialog shows in its default branch; main mints it and uses it for the next isolated start.
+   * Answered `{sessionId, isolationRequired}`: PD-GIT-001's count for the window's workspace, above zero or unreadable, which
+   * the dialog shows as REQ-GIT-119's lock.
+   */
   z.object({ kind: z.literal('session.newId') }),
   z.object({ kind: z.literal('session.list') }),
   /**
@@ -398,3 +402,9 @@ export interface RendererBridge {
   readonly onReauthPrompt: (fn: (p: unknown) => void) => () => void;
 }
 export const BRIDGE_KEY = 'rotaris' as const;
+
+/**
+ * REQ-GIT-119's hint, one text for the two places that say it (PD-GIT-001): the launch dialog's locked isolation, and the
+ * informational notice main raises when `session.start` forces a launch into a worktree the dialog did not show.
+ */
+export const ISOLATION_REQUIRED_HINT = 'Another run is already active, so this session gets its own Git worktree. Two runs sharing one working tree would overwrite each other\'s edits.';

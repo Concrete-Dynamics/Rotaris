@@ -384,6 +384,10 @@ const declinedLog = await launch('quit-declined', s6b, { ROTARIS_SCRIPT: 'read,r
 // (PD-ORCH-005 clause 9): the store records `approval_withdrawn` and no `approval_denied` — the dialog that closes with its
 // window answers nothing (`dialogCloseAnswersDeny` reading `QuitState.withdrawnByClose`). And the stopped run's own outcome
 // is the notice `QuitState.holdsBack` holds from the window that stays (REQ-STARTUP-046's last sentence), which main logs.
+//
+// Since fin29 (PD-GIT-001, OQ-224), while A's run waits, B's launch dialog is read and accepted unchecked: isolation must be
+// unchecked and enabled (a run of another project never counts), and B's run must end `completed` on B's base tree, with
+// no worktree binding.
 const PAIR_WINDOW_BOX = /capture: message box "Close this window while a run is active\?" \| Close this window while a run is active\? \| A run is still executing in this project\. Closing this window ends it: Rotaris will stop the run, and work in flight may not finish\. Choose Cancel to return to the window and let it finish\. \| buttons \["Cancel","Yes"\] default 0 → answered (\d)/;
 const pairA = scenario('pair-a', [], 'ask');
 const pairB = scenario('pair-b', []);
@@ -398,7 +402,7 @@ const pairB = scenario('pair-b', []);
   const windowsOf = async () => { const r = await d.windows(); return Array.isArray(r?.windows) ? r.windows : []; };
   const storeOf = () => findDatabases(started.local).map((file) => {
     const db = new Database(file, { readonly: true });
-    try { return { file, sessions: db.prepare('SELECT session_id, workspace_root, execution_status, stop_reason FROM sessions').all(), iterations: db.prepare('SELECT session_id, iteration, state, interruption FROM iterations ORDER BY iteration').all(), timeline: db.prepare("SELECT session_id, name FROM timeline WHERE name LIKE 'approval_%' ORDER BY ordinal").all() }; }
+    try { return { file, sessions: db.prepare('SELECT session_id, workspace_root, execution_status, stop_reason, worktree FROM sessions').all(), iterations: db.prepare('SELECT session_id, iteration, state, interruption FROM iterations ORDER BY iteration').all(), timeline: db.prepare("SELECT session_id, name FROM timeline WHERE name LIKE 'approval_%' ORDER BY ordinal").all() }; }
     finally { db.close(); }
   });
   const pairSessionA = () => storeOf().flatMap((s) => s.sessions.map((row) => ({ ...row, iterations: s.iterations.filter((i) => i.session_id === row.session_id), approvals: s.timeline.filter((t) => t.session_id === row.session_id).map((t) => t.name) }))).find((row) => String(row.workspace_root).endsWith('pair-a/workspace') || String(row.workspace_root).endsWith('pair-a\\workspace'));
@@ -426,6 +430,22 @@ const pairB = scenario('pair-b', []);
     // B again; then A's own close, one of two windows with its project's run active: the window box, answered Yes.
     await d.command({ kind: 'workspace.choose', newWindow: true });
     await until(windowsOf, (w) => w.length === 2, { timeoutMs: 30_000, what: 'two main windows again' });
+    // PD-GIT-001 (OQ-224): B's launch dialog, while A's project runs, is main's answer for B's own workspace — isolation
+    // unchecked and enabled — and B's launch left unchecked runs on B's base tree. Before, main forced it into a worktree for
+    // A's run (and B, no Git repository, could not start at all), while the dialog showed it unchecked.
+    await d.useWindow('pair-b/workspace');
+    await d.click('button', { text: 'New session' });
+    await d.waitFor('[data-testid="start-session-dialog"]', { timeoutMs: 10_000 });
+    reading.idleDialog = await d.eval("(() => { const box = document.querySelector('input[data-testid=\"start-session-isolation\"]'); const hint = document.querySelector('[data-testid=\"start-session-hint\"]'); return { checked: box?.checked ?? null, disabled: box?.disabled ?? null, hint: hint?.textContent ?? null }; })()");
+    if (reading.idleDialog?.checked !== false || reading.idleDialog?.disabled !== false) throw new Error(`B's launch dialog locked isolation for a run in another project (PD-GIT-001): ${JSON.stringify(reading.idleDialog)}`);
+    await d.click('[data-testid="start-session-accept"]');
+    await d.waitFor('.composer__input', { timeoutMs: 10_000 });
+    await d.chord('Ctrl+L');
+    await until(() => d.eval("document.activeElement?.classList.contains('composer__input') === true"), (v) => v === true, { timeoutMs: 10_000, what: "B's composer holding focus" });
+    await d.type("B's own run, on B's base tree", { enter: true });
+    const pairSessionB = () => storeOf().flatMap((s) => s.sessions).find((row) => String(row.workspace_root).endsWith('pair-b/workspace') || String(row.workspace_root).endsWith('pair-b\\workspace'));
+    reading.idleLaunch = await until(pairSessionB, (row) => row !== undefined && !['starting', 'running', 'waiting', 'background'].includes(row.execution_status), { timeoutMs: 60_000, what: "B's run ending" });
+    if (reading.idleLaunch.worktree !== null && reading.idleLaunch.worktree !== '' || reading.idleLaunch.execution_status !== 'completed') throw new Error(`B's unchecked launch did not run on B's base tree to its end (PD-GIT-001): ${JSON.stringify(reading.idleLaunch)}`);
     await d.useWindow('pair-a/workspace');
     await d.command({ kind: 'window.close' });
     await d.useWindow();
@@ -453,7 +473,7 @@ const pairB = scenario('pair-b', []);
   const heldOutcome = /run (\S+): its outcome "([^"]*)" held back: its window's close stopped the run \(REQ-STARTUP-046, PD-SHELL-009\)/.exec(log);
   if (heldOutcome === null || heldOutcome[1] !== session.session_id) throw new Error(`the stopped run's outcome was not held back from the window that stays; see pair-app.log`);
   if (new RegExp(`notice from the run host: [^\\n]*\\(session ${session.session_id}\\)`).test(log)) throw new Error(`a notice of the stopped session reached the window that stays; see pair-app.log`);
-  results.pairWindows = { idleClose: reading.idleClose, runningClose: { session, box: 'Close this window while a run is active? — answered Yes', heldOutcome: heldOutcome[2] }, boxesAsked: boxes, quit: { exit: stopped.exit } };
+  results.pairWindows = { idleClose: reading.idleClose, idleDialog: reading.idleDialog, idleLaunch: { status: reading.idleLaunch.execution_status, worktree: reading.idleLaunch.worktree }, runningClose: { session, box: 'Close this window while a run is active? — answered Yes', heldOutcome: heldOutcome[2] }, boxesAsked: boxes, quit: { exit: stopped.exit } };
 }
 
 // 6. A root resumed before its first reply in a later iteration (the repair of

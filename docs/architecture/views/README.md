@@ -84,13 +84,23 @@ gate paragraph says so. No package, edge, process, channel, command or store col
 **Closing one of several main windows ends its own project's runs, asking first (PD-SHELL-009, REQ-STARTUP-046, REQ-SHELL-119,
 REQ-SHELL-122; OQ-206 ruled under R-072, fin28).** The run host's `runs.active` counts the named workspace's runs (the session
 row's `workspace_root`, `Sessions.activeRunCount(workspaceRoot?)`) and the empty id the instance's (which `session.start`'s
-REQ-GIT-120 forced isolation still asks, since that rule counts any run); a new request
+REQ-GIT-120 forced isolation still asks, since that rule counts any run — *replaced the same day by PD-GIT-001: it asks
+`scope: 'sharing'` for the window's workspace, see below*); a new request
 `runs.stopWorkspace` → `runs.stopped` stops a workspace's active runs as the stop control does (`Sessions.stopActiveIn`).
 `confirmActiveRunClose` asks `windowCloseBox` at a close that leaves another main window open, and its Yes awaits the stop
 before the close is confirmed; `QuitState.stoppedByClose` withdraws the stopped sessions' approval dialogs, queued approvals
 and question-dock cancellations and holds back their notices until their rest. The **process view**'s close paragraph and the
 **runtime view**'s control table say so. One request and one reply kind on the main ↔ run host channel; no package, edge,
 process, command or store column changed.
+
+**Isolation counts the runs that could share the launch's tree (PD-GIT-001, REQ-GIT-119, REQ-GIT-120, REQ-MONITOR-251; OQ-224
+ruled under R-072, fin29).** `runs.active` gains `scope: 'sharing'` (`Sessions.activeRunsSharing`: the workspace's own runs and
+any whose tree overlaps its folder, compared by whole components); `session.newId` answers `isolationRequired` from it and
+the launch dialog shows that answer (`isolationRequiredOf`, `@rotaris/ui`) in place of its own session-list test;
+`session.start` forces on the same count, an unreadable count forcing, and raises an informational notice when it does
+(REQ-GIT-119's hint, now `ISOLATION_REQUIRED_HINT` in `@rotaris/contracts`); and the engine refuses a base-tree continue
+beside such a run (`BASE_TREE_BUSY_REFUSAL`). The **process view**'s close paragraph says so. One optional value on an
+existing request and one field on an existing reply; no package, edge, process, command or store column changed.
 
 **The window close's follow-ups, and the Windows session's end (PD-SHELL-009, REQ-STARTUP-046, REQ-SHELL-121; fin29).** The
 close of one of several main windows counts with the stop's own predicate (`runs.active` gains `scope: 'stoppable'`,

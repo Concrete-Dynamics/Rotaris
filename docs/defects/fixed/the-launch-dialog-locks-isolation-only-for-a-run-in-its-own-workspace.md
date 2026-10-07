@@ -29,3 +29,25 @@ classified here.
 - `apps/desktop/src/run-host/dispatch.ts`: `runs.active`, keyed by workspace since PD-SHELL-009, the empty id counting the
   instance.
 - `apps/desktop/src/main/commands/session.test.ts`: the REQ-GIT-120 case pinning main's instance-wide force.
+
+## Repaired — 2026-10-07, fin29 (PD-GIT-001, OQ-224; REQ-GIT-119, REQ-GIT-120, REQ-MONITOR-251)
+
+Classified by the R-072 consortium as its question GI1, ruled as [OQ-224](../../architecture/open-questions.md) and recorded
+as [`PD-GIT-001`](../../product/directives.md#pd-git-001): the per-workspace reading, with a workspace folder nested inside
+or around another counted as sharing it. The dialog and main now read one count. The run host answers `runs.active` with
+`scope: 'sharing'` from `Sessions.activeRunsSharing` (`packages/engine/src/sessions.ts`): the workspace's own active runs,
+whatever tree they run in, and any active run whose effective tree is the workspace's folder, lies inside it or contains it
+(`treesOverlap`, whole components under the canonical rule). Main's `session.newId` answers `{sessionId, isolationRequired}`
+from it (an unreadable count is required), and the renderer's launch dialog shows that answer (`isolationRequiredOf`,
+`packages/ui/src/StartSessionDialog.tsx`) in place of `currentBusy || listBusy`. `session.start` forces the default tree on
+the same count, an unreadable count forcing too, and every forced placement raises an informational notice scoped to the new
+session with REQ-GIT-119's hint and the branch (`apps/desktop/src/main/commands/session.ts`). Pinned by
+`commands/session.test.ts` (an idle project shares its own base tree while another project runs, asking `ws-1` with `scope:
+'sharing'`; a sharing run forces the worktree and raises the notice; an unreadable count forces; `session.newId`'s three
+answers), all red on the source before; `run.test.ts`'s PD-GIT-001 cases (same root, inside, around, a common string prefix,
+the outer workspace's isolated run not counting for an inner folder, the session excluded); `dispatch.test.ts`'s `sharing`
+hop; and `start-session-isolation.test.ts` (the dialog locked, unlocked, and locked on an answer that does not say). Shown by
+`pnpm part-j-proof`'s two-window launch: while A's project runs, B's dialog reads unchecked and enabled and B's unchecked
+launch ends `completed` on B's base tree with no worktree binding. fin28's repair round 1 (`32ac0c0`) had made the
+instance-wide reading deliberate; that claim is kept, falsified, beside its replacement in `PD-SHELL-009`'s first execution,
+ADR-0013's sixth execution and the process view.

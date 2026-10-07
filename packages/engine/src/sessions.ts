@@ -1,6 +1,7 @@
 import { asSessionId, type Clocks, countNoun, err, type MachineId, millis, type Millis, ok, type Result, type SessionId, toIsoUtc } from '@rotaris/kernel';
 import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
+import { pathKey } from '@rotaris/platform';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal, type TimelineRow } from '@rotaris/store';
 import type { AgentBackend, ChatMessage, ContentPart } from '@rotaris/model';
 import { conversationOf } from './run/record.js';
@@ -590,6 +591,22 @@ function missingWorktree(row: SessionRow): { readonly code: string; readonly rea
   const binding = parseBinding(row.worktree);
   if (binding && !existsSync(binding.worktree_path)) return { code: 'worktree-missing', reason: `Session ${row.session_id} is bound to the worktree at ${binding.worktree_path}, which no longer exists. Recreate or re-attach the worktree before continuing this session.` };
   return null;
+}
+
+/** REQ-GIT-120's refusal of a base-tree continue beside another run (PD-GIT-001), its words fixed by the requirement. */
+export const BASE_TREE_BUSY_REFUSAL = 'This session uses the base workspace, so it cannot continue while another run is active.';
+
+/**
+ * PD-GIT-001: whether two trees overlap — one is the other, lies inside it or contains it — compared whole, component by
+ * component, under the canonical rule (`pathKey`: resolved, and case-folded on Windows), so `/repo2` lies neither inside
+ * `/repo` nor around it.
+ */
+export function treesOverlap(a: string, b: string, platform: NodeJS.Platform = process.platform): boolean {
+  const ka = pathKey(a, platform);
+  const kb = pathKey(b, platform);
+  const sep = platform === 'win32' ? '\\' : '/';
+  const within = (child: string, parent: string): boolean => child.startsWith(parent.endsWith(sep) ? parent : parent + sep);
+  return ka === kb || within(ka, kb) || within(kb, ka);
 }
 
 /**
@@ -1644,6 +1661,8 @@ export class Sessions {
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const gone = missingWorktree(stored);
     if (gone) return err(gone);
+    const busy = this.baseTreeBusy(stored);
+    if (busy) return err(busy);
     const todo = parseTodoDocument(stored);
     if (!todo.ok) return todo;
     // ADR-0005: the lock is taken back before the first write, and the run launched below holds it (`holdForContinue`).
@@ -2405,6 +2424,9 @@ export class Sessions {
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const gone = missingWorktree(stored);
     if (gone) return err(gone);
+    // REQ-GIT-120 (PD-GIT-001): the cancel resolves the rest without a run, so only the actions that run are refused.
+    const busy = action === 'cancel' ? null : this.baseTreeBusy(stored);
+    if (busy) return err(busy);
     const atLimit = stored.execution_status === 'paused_message_limit';
     const busyLeft = isActiveStatus(stored.execution_status);
     if (busyLeft && this.liveness(s.dal, sessionId) !== 'not-live') return err({ code: 'run-active', reason: `Session ${sessionId} is still marked ${stored.execution_status}, and the process that ran it may still be running it.` });
@@ -2490,6 +2512,8 @@ export class Sessions {
     if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     const gone = missingWorktree(stored);
     if (gone) return err(gone);
+    const busy = this.baseTreeBusy(stored);
+    if (busy) return err(busy);
     const todo = parseTodoDocument(stored);
     if (!todo.ok) return err(todo.error);
     // ADR-0005: the lock is taken back before the first write, and the run launched below holds it.
@@ -2959,6 +2983,8 @@ export class Sessions {
     if (!setup.ok) return err(this.refusedAtStart(s, setup.error));
     const gone = missingWorktree(stored);
     if (gone) return err(gone);
+    const busy = this.baseTreeBusy(stored);
+    if (busy) return err(busy);
     const todo = parseTodoDocument(stored);
     if (!todo.ok) return todo;
     const resolved = s.writer.resolvePlanGate(cycle, decision, 'idle', decision === 'approve', null);
@@ -3324,6 +3350,36 @@ export class Sessions {
     let n = 0;
     for (const [id, s] of this.live) if (Sessions.stoppable(s) && this.inWorkspace(id, workspaceRoot)) n += 1;
     return n;
+  }
+
+  /**
+   * PD-GIT-001 (OQ-224): the runs a launch or a continue in `workspaceRoot` would share a working tree with — every active
+   * run (`isRunActive`) whose session row belongs to that workspace, whatever tree it runs in, or whose effective tree is the
+   * workspace's folder, lies inside it or contains it (`treesOverlap`). A run of an unrelated project never counts. Main asks
+   * it for the launch dialog's lock and `session.start`'s forced isolation (REQ-GIT-119, REQ-GIT-120, REQ-MONITOR-251); a
+   * continue asks it with its own session excluded (`baseTreeBusy`).
+   */
+  activeRunsSharing(workspaceRoot: string, exceptSessionId?: SessionId): number {
+    let n = 0;
+    for (const [id, s] of this.live) {
+      if (id === exceptSessionId || !this.isRunActive(id)) continue;
+      const row = s.dal.getSession(id);
+      if (!row) continue;
+      if (pathKey(row.workspace_root) === pathKey(workspaceRoot) || treesOverlap(effectiveRootOf(row).root, workspaceRoot)) n += 1;
+    }
+    return n;
+  }
+
+  /**
+   * REQ-GIT-120's second clause under PD-GIT-001: a session with no worktree binding (its Branch `—`) is not continued while
+   * another run shares its workspace's tree — refused with the requirement's words at every path that starts a further run
+   * of it (a message to it at rest, the retry through it, Continue, the plan gate's relaunch); loading it stays allowed
+   * (PD-SHELL-002). Built 2026-10-07: until then nothing refused it
+   * (`docs/defects/fixed/a-base-tree-session-continues-beside-another-run-in-its-workspace.md`).
+   */
+  private baseTreeBusy(row: SessionRow): { readonly code: string; readonly reason: string } | null {
+    if (parseBinding(row.worktree) !== null) return null;
+    return this.activeRunsSharing(row.workspace_root, asSessionId(row.session_id)) > 0 ? { code: 'base-tree-busy', reason: BASE_TREE_BUSY_REFUSAL } : null;
   }
 
   /** REQ-SESSION-186: a live run whose end is not yet written — the one predicate the workspace stop counts and stops by. */

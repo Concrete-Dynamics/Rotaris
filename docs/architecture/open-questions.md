@@ -11182,7 +11182,7 @@ in this workspace" and calls itself consistent with REQ-GIT-119 and REQ-GIT-120;
 resume half scoped "there" and "in a workspace where a run is already executing"; `PD-SHELL-002`, "while any run is active in
 the workspace, the dialog SHALL lock", and "a window of another project is untouched by all of this". Raised 2026-10-07 by
 the R-072 consortium as its question GI1, from
-[`the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md`](../defects/the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md)
+[`the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md`](../defects/fixed/the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md)
 (fin28's repair round 1), and recorded here as OQ-224, the number the round assigned it. ~~Open.~~ **Ruled 2026-10-07.**)*
 
 The launch dialog locks isolation on for a busy session of its own workspace (`currentBusy || listBusy` over the window's
@@ -11216,5 +11216,5 @@ fin28's verifier did, and A's containment rule, without which a base-tree launch
 in a window open on `/repo/app`; and from B the history corrected beside the claim it replaces and the resume refusal placed
 at continuing, with the session excluded. Neither settled two things, which the ruling adds: an unreadable count locks the
 dialog and forces the worktree, and a forced placement says so.
-[`a-base-tree-session-continues-beside-another-run-in-its-workspace.md`](../defects/a-base-tree-session-continues-beside-another-run-in-its-workspace.md)
+[`a-base-tree-session-continues-beside-another-run-in-its-workspace.md`](../defects/fixed/a-base-tree-session-continues-beside-another-run-in-its-workspace.md)
 records the unbuilt resume half, written before its code.

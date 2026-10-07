@@ -150,8 +150,11 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    * REQ-SHELL-122's count: a non-empty `workspaceId` counts that workspace's active runs (PD-SHELL-009), an empty one the
    * instance's. `scope: 'stoppable'` (with a workspace) counts only the runs `runs.stopWorkspace` would stop — the predicate
    * the close of one of several main windows asks by, so its box never counts a run its Yes cannot stop (PD-SHELL-009).
+   * `scope: 'sharing'` (with a workspace) counts the runs a launch there would share a working tree with — the workspace's
+   * own, and any whose tree is its folder, inside it or around it (PD-GIT-001): the launch dialog's lock and
+   * `session.start`'s forced isolation read it.
    */
-  z.object({ kind: z.literal('runs.active'), workspaceId: z.string(), scope: z.enum(['active', 'stoppable']).optional() }),
+  z.object({ kind: z.literal('runs.active'), workspaceId: z.string(), scope: z.enum(['active', 'stoppable', 'sharing']).optional() }),
   /** PD-SHELL-009: the close of one of several main windows stops its workspace's active runs as the stop control does. */
   z.object({ kind: z.literal('runs.stopWorkspace'), workspaceId: z.string().min(1) }),
   /** ADR-0019: the presenter is a capability main registers per window and revokes on close; the poll reply carries the windows it holds. */

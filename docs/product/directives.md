@@ -5012,7 +5012,9 @@ Dock Quit is a person's quit outside any window, which asks nothing — to be re
 > `session.start`'s forced isolation (REQ-GIT-120, REQ-MONITOR-251: "whenever **any** run is active"), which keyed would have
 > stopped forcing a launch in an idle project into a worktree while another project's run executed. It asks the instance's
 > count (the empty id) instead, so the launch rule is unchanged by this directive; `commands/session.test.ts`'s REQ-GIT-120
-> case pins it, red on the keyed request (found by the verifier of this change, repair round 1). The record's claim that "the desktop's logout" reaches `before-quit` holds on Linux and
+> case pins it, red on the keyed request (found by the verifier of this change, repair round 1). *Falsified the same day by
+> [`PD-GIT-001`](#pd-git-001) (OQ-224), the claim kept:* "any" is not the whole instance — `session.start` and the launch
+> dialog now ask one per-workspace count, `scope: 'sharing'`, and a launch in an idle project shares its own base tree. The record's claim that "the desktop's logout" reaches `before-quit` holds on Linux and
 > macOS only; on Windows Electron's own typings say neither `before-quit` nor `will-quit` is emitted at a logout or shutdown
 > (recorded as a defect, not repaired here). **What was measured.** `close-confirmation.test.ts`, `exit.test.ts`,
 > `commands/session.test.ts`, `dispatch.test.ts`, `main-windows.test.ts` (the two-window gesture) and `run.test.ts` (the
@@ -5729,6 +5731,32 @@ session while another base-tree run of the same project executes is refused, whi
 
 *Raised under the owner's delegation, 2026-10-07, ruling OQ-224 (the consortium's question GI1, both advocates followed);
 logged as [R-072](requests.md#r-072).*
+
+> **First execution, 2026-10-07, built under [R-072](requests.md#r-072) (fin29):** the directive held as written, and two
+> claims the record carried were false. **Found:** `session.start`'s forced isolation asked the instance's count, a reading
+> fin28's repair round 1 made deliberate (`32ac0c0`), now kept falsified beside its replacement in PD-SHELL-009's first
+> execution, ADR-0013's sixth execution and the process view; and REQ-GIT-120's refusal to continue a base-tree session was
+> not built at all
+> ([`a-base-tree-session-continues-beside-another-run-in-its-workspace.md`](../defects/fixed/a-base-tree-session-continues-beside-another-run-in-its-workspace.md)).
+> **As built.** `Sessions.activeRunsSharing` and `treesOverlap`, and `baseTreeBusy` with `BASE_TREE_BUSY_REFUSAL` at the four
+> paths that start a further run of a session (`packages/engine/src/sessions.ts`); `runs.active`'s `scope: 'sharing'`
+> (`packages/contracts/src/process-protocol.ts`, `apps/desktop/src/run-host/dispatch.ts`); `session.newId`'s
+> `isolationRequired` and `session.start`'s force and notice (`apps/desktop/src/main/commands/session.ts`), the hint one text
+> in `ISOLATION_REQUIRED_HINT` (`packages/contracts/src/commands.ts`); `isolationRequiredOf` (`packages/ui/src/StartSessionDialog.tsx`)
+> read by the renderer's launch dialog. **What was measured.** `commands/session.test.ts` (an idle project's launch shares its
+> own base tree while another project runs; a sharing run forces the worktree and raises the notice; an unreadable count
+> forces; `session.newId`'s three answers), four cases red on the source before; `run.test.ts`'s PD-GIT-001 cases (the overlap
+> rule by component and case, the count over same, inner, outer and unrelated roots with the outer isolated run not counting
+> for an inner folder, and the refusal: refused for the prompt, the retry and Continue beside a base-tree run of the same
+> workspace with nothing written, allowed beside an unrelated project's run, after that run ended, and for an isolated session,
+> the load allowed throughout), red with the refusal removed; `dispatch.test.ts`'s `sharing` hop; `start-session-isolation.test.ts`
+> (the dialog locked, unlocked, and locked on an answer that does not say). Driven: `pnpm part-j-proof`'s two-window launch,
+> where with A's project running, B's dialog read unchecked and enabled with REQ-GIT-118's hint, and B's unchecked launch ended
+> `completed` on B's base tree with no worktree binding (B is no Git repository, so under the instance-wide force it could not
+> have started). **What was not measured.** The running window's dialog locked in the built app (A's run is held at its approval
+> dialog there, which is modal; the lock is pinned by the dialog and command cases), the forced-placement notice in the built
+> app (no proof starts a run between a dialog's opening and its acceptance), and the refusal driven through the UI. The row is
+> in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

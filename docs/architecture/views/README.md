@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**The hand-over socket lives where a unix socket fits, and never relative to the working directory (REQ-STARTUP-145,
+REQ-STARTUP-161, REQ-STARTUP-164; finacc3 A2-04, A2-05; fin30).** `socketDirectoryCandidates` (`platform/instance.ts`) orders
+`XDG_RUNTIME_DIR`, the data directory and a private `rotaris-<uid>` below the temporary directory or `/tmp`, keeping each only
+where it is absolute and the socket's path fits the platform's address (107 bytes on Linux, 103 on macOS); the claim listens in
+the first that can hold a file, and a claim whose listen fails gives its record back and is refused rather than rejected unhandled.
+The **process view**'s instance-claim row and the **sequences view**'s launch diagram (the refused branch) say so. No package,
+edge, process, channel, command or store column changed.
+
 **A timeout's issue names the call that ran out of time, and summary.md's terminal counts flag the cap (REQ-SESSION-136,
 REQ-SESSION-133, REQ-SESSION-140; finacc3 A2-08 and A2-09, fin30).** `outcomeIssues` (`packages/agent-tools/src/gate.ts`)
 files `terminal_timeout` for every timeout as before, but says "A terminal command exceeded its timeout." only where the

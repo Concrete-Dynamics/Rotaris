@@ -239,10 +239,17 @@ export function launchOptions({ local, preferences, home, extra = {} }) {
  * a parameter for the same reason `resolveUserDirs` takes one: so the answer is decidable from any host.
  *
  * The short `XDG_RUNTIME_DIR` is the socket's half of the same defect. The single-instance claim listens on a
- * unix socket under the data directory, and a unix socket path is capped at 108 bytes — a data root nested
- * three deep under `.proof/<name>/profile` already overflows it. A runtime directory under the system
- * temporary directory keeps the path short whatever the profile's depth; the product never reads this
- * variable, so nothing but the claim's socket moves (see `packages/platform/src/instance.ts`).
+ * unix socket, and a unix socket path is capped at 108 bytes — a data root nested three deep under
+ * `.proof/<name>/profile` already overflows it. A runtime directory under the system temporary directory keeps
+ * the path short whatever the profile's depth. The product reads this variable for the claim's socket and for
+ * nothing else, so nothing but the socket moves (`socketDirectoryCandidates`, `packages/platform/src/instance.ts`).
+ * Until fin30 this comment said "the product never reads this variable", which was untrue: the claim has read it
+ * since 2026-09-19 (`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
+ * Since fin30 the product also falls back on its own, to a private directory below the temporary directory, when
+ * neither the runtime directory nor the data directory can hold the socket
+ * (`docs/defects/fixed/a-deep-data-directory-leaves-the-launch-windowless.md`), so this variable is no longer what
+ * makes a deep profile launchable; it still keeps each profile's socket in a directory of that profile's own, and
+ * `workspace-proof`'s scenario 13b takes it away to drive the fallback.
  */
 export function proofIsolationEnv({ profileRoot, local, preferences, home, platform = process.platform }) {
   // The POSIX pair is spelled with POSIX separators even when the harness runs on Windows: a POSIX launch

@@ -1,6 +1,7 @@
 import { createServer, connect, type Server, type Socket } from 'node:net';
-import { mkdirSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
+import { accessSync, chmodSync, constants, lstatSync, mkdirSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
+import { tmpdir, userInfo } from 'node:os';
 import { posix } from 'node:path';
 import type { MachineId, Millis, Timers, WallClock } from '@rotaris/kernel';
 import { toIsoUtc } from '@rotaris/kernel';
@@ -93,14 +94,78 @@ export interface ClaimDeps {
   readonly replaceRecord?: (file: string, content: string) => ReturnType<typeof replaceDocument>;
   readonly platform?: NodeJS.Platform;
   /**
-   * Where a unix socket for the hand-over endpoint may live, on platforms that
-   * use one. The default is `endpointDir` — which is the per-user data
-   * directory in production. A caller that isolates the data directory under a
-   * deep scratch profile (the proofs) names a shallow directory here instead,
-   * because a unix socket path is capped at 108 bytes and the data root alone
-   * already overflows it.
+   * Where a unix socket for the hand-over endpoint should live, on platforms that use one, ahead of every other
+   * candidate (`socketDirectoryCandidates`). Production names none; a test names its own directory.
    */
   readonly socketDir?: string;
+  /** The environment `XDG_RUNTIME_DIR` is read from, once per launch; `process.env` unless a test substitutes one. */
+  readonly env?: Readonly<Record<string, string | undefined>>;
+  /**
+   * The shallow directories a socket falls back to when neither the runtime directory nor the data directory can hold
+   * one, each used through a private `rotaris-<user>` directory below it. `[tmpdir(), '/tmp']` unless a test substitutes
+   * its own.
+   */
+  readonly tempDirs?: readonly string[];
+}
+
+/**
+ * The longest path, in bytes, a unix socket address holds: `sockaddr_un`'s `sun_path` is 108 bytes on Linux and 104 on
+ * macOS and the BSDs, its terminating NUL included. A longer path does not bind at all (`listen EINVAL`).
+ */
+export function socketPathLimit(platform: NodeJS.Platform): number {
+  return platform === 'linux' ? 107 : 103;
+}
+
+/** One directory a hand-over socket may be placed in, and whether it is a private one this launch makes and checks. */
+export interface SocketCandidate {
+  readonly dir: string;
+  /** A `rotaris-<user>` directory below a shared temporary directory: created `0700` and used only while it is ours alone. */
+  readonly private: boolean;
+}
+
+export interface SocketPlacement {
+  readonly platform: NodeJS.Platform;
+  readonly pid: number;
+  readonly endpointDir: string;
+  readonly socketDir?: string | undefined;
+  /** `XDG_RUNTIME_DIR` as the launch read it: unset, empty, relative or absolute. */
+  readonly runtimeDir?: string | undefined;
+  readonly tempDirs: readonly string[];
+  /** Names the private directory below a temporary one: the numeric user id where the platform has one. */
+  readonly user: string;
+}
+
+/**
+ * Where a unix socket for the hand-over endpoint may be placed, in the order a launch tries them (REQ-STARTUP-161/164):
+ * a socket directory the caller names; `XDG_RUNTIME_DIR`, the directory the XDG Base Directory Specification sets aside
+ * for exactly this; the data directory beside the record; and a private `rotaris-<user>` directory below each temporary
+ * directory, the "replacement directory with similar capabilities" that specification tells an application to fall back
+ * to. A directory is a candidate only when it is absolute, since the record names the socket for a launch started from any
+ * working directory and a relative value is one the specification calls invalid and says to ignore; and only when the
+ * socket's whole path fits `socketPathLimit`, measured in bytes with this launch's pid.
+ *
+ * Until fin30 the claim took `XDG_RUNTIME_DIR` with `??`, so a set-but-empty value addressed the socket relative to the
+ * working directory (`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`),
+ * and with no runtime directory it listened under the data directory whatever that directory's length, so a home of
+ * about fifty characters made the listen fail with `EINVAL` and the launch end with no window
+ * (`docs/defects/fixed/a-deep-data-directory-leaves-the-launch-windowless.md`).
+ */
+export function socketDirectoryCandidates(p: SocketPlacement): SocketCandidate[] {
+  const limit = socketPathLimit(p.platform);
+  // The nonce is minted per attempt and always eight hex digits, so any eight stand in for it here.
+  const fits = (dir: string): boolean => Buffer.byteLength(posix.join(dir, `instance-${p.pid}-00000000.sock`), 'utf8') <= limit;
+  const out: SocketCandidate[] = [];
+  const consider = (dir: string | undefined, isPrivate: boolean): void => {
+    if (dir === undefined || !posix.isAbsolute(dir) || !fits(dir) || out.some((c) => c.dir === dir)) return;
+    out.push({ dir, private: isPrivate });
+  };
+  consider(p.socketDir, false);
+  consider(p.runtimeDir, false);
+  consider(p.endpointDir, false);
+  for (const temp of p.tempDirs) {
+    if (posix.isAbsolute(temp)) consider(posix.join(temp, `rotaris-${p.user}`), true);
+  }
+  return out;
 }
 
 export function endpointFor(endpointDir: string, pid: number, platform: NodeJS.Platform = process.platform, socketDir?: string): string {
@@ -279,13 +344,62 @@ async function passRecord(deps: ClaimDeps, successor: InstanceRecord, link: Succ
   return { passed: true };
 }
 
-/** The socket directory a claim listens under, created where the launch makes the profile; read ONCE per launch. */
-function socketDirectoryFor(deps: ClaimDeps, platform: NodeJS.Platform): string | undefined {
-  const socketDir = deps.socketDir ?? (platform === 'win32' ? undefined : process.env['XDG_RUNTIME_DIR']);
-  if (platform !== 'win32' && socketDir !== undefined && socketDir !== deps.endpointDir) {
-    try { mkdirSync(socketDir, { recursive: true }); } catch { /* the listen reports it */ }
+/**
+ * Whether a candidate can hold the socket: it exists as a directory (made here when it does not, since a scratch runtime
+ * directory does not exist until the harness's launch makes the profile that names it) and this process may create a
+ * file in it. A private one must also be this user's alone — not a link, owned by this user, and closed to everyone else —
+ * because a directory below a shared temporary directory may have been made by someone else first, and whoever controls
+ * the directory controls which socket a later launch connects to.
+ */
+function preparedSocketDirectory(candidate: SocketCandidate): boolean {
+  try {
+    mkdirSync(candidate.dir, { recursive: true, ...(candidate.private ? { mode: 0o700 } : {}) });
+    const stat = lstatSync(candidate.dir);
+    if (!stat.isDirectory()) return false;
+    if (candidate.private) {
+      const uid = process.getuid?.();
+      if (uid !== undefined && stat.uid !== uid) return false;
+      if ((stat.mode & 0o077) !== 0) chmodSync(candidate.dir, 0o700);
+    }
+    accessSync(candidate.dir, constants.W_OK | constants.X_OK);
+    return true;
+  } catch {
+    return false;
   }
-  return socketDir;
+}
+
+/**
+ * The socket directory a claim listens under: the first of `socketDirectoryCandidates` that can hold one. Read ONCE per
+ * launch. `undefined` on Windows (a named pipe), and where no candidate can hold a socket — the endpoint is then addressed
+ * under the data directory, its listen fails, and the claim is refused with the reason rather than left unhandled.
+ */
+function socketDirectoryFor(deps: ClaimDeps, platform: NodeJS.Platform): string | undefined {
+  if (platform === 'win32') return undefined;
+  const candidates = socketDirectoryCandidates({
+    platform, pid: deps.pid, endpointDir: deps.endpointDir, socketDir: deps.socketDir,
+    runtimeDir: (deps.env ?? process.env)['XDG_RUNTIME_DIR'],
+    tempDirs: deps.tempDirs ?? [tmpdir(), '/tmp'],
+    user: String(process.getuid?.() ?? userInfo().username),
+  });
+  return candidates.find(preparedSocketDirectory)?.dir;
+}
+
+/**
+ * Open the endpoint the record just claimed names, or give the claim back. A listen that fails — no directory could hold
+ * the socket — would otherwise leave a record naming an endpoint nobody serves and reject the launch with nothing awaiting
+ * it, which on 2026-10-07 was a launch with no window that said nothing at all; refused, main logs the reason and ends the
+ * launch (REQ-STARTUP-164's bounded end), and the next launch finds no record to wait on.
+ */
+async function listenOrRelease(deps: ClaimDeps, record: InstanceRecord, platform: NodeJS.Platform): Promise<{ readonly server: Server } | { readonly refused: string }> {
+  try {
+    return { server: await listen(record.endpoint, deps.onHandOver, platform, (successor, link) => passRecord(deps, successor, link)) };
+  } catch (cause) {
+    try {
+      const now = readRecord(deps.recordFile);
+      if (now !== undefined && now.pid === record.pid && now.endpoint === record.endpoint) rmSync(deps.recordFile, { force: true });
+    } catch { /* the record could not be read again: left for REQ-STARTUP-164 (3) to reclaim */ }
+    return { refused: `this launch could not open its hand-over endpoint ${record.endpoint}: ${String(cause)}; the instance record it claimed is released (REQ-STARTUP-164)` };
+  }
 }
 
 /** Release what this process holds: its record (only while it still names this process), its server, its socket. */
@@ -411,8 +525,9 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
     const r = exclusiveCreate(deps.recordFile, `${JSON.stringify(record)}\n`);
     if (!r.ok) return { outcome: 'refused', reason: `${r.error.headline}: ${r.error.detail ?? ''}` };
     if (r.value.minted) {
-      const server = await listen(endpoint, deps.onHandOver, platform, (successor, link) => passRecord(deps, successor, link));
-      return { outcome: 'instance', record, server, close: closerFor(deps, server, endpoint, platform) };
+      const opened = await listenOrRelease(deps, record, platform);
+      if ('refused' in opened) return { outcome: 'refused', reason: opened.refused };
+      return { outcome: 'instance', record, server: opened.server, close: closerFor(deps, opened.server, endpoint, platform) };
     }
     return 'lost';
   };

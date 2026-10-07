@@ -1,11 +1,11 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { connect, createServer, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { join, posix } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { err, FakeClock, millis, toIsoUtc, type MachineId } from '@rotaris/kernel';
 import { nodeClocks } from './clock.js';
-import { claimInstance, endpointFor, inheritInstance, type ClaimDeps, type HandOver, type InstanceRecord } from './instance.js';
+import { claimInstance, endpointFor, inheritInstance, socketDirectoryCandidates, socketPathLimit, type ClaimDeps, type HandOver, type InstanceRecord } from './instance.js';
 
 const M = 'machine-test';
 const clocks = nodeClocks();
@@ -418,5 +418,111 @@ describe('the successor\'s side of the two-step pass — REQ-STARTUP-121 (ADR-00
     if (refused.outcome === 'refused') expect(refused.reason).toContain('the running instance ended without passing its record');
     expect(readFileSync(join(dir, 'instance.json'), 'utf8')).toBe(before);
     await vanished.close();
+  });
+});
+
+/**
+ * Where the hand-over socket lives off Windows (REQ-STARTUP-145, REQ-STARTUP-161, REQ-STARTUP-164). Until fin30 the claim
+ * listened under the data directory whatever its length, so a deep one made the listen fail with `EINVAL` and the
+ * rejection went unhandled in main — a launch with no window that said nothing
+ * (`docs/defects/fixed/a-deep-data-directory-leaves-the-launch-windowless.md`); and it took `XDG_RUNTIME_DIR` with `??`, so
+ * a set-but-empty value put the socket in the working directory
+ * (`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
+ */
+describe('the hand-over socket\'s directory — REQ-STARTUP-145, REQ-STARTUP-161, REQ-STARTUP-164', () => {
+  const posixHost = process.platform !== 'win32';
+  afterEach(() => { vi.unstubAllEnvs(); });
+  /** The claim as production makes it: no socket directory of its own, so the candidates decide. */
+  const asProduction = (over: Parameters<typeof deps>[0] = {}): ClaimDeps => {
+    const { socketDir: _named, ...rest } = deps(over);
+    return rest;
+  };
+
+  it.skipIf(!posixHost)('a data directory too deep for a unix socket still claims, and a second launch is handed over to it', async () => {
+    vi.stubEnv('XDG_RUNTIME_DIR', undefined);
+    const deep = join(dir, 'a'.repeat(60), 'b'.repeat(60));
+    mkdirSync(deep, { recursive: true });
+    const seen: HandOver[] = [];
+    const first = await claimInstance(asProduction({ endpointDir: deep, tempDirs: [dir], seen }));
+    expect(first.outcome).toBe('instance');
+    if (first.outcome !== 'instance') return;
+    const endpoint = first.record.endpoint;
+    expect(posix.isAbsolute(endpoint)).toBe(true);
+    expect(Buffer.byteLength(endpoint)).toBeLessThanOrEqual(socketPathLimit(process.platform));
+    expect(endpoint.startsWith(`${deep}/`)).toBe(false);
+    // The fallback is a directory of this user's alone, below the temporary directory.
+    expect(posix.dirname(endpoint)).toMatch(/\/rotaris-[^/]+$/);
+    expect(statSync(posix.dirname(endpoint)).mode & 0o077).toBe(0);
+    const second = await claimInstance(asProduction({ endpointDir: deep, tempDirs: [dir] }), { workspace: '/w' });
+    expect(second.outcome).toBe('handed-over');
+    expect(seen).toEqual([{ workspace: '/w' }]);
+    await first.close();
+    expect(existsSync(endpoint)).toBe(false);
+  });
+
+  it.skipIf(!posixHost)('an empty or relative XDG_RUNTIME_DIR is ignored: the socket is never addressed relative to the working directory', async () => {
+    for (const value of ['', 'run']) {
+      vi.stubEnv('XDG_RUNTIME_DIR', value);
+      const claim = await claimInstance(asProduction({ tempDirs: [dir] }));
+      expect(claim.outcome).toBe('instance');
+      if (claim.outcome !== 'instance') return;
+      expect(posix.isAbsolute(claim.record.endpoint)).toBe(true);
+      // The data directory is short enough here, so the socket sits beside the record.
+      expect(claim.record.endpoint.startsWith(`${dir}/instance-`)).toBe(true);
+      await claim.close();
+    }
+  });
+
+  it.skipIf(!posixHost)('an absolute XDG_RUNTIME_DIR is where the socket goes, made when it does not exist yet', async () => {
+    const runtime = join(dir, 'run');
+    vi.stubEnv('XDG_RUNTIME_DIR', runtime);
+    const claim = await claimInstance(asProduction({ tempDirs: [dir] }));
+    expect(claim.outcome).toBe('instance');
+    if (claim.outcome !== 'instance') return;
+    expect(claim.record.endpoint.startsWith(`${runtime}/instance-`)).toBe(true);
+    await claim.close();
+  });
+
+  it.skipIf(!posixHost)('a launch whose endpoint cannot listen anywhere is refused and gives its record back, never left unhandled', async () => {
+    vi.stubEnv('XDG_RUNTIME_DIR', undefined);
+    const file = join(dir, 'not-a-directory');
+    writeFileSync(file, '');
+    const claim = await claimInstance(asProduction({ endpointDir: join(file, 'data'), tempDirs: [join(file, 'tmp')] }));
+    expect(claim.outcome).toBe('refused');
+    if (claim.outcome === 'refused') expect(claim.reason).toContain('could not open its hand-over endpoint');
+    // The record it claimed is released, so the next launch claims at once rather than waiting on an endpoint nobody serves.
+    expect(existsSync(join(dir, 'instance.json'))).toBe(false);
+  });
+
+  it('the candidates, in order: named, runtime, data, then a private directory below each temporary one — each absolute and short enough', () => {
+    const at = (over: Partial<Parameters<typeof socketDirectoryCandidates>[0]> = {}) => socketDirectoryCandidates({
+      platform: 'linux', pid: 4242, endpointDir: '/home/me/.local/share/rotaris', tempDirs: ['/tmp'], user: '1000', ...over,
+    }).map((c) => `${c.dir}${c.private ? ' (private)' : ''}`);
+    expect(at({ socketDir: '/s', runtimeDir: '/run/user/1000' })).toEqual(['/s', '/run/user/1000', '/home/me/.local/share/rotaris', '/tmp/rotaris-1000 (private)']);
+    // Unset, empty, relative, and a Windows-spelled value are none of them a directory a POSIX launch can name.
+    for (const runtimeDir of [undefined, '', 'run', 'D:/run']) {
+      expect(at({ runtimeDir })).toEqual(['/home/me/.local/share/rotaris', '/tmp/rotaris-1000 (private)']);
+    }
+    // A data directory too deep for the socket is passed over: the defect's own shape, the default data directory below a
+    // home of sixty-six characters (with a four-digit pid the socket fits only below a home of fifty-eight or fewer).
+    const deepHome = `/home/${'x'.repeat(60)}/.local/share/rotaris`;
+    expect(at({ endpointDir: deepHome })).toEqual(['/tmp/rotaris-1000 (private)']);
+    // A relative temporary directory is skipped; duplicates are kept once.
+    expect(at({ tempDirs: ['tmp', '/tmp', '/tmp'] })).toEqual(['/home/me/.local/share/rotaris', '/tmp/rotaris-1000 (private)']);
+  });
+
+  it('the length is measured in bytes against the platform asked about: 107 on Linux, 103 on macOS', () => {
+    expect(socketPathLimit('linux')).toBe(107);
+    expect(socketPathLimit('darwin')).toBe(103);
+    const name = 'instance-4242-00000000.sock'.length + 1;
+    const exactly = (bytes: number) => `/${'d'.repeat(bytes - name - 1)}`;
+    const linuxEdge = exactly(107);
+    expect(socketDirectoryCandidates({ platform: 'linux', pid: 4242, endpointDir: linuxEdge, tempDirs: [], user: '1' }).map((c) => c.dir)).toEqual([linuxEdge]);
+    expect(socketDirectoryCandidates({ platform: 'linux', pid: 4242, endpointDir: `${linuxEdge}d`, tempDirs: [], user: '1' })).toEqual([]);
+    expect(socketDirectoryCandidates({ platform: 'darwin', pid: 4242, endpointDir: exactly(104), tempDirs: [], user: '1' })).toEqual([]);
+    // A multi-byte character costs its bytes, not one.
+    const wide = `/${'é'.repeat(40)}`;
+    expect(wide.length + name).toBeLessThan(107);
+    expect(socketDirectoryCandidates({ platform: 'linux', pid: 4242, endpointDir: wide, tempDirs: [], user: '1' })).toEqual([]);
   });
 });

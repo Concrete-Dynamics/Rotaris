@@ -36,6 +36,8 @@ sequenceDiagram
   M->>M: claimInstance(...)
   alt handed over
     M-->>OS: app.exit(0) — shows nothing, writes nothing
+  else refused (both claims lost, or no directory could hold the endpoint — the record given back)
+    M-->>OS: one error line, app.exit(2)
   else claimed
     M->>M: preferences, theme, provider catalogue
     M->>M: await app.whenReady()

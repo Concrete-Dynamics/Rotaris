@@ -23,9 +23,9 @@
  * `JSON.stringify(...)` and is parsed, and why nothing parses a `command`. Parsing a command's answer fails with
  * `"[object Object]" is not valid JSON` at the first assertion, before anything has been measured.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { app as appDirectory, buildDesktop, cleanEnvironment, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join, posix } from 'node:path';
+import { app as appDirectory, buildDesktop, cleanEnvironment, dataDirFor, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
 import { exitWithin, overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { startApp } from './lib/driver.mjs';
 
@@ -224,7 +224,7 @@ let handOverSequence = 0;
  * did not answer SIGTERM outlived the proof, and the failure carried none of its log
  * (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`).
  */
-async function handOver(started, workspace) {
+async function handOver(started, workspace, extra = {}) {
   const sequence = ++handOverSequence;
   // `hostSwitches` as the driver's launch carries them: as root this second instance died with SIGTRAP and the proof's
   // two hand-over checks were red for the host, not the product (`fixed/a-driven-launch-dies-as-root-on-linux.md`).
@@ -237,6 +237,8 @@ async function handOver(started, workspace) {
       ...proofIsolationEnv({ local: started.local, preferences: started.preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted',
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      // The same variables the instance it is handed to was launched with (13b takes the runtime directory away).
+      ...extra,
     },
   });
   const outputText = `${result.stdout}${result.stderr}`;
@@ -693,6 +695,53 @@ try {
     check('REQ-STARTUP-163: hand-over for a different workspace adds a main window',
       addedExit.code === 0 && added.some((window) => String(window.workspace).toLowerCase() === B.toLowerCase()) && logOf(s).includes('origin hand-over'),
       `secondary exit ${addedExit.code ?? addedExit.signal}; windows ${JSON.stringify(added)}`);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 13b — the hand-over socket with no usable runtime directory, from a profile too deep for one (REQ-STARTUP-164).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * This proof's data directory is far past a unix socket's 108 bytes, which is why the harness hands every launch a
+     * short `XDG_RUNTIME_DIR`. Here it is taken away (unset) and then emptied, so the claim has to find a directory of its
+     * own. Until fin30 the unset launch's listen failed with `EINVAL`, the rejection went unhandled in main and no window
+     * was ever built (`docs/defects/fixed/a-deep-data-directory-leaves-the-launch-windowless.md`); and the empty one put
+     * the socket in the working directory, this proof's `apps/desktop`, where it stayed after the launch ended
+     * (`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
+     */
+    if (process.platform === 'win32') {
+      skip('REQ-STARTUP-164: the hand-over socket from a profile too deep for one', 'Windows hands over through a named pipe, which has no directory and no length cap');
+    } else {
+      const limit = process.platform === 'linux' ? 107 : 103;
+      const strays = () => readdirSync(appDirectory).filter((name) => /^instance-.*\.sock$/.test(name));
+      for (const [label, value] of [['unset', undefined], ['empty', '']]) {
+        const extra = { XDG_RUNTIME_DIR: value };
+        let s;
+        try {
+          s = await launch(`socket-${label}`, { workspace: A, extra });
+        } catch (cause) {
+          check(`REQ-STARTUP-164/155: with XDG_RUNTIME_DIR ${label}, a launch from a profile too deep for a socket paints and claims`, false,
+            `no window: ${cause instanceof Error ? cause.message : String(cause)}`);
+          continue;
+        }
+        const dataDir = dataDirFor(s.local);
+        const recordFile = join(dataDir, 'instance.json');
+        const endpoint = existsSync(recordFile) ? String(JSON.parse(readFileSync(recordFile, 'utf8')).endpoint) : '';
+        const bytes = Buffer.byteLength(endpoint);
+        const stray = strays();
+        check(`REQ-STARTUP-164/155: with XDG_RUNTIME_DIR ${label}, a launch from a profile too deep for a socket paints and claims`,
+          posix.isAbsolute(endpoint) && bytes <= limit && !endpoint.startsWith(`${dataDir}/`) && stray.length === 0,
+          `endpoint ${endpoint || '(no record)'} (${bytes} bytes, cap ${limit}); data directory ${Buffer.byteLength(dataDir)} bytes; socket files in the working directory: ${JSON.stringify(stray)}`);
+        const exit = await handOver(s, A, extra);
+        const windows = await waitForWindowCount(s.driver, 1);
+        check(`REQ-STARTUP-162: with XDG_RUNTIME_DIR ${label}, a second launch is handed over through that socket`,
+          exit.code === 0 && windows.length === 1 && logOf(s).includes('hand-over surfaced window'),
+          `secondary exit ${exit.code ?? exit.signal}; ${windows.length} main window(s)`);
+        await closeAll();
+        check(`REQ-STARTUP-145: with XDG_RUNTIME_DIR ${label}, the ended launch leaves no socket behind, here or in the working directory`,
+          !existsSync(endpoint) && strays().length === 0, `endpoint ${existsSync(endpoint) ? 'still present' : 'removed'}; strays ${JSON.stringify(strays())}`);
+      }
+    }
   }
 
   // ───────────────────────────────────────────────────────────────────────────────────────────────────────────

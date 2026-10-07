@@ -1081,3 +1081,29 @@ which this record places on every path that opens a workspace, is likewise not b
 add/replace flows, hand-over routing, and per-window deferred offers were deepened into `MainWindows`
 (`apps/desktop/src/main/main-windows.ts`). Consequence 6's two entrances and listener-before-load ordering are
 guaranteed by the `MainWindows` lifecycle seam.
+
+## Corrected 2026-10-07 (fin30): where the unix socket lives, and a claim that cannot listen
+
+"A named pipe on Windows, a unix-domain socket on macOS and Linux" said nothing about where the socket is, and the code
+answered with the data directory, or `XDG_RUNTIME_DIR` when one was set (2026-09-19, for the proofs). Two things this record
+never priced followed from that. A unix socket's address holds 108 bytes on Linux and 104 on macOS, so a data directory below a
+home of about sixty characters could not hold one: the listen failed with `EINVAL`, nothing awaited the rejection, and the launch
+ended with no window and nothing said
+(`docs/defects/fixed/a-deep-data-directory-leaves-the-launch-windowless.md`). And a set-but-empty `XDG_RUNTIME_DIR` addressed the
+socket relative to the working directory, so the record named an endpoint only a launch from that same directory could reach
+(`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
+
+Since fin30 the socket goes in the first of `socketDirectoryCandidates` (`packages/platform/src/instance.ts`) that is absolute,
+leaves the whole path inside the platform's limit, and can hold a file: `XDG_RUNTIME_DIR`, the data directory beside the record,
+then a private `rotaris-<uid>` directory (`0700`, owned by this user, refused otherwise) below the temporary directory and below
+`/tmp` — the replacement directory the XDG Base Directory Specification tells an application without a runtime directory to fall
+back to. The record still lives in the data directory, as `REQ-STARTUP-161` requires; only the address it names moves, and the
+record's `endpoint` field is what every later launch reads, so nothing has to guess it. A claim whose listen still fails gives its
+record back and is refused with the reason, which main logs at `error` before it exits 2 — `REQ-STARTUP-164`'s bounded end
+rather than a launch left running with no window. No platform dialog is raised for it: ADR-0019's prohibition on a synchronous
+native box in main stands.
+
+**The order this record fixes is not yet what the code does.** "The endpoint is listening before the record is written" is the
+rule above; `claimInstance` takes the record first and opens the endpoint after it, and fin30 kept that order, giving the record
+back when the listen fails rather than reordering the claim. Recorded, not repaired:
+`docs/defects/the-instance-record-is-written-before-its-endpoint-listens.md`.

@@ -698,6 +698,9 @@ The failure this prevents is invisible to every other detector this document has
 **REQ-MONITOR-250** — Background run handles keep refreshing their own session but publish only a session summary (session id, execution status, branch). They must never publish into the shared transcript, agent tree, metrics, or prompt queue.
 
 **REQ-MONITOR-251** — The second and any subsequent concurrent launch must be placed into a worktree.
+  > **Narrowed by [`PD-GIT-001`](../product/directives.md#pd-git-001), 2026-10-07.** A launch is a second concurrent
+  > launch when a run is active in the launching window's workspace, or in a tree that is that workspace's folder, lies
+  > inside it or contains it; a run of an unrelated project does not place it in a worktree.
 
 **REQ-MONITOR-252** — Switching focus changes which session is projected without touching any background run's lifecycle. Cancelling or failing one run must affect only that run's handle.
 

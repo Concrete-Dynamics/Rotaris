@@ -315,8 +315,15 @@ Rotaris can give each agent session a Git worktree of its own, so two concurrent
 - **REQ-GIT-118** — The session-launch dialog SHALL offer a checkbox "Run in an isolated Git worktree" and a Branch field pre-filled with `rotaris/session/<new-session-id>`; the branch field is enabled only while isolation is on. The normal hint reads "Choose an isolated Git worktree when this task may run beside other sessions."
 
 - **REQ-GIT-119** — While another run is active, isolation SHALL be mandatory: the checkbox is pre-checked AND disabled (tooltip "Required while another run is active.") and the hint reads "Another run is already active, so this session gets its own Git worktree. Two runs sharing one working tree would overwrite each other's edits."
+  > **Narrowed by [`PD-GIT-001`](../product/directives.md#pd-git-001), 2026-10-07.** "Another run is active" counts a run
+  > that belongs to the launching window's workspace, or writes in a tree that is that workspace's folder, lies inside it
+  > or contains it; a run of an unrelated project does not lock the checkbox. The dialog shows the count main asks the run
+  > host, and a count that cannot be read locks it.
 
 - **REQ-GIT-120** — Whenever any run is active: launching a new session without an explicit worktree request SHALL force-create one; resuming a NON-isolated session SHALL be refused, surfaced as `This session uses the base workspace, so it cannot continue while another run is active.` A session counts as isolated when its summary carries a real branch (not the placeholder `—`).
+  > **Narrowed by [`PD-GIT-001`](../product/directives.md#pd-git-001), 2026-10-07.** "Any run" is a run counted as
+  > `PD-GIT-001` counts it for the launching workspace (for a resume, with that session excluded); a count that cannot be
+  > read forces the worktree, and a forced placement raises an informational notice naming the branch.
 
 - **REQ-GIT-121** — A session launched from the desktop SHALL appear in the session list in state "starting" before the run it launched performs any work, its Branch column carrying the branch that was requested or `—` when none was requested. The Branch column SHALL then be replaced by the branch that actually exists — which may differ from the requested name by a `-2`, `-3`, … collision suffix (REQ-GIT-010) — and that replacement SHALL be visible before any agent output of that session is. The session list SHALL carry the current state and worktree branch of every active session, whether or not it is the focused one.
 

@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Seventy-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Eighty.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -5684,6 +5684,51 @@ logged as [R-072](requests.md#r-072).*
 > skip the directory, and its marker file named by path is served; and the parent-listing case beside it, red on `d12f1f2`. **What was not measured.** No live run: the next duress
 > run is the measurement (file-tool rows under the directory near zero, no marker files in the delivered overview, `git
 > status` still clean). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-git-001"></a>
+
+### PD-GIT-001 — isolation counts the runs that could share the launch's working tree
+
+In REQ-GIT-119, REQ-GIT-120 and REQ-MONITOR-251, a run SHALL count as active for a launch or a continue in a workspace when
+it is active (REQ-SHELL-122's test) and either **belongs to that workspace**, whatever tree it runs in, or **writes in a tree
+that is that workspace's folder, lies inside it or contains it**. Paths are compared whole component by component under the
+canonical rule, so `/repo2` lies neither inside `/repo` nor around it. A run of an unrelated project never counts. Concretely:
+
+- **One count, asked of the run host by main.** Main asks it with the window's workspace; the launch path and the dialog
+  read the same answer, and nothing else decides either.
+- **The launch dialog shows main's answer when it opens.** Above zero, or a count that cannot be read: the isolation
+  checkbox is pre-checked and disabled with REQ-GIT-119's tooltip and hint. Otherwise it is unchecked and enabled, with
+  REQ-GIT-118's normal hint.
+- **`session.start` forces the default tree on the same answer** for a launch without an explicit tree, a count that cannot
+  be read forcing it too; and every time it forces the placement it raises an informational notice scoped to the new session
+  whose message is REQ-GIT-119's hint and whose detail names the branch actually made — so a run that became active after
+  the dialog opened never places a session where the person did not see it go.
+- **REQ-GIT-120's refusal to continue a base-tree session** (one with no worktree binding, its Branch `—`) is built on the
+  same count with that session excluded, at every path that starts a further run of it — a message to it at rest, Continue,
+  the retry, the plan gate's relaunch — with REQ-GIT-120's text. Loading or focusing a session stays allowed (PD-SHELL-002).
+
+REQ-GIT-124 (the integration's own per-workspace count), REQ-MONITOR-256 (already narrowed by PD-ORCH-005) and
+REQ-MONITOR-258 (whose launch clause cites REQ-MONITOR-251) are cited as support and left as they are.
+
+**Why, and what it costs.** OQ-224 (the consortium's GI1). The dialog and main disagreed: the dialog locked for a busy
+session of its own workspace, main forced a worktree for a run in any project, so an idle project's launch shown on the base
+tree landed in `.rotaris/worktrees/<id>` on a branch nobody chose, its edits missing from the checkout the person looks at
+until an integration (REQ-GIT-124/125) merged them; and in a plain folder, a repository with no commit, a detached HEAD or a
+subfolder workspace the forced launch failed (REQ-GIT-006), about a run in another window. The requirements were written when
+one instance held one workspace, so every run then could share the tree; PD-SHELL-002 already locks the dialog "while any
+run is active in the workspace" and leaves "a window of another project … untouched". What it costs: REQ-GIT-120's literal
+"any" and REQ-MONITOR-251's "second concurrent launch" no longer hold across projects; a workspace opened inside another open
+workspace is locked whenever the outer one runs on its base tree, and since isolation needs a Git root (REQ-GIT-006) a launch
+there can then only fail or attach, as a non-Git workspace's launch already does while its own run is active; a run started
+after the dialog opened still places the launch in a worktree, which the notice now says; and continuing an old base-tree
+session while another base-tree run of the same project executes is refused, which no user has met before.
+
+> **Narrows:** REQ-GIT-119, REQ-GIT-120, REQ-MONITOR-251
+
+*Raised under the owner's delegation, 2026-10-07, ruling OQ-224 (the consortium's question GI1, both advocates followed);
+logged as [R-072](requests.md#r-072).*
 
 ---
 

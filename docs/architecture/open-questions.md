@@ -11173,3 +11173,48 @@ descriptions. No directive is minted: the requirement is faithful and the code d
 excluded directory yields nothing" in `packages/agent-tools/src/tools/tools.test.ts`, four red on `d12f1f2` (the fifth, a
 run rooted under `.rotaris/worktrees/<w>`, guards the repair). Noticed while ruling and recorded open, not repaired here:
 [`a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md`](../defects/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md).
+
+**OQ-224 — For REQ-GIT-119's lock, REQ-GIT-120's force and refusal and REQ-MONITOR-251's placement, which runs are "another
+run is active"?** *(REQ-GIT-119, the launch dialog's mandatory isolation "while another run is active", its tooltip and hint;
+REQ-GIT-120, "whenever any run is active" a launch without an explicit tree is forced into one and a base-workspace session's
+resume refused; REQ-MONITOR-251, "the second and any subsequent concurrent launch"; REQ-GIT-124, which counts "a session lock
+in this workspace" and calls itself consistent with REQ-GIT-119 and REQ-GIT-120; REQ-MONITOR-256 and REQ-MONITOR-258, the
+resume half scoped "there" and "in a workspace where a run is already executing"; `PD-SHELL-002`, "while any run is active in
+the workspace, the dialog SHALL lock", and "a window of another project is untouched by all of this". Raised 2026-10-07 by
+the R-072 consortium as its question GI1, from
+[`the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md`](../defects/the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md)
+(fin28's repair round 1), and recorded here as OQ-224, the number the round assigned it. ~~Open.~~ **Ruled 2026-10-07.**)*
+
+The launch dialog locks isolation on for a busy session of its own workspace (`currentBusy || listBusy` over the window's
+session list, `apps/desktop/src/renderer/main.tsx`), while `session.start` forces a launch without an explicit tree into
+`rotaris/session/<id>` whenever the run host counts a run anywhere in the instance (`runs.active` with the empty id, since
+fin28's repair round 1, `32ac0c0`). So in an idle project's window, while another project's run executes, the dialog offers
+isolation unchecked and the launch it shows on the base tree lands in a worktree; and in a non-Git folder, a subfolder of a
+repository or a detached HEAD the forced launch fails, about a run in another window. REQ-GIT-120's "any" reads
+instance-wide; REQ-GIT-119's hint ("Two runs sharing one working tree would overwrite each other's edits") and the
+requirements around it read per workspace. Neither surface agrees with the other, and a workspace folder nested inside
+another open workspace shares files with it whichever reading is taken.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** in REQ-GIT-119, REQ-GIT-120 and
+REQ-MONITOR-251, a run is active for a launch or a continue in a workspace when it is active and either belongs to that
+workspace, whatever tree it runs in, or writes in a tree that is that workspace's folder, lies inside it or contains it. A run
+of an unrelated project never counts. Main asks the run host that one count. The launch dialog shows main's answer when it
+opens: locked, with REQ-GIT-119's tooltip and hint, when the count is above zero or cannot be read, and unchecked and
+enabled, with REQ-GIT-118's hint, otherwise. `session.start` forces the default tree on the same answer, and every time it
+forces it raises an informational notice carrying REQ-GIT-119's hint and the branch. REQ-GIT-120's refusal to continue a
+base-tree session is built on the same count, with that session excluded. This is recorded as
+[`PD-GIT-001`](../product/directives.md#pd-git-001), which narrows REQ-GIT-119, REQ-GIT-120 and REQ-MONITOR-251.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: "another run is active" means a run active in the
+launching window's own workspace, a workspace folder nested inside or around it counting as the same workspace; main asks
+that one count and the dialog shows main's answer; recorded as `PD-GIT-001`, narrowing the three requirements. *Advocate B
+(the system's lens)*: the same per-workspace reading, as equality of the session row's workspace — the dialog as built, main
+pointed back at the window's own count, classified as covered with no directive, and the unbuilt resume half recorded and
+built. **The ruling followed both**: the per-workspace reading both take, which PD-SHELL-002, REQ-GIT-124 and
+REQ-MONITOR-256/258 support; A's directive, whose back-pointer stops a later reader of REQ-GIT-120's "any" re-keying it as
+fin28's verifier did, and A's containment rule, without which a base-tree launch in `/repo` would share files with a live run
+in a window open on `/repo/app`; and from B the history corrected beside the claim it replaces and the resume refusal placed
+at continuing, with the session excluded. Neither settled two things, which the ruling adds: an unreadable count locks the
+dialog and forces the worktree, and a forced placement says so.
+[`a-base-tree-session-continues-beside-another-run-in-its-workspace.md`](../defects/a-base-tree-session-continues-beside-another-run-in-its-workspace.md)
+records the unbuilt resume half, written before its code.

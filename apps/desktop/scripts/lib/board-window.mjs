@@ -36,3 +36,33 @@ export function readLongTasks() {
  * never matched (the first form answered `undefined` that way). The function holds no line comment, so joining is safe.
  */
 export const READ_LONGTASKS = `(${readLongTasks.toString().replace(/\s*\n\s*/g, ' ')})()`;
+
+/**
+ * REQ-TRACE-364 in the drop stage: ask the board to reveal card `id`, then wait, frame by frame, until that card holds the
+ * focus or `boundMs` has passed. Sent to the renderer as its own source, like `readLongTasks`, so it uses nothing but the
+ * page's globals. Resolves with `{ revealed, focused, frames, ms }`.
+ *
+ * The board takes the focus through React — the reveal sets state, the render and its effect run on React's scheduler, and
+ * the effect focuses the card in a further animation frame — and REQ-TRACE-364 fixes no number of frames for it. The stage
+ * read the focus exactly two frames after asking until 2026-10-07 and went red on a loaded host for a card revealed and
+ * focused moments later
+ * (docs/defects/fixed/requirements-proofs-drop-stage-reads-a-revealed-cards-focus-two-frames-after-asking-for-it.md).
+ * The focus is still required; what is no longer assumed is that it arrives within two frames.
+ */
+export async function revealUntilFocused(id, boundMs) {
+  const board = window.__rotarisBoard;
+  const revealed = board.reveal(id);
+  const started = performance.now();
+  let frames = 0;
+  while (true) {
+    await new Promise((r) => requestAnimationFrame(() => r(undefined)));
+    frames += 1;
+    const card = document.querySelector(`[data-req-card="${id}"]`);
+    const ms = Math.round(performance.now() - started);
+    if (card !== null && document.activeElement === card) return { revealed, focused: true, frames, ms };
+    if (revealed !== true || ms >= boundMs) return { revealed, focused: false, frames, ms };
+  }
+}
+
+/** `revealUntilFocused` as the one-line source the drop stage's expression calls (see `READ_LONGTASKS`). */
+export const REVEAL_UNTIL_FOCUSED = `(${revealUntilFocused.toString().replace(/\s*\n\s*/g, ' ')})`;

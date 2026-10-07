@@ -99,7 +99,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
-import { READ_LONGTASKS } from './lib/board-window.mjs';
+import { READ_LONGTASKS, REVEAL_UNTIL_FOCUSED } from './lib/board-window.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -523,8 +523,10 @@ stage2.chord = { focus: move.active?.testId, sentence, name: move.matches[0].att
 // card offers no delivery action and is not draggable (REQ-TRACE-284/497) — the first drop attempt proved exactly
 // that. So the drop profile's COPY deprecates REQ-104 (the fixture itself is never edited) and the engine refuses
 // its release in its own words. The board's REQ-TRACE-364 operation realises the card first; an unknown or empty
-// id answers false and the drag is not attempted.
-const DROP = `(async () => { const board = window.__rotarisBoard; if (!board || typeof board.reveal !== 'function') return 'no observable'; if (board.reveal('REQ-999') !== false || board.reveal('') !== false) return 'reveal answered true for an unknown or empty id'; const revealed = board.reveal('REQ-104'); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const card = document.querySelector('[data-req-card="REQ-104"]'); const target = document.querySelector('[data-testid="req-column"][data-column="ready"]'); if (!card || !target) return { revealed, missing: true }; const focused = document.activeElement === card; const dt = new DataTransfer(); const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const ev = (type, el) => el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt })); ev('dragstart', card); await frame(); ev('dragenter', target); ev('dragover', target); await frame(); const dragging = document.querySelector('[data-testid="req-columns"]')?.getAttribute('data-dragging'); ev('drop', target); ev('dragend', card); return { revealed, focused, dragging, types: [...dt.types] }; })()`;
+// id answers false and the drag is not attempted. The card must then hold the focus; since 2026-10-07 the stage waits
+// for it frame by frame, up to 1000 ms, instead of reading it exactly two frames later, which went red on a loaded host
+// (`revealUntilFocused`, docs/defects/fixed/requirements-proofs-drop-stage-reads-a-revealed-cards-focus-two-frames-after-asking-for-it.md).
+const DROP = `(async () => { const board = window.__rotarisBoard; if (!board || typeof board.reveal !== 'function') return 'no observable'; if (board.reveal('REQ-999') !== false || board.reveal('') !== false) return 'reveal answered true for an unknown or empty id'; const seen = await ${REVEAL_UNTIL_FOCUSED}('REQ-104', 1000); const revealed = seen.revealed; const card = document.querySelector('[data-req-card="REQ-104"]'); const target = document.querySelector('[data-testid="req-column"][data-column="ready"]'); if (!card || !target) return { revealed, missing: true }; const focused = seen.focused; const dt = new DataTransfer(); const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const ev = (type, el) => el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt })); ev('dragstart', card); await frame(); ev('dragenter', target); ev('dragover', target); await frame(); const dragging = document.querySelector('[data-testid="req-columns"]')?.getAttribute('data-dragging'); ev('drop', target); ev('dragend', card); return { revealed, focused, focusFrames: seen.frames, focusMs: seen.ms, dragging, types: [...dt.types] }; })()`;
 const dropProfile = profile('drop');
 const deprecatedPath = join(dropProfile.workspace, 'docs', 'requirements', 'REQ-100-fixture-epic', 'REQ-104-draft.md');
 writeFileSync(deprecatedPath, readFileSync(deprecatedPath, 'utf8').replace('status: draft', 'status: deprecated'));
@@ -543,7 +545,7 @@ const reqThreeHundred = cardsOf(drop.probes['[data-testid="req-card"]']).find((c
 expect(reqThreeHundred?.column === 'backlog', `REQ-TRACE-388: after the refused drop REQ-104 sits in ${reqThreeHundred?.column ?? 'no column'}`);
 const readyAfterDrop = columnsOf(drop.probes['[data-testid="req-column"]']).find((c) => c.key === 'ready');
 expect(readyAfterDrop?.count === 0, `the Ready column holds ${readyAfterDrop?.count} after a refused drop`);
-stage2.drop = { revealed: dropped.revealed, transferTypes: dropped.types, feedback: feedback[0], column: reqThreeHundred.column, readyCount: readyAfterDrop.count };
+stage2.drop = { revealed: dropped.revealed, focusFrames: dropped.focusFrames, focusMs: dropped.focusMs, transferTypes: dropped.types, feedback: feedback[0], column: reqThreeHundred.column, readyCount: readyAfterDrop.count };
 
 // ── scale: the generated 1,500-requirement store — 100 columns on the epic axis, virtualisation, the budget ──
 const scaleProfile = generatedProfile('scale');

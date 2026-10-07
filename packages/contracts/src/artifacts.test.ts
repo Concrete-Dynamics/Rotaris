@@ -19,6 +19,13 @@ describe('PD-LIBRARY-003 — splitFrontmatter', () => {
     }
   });
 
+  it('a value holding U+2028 or U+2029 is still a `key: value` line, since only `\\n` ends a line here', () => {
+    // docs/defects/fixed/a-title-holding-a-unicode-line-separator-writes-a-frontmatter-the-splitter-does-not-read.md: the
+    // line pattern's `.` matched neither, so a block the product had written with a raw separator in it was no block.
+    const text = '---\nid: "a"\ntitle: "Line\u2028and\u2029paragraph"\n---\n\n# Title\n';
+    expect(splitFrontmatter(text)).toEqual({ frontmatter: '---\nid: "a"\ntitle: "Line\u2028and\u2029paragraph"\n---\n', rest: '\n# Title\n' });
+  });
+
   it('a block closed at the very end of the text leaves an empty rest', () => {
     expect(splitFrontmatter('---\nid: "a"\n---')).toEqual({ frontmatter: '---\nid: "a"\n---', rest: '' });
   });

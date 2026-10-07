@@ -541,6 +541,26 @@ describe('engine/artifacts — the session artifact store', () => {
       expect(splitFrontmatter(twice).frontmatter).toContain(`superseded_by: ${JSON.stringify(third.value.id)}`);
     });
 
+    it('a title holding U+2028 or U+2029 writes a frontmatter the splitter reads as a block, so re-renders of the edit stack none', () => {
+      // docs/defects/fixed/a-title-holding-a-unicode-line-separator-writes-a-frontmatter-the-splitter-does-not-read.md:
+      // `JSON.stringify` left both characters raw and `FRONTMATTER_LINE`'s `.` matched neither, so each re-render found no
+      // block and wrote one more above the person's text.
+      const store = storeFor();
+      const first = publish(store, { title: 'Line\u2028and\u2029paragraph' });
+      const second = publish(store, { slug: 'other' });
+      const third = publish(store, { slug: 'third' });
+      if (!first.ok || !second.ok || !third.ok) throw new Error('publish');
+      const written = docOf(first.value.id);
+      expect(written.slice(0, written.indexOf('\n---\n'))).not.toMatch(/[\u2028\u2029]/);
+      expect(written).toContain('title: "Line\\u2028and\\u2029paragraph"');
+      expect(store.editBody(first.value.id, edited(first.value.id)).ok).toBe(true);
+      expect(store.supersede(second.value.id, first.value.id).ok).toBe(true);
+      expect(store.supersede(third.value.id, first.value.id).ok).toBe(true);
+      const after = docOf(first.value.id);
+      expect(after.match(/^---$/gm)).toHaveLength(2);
+      expect(splitFrontmatter(after).rest).toBe('\n# The plan, corrected by hand\n\nThe reconciliation was NOT completed.\n');
+    });
+
     it('a document that opens with a `---` rule followed by prose stays whole under a block put in front of it', () => {
       const store = storeFor();
       const first = publish(store);

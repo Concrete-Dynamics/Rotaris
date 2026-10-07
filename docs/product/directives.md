@@ -6020,8 +6020,8 @@ live run at `a68f121`); logged as [R-072](requests.md#r-072).*
 > sentence the agent reads on Continue was in place, and only the body under it was false. **What was measured.**
 > `terminal.test.ts`'s handshake cancel case, its new mid-command cancel case (`sleep 5` cancelled at 300 ms: `interrupted`,
 > the restore named, no timeout, the next call in the restored directory with the variable) and its classify case, each red
-> on `71176df`; `gate.test.ts` and `summary.test.ts` as guards; `pnpm driver-proof`'s launch 13d, a quit during `sleep 60`
-> under a 100 s bound in the built app, red on `71176df` (`timeout`, 124, "exceeded its timeout of 100 seconds",
+> on `fee3593`; `gate.test.ts` and `summary.test.ts` as guards; `pnpm driver-proof`'s launch 13d, a quit during `sleep 60`
+> under a 100 s bound in the built app, red on `fee3593` (`timeout`, 124, "exceeded its timeout of 100 seconds",
 > `terminal_timeout` at `error`) and green after (`interrupted`, no exit code, `kill_status` `session_reset`, no issue).
 > **What was not measured.** No live run: the next default live run's quit is the measurement.
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).

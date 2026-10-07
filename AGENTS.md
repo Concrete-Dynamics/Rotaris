@@ -42,6 +42,14 @@ show it, which a check of the status passes as a clean exit. (Before the applica
 2026-09-29 it did not return at all.)
 ([note](docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)).
 
+A launch ends with its whole process group, not with its main process alone. Since 2026-10-07 a driven launch leads a
+process group of its own as a `spawnBounded` one does, and both drain it once the main process has exited
+(`drainGroup`): whatever is still running three seconds later, an Electron helper or a child the app started, is ended
+with SIGKILL and named on the proof's standard error as `bounded-launch: … outlived it …`. A proof that exits or is
+signalled takes every live group with it. Before that, `layout-proof`, `driver-proof` and `workspace-proof` exited beside
+their own zygotes and a Git view's `git diff`
+([note](docs/defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md)).
+
 | Area | Script | What it measures |
 |---|---|---|
 | **The run** | `part-h-proof` | the loop supervisor and `continue` (ADR-0059); since 2026-10-07 (`plan-correction`, PD-ORCH-015, OQ-225) a coordinating root that answers while its plan's report item is `PENDING` is corrected in its own conversation at the default configuration, records the item, and closes in one `succeeded` iteration with no held-answer row (two iterations, `partial` then `succeeded`, without the directive); and its resume launches read each closed iteration's `iteration_end` timeline entry, the record REQ-SESSION-115's "Recent iterations" reads (live-run finding P4) |

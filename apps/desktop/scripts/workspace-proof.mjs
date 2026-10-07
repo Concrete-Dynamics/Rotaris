@@ -27,7 +27,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join, posix } from 'node:path';
 import { app as appDirectory, buildDesktop, cleanEnvironment, dataDirFor, electron, evidenceDirectory, findDatabases, hostSwitches, mainEntry, proofIsolationEnv, scratchHomeFor } from './lib/harness.mjs';
 import { exitWithin, overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
-import { startApp } from './lib/driver.mjs';
+import { endLaunch, startApp } from './lib/driver.mjs';
 
 const output = evidenceDirectory('.workspace-proof');
 rmSync(output, { recursive: true, force: true });
@@ -188,6 +188,8 @@ async function closeAll() {
     writeFileSync(join(output, `app-${name}.log`), existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '');
     started.driver.close();
     try { if (started.child.pid) process.kill(started.child.pid); } catch { /* already gone after quit */ }
+    // The rest of the launch's process group with it (finacc3 A2-19): the proof once exited beside its zygotes.
+    await endLaunch(started.child);
   }
 }
 /**

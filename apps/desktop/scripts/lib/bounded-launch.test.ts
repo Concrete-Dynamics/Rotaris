@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the module is plain ESM beside the scripts that run it.
-import { endOverrun, exitWithin, logTail, overrunMessage, spawnBounded } from './bounded-launch.mjs';
+import { drainGroup, endOverrun, exitWithin, logTail, overrunMessage, spawnBounded } from './bounded-launch.mjs';
 
 const POSIX = process.platform !== 'win32';
 
@@ -206,6 +206,54 @@ describe('R-062: ending a proof launch within its bound', () => {
     } finally {
       holder.kill('SIGKILL');
     }
+  });
+
+  /*
+   * finacc3 A2-19 (docs/defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md): a launch's main
+   * process exited and the proof moved on while the rest of its process group still ran — Electron's zygotes, its GPU,
+   * utility and renderer processes, and a `git diff --numstat` the Git view had started — so the next proof could meet
+   * them. A launch now ends with its whole group: what outlives the leader by the grace is ended with SIGKILL and named.
+   */
+  it.skipIf(!POSIX)('spawnBounded ends a member of the launch\'s group that outlives a leader which exited by itself, and names it', async () => {
+    const r = await spawnBounded(process.execPath, ['-e', "const { spawn } = require('node:child_process'); const g = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);\", 'lingering-member'], { stdio: 'ignore' }); console.log('member ' + g.pid); process.exit(0);"], { timeoutMs: 10_000, groupGraceMs: 300 });
+    const member = Number(/member (\d+)/.exec(r.stdout)?.[1] ?? 0);
+    try {
+      expect(member).toBeGreaterThan(0);
+      expect(r).toMatchObject({ status: 0, overran: null });
+      expect(r.group).toMatchObject({ endedBy: 'SIGKILL' });
+      expect(r.group.lingered.some((l: string) => l.includes('lingering-member'))).toBe(true);
+      expect(await goneWithin(member, 5_000)).toBe(true);
+    } finally {
+      try { process.kill(member, 'SIGKILL'); } catch { /* gone */ }
+    }
+  });
+
+  it.skipIf(!POSIX)('a proof with nothing else left to wait on still finishes the drain: its top-level await settles', async () => {
+    // The first form waited on unreferenced timers: a scratch loop's `await spawnBounded(…)` ended its process with exit
+    // 13, "unsettled top-level await", the moment the leader was gone and only the drain was left.
+    const module = pathToFileURL(join(import.meta.dirname, 'bounded-launch.mjs')).href;
+    const leader = "const { spawn } = require('node:child_process'); spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);\"], { stdio: 'ignore' }); process.exit(0);";
+    const proof = spawn(process.execPath, ['--input-type=module', '-e',
+      `const { spawnBounded } = await import(${JSON.stringify(module)}); const r = await spawnBounded(process.execPath, ['-e', ${JSON.stringify(leader)}], { timeoutMs: 10_000, groupGraceMs: 300 }); console.log('drained ' + r.group.endedBy);`,
+    ], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let out = '';
+    proof.stdout!.setEncoding('utf8').on('data', (c: string) => { out += c; });
+    const exit = await new Promise<number | null>((resolve) => proof.once('exit', (code) => resolve(code)));
+    expect({ exit, out: out.trim() }).toEqual({ exit: 0, out: 'drained SIGKILL' });
+  });
+
+  it.skipIf(!POSIX)('drainGroup leaves a group whose members end inside the grace alone, and says nothing lingered', async () => {
+    const leader = await child(
+      "const { spawn } = require('node:child_process');"
+      + " spawn(process.execPath, ['-e', 'setTimeout(() => {}, 200)'], { stdio: 'ignore' });"
+      + " console.log('ready'); setTimeout(() => process.exit(0), 50);",
+      { detached: true },
+    );
+    await exitWithin(leader, 5_000);
+    const drained = await drainGroup(leader, { graceMs: 5_000 });
+    // Left by itself well inside the grace: a member that has exited and waits on PID 1's reaping counts as gone.
+    expect(drained).toMatchObject({ endedBy: null, lingered: [] });
+    expect(drained.afterMs).toBeLessThan(5_000);
   });
 
   it('logTail keeps the last non-empty lines', () => {

@@ -35,7 +35,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
-import { startApp } from './lib/driver.mjs';
+import { endLaunch, startApp } from './lib/driver.mjs';
 
 const output = evidenceDirectory('.layout-proof');
 rmSync(output, { recursive: true, force: true });
@@ -342,6 +342,8 @@ try {
   await d.quit().catch(() => undefined);
   d.close();
   try { if (started.child.pid) process.kill(started.child.pid); } catch { /* already gone after quit */ }
+  // The rest of the launch's process group with it (finacc3 A2-19): the proof once exited beside its zygotes.
+  await endLaunch(started.child);
   const log = existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '';
   writeFileSync(join(output, 'app.log'), log);
   writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);

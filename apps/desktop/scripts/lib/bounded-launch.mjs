@@ -23,9 +23,15 @@
  *
  * Nothing here is product code. It runs only from the proofs; `bounded-launch.test.ts` pins it against real children.
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const POSIX = process.platform !== 'win32';
+/**
+ * How long the rest of a launch's process group may outlive its leader before it is ended (`drainGroup`). Electron's
+ * zygotes, GPU, utility and renderer processes leave within moments of the main process; what is still there after this
+ * is a process the launch left behind (finacc3 A2-19: a `git diff --numstat` the Git view started, alive after the quit).
+ */
+const GROUP_GRACE_MS = 3_000;
 /** How long SIGKILL may take to be reaped. It cannot be refused, so this is a bound on the kernel, not on the app. */
 const KILL_REAP_MS = 5_000;
 /** How long the pipes may stay open after the process exited — a helper holding them is not a reason to hang. */
@@ -65,6 +71,13 @@ function track(child) {
     process.on(sig, handler);
   }
 }
+/**
+ * A launch the proof started some other way (`lib/driver.mjs`'s `startApp`) taken into the same care: while it is live, a
+ * fatal signal to the proof, or the proof's exit, ends its whole group. It leaves the set through `drainGroup`.
+ */
+export function trackLaunch(child) {
+  track(child);
+}
 /** A launch seen to end is no longer the proof's to clean up; with none left, the proof's signals are its own again. */
 function untrack(child) {
   live.delete(child);
@@ -93,10 +106,10 @@ export function exitWithin(child, ms) {
  * leader). A process that is already gone is not an error: the point is that it is gone.
  */
 function signal(child, sig, group) {
-  try {
-    if (group && POSIX && child.pid) process.kill(-child.pid, sig);
-    else child.kill(sig);
-  } catch { /* ESRCH: already gone */ }
+  if (group && POSIX && child.pid) {
+    try { process.kill(-child.pid, sig); return; } catch { /* no such group: a launch that leads none — the process alone */ }
+  }
+  try { child.kill(sig); } catch { /* ESRCH: already gone */ }
 }
 
 /**
@@ -116,6 +129,53 @@ export async function endOverrun(child, { graceMs = 10_000, group = false } = {}
 }
 
 /**
+ * The live members of process group `pgid`, one `pid args` line each, a zombie not counted (it runs nothing and init
+ * reaps it on its own schedule); `null` where `ps` cannot be asked, and then `kill(-pgid, 0)` alone says whether any is left.
+ */
+function groupMembers(pgid) {
+  const r = spawnSync('ps', ['-A', '-o', 'pid=', '-o', 'pgid=', '-o', 'stat=', '-o', 'args='], { encoding: 'utf8', timeout: 5_000 });
+  if (r.status !== 0 || typeof r.stdout !== 'string') return null;
+  const members = [];
+  for (const line of r.stdout.split('\n')) {
+    const m = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(line);
+    if (m && Number(m[2]) === pgid && !m[3].startsWith('Z')) members.push(`${m[1]} ${m[4].trim()}`);
+  }
+  return members;
+}
+function groupLive(pgid) {
+  const members = groupMembers(pgid);
+  if (members !== null) return members.length > 0;
+  try { process.kill(-pgid, 0); return true; } catch { return false; }
+}
+
+/**
+ * finacc3 A2-19 (`docs/defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md`): a launch ends
+ * with its whole process group, not with its main process alone. Called once the leader has exited: the rest of the group
+ * is given `graceMs` to leave on its own, and whatever is still running then is ended with SIGKILL and NAMED — a proof that
+ * moved on with it alive would have measured beside its own leftovers. Resolves with `{ endedBy, lingered, afterMs }`:
+ * `endedBy` null when the group left by itself, `'SIGKILL'` when it had to be ended, `'nothing'` when even that was not
+ * seen to take; `lingered` the members found at the grace (`pid args`). On Windows, or for a launch that leads no group,
+ * there is no group to drain. The launch leaves the proof's care here.
+ */
+/** A wait that holds the event loop open: a drain must finish even when nothing else is left for the proof to wait on. */
+const heldSleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+export async function drainGroup(child, { graceMs = GROUP_GRACE_MS } = {}) {
+  const started = Date.now();
+  if (!POSIX || !child.pid) { untrack(child); return { endedBy: null, lingered: [], afterMs: 0 }; }
+  const pgid = child.pid;
+  while (groupLive(pgid) && Date.now() - started < graceMs) await heldSleep(50);
+  if (!groupLive(pgid)) { untrack(child); return { endedBy: null, lingered: [], afterMs: Date.now() - started }; }
+  const lingered = groupMembers(pgid) ?? ['(members unknown: ps could not be asked)'];
+  try { process.kill(-pgid, 'SIGKILL'); } catch { /* ESRCH: gone between the look and the signal */ }
+  const killedAt = Date.now();
+  while (groupLive(pgid) && Date.now() - killedAt < KILL_REAP_MS) await heldSleep(50);
+  const endedBy = groupLive(pgid) ? 'nothing' : 'SIGKILL';
+  untrack(child);
+  console.error(`bounded-launch: ${lingered.length} process(es) of the launch's group (${pgid}) outlived it by ${graceMs} ms and ${endedBy === 'SIGKILL' ? 'were ended with SIGKILL' : 'did not end on SIGKILL'}: ${lingered.join(' ;; ')}`);
+  return { endedBy, lingered, afterMs: Date.now() - started };
+}
+
+/**
  * `spawnSync`'s shape — `{ status, signal, stdout, stderr }` — from an asynchronous launch that ends within
  * `timeoutMs` whatever the process does, plus `elapsedMs` and `overran`: `null` for a launch that ended by itself,
  * otherwise `endOverrun`'s account of how it was ended. `graceMs` is the SIGTERM grace.
@@ -123,7 +183,7 @@ export async function endOverrun(child, { graceMs = 10_000, group = false } = {}
  * On POSIX the launch leads its own process group, so the SIGKILL reaches every helper it started. SIGTERM goes to the
  * process alone: that is what a person's `kill` does, and what the product's own quit path is expected to answer.
  */
-export async function spawnBounded(command, args, { timeoutMs, graceMs = 10_000, cwd, env, windowsHide = true } = {}) {
+export async function spawnBounded(command, args, { timeoutMs, graceMs = 10_000, groupGraceMs = GROUP_GRACE_MS, cwd, env, windowsHide = true } = {}) {
   if (!(timeoutMs > 0)) throw new Error('spawnBounded needs a positive timeoutMs');
   const started = Date.now();
   const child = spawn(command, args, { cwd, env, windowsHide, detached: POSIX, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -146,11 +206,12 @@ export async function spawnBounded(command, args, { timeoutMs, graceMs = 10_000,
     overran = { timeoutMs, ...(await endOverrun(child, { graceMs, group: POSIX })) };
     exit = overran.exit;
   }
+  // The rest of the group first: a helper holding the pipes is a member of it, so the pipes close once it is drained.
+  const group = hasExited(child) ? await drainGroup(child, { graceMs: groupGraceMs }) : null;
   await Promise.race([closed, sleep(PIPE_GRACE_MS)]);
   child.stdout.destroy();
   child.stderr.destroy();
-  if (hasExited(child)) untrack(child);
-  return { status: exit?.code ?? null, signal: exit?.signal ?? null, stdout, stderr, elapsedMs: Date.now() - started, overran };
+  return { status: exit?.code ?? null, signal: exit?.signal ?? null, stdout, stderr, elapsedMs: Date.now() - started, overran, group };
 }
 
 /** The last `lines` lines of a log, for a failure that has to say what the launch was doing when it was ended. */

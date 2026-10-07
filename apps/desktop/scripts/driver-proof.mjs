@@ -34,7 +34,7 @@ import { createRequire } from 'node:module';
 import { connect as connectSocket } from 'node:net';
 import { join } from 'node:path';
 import { buildDesktop, evidenceDirectory, oneDatabase } from './lib/harness.mjs';
-import { clickLanded, startApp, until } from './lib/driver.mjs';
+import { clickLanded, endLaunch, startApp, until } from './lib/driver.mjs';
 import { exitWithin } from './lib/bounded-launch.mjs';
 
 const require = createRequire(import.meta.url);
@@ -46,6 +46,12 @@ mkdirSync(join(output, 'shots'), { recursive: true });
 if (!process.argv.includes('--skip-build')) buildDesktop(output);
 
 const workspace = join(output, 'workspace');
+/**
+ * finacc3 A2-19: the workspaces lie under the checkout's git-ignored `.proof/` and hold no repository of their own, so the
+ * app's git climbed into the enclosing checkout and its Git view diffed that repository's branches (`main...fin27-d`).
+ * Discovery stops at the evidence directory, so each workspace is what it is meant to be here: not a repository.
+ */
+const NO_ENCLOSING_REPOSITORY = { GIT_CEILING_DIRECTORIES: output };
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# driver proof\n');
 writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
@@ -92,7 +98,7 @@ const check = (name, ok, detail) => {
 };
 const note = (name, detail) => { results.push({ name, verdict: 'NOTE', detail }); console.log(`NOTE  ${name} — ${detail}`); };
 
-const started = await startApp({ root: join(output, 'app'), workspace, timeoutMs: 90_000 });
+const started = await startApp({ root: join(output, 'app'), workspace, timeoutMs: 90_000, extra: NO_ENCLOSING_REPOSITORY });
 const d = started.driver;
 try {
   const pong = await d.ping();
@@ -189,6 +195,7 @@ try {
 } finally {
   d.close();
   try { if (started.child.exitCode === null && started.child.pid) process.kill(started.child.pid); } catch { /* already gone, which is the expected case after `quit` */ }
+  await endLaunch(started.child);
   const log = existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '';
   writeFileSync(join(output, 'app.log'), log);
   writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);
@@ -219,7 +226,7 @@ writeFileSync(join(runWorkspace, '.rotaris', 'agents.yaml'), [
 ].join('\n'));
 const run = await startApp({
   root: join(output, 'run-app'), workspace: runWorkspace, timeoutMs: 90_000,
-  extra: { ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,wait:120000,answer', ROTARIS_CHILD_SCRIPT: 'write,answer' },
+  extra: { ...NO_ENCLOSING_REPOSITORY, ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,wait:120000,answer', ROTARIS_CHILD_SCRIPT: 'write,answer' },
 });
 const r = run.driver;
 try {
@@ -293,6 +300,7 @@ try {
 } finally {
   r.close();
   try { if (run.child.exitCode === null && run.child.pid) process.kill(run.child.pid); } catch { /* already gone after the quit */ }
+  await endLaunch(run.child);
   writeFileSync(join(output, 'run-app.log'), existsSync(run.logFile) ? readFileSync(run.logFile, 'utf8') : '');
   writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);
 }
@@ -319,7 +327,7 @@ for (const root of [familyA, familyB]) {
 }
 const family = await startApp({
   root: join(output, 'family-app'), workspace: familyA, timeoutMs: 90_000,
-  extra: { ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,wait:120000,answer', ROTARIS_CHILD_SCRIPT: 'answer', ROTARIS_CAPTURE_PROJECT_FOLDER: familyB },
+  extra: { ...NO_ENCLOSING_REPOSITORY, ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,wait:120000,answer', ROTARIS_CHILD_SCRIPT: 'answer', ROTARIS_CAPTURE_PROJECT_FOLDER: familyB },
 });
 const f = family.driver;
 try {
@@ -369,6 +377,7 @@ try {
 } finally {
   f.close();
   try { if (family.child.exitCode === null && family.child.pid) process.kill(family.child.pid); } catch { /* already gone after the quit */ }
+  await endLaunch(family.child);
   writeFileSync(join(output, 'family-app.log'), existsSync(family.logFile) ? readFileSync(family.logFile, 'utf8') : '');
   writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);
 }

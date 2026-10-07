@@ -13,7 +13,9 @@ import { connect as connectSocket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { app as appDirectory, cleanEnvironment, electron, hostSwitches, mainEntry, proofIsolationEnv } from './harness.mjs';
-import { endedHow, endOverrun, exitWithin, hasExited, logTail } from './bounded-launch.mjs';
+import { drainGroup, endedHow, endOverrun, exitWithin, hasExited, logTail, trackLaunch } from './bounded-launch.mjs';
+
+const POSIX = process.platform !== 'win32';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -132,9 +134,14 @@ export async function startApp({ root, workspace, extra = {}, electronArgs = [],
   mkdirSync(preferences, { recursive: true });
 
   const out = openSync(logFile, 'a');
+  // On POSIX every launch leads its own process group, so the launch can be ended as a whole — what its main process
+  // leaves running is drained at its end (`stopApp`, `drainGroup`) and SIGKILLed at the proof's exit or on a fatal signal
+  // (`trackLaunch`). Until 2026-10-07 a proof's launch shared the proof's group and a proof exited beside its zygotes
+  // and a Git view's `git diff` (finacc3 A2-19, `docs/defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md`).
+  const group = detached || POSIX;
   const child = spawn(electron, [mainEntry, ...hostSwitches, ...electronArgs, ...(workspace ? [workspace] : [])], {
     cwd: appDirectory,
-    detached,
+    detached: group,
     windowsHide: false,
     stdio: ['ignore', out, out],
     env: {
@@ -147,9 +154,10 @@ export async function startApp({ root, workspace, extra = {}, electronArgs = [],
     },
   });
   if (detached) child.unref();
+  else trackLaunch(child);
   writeFileSync(join(root, 'app.pid'), `${child.pid}\n`);
 
-  const driver = await connectOrEnd(child, endpointFile, logFile, { timeoutMs, group: detached });
+  const driver = await connectOrEnd(child, endpointFile, logFile, { timeoutMs, group });
   return { child, driver, endpointFile, logFile, local, preferences };
 }
 
@@ -164,6 +172,7 @@ export async function connectOrEnd(child, endpointFile, logFile, { timeoutMs = 6
     return await connect(endpointFile, { timeoutMs });
   } catch (cause) {
     const ended = hasExited(child) ? null : await endOverrun(child, { graceMs, group });
+    if (group) await drainGroup(child);
     const fate = ended
       ? `the launch was ended: ${endedHow(ended)}`
       : `the launch had already exited ${child.exitCode ?? child.signalCode}`;
@@ -202,9 +211,19 @@ export async function stopApp(started, { graceMs = 15_000, quitMs = 10_000, scre
   started.driver.close();
   const quitAnswered = quit !== null;
   const exit = await exitWithin(started.child, graceMs);
-  if (exit) return { exit, overran: null, quitAnswered, screenshot: pictured };
-  const ended = await endOverrun(started.child, { graceMs });
-  return { exit: ended.exit, overran: { quitAnswered, quitMs, afterQuitMs: graceMs, ...ended }, quitAnswered, screenshot: pictured };
+  if (exit) return { exit, overran: null, quitAnswered, screenshot: pictured, group: await drainGroup(started.child) };
+  const ended = await endOverrun(started.child, { graceMs, group: POSIX });
+  return { exit: ended.exit, overran: { quitAnswered, quitMs, afterQuitMs: graceMs, ...ended }, quitAnswered, screenshot: pictured, group: await drainGroup(started.child) };
+}
+
+/**
+ * End a driven launch the proof has already asked to quit (or given up on): at most `graceMs` for the main process to
+ * exit, SIGTERM then SIGKILL to its group if it does not, then the rest of its group drained (`drainGroup`). For a
+ * proof's own `finally`, where `stopApp`'s screenshot and quit request have no place. Resolves with the drain's account.
+ */
+export async function endLaunch(child, { graceMs = 10_000 } = {}) {
+  if (!hasExited(child) && (await exitWithin(child, graceMs)) === null) await endOverrun(child, { graceMs, group: POSIX });
+  return drainGroup(child);
 }
 
 /** The sentence a proof throws for a driven launch `stopApp` had to end: what the quit did, what ended it, its last words. */

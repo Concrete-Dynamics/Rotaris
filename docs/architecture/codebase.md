@@ -1511,6 +1511,12 @@ status 0), `workspace-proof`'s hand-over launch (SIGTERM alone at 30 s, no log) 
 Since then the same test also fails a bare `spawn` of Electron outside three it names with their reasons: the driver's,
 `code-intel-proof`'s branch (a stdio server guarded by its RPC client) and `live-run`'s `runElectron` (SIGKILL at its
 bound, reported as a signal). And it checks each `spawnBounded` site, not each file, for its `.overran`.
+Since 2026-10-07 (finacc3 A2-19) a launch ends with its whole process group: `spawnBounded` and the driver's `stopApp` and
+`endLaunch` drain the group once the main process has exited (`drainGroup`: three seconds for it to leave by itself, then
+SIGKILL, each straggler named on standard error), a driven launch leads a group of its own as a bounded one does
+(`startApp`, `trackLaunch`), and a proof that exits or is signalled ends every live group. `driver-proof`'s workspaces carry
+`GIT_CEILING_DIRECTORIES` at the evidence directory, so the app's git no longer climbs into the checkout they lie in
+([note](../defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md)).
 
 **The driver.** `apps/desktop/src/main/driver.ts`, reached only when `ROTARIS_DRIVER` names an endpoint file at
 launch, opens a loopback listener and answers newline-delimited JSON: `waitFor`, `click` (by selector, optionally

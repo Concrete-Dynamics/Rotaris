@@ -231,7 +231,7 @@ function slug(key) { return key.replace(/[^a-z0-9]/gi, '').slice(0, 12).toLowerC
  */
 export function stageEfforts(efforts) {
   if (!efforts || (efforts.verify === undefined && efforts.merge === undefined)) return efforts
-  const { verify, merge, ...rest } = efforts
+  const { verify, merge: _merge, ...rest } = efforts
   return verify !== undefined && rest.review === undefined ? { ...rest, review: verify } : rest
 }
 /** The bundles whose plan entry names an old stage's effort, for render to say how it read them. */

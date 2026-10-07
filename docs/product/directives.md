@@ -3911,6 +3911,26 @@ REQ-LIBRARY-023, REQ-LIBRARY-124, REQ-NOTIFY-100, REQ-CONFIG-446, REQ-CONFIG-419
 > A run started with an unsaved value (the unsaved-settings guard holds the person in Settings; the Tier B overlay and the
 > live state are pinned by unit cases), and a delegated child running past 20 minutes (the orchestrator's live run). The row
 > is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Revision 2's first execution, 2026-10-07, built under [R-072](requests.md#r-072) (fin29):** the revision held as
+> written, and its widget clamp needed one more rule. **Found:** the control as first built took every keystroke through
+> the clamp, so `120` typed into a cleared field became `10`, then `102`, then `600`; it now holds the text as a draft until it
+> is a whole number within 10–600 or the field loses focus (`improvementTimeoutEdit`). The same fault in the category's other
+> number fields is recorded, not repaired
+> ([`a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`](../defects/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md)).
+> **As built.** `DESKTOP_SAVE_RUNTIME_KEYS` and the closed `DesktopSaveSchema.runtime` (`packages/contracts/src/config.ts`),
+> `DesktopSave.runtime` typed from it (`packages/config/src/writers.ts`), `improvement_collector_timeout` in
+> `TIER_B_RUNTIME_KEYS` (`packages/config/src/tiers.ts`), the helpers in `packages/ui/src/settings/config-state.ts`, the
+> `improvement-timeout` control in `packages/ui/src/settings/ConfigSettings.tsx`, `zeroProposalDetail`
+> (`apps/desktop/src/main/improvement-notice.ts`), and the run start's configuration line now naming the resolved
+> `improvement_collector_timeout` (`apps/desktop/src/run-host/configuration.ts`). **What was measured.**
+> `settings/improvement-timeout.test.ts`, `writers.test.ts`'s three revision-2 cases, `contracts.test.ts`'s closed-list case
+> and `improvement-notice.test.ts`, red on the source before except the save's write; driven (`pnpm app:drive`): 60 by
+> default after the toggle, 120 typed and saved into the workspace file and resolved at the next run start, a stated 900 read
+> 600 with its stored line and the save bar clean. **What was not measured.** A run started on an unsaved value (the
+> unsaved-settings guard holds the person in Settings, as for the per-agent timeout), a timed-out analysis's notice in the
+> built app, and the `ui-review` pack (skipped: the control repeats the per-agent timeout's measured geometry, 66 px). The
+> row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

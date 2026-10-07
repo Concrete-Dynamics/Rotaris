@@ -93,6 +93,13 @@ and question-dock cancellations and holds back their notices until their rest. T
 **runtime view**'s control table say so. One request and one reply kind on the main ↔ run host channel; no package, edge,
 process, command or store column changed.
 
+**The improvement analysis timeout control is complete, and the save's runtime keys are a closed list (PD-CONFIG-003
+revision 2, REQ-CONFIG-256, REQ-CONFIG-262, REQ-NOTIFY-100; OQ-223 ruled under R-072, fin29).** `DESKTOP_SAVE_RUNTIME_KEYS`
+(`@rotaris/contracts`) closes `DesktopSaveSchema.runtime`; `TIER_B_RUNTIME_KEYS` gains `improvement_collector_timeout`; the
+control is clamped 10–600 s with a seconds suffix and a stored-value line; and the zero-proposal notice's detail says when a
+post-run analysis reached its limit (`zeroProposalDetail`, `apps/desktop/src/main/improvement-notice.ts`). The **seams view**
+§5 and the **runtime view**'s Tier B list say so. No package, edge, process, channel, command or store column changed.
+
 **Isolation counts the runs that could share the launch's tree (PD-GIT-001, REQ-GIT-119, REQ-GIT-120, REQ-MONITOR-251; OQ-224
 ruled under R-072, fin29).** `runs.active` gains `scope: 'sharing'` (`Sessions.activeRunsSharing`: the workspace's own runs and
 any whose tree overlaps its folder, compared by whole components); `session.newId` answers `isolationRequired` from it and

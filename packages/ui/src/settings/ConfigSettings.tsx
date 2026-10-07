@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
-import { CHILD_TIMEOUT_MINUTES, clampForDisplay, scopeCellOf, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
+import { CHILD_TIMEOUT_MINUTES, clampForDisplay, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutEdit, improvementTimeoutForDisplay, improvementTimeoutFromInput, scopeCellOf, storedImprovementTimeoutNote, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 
@@ -243,6 +243,8 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
   const [confirm, setConfirm] = useState<'outside' | 'autonomous' | null>(null);
   const [advancedScope, setAdvancedScope] = useState<'workspace' | 'global'>('workspace');
   const [advancedMessage, setAdvancedMessage] = useState<string | null>(null);
+  // PD-CONFIG-003 revision 2: the improvement analysis timeout's text while it is typed and not yet a value within 10–600.
+  const [improvementDraft, setImprovementDraft] = useState<string | null>(null);
   if (!snapshot || !pending) return <p className="text-secondary">{props.loading ? 'Reading the configuration…' : props.error ?? 'No configuration service.'}</p>;
   if (!snapshot.loadOk) return <Fatal snapshot={snapshot} />;
   const rt = pending.runtime;
@@ -289,10 +291,15 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
         <Toggle id="cb" label="Circuit breaker" hint="Watches every agent for repeated work and redirects it; escalates after three activations." on={pending.circuitBreakerEnabled} onChange={(v) => onChange({ kind: 'circuitBreaker', value: v })} />
         <Toggle id="outside" label="Allow outside workspace" hint="Lets agents read and change files outside the chosen workspace." on={rt.allow_outside_workspace} onChange={(v) => { if (v) setConfirm('outside'); else onChange({ kind: 'runtime', key: 'allow_outside_workspace', value: false }); }} />
         <Toggle id="improvement" label="Improvement loop" hint="Runs one bounded background analysis after each completed task run and stores reviewable proposals in the Library." on={rt.improvement_collector_enabled} onChange={(v) => onChange({ kind: 'runtime', key: 'improvement_collector_enabled', value: v })} />
+        {/* PD-CONFIG-003 revision 2 (OQ-223): the improvement analysis timeout, directly after the toggle it qualifies, in whole
+            seconds clamped 10–600 over `runtime.improvement_collector_timeout`, drawn as the per-agent timeout is. A stored value
+            outside the range is shown clamped and stated beneath, never rewritten until the field is changed (REQ-CONFIG-446,
+            REQ-CONFIG-419). */}
         <div className="settings__action">
           <label htmlFor="improvement-timeout">Improvement analysis timeout</label>
-          <DesignInput id="improvement-timeout" className="input settings__number" type="number" min={1} value={Math.max(1, rt.improvement_collector_timeout)} onChange={(e) => onChange({ kind: 'runtime', key: 'improvement_collector_timeout', value: Math.max(1, Number(e.currentTarget.value) || 1) })} />
-          <span className="text-secondary settings__hint">seconds before the collector records its bounded timeout result</span>
+          <DesignInput id="improvement-timeout" className="input settings__number" type="number" min={IMPROVEMENT_TIMEOUT_SECONDS.min} max={IMPROVEMENT_TIMEOUT_SECONDS.max} step={1} aria-description={`Stored as ${rt.improvement_collector_timeout} seconds.`} value={improvementDraft ?? improvementTimeoutForDisplay(rt.improvement_collector_timeout)} onChange={(e) => { const edit = improvementTimeoutEdit(e.currentTarget.value); if ('commit' in edit) { setImprovementDraft(null); onChange({ kind: 'runtime', key: 'improvement_collector_timeout', value: edit.commit }); } else setImprovementDraft(edit.draft); }} onBlur={() => { if (improvementDraft === null) return; setImprovementDraft(null); onChange({ kind: 'runtime', key: 'improvement_collector_timeout', value: improvementTimeoutFromInput(improvementDraft.trim() === '' ? Number.NaN : Number(improvementDraft)) }); }} /><span className="text-secondary">seconds</span>
+          <span className="text-secondary settings__hint" data-testid="improvement-timeout-hint">How long the background review of a finished run may take while the improvement loop is on; a review that runs longer ends with no proposals. It never holds up your work, and applies to runs started from now.</span>
+          {storedImprovementTimeoutNote(rt.improvement_collector_timeout) !== null && <span className="text-secondary settings__hint" data-testid="improvement-timeout-stored">{storedImprovementTimeoutNote(rt.improvement_collector_timeout)}</span>}
         </div>
         <Toggle id="keep-going" label="Keep going" hint="A run holds itself open while the last verification suite still has a failing or timed-out check; no budget is extended." on={rt.keep_going} onChange={(v) => onChange({ kind: 'runtime', key: 'keep_going', value: v })} />
         <div className="settings__action">

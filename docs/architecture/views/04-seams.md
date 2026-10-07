@@ -232,8 +232,15 @@ those is a key that saves and does not mark dirty, or marks dirty and does not s
 `instructions.overrides` (`PD-WORKSPACE-002`) is the worked example, and `skills.overrides` the one
 before it. A key that also reaches a run start through the live state, as the delegation limits do, joins
 `TIER_B_RUNTIME_KEYS` (`packages/config/src/tiers.ts`): `runtime.child_timeout` (`PD-CONFIG-003`, 2026-10-07) is the
-latest — seconds in the file and the snapshot, whole minutes on the screen (`timeoutMinutesForDisplay`,
-`timeoutSecondsFromInput`), a stored value the control cannot show kept as stored until the field is changed.
+latest but one — seconds in the file and the snapshot, whole minutes on the screen (`timeoutMinutesForDisplay`,
+`timeoutSecondsFromInput`), a stored value the control cannot show kept as stored until the field is changed; then
+`runtime.improvement_collector_timeout` (`PD-CONFIG-003` revision 2, 2026-10-07), whole seconds clamped 10–600
+(`improvementTimeoutForDisplay`, `improvementTimeoutFromInput`, `storedImprovementTimeoutNote`). **Since that revision the
+desktop save's runtime keys are a closed list**, `DESKTOP_SAVE_RUNTIME_KEYS` in `packages/contracts/src/config.ts`:
+`DesktopSaveSchema` refuses any other runtime key, `DesktopSave.runtime` (`packages/config/src/writers.ts`) is typed from
+it, the screen's runtime keys (`pendingFrom`) must equal it and `TIER_B_RUNTIME_KEYS` must equal it less the six
+confinement and egress fields (`improvement-timeout.test.ts`, `writers.test.ts`), so a runtime key the screen edits is
+added in the list or the save refuses it.
 
 Invariants:
 

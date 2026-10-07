@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isMap, isNode, type Document, type Node, type YAMLMap } from 'yaml';
-import { LEGACY_ROLE_ALIASES, VerifierSectionSchema, type VerifierSection } from '@rotaris/contracts';
+import { LEGACY_ROLE_ALIASES, VerifierSectionSchema, type DesktopSaveRuntimeKey, type VerifierSection } from '@rotaris/contracts';
 import { err, millis, ok, type Result, type Timers } from '@rotaris/kernel';
 import { replaceDocument, replaceDocumentSync, type RetryLadder } from '@rotaris/platform';
 import { parseConfig, plainOf } from './document.js';
@@ -219,7 +219,8 @@ function roleEditAt(edit: RoleEdit, scope: RoleEditScope): RoleFieldEdits | unde
 export interface DesktopSave {
   readonly slots?: Partial<Record<ModelSlot, string | null>>;
   readonly slotThinking?: Partial<Record<ModelSlot, ReasoningLevel | null>>;
-  readonly runtime?: Partial<Record<'max_depth' | 'max_active_children' | 'child_timeout' | 'max_iterations' | 'allow_outside_workspace' | 'permission_mode' | 'improvement_collector_enabled' | 'keep_going' | 'run_start_mode' | 'sandbox_mode' | 'sandbox_writable_roots' | 'sandbox_allow_network' | 'network_egress_policy' | 'network_allowed_hosts' | 'network_denied_hosts', unknown>>;
+  /** REQ-CONFIG-256's closed list of runtime keys (`DESKTOP_SAVE_RUNTIME_KEYS`, PD-CONFIG-003 revision 2). */
+  readonly runtime?: Partial<Record<DesktopSaveRuntimeKey, unknown>>;
   readonly circuitBreakerEnabled?: boolean;
   readonly compressorThresholdPercentage?: number;
   readonly delegationStrategy?: DelegationStrategy;

@@ -1730,7 +1730,9 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   is a separate per-launch input carrying both fields required by REQ-TRACE-470. The runtime keys the live state lays
   on are `TIER_B_RUNTIME_KEYS`: the permission mode, the depth cap, the fan-out limit, **the per-agent timeout
   (`child_timeout`, since 2026-10-07, PD-CONFIG-003 — the run's `childTimeoutMs`)**, the iteration cap, the outside-workspace
-  switch, the improvement loop, keep-going and the run-start mode.
+  switch, the improvement loop, **the improvement analysis timeout (`improvement_collector_timeout`, since 2026-10-07,
+  PD-CONFIG-003 revision 2 — the bound the post-run analyst reads from the run's configuration)**, keep-going and the
+  run-start mode.
 - **Tier C** — everything else is read at the next load; nothing watches a file. **The `display:` section** —
   REQ-CHAT-166's four transcript caps, the reader `SECTION_KEYS` declared and nothing stood behind until Part Z —
   is Tier C: it is read by `loadConfiguration`, carried on the configuration snapshot, and reaches every window over

@@ -54,6 +54,7 @@ import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
 import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmation.js';
+import { zeroProposalDetail } from './improvement-notice.js';
 import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
@@ -986,8 +987,9 @@ async function main(): Promise<void> {
       const retrospective = record.artifact.source_kind === 'retrospective';
       const session = record.artifact.source_session_id ?? undefined;
       if (count === 0) {
-        // REQ-LIBRARY-124: zero proposals is an informational notice with NO action — there is nothing to review.
-        raiseNotice('info', retrospective ? 'The retrospective found nothing to propose' : 'Improvement analysis complete — no proposals', `Nothing was proposed in ${record.artifact.artifact_id}.`, undefined, session);
+        // REQ-LIBRARY-124: zero proposals is an informational notice with NO action — there is nothing to review. PD-CONFIG-003
+        // revision 2 with REQ-NOTIFY-100: a post-run analysis that reached its limit says so in the detail (`zeroProposalDetail`).
+        raiseNotice('info', retrospective ? 'The retrospective found nothing to propose' : 'Improvement analysis complete — no proposals', zeroProposalDetail(record.artifact), undefined, session);
         return;
       }
       raiseNotice(

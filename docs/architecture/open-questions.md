@@ -10897,7 +10897,7 @@ directive, since REQ-CONFIG-322 and the three enumerations list the editable set
 REQ-MONITOR-286 names controls a user moves and initialises them from policy values, and the 1200 s ceiling the duress runs met
 is kept only because a user can raise it. From B it kept the exact seconds on screen where the field cannot show them, a hint
 saying the limit bounds delegated agents, and the defect note on the unlisted analysis-timeout control
-([`the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`](../defects/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md),
+([`the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`](../defects/fixed/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md),
 recorded, not repaired). The 240-minute ceiling is a chosen figure, twelve times the default; a file can still state a longer
 value.
 
@@ -11227,7 +11227,7 @@ records the unbuilt resume half, written before its code.
 REQ-LIBRARY-041, the improvement domain's one Settings row, the toggle; REQ-CONFIG-118 and REQ-LIBRARY-039, the key and its
 60 s default; REQ-NOTIFY-100 and REQ-LIBRARY-023/124, a timed-out analysis and its notice; OQ-114's F4, the measured analyst
 calls. Raised 2026-10-07 by the R-072 consortium as its question IT1, from
-[`the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`](../defects/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md)
+[`the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`](../defects/fixed/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md)
 (noticed while building OQ-218), and recorded here as OQ-223, the number the round assigned it. ~~Open.~~ **Ruled
 2026-10-07.**)*
 
@@ -11259,5 +11259,5 @@ list, the equality tests that would have caught this defect, and the objection t
 widening PD-CONFIG-003's heading. It departs from A on the dispositions: REQ-CONFIG-323's four toggles are untouched
 (extended), and REQ-CONFIG-325's "two numeric policy limits" is the count that changes (narrowed). R-071 is not revised: the
 60 s default stands.
-[`a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md`](../defects/a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md)
+[`a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md`](../defects/fixed/a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md)
 records the notice's half, written before its code.

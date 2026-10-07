@@ -263,10 +263,24 @@ export const InstructionsSaveSchema = z.object({
 export type InstructionsSavePayload = z.infer<typeof InstructionsSaveSchema>;
 
 /** REQ-CONFIG-256: the desktop save's enumerable key set. */
+/**
+ * REQ-CONFIG-256's "Written keys are exactly", for the runtime section, as a closed list: its eight runtime keys, the per-agent
+ * timeout (PD-CONFIG-003), the improvement analysis timeout (PD-CONFIG-003 revision 2) and the six confinement and egress
+ * fields (REQ-SANDBOX-113). `DesktopSaveSchema` refuses any other runtime key, and the settings screen's runtime keys equal
+ * this list (`pendingFrom`); until 2026-10-07 the schema took any key, which is how a control over a key no list named got
+ * through (`docs/defects/fixed/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`).
+ */
+export const DESKTOP_SAVE_RUNTIME_KEYS = [
+  'max_depth', 'max_active_children', 'max_iterations', 'allow_outside_workspace', 'permission_mode', 'improvement_collector_enabled', 'keep_going', 'run_start_mode',
+  'child_timeout', 'improvement_collector_timeout',
+  'sandbox_mode', 'sandbox_writable_roots', 'sandbox_allow_network', 'network_egress_policy', 'network_allowed_hosts', 'network_denied_hosts',
+] as const;
+export type DesktopSaveRuntimeKey = (typeof DESKTOP_SAVE_RUNTIME_KEYS)[number];
+
 export const DesktopSaveSchema = z.object({
   slots: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.string().nullable()).optional(),
   slotThinking: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.enum(REASONING_LEVEL_NAMES).nullable()).optional(),
-  runtime: z.record(z.string(), z.unknown()).optional(),
+  runtime: z.partialRecord(z.enum(DESKTOP_SAVE_RUNTIME_KEYS), z.unknown()).optional(),
   circuitBreakerEnabled: z.boolean().optional(),
   compressorThresholdPercentage: z.number().int().optional(),
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES).optional(),

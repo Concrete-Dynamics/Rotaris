@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { bootstrapConfigFile, saveDesktop, starterDocument, writeConfigFields, writeModelPreferences, writeVerifierSection } from './writers.js';
 import { loadConfiguration } from './load.js';
-import { overlayLiveState } from './tiers.js';
+import { overlayLiveState, TIER_B_RUNTIME_KEYS } from './tiers.js';
+import { DESKTOP_SAVE_RUNTIME_KEYS } from '@rotaris/contracts';
 import { rolePreferences, slotPreferences, followRawSlot } from './preferences.js';
 
 const dirs: string[] = [];
@@ -204,6 +205,34 @@ describe('REQ-CONFIG-441..444 the scoped per-field write path', () => {
     const bad = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { runtime: { child_timeout: 0 } });
     expect(bad.ok).toBe(false);
     expect(readFileSync(s.wsFile, 'utf8')).toBe('runtime:\n  child_timeout: 2700\n');
+  });
+});
+
+describe('PD-CONFIG-003 revision 2: the improvement analysis timeout through the desktop save and Tier B (OQ-223)', () => {
+  it('the desktop save writes runtime.improvement_collector_timeout, and refuses one below 1 before touching the file (REQ-CONFIG-111)', async () => {
+    const s = scope();
+    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { runtime: { improvement_collector_timeout: 120 } });
+    expect(r.ok).toBe(true);
+    expect(readFileSync(s.wsFile, 'utf8')).toBe('runtime:\n  improvement_collector_timeout: 120\n');
+    const bad = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { runtime: { improvement_collector_timeout: 0 } });
+    expect(bad.ok).toBe(false);
+    expect(readFileSync(s.wsFile, 'utf8')).toBe('runtime:\n  improvement_collector_timeout: 120\n');
+  });
+
+  it('a live 120 reaches the resolved runtime the run host reads, saved or not (REQ-CONFIG-262, REQ-CONFIG-263)', () => {
+    const s = scope();
+    writeFileSync(s.wsFile, 'runtime:\n  improvement_collector_timeout: 60\n');
+    const loaded = loadConfiguration({ globalDir: s.globalDir, workspaceRoot: s.workspaceRoot, keepIgnored: false });
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const live = overlayLiveState(loaded.value, { runtime: { improvement_collector_timeout: 120 } });
+    expect(live.ok && live.value.runtime.improvement_collector_timeout).toBe(120);
+    expect(loaded.value.runtime.improvement_collector_timeout).toBe(60);
+  });
+
+  it("Tier B's runtime keys are the desktop save's, less the six confinement and egress fields REQ-SANDBOX-118 keeps to the file", () => {
+    const confinement = ['sandbox_mode', 'sandbox_writable_roots', 'sandbox_allow_network', 'network_egress_policy', 'network_allowed_hosts', 'network_denied_hosts'];
+    expect([...TIER_B_RUNTIME_KEYS].sort()).toEqual(DESKTOP_SAVE_RUNTIME_KEYS.filter((k) => !confinement.includes(k)).sort());
   });
 });
 

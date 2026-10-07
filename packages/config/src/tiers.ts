@@ -15,8 +15,13 @@ import type { FatalLoadReport } from './validate.js';
  * Tier C is the absence of a mechanism: everything outside A and B is read at the next load
  * (REQ-CONFIG-265), and nothing here watches a file.
  */
-/** PD-CONFIG-003 adds `child_timeout`: the per-agent timeout is a delegation limit and commits as the depth cap and fan-out limit do. */
-export const TIER_B_RUNTIME_KEYS = ['permission_mode', 'max_depth', 'max_active_children', 'child_timeout', 'max_iterations', 'allow_outside_workspace', 'improvement_collector_enabled', 'keep_going', 'run_start_mode'] as const;
+/**
+ * PD-CONFIG-003 adds `child_timeout`: the per-agent timeout is a delegation limit and commits as the depth cap and fan-out
+ * limit do. Revision 2 adds `improvement_collector_timeout`: the one Runtime control whose on-screen value the next run did not
+ * read (REQ-CONFIG-262). The list is the desktop save's runtime keys less the six confinement and egress fields, which
+ * REQ-SANDBOX-118 keeps to the file (`writers.test.ts` pins the equality).
+ */
+export const TIER_B_RUNTIME_KEYS = ['permission_mode', 'max_depth', 'max_active_children', 'child_timeout', 'max_iterations', 'allow_outside_workspace', 'improvement_collector_enabled', 'improvement_collector_timeout', 'keep_going', 'run_start_mode'] as const;
 export type TierBRuntimeKey = (typeof TIER_B_RUNTIME_KEYS)[number];
 
 export interface LiveState {

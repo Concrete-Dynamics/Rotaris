@@ -232,6 +232,14 @@ describe('REQ-TOOLS-002 / REQ-MONITOR-060: declaredToolsOf', () => {
 });
 
 describe('REQ-CONFIG-259/341: a role edit is held under the scope each field was edited at', () => {
+  it("PD-CONFIG-003 revision 2: the desktop save's runtime keys are a closed list — an unlisted key is refused (REQ-CONFIG-256)", async () => {
+    const { DesktopSaveSchema, DESKTOP_SAVE_RUNTIME_KEYS } = await import('./config.js');
+    expect(DESKTOP_SAVE_RUNTIME_KEYS).toHaveLength(16);
+    expect(DesktopSaveSchema.safeParse({ runtime: { improvement_collector_timeout: 90, child_timeout: 2700, max_depth: 4 } }).success).toBe(true);
+    expect(DesktopSaveSchema.safeParse({ runtime: { retrospective_timeout: 90 } }).success).toBe(false);
+    expect(DesktopSaveSchema.safeParse({ runtime: { memory_diagnostics_enabled: true } }).success).toBe(false);
+  });
+
   it('admits field edits at two scopes, the same field at both, and refuses the old one-scope shape', async () => {
     const { DesktopSaveSchema } = await import('./config.js');
     expect(DesktopSaveSchema.safeParse({ roles: { tester: { workspace: { unsetModel: true }, global: { unsetThinking: true } } } }).success).toBe(true);

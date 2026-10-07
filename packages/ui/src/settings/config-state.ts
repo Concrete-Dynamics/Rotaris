@@ -21,6 +21,10 @@ export interface PendingSettings {
     readonly allow_outside_workspace: boolean;
     readonly permission_mode: string;
     readonly improvement_collector_enabled: boolean;
+    /**
+     * PD-CONFIG-003 revision 2: the improvement analysis timeout, in seconds as `runtime.improvement_collector_timeout` stores
+     * it (REQ-CONFIG-118); the control clamps it to 10–600 (`improvementTimeoutForDisplay`, `improvementTimeoutFromInput`).
+     */
     readonly improvement_collector_timeout: number;
     readonly keep_going: boolean;
     readonly run_start_mode: 'auto' | 'plan';
@@ -441,5 +445,43 @@ export function timeoutSecondsFromInput(value: number): number {
  * minute, or one outside 60–14,400 s): the exact figure, kept until the field is changed. `null` when the control shows it.
  */
 export function storedTimeoutNote(seconds: number): string | null {
-  return timeoutMinutesForDisplay(seconds) * 60 === seconds ? null : `Stored as ${seconds} seconds; kept until you change this field.`;
+  return timeoutMinutesForDisplay(seconds) * 60 === seconds ? null : storedSecondsLine(seconds);
+}
+
+/** REQ-CONFIG-446's stated value, one wording for both timeout controls (PD-CONFIG-003 and its revision 2). */
+function storedSecondsLine(seconds: number): string {
+  return `Stored as ${seconds} seconds; kept until you change this field.`;
+}
+
+/** PD-CONFIG-003 revision 2: the improvement analysis timeout control's widget clamp, in whole seconds. */
+export const IMPROVEMENT_TIMEOUT_SECONDS = { min: 10, max: 600 } as const;
+
+/**
+ * PD-CONFIG-003 revision 2 with REQ-CONFIG-446: the seconds the improvement analysis timeout control shows — clamped to 10–600
+ * for display only; the stored value itself is never rewritten by being shown.
+ */
+export function improvementTimeoutForDisplay(seconds: number): number {
+  return clampForDisplay(seconds, IMPROVEMENT_TIMEOUT_SECONDS.min, IMPROVEMENT_TIMEOUT_SECONDS.max);
+}
+
+/** PD-CONFIG-003 revision 2: the seconds a user's entry stores — whole seconds clamped to 10–600. */
+export function improvementTimeoutFromInput(value: number): number {
+  const seconds = Number.isFinite(value) ? Math.round(value) : IMPROVEMENT_TIMEOUT_SECONDS.min;
+  return clampForDisplay(seconds, IMPROVEMENT_TIMEOUT_SECONDS.min, IMPROVEMENT_TIMEOUT_SECONDS.max);
+}
+
+/**
+ * PD-CONFIG-003 revision 2: what one keystroke in the control does. A whole number within 10–600 is committed as typed; any
+ * other text is held as the field's draft and committed, clamped, when the field loses focus (`improvementTimeoutFromInput`).
+ * Clamping every keystroke made a value whose first digit lies below 10 untypable — "120" became 10, then 102, then 600 —
+ * found by driving the built app.
+ */
+export function improvementTimeoutEdit(raw: string): { readonly commit: number } | { readonly draft: string } {
+  const n = Number(raw);
+  return raw.trim() !== '' && Number.isInteger(n) && n >= IMPROVEMENT_TIMEOUT_SECONDS.min && n <= IMPROVEMENT_TIMEOUT_SECONDS.max ? { commit: n } : { draft: raw };
+}
+
+/** PD-CONFIG-003 revision 2: the line beneath the control when the stored seconds lie outside 10–600; `null` when it shows them. */
+export function storedImprovementTimeoutNote(seconds: number): string | null {
+  return improvementTimeoutForDisplay(seconds) === seconds ? null : storedSecondsLine(seconds);
 }

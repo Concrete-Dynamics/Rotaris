@@ -1600,7 +1600,9 @@ of §5 and none a channel: each is a request answered once.
   the same transaction (`StoreDal.elidedAttachmentRowsOf`, `elidedAttachmentsOf`), a plain count, `0` when none, where it read
   `n/a` before; its Tool errors line counts the issues record's `tool_error` entries
   (REQ-SESSION-136's "any other failure"), as its Issues line does, never the histogram's `tool_error` bucket, which a
-  record carrying an `outcome_kind` never reaches (fin23; the histogram's `mcp` bucket is OQ-208's). A count over the
+  record carrying an `outcome_kind` never reaches (fin23). An MCP call's record and a fetch call's carry no `outcome_kind`
+  since OQ-208's ruling (2026-10-07, R-072; fin28), so the histogram derives their bucket, `success` or `tool_error`, from
+  `status` and `is_error`, and keeps no `mcp` or `fetch` bucket. A count over the
   permission audit or the issues record — Permission denials, Tool errors, and the Metrics lines printing the same figures —
   reads `at least N` with how many rows the cap dropped once REQ-SESSION-133's cap has dropped rows of its ring (`atLeast`;
   finacc3 F10). Its Agents lines read each agent's own count — an iteration's root

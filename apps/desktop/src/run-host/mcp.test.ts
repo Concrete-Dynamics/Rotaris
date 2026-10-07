@@ -6,6 +6,8 @@ import { FakeClock } from '@rotaris/kernel';
 import type { LoadedConfiguration } from '@rotaris/config';
 import { nodeClocks } from '@rotaris/platform';
 import { buildPolicy, Gate, PendingApprovals, PolicyContext } from '@rotaris/agent-tools';
+import { sessionMetrics } from '@rotaris/engine';
+import type { SessionRow } from '@rotaris/store';
 import { configurationForExecutionRoot, grantEvidence, McpHost } from './mcp.js';
 
 /**
@@ -359,14 +361,16 @@ describe('an MCP call checked against the input schema the model was given (REQ-
     },
   };
 
-  function rig(inputSchema: Record<string, unknown>) {
+  /** What the stubbed server does with a call that reaches it: answer (normally or `isError`), or throw. */
+  type Answer = () => { isError: boolean; text: string };
+  function rig(inputSchema: Record<string, unknown>, answer: Answer = () => ({ isError: false, text: 'edited' })) {
     const lines: { message: string; level: string }[] = [];
     const mcp = new McpHost({ clocks: new FakeClock(), log: (message, level = 'info') => { lines.push({ message, level }); }, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
     vi.spyOn(mcp.discovery, 'peek').mockReturnValue({ tools: [{ name: 'amend_note', description: 'Replace content in a memory.', inputSchema }], failed: false } as unknown as ReturnType<typeof mcp.discovery.peek>);
     const sent: { tool: string; args: Record<string, unknown> }[] = [];
     vi.spyOn(mcp, 'connectionsFor').mockReturnValue({
       connect: async () => ({ onToolsChanged: () => undefined }),
-      call: async (_server: string, _d: unknown, tool: string, args: Record<string, unknown>) => { sent.push({ tool, args }); return { isError: false, text: 'edited' }; },
+      call: async (_server: string, _d: unknown, tool: string, args: Record<string, unknown>) => { sent.push({ tool, args }); return answer(); },
     } as unknown as ReturnType<typeof mcp.connectionsFor>);
     const entry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'ci' };
     const cfg = {
@@ -420,6 +424,37 @@ describe('an MCP call checked against the input schema the model was given (REQ-
     const result = await r.dispatch(args);
     expect(result).toMatchObject({ status: 'ok', isError: false, text: 'edited' });
     expect(r.sent).toEqual([{ tool: 'amend_note', args }]);
+  });
+
+  /*
+   * OQ-208, ruled 2026-10-07 under the owner's delegation (R-072): an `outcome_kind` names how a call ended, and `mcp` names a
+   * tool family, so an MCP call's record carries none and keeps its `failure_kind`; REQ-SESSION-139 derives its histogram
+   * bucket from `status` and `is_error`. Until the ruling every MCP record carried `outcome_kind: 'mcp'`, succeeding or
+   * failing alike, and the c2a9444 duress run's failed `edit_memory` call sat inside `mcp 17`.
+   */
+  it('a call the server answers, fails with isError, or fails by throwing settles with no outcome_kind and keeps its failure_kind (OQ-208 as ruled)', async () => {
+    const ok = rig(EDIT_MEMORY);
+    expect(await ok.dispatch({ memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal' })).toMatchObject({ status: 'ok', isError: false });
+    expect(ok.settles[0]).not.toHaveProperty('outcome_kind');
+    expect(ok.issues).toEqual([]);
+
+    const refused = rig(EDIT_MEMORY, () => ({ isError: true, text: 'no such memory' }));
+    expect(await refused.dispatch({ memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal' })).toMatchObject({ status: 'failed', isError: true });
+    expect(refused.settles[0]).toMatchObject({ failure_kind: 'tool_error' });
+    expect(refused.settles[0]).not.toHaveProperty('outcome_kind');
+    expect(refused.issues).toEqual([expect.objectContaining({ kind: 'tool_error' })]);
+
+    const thrown = rig(EDIT_MEMORY, () => { throw new Error('the server went away'); });
+    expect(await thrown.dispatch({ memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal' })).toMatchObject({ status: 'failed', isError: true });
+    expect(thrown.settles[0]).toMatchObject({ failure_kind: 'execution_error' });
+    expect(thrown.settles[0]).not.toHaveProperty('outcome_kind');
+
+    // REQ-SESSION-139's histogram over the two records: `success` and `tool_error`, and no `mcp` bucket.
+    const record = (s: Record<string, unknown>, n: number) => ({ call_id: `c${n}`, agent_name: 'verifier', tool_name: 'amend_note', status: String(s['status']), elapsed_ms: 1, is_error: s['is_error'] ? 1 : 0, outcome_kind: (s['outcome_kind'] as string | undefined) ?? null, failure_kind: (s['failure_kind'] as string | undefined) ?? null });
+    const row = { session_id: 'S1', execution_status: 'completed', updated_at: 't', tokens_input: 0, tokens_output: 0, cost: '0', cost_qualifier: 'unknown', tool_calls: 2 } as unknown as SessionRow;
+    const histogram = sessionMetrics(row, [record(ok.settles[0]!, 1), record(refused.settles[0]!, 2)], [], [], 0, 0, 0).tool_outcomes;
+    expect(histogram).toMatchObject({ success: 1, tool_error: 1 });
+    expect(histogram).not.toHaveProperty('mcp');
   });
 
   it('the model is still handed the server\'s own input schema', () => {

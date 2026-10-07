@@ -396,7 +396,9 @@ describe('against a real node:http server on 127.0.0.1', () => {
     const o = await tool.execute(args({ url: `${origin()}/ok` }), ctx());
     expect(o.isError).toBe(false);
     expect(o.text).toBe(`url: ${origin()}/ok\nfinal_url: ${origin()}/ok\nstatus_code: 200\ncontent_type: text/plain\ntruncated: false\n\none\ntwo\nthree`);
-    expect(o.outcomeKind).toBe('fetch');
+    // OQ-208 as ruled (2026-10-07, R-072): `fetch` names the tool, not how the call ended, so the record carries no outcome_kind.
+    expect(o.outcomeKind).toBeUndefined();
+    expect(o.failureKind).toBeNull();
     expect(o.label).toBe(`fetch ${origin()}/ok`);
     const windowed = await tool.execute(args({ url: `${origin()}/ok`, from_line: 2, max_lines: 1 }), ctx());
     expect(windowed.text.endsWith('truncated: true\n\ntwo')).toBe(true);
@@ -418,6 +420,16 @@ describe('against a real node:http server on 127.0.0.1', () => {
     expect(o.failureKind).toBe('http_error');
     expect(diag(o)).toMatchObject({ status_code: 404, detail: 'HTTP request completed with status code 404.' });
     expect(o.text.endsWith('[fetch_output]\nnothing here')).toBe(true);
+  });
+  // OQ-208 as ruled (2026-10-07, R-072): a failing fetch keeps its failure_kind and carries no outcome_kind, so REQ-SESSION-139
+  // derives its histogram bucket from status and is_error (`tool_error`), where it read `fetch` whatever the outcome.
+  it('a failing fetch (the server\'s 500) carries its failure_kind and no outcome_kind', async () => {
+    const o = await fetchTool({ policy: policyOf(ASK_DEFAULT), timers: clock }).execute(args({ url: `${origin()}/server-error` }), ctx());
+    expect(o.isError).toBe(true);
+    expect(o.failureKind).toBe('http_error');
+    expect(diag(o)).toMatchObject({ status_code: 500 });
+    expect(o.outcomeKind).toBeUndefined();
+    expect('outcomeKind' in o).toBe(false);
   });
   it('a route that never answers: the FakeClock-driven deadline ends it as timeout, from the call level', async () => {
     seen.length = 0;

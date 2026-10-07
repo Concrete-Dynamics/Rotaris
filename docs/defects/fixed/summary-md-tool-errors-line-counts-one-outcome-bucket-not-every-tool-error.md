@@ -56,7 +56,9 @@ issue, so the old wording described neither.
 
 REQ-SESSION-139's histogram is unchanged: it still buckets by `outcome_kind` first, `mcp` included. Whether an MCP call's
 record should carry `outcome_kind: 'mcp'` at all is a question the specification leaves open, raised as
-[OQ-208](../../architecture/open-questions.md); the Tool errors line no longer depends on its answer.
+[OQ-208](../../architecture/open-questions.md); the Tool errors line no longer depends on its answer. *2026-10-07:* OQ-208
+was ruled under the owner's delegation (R-072): an MCP call's record, and a fetch call's, carries no `outcome_kind`, so
+the histogram derives `success` or `tool_error` for it and has no `mcp` or `fetch` bucket (fin28).
 
 Pinned by:
 - `packages/engine/src/run/summary.test.ts` — "Tool errors counts every tool_error issue REQ-SESSION-136 filed, whatever

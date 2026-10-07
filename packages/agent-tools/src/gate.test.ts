@@ -1115,7 +1115,7 @@ describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCh
   function advertisedHarness(inputSchema: Record<string, unknown>) {
     const sent: unknown[] = [];
     const check = advertisedSchemaCheck(inputSchema);
-    const executor = simpleExecutor('amend_note', 'e', check.schema, async (a) => { sent.push(a); return { text: 'edited', isError: false, outcomeKind: 'mcp' }; });
+    const executor = simpleExecutor('amend_note', 'e', check.schema, async (a) => { sent.push(a); return { text: 'edited', isError: false }; });
     const h = harness({ preset: 'autonomous', extraExecutors: [['amend_note', executor]], publicTool: (n) => n !== 'amend_note' });
     return { ...h, sent, check };
   }
@@ -1223,7 +1223,7 @@ describe('REQ-TOOLS-032: a call the advertised JSON Schema accepts is never refu
   function advertisedHarness(inputSchema: Record<string, unknown>) {
     const sent: unknown[] = [];
     const check = advertisedSchemaCheck(inputSchema);
-    const executor = simpleExecutor('amend_note', 'e', check.schema, async (a) => { sent.push(a); return { text: 'edited', isError: false, outcomeKind: 'mcp' }; });
+    const executor = simpleExecutor('amend_note', 'e', check.schema, async (a) => { sent.push(a); return { text: 'edited', isError: false }; });
     const h = harness({ preset: 'autonomous', extraExecutors: [['amend_note', executor]], publicTool: (n) => n !== 'amend_note' });
     return { ...h, sent, check };
   }

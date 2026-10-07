@@ -8,7 +8,8 @@
  * only where one is recorded; Metrics; Warnings (the kinds it names, the permission audit named beside the denials);
  * Agents; Slowest Tools; the closing inspection note. The Outcome block (OQ-60 as ruled) is the build's own and is not
  * read here. The mostly-elided artifacts line carries a count from the timeline's context_selection entries, never `n/a`
- * (PD-SESSION-002). Beside the order, one agreement the file owes itself: the Warnings line's tool errors are the Issues line's
+ * (PD-SESSION-002), and the tool outcomes carry no `mcp` or `fetch` bucket (OQ-208 as ruled). Beside the order, one
+ * agreement the file owes itself: the Warnings line's tool errors are the Issues line's
  * `tool_error` entries (REQ-SESSION-136; `docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
  *
  * Nothing here is product code. It runs only from the live run.
@@ -57,6 +58,11 @@ export function summaryReading(md, { sessionId, stopReason }) {
   // entries, which no cap trims, so the line carries a plain count and names that record; until the ruling it read `n/a`.
   const elided = warnings.find((l) => l.startsWith('- Mostly-elided artifacts: '));
   if (elided !== undefined && !/^- Mostly-elided artifacts: \d+ \(.*context_selection/.test(elided)) problems.push(`the mostly-elided artifacts line carries no count from the context_selection entries: "${elided}"`);
+  // OQ-208 as ruled (2026-10-07): an MCP or fetch call's record carries no outcome_kind, so the histogram has no bucket named
+  // after the tool family; a fresh live-run store holds no record written before the ruling.
+  const outcomes = lines.find((l) => l.startsWith('- Tool outcomes: '));
+  const family = outcomes === undefined ? null : /(?:^- Tool outcomes: |, )(mcp|fetch) \d+/.exec(outcomes);
+  if (family !== null) problems.push(`the tool outcomes carry a "${family[1]}" bucket, a tool family and not an outcome: "${outcomes}"`);
   const denials = warnings.find((l) => l.startsWith('- Permission denials: '));
   if (denials !== undefined && !denials.includes('permission audit')) problems.push('the permission denials do not name the permission audit');
   // A count over a ring the retention cap has dropped rows of reads `at least N` (REQ-SESSION-133; finacc3 F10).

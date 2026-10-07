@@ -58,6 +58,14 @@ R-072).** `ArtifactStore.rerender` rewrites only the leading frontmatter (`rende
 inspector's Preview renders from below the frontmatter (`previewSource`). The **runtime view**'s `artifacts` row and its
 continuation paragraph say so. No package, edge, process, channel, command or store column changed.
 
+**MCP and fetch call records carry no `outcome_kind` (REQ-SESSION-136, REQ-SESSION-139; OQ-208 ruled 2026-10-07 under
+R-072; fin28).** The run host's MCP executors (`run-host/mcp.ts`) and the fetch tool (`agent-tools/tools/fetch.ts`) no longer
+set `outcomeKind` (`mcp`, `fetch`); each keeps its `failureKind`, so REQ-SESSION-139's histogram derives the call's bucket,
+`success` or `tool_error`, from `status` and `is_error`, and `summary.md`'s Tool outcomes line and the metrics document show
+no `mcp` or `fetch` bucket; the live run's reader (`lib/summary-sections.mjs`) refuses one. Records already stored keep
+what they hold. The **runtime view**'s `summary.md` paragraph says
+so. No package, edge, process, channel, command or store column changed.
+
 **`summary.md`'s mostly-elided artifacts are counted (`PD-SESSION-002`, REQ-SESSION-140, REQ-LIBRARY-098; OQ-207 ruled
 2026-10-07 under R-072; fin28).** `summaryFactsOf` (`run/summary.ts`) reads each `context_selection` timeline entry's
 `task_id` and `attached_elided` through the new `StoreDal.elidedAttachmentRowsOf`, a statement over the timeline's primary
@@ -118,7 +126,7 @@ The **runtime view**'s file-tools paragraph says so. No package, edge, process, 
 
 **`summary.md`'s Tool errors line is the issues record's (REQ-SESSION-140, REQ-SESSION-136; fin23).** `warningLines`
 (`run/summary.ts`) reads `issues_by_kind.tool_error`, the figure the Metrics section's Issues line prints, where it read the
-tool-outcomes histogram's `tool_error` bucket. The histogram is unchanged (REQ-SESSION-139; its `mcp` bucket is OQ-208's).
+tool-outcomes histogram's `tool_error` bucket. The histogram is unchanged (REQ-SESSION-139; its `mcp` bucket was OQ-208's, ruled 2026-10-07, below).
 The scripted client gains a `badterm` step, a terminal call its schema refuses, which `sessions-proof`'s seed launch takes.
 The **runtime view**'s repair paragraph says so. No package, edge, process, channel, command or store column changed.
 

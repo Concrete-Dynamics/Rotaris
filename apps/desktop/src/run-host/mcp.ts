@@ -356,12 +356,16 @@ export class McpHost {
               const c = await connections.connect(server.name, description, workspaceRoot);
               watch(c);
               const r = await connections.call(server.name, description, tool.reported, a as Record<string, unknown>, timeoutMs, tctx.signal);
-              return r.isError ? errorObservation(r.text, { outcomeKind: 'mcp', failureKind: 'tool_error' }) : observation(r.text, { outcomeKind: 'mcp' });
+              // REQ-SESSION-136 / REQ-SESSION-139, OQ-208 as ruled (2026-10-07, R-072): an MCP call's record carries no
+              // `outcome_kind` — `mcp` names the tool's family, not how the call ended — and keeps its `failure_kind`, so the
+              // histogram derives its bucket from `status` and `is_error` (`success` or `tool_error`). Until the ruling every
+              // MCP record carried `outcome_kind: 'mcp'`, succeeding or failing alike.
+              return r.isError ? errorObservation(r.text, { failureKind: 'tool_error' }) : observation(r.text);
             } catch (cause) {
               const text = String(cause instanceof Error ? cause.message : cause);
               const elapsed = this.deps.clocks.monotonic.now() - started;
-              if (/timeout|timed out/i.test(text) && elapsed >= timeoutMs * 0.9) return errorObservation(`MCP server '${server.name}' did not answer '${tool.callable}' within its allowance of ${timeoutMs / 1_000} s; the call failed and was not retried (REQ-MCP-003).`, { outcomeKind: 'mcp', failureKind: 'timeout' });
-              return errorObservation(`The call to '${tool.callable}' on MCP server '${server.name}' failed: ${redact(text)}`, { outcomeKind: 'mcp', failureKind: 'execution_error' });
+              if (/timeout|timed out/i.test(text) && elapsed >= timeoutMs * 0.9) return errorObservation(`MCP server '${server.name}' did not answer '${tool.callable}' within its allowance of ${timeoutMs / 1_000} s; the call failed and was not retried (REQ-MCP-003).`, { failureKind: 'timeout' });
+              return errorObservation(`The call to '${tool.callable}' on MCP server '${server.name}' failed: ${redact(text)}`, { failureKind: 'execution_error' });
             }
           },
         } as ToolExecutor);

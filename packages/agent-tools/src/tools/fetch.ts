@@ -241,7 +241,10 @@ export function fetchTool(deps: FetchDeps): ToolExecutor<FetchArgs> {
     label: (a) => `fetch ${typeof a.url === 'string' ? a.url : ''}`.trimEnd(),
     execute: async (a, ctx): Promise<Observation> => {
       const r = await run(a, ctx);
-      return { text: renderFetch(r), isError: r.failure_kind !== null, failureKind: r.failure_kind, outcomeKind: 'fetch', label: `fetch ${r.url}`.trimEnd() };
+      // REQ-SESSION-136 / REQ-SESSION-139, OQ-208 as ruled (2026-10-07, R-072): the record carries no `outcome_kind` — `fetch`
+      // names the tool, not how the call ended — and keeps its `failure_kind`, so the histogram derives its bucket from
+      // `status` and `is_error`. Until the ruling it carried `outcome_kind: 'fetch'`, succeeding or failing alike.
+      return { text: renderFetch(r), isError: r.failure_kind !== null, failureKind: r.failure_kind, label: `fetch ${r.url}`.trimEnd() };
     },
   };
 }

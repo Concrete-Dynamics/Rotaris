@@ -146,19 +146,21 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
     const records = [
       rec(1, 'failed', 1, 'invalid_request', 'invalid_request'), // refused at the gate's schema check
       rec(2, 'failed', 1, 'execution_error', 'execution_error'), // a terminal that could not start
-      rec(3, 'failed', 1, 'mcp', 'tool_error'), // a failed MCP call
+      rec(3, 'failed', 1, null, 'tool_error'), // a failed MCP call: no outcome_kind since OQ-208's ruling (2026-10-07)
       rec(4, 'failed', 1, null), // a file tool's failure: the histogram's own tool_error bucket
       rec(5, 'failed', 1, 'shell_failure'), // its own kind
       rec(6, 'failed', 1, null, 'timeout'), // its own kind, though it derives to the histogram's tool_error bucket
-      rec(7, 'ok', 0, 'mcp'),
+      rec(7, 'ok', 0, null), // an MCP call that succeeded
     ];
     const issues = [{ kind: 'tool_error' }, { kind: 'tool_error' }, { kind: 'tool_error' }, { kind: 'tool_error' }, { kind: 'terminal_shell_failure' }, { kind: 'terminal_timeout' }];
     const metrics = sessionMetrics(row, records, [], issues, 0, 0, 0);
     const md = renderSummary(factsOf(row, { metrics }));
     expect(section(md, 'Warnings')).toContain('- Tool errors: 4 (counted from the issues record, where each tool_error issue is an entry)');
     expect(section(md, 'Metrics')).toContain('- Issues: 6 (terminal_shell_failure 1, terminal_timeout 1, tool_error 4)');
-    // The histogram is REQ-SESSION-139's and is unchanged: it classifies by outcome_kind first, an MCP call's included.
-    expect(metrics.tool_outcomes).toEqual({ success: 0, tool_error: 2, rejected: 0, unknown: 0, invalid_request: 1, execution_error: 1, mcp: 2, shell_failure: 1 });
+    // The histogram is REQ-SESSION-139's: an outcome_kind where the record carries one, otherwise derived from status and
+    // is_error. Since OQ-208's ruling (2026-10-07, R-072) an MCP call's record carries none, so it is counted under the
+    // derived `success` or `tool_error`, where it read an `mcp` bucket whatever the call's outcome.
+    expect(metrics.tool_outcomes).toEqual({ success: 1, tool_error: 3, rejected: 0, unknown: 0, invalid_request: 1, execution_error: 1, shell_failure: 1 });
   });
 
   /*

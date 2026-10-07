@@ -10508,7 +10508,24 @@ one, otherwise derived from `status` and `is_error` into rejected, tool-error, s
 `outcome_kind` vocabulary, which names terminal observations only. Raised 2026-10-06 by fin23 (bundle
 `fin23-summary-and-live-checks`) while repairing
 [`summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`](../defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md),
-at the orchestrator's question whether a bucket named `mcp` belongs among the tool outcomes. Open, the owner's.)*
+at the orchestrator's question whether a bucket named `mcp` belongs among the tool outcomes. ~~Open, the owner's.~~ Ruled
+2026-10-07.)*
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** an `outcome_kind` names how a
+call ended. A record carries one only when the specification gives its tool outcome words: the terminal's REQ-TOOLS-112
+set, and the questions tool's REQ-TOOLS-158 outcomes together with PD-ORCH-005's `withdrawn`. `mcp` names a tool family, so
+it is no outcome: an MCP tool call's record carries no `outcome_kind` and keeps its `failure_kind` (`tool_error`, `timeout`,
+`execution_error`), and REQ-SESSION-139 derives its histogram bucket from `status` and `is_error` as `success` or
+`tool_error`. The fetch tool's record falls under the same reading of REQ-SESSION-136's "only when applicable" and drops
+`outcome_kind: 'fetch'`. Records already stored keep what they hold, and no directive, migration or reader shim is owed.
+The ruling weighed two recommendations and **followed both** where they agree: advocate A (the user's lens) recommended
+dropping `mcp` so the histogram stops hiding a failed MCP call (the c2a9444 duress run's `edit_memory` call inside
+`mcp 17`), with fetch recorded as a defect; advocate B (the system's lens) recommended the same for MCP, since one tool's
+failures landed in two buckets (a schema refusal in `tool_error`, a server failure in `mcp`), and ruling fetch with it.
+On fetch it followed B. The terminal-worded timeout issue an MCP or fetch timeout files is recorded separately, in
+[`an-mcp-or-fetch-timeout-files-a-terminal-timeout-issue-that-names-a-terminal-command.md`](../defects/an-mcp-or-fetch-timeout-files-a-terminal-timeout-issue-that-names-a-terminal-command.md).
+Built by fin28 (`apps/desktop/src/run-host/mcp.ts`, `packages/agent-tools/src/tools/fetch.ts`); the fetch half is
+[`a-fetch-calls-record-carries-its-tools-name-as-outcome-kind.md`](../defects/fixed/a-fetch-calls-record-carries-its-tools-name-as-outcome-kind.md).
 
 Every MCP tool call's record carries `outcome_kind: 'mcp'`, the call succeeding or failing alike
 (`apps/desktop/src/run-host/mcp.ts`, the `execute` of each MCP tool executor the run host builds). The histogram follows REQ-SESSION-139's letter and
@@ -10520,7 +10537,7 @@ succeeded from one that failed. The specification does not say whether REQ-SESSI
 `outcome_kind` applicable to an MCP call at all, and gives an MCP call no outcome vocabulary of its own: REQ-TOOLS-112's
 set (`success`, `shell_failure`, …) is the terminal's.
 
-**What the build proceeds under.** The record is left as it is and the histogram keeps REQ-SESSION-139's letter, `mcp`
+**What the build proceeded under until the ruling** (superseded; kept as the record of it). The record is left as it is and the histogram keeps REQ-SESSION-139's letter, `mcp`
 bucket included. Nothing else depends on the answer since fin23: `summary.md`'s `- Tool errors:` line counts the issues
 record's `tool_error` entries, which REQ-SESSION-136 files for a failed MCP call whatever its `outcome_kind`, and the
 terminal counts read their own outcomes and issues.

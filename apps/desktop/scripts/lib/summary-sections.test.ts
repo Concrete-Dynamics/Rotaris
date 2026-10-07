@@ -58,6 +58,16 @@ describe('summaryReading (REQ-SESSION-140)', () => {
     expect(summaryReading(counted, { sessionId: 'S-1', stopReason: 'tasks_complete' })).toEqual({ ok: true, problems: [] });
   });
 
+  // OQ-208 as ruled (2026-10-07): an MCP or fetch record carries no outcome_kind, so no bucket is named after a tool family.
+  it('a tool-outcomes bucket named mcp or fetch, as every MCP and fetch record made before OQ-208\'s ruling, is named', () => {
+    const outcomes = md().split('\n').find((l) => l.startsWith('- Tool outcomes: '))!;
+    expect(outcomes).not.toMatch(/\b(mcp|fetch) \d/);
+    const mcp = md().replace(outcomes, `${outcomes}, mcp 17`);
+    expect(summaryReading(mcp, { sessionId: 'S-1', stopReason: 'tasks_complete' }).problems).toEqual([`the tool outcomes carry a "mcp" bucket, a tool family and not an outcome: "${outcomes}, mcp 17"`]);
+    const fetch = md().replace(outcomes, outcomes.replace('- Tool outcomes: ', '- Tool outcomes: fetch 2, '));
+    expect(summaryReading(fetch, { sessionId: 'S-1', stopReason: 'tasks_complete' }).problems).toHaveLength(1);
+  });
+
   it('the Tool errors line that read one histogram bucket before fin23 disagrees with its Issues line, and is named', () => {
     const before = md().replace(/^- Tool errors: .*$/m, '- Tool errors: 1');
     expect(summaryReading(before, { sessionId: 'S-1', stopReason: 'tasks_complete' }).problems).toEqual(['Warnings reads 1 tool error(s) and the Issues line 2 tool_error']);

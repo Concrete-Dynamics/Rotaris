@@ -230,7 +230,8 @@ function warningLines(f: SummaryFacts): string[] {
      * success and a timeout, each referencing its record. Read from the issues record, as the Issues line above is, so the
      * file never gives two counts for one thing. Until fin23 this read the histogram's `tool_error` bucket, which a failed
      * record carrying an `outcome_kind` (`invalid_request`, `execution_error`, `mcp`) never reaches and a timeout with none
-     * does (docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md). The
+     * does (docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md); since OQ-208's
+     * ruling (2026-10-07, R-072) MCP and fetch records carry no `outcome_kind` and derive to `success` or `tool_error`. The
      * parenthesis names what is counted, each `tool_error` issue: until fin25 it read "each failed call that is not a
      * terminal failure, suspicious success or timeout", and a suspicious success is no failed call, while a call cut short
      * under PD-ORCH-005 is one and files no issue.

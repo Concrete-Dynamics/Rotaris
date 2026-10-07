@@ -5810,7 +5810,11 @@ logged as [R-072](requests.md#r-072).*
 > have started). **What was not measured.** The running window's dialog locked in the built app (A's run is held at its approval
 > dialog there, which is modal; the lock is pinned by the dialog and command cases), the forced-placement notice in the built
 > app (no proof starts a run between a dialog's opening and its acceptance), and the refusal driven through the UI. The row is
-> in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+> in [`../architecture/first-executions.md`](../architecture/first-executions.md). *Found by the landing gate (fin29's
+> review):* the refusal met two cases the build had not run, `children.test.ts`'s PD-ORCH-005 clause 4 and clause 6, which
+> continued a paused base-tree session in `C:/ws` beside a second base-tree run of `C:/ws` — exactly what REQ-GIT-120 now
+> refuses. What they pin is REQ-CONFIG-094's per-model cap across the process, so their second session is now another
+> project's (`C:/other`), and both pass; the refusal itself stays pinned by `run.test.ts`.
 
 ---
 

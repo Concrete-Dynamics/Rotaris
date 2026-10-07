@@ -2583,7 +2583,10 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     /**
      * PD-ORCH-005 clause 4 with REQ-CONFIG-094 (OQ-149's reading, confirmed 2026-10-06 by R-071): a child paused while it held a slot keeps that place
      * while its session rests, so no other session takes it, and continuing never puts two on the key. The first session is
-     * paused with its child mid-step and comes to rest `interrupted`, its child `paused`.
+     * paused with its child mid-step and comes to rest `interrupted`, its child `paused`. The second session is another
+     * project's: the cap counts every child in the process whatever its workspace, and a base-tree session is not continued
+     * beside a run sharing its own workspace's tree (REQ-GIT-120 under PD-GIT-001), so a second run in `C:/ws` would refuse
+     * the continue these cases make.
      */
     async function pausedFirst(onSecondChild?: () => void) {
       const setup = twoSessions(onSecondChild);
@@ -2594,7 +2597,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       releaseFirst(); releaseFirstRoot();
       expect((await sessions.running(s1)!).status).toBe('interrupted');
       expect(children(s1).map((c) => [c.state, c.resume_state])).toEqual([['paused', expect.stringMatching(/^(running|summarizing)$/)]]);
-      const s2 = (sessions.start(dal, 'C:/ws', 'the second task') as { value: SessionId }).value;
+      const s2 = (sessions.start(dal, 'C:/other', 'the second task') as { value: SessionId }).value;
       await until(() => children(s2).length === 1 && children(s2)[0]!.state !== 'queued');
       return { ...setup, s1, s2 };
     }

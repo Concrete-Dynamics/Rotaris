@@ -43,6 +43,11 @@ export interface ArtifactInspectorProps {
   readonly onSave: (id: string, body: string) => Promise<{ ok: true; editedAt: string } | { ok: false; reason: string }>;
   readonly onClose: (id: string) => void;
   readonly onOpenLink?: ((href: string) => void) | undefined;
+  /**
+   * A load already answered, which the dialog opens on before `onLoad` answers. No host passes it: it lets a static render
+   * (the unit test beside this file) draw the loaded dialog, where effects never run.
+   */
+  readonly preloaded?: ArtifactLoaded | undefined;
 }
 
 /**
@@ -60,13 +65,13 @@ export function metadataLine(a: Pick<ArtifactLoaded, 'id' | 'artifactKind' | 'st
   return `${a.id} · ${a.artifactKind} · ${a.status}${by ? ` · by ${by}` : ''}${a.edited ? ' · edited' : ''}`;
 }
 
-export function ArtifactInspector({ id, raised, onLoad, onSave, onClose, onOpenLink }: ArtifactInspectorProps) {
-  const [artifact, setArtifact] = useState<ArtifactLoaded | null>(null);
-  const [text, setText] = useState('');
-  const [saved, setSaved] = useState('');
+export function ArtifactInspector({ id, raised, onLoad, onSave, onClose, onOpenLink, preloaded }: ArtifactInspectorProps) {
+  const [artifact, setArtifact] = useState<ArtifactLoaded | null>(preloaded ?? null);
+  const [text, setText] = useState(preloaded?.body ?? '');
+  const [saved, setSaved] = useState(preloaded?.body ?? '');
   const [tab, setTab] = useState<'preview' | 'markdown'>('preview');
   const [status, setStatus] = useState('');
-  const [readOnly, setReadOnly] = useState(true);
+  const [readOnly, setReadOnly] = useState(preloaded === undefined);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const frame = useRef<HTMLDivElement>(null);

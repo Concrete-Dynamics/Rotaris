@@ -2151,6 +2151,22 @@ so a child that genuinely loops is still stopped at the same point.
 > continued the reconcile item. Reaffirmed 2026-10-07 under R-072 (OQ-214): the limit and its default stand, with OQ-214's
 > reopening condition. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 >
+> **Second live execution of revision 5, 2026-10-07 (duress at `a68f121`), recorded under [R-072](requests.md#r-072) with
+> OQ-214's reopening:** pack `2026-10-07T07-09-30-708Z` of the live worktree, session `e6747bd0`, the self-hosted reasoning
+> model. **Two cut-offs, both while making progress:** `wave3-verify-all` (tester, the verification) and its continuation
+> `wave3b-finish-verification`, their last calls 1.5 s and 8.8 s before the ceiling. **The landing:** +4.25 s and +0.44 s
+> after the ceiling, each running an edit, none aborted. **The reports:** both carried the timeout error ("Child timed out
+> after 1200s") and the cut-off statement; the offer stood on wave3 alone, with revision 5's sentence, and the continuation
+> carried none — continued once and never chained; wave3b's brief stood alone, as OQ-114 asks. One record was false: wave3b's
+> changed paths read empty, "Its file-writing calls changed no workspace paths.", over 11 `ok` edits through the
+> code-intelligence EDIT tier — D1's, repaired by fin32 and reported above ("The changed-paths reading falsified"), the
+> reading kept beside its replacement there. **R-071's premise**, "the continuation offer already recovers", is kept as
+> written beside its new count: it held for five of the nine continuations made since 2026-09-29; here the continuation was
+> cut off on its own on-task item, and the coordinator recovered the work by reading `docs/verification.md` itself. Nothing in
+> the text was wrong. Reaffirmed 2026-10-07 under R-072 (OQ-214 reopened): the limit and its default stand, the relief for a
+> slow reasoning model being PD-CONFIG-003's Per-agent timeout, which the duress harness now sets to 45 minutes. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
 > **The changed-paths reading falsified, 2026-10-07 (duress at `a68f121`, finding D1), and its replacement, built by
 > fin32:** the first execution's open reading (4), "a path 'changed' when a `write_file`, `haet_edit` or `haet` call naming
 > it returned `ok`", is kept above as written. Pack `2026-10-07T07-09-30-708Z` of the live worktree, session `e6747bd0`:
@@ -3978,7 +3994,9 @@ REQ-LIBRARY-023, REQ-LIBRARY-124, REQ-NOTIFY-100, REQ-CONFIG-446, REQ-CONFIG-419
 > `child_timeout: 2700` into the workspace file, and the next run start logged `child_timeout=2700 s`; a workspace stating 1250
 > read 21 with "Stored as 1250 seconds; kept until you change this field." and the save bar clean. **What was not measured.**
 > A run started with an unsaved value (the unsaved-settings guard holds the person in Settings; the Tier B overlay and the
-> live state are pinned by unit cases), and a delegated child running past 20 minutes (the orchestrator's live run). The row
+> live state are pinned by unit cases), and a delegated child running past 20 minutes (the orchestrator's live run; since
+> OQ-214's second ruling, 2026-10-07, the duress live harness sets this control to 45 minutes for its launch, so the next
+> duress live run is its measurement — `child_timeout=2700 s` in its `app.log`). The row
 > is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 >
 > **Revision 2's first execution, 2026-10-07, built under [R-072](requests.md#r-072) (fin29):** the revision held as

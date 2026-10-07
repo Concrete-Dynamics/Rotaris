@@ -85,7 +85,10 @@
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
- *                 check and hard to fool.
+ *                 check and hard to fool. It launches with the Per-agent timeout raised to
+ *                 `LIVE_RUN_DURESS_CHILD_TIMEOUT_MIN` (default 45 minutes), as a user on a slow reasoning model
+ *                 would raise it (OQ-214 reopened and ruled 2026-10-07 under R-072; PD-CONFIG-003); `=20` measures
+ *                 the product's default.
  *
  * The key is never passed on a command line and never written to the repository. For one endpoint `<name>`:
  *   1. `ROTARIS_LIVE_API_KEY` in the environment (for a one-off, or a machine where the prompt cannot run);
@@ -146,6 +149,7 @@ import { DURATION_PROBES, runDurationReading } from './lib/run-duration-agreemen
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, toolIntervals, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
+import { withRuntimeKey } from './lib/runtime-key.mjs';
 import { LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
@@ -263,6 +267,18 @@ for (const name of wanted) if (!SCENARIOS.includes(name)) throw new Error(`--onl
  */
 const DURESS_FIXTURE = value('duress-fixture', null);
 const DURESS_MS = Number(process.env['LIVE_RUN_DURESS_MS'] ?? 2_400_000);
+/*
+ * OQ-214, reopened under its condition (a) and ruled again on 2026-10-07 under the owner's delegation (R-072; finding D2 of the
+ * duress run at a68f121): the product's 1200 s ceiling stands, and the relief for long work on a slow reasoning model is
+ * PD-CONFIG-003's Per-agent timeout. The duress launch sets it as such a user would, to this many whole minutes (default 45,
+ * the figure PD-CONFIG-003's first execution drove through Save), and records the value; `=20` measures the default. A value
+ * outside the control's 1–240 stops the harness here, before any launch spends anything.
+ */
+const DURESS_CHILD_TIMEOUT_MIN = Number(process.env['LIVE_RUN_DURESS_CHILD_TIMEOUT_MIN'] ?? 45);
+if (wanted.includes('duress') && !(Number.isInteger(DURESS_CHILD_TIMEOUT_MIN) && DURESS_CHILD_TIMEOUT_MIN >= 1 && DURESS_CHILD_TIMEOUT_MIN <= 240)) {
+  throw new Error(`LIVE_RUN_DURESS_CHILD_TIMEOUT_MIN must be whole minutes from 1 to 240, the Per-agent timeout control's range (PD-CONFIG-003); got ${JSON.stringify(process.env['LIVE_RUN_DURESS_CHILD_TIMEOUT_MIN'])}`);
+}
+const DURESS_CHILD_TIMEOUT_S = DURESS_CHILD_TIMEOUT_MIN * 60;
 /*
  * A named fixture replaces the workspace for the WHOLE run, because one sandbox holds one store and
  * `oneDatabase` refuses a second. Every other scenario's prompt names files `todo-app` has, so running them
@@ -1968,9 +1984,7 @@ if (wanted.includes('faults')) {
     const ARGS_PACE_MS = Number(process.env['LIVE_RUN_ARGS_PACE_MS'] ?? 120);
     const argsPrompt = 'Create a new file named PACED.md in the workspace root with one write_file call, without reading any file first: a Markdown list of the integers from 1 to 120, one per line, each followed by its English name (for example "- 7 seven"). Then reply with one sentence saying it is written.';
     const agentsBefore = readFileSync(agentsFile, 'utf8');
-    const lowered = /^\s+child_stall_timeout:/m.test(agentsBefore)
-      ? agentsBefore.replace(/^(\s+child_stall_timeout:\s*)\d+/m, `$1${ARGS_STALL_S}`)
-      : agentsBefore.replace(/^runtime:\n/m, `runtime:\n  child_stall_timeout: ${ARGS_STALL_S}\n`);
+    const lowered = withRuntimeKey(agentsBefore, 'child_stall_timeout', ARGS_STALL_S);
     proxy.setFaults([{ kind: 'pace', every: true, delayMs: ARGS_PACE_MS }]);
     let argsRead = null;
     try {
@@ -2341,6 +2355,14 @@ if (wanted.includes('terminal')) {
  * scenario cheap to write and hard to fool. What the model produced is NOT asserted: a weak model doing the work
  * badly is a fact about the model.
  *
+ * Its children's limit is PD-CONFIG-003's Per-agent timeout at `LIVE_RUN_DURESS_CHILD_TIMEOUT_MIN` (default 45 minutes), written
+ * into the workspace's `agents.yaml` as Save stores it for this launch alone and restored after; every other scenario keeps the
+ * product's 1200 s. OQ-214's reopening and second ruling (2026-10-07, R-072; finding D2 of the duress run at a68f121, where the
+ * 1200 s ceiling cut off a verifier and its continuation each working on its own task): the ceiling stands, and this is the
+ * relief its ruling counts on, set as a user on a slow reasoning model would set it. The pack carries `duress/agents.yaml`,
+ * `results.json` `scenarios.duress.childTimeoutS`, and a NOTE whenever the value is not the default, so a pass at a raised
+ * limit is never read as a pass at the default.
+ *
  * Its wall clock is `LIVE_RUN_DURESS_MS` (default 40 minutes, the owner's figure of 2026-09-22). An overrun says where
  * the time went, and one the endpoint held while the run was still progressing is a NOTE that the window was the bound,
  * not a failure of the product (live-run finding H-h; `lib/duress-checks.mjs`, AGENTS.md "`LIVE_RUN_DURESS_MS`").
@@ -2383,12 +2405,24 @@ if (wanted.includes('duress')) {
     'Read files before describing them; do not describe a file you have not opened. When wave 3 has reported,',
     'reply with one paragraph naming what each child did and which files changed.',
   ].join('\n');
+  const agentsBeforeDuress = readFileSync(agentsFile, 'utf8');
+  const duressAgents = withRuntimeKey(agentsBeforeDuress, 'child_timeout', DURESS_CHILD_TIMEOUT_S);
   const startedAt = Date.now();
-  const log = await launch('duress', {
-    ROTARIS_CAPTURE_PROMPT: PROMPT,
-    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(DURESS_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
-  }, DURESS_MS + 180_000);
+  let log = '';
+  try {
+    writeFileSync(agentsFile, duressAgents);
+    cpSync(agentsFile, join(scenarioDir('duress'), 'agents.yaml'));
+    log = await launch('duress', {
+      ROTARIS_CAPTURE_PROMPT: PROMPT,
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(DURESS_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+    }, DURESS_MS + 180_000);
+  } finally {
+    writeFileSync(agentsFile, agentsBeforeDuress);
+  }
   const elapsed = Date.now() - startedAt;
+  // OQ-214 as re-ruled: the run host read the Per-agent timeout this launch wrote (`configuration.ts`'s loaded line).
+  check(log.includes(`child_timeout=${DURESS_CHILD_TIMEOUT_S} s`), 'the long run\'s children ran under the Per-agent timeout the harness set', `runtime.child_timeout: ${DURESS_CHILD_TIMEOUT_S} written; the run host's line ${/child_timeout=\d+ s/.exec(log)?.[0] ?? 'is absent'}`);
+  if (DURESS_CHILD_TIMEOUT_S !== 1200) noted('the long run\'s per-agent timeout', `${DURESS_CHILD_TIMEOUT_S} s — PD-CONFIG-003's Per-agent timeout raised as a user on a slow reasoning model would raise it (OQ-214, re-ruled 2026-10-07); LIVE_RUN_DURESS_CHILD_TIMEOUT_MIN=20 measures the product's 1200 s default`);
   const read = readSession();
   /*
    * Where the wait went, from the traffic (each call's interval at the endpoint) and the store (each tool call's), so
@@ -2499,7 +2533,7 @@ if (wanted.includes('duress')) {
     // invisible in a green: `--max-iterations` is what raises it.
     if (read.session.iterations_completed >= MAX_ITERATIONS) noted('the long run stopped at the iteration ceiling', `${MAX_ITERATIONS} iterations — it was bounded by --max-iterations, not by the work; raise it to ask the longer question`);
     results.scenarios.duress = {
-      fixture: basename(workspaceFixture), elapsedMs: elapsed, budgetMs: DURESS_MS,
+      fixture: basename(workspaceFixture), elapsedMs: elapsed, budgetMs: DURESS_MS, childTimeoutS: DURESS_CHILD_TIMEOUT_S,
       status: read.session.execution_status, stopReason: read.session.stop_reason,
       iterations: read.session.iterations_completed, toolCalls: calls.length, compressions: { aggregate, timeline: compressed },
       children: children.map((c) => ({ name: c.given_name, persona: c.persona, state: c.state, toolCalls: c.tool_calls, commands: (reportOf(c).commands ?? []).length })),

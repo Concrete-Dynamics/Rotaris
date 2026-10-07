@@ -11138,6 +11138,55 @@ presents the setting (REQ-MONITOR-286), which is OQ-218's question. **Recorded 2
 specification text changed; PD-ORCH-004's report-back and its row in `first-executions.md` are written. Findings L1 and N4
 close as ruled.
 
+**Reopened and ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** reopened under
+condition (a) by finding D2 of the final duress live run at `a68f121` (pack `2026-10-07T07-09-30-708Z` of the live worktree,
+session `e6747bd0`), the first duress run after the marker-directory (OQ-215) and personas'-tools (OQ-216) rulings were built.
+The 1200 s ceiling cut off the verifier `wave3-verify-all` and its continuation `wave3b-finish-verification`, both testers
+working on their own task: by the measure above, wave3 spent 45 of its 58 requests (78 %) and wave3b 33 of 47 (70 %) on its
+own task, even counting every request that so much as mentions the marker directory as off-task. Both were making progress —
+their last calls completed 1.5 s and 8.8 s before the ceiling — and both landed inside the 30 s bound, at +4.25 s and +0.44 s,
+running an edit; reasoning was 75 % and 90 % of their output. The verification took 2,526.3 s, 60.7 % of the run's 4,162.6 s,
+for a deliverable two `failed` children held. The longest child of the same model's default pack lived 204.4 s, and e finished
+at 88 % of the ceiling.
+
+**The ruling:** the working child's ceiling stays as the owner ruled it. `runtime.child_timeout` defaults to 1200 s and is a
+hard bound with the 30 s landing, and a piece of work is continued once and never chained. PD-ORCH-004 (revisions 1 to 5),
+R-048, R-071 and PD-CONFIG-003 stand unrevised, because R-072 delegates open questions and does not reach a clause the owner
+has already decided: R-048's "the limit itself is not raised" and R-071's "never longer" are the owner's, so a raised default,
+an extension while the child makes progress, a per-model figure or a chained continuation would each reverse one of them, and
+each goes to the owner as a recommendation. For long work on a slow reasoning model the relief is
+[`PD-CONFIG-003`](../product/directives.md#pd-config-003)'s Per-agent timeout: the duress live harness sets it to 45 minutes for
+its own launch, as such a user would, and records that value (`LIVE_RUN_DURESS_CHILD_TIMEOUT_MIN`). The question reopens under
+**(a′)** a duress run with the Per-agent timeout at 45 minutes cuts off a child that spent more than half its requests on its
+own task, measured as above; or **(b)**, unchanged. Either sends any raise of the default, or any softening of the bound, to the
+owner as a recommendation in `docs/product/requests.md`; the consortium rules only inside the owner's rulings.
+
+**The two recommendations weighed, and the ruling followed both.** *Advocate A (the user's lens)*: confirm as built; the duress
+harness, acting as a user on a slow reasoning model, sets the Per-agent timeout to 40 minutes, the product default when the
+variable is unset; R-071's premise written down beside its new count; any change to the default the owner's. *Advocate B (the
+system's lens)*: confirm as built; the harness sets it to 45 minutes by default, `=20` re-measuring the default, checking that
+the setting took effect; condition (a) replaced by (a′) measured at the raised value. The ruling took B's 45 minutes —
+PD-CONFIG-003's first execution drove exactly 2,700 s through Save to the run host, while 40 minutes barely covers the 2,345 s
+the two lives generated — and B's harness default; and A's NOTE, the unit-tested rewrite of the stored value, and R-071's
+premise kept beside its new count (5 of 9). On the merits both agreed: no signal the product can read separates on-task wave3
+from off-task d2 at `c2fdd6a` (both passed PD-ORCH-004's progress test and both wrote late), REQ-ORCH-062 and REQ-TOOLS-156
+rely on the hard bound, and no default-pack child came near the ceiling.
+
+**Recorded 2026-10-07 (fin32).** No product code, specification text or view changed. The harness:
+`apps/desktop/scripts/lib/runtime-key.mjs` (`withRuntimeKey`, `runtime-key.test.ts`), which faults-args' stall-threshold rewrite
+now uses too; the duress launch writes `runtime.child_timeout: <min×60>` into the workspace's `agents.yaml`, copies it to
+`duress/agents.yaml` in the pack, restores the original after, checks the run host's `child_timeout=<s> s`, records
+`childTimeoutS` in `results.json` and NOTEs any value but 1200; a value outside 1–240 stops the harness before any launch.
+`AGENTS.md` carries the recipe (`LIVE_RUN_DURESS_MS=7800000`). PD-ORCH-004 gains the second live execution of revision 5 and its
+reaffirmation; PD-CONFIG-003's "not measured" item names the next duress run as its measurement. Finding D2 and this
+question's reopening measure (the a68f121 autopsy's first-execution list) close as ruled. **Not yet measured:** the next duress
+live run, the harness change's first execution — its `app.log` should read `child_timeout=2700 s`, `results.json` carry
+`childTimeoutS: 2700` with the NOTE, and the pack hold `duress/agents.yaml`; a wave-three child may then work past 20 minutes,
+finishing in one life or cut off at 2,700 s plus at most 30 s and handled as PD-ORCH-004 says; its autopsy reports each child's
+lifetime, any compression inside a child, any parent resume, and whether a cut-off child spent more than half its requests on
+its own task (condition a′). The question of whether a child cut off at its per-agent timeout names the Settings control where
+the person sees the failure is raised and ruled on its own, not here.
+
 **OQ-215 — Do the built-in search and listing tools skip the code-intelligence runtime's marker directory, and do its
 memories leave the workspace?** *(REQ-TOOLS-140, the hard-coded ignore components, a closed list holding `.rotaris` and not
 the runtime's directory; REQ-TOOLS-139, the scan filters, which honour "the workspace's `.gitignore`" and nothing else, and

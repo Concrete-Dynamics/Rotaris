@@ -72,7 +72,9 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(dal.getLock(sid)).toBeUndefined();
     expect(dal.getLaunchAudit(sid)).toBeDefined();
     expect(JSON.parse(dal.getLaunchAudit(sid)!.payload).run_intent.fallback).toBe(true);
-    expect(dal.timelineOf(sid).map((t) => t.name)).toEqual(['run_start', 'run_end']);
+    // REQ-ORCH-139 / REQ-SESSION-115: the iteration's end is a timeline entry too (live-run finding P4).
+    expect(dal.timelineOf(sid).map((t) => t.name)).toEqual(['run_start', 'iteration_end', 'run_end']);
+    expect(dal.timelineOf(sid)[1]!.message).toBe('Iteration 1 (what is the answer?): succeeded — The answer is 42.');
     expect(result).toMatchObject({ status: 'completed', stop_reason: 'tasks_complete', iterations_completed: 1, tokens: { input: 20, output: 6, total: 26 }, error: null });
     expect(results).toEqual([result]);
     // REQ-SESSION-095: session.end and result mirror one computation.

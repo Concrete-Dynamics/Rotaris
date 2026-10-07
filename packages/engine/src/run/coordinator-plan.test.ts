@@ -663,6 +663,12 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
       expect(firstUser(client.requests[0]!)).not.toContain('Your previous iteration answered');
       // A task completed carries the answer no further.
       expect(planner(sid)[0]).not.toHaveProperty('heldAnswer');
+      // REQ-SESSION-115 / REQ-ORCH-139 (live-run finding P4): the iteration's `iteration_end` timeline entry names the outcome
+      // and the open items, so a later follow-up's "Recent iterations" says why the first iteration did not complete the task.
+      expect(dal.timelineOf(sid).filter((e) => e.name === 'iteration_end').map((e) => e.message)).toEqual([
+        'Iteration 1 (run the sequence): partial — the coordinator answered with 1 item of its plan not done: Report each command\'s outcome in one line',
+        'Iteration 2 (run the sequence): succeeded — Done: every item of the plan is complete.',
+      ]);
     });
 
     it('the held answer is kept with the task, so a later run\'s fresh root of it is handed the answer; it reaches no other task', async () => {

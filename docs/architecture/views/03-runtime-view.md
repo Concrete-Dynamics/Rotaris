@@ -252,7 +252,7 @@ flowchart TB
   L0 -. "a continue: the open iteration first" .-> RES["iterate(open row): the same number, root and task;<br/>resumePaused() · the root from its record;<br/>iteration_resumed (PD-ORCH-005 clause 4)"]
   RES --> TURN
   OUT -- "the explicit cancel, an abort, or a rest<br/>that found nothing unfinished" --> PEND["task back to pending"]
-  C & RQ & AB & PEND --> E["endIteration(): iteration.end event · the row closed · the todo stored (ONE transaction) ·<br/>CHECKPOINT capture (ADR-0039, awaited) · iteration_end hooks ·<br/>iterationsCompleted += 1 · save running (aggregates, todo, progress — published)"]
+  C & RQ & AB & PEND --> E["endIteration(): iteration.end event · the row closed · the todo stored (ONE transaction) ·<br/>iteration_end timeline entry (REQ-ORCH-139; read by REQ-SESSION-115's Recent iterations) ·<br/>CHECKPOINT capture (ADR-0039, awaited) · iteration_end hooks ·<br/>iterationsCompleted += 1 · save running (aggregates, todo, progress — published)"]
   E --> ML{"message limit in force<br/>and count ≥ limit?"}
   ML -- yes --> PL["pauseAtLimit(): status paused_message_limit + count + limit (durable),<br/>run.paused event to main, no terminal pair; the Run ends"]
   ML -- no --> L0
@@ -1406,7 +1406,9 @@ plan cycle opened its gate after that iteration opened — else the latest of an
 (PD-ORCH-005 clause 20, OQ-106), id first and cut to 6,000 characters, an artifact a person edited carried as its
 document below its frontmatter and marked `edited`, read through the session's `ArtifactStore` (PD-LIBRARY-003 (e)) —
 `latestArtifactText`, read once at the continue, so a later iteration of that run, and the plan cycle held after a
-resumed iteration, are re-sent it as it stood then —
+resumed iteration, are re-sent it as it stood then —, its "Recent iterations" the last five `iteration_end` timeline entries
+each closed iteration writes after `endIteration` ("Iteration <n> (<task title>): <outcome> — <summary>", REQ-ORCH-139's word
+with REQ-ORCH-067's fields; nothing wrote one before 2026-10-07 and the block read "(none recorded)", live-run finding P4) —
 and its progress context listing the continuation offers
 no child has taken up, the newest ten — `openOffersText` (`run/offers.ts`), which a continue that resumes an open
 iteration records for its root instead, OQ-99; and which `Run.turn()` adds to the first message of every execution

@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**Each closed iteration writes its `iteration_end` timeline entry, which the follow-up payload's "Recent iterations" reads
+(REQ-SESSION-115, REQ-ORCH-139, REQ-ORCH-067; live-run finding P4, fin31).** `Run.iterate` appends it after
+`writer.endIteration` with the iteration's number, task title, outcome and summary; `buildContinuationPayload` already read
+the last five, and found none. The **runtime view**'s loop diagram and its continuation paragraph say so. No package, edge,
+process, channel, command or store column changed.
+
 **A root that answers with its plan open is corrected in its own conversation; a held answer is carried and announced
 (PD-ORCH-015, PD-ORCH-009 revision 2, REQ-ORCH-075, REQ-ORCH-078; OQ-225 ruled under R-072, fin31).** `Run.turn`'s correction
 closure counts to `max(1, RunConfig.validationRetries)`, keeps the execution's `answer` (the re-prompt now fires only while it

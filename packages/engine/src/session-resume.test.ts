@@ -168,6 +168,41 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(context.length).toBeLessThanOrEqual(3_200);
   });
 
+  /**
+   * REQ-SESSION-115's "the last 5 outer-loop iterations", read from the timeline's `iteration_end` entries (REQ-ORCH-139's
+   * vocabulary, REQ-ORCH-067's number, task, outcome and summary), which the run now writes as each iteration closes. The
+   * repair of `the-follow-up-payloads-recent-iterations-read-timeline-entries-nothing-writes.md` (live-run finding P4):
+   * nothing wrote such an entry, and the block always read "- (none recorded)".
+   */
+  it('REQ-SESSION-115: a follow-up after two iterations tells the root how each ended, from the timeline\'s iteration_end entries', async () => {
+    const client = new ScriptedModelClient([answer('First done.'), answer('Second done: the parser now accepts tabs.'), answer('Third.')]);
+    const sessions = makeSessions(91, new DefaultAgentBackend(client));
+    const started = sessions.start(dal, 'C:/ws', 'write the parser');
+    if (!started.ok) throw new Error(started.error.reason);
+    await sessions.running(started.value);
+    expect(sessions.prompt(started.value, 'make it accept tabs').ok).toBe(true);
+    await sessions.running(started.value);
+    expect(sessions.prompt(started.value, 'now document it').ok).toBe(true);
+    await sessions.running(started.value);
+    const ends = dal.timelineOf(started.value).filter((e) => e.name === 'iteration_end');
+    expect(ends.map((e) => JSON.parse(e.metadata) as Record<string, unknown>).map((m) => [m['iteration'], m['outcome']])).toEqual([[1, 'succeeded'], [2, 'succeeded'], [3, 'succeeded']]);
+    const third = client.requests[2]!.messages.find((m) => m.role === 'user')!.content.map((c) => (c.kind === 'text' ? c.text : '')).join('\n');
+    const block = third.slice(third.indexOf('Recent iterations:'), third.indexOf('\n\nRecent session context:'));
+    // Without the repair: "Recent iterations:\n- (none recorded)".
+    expect(block).toBe('Recent iterations:\n- Iteration 1 (write the parser): succeeded — First done.\n- Iteration 2 (make it accept tabs): succeeded — Second done: the parser now accepts tabs.');
+  });
+
+  it('REQ-SESSION-115: the iterations block keeps the last five, each cut to 700 characters', () => {
+    const sid = asSessionId('S-iterations');
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: new Date(clock.instant()).toISOString(), updated_at: new Date(clock.instant()).toISOString() });
+    const at = new Date(clock.instant()).toISOString();
+    for (let i = 1; i <= 7; i += 1) dal.insertTimeline(sid, i, at, 'iteration_end', 'rotaris', `Iteration ${i} (t): succeeded — ${'s'.repeat(i === 7 ? 900 : 5)}`, '{}', `t${i}`, 'info');
+    const payload = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    const lines = payload.split('Recent iterations:\n')[1]!.split('\n\n')[0]!.split('\n');
+    expect(lines.map((l) => /^- Iteration (\d)/.exec(l)?.[1])).toEqual(['3', '4', '5', '6', '7']);
+    expect(lines[4]!.length).toBeLessThanOrEqual(2 + 700);
+  });
+
   it('REQ-SESSION-115 / REQ-CHAT-040: a named task\'s line in the handoff is its display title, the name, not its content', () => {
     const sid = asSessionId('S-named');
     dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: new Date(clock.instant()).toISOString(), updated_at: new Date(clock.instant()).toISOString() });

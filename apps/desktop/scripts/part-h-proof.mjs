@@ -133,7 +133,7 @@ const resumedDb = new Database(resumeFile, { readonly: true });
 const after = resumedDb.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed FROM sessions').all();
 const userRows = resumedDb.prepare("SELECT row_index, body FROM transcript_rows WHERE session_id = ? AND kind = 'user' ORDER BY row_index").all(sessionId);
 const continuationRows = resumedDb.prepare("SELECT row_index, body FROM transcript_rows WHERE session_id = ? AND kind = 'system' AND body = 'Intent classified: moderate_feature (continued from previous run)' ORDER BY row_index").all(sessionId);
-const timeline = resumedDb.prepare('SELECT ordinal, name FROM timeline WHERE session_id = ? ORDER BY ordinal').all(sessionId);
+const timeline = resumedDb.prepare('SELECT ordinal, name, message FROM timeline WHERE session_id = ? ORDER BY ordinal').all(sessionId);
 const staleChild = resumedDb.prepare("SELECT state, report_stored FROM children WHERE session_id = ? AND task_id = 'bg_deadbeef'").get(sessionId);
 const locks = resumedDb.prepare('SELECT session_id, pid, host FROM session_locks').all();
 resumedDb.close();
@@ -146,6 +146,10 @@ if (locks.length !== 0) throw new Error(`capture exit left ${locks.length} sessi
 const ordinals = timeline.map((entry) => entry.ordinal);
 if (ordinals.some((ordinal, index) => index > 0 && ordinal <= ordinals[index - 1])) throw new Error(`the continued run broke the ordinal series: ${ordinals.join(',')}`);
 if (timeline.filter((entry) => entry.name === 'run_start').length !== 2) throw new Error('expected two run_start entries in one ordinal series');
+// REQ-ORCH-139 / REQ-SESSION-115 (live-run finding P4): every iteration that closed wrote its `iteration_end` timeline entry —
+// the record the continuation's "Recent iterations" block reads, which nothing wrote before (the block read "(none recorded)").
+const iterationEnds = timeline.filter((entry) => entry.name === 'iteration_end');
+if (iterationEnds.length !== after[0].iterations_completed || !/^Iteration 1 \(finish the first run\): succeeded/.test(iterationEnds[0]?.message ?? '')) throw new Error(`iteration_end timeline entries: ${JSON.stringify(iterationEnds)} for ${after[0].iterations_completed} iteration(s)`);
 
 /*
  * PD-ORCH-015 (OQ-225, live-run finding P1): a coordinating root that answers while its plan's report item is still PENDING
@@ -186,7 +190,7 @@ if (agentStates.length < 2 || agentStates.some((state) => state !== 'COMPLETED')
 const result = {
   planCorrection: { session: correctionSessionShown, iterations: correctionIterations, heldRows: heldRows.length, todoCalls: todoCalls.length, agentStates, screenshot: 'plan-correction.png' },
   loop: { session: loopSession, activations: loopActivations.length, issues: loopIssues, toolCalls: loopCalls.length, screenshot: 'loop-supervisor.png' },
-  resume: { before, after, userRows, continuationRows: continuationRows.length, staleChild, locks: locks.length, ordinals, screenshots: ['resume-before.png', 'resume-after.png'] },
+  resume: { before, after, userRows, continuationRows: continuationRows.length, staleChild, locks: locks.length, ordinals, iterationEnds: iterationEnds.map((entry) => entry.message), screenshots: ['resume-before.png', 'resume-after.png'] },
 };
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(result, null, 2)}\n`);
 console.log(JSON.stringify(result, null, 2));

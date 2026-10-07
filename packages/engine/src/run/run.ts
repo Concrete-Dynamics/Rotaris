@@ -8,7 +8,8 @@ import type { Committed, SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
 import { classifyStop, HELD_ANSWER_LIMIT, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planHeldRowText, planNotDoneSummary, statusForResult, stopCondition, summarise, TODO_LIST_OWED_TEXT, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
-import { mintTodoId, taskLine, Todo, type Task, type TodoDocument } from './todo.js';
+import { mintTodoId, taskLine, taskTitle, Todo, type Task, type TodoDocument } from './todo.js';
+import { cut } from './cut.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
 import { recordSteeringInjected, runTurn, steeringMessage, type ToolPort, type TurnOutcome } from './turn.js';
 import { childCompletedFields, IterationChildren, refreshing } from '../children/orchestration.js';
@@ -1323,6 +1324,14 @@ export class Run {
     // PD-ORCH-005 clause 1: `iteration.end` and the iteration's record closing with its outcome, in one transaction — with
     // the todo its task and held messages were just closed in, so no death before the save below strands them in progress.
     writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome, this.todoJson());
+    /*
+     * REQ-ORCH-139's `iteration_end` timeline entry, carrying REQ-ORCH-067's iteration number, task, outcome and summary: the
+     * record REQ-SESSION-115's follow-up payload reads for "the last 5 outer-loop iterations" (`buildContinuationPayload`).
+     * Nothing wrote it before, and that block always read "(none recorded)" (live-run finding P4). An iteration a rest leaves
+     * open has not ended and writes none (`leaveIterationOpen`).
+     */
+    const title = cut(taskTitle(task), 80);
+    writer.appendTimeline('iteration_end', 'rotaris', `Iteration ${iteration} (${title}): ${outcome}${summary.trim() === '' ? '' : ` — ${summary.trim()}`}`, { iteration, task_id: task.id, task: title, outcome, summary });
     this.iterationTask = null;
     // ADR-0039 / REQ-GIT-051: exactly one capture per iteration that closes, at the moment it closes — after
     // `iteration.end` is recorded and BEFORE the hooks' `iteration_end`: the checkpoint records the iteration's work as

@@ -26,3 +26,25 @@ no follow-up into an existing session, and its store's 19 timeline names, over 1
 - `packages/engine/src/run/run.ts` — `iterate()`'s close: `writer.endIteration(...)` and the `iteration_end` hook, where the
   iteration's number, task, outcome and summary are all in hand.
 - `packages/engine/src/session-writer.ts` — `endIteration` (the `iteration.end` event) and `appendTimeline`.
+
+## Repaired (2026-10-07, fin31)
+
+REQ-ORCH-139's vocabulary and REQ-ORCH-067's fields decide where the account comes from: `iteration_end` is a word of the
+session diagnostics' timeline, and an iteration's end carries its number, task, outcome and summary. So the run now writes
+that entry rather than the payload reading another record: `Run.iterate` (`packages/engine/src/run/run.ts`) appends
+`iteration_end` after `writer.endIteration`, with the message "Iteration <n> (<task title, cut to 80>): <outcome> — <summary>"
+and the same facts as metadata (`iteration`, `task_id`, `task`, `outcome`, `summary`). `buildContinuationPayload` is
+unchanged: it reads the last five, each cut to 700 characters. An iteration a rest leaves open has not ended and writes none.
+A re-queue for an open plan (`PD-ORCH-015`) carries `partial` and the open items in its summary, so the payload says why the
+iteration did not complete its task.
+
+Pinned by `packages/engine/src/session-resume.test.ts`: a follow-up after two iterations reads "- Iteration 1 (write the
+parser): succeeded — First done." and the second iteration's line (red on `a68f121`: no entry, "- (none recorded)"), and a
+guard that the block keeps the last five, each at most 700 characters; `run.test.ts`'s happy path now expects the entry
+between `run_start` and `run_end`; `coordinator-plan.test.ts` reads the `partial` entry a held iteration writes. Shown in the
+built app by `pnpm part-h-proof`'s resume launches: each closed iteration of the continued session has its entry,
+"Iteration 1 (finish the first run): succeeded — …" first. The payload's text itself is not read by any proof (the scripted
+client records no user message).
+
+Not written, and not repaired here: the vocabulary's `iteration_start` timeline entry. No requirement reads it, and an
+iteration's start is in the `events` record (`iteration.start`).

@@ -10862,3 +10862,45 @@ tells the caller no persona runs commands); `git_commit`, having no executor, ne
 told equal to its child port's grant) and `personas.test.ts`. **Not yet measured:** the duress live run that counts briefs
 asking a persona without a terminal to run commands (2 to 3 per run before; target 0) and `write_scope` refusals (2 per run;
 target 0).
+
+**OQ-217 — What is the report summariser told of how the child ended?** *(REQ-ORCH-088, a timed-out child recorded failed
+with a report of the form "Child timed out after <N>s"; REQ-ORCH-108, the report condenses what already happened;
+REQ-ORCH-110, the pass's bounds and its fallback, silent on what the pass is given; REQ-ORCH-112, the report status mapped
+to the terminal state; OQ-111, which gave the pass the run's deterministic facts; OQ-120, the facts' 12,000-character bound
+keeping its head; `PD-ORCH-004`, the cut-off statement. Raised 2026-10-07 from the final live runs' findings L5 (the
+`c2fdd6a` duress autopsy) and N5 (the `c2a9444` duress autopsy), recorded in
+[`a-timed-out-childs-report-summary-reads-as-success.md`](../defects/a-timed-out-childs-report-summary-reads-as-success.md),
+and ruled the same day under the owner's delegation; the consortium's question L5.)*
+
+Two of the five timed-out children of the two duress runs got summaries that read as success beneath status `failed`:
+"The agent completed the requested documentation task" (`c2fdd6a`) and "The agent reconciled documentation …" (`c2a9444`).
+The pass is given the task, the most recent part of the transcript and OQ-111's facts, and not the status or the end
+reason, which the run decides before the pass runs (`packages/engine/src/children/orchestration.ts`). The artifact copies
+neither the errors nor `cut_off`, so the sentence is the only place on its paths a cause could stand. The specification
+does not say what the pass is told of the outcome.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the report summariser is told how
+a failed child ended. For every child the runner settles other than `succeeded`, the facts it is given open with an Outcome
+line: the runner's status, its end reason as the run recorded it and, for a child cut off while making progress,
+PD-ORCH-004's statement. The pass is asked to state that outcome in the summary's first sentence, then condense what the
+agent did, and never to call the task completed. A succeeded child's request stays as it is, the no-model fallback stays as
+REQ-ORCH-110 states it, and no summarising pass can raise a status the runner settled as failed. This fills REQ-ORCH-110's
+silence on the pass's inputs, as OQ-111 did, and needs no directive: REQ-ORCH-088, REQ-ORCH-108, REQ-ORCH-110,
+REQ-ORCH-112 and PD-ORCH-004 keep their text. The status guard brings the build into line with REQ-ORCH-088 and
+REQ-ORCH-112 as written
+([`the-summarising-pass-can-raise-a-failed-childs-report-status.md`](../defects/the-summarising-pass-can-raise-a-failed-childs-report-status.md)).
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended giving the pass the run's status and recorded end reason as one more
+  runner-owned fact beside OQ-111's, the summary stating the outcome in its first sentence and then what the child did,
+  the status staying the run's. The ruling took A's wording on what remained: the summary says what the transcript shows
+  was left, and never claims more was left undone than it shows, since a timed-out child's work may be whole.
+- **Advocate B (the system's lens)** recommended the same Outcome line at the head of the facts, so OQ-120's head-keeping
+  cut never drops it, the plumbing for the cut-off statement, and a guard in `shape` so a pass can never raise a failed
+  child's status. The ruling took all three. It departed from B on one point: a succeeded child gets no Outcome line,
+  because the runner's `succeeded` means only that the turn ended with an answer, and stating it would invite a completion
+  claim over a child whose answer was that it could not do the work.
+
+Both rejected a label beside the summary (it leaves the false sentence stored), a run-written prefix or a separate reason
+field (each needs a directive over REQ-ORCH-111 or REQ-LIBRARY-088), and confirming the behaviour as built. OQ-111 is the
+precedent: its facts took report denials from 5 of 7 to 0 of 6 with this model.

@@ -80,9 +80,9 @@ describe('SessionWriter — an error-path tool record marks the cut it makes (RE
     expect(JSON.stringify(stored).length).toBeLessThanOrEqual(2_000);
   });
 
-  // OQ-209: a path longer than the cap on its own. REQ-SESSION-194's "never truncated" is read as governing, so the path stays
-  // whole, the free text is cut to the marker alone, and the record exceeds 2,000 characters until the owner rules.
-  it('keeps a path longer than the cap whole and cuts the free text to the marker (OQ-209)', () => {
+  // PD-SESSION-003 (OQ-209, ruled 2026-10-07 under R-072): a path longer than the cap on its own. REQ-SESSION-194's "never
+  // truncated" governs, so the path stays whole, the free text is cut to the marker alone, and the record exceeds 2,000 characters.
+  it('keeps a path longer than the cap whole and cuts the free text to the marker (PD-SESSION-003)', () => {
     const path = `/ws/${'d/'.repeat(1_100)}x.ts`;
     const stored = settled({ path, content: 'c'.repeat(500) }, { is_error: true, result: 'refused' })['args'] as Record<string, unknown>;
     expect(stored['path']).toBe(path);

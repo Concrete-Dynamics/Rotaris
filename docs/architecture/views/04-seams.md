@@ -177,6 +177,7 @@ Fail-closed by construction: the registry removes what it cannot resolve.
 | 3 | `packages/agent-tools/src/tools/<name>.ts` | the executor — pure, no `electron`, time from the clock ports only |
 | 4 | `apps/desktop/src/run-host/tools.ts` — `executorsFor` | the wiring that makes the declared name callable |
 | 5 | `packages/agent-tools/src/gate.ts`, `policy.ts` | only if it needs a rule of its own |
+| 6 | `packages/engine/src/run/cut.ts` — `WHOLE_KEYS`, and the key table in `run/cut.test.ts` | only when an argument key holds identifiers, paths or timestamps and its last word does not say so, so an error-path record never cuts it (`PD-SESSION-003` (d)); the table classifies every built-in tool's argument keys |
 
 Invariants:
 

@@ -3,7 +3,8 @@
  * (PD-ORCH-004 revision 3), the pending tasks a plan cycle held after a resumed iteration is told (PD-ORCH-003
  * revision 2) and, since 2026-10-06, the tool log's 2,000-character cut of an error-path record's arguments and result
  * (`SessionWriter.settleToolCall`, REQ-SESSION-136; the result cut here whole, the arguments value by value through
- * `cutArguments` below, which keeps their shape and never cuts a path, an identifier, a count or a timestamp) — and that the session list's 80-character label (`Sessions.list`)
+ * `cutArguments` below, which keeps their shape and never cuts a path, an identifier, a count or a timestamp, as
+ * PD-SESSION-003 narrows REQ-SESSION-136 and REQ-SESSION-194) — and that the session list's 80-character label (`Sessions.list`)
  * also calls, as it did before the move. Other bounds in the engine cut differently and are not this one (the intent
  * classifier's and a child report's).
  * FALSIFIED, kept beside its replacement (live-run M3,
@@ -24,8 +25,13 @@ export function cut(text: string, cap: number): string {
 const MARKER = '...';
 /** The last word of a key that names a path, an identifier or a timestamp (`file_path`, `task_ids`, `filePath`, `created_at`). */
 const WHOLE_WORDS = new Set(['path', 'paths', 'file', 'files', 'filename', 'dir', 'directory', 'cwd', 'url', 'uri', 'id', 'ids', 'slug', 'ref', 'refs', 'hash', 'name', 'names', 'at', 'timestamp', 'time', 'date', 'since', 'until']);
-/** Keys of this product's own tools whose values are identifiers or path patterns though their last word does not say so. */
-const WHOLE_KEYS = new Set(['persona', 'supersedes', 'depends_on', 'continuation_of', 'write_scope']);
+/**
+ * Keys of this product's own tools whose values are identifiers or path patterns though their last word does not say so
+ * (PD-SESSION-003 (d)). `delegate`'s `inherited_context` (sibling task ids) and `attach_artifacts` (artifact ids or slugs,
+ * REQ-TOOLS-152) joined on 2026-10-07: until then a failed delegate call's id lists were cut as free text
+ * (docs/defects/fixed/a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md).
+ */
+const WHOLE_KEYS = new Set(['persona', 'supersedes', 'depends_on', 'continuation_of', 'write_scope', 'inherited_context', 'attach_artifacts']);
 
 /**
  * REQ-SESSION-136's error-path cut of a tool record's ARGUMENTS under REQ-SESSION-194 whole, its last sentence included:
@@ -39,8 +45,9 @@ const WHOLE_KEYS = new Set(['persona', 'supersedes', 'depends_on', 'continuation
  * with every key — and only free-text string values are cut, each with `cut`'s marker, longest first, until the JSON text
  * fits. A value is a path, an identifier or a timestamp by its key (`argumentKeptWhole`), and is never cut, nor anything
  * beneath it; a number, a boolean and null are never cut (a count among them). Where what is kept whole cannot fit `cap`
- * on its own, every free-text value is cut to the marker alone and the record exceeds `cap`: the reading OQ-209 records
- * while REQ-SESSION-136's "truncated to 2000 characters" and REQ-SESSION-194's "never truncated" wait on the owner.
+ * on its own, every free-text value is cut to the marker alone and the record exceeds `cap`. That is PD-SESSION-003, which
+ * narrows REQ-SESSION-136's "truncated to 2000 characters" and REQ-SESSION-194's "never exceeds its cap" for this one cut
+ * (OQ-209, ruled 2026-10-07 under the owner's delegation, R-072, confirming the reading the build proceeded under).
  */
 export function cutArguments(args: Readonly<Record<string, unknown>>, cap: number): Readonly<Record<string, unknown>> {
   const text = JSON.stringify(args);

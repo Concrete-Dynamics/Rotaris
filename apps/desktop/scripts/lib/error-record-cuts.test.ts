@@ -42,7 +42,7 @@ describe('errorRecordCuts (REQ-SESSION-136, REQ-SESSION-194)', () => {
     expect(r.overCapArgs).toEqual([]);
   });
 
-  it('a call that succeeded is never read, however long; a result over the cap is a failure; arguments over it are counted (OQ-209)', () => {
+  it('a call that succeeded is never read, however long; a result over the cap is a failure; arguments over it are counted (PD-SESSION-003)', () => {
     const longPath = `/ws/${'d/'.repeat(1100)}x.ts`;
     const calls = [
       { ordinal: 1, tool_name: 'terminal', isError: false, args: JSON.stringify(longWrite), result: longOutput },

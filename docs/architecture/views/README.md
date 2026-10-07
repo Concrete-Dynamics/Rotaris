@@ -58,6 +58,13 @@ R-072).** `ArtifactStore.rerender` rewrites only the leading frontmatter (`rende
 inspector's Preview renders from below the frontmatter (`previewSource`). The **runtime view**'s `artifacts` row and its
 continuation paragraph say so. No package, edge, process, channel, command or store column changed.
 
+**An error-path record's arguments are `PD-SESSION-003`'s, and `delegate`'s id lists are never cut (REQ-SESSION-136,
+REQ-SESSION-194; OQ-209 ruled 2026-10-07 under R-072; fin28).** The reading `cutArguments` (`run/cut.ts`) was built under is
+confirmed and minted as `PD-SESSION-003`; `WHOLE_KEYS` gains `inherited_context` and `attach_artifacts`, and `cut.test.ts`
+classifies every argument key of every built-in tool. The **seams view**'s tool path gains its sixth row (`WHOLE_KEYS`, when
+a key holds identifiers its last word does not name), and the **runtime view**'s store table cites the directive. No package,
+edge, process, channel, command or store column changed.
+
 **MCP and fetch call records carry no `outcome_kind` (REQ-SESSION-136, REQ-SESSION-139; OQ-208 ruled 2026-10-07 under
 R-072; fin28).** The run host's MCP executors (`run-host/mcp.ts`) and the fetch tool (`agent-tools/tools/fetch.ts`) no longer
 set `outcomeKind` (`mcp`, `fetch`); each keeps its `failureKind`, so REQ-SESSION-139's histogram derives the call's bucket,
@@ -110,7 +117,7 @@ paragraph says so. No package, edge, process, channel, command or store column c
 **An error-path tool record marks the cut it makes (REQ-SESSION-194, REQ-SESSION-136; fin23, live-run M3).**
 `SessionWriter.settleToolCall` cuts an error's `args` and `result` with `run/cut.ts`, so a cut value ends with `...` inside
 its 2,000 characters where it was a bare `slice`; the arguments keep their shape (`cutArguments`: only free-text values cut,
-a path, identifier, count or timestamp never; OQ-209). The **runtime view**'s store table says so. No package, edge, process,
+a path, identifier, count or timestamp never; OQ-209, ruled 2026-10-07 as `PD-SESSION-003`, below). The **runtime view**'s store table says so. No package, edge, process,
 channel, command or store column changed.
 
 **A terminal command too long for one PTY line is staged in a script (REQ-TOOLS-096, ADR-0020; fin23, live-run M1).** A POSIX

@@ -926,7 +926,7 @@ function checkToolRecord() {
   const list = (calls) => calls.map((c) => `${at(c)} (${c.tool_name})`).join(', ');
   if (seen === 0) noted('no error-path tool record was long enough to be cut', `REQ-SESSION-194's marker on REQ-SESSION-136's 2,000-character cut was not observed in ${where} (${e.errors.length} error-path record(s))`);
   else check(e.failures.length === 0, "every error-path tool record cut to 2,000 characters ends with REQ-SESSION-194's marker and keeps its arguments an object (REQ-SESSION-136)", e.failures.length === 0 ? `${e.markedResults.length} result(s) cut and marked${e.markedResults.length === 0 ? '' : ` (${list(e.markedResults)})`}; ${e.markedArgs.length} argument object(s) with a marked value${e.markedArgs.length === 0 ? '' : ` (${list(e.markedArgs)})`}` : [e.overlongResults.length === 0 ? '' : `result over 2,000: ${list(e.overlongResults)}`, e.unmarkedResults.length === 0 ? '' : `result of 2,000 with no marker: ${list(e.unmarkedResults)}`, e.stringArgs.length === 0 ? '' : `arguments stored as a string: ${list(e.stringArgs)}`].filter((x) => x !== '').join('; '));
-  if (e.overCapArgs.length > 0) noted("error-path arguments passed 2,000 characters with what is never cut (OQ-209's reading)", list(e.overCapArgs));
+  if (e.overCapArgs.length > 0) noted("error-path arguments passed 2,000 characters with what is never cut (PD-SESSION-003)", list(e.overCapArgs));
 }
 
 /**

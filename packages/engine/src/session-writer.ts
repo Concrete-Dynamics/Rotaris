@@ -971,7 +971,7 @@ export class SessionWriter {
       timestamp: at, agent_name: open.agent_name, tool_name: open.tool_name, call_id: open.call_id, status: settle.status, elapsed_ms: settle.elapsed_ms, is_error: settle.is_error,
       // REQ-SESSION-136: on error the args and the result are cut to 2000 characters. The args stay an object: only their
       // free-text values are cut, each marked, and a path, an identifier, a count or a timestamp is never cut (REQ-SESSION-194's
-      // last sentence; `cutArguments`, and OQ-209 for args those alone take past the cap).
+      // last sentence; `cutArguments`, and PD-SESSION-003 for args those alone take past the cap, OQ-209 as ruled 2026-10-07).
       // FALSIFIED, kept beside its replacement (the fin23 verifier, 2026-10-06): "one that does not is stored as the head of
       // its JSON text, marked" — a head drops whatever the model serialised after a long value, a path among them.
       args: settle.is_error ? cutArguments(open.args, ERROR_RECORD_CAP) : open.args, result: capped(settle.result),

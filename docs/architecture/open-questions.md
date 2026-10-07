@@ -10560,7 +10560,24 @@ domain's resolution 21. Raised 2026-10-06 by fin23 (bundle `fin23-terminal-and-r
 the repair of
 [`an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md`](../defects/fixed/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md).
 Raised on the branch as OQ-208 and renumbered OQ-209 when the branch was rebased onto `origin/main`, main's OQ-208 (an MCP
-call's `outcome_kind`) having taken that number first. Open, the owner's.)*
+call's `outcome_kind`) having taken that number first. ~~Open, the owner's.~~ Ruled 2026-10-07 under the owner's delegation
+([R-072](../product/requests.md#r-072)).)*
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** confirmed as built and minted as
+[`PD-SESSION-003`](../product/directives.md#pd-session-003), which narrows REQ-SESSION-136 and REQ-SESSION-194. The
+error-path 2,000 characters measure the arguments' JSON text. The arguments keep their shape, and only free-text values are
+cut, longest first, each ending with `...` inside its own length. A path, identifier, count or timestamp is never cut, and
+when those values alone pass 2,000 the record goes over the cap. The key name decides which values are kept whole, and this
+product's `delegate` keys `inherited_context` and `attach_artifacts` join the keys kept whole, repaired as a defect
+([`a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md`](../defects/fixed/a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md)).
+The ruling weighed two recommendations and **followed both**, which agree: advocate A (the user's lens) recommended
+confirming the reading, a directive, the two keys and a first-executions row — a path or an id cut short gives a false account
+to the person reading the record after a failure; advocate B (the system's lens) recommended confirming the reading, a
+directive and the two keys with no row — nothing in the product relies on 2,000 as a bound, and the key name is the only
+test that reaches an MCP tool. Where they differ it follows B: no first-executions row is owed, the mechanism having run
+before the ruling (`PD-SESSION-001`'s precedent). It adds one guard of its own: `cut.test.ts` classifies every argument key
+of every built-in tool, and the seams view's tool path names `WHOLE_KEYS`. The ruling names the directive PD-SESSION-002;
+it is `PD-SESSION-003` by the number the orchestrator assigned, OQ-207's directive taking PD-SESSION-002. Built by fin28.
 
 A tool call's arguments are a JSON object whose key order the model chooses. REQ-SESSION-136 caps them at 2,000 characters
 without saying what is counted (the object's JSON text, or each value), and REQ-SESSION-194 forbids truncating a count, an
@@ -10569,7 +10586,7 @@ whatever the model serialised after a long value — a `path` after a 1,990-char
 and the verifier found. And where a value that is a path or an identifier is itself longer than the cap (a deep path, a
 long list of ids), no cut can meet both: the cap is exceeded or the path is cut.
 
-**What the build proceeds under** (`cutArguments`, `packages/engine/src/run/cut.ts`; `SessionWriter.settleToolCall`). The
+**What the build proceeded under until the ruling, and confirmed by it** (`cutArguments`, `packages/engine/src/run/cut.ts`; `SessionWriter.settleToolCall`). The
 2,000 characters measure the arguments' JSON text. The arguments keep their shape: an object stays an object with every key,
 and only free-text string values are cut, longest first, each ending with REQ-SESSION-194's `...` inside its own length,
 until the text fits. A value is a path, an identifier or a timestamp by its key — the key's last word is one of `path`,

@@ -33,7 +33,7 @@ const OTHER_OPERATION_FIELDS = ['old_string', 'new_string', 'insert_line'];
  * pack or a store written before then still holds them. The cut string is read as far as it goes — each key, and each
  * string value with whether it was cut — so a key the cut took away is simply not seen. Since that repair the writer keeps
  * the arguments an object, cutting only free-text values, each ending `...`, and never a path (`cutArguments` in
- * `packages/engine/src/run/cut.ts`, OQ-209), so such a record is read as an object whose `content` ends with the marker.
+ * `packages/engine/src/run/cut.ts`, PD-SESSION-003), so such a record is read as an object whose `content` ends with the marker.
  */
 export function argumentFields(args) {
   if (args !== null && typeof args === 'object' && !Array.isArray(args)) {

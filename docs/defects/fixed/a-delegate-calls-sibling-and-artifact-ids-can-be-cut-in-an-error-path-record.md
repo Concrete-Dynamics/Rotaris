@@ -10,7 +10,7 @@ id lists were long enough for the arguments to need a cut once its `task` had be
 free text, each ending with `...`: the record named sibling tasks and artifacts that do not exist.
 
 Written 2026-10-07 by fin28 on OQ-209's ruling under the owner's delegation (R-072), which found the gap through both of its
-advocates and has it repaired as a defect.
+advocates, and repaired in the same bundle.
 
 ## Specs
 
@@ -23,3 +23,14 @@ keys kept whole.
 - `packages/engine/src/run/cut.ts` — `WHOLE_KEYS`, `argumentKeptWhole`, `cutArguments`.
 - `packages/agent-tools/src/tools/delegation.ts` — `delegateSchema`: `inherited_context` and `attach_artifacts`.
 - `packages/engine/src/run/cut.test.ts` — the key classification and the cut.
+
+## Outcome
+
+Repaired 2026-10-07 by fin28 (bundle `fin28-session-records`): both keys joined `WHOLE_KEYS`. Pinned by
+`packages/engine/src/run/cut.test.ts`, three cases red on `d12f1f2`: "reads the key by its last word" (both keys added to
+the kept-whole list); "classifies every argument key of every built-in tool (PD-SESSION-003)", a table of every argument
+key of every built-in tool by tool, so the next identifier key a tool gains is classified where it is added; and "a failed
+delegate call keeps its sibling task ids and attached artifact ids whole and cuts its task to the marker", 80 sibling ids
+and 60 artifact ids that pass 2,000 characters on their own, which come back equal while the 3,000-character `task` comes
+back as `...` and the record goes over the cap (PD-SESSION-003 (e)). The seams view's tool path names `WHOLE_KEYS` as the
+step for such a key.

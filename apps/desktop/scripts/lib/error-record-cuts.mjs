@@ -17,7 +17,8 @@
  *   the detail names, never a pass);
  * - arguments stored as a string are `stringArgs` (M3's shape); an object carrying a string value that ends with the marker
  *   is `markedArgs` (a whole value may end with `...` as well, so this is a count, never a check on its own); an object whose
- *   JSON text passes the cap is `overCapArgs`, which OQ-209's reading allows where a path or an identifier alone passes it.
+ *   JSON text passes the cap is `overCapArgs`, which PD-SESSION-003 (OQ-209, ruled 2026-10-07) allows where a path or an
+ *   identifier alone passes it.
  *
  * Nothing here is product code. It runs only from the live run.
  */

@@ -45,7 +45,8 @@ marker". A head keeps whatever the model serialised first, so `{content: <1,990 
 path whole, and a path that began near character 1,997 was cut through, against "Counts, identifiers, paths and timestamps
 are never truncated". Where a path or an identifier is itself longer than the cap, REQ-SESSION-136's cap and that sentence
 cannot both hold: [OQ-209](../../architecture/open-questions.md) records the question and the reading the build proceeds
-under (the value kept whole, the free text cut to the marker alone, the record over 2,000 characters). `run/cut.ts`'s comment no longer places this
+under (the value kept whole, the free text cut to the marker alone, the record over 2,000 characters). *Ruled 2026-10-07:
+[`PD-SESSION-003`](../../product/directives.md#pd-session-003) (R-072), the reading confirmed.* `run/cut.ts`'s comment no longer places this
 cut outside REQ-SESSION-194; its old reading is kept there beside the new one. The runtime view's store table says so.
 
 **Pinned by** `packages/engine/src/session-writer.test.ts`, "SessionWriter — an error-path tool record marks the cut it
@@ -74,7 +75,7 @@ The live run now reads the cut itself. `apps/desktop/scripts/lib/error-record-cu
 `error-record-cuts.test.ts` against this note's three ordinals and the shapes the writer stores since the repair) sorts every
 error-path record of every session the run keeps (`runWideReadings`): a result over 2,000 characters, a result of exactly
 2,000 with no closing `...`, or arguments stored as a string is a FAILURE; arguments that pass 2,000 with what is never cut are
-a NOTE under OQ-209's reading. The `frictions` scenario also makes one launch of its own (`frictions-cut`) whose command fails
+a NOTE under OQ-209's reading (ruled 2026-10-07: `PD-SESSION-003`). The `frictions` scenario also makes one launch of its own (`frictions-cut`) whose command fails
 on purpose with about 5,000 characters of output, so the cut is asked every run rather than by chance.
 
 `pnpm live-run --confirm --skip-build --only=frictions,requirements` against the registered self-hosted default, pack

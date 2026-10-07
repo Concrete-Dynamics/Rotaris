@@ -66,5 +66,5 @@ disposition blocks left out and the sixth as a cross-reference. No requirement t
 `tools/symbol-artifact/back-pointers.test.ts` lost its known list: its general case asserts that no note disagrees,
 red on the old register with exactly these six; a converse case asserts that every register entry has its note; and an
 OQ-222 case pins the five register entries and REQ-WORKSPACE-041's narrowing by `PD-WORKSPACE-002`. `pnpm symbols`
-gained three narrowed and four extended entries: 177 and 51 to 180 and 55 as built, 181 and 53 to 184 and 57 on the
-head rebased onto origin/main at landing.
+gained three narrowed and four extended entries: 177 and 51 to 180 and 55 as built (the totals move with
+every directive main gains; the delta does not).

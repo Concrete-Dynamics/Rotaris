@@ -76,6 +76,8 @@ describe('cutArguments (REQ-SESSION-136, REQ-SESSION-194)', () => {
       haet_read: { path: 'whole', file_path: 'whole', offset: 'value', limit: 'value', grep: 'free', grep_context: 'value' },
       write_file: { operation: 'free', path: 'whole', file_path: 'whole', content: 'free', old_string: 'free', new_string: 'free', replace_all: 'value', insert_line: 'value' },
       haet_edit: { path: 'whole', file_path: 'whole', content_hash: 'whole', old_string: 'free', new_string: 'free', replace_all: 'value' },
+      // `haet`, the alias the run host registers through `haetEditTool` with the same schema (run-host/tools.ts)
+      haet: { path: 'whole', file_path: 'whole', content_hash: 'whole', old_string: 'free', new_string: 'free', replace_all: 'value' },
       // search.ts
       grep: { pattern: 'free', paths: 'whole', path: 'whole', max_matches: 'value' },
       glob: { pattern: 'free', base_path: 'whole' },

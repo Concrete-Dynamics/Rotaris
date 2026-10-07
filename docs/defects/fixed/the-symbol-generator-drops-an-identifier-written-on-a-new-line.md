@@ -23,3 +23,13 @@ Recorded 2026-10-07 while building the ruling on OQ-222 (BP1), which orders the 
 - `tools/symbol-artifact/generate.mjs` — the disposition parse.
 - `apps/desktop/scripts/directive-proof.mjs` — the generator's counterfactuals.
 - `docs/product/directives.md` — `PD-LIBRARY-002`'s disposition block.
+
+## Repaired
+
+2026-10-07, under the ruling on OQ-222 (BP1, R-072). `tools/symbol-artifact/generate.mjs` refuses a `New:` line that
+names a requirement, on the line itself or on a blockquote continuation line, and refuses a directive that declares
+itself New beside Supersedes, Narrows or Extends. `pnpm directive-proof` carries three counterfactuals for them (a
+`New:` line naming REQ-CHAT-004, the same on its continuation line, and New beside Extends), each failing against the old
+generator ("29/32 checks passed") and refused by the new one, paired with their passing forms in section 4 (New and its
+continuation in words alone; the requirement named under Extends instead, reaching `EXTENDED_BY`). `PD-LIBRARY-002`'s
+`New:` line was retired in the same change, so the committed register passes the refusal.

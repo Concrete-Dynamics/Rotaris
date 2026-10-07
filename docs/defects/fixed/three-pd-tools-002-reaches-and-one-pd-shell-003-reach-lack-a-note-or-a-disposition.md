@@ -32,3 +32,13 @@ REQ-TOOLS-072 were named by both advocates and added to `PD-TOOLS-002`'s Narrows
 - `docs/spec/12-desktop-shell-windows.md` — REQ-SHELL-119.
 - `docs/product/directives.md` — `PD-TOOLS-002`'s Narrows line.
 - `tools/symbol-artifact/back-pointers.test.ts` — the check, which read one direction.
+
+## Repaired
+
+2026-10-07, under the ruling on OQ-222 (BP1, R-072). `PD-TOOLS-002`'s Narrows line names REQ-TOOLS-071 and
+REQ-TOOLS-072 (with REQ-SANDBOX-104), with a dated italic line beneath it; "Narrowed by `PD-TOOLS-002`" notes were
+written at REQ-TOOLS-069, REQ-TOOLS-071 and REQ-TOOLS-072, and an "Extended by `PD-SHELL-003`" note at REQ-SHELL-119
+beside its `PD-SHELL-009` narrowing, each closing "Written 2026-10-07". `tools/symbol-artifact/back-pointers.test.ts`
+gained the converse case (every `SUPERSEDED_BY`, `NARROWED_BY` and `EXTENDED_BY` entry has its labelled note), red on
+the old record with exactly REQ-TOOLS-069 and REQ-SHELL-119, and its OQ-222 case pins REQ-TOOLS-071 and REQ-TOOLS-072
+to `PD-TOOLS-002`.

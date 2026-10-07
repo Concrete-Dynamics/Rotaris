@@ -41,4 +41,4 @@ generated `SUPERSEDED_BY`, `NARROWED_BY` and `EXTENDED_BY`: its F15 case fails o
 be 'PD-ORCH-014'`), and its general case fails on any note whose verb is not the register's disposition. Reading every
 note found six more that name a directive whose disposition does not name their requirement, recorded and not repaired
 here:
-[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement`](../six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md).
+[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement`](six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md).

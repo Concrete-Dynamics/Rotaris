@@ -66,7 +66,7 @@ const PD_SECTION = /^#{2,5}\s+(PD-[A-Z]+-\d+)(.*)$/;
 const DISPOSITION = /^>?\s*\*\*(Supersedes|Narrows|Extends|New):\*\*\s*(.*)$/;
 const RETIRED = /^PD-(TUI|CLI)-/; // domains 17 and 18 are closed here as they are in the corpus
 
-/** @type {Map<string, {domain: string, line: number, withdrawn: boolean, stated: boolean, supersedes: string[], narrows: string[], extends: string[]}>} */
+/** @type {Map<string, {domain: string, line: number, withdrawn: boolean, stated: boolean, statedNew: boolean, supersedes: string[], narrows: string[], extends: string[]}>} */
 const directives = new Map();
 if (existsSync(directivesFile)) {
   const lines = readFileSync(directivesFile, 'utf8').split(/\r?\n/);
@@ -75,6 +75,22 @@ if (existsSync(directivesFile)) {
   // The register carries its own entry template inside an HTML comment. Parsing it would
   // mint a directive nobody wrote, against identifiers chosen to read well in an example.
   let inComment = false;
+  // The `New:` line being read, whose blockquote continuation lines belong to it: an identifier on any of them is
+  // refused like one on the line itself.
+  /** @type {number | null} */
+  let newLine = null;
+  /**
+   * @param {string} text
+   * @param {number} at
+   */
+  const refuseNamedInNew = (text, at) => {
+    const named = text.match(/REQ-[A-Z]+-\d+/g);
+    if (named) {
+      throw new Error(
+        `symbol artifact: ${current}'s "New" disposition (docs/product/directives.md:${at}) names ${named.join(', ')}; New is used alone and names no identifier — a requirement the directive reaches goes under Supersedes, Narrows or Extends (OQ-222)`,
+      );
+    }
+  };
   lines.forEach((line, i) => {
     if (inComment) {
       if (line.includes('-->')) inComment = false;
@@ -83,6 +99,13 @@ if (existsSync(directivesFile)) {
     if (line.includes('<!--') && !line.includes('-->')) {
       inComment = true;
       return;
+    }
+    if (newLine !== null) {
+      if (/^>/.test(line) && !DISPOSITION.test(line)) {
+        refuseNamedInNew(line, i + 1);
+        return;
+      }
+      newLine = null;
     }
     const m = PD_BULLET.exec(line) ?? PD_HEADING.exec(line) ?? PD_SECTION.exec(line);
     if (m) {
@@ -102,6 +125,7 @@ if (existsSync(directivesFile)) {
         // nothing. Counting the identifiers alone would refuse every directive that displaces
         // nothing — the first execution of this generator did exactly that.
         stated: false,
+        statedNew: false,
         supersedes: [],
         narrows: [],
         extends: [],
@@ -116,7 +140,15 @@ if (existsSync(directivesFile)) {
     const entry = directives.get(current);
     if (!entry) return;
     entry.stated = true;
-    if (d[1] === 'New') return; // names no identifier, by definition
+    if (d[1] === 'New') {
+      // Names no identifier, by definition (docs/product/README.md, "The shape of an entry"). This used to return
+      // without looking, so PD-LIBRARY-002's `New:` line naming REQ-LIBRARY-017 reached no register while the note at
+      // that requirement read "Extended by" (OQ-222; the-symbol-generator-drops-an-identifier-written-on-a-new-line).
+      refuseNamedInNew(d[2] ?? '', i + 1);
+      entry.statedNew = true;
+      newLine = i + 1;
+      return;
+    }
     const named = (d[2] ?? '').match(/REQ-[A-Z]+-\d+/g) ?? [];
     if (named.length === 0) {
       throw new Error(`symbol artifact: ${current}'s "${d[1]}" disposition (docs/product/directives.md:${i + 1}) names no requirement identifier`);
@@ -139,6 +171,9 @@ for (const [id, v] of directives) {
   const where = `docs/product/directives.md:${v.line}`;
   if (!v.stated && !v.withdrawn) {
     throw new Error(`symbol artifact: ${id} (${where}) states no disposition; every directive names what it supersedes, narrows or extends, or declares itself New`);
+  }
+  if (v.statedNew && v.supersedes.length + v.narrows.length + v.extends.length > 0) {
+    throw new Error(`symbol artifact: ${id} (${where}) declares itself New beside another disposition; New means nothing is displaced and is used alone (OQ-222)`);
   }
   for (const [verb, list, into] of /** @type {const} */ ([
     ['supersedes', v.supersedes, supersededBy],

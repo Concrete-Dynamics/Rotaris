@@ -495,7 +495,8 @@ While a task run is executing, a user must be able to watch what every agent is 
   > card's rows may also carry retrospective proposals — they are improvement proposals in the same
   > store, reviewed by the same actions, and the card distinguishes them from per-run ones by the
   > artifact that holds them rather than by a second card or a second vocabulary. The card's own
-  > contract above is unchanged.
+  > contract above is unchanged. The card's header also carries the retrospective's start gesture beside its
+  > library link (ADR-0065 decision 7); sentence added 2026-10-07 ([OQ-222](../architecture/open-questions.md)).
 
 **REQ-MONITOR-174** — The overview refreshes in response to state-change notifications (agents, sessions, status, repository, proposals, settings) and performs no work while hidden; the session runtime and status in its header follow status changes.
 

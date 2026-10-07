@@ -168,6 +168,24 @@ try {
     ['the same identifier minted twice', '### PD-CHAT-001 — x\n\n> **New:** none.\n\n### PD-CHAT-001 — y\n\n> **New:** none.\n', /defined twice/],
     ['an identifier in a retired domain', '### PD-CLI-001 — x\n\n> **New:** none.\n', /retired domain/],
     ['a disposition with no directive above it', '> **Supersedes:** REQ-CHAT-004\n', /precedes any directive/],
+    // OQ-222 (BP1, R-072): PD-LIBRARY-002's `New:` line named REQ-LIBRARY-017 and stood beside its Extends, and the
+    // generator dropped the identifier without a word, so the requirement's "Extended by" note had no register behind it.
+    // Each passing form is in section 4.
+    [
+      'a New line naming a requirement',
+      '### PD-CHAT-001 — x\n\n> **New:** no live requirement covers this; REQ-CHAT-004 forbids it.\n',
+      /"New" disposition .* names REQ-CHAT-004/,
+    ],
+    [
+      'a New line whose continuation names a requirement',
+      '### PD-CHAT-001 — x\n\n> **New:** no live requirement covers this;\n> REQ-CHAT-004 forbids it.\n',
+      /"New" disposition .* names REQ-CHAT-004/,
+    ],
+    [
+      'New beside another disposition',
+      '### PD-CHAT-001 — x\n\n> **Extends:** REQ-SHELL-023\n> **New:** no live requirement covers this.\n',
+      /declares itself New beside another disposition/,
+    ],
   ];
   for (const [name, body, expected] of refusals) {
     withDirectives(body);
@@ -182,6 +200,20 @@ try {
     assert('a directive that displaces nothing generates', ok, out);
     const art = readFileSync(artifact, 'utf8');
     assert('it names no requirement', /'PD-CHAT-001': \{[^}]*supersedes: \[\], narrows: \[\], extends: \[\]/.test(art));
+  }
+  {
+    // The passing forms of section 3's two New refusals (OQ-222): the reason written in words across a continuation
+    // line, and the requirement the directive reaches named under Extends with no New beside it.
+    withDirectives('### PD-CHAT-001 — x\n\n> **New:** no live requirement covers this;\n> the composer has no such control.\n');
+    const words = generate();
+    assert('a New line and its continuation in words alone generate', words.ok, words.out);
+    withDirectives('### PD-CHAT-001 — x\n\n> **Extends:** REQ-SHELL-023, REQ-CHAT-004\n');
+    const named = generate();
+    assert('the reached requirement named under Extends instead generates', named.ok, named.out);
+    assert(
+      'and reaches the register',
+      named.ok && /EXTENDED_BY = \{\n  'REQ-CHAT-004': 'PD-CHAT-001',/.test(readFileSync(artifact, 'utf8')),
+    );
   }
 } finally {
   writeFileSync(register, original);

@@ -8,6 +8,14 @@
  * Acceptance finding F15: PD-ORCH-014 listed REQ-CONFIG-135 under Extends and its note read "Extended by", where OQ-53's
  * ruling narrows the requirement's "session's event stream" to the timeline
  * (docs/defects/fixed/pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it.md).
+ *
+ * Both directions are read (OQ-222, BP1, ruled under R-072): a labelled note whose requirement the register does not
+ * record under that verb and directive, and a register entry with no such note at its requirement. Six notes once
+ * named a directive whose disposition block left their requirement out, and REQ-TOOLS-069 and REQ-SHELL-119 sat in the
+ * register with no note
+ * (docs/defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md). A note
+ * that names a directive with no disposition for that requirement is a cross-reference in its own words and takes none
+ * of the three labels (docs/product/README.md, "The back-pointer, in place").
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -60,20 +68,14 @@ function backPointers(): BackPointer[] {
 
 const agrees = (p: BackPointer): boolean => p.requirement !== null && REGISTER[p.verb][p.requirement] === p.directive;
 
-/**
- * Notes that name a directive whose disposition block does not name their requirement, recorded and not repaired here:
- * docs/defects/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md. An entry leaves
- * this list when its note or its directive is repaired, and the test below fails until it does.
- */
-const KNOWN_DISAGREEING = [
-  'REQ-MONITOR-173 Extended PD-LIBRARY-002',
-  'REQ-SANDBOX-104 Narrowed PD-TOOLS-002',
-  'REQ-WORKSPACE-041 Extended PD-LIBRARY-002',
-  'null Extended PD-LIBRARY-002',
-  'REQ-LIBRARY-017 Extended PD-LIBRARY-002',
-  'REQ-NOTIFY-251 Extended PD-LIBRARY-002',
-];
 const key = (p: BackPointer): string => `${p.requirement} ${p.verb} ${p.directive}`;
+
+/** Every register entry, as "<requirement> <verb> <directive>", the converse side of the notes. */
+function registerEntries(): string[] {
+  return (Object.entries(REGISTER) as [Verb, Readonly<Record<string, string>>][]).flatMap(([verb, map]) =>
+    Object.entries(map).map(([req, pd]) => `${req} ${verb} ${pd}`),
+  );
+}
 
 describe('the back-pointers in docs/spec agree with the directive register', () => {
   it('reads the notes at all: hundreds of them, under every verb', () => {
@@ -82,9 +84,25 @@ describe('the back-pointers in docs/spec agree with the directive register', () 
     for (const verb of ['Superseded', 'Narrowed', 'Extended'] as const) expect(all.some((p) => p.verb === verb)).toBe(true);
   });
 
-  it("every note's verb is the register's disposition for its requirement, the recorded six aside", () => {
-    const disagreeing = backPointers().filter((p) => !agrees(p));
-    expect(disagreeing.map(key).sort()).toEqual([...KNOWN_DISAGREEING].sort());
+  it("every note's verb is the register's disposition for its requirement", () => {
+    expect(backPointers().filter((p) => !agrees(p)).map(key)).toEqual([]);
+  });
+
+  it('every register entry has its note at its requirement, with the same verb and directive', () => {
+    const notes = new Set(backPointers().map(key));
+    expect(registerEntries().filter((e) => !notes.has(e))).toEqual([]);
+  });
+
+  it('OQ-222 (BP1, R-072): the five reaches the six notes marked are in the register, and the introduction is no back-pointer', () => {
+    expect(NARROWED_BY['REQ-SANDBOX-104' as keyof typeof NARROWED_BY]).toBe('PD-TOOLS-002');
+    expect(NARROWED_BY['REQ-TOOLS-071' as keyof typeof NARROWED_BY]).toBe('PD-TOOLS-002');
+    expect(NARROWED_BY['REQ-TOOLS-072' as keyof typeof NARROWED_BY]).toBe('PD-TOOLS-002');
+    for (const req of ['REQ-MONITOR-173', 'REQ-WORKSPACE-041', 'REQ-LIBRARY-017', 'REQ-NOTIFY-251']) {
+      expect(EXTENDED_BY[req as keyof typeof EXTENDED_BY]).toBe('PD-LIBRARY-002');
+    }
+    // REQ-WORKSPACE-041 keeps its narrowing beside the extension.
+    expect(NARROWED_BY['REQ-WORKSPACE-041' as keyof typeof NARROWED_BY]).toBe('PD-WORKSPACE-002');
+    expect(backPointers().filter((p) => p.requirement === null)).toEqual([]);
   });
 
   it('F15 (PD-ORCH-014, OQ-53): REQ-CONFIG-135 is narrowed by PD-ORCH-014, not extended, and its note says so', () => {

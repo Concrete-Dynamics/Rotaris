@@ -11,7 +11,7 @@ status: approved (Specification Gate closed 2026-08-31; amendments land as dated
 
 After every completed task run the product may perform an optional, strictly non-blocking background analysis that stores an "improvement artifact" containing evidence-backed improvement proposals authored by a dedicated analysis model. Users review, edit, approve, reject, defer, reset, or delete those proposals from two desktop surfaces — a Library view and a dashboard card — both of which read and mutate the same workspace-scoped artifacts in the one store. Approved proposals are applied only by a separately started improvement run whose workspace effects are checkpointed and reversible. The same domain covers the per-session store of agent-published reports and deliverables (browsable and editable in the Library and via agent-facing tools), per-persona memory files re-injected into future runs, and the saved-prompt stash and prompt history.
 
-> **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The domain
+> **This domain carries a second analysis pass under [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The domain
 > carries a second kind of analysis pass beside the per-run one: a user-started **retrospective** that
 > reads the workspace's own session history across runs and authors proposals in this domain's own
 > vocabulary and lifecycle. Nothing below is changed for the per-run analyst; where the retrospective

@@ -1298,9 +1298,17 @@ record with evidence, review, undo, history, export and an executor behind it.
   REQ-LIBRARY-037's shape and it is kept. The cost is one more empty-slot refusal a user can meet;
   it is paid once per gesture, names the exact field to set, and stops there.
 
-> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015
-> **New:** no live requirement covers a cross-session analysis pass; REQ-LIBRARY-017 forbids the
-> per-run analyst exactly this reach, faithfully to its own scope.
+> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015, REQ-LIBRARY-017, REQ-MONITOR-173, REQ-NOTIFY-251, REQ-WORKSPACE-041
+
+*Until 2026-10-07 this block read `> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015` and beneath it
+`> **New:** no live requirement covers a cross-session analysis pass; REQ-LIBRARY-017 forbids the per-run analyst exactly
+this reach, faithfully to its own scope.` **New** is used alone and names no identifier (`README.md`, "The shape of an
+entry"); the symbol generator dropped the line without a word, so REQ-LIBRARY-017 reached no register. The four
+back-pointers at REQ-LIBRARY-017, REQ-MONITOR-173, REQ-NOTIFY-251 and REQ-WORKSPACE-041 have read "Extended by" since
+2026-09-17, as [R-033](requests.md#r-033) named them, while this line named three. REQ-LIBRARY-017 is recorded under
+Extends because its clauses bind an analysis that a run triggered, and the rule above leaves them whole for the per-run
+analyst. No rule text changed ([OQ-222](../architecture/open-questions.md), ruled under [R-072](requests.md#r-072);
+[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement`](../defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)).*
 
 *Raised by the owner, 2026-09-17; logged as [R-033](requests.md#r-033).*
 
@@ -1480,7 +1488,14 @@ not reaching agents built later: with no re-resolution step left, there is nothi
 to resolve through.
 
 > **Supersedes:** REQ-TOOLS-067, REQ-TOOLS-068, REQ-TOOLS-070
-> **Narrows:** REQ-TOOLS-048, REQ-TOOLS-069, REQ-TOOLS-073, REQ-TOOLS-125, REQ-SANDBOX-052, REQ-SANDBOX-098, REQ-SANDBOX-099, REQ-SANDBOX-101, REQ-SANDBOX-103, REQ-SANDBOX-105, REQ-SANDBOX-106, REQ-SANDBOX-107, REQ-SANDBOX-110, REQ-CONFIG-124, REQ-CONFIG-411, REQ-TRACE-470
+> **Narrows:** REQ-TOOLS-048, REQ-TOOLS-069, REQ-TOOLS-071, REQ-TOOLS-072, REQ-TOOLS-073, REQ-TOOLS-125, REQ-SANDBOX-052, REQ-SANDBOX-098, REQ-SANDBOX-099, REQ-SANDBOX-101, REQ-SANDBOX-103, REQ-SANDBOX-104, REQ-SANDBOX-105, REQ-SANDBOX-106, REQ-SANDBOX-107, REQ-SANDBOX-110, REQ-CONFIG-124, REQ-CONFIG-411, REQ-TRACE-470
+
+*REQ-TOOLS-071, REQ-TOOLS-072 and REQ-SANDBOX-104 entered this line on 2026-10-07. The rule above has named all three by
+identifier since 2026-09-21 and removes the same downgrade clause from each, while this line omitted them: the note at
+REQ-SANDBOX-104 was written in this directive's own commit (`ed1c167`) and read "Narrowed by" with nothing here behind it,
+and the notes at REQ-TOOLS-071 and REQ-TOOLS-072, with the missing one at REQ-TOOLS-069, are written now. No rule text
+changed ([OQ-222](../architecture/open-questions.md), ruled under [R-072](requests.md#r-072);
+[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement`](../defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)).*
 
 ---
 

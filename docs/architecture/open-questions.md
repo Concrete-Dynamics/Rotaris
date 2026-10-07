@@ -11341,7 +11341,7 @@ back-pointer, in place": "Use `Superseded by`, `Narrowed by` or `Extended by` to
 Narrows line and `PD-LIBRARY-002`'s Extends and `New:` lines; the notes at REQ-SANDBOX-104 (Narrowed by `PD-TOOLS-002`),
 REQ-MONITOR-173, REQ-WORKSPACE-041, REQ-LIBRARY-017 and REQ-NOTIFY-251 (Extended by `PD-LIBRARY-002`), and at domain 14's
 introduction, which names no requirement. Raised 2026-10-06 by the F15 repair, which recorded the six as
-[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md`](../defects/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)
+[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md`](../defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)
 and left the reading per note to the directive's owner; opened here 2026-10-07 as the R-072 consortium's question BP1,
 the number the round assigned it, and ruled the same day.)*
 
@@ -11380,3 +11380,19 @@ reaches have arguable verbs and go to a note of their own, with two further ques
 and
 [`the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md`](../defects/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md),
 recorded and not repaired.
+
+**As built** (fin29, 2026-10-07). `PD-TOOLS-002`'s Narrows line names REQ-TOOLS-071, REQ-TOOLS-072 and REQ-SANDBOX-104 and
+`PD-LIBRARY-002`'s Extends line the four, each block with a dated italic line beneath it; notes were written at
+REQ-TOOLS-069, REQ-TOOLS-071, REQ-TOOLS-072 and REQ-SHELL-119, the REQ-MONITOR-173 and REQ-WORKSPACE-041 notes each
+gained a dated sentence, and domain 14's introduction reads as a cross-reference. `docs/product/README.md`, "The
+back-pointer, in place", states the cross-reference rule and the two-way check. `tools/symbol-artifact/generate.mjs`
+refuses a `New:` line naming a requirement (on the line or its continuation) and New beside another verb; `pnpm symbols`
+reads 180 narrowed and 55 extended (177 and 51 before). Pinned by `tools/symbol-artifact/back-pointers.test.ts` (no note
+disagrees, red on the old record with the six; every register entry has its note, red with REQ-TOOLS-069 and
+REQ-SHELL-119; the OQ-222 case, red on the old register) and by three counterfactuals in `pnpm directive-proof`, red
+against the old generator (29/32) and 32/32 after. Notes moved to `docs/defects/fixed/`:
+[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md`](../defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md),
+[`three-pd-tools-002-reaches-and-one-pd-shell-003-reach-lack-a-note-or-a-disposition.md`](../defects/fixed/three-pd-tools-002-reaches-and-one-pd-shell-003-reach-lack-a-note-or-a-disposition.md)
+and
+[`the-symbol-generator-drops-an-identifier-written-on-a-new-line.md`](../defects/fixed/the-symbol-generator-drops-an-identifier-written-on-a-new-line.md).
+No product behaviour changed, so a live run shows nothing new.

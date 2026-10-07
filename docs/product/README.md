@@ -137,6 +137,13 @@ repairing it quietly, and the same discipline applies here:
 Use `Superseded by`, `Narrowed by` or `Extended by` to match the disposition. The note is a
 blockquote so that it can never be mistaken for part of the requirement.
 
+The three labels are reserved for a disposition the register holds. A note that names a directive where the register
+holds no disposition of that directive for that requirement is a **cross-reference** written in its own words and never
+takes one of the three labels: a domain's introduction, which names no requirement, or a requirement whose reach the
+register records elsewhere (REQ-CONFIG-464's note on `PD-WORKSPACE-002`). The reverse holds too: every requirement a
+disposition block names carries its labelled note. [`tools/symbol-artifact/back-pointers.test.ts`](../../tools/symbol-artifact/back-pointers.test.ts)
+reads both directions and fails `pnpm check` on either gap (OQ-222, ruled under [R-072](requests.md#r-072)).
+
 This is the half a reader actually relies on. A person who opens a specification file must not be
 able to read a superseded requirement and believe it, and a person who opens a directive must be
 able to reach the text it displaced. Both directions, or neither is trustworthy.

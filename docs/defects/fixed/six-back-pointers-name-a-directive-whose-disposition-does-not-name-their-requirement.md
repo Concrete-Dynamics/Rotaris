@@ -25,7 +25,7 @@ directive's owner to confirm, not one this note makes; the repair is a dispositi
 edit of a requirement's text.
 
 Noticed 2026-10-06 while repairing acceptance finding F15
-([`pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it`](fixed/pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it.md)).
+([`pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it`](pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it.md)).
 `tools/symbol-artifact/back-pointers.test.ts` holds these six as its known list, so a seventh fails the suite, and so
 does one of these six once it agrees.
 
@@ -45,3 +45,25 @@ does one of these six once it agrees.
 - `docs/product/directives.md` — `PD-LIBRARY-002`'s and `PD-TOOLS-002`'s disposition blocks.
 - `tools/symbol-artifact/generate.mjs` — what the register's disposition becomes in the artifact.
 - `tools/symbol-artifact/back-pointers.test.ts` — the check and its known list.
+
+## Repaired
+
+2026-10-07, under the R-072 consortium's ruling on OQ-222 (BP1), which read five of the six notes as reaches the
+disposition blocks left out and the sixth as a cross-reference. No requirement text and no rule text changed:
+
+- `PD-TOOLS-002`'s Narrows line gained REQ-SANDBOX-104, and with it REQ-TOOLS-071 and REQ-TOOLS-072, which its rule names
+  by identifier and narrows the same way
+  ([`three-pd-tools-002-reaches-and-one-pd-shell-003-reach-lack-a-note-or-a-disposition`](three-pd-tools-002-reaches-and-one-pd-shell-003-reach-lack-a-note-or-a-disposition.md)).
+- `PD-LIBRARY-002`'s Extends line gained REQ-LIBRARY-017, REQ-MONITOR-173, REQ-NOTIFY-251 and REQ-WORKSPACE-041, and its
+  `New:` line was retired, quoted word for word in the italic line beneath the block
+  ([`the-symbol-generator-drops-an-identifier-written-on-a-new-line`](the-symbol-generator-drops-an-identifier-written-on-a-new-line.md)).
+- Domain 14's introduction reads "**This domain carries a second analysis pass under `PD-LIBRARY-002`, 2026-09-17.**",
+  a cross-reference no register entry stands behind; `docs/product/README.md`, "The back-pointer, in place", now says a
+  note naming a directive with no disposition for its requirement takes none of the three labels.
+- The notes at REQ-WORKSPACE-041 and REQ-MONITOR-173 each gained a dated sentence (OQ-65's read; the retrospective's
+  start gesture in the card header), so both stay true.
+
+`tools/symbol-artifact/back-pointers.test.ts` lost its known list: its general case asserts that no note disagrees,
+red on the old register with exactly these six; a converse case asserts that every register entry has its note; and an
+OQ-222 case pins the five register entries and REQ-WORKSPACE-041's narrowing by `PD-WORKSPACE-002`. `pnpm symbols`
+moved from 177 narrowed and 51 extended to 180 and 55.

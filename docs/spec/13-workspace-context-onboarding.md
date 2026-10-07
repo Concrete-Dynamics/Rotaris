@@ -172,7 +172,10 @@ The product operates on a user-selected workspace folder: the desktop app resolv
   > against it — which is applied, like every proposal, only through the improvement lifecycle, and
   > never written back directly by an analysis. This requirement's discovery rule — the two names,
   > the workspace root, nothing else — governs that read unchanged; the injection behaviour of this
-  > section is untouched.
+  > section is untouched. *Added 2026-10-07 ([OQ-222](../architecture/open-questions.md)):* since
+  > [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002) narrowed this requirement, the retrospective
+  > reads the set injection reads, the per-file switches and REQ-WORKSPACE-048's master switch included (OQ-65,
+  > ruled under [R-071](../product/requests.md#r-071)), so the sentence above no longer states that set.
 
   > **Narrowed by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
   > discovery rule above no longer states what this product does: the workspace root holds the

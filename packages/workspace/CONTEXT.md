@@ -107,7 +107,8 @@ _Avoid_: refresh, reload
 
 **Context unit**:
 One always-active block on an agent's system prompt. The order is fixed: workspace context, the skill
-catalog, the force-loaded skill bodies, persona memory. — `REQ-WORKSPACE-060`
+catalog, the force-loaded skill bodies, persona memory, and last the **product statement**, which names the
+product's own workspace directories. — `REQ-WORKSPACE-060`, `PD-TOOLS-012` revision 2
 _Avoid_: system prompt (the role's instructions are a different thing), injection
 
 ### Onboarding

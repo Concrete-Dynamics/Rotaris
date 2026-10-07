@@ -508,7 +508,9 @@ in `configuration.ts`'s header.)
    the name from the manifest, a reading flagged for the owner (*replaced 2026-10-01 under OQ-161*: `.rotaris/` alone
    in `.gitignore`, the marker's directory in the repository's own `info/exclude`, so no tracked file changes; *and since
    2026-10-07 under OQ-215 / `PD-TOOLS-012`* the marker's directory, named from the manifest, is a hard-coded ignore component of
-   the search and listing tools in `agent-tools/src/tools/search.ts`); and
+   the search and listing tools in `agent-tools/src/tools/search.ts`; *and since 2026-10-07 under OQ-230 / `PD-TOOLS-012`
+   revision 2* every agent is told what both directories are by `PRODUCT_DIRECTORIES_UNIT` (`config/src/product-directories.ts`),
+   the last context unit `SkillHost.contextUnits` hands every agent); and
    the 4.5 s discovery pushed five proofs' fixed windows, which now switch the entry off in their scratch configuration (Part J, resilience, fetch, mission) or carry
    the cost (config); IC-6's packaged launch reads `session running` at its 9 s capture where it read `completed`. A
    stray `builtin/` directory in the main checkout dated from the branch spike: the pre-sentinel build launched here took

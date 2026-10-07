@@ -26,7 +26,7 @@ cost.
 
 - None contradicted as written: OQ-161 (R-071) ruled that "the agents are not told that the product wrote the exclude line",
   and OQ-215 kept "the agents' instructions are unchanged" pending this measurement. Ruled 2026-10-07 under R-072 as OQ-230:
-  [`PD-TOOLS-012`](../product/directives.md#pd-tools-012) revision 2 extends REQ-WORKSPACE-060 with a product statement every
+  [`PD-TOOLS-012`](../../product/directives.md#pd-tools-012) revision 2 extends REQ-WORKSPACE-060 with a product statement every
   agent receives as its last always-active context unit.
 - REQ-TOOLS-140 and PD-TOOLS-012 (the file tools hide both); REQ-MCP-099 and REQ-MCP-102 (memories persist across runs);
   REQ-WORKSPACE-060 (the context units); REQ-CONFIG-100 (a configured persona's prompt).
@@ -38,3 +38,16 @@ cost.
   (each child, whatever its persona's prompt) — where the units reach the system prompt.
 - `packages/agent-tools/src/tools/search.ts` — `IGNORE_COMPONENTS`; `packages/config/src/load.ts` — `keepScopeDirIgnored`
   and the marker's `info/exclude` line.
+
+## Repaired — 2026-10-07 (fin32, under PD-TOOLS-012 revision 2)
+
+`PRODUCT_DIRECTORIES_UNIT` (`packages/config/src/product-directories.ts`) states the directive's four points, the two names
+built from `WORKSPACE_SCOPE_DIR` and `CODE_INTELLIGENCE_MARKER_SEGMENTS[0]`; `SkillHost.contextUnits`
+(`apps/desktop/src/run-host/skills.ts`) pushes it last on every call, with no instruction file, no skill and injection off
+too. Pinned by `packages/config/src/product-directories.test.ts`, by seven cases in `apps/desktop/src/run-host/skills.test.ts`
+red on the code before (among them "PD-TOOLS-012 revision 2: every call ends with the same product statement …"), and by a
+guard in `packages/engine/src/run/record.test.ts` (the entry agent and a child with a configured prompt both end their units
+with the run host's last one). `pnpm mcp-proof`'s launch 1 reads the built app's orchestrator prompt and asserts the statement
+stands, alone, between the closed instruction files and the MCP section. Not measured: the live effect — the next default and
+duress live runs are the measurement (no delivered file, answer or memory naming either directory; calls and rows naming them
+well below 21 and 32). Memories already written, such as the `todo-app/docs-pair` edit of this pack, are unchanged.

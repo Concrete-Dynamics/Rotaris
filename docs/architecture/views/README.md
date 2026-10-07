@@ -88,6 +88,13 @@ run cancelled the call; `classify.ts` adds the kind to both vocabularies. The ga
 result interrupted and files no issue, and the metrics count it under `interrupted`, not Timeouts. The **runtime view**'s
 rest paragraph says so. No package, edge, process, channel, command or store column changed.
 
+**Every agent is told what the product's own workspace directories are (PD-TOOLS-012 revision 2, OQ-230; finding D4 of the
+final duress run at `a68f121`; fin32).** `PRODUCT_DIRECTORIES_UNIT` (`config/src/product-directories.ts`, built from
+`WORKSPACE_SCOPE_DIR` and `CODE_INTELLIGENCE_MARKER_SEGMENTS[0]`) is the fifth always-active context unit: `SkillHost.contextUnits`
+(`run-host/skills.ts`) pushes it last on every call, so every session-start path (`host.ts`'s `configure`, `dispatch.ts`'s
+start) hands it to the entry agent and every child. The **runtime view**'s prompt-composition paragraph says so. No package,
+edge, process, channel, command or store column changed; `@rotaris/config` gains one export.
+
 **A `haet_edit` near miss names its level and quotes the file's lines (PD-TOOLS-014, OQ-231; finding D5 of the final duress run at `a68f121`; fin32).** `matchEdit` (`agent-tools/src/tools/files.ts`) returns an `EditMatch` whose level-3 result carries each window's `shifts` (the prefix, and whether the file carries it in addition to `old_string`'s); `haetEditTool`'s miss branch answers a single level-2 or level-3 window through `nearMissMessage` and leaves REQ-TOOLS-189's reply to a level-4 match or none. Nothing is written on either path. `live-run.mjs` counts the near misses and the terminal probes after them (`lib/near-miss-edits.mjs`). The **runtime view**'s file-tools paragraph says so. No package, edge, process, channel, command or store column changed.
 
 **An empty or relative per-user variable takes its default (REQ-STARTUP-145, REQ-CONFIG-001; finacc3 A2-06, A2-07; fin30).**

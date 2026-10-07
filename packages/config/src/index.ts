@@ -22,6 +22,7 @@ export * from './sections/requirements.js'; // Part AP
 export * from './sections/skills.js'; // ADR-0063
 export * from './sections/instructions.js'; // PD-WORKSPACE-002
 export * from './instructions.js'; // PD-WORKSPACE-002
+export * from './product-directories.js'; // PD-TOOLS-012 revision 2
 export * from './sections/mcp-servers.js';
 export * from './mcp/index.js';
 export * from './skills/index.js'; // ADR-0063

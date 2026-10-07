@@ -5911,6 +5911,23 @@ logged as [R-072](requests.md#r-072).* *Revision 2 raised under the owner's dele
 > **What it did not reach:** the terminal — 5 terminal commands put the directories in front of the agents, and 21 calls and 32
 > rows named them, which reached the delivered report, the answer and a project memory. That remainder is revision 2's. The row is
 > in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Revision 2, first execution, 2026-10-07, built under [R-072](requests.md#r-072) (fin32):** the rule held as written.
+> `PRODUCT_DIRECTORIES_UNIT` (`packages/config/src/product-directories.ts`) carries points (a) to (d) with both names built from
+> `WORKSPACE_SCOPE_DIR` and `CODE_INTELLIGENCE_MARKER_SEGMENTS[0]`; `SkillHost.contextUnits` (`apps/desktop/src/run-host/skills.ts`)
+> pushes it last on every call; the engine was unchanged (`withContextUnits` already appends the units after any persona's
+> prompt, the entry agent's and each child's). **What was measured.** `product-directories.test.ts` (the four points, the names
+> from their sources, no literal in the source); seven cases in `apps/desktop/src/run-host/skills.test.ts` red on the code before
+> (the statement last with and without context files, skills and force-loaded bodies; alone with no instruction file, the skill
+> switch off or an unreadable body; between the closed files and the MCP section); a guard in
+> `packages/engine/src/run/record.test.ts` (the entry agent and a child whose persona carries a configured prompt both end their
+> units with the run host's last one, before the MCP section); `pnpm mcp-proof`'s launch 1 on the built app, the orchestrator's
+> recorded prompt carrying the statement alone between the closed `AGENTS.md` and the MCP section. **Found:** the statement is
+> 599 characters, nearer 150 tokens a request than the ruling's estimate of about 80; and a session started with no `configure`
+> (a process-wide model, which only tests and scripts use) receives no units at all, the statement included. **What was not
+> measured.** No live run: the next default and duress runs are the measurement — no delivered file, answer or memory naming
+> either directory, calls and rows naming them well below 21 and 32, and in the default run no priming. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

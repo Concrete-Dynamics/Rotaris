@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { FileToolState, grepTool, readFileTool, writeFileTool } from '@rotaris/agent-tools';
-import { MCP_SECTION_HEADING, NODE_DISCOVERY_PORTS, renderMcpSection, SKILLS_DEFAULTS, type DiscoveryPorts, type SkillsSection } from '@rotaris/config';
+import { MCP_SECTION_HEADING, NODE_DISCOVERY_PORTS, PRODUCT_DIRECTORIES_UNIT, renderMcpSection, SKILLS_DEFAULTS, type DiscoveryPorts, type SkillsSection } from '@rotaris/config';
 import { parseSkillListing } from '@rotaris/contracts';
 import { readTrajectory, Sessions, withContextUnits, withMcpSection } from '@rotaris/engine';
 import { asSessionId, FakeClock, millis, mintMachineId, type MachineId } from '@rotaris/kernel';
@@ -84,7 +84,8 @@ describe('the skill catalog (REQ-WORKSPACE-058, 069, 073, 057)', () => {
     const t = tree();
     try {
       const h = host(t.root, t.home, { ...SKILLS_DEFAULTS, enabled: false });
-      expect(h.contextUnits(t.root, 's1')).toEqual([]);
+      // PD-TOOLS-012 revision 2: the product statement alone, which no skill switch removes.
+      expect(h.contextUnits(t.root, 's1')).toEqual([PRODUCT_DIRECTORIES_UNIT]);
       expect(h.state(t.root, 's1').skills[0]!.userInvocable).toBe(false);
       expect(h.forceLoad(t.root, 's1', 'alpha')).toEqual({ ok: false, reason: 'disabled' });
     } finally { t.cleanup(); }
@@ -109,12 +110,14 @@ describe('the skill catalog (REQ-WORKSPACE-058, 069, 073, 057)', () => {
       const h = host(t.root, t.home);
       h.forceLoad(t.root, 's1', 'beta');
       const units = h.contextUnits(t.root, 's1');
-      expect(units).toHaveLength(2);
+      expect(units).toHaveLength(3);
       expect(units[0]).toContain('- alpha: Alpha does things.');
       // REQ-WORKSPACE-062: a force-loaded skill leaves the catalog; its body stands in the entry's place.
       expect(units[0]).not.toContain('- beta:');
       expect(units[1]).toContain('BETA BODY');
       expect(units[1]).not.toContain('description:');
+      // PD-TOOLS-012 revision 2: the product statement after every unit REQ-WORKSPACE-060 orders.
+      expect(units[2]).toBe(PRODUCT_DIRECTORIES_UNIT);
     } finally { t.cleanup(); }
   });
 
@@ -150,7 +153,7 @@ describe('the skill catalog (REQ-WORKSPACE-058, 069, 073, 057)', () => {
       const h = host(t.root, t.home);
       h.forceLoad(t.root, 's1', 'alpha');
       rmSync(join(t.root, '.agents', 'skills', 'alpha', 'SKILL.md'));
-      expect(h.contextUnits(t.root, 's1')).toEqual([]);
+      expect(h.contextUnits(t.root, 's1')).toEqual([PRODUCT_DIRECTORIES_UNIT]);
     } finally { t.cleanup(); }
   });
 
@@ -282,10 +285,11 @@ describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)'
     try {
       writeFileSync(join(t.root, 'AGENTS.md'), 'STANDING INSTRUCTIONS\n');
       const units = contextHost(t.home, join(t.home, 'cfg')).contextUnits(t.root, 's1');
-      expect(units).toHaveLength(2);
+      expect(units).toHaveLength(3);
       expect(units[0]).toContain('STANDING INSTRUCTIONS');
       expect(units[0]).toContain(`<!-- source: ${join(t.root, 'AGENTS.md')} -->`);
       expect(units[1]).toContain('- alpha: Alpha does things.');
+      expect(units[2]).toBe(PRODUCT_DIRECTORIES_UNIT);
     } finally { t.cleanup(); }
   });
 
@@ -306,7 +310,7 @@ describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)'
       // No skill anywhere: the live run's case, where the MCP section follows the last file directly.
       writeFileSync(join(root, 'AGENTS.md'), '# Working in this repository\n\nKeep changes minimal.\n');
       const units = contextHost(home, join(home, 'cfg')).contextUnits(root, 's1');
-      expect(units).toHaveLength(1);
+      expect(units).toEqual([units[0], PRODUCT_DIRECTORIES_UNIT]);
       const section = renderMcpSection({ persona: 'docs', dropped: [], active: [{ name: 'alpha', entry: { type: 'stdio', command: 'x', args: [] } as never, origin: 'yaml', discoveryFailed: false, tools: [{ callable: 'echo', reported: 'echo', description: 'Echo the text back.', inputSchema: {} }] }] });
       const prompt = withMcpSection(withContextUnits('You write documentation.', units), section);
       const fileAt = prompt.indexOf(`<!-- source: ${join(root, 'AGENTS.md')} -->`);
@@ -314,25 +318,45 @@ describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)'
       const headingAt = prompt.indexOf(MCP_SECTION_HEADING, fileEnd);
       expect(fileAt).toBeGreaterThan(0);
       expect(headingAt).toBeGreaterThan(fileEnd);
-      // Between the file's last line and the MCP heading: exactly the closing comment, one blank line either side.
-      expect(prompt.slice(fileEnd, headingAt)).toBe('\n\n<!-- end of instruction files: nothing below this line is part of them -->\n\n');
+      // Between the file's last line and the MCP heading: the closing comment, then (PD-TOOLS-012 revision 2) the product
+      // statement, one blank line around each.
+      expect(prompt.slice(fileEnd, headingAt)).toBe(`\n\n<!-- end of instruction files: nothing below this line is part of them -->\n\n${PRODUCT_DIRECTORIES_UNIT}\n\n`);
       // With a skill catalog after the files, the close sits between the files and the catalog instead.
       mkdirSync(join(root, '.agents', 'skills', 'alpha'), { recursive: true });
       writeFileSync(join(root, '.agents', 'skills', 'alpha', 'SKILL.md'), '---\nname: alpha\ndescription: Alpha does things.\n---\nALPHA BODY\n');
       const withCatalog = contextHost(home, join(home, 'cfg')).contextUnits(root, 's2');
-      expect(withCatalog).toHaveLength(2);
+      expect(withCatalog).toHaveLength(3);
       expect(withCatalog[0]!.endsWith('Keep changes minimal.\n\n<!-- end of instruction files: nothing below this line is part of them -->')).toBe(true);
       expect(withCatalog[1]).not.toContain('end of instruction files');
     } finally { rmSync(base, { recursive: true, force: true }); }
   });
 
-  it('REQ-WORKSPACE-047: with no instruction file there is no unit, and so no closing comment either', () => {
+  it('REQ-WORKSPACE-047: with no instruction file there is no workspace-context unit, and so no closing comment either', () => {
     const base = mkdtempSync(join(tmpdir(), 'rotaris-skills-'));
     try {
       mkdirSync(join(base, 'ws'), { recursive: true });
       mkdirSync(join(base, 'home'), { recursive: true });
-      expect(contextHost(join(base, 'home'), join(base, 'home', 'cfg')).contextUnits(join(base, 'ws'), 's1')).toEqual([]);
+      // PD-TOOLS-012 revision 2: the product statement is independent of context-file injection, so it is the one unit left.
+      const units = contextHost(join(base, 'home'), join(base, 'home', 'cfg')).contextUnits(join(base, 'ws'), 's1');
+      expect(units).toEqual([PRODUCT_DIRECTORIES_UNIT]);
+      expect(units.some((u) => u.includes('end of instruction files'))).toBe(false);
     } finally { rmSync(base, { recursive: true, force: true }); }
+  });
+
+  it('PD-TOOLS-012 revision 2: every call ends with the same product statement, with or without context files, skills and force-loaded bodies', () => {
+    const t = tree();
+    try {
+      const h = contextHost(t.home, join(t.home, 'cfg'));
+      const bare = h.contextUnits(t.root, 's1');
+      writeFileSync(join(t.root, 'AGENTS.md'), 'STANDING INSTRUCTIONS\n');
+      h.onSessionCreated(t.root, 's2');
+      h.forceLoad(t.root, 's2', 'alpha');
+      const full = h.contextUnits(t.root, 's2');
+      expect(full.length).toBeGreaterThan(bare.length);
+      for (const units of [bare, full]) expect(units[units.length - 1]).toBe(PRODUCT_DIRECTORIES_UNIT);
+      // The same characters in every prompt: one constant, appended once.
+      expect(full.filter((u) => u === PRODUCT_DIRECTORIES_UNIT)).toHaveLength(1);
+    } finally { t.cleanup(); }
   });
 
   it('PD-WORKSPACE-002: the global and user bases reach the agent, in discovery order', () => {

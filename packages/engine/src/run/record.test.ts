@@ -481,6 +481,21 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     dal.updateSessionRun(sid, { iterations_completed: 0, todo: encodeStoredTodo({ ...stored, planner }) });
   }
 
+  it('PD-TOOLS-012 revision 2: the entry agent and a child whose persona carries a configured prompt both end their units with the run host\'s last one', async () => {
+    // The engine does not build the product statement (the run host's `SkillHost.contextUnits` does); it must carry the
+    // last unit it is handed to every agent, after whatever prompt the persona carries (REQ-CONFIG-100), before the MCP section.
+    const LAST = 'Product directories: the run host\'s last unit.';
+    const run = harness((persona, turn) => (persona === 'orchestrator' ? (turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { task_name: 'work' } }], 'Delegating.') : answer('All done.')) : persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Probed.')),
+      { childPrompt: 'You are a configured reviewer. Never touch tests.', contextUnits: () => ['Skill catalog: none.', LAST] });
+    const sid = (run.sessions.start(dal, 'C:/ws', 'probe the thing') as { value: SessionId }).value;
+    expect((await run.sessions.running(sid)!).status).toBe('completed');
+    for (const persona of ['orchestrator', 'child']) {
+      const system = systemOf(run.client.requests.find((r) => personaOf(r) === persona)!);
+      expect(system).toContain(`Skill catalog: none.\n\n${LAST}\n\nMCP servers: none connected.`);
+    }
+    expect(systemOf(run.client.requests.find((r) => personaOf(r) === 'child')!).startsWith('You are a configured reviewer.')).toBe(true);
+  });
+
   it('each agent records the fingerprint of its persona\'s definition, once; a resume under the same definition states nothing', async () => {
     const first = harness((persona, turn) => (persona === 'orchestrator' ? (turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { task_name: 'work' } }], 'Delegating.') : answer('All done.')) : persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Probed.')));
     const sid = (first.sessions.start(dal, 'C:/ws', 'probe the thing') as { value: SessionId }).value;

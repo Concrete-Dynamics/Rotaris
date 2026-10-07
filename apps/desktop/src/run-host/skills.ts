@@ -4,7 +4,7 @@ import type { SessionWriter } from '@rotaris/engine';
 import type { MonotonicClock } from '@rotaris/kernel';
 import {
   discoverInstructionFiles, discoverSkills, enabledInstructionFiles, instructionContextUnit, loadManualSkill, mergeInstructionContext,
-  NODE_DISCOVERY_PORTS, parseSkill, resolveSkills,
+  NODE_DISCOVERY_PORTS, parseSkill, PRODUCT_DIRECTORIES_UNIT, resolveSkills,
   skillBodyBlock, skillCatalogBlock, skillReadRoots,
   type DiscoveredSkill, type DiscoveryPorts, type InstructionFileEntry, type InstructionsSection, type SkillDiscovery, type SkillSessionState, type SkillsSection,
 } from '@rotaris/config';
@@ -301,9 +301,9 @@ export class SkillHost {
    * order. Called at every agent construction (a getter, not a captured value), so a force-load reaches the
    * next agent built and never retracts one already running (REQ-CONFIG-166).
    *
-   * The order is **workspace context → skill catalog → force-loaded skill bodies → persona memory**. The
-   * first three exist; persona memory does not, so the list is the seam where it will sit — an empty slot
-   * in a sequence, not a shape a later part has to re-cut.
+   * The order is **workspace context → skill catalog → force-loaded skill bodies → persona memory**, and then,
+   * under `PD-TOOLS-012` revision 2, the product statement. The first three exist; persona memory does not, so
+   * the list is the seam where it will sit — an empty slot in a sequence, not a shape a later part has to re-cut.
    */
   contextUnits(workspaceRoot: string, sessionId?: string, executionRoot?: string): readonly string[] {
     const resolved = this.resolved(workspaceRoot, sessionId);
@@ -335,13 +335,20 @@ export class SkillHost {
       units.push(skillBodyBlock(r.skill.name, r.skill.path, parsed.ok ? parsed.skill.body : body));
     }
     // [slot] persona memory (REQ-WORKSPACE-060) — not built.
+    const workspaceUnits = units.length;
+    // PD-TOOLS-012 revision 2 (OQ-230): the product statement, last, on every call — with no instruction file, no skill and
+    // injection off too — so every agent of the session is told what the product's own directories are. The engine appends
+    // the units after whatever prompt the persona carries, built in or configured (`withContextUnits`, run.ts and
+    // orchestration.ts). Finding D4 of the final duress run at a68f121: a docs-writer with no terminal wrote that the hidden
+    // directories were absent, and a tester with one put them in the user's report, the answer and a project memory.
+    units.push(PRODUCT_DIRECTORIES_UNIT);
     /*
      * What this agent is actually being given, at the moment it is given it. It names the skills rather than
      * carrying any body text: a log is not a place to put a document, and REQ-WORKSPACE-066 is about what
      * reaches a MODEL, not what reaches an operator reading a session log. Without this line the only evidence
      * that injection happened at all is the model's own behaviour, which is not evidence.
      */
-    if (units.length > 0) {
+    if (workspaceUnits > 0) {
       const forced = resolved.filter((r) => r.forceLoaded).map((r) => r.skill.name);
       const catalogued = resolved.filter((r) => r.inCatalog).map((r) => r.skill.name);
       this.deps.log(`skills: context units for ${sessionId ?? workspaceRoot}: catalog ${catalogued.length === 0 ? '(none)' : catalogued.join(', ')}; force-loaded ${forced.length === 0 ? '(none)' : forced.join(', ')}`);

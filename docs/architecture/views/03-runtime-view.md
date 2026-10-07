@@ -87,6 +87,13 @@ that line, and whatever follows is not read as the last file's own: the skill ca
 (`withMcpSection`, REQ-MCP-101), which is appended after them. Until 2026-10-06 nothing closed the files, and in the duress
 live run at `27a5127` agents read `## MCP servers` as part of `AGENTS.md`
 (`docs/defects/fixed/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
+The always-active units are five since `PD-TOOLS-012` revision 2 (OQ-230): after REQ-WORKSPACE-060's four (workspace context,
+skill catalog, force-loaded bodies, the persona-memory slot), `contextUnits` pushes `PRODUCT_DIRECTORIES_UNIT`
+(`config/src/product-directories.ts`) on every call — with no instruction file, no skill and injection off too — so the entry
+agent and every child, whatever its persona's prompt, is told that `.rotaris/` and the code-intelligence marker directory are
+the product's, how they are kept out of version control, that the file tools hide them and a terminal shows them, and to keep
+them out of what it writes. The engine is unchanged: `withContextUnits` appends the units after the persona's prompt in
+`Run.turn` and in a child's construction (`orchestration.ts`), before the MCP section.
 
 **The run override is the last thing an entry turn's prompt carries (REQ-ORCH-025).** After the MCP section `runTurn`
 appends the run override's layer (`withRunOverrideLayer`, `run/turn.ts`, from `TurnDeps.runOverrideLayer`), which `Run`

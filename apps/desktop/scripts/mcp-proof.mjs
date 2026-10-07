@@ -352,7 +352,10 @@ const ROUND_OVER = `(() => {
   if (headingAt < fileEnd + boundary.length) throw new Error(`the MCP section does not follow the closed instruction files in the orchestrator's prompt:\n${system}`);
   const repositorySkills = readdirSync(join(repo, '.agents', 'skills'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).filter((name) => system.includes(name));
   if (/Portable skills available/.test(system) || repositorySkills.length > 0) throw new Error(`the orchestrator's prompt carries a skill catalog the workspace never declared (${repositorySkills.join(', ') || 'a catalog'}): the project walk left the workspace`);
-  if (headingAt !== fileEnd + boundary.length) throw new Error(`something stands between the closed instruction files and the MCP section: ${JSON.stringify(system.slice(fileEnd + boundary.length, headingAt))}`);
+  // PD-TOOLS-012 revision 2 (OQ-230): one unit stands between them, the product statement every agent receives last — one
+  // paragraph naming the product's own directories — and nothing else.
+  const between = system.slice(fileEnd + boundary.length, headingAt);
+  if (!/^Product directories: [^\n]+\n\n$/.test(between) || !between.includes('`.rotaris/`') || !between.includes('info/exclude')) throw new Error(`something other than the product statement stands between the closed instruction files and the MCP section: ${JSON.stringify(between)}`);
   const surface = lines(r.log, /mcp: surface for orchestrator/);
   if (surface.length === 0) throw new Error(`no surface line:\n${r.log}`);
   const first = surface[0];

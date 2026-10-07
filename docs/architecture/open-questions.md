@@ -11716,7 +11716,7 @@ answer's "Remains" (row 766) relays that `docs/overview.md` claims everything gi
 wave3's `edit_memory` #311 wrote into the project memory `todo-app/docs-pair` that both are present and "absence must be
 checked with `ls`". The false absence claim was written by docs-writer c, which holds no terminal: the file tools hid the
 directories, so it inferred absence. Recorded as
-[`the-product-directories-reach-the-users-report-answer-and-memory-through-the-terminal.md`](../defects/the-product-directories-reach-the-users-report-answer-and-memory-through-the-terminal.md).
+[`the-product-directories-reach-the-users-report-answer-and-memory-through-the-terminal.md`](../defects/fixed/the-product-directories-reach-the-users-report-answer-and-memory-through-the-terminal.md).
 
 **What the build proceeds under.** OQ-161's and OQ-215's rulings as built: the directories hidden from the file tools, shown
 by a terminal, and no agent told what they are.
@@ -11749,6 +11749,12 @@ the remainder (a memory that compounds from run to run). **Costs kept on record:
 for black-box conformance; possible priming; an agent possibly holding back a relevant fact; a poorer fit for a user who tracks
 the marker directory; no change to memories already written. **Reopening:** if a delivered document, the answer or a memory
 still carries either directory when the task does not concern them, the question reopens for a write-side measure.
+**Built 2026-10-07 (fin32):** `PRODUCT_DIRECTORIES_UNIT` (`packages/config/src/product-directories.ts`), pushed last by
+`SkillHost.contextUnits` (`apps/desktop/src/run-host/skills.ts`) on every call; pinned by
+`packages/config/src/product-directories.test.ts`, seven cases in `apps/desktop/src/run-host/skills.test.ts` red on the code
+before, an engine guard in `packages/engine/src/run/record.test.ts`, and `pnpm mcp-proof`'s launch 1 reading the built app's
+prompt. The statement is 599 characters, nearer 150 tokens than the ruling's estimate of about 80. Finding D4 closes with it;
+the next default and duress live runs are the measurement.
 
 **OQ-233 — When `write_file`'s edit matches at REQ-TOOLS-136 level 3, is `new_string` shifted by the same prefix?**
 *(REQ-TOOLS-136, the four match levels and "a window match replaces whole lines", silent on whether the replacement takes

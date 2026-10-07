@@ -132,6 +132,32 @@ describe('REQ-MONITOR-044/052/068/069 (live-run finding K1): artifact links', ()
   });
 
   /*
+   * PD-LIBRARY-004 (OQ-211, ruled 2026-10-07 under R-072): an artifact's consumer is the reading INSTANCE by its canonical
+   * name, never its persona, so the received links show exactly which instance read what.
+   */
+  it('PD-LIBRARY-004: only the instance that read an artifact has the received link; its sibling of the same persona has none', () => {
+    const reader = child({ id: 'bg_00000011', name: 'coding-agent-1' });
+    const sibling = child({ id: 'bg_00000012', name: 'coding-agent-2' });
+    const read = link({ id: 'art_read0001', slug: 'the-spec', producer: 'planner-1', consumedBy: ['coding-agent-1'] });
+    const s = session({ agents: [reader, sibling], artifacts: [read] });
+    expect(agentArtifacts(reader, s.artifacts)).toEqual({ produced: [], received: [read] });
+    expect(agentArtifacts(sibling, s.artifacts)).toEqual({ produced: [], received: [] });
+    expect(linkIds(inspector(s, reader.id, null), 'inspector-artifacts-received')).toEqual(['art_read0001']);
+    expect(inspector(s, sibling.id, null)).toContain(NO_ARTIFACTS);
+  });
+
+  it('PD-LIBRARY-004: a child of the entry persona that reads an artifact does not make it the run-level agent\'s received link', () => {
+    const roots = [{ name: 'orchestrator', canonical: 'orchestrator' }];
+    const helper = child({ id: 'bg_00000013', name: 'orchestrator-2', persona: 'orchestrator' });
+    const read = link({ id: 'art_read0002', slug: 'coder-1-report', producer: 'coder-1', consumedBy: ['orchestrator-2'] });
+    const s = session({ agents: [helper], artifacts: [read], entryRoots: roots });
+    const runLevel = runLevelAgent(s, entry, false)!;
+    expect(agentArtifacts(runLevel, s.artifacts, roots)).toEqual({ produced: [], received: [] });
+    expect(agentArtifacts(helper, s.artifacts, roots)).toEqual({ produced: [], received: [read] });
+    expect(linkIds(inspector(s, RUN_AGENT_ID, runLevel), 'inspector-artifacts-received')).toEqual([]);
+  });
+
+  /*
    * REQ-LIBRARY-093 (the repair of a-roots-publish-names-its-persona-as-its-author.md): a root's publish and its reads record
    * its canonical instance name, which for a persona the canonicaliser rewrites is not the entry persona the run-level agent
    * is named by — so its links read empty (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).

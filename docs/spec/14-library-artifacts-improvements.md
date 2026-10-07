@@ -302,6 +302,11 @@ After every completed task run the product may perform an optional, strictly non
   > above gains one member, `commands`, and nothing else about this requirement moves: the default is
   > still the full body, a miss still returns the same observation, and a read still marks the persona
   > a consumer. An agent asking for a section name outside the widened set is refused as before.
+  > **Narrowed by [`PD-LIBRARY-004`](../product/directives.md#pd-library-004), 2026-10-07.** The consumer a successful
+  > read marks is the reading agent INSTANCE by its canonical name (a child's canonical name, a root's
+  > `root_canonical_name`), not its persona, so two instances of one persona that read one artifact are two consumers.
+  > The note above's "marks the persona a consumer" reads as that instance. The section filter, the default and the miss
+  > observation keep governing.
 
 **REQ-LIBRARY-100** — The agent-facing `artifact_list` tool MUST accept kind, persona, tags, `limit` (default 20, range 1..200), and an include-superseded flag, and return `<N> artifact(s):` plus one line per record formatted `- <id> [<slug>] persona=<p> status=<s> tags=[…] — <title>`, or `No artifacts found.` when empty.
 

@@ -488,6 +488,9 @@ Given `haet_edit` is called, when the SHA-256 digest of the file's current bytes
   > **Extended by [`PD-LIBRARY-001`](../product/directives.md#pd-library-001), 2026-09-12.** The section
   > vocabulary follows REQ-LIBRARY-099 as widened by the directive: it gains `commands`. The default,
   > miss observation and consumer marking above keep their meanings.
+  > **Narrowed by [`PD-LIBRARY-004`](../product/directives.md#pd-library-004), 2026-10-07.** "The reading persona" is the
+  > reading agent instance, recorded by its canonical name, so two instances of one persona are two consumers; the
+  > default, the section filter and the miss observation are unchanged.
 
 **REQ-TOOLS-149** — `artifact_list(artifact_kind?, persona?, tags[], limit=20 (range 1–200), include_superseded=false)` renders one line per artifact in the form `- <id> [<slug>] persona=<p> status=<s> tags=[…] — <title>`. The tag filter is an AND-match over the closed tag vocabulary REQ-TOOLS-150 takes from REQ-LIBRARY-089: an artifact is listed only if it carries every requested tag. Superseded artifacts are omitted unless `include_superseded` is true. With no results the output is `No artifacts found.` Lines are rendered newest first by publication time, ties broken by ascending artifact id, so the ordering is total and reproducible for any set of artifacts. A `limit` outside 1–200 is clamped to the nearer bound rather than rejected — below 1 becomes 1, above 200 becomes 200 — and the observation states the limit actually applied whenever clamping changed it, so a mistaken argument costs the agent an accurate line of output rather than a whole turn.
 

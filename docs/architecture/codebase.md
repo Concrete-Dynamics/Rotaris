@@ -158,8 +158,8 @@ plain process with no React and the restore run against a fake run host with a c
   no ruling beside it; and on a sentence saying a question was "raised as an open question" that names none. It also
   reads `AGENTS.md`, `docs/module-map.md`, the glossaries and `.claude/rules/`; a bare "closed" or a "not ruled" is no
   ruling. After R-071 a dozen of the first stood, some sixty of the second, and three comments claimed questions no
-  entry held, which became OQ-210 to OQ-212 (since 2026-10-06, acceptance F16 and its repair round 1; OQ-210 ruled
-  2026-10-07 under R-072 as `PD-LIBRARY-003`).
+  entry held, which became OQ-210 to OQ-212 (since 2026-10-06, acceptance F16 and its repair round 1; OQ-210 and OQ-211
+  ruled 2026-10-07 under R-072 as `PD-LIBRARY-003` and `PD-LIBRARY-004`).
 - **A whole-session update keeps the transcript rows** — `REQ-MONITOR-216` omits the transcript from it, so
   it cannot say which rows survived; the increment after an attach or a reconcile upserts by index. The
   first run loop's status saves emptied a transcript still being written before this was so (ADR-0043

@@ -319,11 +319,12 @@ export class ArtifactStore {
   /**
    * REQ-LIBRARY-096 / REQ-LIBRARY-099 — the actor is appended at most once and persists.
    *
-   * Decision where two requirements differ: REQ-LIBRARY-099 says "the reading persona", REQ-LIBRARY-096 says
-   * "the actor". The CANONICAL INSTANCE NAME is recorded, because REQ-LIBRARY-093's reason for `created_by`
-   * — two instances sharing a persona must stay distinguishable in every artifact listing — applies with
-   * equal force to who consumed one, and the persona is recoverable from the name where the reverse is not.
-   * The owner's, raised as OQ-211 (2026-10-06; this comment claimed it raised before any entry existed, F16).
+   * PD-LIBRARY-004 (OQ-211, ruled 2026-10-07 under the owner's delegation, R-072): REQ-LIBRARY-099 says "the reading
+   * persona", REQ-LIBRARY-096 says "the actor", and the CANONICAL INSTANCE NAME is recorded, because REQ-LIBRARY-093's
+   * reason for `created_by` — two instances sharing a persona must stay distinguishable in every artifact listing —
+   * applies with equal force to who consumed one, and the persona is recoverable from the name where the reverse is not.
+   * Two instances of one persona that read one artifact are two consumers. (Raised as OQ-211 on 2026-10-06, after this
+   * comment had claimed it raised before any entry existed, F16; the directive narrows REQ-LIBRARY-099 and REQ-TOOLS-148.)
    */
   markConsumed(ref: string, actor: string): void {
     const record = this.lookup(ref);

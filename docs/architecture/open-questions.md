@@ -10600,7 +10600,8 @@ REQ-MONITOR-052 and REQ-MONITOR-069, whose received-artifact links read the cons
 acceptance round 1 (finding F16), repairing
 [`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
 `ArtifactStore.markConsumed`'s comment (`packages/engine/src/artifacts/store.ts`) said this was "raised as an open question
-rather than settled here", and no entry was ever written. Open, the owner's.)*
+rather than settled here", and no entry was ever written. ~~Open, the owner's.~~ **Ruled 2026-10-07 under the owner's
+delegation.**)*
 
 REQ-LIBRARY-099 names the reading persona; REQ-LIBRARY-096 names the actor, without saying whether that is a persona or an
 agent instance.
@@ -10616,6 +10617,20 @@ are two consumers.
 
 **What a ruling decides.** Whether the consumer is the instance (as built) or the persona, and so whether two instances of one
 persona reading an artifact record one consumer or two.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** confirmed as built. Every
+successful `artifact_read`, filtered or full, records the reading agent instance as a consumer, at most once, by its canonical
+name (the name REQ-LIBRARY-093 gives `created_by`: a child's canonical name, a root's `root_canonical_name`); two instances of
+one persona that read one artifact are two consumers, and the agent surfaces' received links (REQ-MONITOR-044/052/069) read
+these names. Because REQ-LIBRARY-099 and REQ-TOOLS-148 say "the reading persona", the ruling is minted as
+[`PD-LIBRARY-004`](../product/directives.md#pd-library-004), which narrows those two requirements' consumer clause; REQ-LIBRARY-096's
+"actor" is read as the instance within its text. **The two recommendations weighed:** advocate A (the user's lens) and advocate
+B (the system's lens) both recommended confirming as built with a directive — A because the received links show exactly what
+the store holds and a persona would make them wrong whichever way they matched, B because the persona can be derived from the
+instance and not the reverse, and the persona reading would undo OQ-125's confirmed reading. The ruling **followed both**,
+keeping A's test that a child of the entry persona does not credit the run-level agent, and declining B's first-executions
+row, since no mechanism ran for the first time. Built by bundle `fin28-artifacts` the same day as records, comments and three
+pinning tests (`artifacts/artifacts.test.ts`, `ui/src/inspector-links.test.ts`), each green on the build as it stood.
 
 **OQ-212 — Which built-in personas may publish an artifact?** *(REQ-TOOLS-001 and REQ-TOOLS-002, the names a persona may
 declare, `artifact_write` among them; REQ-TOOLS-004, which removes `artifact_write` "declared by a persona that lacks

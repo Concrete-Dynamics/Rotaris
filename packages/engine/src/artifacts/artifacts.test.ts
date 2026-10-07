@@ -159,6 +159,19 @@ describe('engine/artifacts — the session artifact store', () => {
     expect(ops.read('art_missing', [])).toEqual({ ok: false, error: 'not-found:art_missing' });
   });
 
+  it('PD-LIBRARY-004 (OQ-211): two instances of one persona that read one artifact are two consumers, each by its canonical name, in read order; a repeat read adds nothing', () => {
+    const store = storeFor();
+    const r = publish(store);
+    if (!r.ok) throw new Error('publish');
+    const first = artifactOps(store, { canonicalName: 'coding-agent-1', persona: 'coding-agent' });
+    const second = artifactOps(store, { canonicalName: 'coding-agent-2', persona: 'coding-agent' });
+    expect(second.read(r.value.slug, ['summary']).ok).toBe(true);
+    expect(first.read(r.value.id, []).ok).toBe(true);
+    expect(second.read(r.value.id, []).ok).toBe(true);
+    expect(store.lookup(r.value.id)!.consumedBy).toEqual(['coding-agent-2', 'coding-agent-1']);
+    expect(store.lookup(r.value.id)!.consumedBy).not.toContain('coding-agent');
+  });
+
   it('REQ-LIBRARY-090: sections are omitted ENTIRELY when empty and keep the fixed order; a record with only a body renders as frontmatter, title and its findings', () => {
     const store = storeFor();
     const bare = publish(store, { body: 'just a body' });

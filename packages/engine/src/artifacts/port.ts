@@ -7,8 +7,8 @@ import type { ArtifactStore } from './store.js';
  * hands one to the other; neither package imports the other — the same seam `DelegationOps` uses.
  *
  * Every operation is bound to the CALLING agent: a publish records its canonical instance name as
- * `created_by` (REQ-LIBRARY-093, never the persona), and a read records it as a consumer
- * (REQ-LIBRARY-096/099).
+ * `created_by` (REQ-LIBRARY-093, never the persona), and a read records that same name as a consumer
+ * (REQ-LIBRARY-096/099 as PD-LIBRARY-004 narrows them: the reading instance, not its persona).
  */
 export interface ArtifactListingEntry {
   readonly id: string;
@@ -27,7 +27,7 @@ export interface ArtifactOps {
 }
 
 export interface ActingAgent {
-  /** REQ-LIBRARY-093: the canonical instance name, never the persona. */
+  /** REQ-LIBRARY-093 and PD-LIBRARY-004: the canonical instance name, never the persona — the author of a publish and the consumer of a read. */
   readonly canonicalName: string;
   readonly persona: string;
   readonly conversationId?: string | null | undefined;

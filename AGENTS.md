@@ -358,13 +358,17 @@ The proxy is in the path, so it can also be told to misbehave on a **named call*
   defect's question: a model timeout once collapsed into the same `aborted` flag a user's stop sets, and the run
   reported `user_cancelled` with nobody having pressed anything. The check is that it does not do so again.
 - **`faults-args`** (since 2026-10-07) — the proxy's `pace` rule holds every piece of every tool call's streamed
-  arguments `LIVE_RUN_ARGS_PACE_MS` (60 ms) behind the one before it, and the stall threshold is lowered to
+  arguments `LIVE_RUN_ARGS_PACE_MS` (120 ms) behind the one before it, and the stall threshold is lowered to
   `LIVE_RUN_ARGS_STALL_S` (10 s) for this launch alone, so one `write_file` of a 120-line list streams for several
   thresholds. It asks the question of L2 at `c2fdd6a` and N1 at `c2a9444`: is any agent reported stalled while it streams
   a tool call's arguments (`lib/paced-arguments.mjs`, `stallsWhileStreaming`)? A paced span shorter than the threshold and
   one evaluation is no evidence, and fails as such
   (`docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md`). Unlike the other two it names no call:
-  the rule acts on every call of its path and fires on each that carried a piece.
+  the rule acts on every call of its path and fires on each that carried a piece. **First executed 2026-10-07 against
+  `katalyst`:** red on the product before the repair (three `stall` issues inside paced spans, pack
+  `2026-10-07T00-21-02-195Z`), green on the repaired head (220 pieces over 26.4 s, no `stall` issue, pack
+  `2026-10-07T00-26-10-472Z`); its very first run, at a 60 ms pace, cleared the threshold and one evaluation by under two
+  seconds, so the default became 120 ms.
 
 This makes the first of the two frictions the `frictions` scenario reports as uncoverable inducible on demand;
 that row's note points here. A rule names the **1-based index** of the call it fires at, deliberately: "the

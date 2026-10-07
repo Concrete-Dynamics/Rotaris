@@ -1883,7 +1883,7 @@ if (wanted.includes('faults')) {
      * evaluation is no evidence either way, and fails as such: the scenario must reach what it asks about.
      */
     const ARGS_STALL_S = Number(process.env['LIVE_RUN_ARGS_STALL_S'] ?? 10);
-    const ARGS_PACE_MS = Number(process.env['LIVE_RUN_ARGS_PACE_MS'] ?? 60);
+    const ARGS_PACE_MS = Number(process.env['LIVE_RUN_ARGS_PACE_MS'] ?? 120);
     const argsPrompt = 'Create a new file named PACED.md in the workspace root with one write_file call, without reading any file first: a Markdown list of the integers from 1 to 120, one per line, each followed by its English name (for example "- 7 seven"). Then reply with one sentence saying it is written.';
     const agentsBefore = readFileSync(agentsFile, 'utf8');
     const lowered = /^\s+child_stall_timeout:/m.test(agentsBefore)

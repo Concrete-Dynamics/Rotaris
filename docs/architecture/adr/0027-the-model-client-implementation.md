@@ -512,4 +512,7 @@ first) and `TurnSink.event` (each); the stall watch counts it as output, and `st
 Measured: at `c2a9444`, child `f` streamed 3,011 argument pieces of a `write_file` for about 97 s and was warned stalled at
 94 s. `ai-sdk-client.test.ts`'s two cases over an OpenAI-shaped stream of six argument pieces read the step's first part as
 `tool-call` before the change and `tool-input` after; `children.test.ts`'s 95 s case marked the child's row `stalledSince`
-at 10 s before it.
+at 10 s before it. In the built app, `live-run.mjs`'s `faults-args`
+launch (the recording proxy pacing every argument piece under a 10 s stall threshold) was red on the product before the
+change, three `stall` issues written while agents streamed paced arguments, and green after it, none, over 220 pieces and
+26.4 s (`docs/architecture/first-executions.md`, 2026-10-07).

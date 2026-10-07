@@ -303,7 +303,10 @@ cost — the load changed a file the user tracks before any agent ran, every age
 now appends `.rotaris/` alone, and writes the marker's directory to the repository-local exclude file (`info/exclude` in
 the repository's common directory), which Git honours and nobody tracks, so the Git proof's base tree stays clean without
 the user's `.gitignore` changing. OQ-161 holds the owner's ruling (*ruled 2026-10-06, [R-071](../../product/requests.md#r-071): the current behaviour is accepted*); the proofs still seed both lines in their own
-fixtures. And the ≈4.5 s discovery at every process's
+fixtures. *Revised 2026-10-07 under OQ-215 ([R-072](../../product/requests.md#r-072)):* the marker's directory is also a
+hard-coded search and listing ignore component ([`PD-TOOLS-012`](../../product/directives.md#pd-tools-012), the name read from the
+manifest), so the file tools no longer list the runtime's files as the user's; the exclude line and the marker's place in the
+workspace root are unchanged. And the ≈4.5 s discovery at every process's
 first run (finding 6) pushed five proofs' fixed windows: Part J, resilience, fetch and mission now switch the entry off
 in their scratch configuration, config carries the cost in its window, and IC-6's packaged launch reads `session running`
 at its 9 s capture where it read `completed`. A stray `builtin/` directory in the main checkout dated from the branch

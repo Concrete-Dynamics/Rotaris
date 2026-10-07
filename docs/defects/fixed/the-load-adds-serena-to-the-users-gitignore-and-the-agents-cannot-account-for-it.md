@@ -123,3 +123,16 @@ to the user's `.gitignore` beside `.rotaris/`?" in [`open-questions.md`](../../a
 ## Ruled as built — 2026-10-06 ([R-071](../../product/requests.md#r-071)); closed
 
 The owner accepted the current behaviour (OQ-161, ruled in [`open-questions.md`](../../architecture/open-questions.md)): `.rotaris/` goes in the workspace's `.gitignore`, and `.serena/` in the repository's untracked `info/exclude` file, as repaired above. The marker stays in the workspace root as the runtime creates it, so what "Seen again" records, the file tools listing `.serena/` as workspace content, is accepted with it. Nothing is changed in the code.
+
+## Revised 2026-10-07 under the owner's delegation ([R-072](../../product/requests.md#r-072)); stays closed
+
+The listing half of the ruling above is revised by OQ-215 (in [`open-questions.md`](../../architecture/open-questions.md)),
+on the evidence of the two duress runs after `27a5127`: findings L3 at `c2fdd6a` (41 calls by 5 agents, 112 rows, 1,142.5 s of
+the failed child d2's generation) and N6 at `c2a9444` (28 calls, 96 rows, a memory written into the tree, runtime files in the
+delivered overview). The runtime's marker directory is now a hard-coded ignore component
+([`PD-TOOLS-012`](../../product/directives.md#pd-tools-012)), its name read from the binding manifest, so glob, grep and
+`read_file`'s listings skip it as they skip `.rotaris`, and a file in it named by its path is still served. The version-control
+half stands as repaired: `.rotaris/` alone in `.gitignore`, the marker's directory in the repository's `info/exclude`. Pinned by
+the case "the code-intelligence marker directory is a hard-coded ignore component, named by the manifest" in
+`packages/agent-tools/src/tools/tools.test.ts`. A terminal's `find` or `ls -a` still lists the directory; whether that
+remainder costs anything is the next duress run's to measure.

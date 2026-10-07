@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from 'no
 import { join, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import { globToRegExp } from '@rotaris/kernel';
-import { ignoredBy, loadRules, parseGitignore, type IgnoreRule } from '@rotaris/config';
+import { CODE_INTELLIGENCE_MARKER_SEGMENTS, ignoredBy, loadRules, parseGitignore, type IgnoreRule } from '@rotaris/config';
 import { checkFence, isInside, realPathOf, type FenceConfig } from './fence.js';
 import { errorObservation, observation, type ToolExecutor } from './types.js';
 
@@ -11,10 +11,16 @@ import { errorObservation, observation, type ToolExecutor } from './types.js';
  * applies the scan filters — non-files and symlinks skipped, the hard-coded ignore components, the
  * workspace's `.gitignore` when present, files over 2 MiB, probable binaries (NUL in the first 1024).
  * Results are identical whether or not an external accelerator exists on the host: there is none.
+ *
+ * REQ-TOOLS-140's list, plus one member PD-TOOLS-012 adds: the directory holding the code-intelligence
+ * runtime's per-project marker, the first segment of the marker path in REQ-MCP-116's binding manifest
+ * (never written here as a literal). The product's own `.rotaris` is hidden, and since 2026-10-07 so is
+ * the runtime's directory beside it (OQ-215, R-072); `read_file` still serves a file in it named by path.
  */
 export const IGNORE_COMPONENTS: ReadonlySet<string> = new Set([
   '.git', '.hg', '.svn', '.idea', '.vscode', '.mypy_cache', '.pytest_cache', '.ruff_cache', '.tox', '.venv', '__pycache__', 'dist', 'venv',
   'node_modules', '.pnpm', '.next', '.nuxt', 'coverage', '.turbo', 'cache', 'build', 'out', 'target', '.nx', '.rotaris',
+  CODE_INTELLIGENCE_MARKER_SEGMENTS[0] as string, // PD-TOOLS-012
 ]);
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 

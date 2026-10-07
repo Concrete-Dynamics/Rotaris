@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Seventy-six.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Seventy-seven.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -5377,6 +5377,49 @@ takes PD-SESSION-002.*
 > `inherited_context` and `attach_artifacts` joined clause (d)'s keys
 > ([`a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md`](../defects/fixed/a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md)),
 > and `cut.test.ts` classifies every argument key of every built-in tool.
+
+---
+
+<a id="pd-tools-012"></a>
+
+### PD-TOOLS-012 — the code-intelligence runtime's marker directory is a hard-coded ignore component
+
+The directory that holds the code-intelligence runtime's per-project marker file SHALL be a member of REQ-TOOLS-140's
+hard-coded ignore components, beside `.rotaris`, matched at any depth. Its name is the first segment of the marker path in
+REQ-MCP-116's binding manifest, and the code SHALL NOT write it as a literal. REQ-TOOLS-139's grep and glob scans and
+REQ-TOOLS-134's directory and parent listings therefore skip it as they skip `.rotaris`, by reference to REQ-TOOLS-140; a
+file inside it named by its path is still served by `read_file` and `haet_read` (REQ-TOOLS-139). Nothing else about the
+directory changes: `.rotaris/` alone goes in `.gitignore` and the marker's directory in the repository's `info/exclude`
+(OQ-161, ruled as built), the marker and its memories stay in the workspace root and are reached through the memory tools
+(REQ-MCP-102), and where an isolated tree's memories live stays with OQ-195, deferred.
+
+**Why, and what it costs.** OQ-161's ruling accepted that the file tools list the directory on one run's evidence (the duress
+run at `27a5127`: 38 calls by 5 agents and 80 rows naming it, three of the verifier's five defects about it). The two duress
+runs since measured the cost again and found it larger. At `c2fdd6a` (finding L3), 5 agents made 41 calls and wrote 112 rows
+naming it, and 37 of the failed child d2's 45 requests, 1,142.5 s of its 1,222.6 s of generation, reasoned about `.serena`,
+`.rotaris` or `.git` on the run's critical path; both defects the user was told of were about product files. At `c2a9444`
+(finding N6), 28 calls and 96 rows named it, a memory was written into the tree and the delivered overview listed the
+runtime's files as repository files. The build already handled the directory two ways: REQ-TOOLS-140's `cache` hid its
+`cache/` and listed the rest. What it costs: a user who tracks the directory themselves (a shared `project.yml` or shared
+memories) loses glob, grep and listings over it from the product's agents, as REQ-TOOLS-140 already does for `build`, `out`,
+`target`, `.idea` and `.vscode`; `read_file` by path, the memory tools and the terminal still reach it. A nested directory of
+that name, in a subproject, is hidden too. An agent with a terminal can still list it with `find` or `ls -a`. REQ-TOOLS-140 is
+a closed list, so black-box conformance against it sees one extra member.
+
+> **Extends:** REQ-TOOLS-140
+
+*Raised under the owner's delegation, 2026-10-07, ruling OQ-215 (the consortium's ruling of live-run findings L3 and N6);
+logged as [R-072](requests.md#r-072).*
+
+> **First execution, 2026-10-07, built under [R-072](requests.md#r-072):** the rule held as written. `IGNORE_COMPONENTS`
+> (`packages/agent-tools/src/tools/search.ts`) takes `CODE_INTELLIGENCE_MARKER_SEGMENTS[0]` from `@rotaris/config`, and the
+> one set already fed both the scan's walker and `read_file`'s listing (`listing`, `files.ts`), so nothing else changed.
+> **What was measured.** The case "the code-intelligence marker directory is a hard-coded ignore component, named by the
+> manifest" in `packages/agent-tools/src/tools/tools.test.ts`, red on `d12f1f2` (glob `**/*` listed
+> `.serena/memories/m.md` and `.serena/project.yml`): glob, grep, the root listing and a missing path's parent listing
+> skip the directory, and its marker file named by path is served. **What was not measured.** No live run: the next duress
+> run is the measurement (file-tool rows under the directory near zero, no marker files in the delivered overview, `git
+> status` still clean). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

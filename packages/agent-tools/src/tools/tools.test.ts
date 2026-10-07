@@ -6,7 +6,8 @@ import { FakeClock } from '@rotaris/kernel';
 import { checkFence, realPathOf, type FenceConfig } from './fence.js';
 import { diffChanges as lineChangesOf, renderDiff, shortestEdit } from './diff.js';
 import { FileToolState, haetEditTool, haetReadTool, matchEdit, readFileTool, sha256, writeFileTool } from './files.js';
-import { globToRegExp, globTool, grepTool, parseGitignore, ignoredBy } from './search.js';
+import { CODE_INTELLIGENCE_MARKER_SEGMENTS } from '@rotaris/config';
+import { globToRegExp, globTool, grepTool, IGNORE_COMPONENTS, parseGitignore, ignoredBy } from './search.js';
 import { TodoList, todoTool } from './todo.js';
 import type { ToolContext } from './types.js';
 
@@ -434,6 +435,31 @@ describe('grep and glob (REQ-TOOLS-138..141)', () => {
       expect(r.text).not.toContain('Invalid regular expression');
       expect(r.isError ?? false).toBe(false);
     }
+  });
+
+  it('the code-intelligence marker directory is a hard-coded ignore component, named by the manifest (PD-TOOLS-012, REQ-TOOLS-140)', async () => {
+    // The name is the binding manifest's (REQ-MCP-116): never written here as a literal.
+    const marker = CODE_INTELLIGENCE_MARKER_SEGMENTS[0] as string;
+    expect(IGNORE_COMPONENTS.has(marker)).toBe(true);
+    mkdirSync(join(root, marker, 'memories'), { recursive: true });
+    mkdirSync(join(root, '.rotaris'), { recursive: true });
+    writeFileSync(join(root, ...CODE_INTELLIGENCE_MARKER_SEGMENTS), 'project_name: fixture-token-pd12\n');
+    writeFileSync(join(root, marker, 'memories', 'm.md'), '# memo\nfixture-token-pd12 lives here\n');
+    // glob lists nothing under it; grep from the root finds nothing in it
+    const all = (await globTool(fence).execute({ pattern: '**/*' }, ctx())).text.split('\n');
+    expect(all.filter((p) => p.split('/').includes(marker))).toEqual([]);
+    expect(all).toContain('src/a.ts');
+    expect((await grepTool(fence).execute({ pattern: 'fixture-token-pd12', max_matches: 100 }, ctx())).text).toBe('No matches found');
+    // read_file of the root omits it, as it omits `.rotaris`
+    const rf = readFileTool(state, fence);
+    const top = await rf.execute({ path: '.', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(top.text).not.toContain(`${marker}/`);
+    expect(top.text).not.toContain('.rotaris/');
+    expect(top.text).toContain('src/');
+    // a file inside it named by its path is still served (REQ-TOOLS-139)
+    const named = await rf.execute({ path: CODE_INTELLIGENCE_MARKER_SEGMENTS.join('/'), offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(named.isError ?? false).toBe(false);
+    expect(named.text).toContain('project_name: fixture-token-pd12');
   });
 
   it('the gitignore reader: anchors, directories, negation, whole labels', () => {

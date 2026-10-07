@@ -506,7 +506,9 @@ in `configuration.ts`'s header.)
    untracked directory in the user's repository — the Git proof's isolated launch found the base tree dirty; the load's
    `.gitignore` amendment (REQ-CONFIG-013 / REQ-MCP-089) now keeps the marker's directory ignored beside `.rotaris/`,
    the name from the manifest, a reading flagged for the owner (*replaced 2026-10-01 under OQ-161*: `.rotaris/` alone
-   in `.gitignore`, the marker's directory in the repository's own `info/exclude`, so no tracked file changes); and
+   in `.gitignore`, the marker's directory in the repository's own `info/exclude`, so no tracked file changes; *and since
+   2026-10-07 under OQ-215 / `PD-TOOLS-012`* the marker's directory, named from the manifest, is a hard-coded ignore component of
+   the search and listing tools in `agent-tools/src/tools/search.ts`); and
    the 4.5 s discovery pushed five proofs' fixed windows, which now switch the entry off in their scratch configuration (Part J, resilience, fetch, mission) or carry
    the cost (config); IC-6's packaged launch reads `session running` at its 9 s capture where it read `completed`. A
    stray `builtin/` directory in the main checkout dated from the branch spike: the pre-sentinel build launched here took

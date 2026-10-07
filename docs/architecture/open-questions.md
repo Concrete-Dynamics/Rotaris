@@ -8427,6 +8427,10 @@ live-run autopsy at 71ad8e8 finding a71-1,
 ~~Open.~~ Ruled 2026-10-06. Raised as OQ-160 on its branch and renumbered OQ-161 before it reached `main`, where OQ-160 had been taken
 meanwhile.)*
 
+**Listing clause revised 2026-10-07 by OQ-215 (below) ([R-072](../product/requests.md#r-072)):** the marker's directory is now a
+hard-coded ignore component ([`PD-TOOLS-012`](../product/directives.md#pd-tools-012)), so the file tools no longer list it. The
+rest of the ruling below stands as built. The 2026-10-06 text is kept as it was ruled.
+
 **Ruled 2026-10-06 by the owner ([R-071](../product/requests.md#r-071)):** the current behaviour is accepted: a configuration load appends `.rotaris/` alone to the workspace's `.gitignore` (REQ-CONFIG-013, REQ-MCP-089), and the code-intelligence runtime's marker directory `.serena/` goes to the untracked `info/exclude` file of the repository whose top level is the workspace, best-effort and idempotent, on the terms stated above; a workspace below a repository's top level, or in none, gets no line. The marker stays in the workspace root as the runtime creates it, so the file tools, which read the root `.gitignore` alone (REQ-TOOLS-139, REQ-TOOLS-140), still list it, as the duress run of 2026-10-06 showed, and the agents are not told that the product wrote the exclude line. D-21's one exception covers the exclude file as a second ignore file. The requirements name the `.rotaris/` line and are silent on the marker, so this ruling settles it; [`the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md`](../defects/fixed/the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md) closes with it.
 
 The bundled runtime creates `.serena/project.yml` in the workspace root whenever it starts with a project (ADR-0035,
@@ -10919,3 +10923,50 @@ cut-off cases in `children.test.ts` (the request a scripted run sends carries th
 "Outcome: failed — Child timed out after 1200s" (and the statement where the child was making progress), each such stored
 summary stating the limit in its first sentence and claiming no completion, every such report's status `failed`, and
 OQ-111's count of zero denials holding.
+
+**OQ-215 — Do the built-in search and listing tools skip the code-intelligence runtime's marker directory, and do its
+memories leave the workspace?** *(REQ-TOOLS-140, the hard-coded ignore components, a closed list holding `.rotaris` and not
+the runtime's directory; REQ-TOOLS-139, the scan filters, which honour "the workspace's `.gitignore`" and nothing else, and
+serve a file named by its path; REQ-TOOLS-134, the directory and parent listings, which skip "entries whose name is one of
+the ignore components of REQ-TOOLS-140"; REQ-MCP-116, the binding manifest that names the marker file; REQ-MCP-034,
+REQ-MCP-099 and REQ-MCP-102, the runtime's project path, its marker and the memories that persist across runs;
+REQ-WORKSPACE-100; OQ-161's ruling, which accepted the listing; OQ-195, deferred. Raised 2026-10-07 from findings L3 of the
+orchestrator's duress live run at `c2fdd6a` and N6 of its duress live run at `c2a9444` (2026-10-06, the self-hosted
+endpoint), and ruled the same day.)*
+
+OQ-161's ruling (R-071) accepted that the file tools list the runtime's directory: the load writes it to the repository's
+`info/exclude`, so Git treats it as the product's housekeeping, while the scan reads only the root `.gitignore` and shows it
+to the agents as the user's content. That clause was accepted on one run's evidence (`27a5127`, finding H3: 38 calls by 5
+agents and 80 rows naming `.serena`). The two duress runs since measured it again. At `c2fdd6a` (L3), 5 agents made 41 calls
+and wrote 112 rows naming it, and 37 of the failed child d2's 45 requests, 1,142.5 s of its 1,222.6 s of generation, reasoned
+about `.serena`, `.rotaris` or `.git` on the run's critical path; both defects the user was told of concerned product files.
+At `c2a9444` (N6), 28 calls and 96 rows named it, a `write_memory` put a file in the tree, and the delivered overview listed
+the runtime's files as repository files. The build handled the directory two ways: REQ-TOOLS-140's `cache` hid its `cache/`
+and listed `project.yml` and the memories.
+
+**What the build proceeded under, until 2026-10-07.** OQ-161's ruling as built: `IGNORE_COMPONENTS`
+(`packages/agent-tools/src/tools/search.ts`) held REQ-TOOLS-140's list alone, so grep, glob and `read_file`'s listings walked
+the directory; the version-control half (`keepScopeDirIgnored`, `packages/config/src/load.ts`) held in all four duress runs.
+
+**What a ruling decides.** Whether the directory joins the hard-coded components (a directive extending REQ-TOOLS-140's
+closed list), the scan honours `info/exclude` (a rewrite of REQ-TOOLS-139 that covers no workspace where no line is
+written), or the memories leave the tree (against REQ-MCP-034, REQ-MCP-099 and REQ-MCP-102, on a runtime option no manifest
+field records); or the ruling stands.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the code-intelligence runtime's
+marker directory joins REQ-TOOLS-140's hard-coded ignore components under
+[`PD-TOOLS-012`](../product/directives.md#pd-tools-012). Its name is read from the binding manifest of REQ-MCP-116. grep and
+glob scans and `read_file`'s directory and parent listings therefore skip it as they skip `.rotaris`, and `read_file` and
+`haet_read` still serve a file inside it when it is named by path. The rest of OQ-161's ruling stands as built: `.rotaris/`
+alone goes in `.gitignore` and the marker's directory in the repository's `info/exclude`; the marker and its memories stay in
+the workspace root and are reached through the memory tools; the agents' instructions are unchanged; and where an isolated
+tree's memories live stays with OQ-195, which the owner deferred. **The two recommendations weighed:** advocate A (the
+user's lens) recommended revising OQ-161's listing clause so the directory, named from the manifest, joins the hard-coded
+components, with the memories, the exclude line and the instructions left as built; advocate B (the system's lens)
+recommended the same revision, minted as `PD-TOOLS-012` extending REQ-TOOLS-140, in a new entry with a superseding line in
+OQ-161's. The ruling followed **both**, in B's shape for the record; A's later sentence in the agents' instructions waits on
+measurement. A scan rooted inside an ignored component, which the ruling found still walked, is a separate question, OQ-219.
+**Built 2026-10-07 (fin27):** `IGNORE_COMPONENTS` takes `CODE_INTELLIGENCE_MARKER_SEGMENTS[0]` from `@rotaris/config`; the
+one set feeds the walker and `listing` (`files.ts`). Pinned by the case "the code-intelligence marker directory is a
+hard-coded ignore component, named by the manifest" in `packages/agent-tools/src/tools/tools.test.ts`, red on `d12f1f2`.
+Findings L3, N6 and H3 close with it; the next duress live run is the measurement.

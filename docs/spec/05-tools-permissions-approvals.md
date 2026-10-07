@@ -461,6 +461,8 @@ Given `haet_edit` is called, when the SHA-256 digest of the file's current bytes
 
 **REQ-TOOLS-140** — The hard-coded ignore components are: `.git`, `.hg`, `.svn`, `.idea`, `.vscode`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`, `.tox`, `.venv`, `__pycache__`, `dist`, `venv`, `node_modules`, `.pnpm`, `.next`, `.nuxt`, `coverage`, `.turbo`, `cache`, `build`, `out`, `target`, `.nx`, `.rotaris`.
 
+> **Extended by [`PD-TOOLS-012`](../product/directives.md#pd-tools-012), 2026-10-07.** The list above still governs; the directive adds one member, the directory holding the code-intelligence runtime's per-project marker, named by the first segment of the marker path in REQ-MCP-116's binding manifest, so REQ-TOOLS-139's scans and REQ-TOOLS-134's listings skip it as they skip `.rotaris`, and a file in it named by its path is still served.
+
 **REQ-TOOLS-141** — `glob` accepts `pattern` (e.g., `**/*.py`) and `base_path` (a relative directory; a base outside the workspace or not a directory is silently ignored and the workspace root used). Results are workspace-relative POSIX paths, deduplicated and sorted alphabetically, or `No files found`. Absolute path patterns are relativized to the workspace or dropped. Observable results (filters, format, ordering, caps) are identical whether or not an external search accelerator is present on the host.
 
 ### 17. Local Git Tools

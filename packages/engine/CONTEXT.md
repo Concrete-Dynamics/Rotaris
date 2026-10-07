@@ -56,7 +56,8 @@ blocks at the **plan gate** until the user approves, revises or cancels. — `RE
 **Run override**:
 A user-chosen final layer over the playbook, taking precedence over the matrix cell. Exactly two
 exist: `swarm`, which changes instruction text only, and `single`, which is a capability change —
-the entry role works alone and `delegate` is withheld from every role for the whole run. —
+the entry role works alone and `delegate` is withheld from every role for the whole run. On a run the
+intent-to-tools mapping grants the direct-work bundle, `swarm` changes nothing (`PD-ORCH-006` revision 3). —
 `REQ-ORCH-025`
 
 **Message-limit pause**:

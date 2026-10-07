@@ -193,12 +193,13 @@ export const SWARM_PLAN_HELD_NOTE = 'While this run\'s plan awaits approval no c
  *
  * The reason this exists, kept beside it: until 2026-10-06 (finacc3, finding F07) no reader of the instructions read the
  * override, so a `swarm` run was the same run as an `orchestrator` one
- * (`docs/defects/the-swarm-run-override-changes-no-instruction-text.md`). The first repair placed the
+ * (`docs/defects/fixed/the-swarm-run-override-changes-no-instruction-text.md`). The first repair placed the
  * text after the playbook but before the context units and the MCP section, and called that the final layer; it was not.
  *
- * On a run the mapping grants the direct-work bundle, `PD-ORCH-006` tells the entry role to do the work itself, and which of
- * that and the `swarm` demand such a run is told is OQ-205, open. Until it is ruled the build proceeds under the reading
- * OQ-205 records: the direct-work statement alone, no `swarm` text beside it.
+ * On a run the mapping in force grants the direct-work bundle (built-in or a user's mapping file), `PD-ORCH-006` revision 3
+ * (OQ-205 as ruled, R-072) governs REQ-ORCH-025's `swarm`: the entry role is told the direct-work statement alone and no
+ * `swarm` text on any turn, the turn the plan gate holds and a continuation included. Until 2026-10-07 this was OQ-205's
+ * reading while it was open; the ruling confirmed it as built.
  */
 export function runOverrideLayer(override: 'single' | 'swarm' | null, grant: IntentGrant | null, role: Pick<Persona, 'tools'> | null, planHeld = false): string {
   if (override !== 'swarm' || grant === 'direct-work' || role?.tools.includes('delegate') !== true) return '';

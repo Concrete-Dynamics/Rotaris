@@ -25,7 +25,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  function preflightOf(grant: 'direct-work' | 'none', category: 'single_file_change' | 'question' | 'whole_project'): Preflight {
+  function preflightOf(grant: 'direct-work' | 'none', category: 'single_file_change' | 'question' | 'whole_project' | 'small_feature'): Preflight {
     return {
       intent: { category, confidence: 0.9, reason: 'test', fallback: false, carried_over: false }, grant, route: category === 'question' ? 'answer' : 'work',
       resolvedPlaybooks: { orchestrator: { row: 'orchestrator:micro:any', text: 'PLAYBOOK\nROUTE: routed text', cell: { ROUTE: 'routed', AUTONOMY: 'proceed', RESEARCH: 'targeted', CHUNKING: 'single', VERIFY: 'run_checks', ARTIFACT: 'none', OUTPUT: 'report', BUDGET: 'tight' } } },
@@ -91,7 +91,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     expect(coordinated).not.toContain(DIRECT_WORK_INSTRUCTION);
   });
   const systemOf = (client: ScriptedModelClient, request = 0) => client.requests[request]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
-  it('REQ-ORCH-025: a `swarm` run is told to delegate as widely as it can, as the last thing its instructions carry, where the coordinator coordinates; an `orchestrator` run is not (the-swarm-run-override-changes-no-instruction-text.md, the half OQ-205 does not hold)', async () => {
+  it('REQ-ORCH-025: a `swarm` run is told to delegate as widely as it can, as the last thing its instructions carry, where the coordinator coordinates; an `orchestrator` run is not (the-swarm-run-override-changes-no-instruction-text.md, the other half is PD-ORCH-006 revision 3\'s)', async () => {
     const coordinating = BUILT_IN_PERSONAS.orchestrator.systemPrompt;
     const mcpSection = '## MCP servers\n\n_No MCP servers configured._';
     const unit = 'Skill catalog: none loaded.';
@@ -111,8 +111,8 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     expect(swarm).toBe(`${orchestrator}\n\n${SWARM_INSTRUCTION}`);
     expect(swarm.endsWith(SWARM_INSTRUCTION)).toBe(true);
     for (const before of ['PLAYBOOK\nROUTE: routed text', unit, mcpSection]) expect(swarm.indexOf(SWARM_INSTRUCTION)).toBeGreaterThan(swarm.indexOf(before));
-    // OQ-205's reading, until it is ruled: a run the mapping grants the direct-work bundle is told to do the work itself and
-    // carries no `swarm` demand beside it (PD-ORCH-006).
+    // PD-ORCH-006 revision 3 (OQ-205 as ruled, R-072): a run the mapping grants the direct-work bundle is told to do the work
+    // itself and carries no `swarm` demand beside it.
     const granted = await promptOf('direct-work', 'single_file_change', 'swarm');
     expect(granted).toContain(DIRECT_WORK_INSTRUCTION);
     expect(granted).not.toContain(SWARM_INSTRUCTION);
@@ -153,6 +153,32 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     expect(free).not.toContain(SWARM_PLAN_HELD_NOTE);
     const held = await promptOf('plan');
     expect(held.endsWith(`${SWARM_INSTRUCTION}\n\n${SWARM_PLAN_HELD_NOTE}`)).toBe(true);
+  });
+  it('PD-ORCH-006 revision 3 (OQ-205 as ruled, R-072): a `swarm` run a file mapping grants (`small_feature`) is told to do the work itself, with no `swarm` text', async () => {
+    const run = sessionsWith([answer('done')], preflightOf('direct-work', 'small_feature'), undefined, undefined, NONE, BUILT_IN_PERSONAS.orchestrator.systemPrompt, 'swarm');
+    const sid = (run.sessions.start(dal, 'C:/ws', 'add the small feature') as { value: SessionId }).value;
+    expect((await run.sessions.running(sid)!).status).toBe('completed');
+    const prompt = systemOf(run.client);
+    expect(prompt).toContain(DIRECT_WORK_INSTRUCTION);
+    expect(prompt).not.toContain(SWARM_INSTRUCTION);
+    expect(prompt).not.toContain('## Run override');
+  });
+  it('PD-ORCH-006 revision 3 (OQ-205 as ruled, R-072): a granted `swarm` run held at the plan gate is told no `swarm` text on the held turn, nor on its first turn after approval', async () => {
+    const run = sessionsWith([answer('the plan'), answer('done')], preflightOf('direct-work', 'single_file_change'), undefined, undefined, NONE, BUILT_IN_PERSONAS.orchestrator.systemPrompt, 'swarm', { runStartMode: 'plan' });
+    const sid = (run.sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
+    expect((await run.sessions.running(sid)!).status).toBe('interrupted');
+    const held = systemOf(run.client);
+    expect(held).not.toContain(SWARM_INSTRUCTION);
+    expect(held).not.toContain(SWARM_PLAN_HELD_NOTE);
+    // PD-ORCH-006: the held turn keeps the coordinating prompt; the approved turn is told to do the work itself.
+    expect(held).not.toContain(DIRECT_WORK_INSTRUCTION);
+    expect(run.sessions.planDecision(sid, 'approve').ok).toBe(true);
+    expect((await run.sessions.running(sid)!).status).toBe('completed');
+    expect(run.client.requests.length).toBe(2);
+    const approved = systemOf(run.client, 1);
+    expect(approved).toContain(DIRECT_WORK_INSTRUCTION);
+    expect(approved).not.toContain(SWARM_INSTRUCTION);
+    expect(approved).not.toContain(SWARM_PLAN_HELD_NOTE);
   });
   it('REQ-ORCH-025, REQ-ORCH-150: a continuation of a `swarm` run is told the swarm text after its playbook, as its launch was; an `orchestrator` continuation is not', async () => {
     const coordinating = BUILT_IN_PERSONAS.orchestrator.systemPrompt;

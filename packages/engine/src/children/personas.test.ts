@@ -61,8 +61,9 @@ describe('engine/personas — the run override\'s layer of the entry role\'s ins
     expect(runOverrideLayer('swarm', 'none', BUILT_IN_PERSONAS['coding-agent'])).toBe('');
     expect(runOverrideLayer('swarm', 'none', null)).toBe('');
   });
-  it('OQ-205\'s reading until it is ruled: a run granted the direct-work bundle carries no `swarm` text beside PD-ORCH-006\'s statement', () => {
+  it('PD-ORCH-006 revision 3 (OQ-205 as ruled, R-072): a run granted the direct-work bundle carries no `swarm` text beside the directive\'s statement, on any turn', () => {
     expect(runOverrideLayer('swarm', 'direct-work', orchestrator)).toBe('');
+    expect(runOverrideLayer('swarm', 'direct-work', orchestrator, true)).toBe('');
   });
 });
 

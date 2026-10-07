@@ -96,4 +96,10 @@ describe('the back-pointers in docs/spec agree with the directive register', () 
     expect(EXTENDED_BY['REQ-ORCH-139' as keyof typeof EXTENDED_BY]).toBe('PD-ORCH-014');
     expect(EXTENDED_BY['REQ-NOTIFY-268' as keyof typeof EXTENDED_BY]).toBe('PD-ORCH-014');
   });
+
+  it('PD-ORCH-006 revision 3 (OQ-205 as ruled, R-072): REQ-ORCH-025 is narrowed by PD-ORCH-006 beside REQ-ORCH-029, and each note says so', () => {
+    expect(NARROWED_BY['REQ-ORCH-025' as keyof typeof NARROWED_BY]).toBe('PD-ORCH-006');
+    expect(NARROWED_BY['REQ-ORCH-029' as keyof typeof NARROWED_BY]).toBe('PD-ORCH-006');
+    expect(backPointers().filter((p) => p.requirement === 'REQ-ORCH-025').map((p) => `${p.verb} ${p.directive}`)).toEqual(['Narrowed PD-ORCH-006']);
+  });
 });

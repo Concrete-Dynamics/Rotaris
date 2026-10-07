@@ -300,7 +300,8 @@ direct-work bundle and the entry role declares `delegate`, and `runTurn` appends
 the MCP section included (`withRunOverrideLayer`, `TurnDeps.runOverrideLayer`). The text has its own heading, says it takes
 precedence over the playbook's CHUNKING and BUDGET guidance where they differ, and is pointed at the plan while the plan gate
 holds. `RuntimePosture.runOverride` reaches the run as `RunDeps.runOverride` beside `coordinating`, at the launch and at a
-continuation. A run granted the bundle carries no `swarm` text until OQ-205 is ruled. The **runtime view** says so in its own
+continuation. A run granted the bundle carries no `swarm` text: OQ-205's reading, confirmed as built on 2026-10-07 by
+`PD-ORCH-006` revision 3 (R-072). The **runtime view** says so in its own
 paragraph after the instruction files'; repair round 1 moved the layer from before the context units to after the MCP
 section. No package, edge, process, channel, command or store column changed.
 

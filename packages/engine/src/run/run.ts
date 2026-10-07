@@ -1852,7 +1852,8 @@ export class Run {
       // so a skill force-loaded since the last turn reaches this agent (REQ-CONFIG-166).
       systemPrompt: withContextUnits(withPlaybook(this.planHeld ? config.systemPrompt : entryInstructions, this.preflightInEffect?.playbookFor(config.persona, true) ?? ''), this.deps.contextUnits?.() ?? []),
       // REQ-ORCH-025: the run override's layer, which `runTurn` places after everything else, the MCP section included
-      // (`withRunOverrideLayer`); pointed at the plan while the gate holds (REQ-ORCH-153). OQ-205 holds a granted run's.
+      // (`withRunOverrideLayer`); pointed at the plan while the gate holds (REQ-ORCH-153). A run the mapping grants the
+      // direct-work bundle gets none (PD-ORCH-006 rev 3, OQ-205 as ruled, R-072).
       runOverrideLayer: runOverrideLayer(this.deps.runOverride ?? null, this.preflightInEffect?.grant ?? null, entryPersona ?? null, this.planHeld),
       model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,

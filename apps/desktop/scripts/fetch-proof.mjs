@@ -1,7 +1,7 @@
 /**
  * The fetch proof (Part N): ADR-0023's second first execution — the `fetch` tool behind the real run host, its
  * egress policy read from the workspace's SAVED configuration at each call (REQ-SANDBOX-038). Scripted client,
- * scratch store, one `node:http` server on 127.0.0.1 that RECORDS EVERY REQUEST PATH, and seven launches against
+ * scratch store, one `node:http` server on 127.0.0.1 that RECORDS EVERY REQUEST PATH, and eight launches against
  * one scratch profile, the workspace's `agents.yaml` rewritten between them (a saved edit takes effect on the
  * next fetch with no restart — which is also what proves REQ-SANDBOX-038):
  *
@@ -19,6 +19,10 @@
  * Launch 1 also reads the instructions the model port received (`ROTARIS_CAPTURE_MODEL_REQUESTS`): the run is
  * `explicit_trivial`, so the coordinator is told to do the work itself (OQ-202 as ruled, PD-ORCH-006), and its playbook's
  * ROUTE slot is the entry role's own, never the `routed` text a delegated specialist reads (K3 of the live run at c2fdd6a).
+ * Launch 8, `swarm-granted`, saves `rotaris.delegation_strategy: swarm` and reads the same capture: on the `explicit_trivial`
+ * run the mapping grants the bundle, so the coordinator's first request carries the direct-work statement, no
+ * `## Run override: swarm` heading, and offers `write_file`, `terminal` and `delegate` (PD-ORCH-006 revision 3, OQ-205 as
+ * ruled, R-072).
  *
  * Each scenario asserts the tool row's observation from the store's `tool_calls` and the server's request log, and
  * reads the run host's `fetch: egress policy read … in N ms` line for the per-call load's cost.
@@ -78,9 +82,10 @@ mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# Fetch proof workspace\n');
 
 /** REQ-SANDBOX-038: the workspace file is REWRITTEN between launches; the next fetch reads it — no restart of anything but the proof's own launch. */
-function saveConfiguration(runtime) {
+function saveConfiguration(runtime, strategy = null) {
   const lines = ['# scratch configuration written by the fetch proof', 'models:', '  scripted: { provider: scripted, model_id: scripted }', 'small_model: scripted', 'medium_model: scripted', 'large_model: scripted', 'mcp_servers:', '  code_intelligence: { enabled: false }', 'runtime:']; // the code_intelligence entry off: its discovery costs every run start about 4.5 s since Part T (ADR-0035's note, finding 6)
   for (const [key, value] of Object.entries(runtime)) lines.push(`  ${key}: ${Array.isArray(value) ? `[${value.map((v) => JSON.stringify(v)).join(', ')}]` : String(value)}`);
+  if (strategy !== null) lines.push('rotaris:', `  delegation_strategy: ${strategy}`);
   lines.push('');
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), lines.join('\n'));
 }
@@ -96,8 +101,8 @@ function spawnElectron(env) {
   return spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], { timeoutMs: 150_000, cwd: app, env });
 }
 
-async function launch(name, url, runtime, extra = {}) {
-  saveConfiguration(runtime);
+async function launch(name, url, runtime, extra = {}, strategy = null) {
+  saveConfiguration(runtime, strategy);
   seen.length = 0;
   const result = await spawnElectron({
     ...extra,
@@ -194,6 +199,21 @@ try {
   expectText(slow, /did not complete within 1 s, the deadline supplied by the owning run's runtime\.tool_call_timeout\./);
   if (slow.seen.join(',') !== '/slow') throw new Error(`timeout: the server saw ${JSON.stringify(slow.seen)}`);
   results.timeout = { failureKind: slow.failureKind, timeoutSeconds: slow.diagnostic.timeout_seconds, seen: slow.seen, loadMs: slow.loadMs };
+
+  // 8. PD-ORCH-006 revision 3 (OQ-205 as ruled, R-072): a `swarm` run the mapping grants the direct-work bundle is told to
+  // do the work itself, carries no `swarm` layer, and is offered the bundle with `delegate` in it.
+  const swarmRequests = join(output, 'swarm-granted.model-requests.jsonl');
+  writeFileSync(swarmRequests, '');
+  const swarmGranted = await launch('swarm-granted', `${origin}/ok`, { permission_mode: 'autonomous' }, { ROTARIS_CAPTURE_MODEL_REQUESTS: swarmRequests }, 'swarm');
+  if (swarmGranted.isError) throw new Error(`swarm-granted: the fetch failed: ${swarmGranted.result}`);
+  const swarmCalls = readFileSync(swarmRequests, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l)).filter((c) => c.who === 'orchestrator');
+  if (swarmCalls.length === 0) throw new Error('swarm-granted: the model port recorded no orchestrator call, so the instructions are unobserved');
+  const swarmSystem = swarmCalls[0].system;
+  if (!swarmSystem.includes('For this run you hold the tools to read and write files and run commands yourself')) throw new Error(`swarm-granted: the granted run's instructions do not say the coordinator does the work itself:\n${swarmSystem}`);
+  if (swarmSystem.includes('## Run override: `swarm`')) throw new Error(`swarm-granted: the granted run carries the swarm layer beside the direct-work statement:\n${swarmSystem}`);
+  const offered = swarmCalls[0].tools ?? [];
+  for (const tool of ['write_file', 'terminal', 'delegate']) if (!offered.includes(tool)) throw new Error(`swarm-granted: the granted run was not offered ${tool}: ${offered.join(', ')}`);
+  results.swarmGranted = { directWorkInstructions: true, swarmLayer: false, offered: offered.length, loadMs: swarmGranted.loadMs };
 
   const loads = Object.values(results).map((r) => r.loadMs);
   results.policyRead = { perCallMs: loads, medianMs: [...loads].sort((a, b) => a - b)[Math.floor(loads.length / 2)], maxMs: Math.max(...loads) };

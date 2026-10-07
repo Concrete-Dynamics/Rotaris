@@ -13,12 +13,12 @@ Noticed 2026-10-06 (fin22, bundle `fin22-record-tidy`) while naming the `swarm` 
 verifier finding of fin20. Not repaired: the bundle is wording only.
 
 A repair has one interaction to settle: on the intents the mapping grants the direct-work bundle (`explicit_trivial`,
-`single_file_change` with the built-in mapping), [`PD-ORCH-006`](../product/directives.md#pd-orch-006) tells the entry role
+`single_file_change` with the built-in mapping), [`PD-ORCH-006`](../../product/directives.md#pd-orch-006) tells the entry role
 to do the work itself, and a `swarm` demand for maximum delegation beside that statement would put back the contradiction
 the directive removed (finding G2 of the default live run at `27a5127`). Which of the two a granted `swarm` run is told is
 not decided by REQ-ORCH-016, REQ-ORCH-025 or the directive, and REQ-ORCH-025's "keeps its coordinating status and its
 coordination-only tool set" meets REQ-ORCH-016's grant on those intents. It is raised as
-[OQ-205](../architecture/open-questions.md) (2026-10-06, the repair round of the same bundle), open, with the reading the
+[OQ-205](../../architecture/open-questions.md) (2026-10-06, the repair round of the same bundle), open, with the reading the
 build proceeds under: the bundle granted, the direct-work statement, and no `swarm` text. This note stays open on it: the
 `swarm` text on the other intents can be built whichever way OQ-205 is ruled, and what it says on a granted intent waits on
 the ruling.
@@ -51,6 +51,17 @@ ending with the plan-gate note — and six cases in
 instructions): the `swarm` run's differ from the `orchestrator` run's by the layer alone, after `## MCP servers` and ending the
 prompt. **Still open** on the other half: what a `swarm` run on a granted intent is told
 waits on OQ-205, and until it is ruled such a run is told PD-ORCH-006's statement with no `swarm` text beside it.
+
+
+**Closed 2026-10-07: the other half is ruled as built.** OQ-205 was ruled under the owner's delegation
+([R-072](../../product/requests.md#r-072)) and carried by [`PD-ORCH-006`](../../product/directives.md#pd-orch-006) revision 3,
+which narrows REQ-ORCH-025: on a run the mapping in force grants the direct-work bundle, a `swarm` override changes nothing the
+run holds or is told, on any turn, so the direct-work statement alone is what the build should render there, and does. No code
+changed. Pinned by `intent/intent.test.ts`, `children/personas.test.ts` and two `run/preflight.test.ts` cases (a file-mapping
+grant; a plan-held granted run and its first turn after approval), each red with the granted-run check removed; shown in the
+built app by `pnpm fetch-proof`'s `swarm-granted` launch (the direct-work statement, no `## Run override` heading, `write_file`,
+`terminal` and `delegate` offered). The REQ-ORCH-150 citation below is answered by the same directive: the override is offered
+to every run alike, and by the directive has no effect on a granted run.
 
 ## Specs
 

@@ -3293,6 +3293,11 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 
 ### PD-ORCH-006 — a coordinator granted the direct-work bundle does the work itself, and is told so
 
+*Revision 3 (2026-10-07, [R-072](requests.md#r-072)) — **a `swarm` run the mapping grants**, the ruling of OQ-205 under the
+owner's delegation: the paragraph **A `swarm` run** becomes a governing clause, and REQ-ORCH-025 joins the Narrows line. The
+generator admits one narrowing directive per requirement, so any later narrowing of REQ-ORCH-025 also lands here. Revisions 1
+and 2 are otherwise unchanged.*
+
 *Revision 2 (2026-10-06, [R-071](requests.md#r-071)) — **which todo items REQ-ORCH-029's success clause ranges over**, a
 section added after the directive's first two paragraphs; the owner's ruling of OQ-203. One clause of the first paragraph is
 qualified there and quoted beside its replacement. This directive is the one that narrows REQ-ORCH-029, and the symbol
@@ -3318,21 +3323,31 @@ configuration (REQ-CONFIG-100) is kept whole, with that statement after it. Whil
 coordinating run. Every other run keeps REQ-ORCH-029 whole. *(Qualified by revision 2: on every run, the todo clause
 ranges over the task's own items, below.)*
 
-**A `swarm` run** (named 2026-10-06, a wording addition; nothing above changes, and this directive governs over
-REQ-ORCH-029 alone). A `swarm` override is not an input to the mapping (REQ-ORCH-016), so a `swarm` run whose intent the
-mapping grants is granted the bundle, and the paragraphs above reach it as they reach any run granted the bundle. That
-meets a clause this directive does not name: REQ-ORCH-025's `swarm` keeps "its coordinating status and its
-coordination-only tool set" and demands maximum parallel delegation, by instruction text alone. The two requirements do
-not say which governs such a run, and the question is raised as [OQ-205](../architecture/open-questions.md), which is
-open. The build proceeds under the reading OQ-205 records: the run holds the bundle with `delegate` in it, keeps its
-coordinating status in REQ-ORCH-025's sense (it is not a `single` run, so nothing is withheld), and is told that it does
-the work itself. No `swarm` demand stands beside that statement, since the build renders REQ-ORCH-025's `swarm` text on
-no run (`packages/engine/src/children/personas.ts` reads no run override;
-[the defect recorded for it](../defects/the-swarm-run-override-changes-no-instruction-text.md)). *(The reason, corrected
-2026-10-06, finacc3, finding F07: the build now renders the `swarm` text on every run the mapping does not grant the bundle,
-`withRunOverride`, and withholds it on a granted run by a check of its own, OQ-205's reading; the outcome on a granted run is
-unchanged. In that bundle's repair round 1 the function became `runOverrideLayer`, its text placed after everything else the
-prompt carries by `runTurn`; the check on a granted run is the same.)*
+**A `swarm` run — revision 3.** Where the intent-to-tools mapping in force, built-in or a user's mapping file, grants the
+entry role the direct-work bundle, a `swarm` override SHALL change nothing that run holds or is told. The entry role holds the
+bundle with `delegate` in it and is given this directive's direct-work statement. It is given no `swarm` text on any turn of
+the run, including the turn the plan gate holds and a continuation. REQ-ORCH-025's coordination-only tool set and its demand
+for maximum parallel delegation do not reach that run. Its coordinating status in REQ-ORCH-025's sense stands: it is not a
+`single` run, nothing is withheld, and the REQ-ORCH-029 constraints this directive leaves binding still bind. On every run the
+mapping does not grant, REQ-ORCH-025's `swarm` governs as written. `swarm` stays outside the mapping's inputs (REQ-ORCH-016)
+and is offered to every run alike (REQ-ORCH-150).
+
+> *Revision 2 said, and no longer governs:*
+> **A `swarm` run** (named 2026-10-06, a wording addition; nothing above changes, and this directive governs over
+> REQ-ORCH-029 alone). A `swarm` override is not an input to the mapping (REQ-ORCH-016), so a `swarm` run whose intent the
+> mapping grants is granted the bundle, and the paragraphs above reach it as they reach any run granted the bundle. That
+> meets a clause this directive does not name: REQ-ORCH-025's `swarm` keeps "its coordinating status and its
+> coordination-only tool set" and demands maximum parallel delegation, by instruction text alone. The two requirements do
+> not say which governs such a run, and the question is raised as [OQ-205](../architecture/open-questions.md), which is
+> open. The build proceeds under the reading OQ-205 records: the run holds the bundle with `delegate` in it, keeps its
+> coordinating status in REQ-ORCH-025's sense (it is not a `single` run, so nothing is withheld), and is told that it does
+> the work itself. No `swarm` demand stands beside that statement, since the build renders REQ-ORCH-025's `swarm` text on
+> no run (`packages/engine/src/children/personas.ts` reads no run override;
+> [the defect recorded for it](../defects/fixed/the-swarm-run-override-changes-no-instruction-text.md)). *(The reason, corrected
+> 2026-10-06, finacc3, finding F07: the build now renders the `swarm` text on every run the mapping does not grant the bundle,
+> `withRunOverride`, and withholds it on a granted run by a check of its own, OQ-205's reading; the outcome on a granted run is
+> unchanged. In that bundle's repair round 1 the function became `runOverrideLayer`, its text placed after everything else the
+> prompt carries by `runTurn`; the check on a granted run is the same.)*
 
 **Which todo items the success clause ranges over (revision 2).** On every run, coordinating or granted the bundle,
 REQ-ORCH-029's constraint "it does not report the run successful while a todo item is non-terminal" SHALL range over the
@@ -3354,9 +3369,22 @@ coordinator's own file-modifying calls, which REQ-ORCH-029 says a coordinating r
 tells the two apart by the launch audit's `intent_grant`. A `single` override, which REQ-ORCH-025 already takes out of
 REQ-ORCH-029, carries the same grant and is given the same instructions.
 
-> **Narrows:** REQ-ORCH-029
+*Revision 3's why and cost.* Why: a `swarm` demand beside the direct-work statement would put back finding G2, which cost
+14.5 s and 1,034 output tokens at `27a5127`; with the statement alone the default live run at `c2a9444` measured 2,910 ms and
+83 output tokens for the `frictions` scenario's first `explicit_trivial` request, which went straight to `write_file`, and the
+`c2fdd6a` autopsy records G2 as gone. The built-in granted intents fall in the micro cell, CHUNKING `single` with BUDGET
+`tight`, and `SWARM_INSTRUCTION`'s own rule that a one-item task stays one delegation leaves a single delegation all `swarm`
+could ask there. The strategy (`rotaris.delegation_strategy`) is a standing workspace setting, so any other reading would slow
+every trivial edit in a `swarm` workspace. Withholding the grant instead would break REQ-ORCH-016's "not an input", the
+Specification Gate's resolution 14 ("`swarm` is unaffected and stays instruction-only") and REQ-ORCH-025's own "changes
+instruction text only". Cost: `swarm` has no effect on a granted run and no surface says so; the launch audit's
+`intent_grant` and `config_snapshot.delegation_strategy` tell a reader why. A user mapping that grants a larger intent silences
+`swarm` on that intent, and the run's records show the coordinator's own file-modifying calls under `swarm`.
 
-*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), which ruled OQ-202 as recommended.*
+> **Narrows:** REQ-ORCH-029, REQ-ORCH-025
+
+*Raised by the owner, 2026-10-06; logged as [R-071](requests.md#r-071), which ruled OQ-202 as recommended. Revision 3 raised
+under the owner's delegation, 2026-10-07, ruling OQ-205; logged as [R-072](requests.md#r-072).*
 
 > **First execution, 2026-10-06 (fin20).** `entryInstructionsFor` (`packages/engine/src/children/personas.ts`) gives the
 > entry role its instructions for the run's grant, read by `Run`'s root turn (`packages/engine/src/run/run.ts`) with the
@@ -3367,6 +3395,19 @@ REQ-ORCH-029, carries the same grant and is given the same instructions.
 > received on its `explicit_trivial` launch. **What was not measured.** No live run: the orchestrator's default live run's
 > `frictions` scenario should show the coordinator's first request answered without reasoning about the contradiction. The
 > row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 3, 2026-10-07 (fin27), under [R-072](requests.md#r-072):** confirmed as built, no behaviour
+> changed; the clause held as written. **What was measured.** `intent/intent.test.ts` (a `swarm` override keeps the grant
+> of the built-in mapping and of a file mapping granting `small_feature`), `children/personas.test.ts` (no layer on a granted
+> run, held at the plan gate or not), two `run/preflight.test.ts` cases (a file-mapping grant carries the direct-work
+> statement and no `SWARM_INSTRUCTION`; a plan-mode granted run's held turn carries neither `SWARM_INSTRUCTION` nor
+> `SWARM_PLAN_HELD_NOTE`, and its first turn after approval carries the statement and no `swarm` text), each red with the
+> granted-run check in `runOverrideLayer` removed, and `tools/symbol-artifact/back-pointers.test.ts` (REQ-ORCH-025 narrowed
+> by this directive). In the built app, `pnpm fetch-proof`'s launch 8, `swarm-granted` (`rotaris.delegation_strategy:
+> swarm`, `explicit_trivial`): the orchestrator's first request carries the direct-work statement, no `## Run override`
+> heading, and offers 17 tools, `write_file`, `terminal` and `delegate` among them (the scripted client's capture
+> now records the tool names it was offered). **What was not measured.** No live run: no live scenario takes a strategy, so
+> the built-app launch stands in. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

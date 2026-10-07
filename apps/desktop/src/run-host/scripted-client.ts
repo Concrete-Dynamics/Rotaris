@@ -17,6 +17,8 @@ export interface ScriptedCallRecord {
    * digest to read that the images a prompt was sent with reached the model port (REQ-CHAT-173, REQ-NOTIFY-045's retry).
    */
   readonly images: readonly string[];
+  /** The names of the tools the call offered, in listing order — what a proof reads to see a grant reach the model port. */
+  readonly tools: readonly string[];
 }
 
 /**
@@ -272,7 +274,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       calls[counterKey] = (calls[counterKey] ?? 0) + 1;
       // Verification only: the model each call went to, so a proof can read a fallback or an override from the log (Part Q).
       log(`scripted model call: ${req.model.providerId}/${req.model.modelId} (${who})`);
-      record?.({ call, who, model: `${req.model.providerId}/${req.model.modelId}`, system, images: req.messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'image' ? [createHash('sha256').update(Buffer.from(p.base64, 'base64')).digest('hex')] : []))) });
+      record?.({ call, who, model: `${req.model.providerId}/${req.model.modelId}`, system, images: req.messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'image' ? [createHash('sha256').update(Buffer.from(p.base64, 'base64')).digest('hex')] : []))), tools: (req.tools ?? []).map((t) => t.name) });
       if (who === 'classifier') {
         // ROTARIS_INTENT_SCRIPT: <category> | garbage | timeout | reject (the two JSON rungs refused, then text) — verification only.
         const want = (process.env['ROTARIS_INTENT_SCRIPT'] ?? 'moderate_feature').trim();

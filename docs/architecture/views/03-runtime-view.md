@@ -95,8 +95,8 @@ builds for the entry turn with `runOverrideLayer` (`children/personas.ts`) from 
 `SWARM_INSTRUCTION`, under its own heading ``## Run override: `swarm` ``, demands maximum parallel delegation and says it takes
 precedence over the playbook's CHUNKING and BUDGET guidance where they differ, within the child limits the run enforces;
 while the plan gate holds the run (REQ-ORCH-153) `SWARM_PLAN_HELD_NOTE` points it at the plan. None under `single`, a capability
-change; none for an entry role that declares no `delegate`; and none on a run granted the direct-work bundle, OQ-205's
-reading. Until finacc3's repair round 1 (2026-10-06) the layer was appended in `Run` after the playbook but before the
+change; none for an entry role that declares no `delegate`; and none on a run the mapping in force grants the direct-work
+bundle, on any turn, the held one and a continuation included (`PD-ORCH-006` revision 3, OQ-205 as ruled, R-072). Until finacc3's repair round 1 (2026-10-06) the layer was appended in `Run` after the playbook but before the
 context units and the MCP section, and carried no precedence sentence: "the final layer" in name only.
 
 **The cold path is timed, and it runs after first input.** `workspaceContext` reads the monotonic clock port four

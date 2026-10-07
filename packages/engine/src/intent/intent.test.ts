@@ -216,4 +216,10 @@ describe('REQ-ORCH-016/017/018/025 the intent gate', () => {
     expect(inv.warning).toMatch(/not applied: garbage/);
     expect(resolveIntentMapping({ kind: 'absent' })).toMatchObject({ source: 'built-in', warning: '' });
   });
+  it('PD-ORCH-006 revision 3 (OQ-205 as ruled, R-072): a `swarm` override keeps the grant the mapping in force gives, built-in or a file\'s', () => {
+    for (const c of ['explicit_trivial', 'single_file_change'] as const) expect(intentGrant(c, 'swarm', BUILT_IN_INTENT_MAPPING)).toBe('direct-work');
+    const file = resolveIntentMapping({ kind: 'value', mapping: { small_feature: 'direct-work' } });
+    expect(intentGrant('small_feature', 'swarm', file.mapping)).toBe('direct-work');
+    expect(intentGrant('small_feature', 'swarm', BUILT_IN_INTENT_MAPPING)).toBe('none');
+  });
 });

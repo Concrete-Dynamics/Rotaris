@@ -10389,8 +10389,8 @@ grant the entry role the direct-work bundle … a `swarm` override is not an inp
 [`PD-ORCH-006`](../product/directives.md#pd-orch-006), which narrows REQ-ORCH-029 alone and tells the entry role a run
 granted the bundle does the work itself. Raised 2026-10-06 by the repair of fin22's bundle `fin22-record-tidy`, from its
 verifier's finding, beside
-[`the-swarm-run-override-changes-no-instruction-text.md`](../defects/the-swarm-run-override-changes-no-instruction-text.md).
-Open.)*
+[`the-swarm-run-override-changes-no-instruction-text.md`](../defects/fixed/the-swarm-run-override-changes-no-instruction-text.md).
+~~Open.~~ Ruled 2026-10-07, confirmed as built.)*
 
 The two requirements meet on one run: a `swarm` override on an `explicit_trivial` or `single_file_change` intent (with
 the built-in mapping). REQ-ORCH-016 grants that run the direct-work bundle, since `swarm` is not an input to the
@@ -10423,6 +10423,24 @@ directive naming REQ-ORCH-025), or keeps the coordination-only tool set and the 
 so `swarm` becomes an input to REQ-ORCH-016's mapping as `single` is, and `PD-ORCH-006` does not reach that run), or
 keeps the bundle and is told both. The repair of the defect note can render REQ-ORCH-025's `swarm` text on the other
 intents whichever way this is ruled; what it renders on the granted ones waits on the ruling.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** on every run where the
+intent-to-tools mapping in force (the built-in mapping or a user's mapping file) grants the entry role the direct-work bundle,
+a `swarm` override changes nothing the run holds or is told. The entry role keeps the bundle with `delegate` in it and is given
+`PD-ORCH-006`'s direct-work statement. It is given no `swarm` text on any turn, including the turn the plan gate holds and any
+continuation. [`PD-ORCH-006`](../product/directives.md#pd-orch-006) revision 3 carries this by adding REQ-ORCH-025 to its
+Narrows line. On every run the mapping does not grant, REQ-ORCH-025's `swarm` governs as written, and REQ-ORCH-016 and
+REQ-ORCH-150 stay unchanged. **The two recommendations weighed:** advocate A (the user's lens) recommended confirming as built
+through `PD-ORCH-006` revision 3, since the strategy is a standing workspace setting and the micro cell's one-item task has
+nothing to fan out; advocate B (the system's lens) recommended the same confirmation, since withholding the grant would break
+REQ-ORCH-016's "not an input", the Specification Gate's resolution 14 and REQ-ORCH-025's own "instruction text only", and both
+texts together would restore finding G2. The ruling followed **both**, naming the plan-held turn and continuations, which
+neither stated, and taking the owed built-app evidence now. **Confirmed as built 2026-10-07 (fin27):** no behaviour change
+(`runOverrideLayer`, `packages/engine/src/children/personas.ts`, returns nothing on a granted run); pinned by
+`intent/intent.test.ts` (a `swarm` override keeps the grant of the built-in and of a file mapping), `children/personas.test.ts`
+(no layer on a granted run, held or not), two `run/preflight.test.ts` cases (a file-mapping grant; a plan-mode granted run's
+held turn and its first turn after approval), each red with the granted-run check removed, and
+`tools/symbol-artifact/back-pointers.test.ts`; shown in the built app by `pnpm fetch-proof`'s launch 8, `swarm-granted`.
 
 **OQ-206 — Which closes of a main window ask REQ-STARTUP-046's active-run confirmation, now that the instance holds several
 main windows and a quit can start outside any window?** *(REQ-STARTUP-046, "When a run is active, a confirmation SHALL be

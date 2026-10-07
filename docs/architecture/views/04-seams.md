@@ -209,7 +209,7 @@ Invariants:
 - **A `delegate` field the run must admit** lands in three places, as `todo_item` did (revision 6): the tool's schema and the
   `DelegationPort` request (`agent-tools/tools/delegation.ts`), `DelegateRequest` (`engine/children/delegation.ts`), and
   `IterationChildren.delegate`'s admission, before `ChildLedger.spawn`, with a refusal `rejected` and no record. A field the
-  child's record keeps is a store column (§3) and a `ChildSpawn` field carried by `spawn`.
+  child's record keeps is a store column (§3) and a `SpawnInput` field carried by `ChildLedger.spawn` into `ChildInsert`.
 - The gate decides; the executor never asks. An approval travels `gate → presenter → main → dialog` — see
   [`06-sequences.md` §2](06-sequences.md#2-a-permission-approval-end-to-end).
 - A tool that reaches the filesystem states its read roots; a tool that reaches the network reads the egress

@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**A failed child's Outcome line says whose outcome it is (OQ-217; the a68f121 duress run's D9, fin32).** `outcomeLine`
+(`engine/src/children/report.ts`) heads the line "Outcome of this agent, not of the session:", and the summarising ask names
+the agent and forbids a first sentence about the run or the session failing. The **runtime view**'s report paragraph says
+so. No package, edge, process, channel, command or store column changed.
+
 **A child's code-intelligence EDIT-tier writes are file-writing calls (PD-ORCH-004, REQ-MCP-015, REQ-ORCH-109; the a68f121
 duress run's D1, fin32).** `writtenPathsOf` (`engine/src/children/report.ts`) is the one reading of the paths a call writes:
 the three native file tools by `path`/`file_path`, and the binding manifest's `edit` tier by the argument its new

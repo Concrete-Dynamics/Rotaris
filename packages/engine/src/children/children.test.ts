@@ -2135,7 +2135,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       // (the continuation, which succeeded, is summarised with no Outcome line).
       const summarising = client.requests.map((r) => r.messages.map(textOf).join('\n')).filter((t) => t.includes('Condense the transcript below') && !t.includes('TASK: continue'));
       expect(summarising.length).toBeGreaterThan(0);
-      for (const t of summarising) expect(t).toContain(`Facts:\nOutcome: failed — Child timed out after 1200s. ${report.cut_off!.statement}\nEdited files: src/a.ts`);
+      for (const t of summarising) expect(t).toContain(`Facts:\nOutcome of this agent, not of the session: failed — Child timed out after 1200s. ${report.cut_off!.statement}\nEdited files: src/a.ts`);
       // The parent's resume message carries all three, after the report's result text.
       const resume = client.requests.filter((r) => /^You are the orchestrator/.test(textOf(r.messages[0]!)))[2]!;
       const block = textOf([...resume.messages].reverse().find((m) => m.role === 'user')!);
@@ -2155,7 +2155,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       // OQ-217: the pass is told the timeout, and no cut-off statement, since none was made.
       const asks = client.requests.map((r) => r.messages.map(textOf).join('\n')).filter((t) => t.includes('Condense the transcript below') && !t.includes('TASK: continue'));
       expect(asks.length).toBeGreaterThan(0);
-      for (const t of asks) expect(t).toContain('Facts:\nOutcome: failed — Child timed out after 1200s\nEdited files: src/a.ts');
+      for (const t of asks) expect(t).toContain('Facts:\nOutcome of this agent, not of the session: failed — Child timed out after 1200s\nEdited files: src/a.ts');
       const resume = client.requests.filter((r) => /^You are the orchestrator/.test(textOf(r.messages[0]!)))[2]!;
       expect(textOf([...resume.messages].reverse().find((m) => m.role === 'user')!)).not.toMatch(/Cut off|continuation/);
       // The root's attempt to continue it is refused before a record exists.

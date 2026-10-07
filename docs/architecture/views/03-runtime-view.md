@@ -1004,9 +1004,10 @@ facts — edited files (a write the record answers as refused, or cut before it 
 while under way is; since fin32 a code-intelligence EDIT-tier call is a write, its path read from the argument the binding
 manifest's `editArguments` names — `writtenPathsOf`, PD-ORCH-004), commands and exit codes (OQ-111; OQ-120 asks the facts' bound). The task is kept whole within the
 12,000, exempt from the 2,000 per event every other event keeps (OQ-119 as ruled, `PD-ORCH-007`). For a child the runner
-settled other than `succeeded`, the facts open with an **Outcome line** — the status, the end reasons the run recorded and,
-for a child cut off while making progress, PD-ORCH-004's statement (`ReportInput.cutOffStatement`) — and the ask tells the
-pass to state it first and never to call the task completed; a pass can never raise such a child's status (`shape`; OQ-217,
+settled other than `succeeded`, the facts open with an **Outcome line** — "Outcome of this agent, not of the session:" (since
+fin32, the a68f121 duress run's D9), the status, the end reasons the run recorded and, for a child cut off while making
+progress, PD-ORCH-004's statement (`ReportInput.cutOffStatement`) — and the ask, naming the agent, tells the pass to state it
+first as what happened to the agent, never as the run or the session failing, and never to call the task completed; a pass can never raise such a child's status (`shape`; OQ-217,
 R-072). A succeeded child's request is as it was;
 the parent resumes with the report. Every exit from an iteration leaves every child record terminal — except a rest
 (PD-ORCH-005), which leaves every unfinished child `paused`.

@@ -11058,6 +11058,30 @@ cut-off cases in `children.test.ts` (the request a scripted run sends carries th
 summary stating the limit in its first sentence and claiming no completion, every such report's status `failed`, and
 OQ-111's count of zero denials holding.
 
+*First live execution, 2026-10-07: the duress live run at `a68f121` (pack `2026-10-07T07-09-30-708Z` of the live worktree,
+session `e6747bd0`; its autopsy's L5 verdict and finding D9), reported here with the repair it led to (fin32).* **It held.**
+The two failed children, `wave3-verify-all` and its continuation `wave3b-finish-verification`, both cut off at the 1200 s
+limit while making progress, were summarised from facts opening "Outcome: failed — Child timed out after 1200s." with the
+cut-off statement; both stored summaries opened with the timeout and claimed no completion; both reports and both
+`child_end` records read `failed`. **Two things were wrong beside it, neither in the ruling.** (1) wave3b's facts also read
+"Edited files: (none)" over 11 `ok` edits through the code-intelligence EDIT tier, so its summary called the edits
+"attempted": the Outcome line was right and the fact it sat beside was false — PD-ORCH-004's changed-paths reading (finding
+D1), repaired by fin32
+([`a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md`](../defects/fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md)).
+(2) Both summaries opened "The run failed because the child [agent] timed out after 1200s …", and the timeline relayed them
+as "Child wave3-verify-all reported failed: The run failed because …" (entries 74 and 98) while the session completed
+`tasks_complete`: the sentence the ruling asked for read as the session failing (finding D9). **The repair, inside the
+ruling:** the line now says whose outcome it is — "Outcome of this agent, not of the session: failed — Child timed out after
+1200s." (`OUTCOME_HEAD`, `packages/engine/src/children/report.ts`) — and the ask names the agent, asks for the first sentence
+as what happened to the agent ("This agent was stopped at its time limit while …"), and forbids opening with "The run failed"
+or "The session failed", since the session may continue and succeed. The reading taken in the first execution above,
+"'Outcome: failed' is written with the status the runner settled", is kept with its new head. Pinned by `report.test.ts`'s
+case "OQ-217's first sentence is the agent's own outcome …" and the updated line cases there and in `children.test.ts`, red
+on the wording before ([`a-timed-out-childs-summary-opens-as-if-the-run-failed.md`](../defects/fixed/a-timed-out-childs-summary-opens-as-if-the-run-failed.md)).
+**Not measured:** a live run since the repair; it should show each failed child's summary opening with the agent and its own
+outcome, and no "The run failed" on the timeline of a session that completed. The row is in
+[`first-executions.md`](first-executions.md).
+
 **OQ-214 — Does a working child's 1200 s ceiling stay when a model that reasons before it answers fills each life with
 generation?** *(REQ-ORCH-088, the child timeout and its expiry path; REQ-CONFIG-113, `runtime.child_timeout`, default 1200;
 REQ-NOTIFY-100; REQ-MONITOR-121; REQ-ORCH-062 and REQ-TOOLS-156, which forbid a separate deadline on a wait because every

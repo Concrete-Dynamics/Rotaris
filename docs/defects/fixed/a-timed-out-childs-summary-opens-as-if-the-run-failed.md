@@ -20,3 +20,14 @@ Recorded 2026-10-07 before the repair (fin32).
 
 - `packages/engine/src/children/report.ts` — `outcomeLine` (the line's words) and `produceReport`'s `outcomeAsk` (the ask).
 - `packages/engine/src/children/report.test.ts`, `packages/engine/src/children/children.test.ts` — the cases pinning the line.
+
+## Outcome
+
+**Repaired 2026-10-07 by fin32**, inside OQ-217's ruling (no new ruling). The Outcome line now says whose outcome it is,
+"Outcome of this agent, not of the session: failed — Child timed out after 1200s." (`OUTCOME_HEAD`), and the ask names the
+agent, asks for the first sentence as what happened to the agent (for a time limit, "This agent was stopped at its time limit
+while …"), and forbids opening with "The run failed" or "The session failed", since the session may continue and succeed.
+A succeeded child's request is unchanged. Pinned by `report.test.ts`'s case "OQ-217's first sentence is the agent's own
+outcome …" and the line cases there and in `children.test.ts`, red on the wording before. What the model then writes is
+measured only by a live run; the next duress run should show each failed child's summary opening with the agent and its own
+outcome. Reported back in OQ-217's entry with its first live execution.

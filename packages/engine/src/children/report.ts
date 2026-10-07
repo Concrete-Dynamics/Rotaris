@@ -166,6 +166,14 @@ function marker(n: number): string {
 const CATEGORY_WORDS: Readonly<Record<string, string>> = { no_activity: 'ended with no activity after one re-prompt' };
 
 /**
+ * The head of the Outcome line: whose outcome it is. The reason it says so, kept beside the repair (fin32, within OQ-217's
+ * ruling): the line read "Outcome: failed — Child timed out after 1200s.", and at the duress live run at `a68f121` both
+ * timed-out testers' summaries opened "The run failed because the child timed out after 1200s …", which the timeline
+ * relayed as "Child wave3-verify-all reported failed: The run failed because …" while the session completed (finding D9).
+ */
+export const OUTCOME_HEAD = 'Outcome of this agent, not of the session:';
+
+/**
  * OQ-217 (ruled 2026-10-07 under R-072): the Outcome line for a child the runner settled other than `succeeded` — its
  * status, its end reasons as the run recorded them (joined by "; ", a bare category in its issue's words) and, for a child
  * cut off while making progress, PD-ORCH-004's statement; cut to 2,000 characters. Null for a succeeded child: the runner's
@@ -175,7 +183,7 @@ const CATEGORY_WORDS: Readonly<Record<string, string>> = { no_activity: 'ended w
 export function outcomeLine(outcome: Pick<ReportInput, 'status' | 'errors' | 'cutOffStatement'> | undefined): string | null {
   if (!outcome || outcome.status === 'succeeded') return null;
   const reasons = (outcome.errors ?? []).map((e) => CATEGORY_WORDS[e.message] ?? e.message).filter((m) => m.trim() !== '').join('; ');
-  let line = `Outcome: ${outcome.status}${reasons ? ` — ${reasons}` : ''}`;
+  let line = `${OUTCOME_HEAD} ${outcome.status}${reasons ? ` — ${reasons}` : ''}`;
   if (outcome.cutOffStatement) line += `${/[.!?]$/.test(line) ? '' : '.'} ${outcome.cutOffStatement}`;
   return cut(line, EVENT_CAP);
 }
@@ -457,7 +465,12 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
    * OQ-217 (ruled 2026-10-07 under R-072): where the facts open with an Outcome line, the ask says what it is and how the
    * summary states it. A succeeded child's ask is as it was.
    */
-  const outcomeAsk = outcomeLine(input) === null ? '' : " The facts open with an Outcome line: the run's own record of how the agent ended. The first sentence of your summary states that outcome and its reason plainly; the summary then condenses what the agent did, agreeing with the facts, and what the transcript shows remained, if it shows anything. Never describe the task as completed or finished, and never claim work was left undone beyond what the transcript shows.";
+  /*
+   * fin32 (the a68f121 duress run's D9, a repair inside the ruling): the first sentence is the agent's own outcome, the agent
+   * named and the subject, and never the run's or the session's — the summaries had opened "The run failed because the
+   * child … timed out", read on the timeline as the session failing while it completed.
+   */
+  const outcomeAsk = outcomeLine(input) === null ? '' : ` The facts open with an Outcome line: the run's own record of how this agent ended. It is the agent's outcome, not the session's. The first sentence of your summary names the agent (${input.agentName}) and states that outcome and its reason plainly, as what happened to the agent (for a time limit, "This agent was stopped at its time limit while …"); the summary then condenses what the agent did, agreeing with the facts, and what the transcript shows remained, if it shows anything. Never open with "The run failed" or "The session failed", and never word the outcome as the run or the session failing: the session this agent belongs to may continue and succeed. Never describe the task as completed or finished, and never claim work was left undone beyond what the transcript shows.`;
   const timeout = s.timeoutMs ?? SUMMARY_TIMEOUT_MS;
   let complaint = '';
   for (let attempt = 1; attempt <= 2; attempt += 1) {

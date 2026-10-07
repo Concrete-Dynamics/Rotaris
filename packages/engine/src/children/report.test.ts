@@ -576,17 +576,34 @@ describe('engine/children/report — OQ-217: the pass is told how a failed child
     const { asked, s } = summariser();
     await produceReport(timedOut(), s, new AbortController().signal);
     const facts = factsOf(asked[0]!);
-    expect(facts.startsWith(`Outcome: failed — Child timed out after 1200s. ${STATEMENT}\nEdited files: docs/api.md`)).toBe(true);
-    expect(asked[0]).toContain("The facts open with an Outcome line: the run's own record of how the agent ended.");
-    expect(asked[0]).toContain('The first sentence of your summary states that outcome and its reason plainly');
+    expect(facts.startsWith(`Outcome of this agent, not of the session: failed — Child timed out after 1200s. ${STATEMENT}\nEdited files: docs/api.md`)).toBe(true);
+    expect(asked[0]).toContain("The facts open with an Outcome line: the run's own record of how this agent ended. It is the agent's outcome, not the session's");
+    expect(asked[0]).toContain('The first sentence of your summary names the agent (Create-Architecture-Documentation-Files) and states that outcome and its reason plainly, as what happened to the agent');
     expect(asked[0]).toContain('Never describe the task as completed or finished, and never claim work was left undone beyond what the transcript shows.');
   });
 
+  /**
+   * The a68f121 duress run's D9 (session e6747bd0; timeline 74 and 98; artifacts of wave3 and wave3b): the Outcome line read
+   * "Outcome: failed — Child timed out after 1200s." and both summaries opened "The run failed because the child timed out
+   * after 1200s …", so the timeline read "Child wave3-verify-all reported failed: The run failed because …" while the session
+   * completed `tasks_complete`. The line and the ask now make the agent the subject and keep the session out of it.
+   */
+  it("OQ-217's first sentence is the agent's own outcome: the line says whose outcome it is, and the ask names the agent and forbids the run or the session as the subject (D9)", async () => {
+    const { asked, s } = summariser();
+    await produceReport(timedOut({ agentName: 'wave3-verify-all', role: 'tester' }), s, new AbortController().signal);
+    const ask = asked[0]!;
+    expect(factsOf(ask).split('\n')[0]).toBe(`Outcome of this agent, not of the session: failed — Child timed out after 1200s. ${STATEMENT}`);
+    expect(ask).toContain('The first sentence of your summary names the agent (wave3-verify-all) and states that outcome and its reason plainly, as what happened to the agent');
+    expect(ask).toContain('for a time limit, "This agent was stopped at its time limit while …"');
+    expect(ask).toContain('Never open with "The run failed" or "The session failed", and never word the outcome as the run or the session failing: the session this agent belongs to may continue and succeed.');
+    expect(ask).not.toMatch(/Outcome: failed/);
+  });
+
   it('the outcome as the run recorded it: a model failure\'s headline, and `no_activity` in the issue\'s own words; several reasons joined', () => {
-    expect(reportFacts(work, { status: 'failed', errors: [{ type: 'model', message: 'The provider returned 500' }] }).split('\n')[0]).toBe('Outcome: failed — The provider returned 500');
-    expect(reportFacts([], { status: 'failed', errors: [{ type: 'incomplete_execution', message: 'no_activity' }] }).split('\n')[0]).toBe('Outcome: failed — ended with no activity after one re-prompt');
-    expect(reportFacts([], { status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 60s' }, { type: 'model', message: 'stream closed' }] }).split('\n')[0]).toBe('Outcome: failed — Child timed out after 60s; stream closed');
-    expect(reportFacts([], { status: 'failed', errors: [] }).split('\n')[0]).toBe('Outcome: failed');
+    expect(reportFacts(work, { status: 'failed', errors: [{ type: 'model', message: 'The provider returned 500' }] }).split('\n')[0]).toBe('Outcome of this agent, not of the session: failed — The provider returned 500');
+    expect(reportFacts([], { status: 'failed', errors: [{ type: 'incomplete_execution', message: 'no_activity' }] }).split('\n')[0]).toBe('Outcome of this agent, not of the session: failed — ended with no activity after one re-prompt');
+    expect(reportFacts([], { status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 60s' }, { type: 'model', message: 'stream closed' }] }).split('\n')[0]).toBe('Outcome of this agent, not of the session: failed — Child timed out after 60s; stream closed');
+    expect(reportFacts([], { status: 'failed', errors: [] }).split('\n')[0]).toBe('Outcome of this agent, not of the session: failed');
   });
 
   it('a succeeded child: no Outcome line and no outcome instruction — the request is as it was', async () => {
@@ -603,7 +620,7 @@ describe('engine/children/report — OQ-217: the pass is told how a failed child
     const facts = reportFacts(many, { status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 1200s' }], cutOffStatement: STATEMENT });
     expect(facts.length).toBeLessThanOrEqual(TRANSCRIPT_CAP + 40);
     expect(facts).toMatch(/characters omitted\]$/);
-    expect(facts.startsWith(`Outcome: failed — Child timed out after 1200s. ${STATEMENT}\n`)).toBe(true);
+    expect(facts.startsWith(`Outcome of this agent, not of the session: failed — Child timed out after 1200s. ${STATEMENT}\n`)).toBe(true);
   });
 
   it('a pass answering status succeeded or partial for a failed child stores failed; partial for a succeeded child still stores partial (REQ-ORCH-112)', async () => {

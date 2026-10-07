@@ -17,12 +17,12 @@ proof scripts, so the evidence for an area can be found without reading forty sc
 
 ## The proof scripts — which one covers what
 
-`pnpm check` (symbols, typecheck, lint, tests) is the gate every commit passes; in an orchestrated build it runs on the
-exact head each landing pushes, its builders committing on the quick checks (the owner, 2026-10-07; the skill's
-CHANGELOG). Beside it sit the **proof
-scripts**: each launches the **built** application against a scratch profile and measures a mechanism in the
-product rather than in a unit test. Every one is a first execution's evidence, and the area it covers is the
-area it re-verifies.
+`pnpm check` (symbols, typecheck, lint, tests) is the gate every change passes before it lands on main: an agent
+working alone runs it before each commit; in an orchestrated build it runs on the exact head each landing
+pushes, its builders committing on the quick checks (the owner, 2026-10-07; the skill's CHANGELOG). Beside it
+sit the **proof scripts**: each launches the **built** application against a scratch profile and measures a
+mechanism in the product rather than in a unit test. Every one is a first execution's evidence, and the area it
+covers is the area it re-verifies.
 
 Two rules about them. **Run the whole suite a part touches, not the one script named after it** — a change
 that moves a shared seam breaks a neighbour's proof, and that is the point of having them. And a proof is
@@ -100,9 +100,9 @@ rendered defect, and **`review-ui`** for a report-only external critique. Their 
 compatibility routers; the portable files are canonical.
 
 A fourth, **`orchestrated-build`**, drives a large body of work (a release backlog, every open defect) through a
-multi-agent workflow: independent verification per bundle, repair rounds, serialized merges, acceptance with the
-proof sweep and live runs, and recovery from container restarts out of the workflow journals. It improves itself
-under the guardrails its `SKILL.md` states; `pnpm check` runs its self-test.
+multi-agent workflow: per bundle an independent reviewer that repairs in place and lands it, repair rounds,
+acceptance with the proof sweep and live runs, and recovery from container restarts out of the workflow journals.
+It improves itself under the guardrails its `SKILL.md` states; `pnpm check` runs its self-test.
 
 `build-ui` and `debug-ui` may change source within the authority of the current task. `review-ui` writes only
 evidence under `.ui-review/`. Its critique is proposed evidence and reaches implementation through a separate,

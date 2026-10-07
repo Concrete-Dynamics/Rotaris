@@ -121,7 +121,7 @@ const AGENT: AgentRecord = {
   delegationTask: 'TASK: read the repository and report what the transcript renderer must draw, at length enough that the collapsed summary has to compact it to one hundred and ten characters with an ellipsis where it is cut.',
   reasoning: 'high', contextUsed: 1_200, contextLimit: DEFAULT_CONTEXT_CAPACITY, grantedTools: ['read_file', 'terminal'], grantRecorded: true, calledTools: ['read_file', 'terminal'], activeTools: ['terminal'],
   delegationSessionId: null, inheritedContext: 'The parent asked for the transcript rendering rules.', live: true, grantedMcp: {}, mcpServers: [], compressions: 0,
-  interruption: null, stalledSeconds: null,
+  interruption: null, stalledSeconds: null, timedOut: null,
 };
 
 export function rowProofSession(): SessionRecord {

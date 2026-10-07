@@ -1,7 +1,7 @@
 import { useState, type KeyboardEvent } from 'react';
 import type { AgentRecord } from '@rotaris/contracts';
 import { markMotionStart } from './motion.js';
-import { stalledText } from './agents.js';
+import { stalledText, TIMED_OUT_TAG, timeoutLine } from './agents.js';
 import { wholeSeconds } from './composer.js';
 import { Tag as DesignTag } from './design-system/index.js';
 
@@ -133,8 +133,9 @@ export function AgentTree({ agents, selected, onSelect, nowIso = null }: AgentTr
               <span className="agent-row__persona">{a.persona}</span>
               <span className="agent-row__task">{a.givenName}</span>
             </span>
-            {/* REQ-ORCH-089's badge: the stall watch's figure closes the meta label, as the mockup's agents panel closes a waiting row with a `tag-wait` qualifier. */}
-            <span className="agent-row__meta mono">{a.presentationState}{elapsedShown(a) ? ` · ${elapsedLabel(a, nowIso)}` : ''}{a.stalledSeconds !== null && <>{' '}<DesignTag kind="wait" className="agent-row__stalled" data-testid="agent-stalled">{stalledText(a.stalledSeconds)}</DesignTag></>}</span>
+            {/* REQ-ORCH-089's badge: the stall watch's figure closes the meta label, as the mockup's agents panel closes a waiting row with a `tag-wait` qualifier.
+                PD-CONFIG-003 revision 3: a failed agent its per-agent timeout stopped closes it with a `tag-fail` "timed out" in the same slot (a terminal agent is never stalled). */}
+            <span className="agent-row__meta mono">{a.presentationState}{elapsedShown(a) ? ` · ${elapsedLabel(a, nowIso)}` : ''}{a.stalledSeconds !== null && <>{' '}<DesignTag kind="wait" className="agent-row__stalled" data-testid="agent-stalled">{stalledText(a.stalledSeconds)}</DesignTag></>}{a.timedOut !== null && <>{' '}<DesignTag kind="fail" className="agent-row__timed-out" data-testid="agent-timed-out" title={timeoutLine(a.timedOut)} aria-description={timeoutLine(a.timedOut)}>{TIMED_OUT_TAG}</DesignTag></>}</span>
           </div>
         );
       })}

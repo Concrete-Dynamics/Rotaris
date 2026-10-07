@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { millis } from '@rotaris/kernel';
 import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
 import type { ChildRow } from '@rotaris/store';
-import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, workspacePath } from './cut-off.js';
+import { CHILD_STALL_TIMEOUT_MS, childTimedOutMessage, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, timedOutOf, workspacePath } from './cut-off.js';
 
 const ROOT = '/ws';
 const LIMIT = millis(1_200_000);
@@ -146,5 +146,44 @@ describe('PD-ORCH-004: admitting a continuation', () => {
     expect(continuationRefusal('bg_00000001', row('bg_00000001', 'build'), false, undefined)).toMatch(/^Task 'build' \(bg_00000001\) made no continuation offer/);
     expect(continuationRefusal('bg_00000001', row('bg_00000001', 'build'), true, row('bg_00000002', 'build-more'))).toMatch(/was already continued by 'build-more' \(bg_00000002\); a piece of work is continued once/);
     expect(continuationRefusal('bg_00000001', row('bg_00000001', 'build'), true, undefined)).toBeNull();
+  });
+});
+
+/**
+ * PD-CONFIG-003 revision 3 (OQ-234): the agent surfaces read the limit a child ran under back from REQ-ORCH-088's error in
+ * its stored report, so one formatter writes the form and one parser reads it
+ * (docs/defects/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
+ */
+describe('PD-CONFIG-003 revision 3: the timeout error, written once and read back', () => {
+  const stored = (over: Record<string, unknown> = {}): string => JSON.stringify({ agent_name: 'build', role: 'coding-agent', status: 'failed', summary: 's', key_findings: [], last_response: '', final_response: '', ...over });
+  const timeout = (limitS: number) => ({ errors: [{ type: 'timeout', message: childTimedOutMessage(limitS) }] });
+
+  it('writes REQ-ORCH-088\'s fixed form', () => {
+    expect(childTimedOutMessage(1200)).toBe('Child timed out after 1200s');
+    expect(childTimedOutMessage(0.05)).toBe('Child timed out after 0.05s');
+  });
+
+  it('round-trips the limit, with and without PD-ORCH-004\'s cut-off statement', () => {
+    expect(timedOutOf(stored(timeout(1200)))).toEqual({ limitSeconds: 1200, makingProgress: false });
+    expect(timedOutOf(stored(timeout(2700)))).toEqual({ limitSeconds: 2700, makingProgress: false });
+    expect(timedOutOf(stored(timeout(1250)))).toEqual({ limitSeconds: 1250, makingProgress: false });
+    expect(timedOutOf(stored(timeout(0.05)))).toEqual({ limitSeconds: 0.05, makingProgress: false });
+    const cutOff = cutOffReport({ taskId: 'bg_00000001', limitS: 1200, stallS: 90, changedPaths: ['a'], isContinuation: false });
+    expect(timedOutOf(stored({ ...timeout(1200), cut_off: cutOff }))).toEqual({ limitSeconds: 1200, makingProgress: true });
+  });
+
+  it('reads nothing from a report with no timeout error, or none at all', () => {
+    expect(timedOutOf(null)).toBeNull();
+    expect(timedOutOf(undefined)).toBeNull();
+    expect(timedOutOf('not json Child timed out after 1200s')).toBeNull();
+    expect(timedOutOf(stored({ status: 'succeeded', errors: [] }))).toBeNull();
+    expect(timedOutOf(stored({ status: 'cancelled', errors: [{ type: 'cancelled', message: 'Cancelled by the user' }] }))).toBeNull();
+    expect(timedOutOf(stored({ errors: [{ type: 'model', message: 'stream closed' }] }))).toBeNull();
+    // The fallback retry's own note is not the error: a child that succeeded on the retry carries none.
+    expect(timedOutOf(stored({ status: 'succeeded', errors: [], summary: 'Child build timed out after 1200s on a/b; retried once on the fallback model c/d (REQ-ORCH-088).' }))).toBeNull();
+    // Another message under the timeout type is not REQ-ORCH-088's form.
+    expect(timedOutOf(stored({ errors: [{ type: 'timeout', message: 'Child timed out after soon' }] }))).toBeNull();
+    // Of two errors, the timeout one is read.
+    expect(timedOutOf(stored({ errors: [{ type: 'model', message: 'stream closed' }, { type: 'timeout', message: childTimedOutMessage(60) }] }))).toEqual({ limitSeconds: 60, makingProgress: false });
   });
 });

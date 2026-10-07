@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { agentArtifacts, cancelCascade, cancelOffered, cancelUnavailableReason, cascadeNote, chipStates, compressionLine, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, resolvedTools } from './agents.js';
+import { agentArtifacts, cancelCascade, cancelOffered, cancelUnavailableReason, cascadeNote, chipStates, compressionLine, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, resolvedTools, timeoutLine } from './agents.js';
 import { elapsedLabel, elapsedShown } from './AgentTree.js';
 import { AgentArtifactLinks } from './ArtifactLinks.js';
 import { ContextRing } from './ContextRing.js';
@@ -137,6 +137,8 @@ export function Inspector(props: InspectorProps) {
             <span className="inspector__name" data-testid="inspector-name">{shown.name}</span>
           </div>
           <div className="inspector__meta mono" data-testid="inspector-meta">{metaLine(shown, session, elapsed)}</div>
+          {/* PD-CONFIG-003 revision 3 (OQ-234): directly under the meta line, whose REQ-MONITOR-052 form stays as it is. */}
+          {shown.timedOut !== null && <div className="inspector__timeout text-secondary" data-testid="inspector-timeout">{timeoutLine(shown.timedOut)}</div>}
           <div className="inspector__ring">
             <ContextRing used={shown.contextUsed} limit={shown.contextLimit} thresholdPercent={compressionThresholdPercent} label={`${shown.name}'s context window`} />
             <div className="inspector__ring-caption text-secondary">

@@ -13,7 +13,7 @@ import { AgentTable } from './AgentTable.js';
 const agent = (over: Partial<AgentRecord>): AgentRecord => ({
   id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'running', presentationState: 'running', parentId: 'root:1', dependencies: [], activity: 'do the thing', model: 'scripted/alpha',
   depth: 1, background: true, category: '', spawnedAt: '2026-09-05T10:00:00.000Z', completedAt: null, toolCalls: 3, delegationTask: 'do the thing', reasoning: 'medium', contextUsed: 1000, contextLimit: DEFAULT_CONTEXT_CAPACITY,
-  grantedTools: ['read_file'], grantRecorded: true, calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, ...over,
+  grantedTools: ['read_file'], grantRecorded: true, calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, timedOut: null, ...over,
 });
 const table = (agents: AgentRecord[]) => renderToStaticMarkup(createElement(AgentTable, { agents, selected: null, nowIso: '2026-09-05T10:00:05.000Z', onSelect: () => undefined, onOpen: () => undefined, onPopOut: () => undefined }));
 const cells = (html: string, cls: string) => [...html.matchAll(new RegExp(`<td class="agent-table__${cls}[^"]*"[^>]*>([^<]*)</td>`, 'g'))].map((m) => m[1]);

@@ -10,6 +10,7 @@ import { SkillsSettings, type SkillsSettingsProps } from './settings/SkillsSetti
 import { ProjectInitSettings, TraceabilitySettings, type ProjectInitSettingsProps, type TraceabilitySettingsProps } from './settings/ProjectSettings.js'; // Part AJ2, Part AS
 import type { PlaybookCatalogue } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
+import { RUNTIME_CATEGORY_LABEL } from './settings/config-state.js';
 import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js';
 
 /**
@@ -40,7 +41,7 @@ import { Button as DesignButton, Select as DesignSelect } from './design-system/
 export const SETTINGS_CATEGORIES = [
   { id: 'models', label: 'Models' },
   { id: 'personas', label: 'Personas' },
-  { id: 'runtime', label: 'Runtime' },
+  { id: 'runtime', label: RUNTIME_CATEGORY_LABEL },
   { id: 'interface', label: 'Interface' },
   { id: 'display', label: 'Display' },
   { id: 'skills', label: 'Skills' },

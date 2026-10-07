@@ -38,7 +38,7 @@ vi.mock('./terminal/host.js', async (importOriginal) => ({ ...(await importOrigi
 const root: AgentRecord = {
   id: 'run', name: 'orchestrator', givenName: 'orchestrator', persona: 'orchestrator', state: 'running', presentationState: 'running', parentId: '', dependencies: [], activity: '', model: 'beta',
   depth: 0, background: false, category: '', spawnedAt: '2026-10-02T10:00:00.000Z', completedAt: null, toolCalls: 0, delegationTask: '', reasoning: 'medium', contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY,
-  grantedTools: [], grantRecorded: false, calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null,
+  grantedTools: [], grantRecorded: false, calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, timedOut: null,
 } as AgentRecord;
 const session = (excludedModels: string[]): SessionRecord => ({
   id: 's1', executionStatus: 'completed', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-10-02T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [root], pendingApprovals: [], pendingQuestions: [],

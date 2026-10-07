@@ -423,6 +423,14 @@ export function clampForDisplay(value: number, min: number, max: number): number
   return Math.min(max, Math.max(min, value));
 }
 
+/**
+ * The labels Settings renders for the Runtime category and its per-agent timeout control. They are named here, not
+ * written inline, because PD-CONFIG-003 revision 3 has the agent surfaces name the control by its path, and "one wording"
+ * means the path's segments are exactly what Settings shows (`perAgentTimeoutPath` in `agents.ts`).
+ */
+export const RUNTIME_CATEGORY_LABEL = 'Runtime';
+export const PER_AGENT_TIMEOUT_LABEL = 'Per-agent timeout';
+
 /** PD-CONFIG-003: the per-agent timeout control's widget clamp, in whole minutes. */
 export const CHILD_TIMEOUT_MINUTES = { min: 1, max: 240 } as const;
 

@@ -331,6 +331,18 @@ The design language's pair — consult before, match after (`docs/design/README.
 Tokens alone are not compliance, and a plausible invention is not a third option where the design material
 decides.
 
+**A fact one agent surface shows, all of them show** (worked example: PD-CONFIG-003 revision 3's per-agent timeout, OQ-234,
+2026-10-07). The fact rides on `AgentRecord` (`packages/contracts/src/children.ts`), filled by `toAgentRecord`
+(`packages/engine/src/sessions.ts`) from what the store already holds — here the stored report, through a parser that sits
+beside the one formatter that writes the text it reads (`timedOutOf` beside `childTimedOutMessage`, round-tripped in
+`cut-off.test.ts`) — and `runLevelAgent` (`packages/ui/src/agents.ts`) states it for the synthetic agent; every fixture that
+builds an `AgentRecord` gains the field. The words are written once in `agents.ts` (`TIMED_OUT_TAG`, `timeoutLine`), and a
+path to a control is built from the labels Settings itself renders, never typed again (`perAgentTimeoutPath`). The four
+surfaces draw it where the design gives a qualifier: a row's closes its meta label with a design `Tag` in the slot the stalled
+tag uses (`AgentTree.tsx`, `AgentTable.tsx`), and the inspector and a persona window's instance tab a sentence of their own
+under the line the specification fixes (`Inspector.tsx`, `PersonaWindow.tsx`), so REQ-MONITOR-052's meta-line form is kept.
+`agent-timeout.test.ts` renders all four.
+
 **A status-strip item** (worked examples: REQ-SANDBOX-121's sandbox indicator, 2026-10-02; the strip rebuilt to
 REQ-SHELL-038's list, fin10, the same day). The strip's items are **values**: `stripItems(width, facts)` in
 `packages/ui/src/composer.ts` answers them left to right in REQ-SHELL-038's order — the workspace path (the one `link`,

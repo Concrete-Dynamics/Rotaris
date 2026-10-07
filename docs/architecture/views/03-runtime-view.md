@@ -1343,7 +1343,13 @@ live-run finding D5, so neither lookup ever matched a qualified key (repaired 20
 persona's declared tools stand in on the surface, REQ-MONITOR-049/060, so a grant REQ-TOOLS-006's controls left empty of
 native tools is drawn as none; 2026-10-01), `calledTools` and `activeTools` (kept incrementally by the writer's
 `AgentActivity` at `tool.start`/`tool.finish`, seeded once from the ring on load — never recomputed over the transcript,
-REQ-MONITOR-038), `delegationSessionId` (null: every child runs in the run's session) and `inheritedContext`. The projection
+REQ-MONITOR-038), `delegationSessionId` (null: every child runs in the run's session) and `inheritedContext` — and, since
+PD-CONFIG-003 revision 3 (OQ-234, 2026-10-07), **`timedOut`**: for a child presented `failed` whose stored report carries
+REQ-ORCH-088's `timeout` error, the limit it names in seconds and whether the report carries PD-ORCH-004's cut-off statement
+(`timedOutOf`, the parser beside the one formatter `childTimedOutMessage` that the settle writes the error through), else
+null; the tree and Mission-table rows draw a `tag-fail` "timed out" after the state, and the inspector (under its meta line)
+and the persona window's instance tab (under its state) the line `timeoutLine` words once, naming Settings › Runtime ›
+Per-agent timeout by the labels Settings renders. The projection
 owner publishes the record after a commit carrying `child.spawn`, `child.transition`, `tool.start` or `tool.finish`, not
 only after a save (the twenty-eighth defect, ADR-0043 note), coalesced to one publication per 80 ms tick on the clock port. A non-terminal child of a session whose status is neither
 live nor `idle` is presented settled to the run's outcome by the projection (REQ-MONITOR-211/213), though REQ-ORCH-053's

@@ -87,7 +87,7 @@ describe('REQ-MONITOR-127 / REQ-MONITOR-130: the inspector\'s meta line shows a 
   it('reads `cancelling` under the overlay, the dot keeping the live motion; a child keeps the agent vocabulary', () => {
     const child: AgentRecord = { id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'running', presentationState: 'running', parentId: RUN_AGENT_ID, dependencies: [], activity: '', model: 'scripted/alpha',
       depth: 1, background: true, category: '', spawnedAt: '2026-10-01T10:00:05.000Z', completedAt: null, toolCalls: 1, delegationTask: '', reasoning: 'medium', contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY,
-      grantedTools: [], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantRecorded: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null };
+      grantedTools: [], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantRecorded: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, timedOut: null };
     const store = createCancelOverlayStore();
     const record = session({ agents: [child], entryToolCalls: 3 });
     expect(meta(inspector(record, RUN_AGENT_ID)).startsWith('running · ')).toBe(true);

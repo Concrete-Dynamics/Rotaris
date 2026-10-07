@@ -235,6 +235,13 @@ export const AgentRecordSchema = z.object({
    * tool calls, or not running). Refreshed at every evaluation, so a surface's figure advances at the watch's cadence.
    */
   stalledSeconds: z.number().int().nonnegative().nullable(),
+  /**
+   * PD-CONFIG-003 revision 3 (OQ-234) extending REQ-MONITOR-044: a `failed` delegated agent whose stored report carries
+   * REQ-ORCH-088's `timeout` error ("Child timed out after <N>s") — N, the limit it ran under, in seconds, and whether the
+   * report carries PD-ORCH-004's cut-off statement (it was cut off while making progress). Null for every other agent,
+   * the run-level agent included. Read from the stored report, so a reopened session shows it as the live one did.
+   */
+  timedOut: z.object({ limitSeconds: z.number().positive(), makingProgress: z.boolean() }).nullable(),
 });
 export type AgentRecord = z.infer<typeof AgentRecordSchema>;
 

@@ -847,6 +847,10 @@
    mockup's agents panel qualifies a waiting row ("waiting · approval") — the run is still waiting on the agent — sized to
    the meta line it closes; it animates nothing, as REQ-CHAT-164's stalled indicator does not. */
 .agent-row__stalled { font-size: var(--rt-text-2xs); }
+/* PD-CONFIG-003 revision 3 (OQ-234): a failed agent its per-agent timeout stopped closes the same meta label with the design
+   system's `tag-fail` "timed out" — the failed state's own tone (the dot's `--rt-danger-300` family) — sized as the stalled
+   tag it replaces; a terminal agent is never stalled, so the two never share the slot. */
+.agent-row__timed-out { font-size: var(--rt-text-2xs); }
 @media (prefers-reduced-motion: reduce) { .agent-row__dot--running { animation: none; } }
 
 /* Part AD — REQ-CHAT-085..091: the editable task-plan strip in the workspace sidebar. */
@@ -1604,6 +1608,9 @@
 .inspector__title { display: flex; align-items: center; gap: var(--rt-space-2, 8px); }
 .inspector__name { font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-size: var(--rt-text-base, 14px); color: var(--rt-text); }
 .inspector__meta { color: var(--rt-text-secondary); }
+/* PD-CONFIG-003 revision 3: the cut-off line under the meta line, in the body face at the inspector's small step — a
+   sentence, not a figure, so not the meta line's mono — wrapping inside the pane. */
+.inspector__timeout, .persona-window__timeout { font-size: var(--rt-text-xs); overflow-wrap: anywhere; }
 .inspector__ring { display: flex; align-items: center; gap: var(--rt-space-3, 12px); }
 .inspector__ring-caption { display: flex; flex-direction: column; gap: 2px; font-size: var(--rt-text-2xs, 10px); }
 /* The controls column holds model identifiers that do not break (`openai-compatible--…`),

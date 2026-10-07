@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
-import { CHILD_TIMEOUT_MINUTES, clampForDisplay, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutEdit, improvementTimeoutForDisplay, improvementTimeoutFromInput, scopeCellOf, storedImprovementTimeoutNote, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
+import { CHILD_TIMEOUT_MINUTES, clampForDisplay, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutEdit, improvementTimeoutForDisplay, improvementTimeoutFromInput, scopeCellOf, storedImprovementTimeoutNote, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 
@@ -255,7 +255,7 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
   };
   return (
     <div className="settings__section">
-      <h1 className="display">Runtime</h1>
+      <h1 className="display">{RUNTIME_CATEGORY_LABEL}</h1>
       <div className="settings__action">
         <label htmlFor="strategy">Delegation strategy</label>
         <DesignSelect id="strategy" className="input select settings__select" aria-label="Delegation strategy" value={pending.delegationStrategy} onChange={(e) => onChange({ kind: 'delegationStrategy', value: e.currentTarget.value as PendingSettings['delegationStrategy'] })}>
@@ -281,7 +281,7 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
           `runtime.child_timeout`'s seconds. A stored value it cannot show is shown clamped and stated beneath, never
           rewritten until the field is changed (REQ-CONFIG-446, REQ-CONFIG-419). */}
       <div className="settings__action">
-        <label htmlFor="child-timeout">Per-agent timeout</label>
+        <label htmlFor="child-timeout">{PER_AGENT_TIMEOUT_LABEL}</label>
         <DesignInput id="child-timeout" className="input settings__number" type="number" min={CHILD_TIMEOUT_MINUTES.min} max={CHILD_TIMEOUT_MINUTES.max} step={1} aria-description={`Stored as ${rt.child_timeout} seconds.`} value={timeoutMinutesForDisplay(rt.child_timeout)} onChange={(e) => onChange({ kind: 'runtime', key: 'child_timeout', value: timeoutSecondsFromInput(Number(e.currentTarget.value) || CHILD_TIMEOUT_MINUTES.min) })} /><span className="text-secondary">minutes</span>
         <span className="text-secondary settings__hint" data-testid="child-timeout-hint">Each delegated agent is stopped this long after it starts; the step in flight gets up to 30 s more, and an agent still making progress hands its work back to its parent. Applies to runs started from now.</span>
         {storedTimeoutNote(rt.child_timeout) !== null && <span className="text-secondary settings__hint" data-testid="child-timeout-stored">{storedTimeoutNote(rt.child_timeout)}</span>}

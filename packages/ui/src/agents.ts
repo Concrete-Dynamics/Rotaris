@@ -1,6 +1,7 @@
-import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, presentationStatus, RUN_AGENT_ID, type AgentRecord, type ConfigSnapshot, type EntryRoot, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, presentationStatus, PRIMARY_VIEWS, RUN_AGENT_ID, type AgentRecord, type ConfigSnapshot, type EntryRoot, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { countNoun } from '@rotaris/kernel';
 import { treeRows } from './AgentTree.js';
+import { PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL } from './settings/config-state.js';
 
 /**
  * The agent surfaces' pure rules (Part R): what the inspector follows (REQ-MONITOR-053), the run-level agent as a
@@ -127,6 +128,8 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     interruption: null,
     // REQ-MONITOR-117/119: the entry agent's own stall watch's figure, while its run is live.
     stalledSeconds: busy ? session.entryStalledSeconds : null,
+    // PD-CONFIG-003 revision 3: the per-agent timeout bounds delegated agents; the run-level agent is never cut off by it.
+    timedOut: null,
   };
 }
 
@@ -444,6 +447,32 @@ export function stalledText(seconds: number | null): string | null {
  */
 export function compressionLine(agent: AgentRecord): string {
   return `${countNoun(agent.compressions, 'compression')} ${agent.id === RUN_AGENT_ID ? 'across the run' : "of this agent's context"}`;
+}
+
+/**
+ * PD-CONFIG-003 revision 3 (OQ-234): what a delegated agent cut off at its per-agent timeout shows, worded once here. The
+ * tree row and the Mission-table row carry `TIMED_OUT_TAG` after the state (in the stalled tag's slot, which a terminal agent
+ * never fills); the inspector, under its meta line, and the persona window's instance tab, under its state, carry
+ * `timeoutLine`. The limit is the one the agent ran under, read from REQ-ORCH-088's error in its stored report
+ * (`AgentRecord.timedOut`); the control's path is built from the labels Settings renders, so the two cannot drift.
+ */
+export const TIMED_OUT_TAG = 'timed out';
+
+/** The limit in words: "1 minute" or "<m> minutes" when it is a whole number of minutes, else "<N> seconds" ("1 second"). */
+export function timeoutLimitText(seconds: number): string {
+  if (seconds >= 60 && Number.isInteger(seconds / 60)) return countNoun(seconds / 60, 'minute');
+  return countNoun(seconds, 'second');
+}
+
+/** "Settings › Runtime › Per-agent timeout", from the nav rail's view label, the category's and the control's own. */
+export function perAgentTimeoutPath(): string {
+  const settings = PRIMARY_VIEWS.find((v) => v.id === 'settings')!.label;
+  return [settings, RUNTIME_CATEGORY_LABEL, PER_AGENT_TIMEOUT_LABEL].join(' \u203a ');
+}
+
+/** The line: the limit, "while making progress" exactly when the report carries PD-ORCH-004's cut-off statement, and the control. */
+export function timeoutLine(timedOut: NonNullable<AgentRecord['timedOut']>): string {
+  return `Cut off at its per-agent timeout of ${timeoutLimitText(timedOut.limitSeconds)}${timedOut.makingProgress ? ' while making progress' : ''}. ${perAgentTimeoutPath()} sets this limit for runs started from now.`;
 }
 
 export function metaLine(agent: AgentRecord, session: Pick<SessionRecord, 'executionStatus'> | null, elapsed: string | null): string {

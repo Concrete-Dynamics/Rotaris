@@ -3,6 +3,7 @@ import { DEFAULT_CONTEXT_CAPACITY } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
 import { AgentActivity } from './activity.js';
 import { toAgentRecord } from '../sessions.js';
+import { childTimedOutMessage, cutOffReport } from './cut-off.js';
 
 const clocks = {} as Parameters<typeof toAgentRecord>[1];
 const row = (over: Partial<ChildRow> = {}): ChildRow => ({
@@ -121,5 +122,33 @@ describe('toAgentRecord — PD-ORCH-005 clauses 13 and 18 (OQ-100): an agent a c
     expect(toAgentRecord(row({ state: 'succeeded', completed_at: 't' }), clocks, { session: repaired, crashLeft })).toMatchObject({ presentationState: 'done', interruption: null });
     expect(toAgentRecord(row({ state: 'paused', interruption: 'stop' }), clocks, { session: repaired, crashLeft })).toMatchObject({ presentationState: 'paused', interruption: 'stop' });
     expect(toAgentRecord(row({ task_id: 'bg_00000002', state: 'running' }), clocks, { session: repaired, crashLeft }).presentationState).toBe('cancelled');
+  });
+});
+
+/**
+ * PD-CONFIG-003 revision 3 (OQ-234): a failed agent whose stored report carries REQ-ORCH-088's timeout error is presented
+ * with the limit it ran under and whether it was cut off while making progress; every other agent with nothing
+ * (docs/defects/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
+ */
+describe('toAgentRecord — the per-agent timeout (PD-CONFIG-003 revision 3)', () => {
+  const report = (over: Record<string, unknown>): string => JSON.stringify({ agent_name: 'helper', role: 'coding-agent', status: 'failed', summary: 's', key_findings: [], last_response: '', final_response: '', errors: [], ...over });
+  const settled = (state: string, rep: string | null): ChildRow => row({ state, completed_at: '2026-09-05T10:20:00.000Z', report: rep, report_stored: rep === null ? 0 : 1 });
+  const timeout = { errors: [{ type: 'timeout', message: childTimedOutMessage(1200) }] };
+
+  it('carries the limit and the progress fact for a timed-out child', () => {
+    const cut_off = cutOffReport({ taskId: 'bg_00000001', limitS: 1200, stallS: 90, changedPaths: [], isContinuation: false });
+    expect(toAgentRecord(settled('failed', report({ ...timeout, cut_off })), clocks).timedOut).toEqual({ limitSeconds: 1200, makingProgress: true });
+    expect(toAgentRecord(settled('failed', report(timeout)), clocks).timedOut).toEqual({ limitSeconds: 1200, makingProgress: false });
+    expect(toAgentRecord(settled('failed', report({ errors: [{ type: 'timeout', message: childTimedOutMessage(1250) }] })), clocks).timedOut).toEqual({ limitSeconds: 1250, makingProgress: false });
+  });
+
+  it('carries nothing for success (the fallback retry\'s too), a cancel, another failure, no report, or a live child', () => {
+    expect(toAgentRecord(settled('succeeded', report({ status: 'succeeded' })), clocks).timedOut).toBeNull();
+    expect(toAgentRecord(settled('cancelled', report({ status: 'cancelled', errors: [{ type: 'cancelled', message: 'Cancelled' }] })), clocks).timedOut).toBeNull();
+    expect(toAgentRecord(settled('failed', report({ errors: [{ type: 'model', message: 'stream closed' }] })), clocks).timedOut).toBeNull();
+    expect(toAgentRecord(settled('failed', null), clocks).timedOut).toBeNull();
+    expect(toAgentRecord(row(), clocks).timedOut).toBeNull();
+    // A stored report with the error on an agent not presented failed (never written so; read defensively) carries nothing.
+    expect(toAgentRecord(settled('succeeded', report(timeout)), clocks).timedOut).toBeNull();
   });
 });

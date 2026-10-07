@@ -21,6 +21,51 @@ import { writtenPathsOf } from './report.js';
  * the parent's decision.
  */
 
+/**
+ * REQ-ORCH-088's error for a child its per-agent timeout stopped, in its fixed form "Child timed out after <N>s". The one
+ * writer of the form: the settle writes the report's error through it, and `timedOutOf` reads it back, so the two cannot
+ * drift (PD-CONFIG-003 revision 3).
+ */
+export function childTimedOutMessage(limitS: number): string {
+  return `Child timed out after ${limitS}s`;
+}
+
+const CHILD_TIMED_OUT = /^Child timed out after (\d+(?:\.\d+)?)s$/;
+
+/** What PD-CONFIG-003 revision 3 shows of a child its per-agent timeout stopped: the limit it ran under, and whether it was making progress. */
+export interface TimedOut {
+  readonly limitSeconds: number;
+  /** PD-ORCH-004's cut-off statement is in the report: the child was cut off while making progress. */
+  readonly makingProgress: boolean;
+}
+
+/**
+ * PD-CONFIG-003 revision 3: whether a child's stored report carries REQ-ORCH-088's `timeout` error, and if so the limit
+ * it names and whether the report carries PD-ORCH-004's cut-off statement. Null for no report, a report that is not JSON,
+ * and every report with no such error — a child that succeeded (on the fallback retry too), was cancelled, or failed for
+ * another reason. The stored report is JSON, so every field is re-read defensively, as `cutOffLines` does.
+ */
+export function timedOutOf(report: string | null | undefined): TimedOut | null {
+  // Most reports carry no timeout: skip the parse unless the form is there at all (`toAgentRecord` reads every child).
+  if (typeof report !== 'string' || !report.includes('Child timed out after')) return null;
+  let parsed: unknown;
+  try { parsed = JSON.parse(report); } catch { return null; }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const { errors, cut_off: cutOff } = parsed as { errors?: unknown; cut_off?: unknown };
+  if (!Array.isArray(errors)) return null;
+  for (const e of errors) {
+    if (typeof e !== 'object' || e === null) continue;
+    const { type, message } = e as { type?: unknown; message?: unknown };
+    if (type !== 'timeout' || typeof message !== 'string') continue;
+    const m = CHILD_TIMED_OUT.exec(message);
+    const limitSeconds = m ? Number(m[1]) : Number.NaN;
+    if (!(limitSeconds > 0)) continue;
+    const statement = typeof cutOff === 'object' && cutOff !== null ? (cutOff as { statement?: unknown }).statement : undefined;
+    return { limitSeconds, makingProgress: typeof statement === 'string' };
+  }
+  return null;
+}
+
 /** REQ-NOTIFY-100 / REQ-CONFIG-113: `runtime.child_stall_timeout`'s default, 90 s — used where the run is handed none. */
 export const CHILD_STALL_TIMEOUT_MS: Millis = millis(90_000);
 

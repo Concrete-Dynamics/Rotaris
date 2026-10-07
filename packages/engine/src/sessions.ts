@@ -25,6 +25,7 @@ import { SessionLog, type LogLevel } from './session-log.js';
 import { UserPresence } from './run/presence.js';
 import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
+import { timedOutOf } from './children/cut-off.js';
 import type { DelegationOps } from './children/delegation.js';
 import { DEFAULT_BUDGET, holdsModelSlot, storeChildReport, userCancellation, writeCancelledTeardown, type Budget } from './children/ledger.js';
 import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, splitFrontmatter, trimBlankLines, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink } from '@rotaris/contracts';
@@ -1218,6 +1219,9 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {
     interruption: crashLeft ? 'crash' : paused && isInterruption(c.interruption) ? c.interruption : null,
     // REQ-ORCH-089 / REQ-MONITOR-119: the stall watch's latest figure, live from the tracker; an agent settled or paused has none.
     stalledSeconds: terminal || paused ? null : activity?.stalledSeconds(c.canonical_name) ?? null,
+    // PD-CONFIG-003 revision 3 (OQ-234): a failed agent its per-agent timeout stopped carries the limit and whether it was
+    // making progress, read from its stored report; any other agent carries nothing.
+    timedOut: shownPs === 'failed' ? timedOutOf(c.report) : null,
   };
 }
 

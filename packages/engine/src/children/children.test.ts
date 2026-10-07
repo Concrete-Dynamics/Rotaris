@@ -2092,7 +2092,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
      * started at 0, so its 1,200 s limit expires at 1,200,000); it then speaks once more and is cut off. At its next
      * turn the root tries to continue it and then ends.
      */
-    async function cutOffAt(completedAt: number, over: { childStallTimeoutMs?: number } = {}) {
+    async function cutOffAt(completedAt: number, over: { childStallTimeoutMs?: number; publisher?: Publisher } = {}) {
       const g = gate();
       const hold = gate();
       let sid = '' as SessionId;
@@ -2117,8 +2117,12 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       return { sid, result, client, row: children(sid)[0]! };
     }
 
+    /** PD-CONFIG-003 revision 3 (OQ-234): the published session's agents, as the surfaces read them. */
+    const published = () => { const snapshots: SessionRecord[] = []; return { snapshots, publisher: { increment: () => undefined, snapshot: (p: { session: SessionRecord }) => { snapshots.push(p.session); } } as Publisher }; };
+
     it('a call completed exactly at the start of the final 90 s is progress: the report adds the statement, the paths and the offer, and the parent reads them', async () => {
-      const { sid, result, client, row } = await cutOffAt(1_110_000);
+      const { snapshots, publisher } = published();
+      const { sid, result, client, row } = await cutOffAt(1_110_000, { publisher });
       expect(result.status).toBe('completed');
       expect(row.state).toBe('failed');
       const report = reportOf(row);
@@ -2144,10 +2148,16 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const rest = children(sid).find((c) => c.canonical_name === 'build-rest')!;
       expect(rest.continuation_of).toBe(row.task_id);
       expect(row.continuation_of).toBeNull();
+      // PD-CONFIG-003 revision 3 (OQ-234): the presented agent carries the limit it ran under and that it was making progress,
+      // read back from the report's own error; the continuation, which succeeded, carries nothing.
+      const agents = snapshots.at(-1)!.agents;
+      expect(agents.find((a) => a.name === 'build')!.timedOut).toEqual({ limitSeconds: 1200, makingProgress: true });
+      expect(agents.find((a) => a.name === 'build-rest')!.timedOut).toBeNull();
     });
 
     it('a call completed one millisecond before the final 90 s is not progress: exactly REQ-ORCH-088\'s report, and no continuation is admitted', async () => {
-      const { sid, client, row } = await cutOffAt(1_109_999);
+      const { snapshots, publisher } = published();
+      const { sid, client, row } = await cutOffAt(1_109_999, { publisher });
       expect(row.state).toBe('failed');
       const report = reportOf(row);
       expect(report.errors).toEqual(expect.arrayContaining([{ type: 'timeout', message: 'Child timed out after 1200s' }]));
@@ -2162,6 +2172,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(children(sid)).toHaveLength(1);
       const after = client.requests.filter((r) => /^You are the orchestrator/.test(textOf(r.messages[0]!)))[3]!;
       expect(textOf(after.messages.at(-1)!)).toMatch(/rejected — Task 'build' \(bg_[0-9a-f]{8}\) made no continuation offer/);
+      // PD-CONFIG-003 revision 3: cut off, but not while making progress.
+      expect(snapshots.at(-1)!.agents.find((a) => a.name === 'build')!.timedOut).toEqual({ limitSeconds: 1200, makingProgress: false });
     });
 
     it('revision 3, an offer outlives its run: a later run\'s root takes up the offer an earlier iteration left, once; a later child cannot', async () => {

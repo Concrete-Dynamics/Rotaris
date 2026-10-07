@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**A delegated agent cut off at its per-agent timeout says so where its failure shows, and names the control (PD-CONFIG-003
+revision 3, REQ-MONITOR-040, REQ-MONITOR-044, REQ-MONITOR-052, REQ-MONITOR-069; OQ-234 ruled under R-072, fin33).**
+`AgentRecord` gains `timedOut` (`{ limitSeconds, makingProgress } | null`), which `toAgentRecord` derives from the stored
+report (`timedOutOf` in `packages/engine/src/children/cut-off.ts`, reading the error the settle now writes through
+`childTimedOutMessage`); the tree and Mission-table rows draw a `tag-fail` "timed out", and the inspector and the persona
+window's instance tab the line `timeoutLine` (`packages/ui/src/agents.ts`) words, whose path is built from the labels Settings
+renders (`RUNTIME_CATEGORY_LABEL`, `PER_AGENT_TIMEOUT_LABEL` in `settings/config-state.ts`, and the rail's `Settings`). The
+**runtime view**'s agent-record paragraph, the **state ownership view**'s cut-off row and the **seams view** §8 say so. One
+field on the existing session-record channel; no package, edge, process, command or store column changed.
+
 **The raw-count fallback reads four consecutive calls as evidence only when they are the same action (PD-ORCH-016; OQ-232,
 the a68f121 duress run's D6, fin32).** `rawFallbackHasEvidence` (`engine/src/run/supervisor.ts`) compares the last four tool
 events by `fingerprint` (the name and the whole arguments) where it compared the name. The scripted client gains a

@@ -2426,6 +2426,11 @@ are not recorded, and cannot be recovered afterwards.
 
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
+*Revision 6 (2026-10-07, [R-072](requests.md#r-072)) — **which todo item a delegation serves**, a section added after
+revision 5's; the ruling of [OQ-220](../architecture/open-questions.md) under the owner's delegation. Nothing is replaced, and
+the dispositions stay as they were. It lands here for the reason revisions 3 to 5 did: this directive holds REQ-TOOLS-152's
+narrowing slot and REQ-ORCH-028's extending slot.*
+
 *Revision 5 (2026-10-07, [R-072](requests.md#r-072)) — **the attached-artifact budget, and what the caller is told**, a section
 added after revision 4's; the ruling of [OQ-221](../architecture/open-questions.md) under the owner's delegation. It replaces
 REQ-TOOLS-152's dropping rule and REQ-LIBRARY-098's figure, both quoted below, and adds REQ-LIBRARY-098 to the Narrows line. It
@@ -2516,6 +2521,25 @@ REQ-TOOLS-154's order is unchanged.
 > REQ-TOOLS-152 said, and no longer governs: "the first whose full body would carry the section past the budget is dropped, and
 > so is every attachment after it." REQ-LIBRARY-098 said, and no longer governs: "within a 48,000-character budget".
 
+**Which todo item a delegation serves (revision 6).** `delegate` SHALL accept one further optional action field, `todo_item`:
+the id of a task in the calling agent's own plan (the root's own todo list, or a child's own), which the delegation serves. The
+id SHALL be stored with the child's record. A delegation is an **implementation delegation** as REQ-ORCH-028 defines it, its
+target persona's grant, as revision 4's catalogue resolves it for the caller, holding a tool the registry declares as writing
+workspace files. Each of these SHALL be refused with status `rejected`, before any record is created and with no task id, its
+reason naming the item, the holder where there is one, and the way forward:
+- for any delegation, a `todo_item` that names no task of the caller's own plan;
+- for an implementation delegation, a `todo_item` whose task is COMPLETED or ABANDONED;
+- for an implementation delegation, a `todo_item` that another non-terminal implementation child of the same plan holds
+  (queued, waiting, running, summarising and paused children all hold; every root's children are one plan);
+- for an implementation delegation from the coordinating entry role, no `todo_item` once that role has written its todo list
+  for the task (OQ-213's `listWritten`).
+
+A delegation that names no item serves no item and holds nothing. A continuation (`continuation_of`) that names none inherits
+the item of the child it continues and meets only the held-item refusal. A `session_id` follow-up keeps its stored item, reads
+no `todo_item` (OQ-131), and is refused only while another outstanding implementation child of the plan holds that item. Each
+refusal is logged as a warning citing REQ-ORCH-028 or REQ-ORCH-029. `delegate`'s description SHALL say what `todo_item` names,
+when it is required, and that the list is written in one step and the delegation made in the next.
+
 **What is unchanged.** A child delegated without a `write_scope` claims nothing and is refused only where a
 live sibling's claim reaches. A `write_scope` never limits the child that declared it: that child may write
 outside its own patterns wherever no other claim reaches. A claim belongs to one run and lapses with its child, so a
@@ -2585,12 +2609,26 @@ earlier attachment, so the child always receives a superset of what the prefix r
 - a later attachment can arrive without an earlier one it builds on, where the prefix rule withheld both;
 - for a child held before its payload is assembled, the observation is a forecast the store may outrun.
 
+**Why revision 6, and what it costs.** REQ-ORCH-028 measures implementation ownership per todo item and REQ-ORCH-029 holds
+the coordinator to no two implementation delegations for one item outstanding at once, checkable from the run's records. OQ-213
+made the coordinator keep a list of its own; nothing in the build named which item a delegation served, so the per-item
+constraint stood on instruction text and no record could check it
+([`no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md`](../defects/no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md)).
+Only the coordinator knows which item a delegation serves, so the call names it, where the run can still refuse before a child
+is paid for. What it costs:
+- a refusal that misfires costs the coordinator one model step (17.7 to 19.6 s measured), where a duplicate costs a whole
+  child, up to 1,200 s;
+- a model cannot name an id its own step creates, so a list and a delegation written in one step leave the delegation refused,
+  once;
+- a coordinator that works on one item at a time must split it (`todo add_task`) to run two writers in parallel;
+- REQ-ORCH-030's per-item attempt count now has its key, and is still owed.
+
 > **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154, REQ-LIBRARY-098
 > **Extends:** REQ-ORCH-028
 
 *Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049). Revision 2 logged as [R-059](requests.md#r-059),
 revision 3 as [R-067](requests.md#r-067). Revision 4 ruled under the owner's delegation, [R-072](requests.md#r-072), from
-the final live runs' findings L4 and N3. Revision 5 ruled under the same delegation from OQ-221 (the consortium's question AB1).*
+the final live runs' findings L4 and N3. Revision 5 ruled under the same delegation from OQ-221 (the consortium's question AB1), revision 6 from OQ-220.*
 
 > **First execution, 2026-09-23, the day it was ruled:** the mechanism was built as written, and one clause of
 > the disclosure proved false for one reader. The block lists "the `write_scope` of every other child of the run

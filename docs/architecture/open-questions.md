@@ -10973,7 +10973,7 @@ Reported in place in [`PD-CONFIG-003`](../product/directives.md#pd-config-003); 
 for the same todo item are outstanding at once"; resolution 15 (b) of `docs/spec/resolutions/01-run-orchestration.md`, ownership
 "per todo item and at no other granularity"; REQ-TOOLS-144, the plan's schema; REQ-TOOLS-152, the `delegate` call's
 arguments. Raised 2026-10-07 by fin27's build of OQ-213's ruling, at that ruling's instruction. Numbered past the
-round's assigned OQ-213 to OQ-219. Open.)*
+round's assigned OQ-213 to OQ-219. ~~Open.~~ **Ruled 2026-10-07.**)*
 
 OQ-213's refusal makes a multi-step coordinator keep a todo list of its own, which is the precondition for REQ-ORCH-029's
 per-item constraint, not its measurement. A `delegate` call names no todo item (`packages/agent-tools/src/tools/delegation.ts`),
@@ -10986,6 +10986,39 @@ implementation delegation for one item, as before OQ-213.
 **What a ruling decides.** Whether a delegation names the todo item it serves (a `delegate` argument, a field on the plan's
 item, or a link the run infers), whether a second implementation delegation for an item already served is refused at dispatch,
 and what a delegation that names no item counts as.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a delegation names the todo item it
+serves in one optional `delegate` argument, `todo_item`: the id of a task in the caller's own plan. The id is stored on the
+child's record, and the call is refused `rejected` when the plan holds no such task. An implementation delegation (REQ-ORCH-028)
+is refused `rejected` at admission in three cases: its item is COMPLETED or ABANDONED; another non-terminal implementation child
+of the same plan holds the item; or it names no item and comes from the coordinating entry role after that role has written its
+todo list for the task (OQ-213's `listWritten`). A delegation that names no item serves no item and holds nothing, so a task's
+first work item is the only unnamed implementation delegation the coordinator can make; a continuation inherits the item of the
+child it continues, and a `session_id` follow-up keeps its stored item. Recorded as
+[`PD-TOOLS-006`](../product/directives.md#pd-tools-006) **revision 6** (the ruling text names it revision 5; AB1's ruling,
+OQ-221, built first in the same bundle, is revision 5, and the round assigned this one revision 6). The dispositions stay as
+they are: it narrows REQ-TOOLS-152 and REQ-TOOLS-154 and extends REQ-ORCH-028. The held-item refusal builds REQ-ORCH-028 and
+REQ-ORCH-029 as written and needs no directive, following OQ-213's precedent; if a later round reads "a delegation made before
+the list serves no item" as a narrowing of REQ-ORCH-029, it lands as `PD-ORCH-006` revision 3, the one narrowing slot
+REQ-ORCH-029 admits. The build lacked any way to hold or read the per-item constraint, recorded as
+[`no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md`](../defects/no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md).
+
+**The two recommendations weighed, and the ruling followed both.** *Advocate A (the user's lens)* recommended that the
+coordinator names the item at the call: an optional `todo_item` stored on the child's record; once the coordinating entry role
+keeps a list, an implementation delegation names an item from it; one naming an item another outstanding implementation child
+holds is refused `rejected`; one made before any list serves the task as a whole, is recorded with no item and blocks none.
+*Advocate B (the system's lens)* recommended the same mechanism, with an unnamed implementation delegation serving no item and
+admitted only until the coordinator has written its list. Only the coordinator knows which item a delegation serves, so the link
+belongs in the call, where the run can still refuse before a child is paid for; inferring the item conflicts with REQ-TOOLS-144
+(names need not be unique) and REQ-TOOLS-145 (one item IN_PROGRESS), a field on the plan's item is written too late to refuse,
+and recording without refusing leaves the clause on instruction text, which OQ-213's ruling rejected under REQ-ORCH-029. Where
+the advocates differed the ruling followed B: a follow-up reads no `todo_item` (OQ-131) and keeps its stored item; the
+held-item refusal comes from REQ-ORCH-028 and binds any caller naming an item of its own plan; a terminal item is refused to
+implementation work, so the plan never shows COMPLETED work still under way. From A it took the unknown-id refusal for every
+delegation (REQ-TOOLS-152's `inherited_context` precedent) and the harness checks. Both advocates missed that `PD-TOOLS-006`
+revision 4 had landed for OQ-216, and that a model cannot name an id its own step creates, so `delegate`'s description and
+OQ-213's refusal text tell it to write the list first. A refusal that misfires costs one model step (17.7 to 19.6 s measured);
+a duplicate costs a whole child, up to 1,200 s.
 
 **OQ-216 — Is the coordinator told which personas hold a terminal or a file-writing tool?** *(REQ-ORCH-028, a routing table
 from need to role, with two capability clauses (`codebase-analyst` "reads the workspace but does not modify it", `librarian`

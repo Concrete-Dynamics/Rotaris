@@ -54,7 +54,7 @@ every bundle's ending, acceptance); the journal holds every agent's.
 - **Two runs at once each run two**: on 2026-09-29 `wf_4da43d03-b3a` and `wf_f722534f-88d` overlapped from 05:27 to
   11:29 UTC with four workflow agents at once, and every merge either made then had its gate green.
 - **To run more, split the bundles over two plans** that share no bundle, no file and no `after`:
-  - each has its own `id`, so its own branches and integration worktree (`<repo>-wt-integ-<id>`), and its own
+  - each has its own `id`, so its own branches and landing worktrees (`<repo>-wt-integ-<id>-<short>`), and its own
     scratchpad directory (SKILL.md §3: `plan.json`, `RUNS.txt`, rendered scripts) and check-in;
   - each takes `"acceptance": { "rounds": 0 }`, because every plan shares the profile's acceptance worktree;
   - when both have settled and a fresh triage has run (SKILL.md §5), one acceptance-only plan (`"bundles": []`, the
@@ -69,10 +69,11 @@ every bundle's ending, acceptance); the journal holds every agent's.
   triage's own list (triage 4 wrote `after: ["fin6"]`); the mark never goes into `plan.json`, where `after` names
   bundles of the same plan only and `render` refuses any other. On 2026-10-02 fin8's `ladder-overrides` and
   `focus-bound-recovery` were held so while fin6's `auth-recovery` bundles had yet to merge.
-- Landings are serialized with a promise-chain lock, which the review stage holds for its whole round, so the plan's
-  integration worktree has one user at a time; proof sweeps have another lock. Two workflows, or a workflow and you,
-  coordinate through `origin/main`: a push that is not a fast-forward is rejected, and whoever is rejected fetches,
-  rebases, runs the gate again and pushes again. Never run two runs of one `RUNS.txt` at once.
+- Reviews of different bundles run at once since 2026-10-07, each gating and pushing from its bundle's own landing
+  worktree (`<repo>-wt-integ-<id>-<short>`); before, one integration worktree per plan served one landing at a time
+  under a promise-chain lock. Proof sweeps are still serialized with such a lock. Reviewers of one run, two workflows,
+  or a workflow and you, coordinate through `origin/main`: a push that is not a fast-forward is rejected, and whoever is
+  rejected fetches, rebases, runs the gate again and pushes again. Never run two runs of one `RUNS.txt` at once.
 
 ## Cost and duration, as observed
 

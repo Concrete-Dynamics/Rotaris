@@ -55,15 +55,15 @@ bundle's merge gate meets it; a red that needs code goes to the owner or into a 
 
 ## Worktrees and branches — `docs/clean-room/agent-workflow.md`
 
-One temporary branch in one temporary worktree per bundle (`<repo>-wt-<short>`), cut from `origin/main`. The
-primary checkout is not a place to write. **Main's history is linear**: a reviewed bundle lands by a rebase onto
-`origin/main` in its own worktree, the gate on that exact head checked out detached in the plan's integration worktree
-(`<repo>-wt-integ-<id>`, a tree other than the one it was built in), and a fast-forward push of it from there; never a
-merge commit, never a force (the owner, 2026-10-04: "please always use rebase instead of a merge commit for main."). A
-push rejected because main moved is rebased, gated and pushed again. Merging `origin/main` into a bundle branch while it
-is built and repaired is fine: the rule is about main, and the rebase at landing drops those merges. After the landing
-the worktree is removed and the branch deleted (`git branch -d`). Stage paths by name, never `git add -A`; LF line
-endings.
+One temporary branch in one temporary worktree per bundle (`<repo>-wt-<short>`), cut from `origin/main`. The primary
+checkout is not a place to write. **Main's history is linear**: a reviewed bundle lands by a rebase onto `origin/main`
+in its own worktree, the gate on that exact head checked out detached in the bundle's own landing worktree
+(`<repo>-wt-integ-<id>-<short>`, a tree other than the one it was built in), and a fast-forward push of it from there;
+never a merge commit, never a force (the owner, 2026-10-04: "please always use rebase instead of a merge commit for
+main."). A push rejected because main moved is rebased, gated and pushed again. Merging `origin/main` into a bundle
+branch while it is built and repaired is fine: the rule is about main, and the rebase at landing drops those merges.
+After the landing the bundle and landing worktrees are removed and the branch deleted (`git branch -d`). Stage paths
+by name, never `git add -A`; LF line endings.
 
 **Never `git stash`**: `refs/stash` lives in the common git directory, one stash for every worktree, so a `pop` takes
 whatever entry is on top, another agent's included. On 2026-10-03 at about 07:04 UTC the builders of finacc's

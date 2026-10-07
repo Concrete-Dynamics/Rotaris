@@ -83,7 +83,7 @@ Abandoning a branch because the rebase is hard is not an outcome an agent may ch
   one that lands; a gate green before the rebase judged a different tree. Proofs that reach
   into per-workspace state have passed in the tree they were written in and failed in the
   primary checkout on a directory name alone, so run them on the rebased head in another
-  tree: a detached worktree at that head (an orchestrated build's integration worktree is
+  tree: a detached worktree at that head (an orchestrated build's landing worktree is
   one).
 - **Remove the worktree once landed**: `git worktree remove ../Rotaris-crw-wt-<short>`
   and `git branch -d <topic>`.

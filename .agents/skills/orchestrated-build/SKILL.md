@@ -1,6 +1,6 @@
 ---
 name: orchestrated-build
-description: 'Drive a very large implementation (a release backlog, every open defect, a whole feature set) through a multi-agent workflow: bundles of two tasks per builder, an independent reviewer per bundle that repairs what it can in place and lands it, repair rounds until it passes, one landing at a time, then acceptance rounds (full proof sweep, live run against a real model, autopsy) whose findings go back through the same loop. Survives container restarts and usage limits by resuming from the workflow journals. Use when the owner asks to "fix everything before release", "do all open defects", "implement the whole backlog", "plan it and delegate with a workflow", or names this skill. The skill improves itself: read "Improving this skill" before finishing.'
+description: 'Drive a very large implementation (a release backlog, every open defect, a whole feature set) through a multi-agent workflow: bundles of two tasks per builder, an independent reviewer per bundle that repairs what it can in place and lands it from its own tree, repair rounds until it passes, then acceptance rounds (full proof sweep, live run against a real model, autopsy) whose findings go back through the same loop. Survives container restarts and usage limits by resuming from the workflow journals. Use when the owner asks to "fix everything before release", "do all open defects", "implement the whole backlog", "plan it and delegate with a workflow", or names this skill. The skill improves itself: read "Improving this skill" before finishing.'
 argument-hint: '[scope, e.g. "every open defect and unimplemented feature except signing"]'
 ---
 
@@ -92,7 +92,8 @@ node $K/scripts/orchestration.mjs render --plan $S/plan.json --profile $K/profil
 authorization), checks that the reference worktree's copy of this skill matches the one rendering, embeds the plan
 in the template, and dry-runs the result against stub agents; it refuses to write a script
 that leaves a bundle unsettled. Launch with `Workflow({ scriptPath: "$S/run-1.js" })` and write the run id as the
-first line of `$S/RUNS.txt`. The first reviewer to land creates the plan's integration worktree.
+first line of `$S/RUNS.txt`. Each reviewer lands from its bundle's own landing worktree (`<integ>-<short>`: the profile's
+`integ`, a dash, the bundle's short name), which it creates when missing and removes after the landing.
 
 Schedule a fallback check-in (`send_later`, ~120 minutes) whose message says: read the last run of `RUNS.txt`, run
 `status`, look for another writer on main (`references/repository.md`), recover if it stopped, else re-arm
@@ -104,7 +105,7 @@ silently. Re-arm at every check-in. It survives restarts; background tasks do no
 
 | Ending | Meaning | What you do |
 | --- | --- | --- |
-| `merged` | On main, gate green | Nothing |
+| `merged` | On main, gate green | Nothing; but with `landedWithBlocking`, its reviewer landed it with the findings in `lastBlocking` unrepaired: record each (repository.md) and report it |
 | `blocked` | No task could proceed | Report it; or `reopen` it (below) |
 | `needs-owner` | Two repair budgets spent, findings survive | Report the last findings to the owner |
 | `unverified` | One budget spent | Re-render: it gets a fresh budget at `max` with a root-cause note |
@@ -177,8 +178,8 @@ nothing but its own repairs merged after it; `"acceptance": { "fresh": true }` f
 
 Report what merged (counts, notable repairs), what remains open and why (owner rulings, platform-bound, excluded),
 each decision waiting on the owner in one line, collisions the owner must know about, and where the evidence is.
-Then remove the integration, acceptance, live and reference worktrees and the landed branches (`git branch -d`), stop
-leftover `Xvfb`, and delete the check-in.
+Then remove the landing worktrees left by bundles that did not land (`<integ>-<short>`), the acceptance, live and
+reference worktrees and the landed branches (`git branch -d`), stop leftover `Xvfb`, and delete the check-in.
 
 ## Improving this skill
 

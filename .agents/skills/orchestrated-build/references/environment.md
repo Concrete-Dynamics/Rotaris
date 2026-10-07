@@ -77,11 +77,12 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   left off." turns at 21:16 UTC that day and 01:06 UTC the next were answered by the limit message; and a probe sent
   when the owner wrote "Continue" succeeded at 06:43 UTC on 2026-10-02.
 - **A reviewer lost mid-landing** (a merge agent, before 2026-10-07) leaves its bundle branch rebased but unpushed
-  (the rebased head detached in `<repo>-wt-integ-<id>`), or a rebase in progress in the bundle worktree. Nothing is
-  lost: the re-rendered review's landing step 0, which it runs first, finds a landing that did happen (the rebased
-  branch is part of origin/main); otherwise it aborts a rebase left in progress, reviews, rebases again, gates the head
-  and pushes. Before rebase landing (2026-10-04), the same limit left fin3's `c6e5d96` and fin4's `bfc3f33`, merge
-  commits unpushed in `<repo>-wt-integ-<id>`, and the re-rendered merge stages merged again from origin/main.
+  (the rebased head detached in its landing worktree, `<repo>-wt-integ-<id>-<short>`), or a rebase in progress in the
+  bundle worktree. Nothing is lost: the re-rendered review's landing step 0, which it runs first, finds a landing that
+  did happen (the rebased branch is part of origin/main); otherwise it aborts a rebase left in progress, reviews,
+  rebases again, gates the head and pushes. Before rebase landing (2026-10-04), the same limit left fin3's `c6e5d96`
+  and fin4's `bfc3f33`, merge commits unpushed in `<repo>-wt-integ-<id>`, and the re-rendered merge stages merged
+  again from origin/main.
 
 ## Pause and backup
 

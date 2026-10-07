@@ -134,3 +134,11 @@ user can drag taller", which counted the open field at its default height among 
 On a short window either can stand taller than the plan's floor. PD-ORCH-002 revision 2 asks both that every other part
 be "sized by its own content" and that the plan be the largest, and on such a window the two cannot both hold. This is
 raised as **OQ-204** in `docs/architecture/open-questions.md`, with the reading the build proceeds under.
+
+**Settled 2026-10-07 (fin28, bundle `fin28-window-gate-timeout`).** OQ-204 was ruled under the owner's delegation
+([R-072](../../product/requests.md#r-072)) and recorded as [`PD-ORCH-002`](../../product/directives.md#pd-orch-002) revision 3:
+"largest" holds against every part the product sizes. The "You asked for" line is now capped like the todo
+(`max-height: var(--rt-space-16)`), scrolls inside itself and wraps an unbroken run; a revision field the user drags taller
+keeps the user's height and may then stand taller than the plan, the one case where "largest" yields; a gate shorter than
+its parts scrolls with its three answers pinned, as built. Pinned by the "caps a later cycle's 'You asked for' line" case
+in `packages/ui/src/plan-gate.test.ts` and `pnpm plan-gate-proof`'s `revised-at-minimum` launch.

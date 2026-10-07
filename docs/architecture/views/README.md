@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**A later cycle's "You asked for" line is capped like the implied todo (PD-ORCH-002 revision 3, REQ-ORCH-153; OQ-204 ruled
+under R-072, fin28).** `.plan-gate__prior` (`packages/ui/src/shell.css`) takes `max-height: var(--rt-space-16)`, scrolls inside
+itself and wraps with `overflow-wrap: anywhere`; a revision field dragged taller keeps its height. The **runtime view**'s plan
+gate paragraph says so. No package, edge, process, channel, command or store column changed.
+
 **Closing one of several main windows ends its own project's runs, asking first (PD-SHELL-009, REQ-STARTUP-046, REQ-SHELL-119,
 REQ-SHELL-122; OQ-206 ruled under R-072, fin28).** The run host's `runs.active` counts the named workspace's runs (the session
 row's `workspace_root`, `Sessions.activeRunCount(workspaceRoot?)`) and the empty id the instance's; a new request

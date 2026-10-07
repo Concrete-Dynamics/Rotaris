@@ -10349,7 +10349,26 @@ the only element that grows with it: every other part of the gate is sized by it
 1000x680 minimum; REQ-SHELL-048, every action reachable. Raised 2026-10-06 by
 [`the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md`](../defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md)
 (finacc2, bundle `finacc2-accept1-6`). First committed as OQ-202 on the bundle's branch; origin/main had already taken
-OQ-202 and OQ-203 (`ef1e6d9`, `6998e3f`), so it takes the next free number, OQ-204. Open, the owner's.)*
+OQ-202 and OQ-203 (`ef1e6d9`, `6998e3f`), so it takes the next free number, OQ-204. ~~Open, the owner's.~~ **Ruled
+2026-10-07.**)*
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** "largest" holds against every
+part the product sizes. A later cycle's "You asked for" line is bounded like the implied todo (`max-height:
+var(--rt-space-16)`). It scrolls inside itself and wraps long unbroken text, so the plan's floor stands above every part
+the product sizes. A revision field the user drags taller keeps the height the user gave it and may then stand taller than
+the plan, the one case where "largest" yields. When the area is shorter than the gate's parts with the plan at its floor,
+the gate scrolls with its three answers pinned at its foot, as built. Recorded as
+[`PD-ORCH-002`](../product/directives.md#pd-orch-002) revision 3, one paragraph added and nothing replaced, with REQ-ORCH-153's
+back-pointer amended in place.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: decide by who sized the part — cap the "You asked for"
+line as the todo is capped, so the plan stands taller than every part the product sizes, and let a field the user drags
+keep the user's height. *Advocate B (the system's lens)*: the same layout — cap the line below the plan's floor, let the
+drag stand, confirm the pinned-answers scroll — reached by refusing to choose between the directive's two clauses where a
+layout keeping both exists, as the 2026-10-06 repair's verifier did. **The ruling followed both.** From A it took the
+dragged-field reading and the amendment of REQ-ORCH-153's back-pointer in place; from B, that the cycle-2 reading must go
+red on the CSS before the change, and that the error line (`composer__error`) is left as it is. The cap is the todo's own
+token, so one bound serves both content-sized parts (B's whole-line cap was set aside).
 
 On a short window the gate's row is less than its parts need: at 1000x680 with a 97 px persistent notice it is 261 px, and
 199 px with the re-authentication bar as well. If every part but the plan keeps its content height and the plan has no

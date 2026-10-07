@@ -761,6 +761,9 @@ possible way: by the supervisor not firing at all.
 
 ### PD-ORCH-002 — the plan gate renders Markdown by default with inline editing and progressive revision feedback
 
+*Revision 3 (2026-10-07, [R-072](requests.md#r-072), ruling [OQ-204](../architecture/open-questions.md)) — **when the gate
+cannot hold every part**: one paragraph is added after revision 2's **Expanded** clause, and nothing is replaced.*
+
 *Revision 2 (2026-09-17, [R-032](requests.md#r-032)) — **the height the gate is given, and who decides it**,
 below. Revision 1 (2026-09-16, [R-030](requests.md#r-030)) is quoted where it is replaced, never deleted. A
 changed directive takes a revision and never a new number ([`README.md`](README.md)).*
@@ -778,6 +781,18 @@ it**, and the plan's own text — rendered Markdown, or the source under `REQ-OR
 **largest element of the surface and the only element that grows with it**: every other part of the gate is
 sized by its own content, so every pixel the surface gains goes to the plan and a taller window is a longer
 plan and nothing else.
+
+**When the gate cannot hold every part — revision 3.** Every part of the expanded gate other than the plan SHALL have a
+height bound below the plan's floor. The product's own text (the heading, the intent sentence, a refusal's reason and the
+three answers) is bounded by that text. The implied todo and a later cycle's "You asked for" line are bounded by a cap:
+each takes its content height up to the cap, scrolls inside itself past it, and wraps its text so the gate never scrolls
+sideways. The revision field is bounded by its default height, which grows with nothing typed. The plan's floor SHALL
+stand above every such bound in both presentations, so the plan is the largest part of the expanded gate at every window
+size the shell supports. The one exception is a height the user gives the revision field by dragging it: the field keeps
+that height while it stays on screen, and it may then stand taller than the plan. When the area is shorter than the
+gate's parts with the plan at its floor, the gate SHALL scroll with its three answers pinned at its foot, and no part
+yields below its content or its bound. *Why:* the plan is what is decided; the user's own earlier words stay in the
+durable record and one scroll away; a drag is the user's own choice of layout, and the adopted `textarea.input` grants it.
 
 **Collapsed**: the gate is a single bar at the top of that same area, and the transcript reads beneath it
 exactly as it does when no gate is held, under `REQ-CHAT-010`'s floor and no other.
@@ -828,9 +843,24 @@ for these three in particular.
 > **Narrows:** REQ-ORCH-154, REQ-SHELL-168, REQ-CHAT-010
 
 *Raised by the owner, 2026-09-16; logged as [R-030](requests.md#r-030). Revised 2026-09-17; logged as
-[R-032](requests.md#r-032). `REQ-CHAT-010` joins the dispositions at revision 2: its 180 px transcript
+[R-032](requests.md#r-032). Revision 3 logged as [R-072](requests.md#r-072) (OQ-204), ruled by the consortium under the
+owner's delegation, both advocates' recommendation followed. `REQ-CHAT-010` joins the dispositions at revision 2: its 180 px transcript
 minimum is a floor under an area this directive now takes in full while the gate is expanded, and a
 requirement a mechanism contradicts is named by the directive or it is an ungoverned deviation from it.*
+
+> **First execution of revision 3, 2026-10-07, built under [R-072](requests.md#r-072):** the paragraph held as written.
+> `.plan-gate__prior` takes the todo's cap (`max-height: var(--rt-space-16)`), `overflow: auto` and `overflow-wrap: anywhere`
+> (`packages/ui/src/shell.css`). **What was measured.** `plan-gate.test.ts`'s cap case, red on the CSS before; and
+> `pnpm plan-gate-proof`'s `revised-at-minimum` launch at 1000x680 beside REQ-NOTIFY-032's warning, at cycle 2 with a
+> 1,029-character stated change holding a 120-character unbroken run. On the CSS before the change it went **red**: the
+> "You asked for" line stood 143 px against the plan's 72 (the heading 24, the intent 19, the todo 56, the closed field 22,
+> the answers 41). After it: the line 64 px, scrolling (143 of content in 64), the plan 72 and the tallest part, the only
+> one that grows, nothing else yielding, the gate 858 px wide with nothing to scroll sideways, 99 px to scroll down, and the
+> three answers hit. With the revision field opened and set to 240 px as a drag sets it, the field held 240 px (its part
+> 262), the plan's floor read 112px, the plan was still the only part that grows, nothing else yielded, and the answers
+> were hit; "largest" is not asserted there. Taken at a load average of about 9 on four CPUs, beside another plan's
+> builders. **What was not measured.** A drag with the pointer (the proof sets the height a drag sets) and the keyboard
+> scroll of the capped line. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 <a id="pd-orch-003"></a>
 

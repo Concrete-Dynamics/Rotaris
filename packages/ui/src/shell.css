@@ -953,7 +953,11 @@
 .plan-gate__facts dt { color: var(--rt-text-secondary); }
 .plan-gate__facts dd { margin: 0; color: var(--rt-text); font-weight: var(--rt-weight-medium); }
 .plan-gate__body { margin: 0; font-size: var(--rt-text-sm); color: var(--rt-text-secondary); }
-.plan-gate__prior { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-accent-300); }
+/* PD-ORCH-002 revision 3 (OQ-204, ruled 2026-10-07 under R-072): a later cycle's "You asked for" line is bounded like the
+   implied todo — the todo's own cap, below the plan's 72, 80 and 112 px floors — so the plan stays the largest part the
+   product sizes. Past the cap it scrolls inside itself (keyboard-reachable through Chromium's focusable scrollers, as the
+   todo is), and long unbroken text wraps, so the gate never scrolls sideways (REQ-SHELL-022). Its full text is in the record. */
+.plan-gate__prior { margin: 0; max-height: var(--rt-space-16); overflow: auto; overflow-wrap: anywhere; font-size: var(--rt-text-xs); color: var(--rt-accent-300); }
 .plan-gate > * { flex: 0 0 auto; }
 /* Revision 2: the plan's own text takes what is left after the heading, the controls and the three answers — no cap
    of its own, since the cap is what left it a single clipped line on the window the product is used at.
@@ -979,7 +983,8 @@
    minimum, with or without a notice (the bundle's verifier, repair round 2, 2026-10-06: preview 72 against 102). While the
    field is open the plan's floor rises above it in both modes; every other part keeps its content height and the gate
    scrolls with its answers pinned. The selector outranks `textarea.input` (0,1,1), which governs edit mode's floor
-   otherwise. Only a field the user drags taller is unbounded (OQ-204). */
+   otherwise. A field the user drags taller keeps the user's height (PD-ORCH-002 revision 3), the one part that may then
+   stand taller than the plan. */
 .plan-gate:has(.plan-gate__changes-details[open]) .plan-gate__preview-wrap, .plan-gate:has(.plan-gate__changes-details[open]) .plan-gate__plan { min-height: calc(var(--rt-space-24) + var(--rt-space-4)); }
 /* The implied todo state is bounded so a long one cannot take the height revision 2 gives the plan; it scrolls instead. */
 .plan-gate__todo { display: flex; flex-direction: column; gap: var(--rt-space-1); max-height: var(--rt-space-16); overflow: auto; padding: var(--rt-space-2); background: color-mix(in oklch, var(--rt-surface-2) 60%, transparent); border-radius: var(--rt-radius-sm); }

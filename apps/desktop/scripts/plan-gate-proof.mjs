@@ -17,7 +17,9 @@ import { codeIntelligenceDiscovered } from './lib/code-intelligence-discovery.mj
  *  2. The edit is written through and approves nothing.
  *  3. **The pending decision survives the application closing** (REQ-ORCH-153): the window is gone, the store
  *     is read directly, and a second launch onto the same workspace finds the gate and the edit still there.
- *  4. Revise starts a further cycle carrying the changes the user stated.
+ *  4. Revise starts a further cycle carrying the changes the user stated; at the minimum beside a notice that cycle's
+ *     "You asked for" line stands capped and scrolling, the plan still the largest part, and a revision field dragged
+ *     taller keeps its height (PD-ORCH-002 revision 3).
  *  5. Approve releases execution, the run carries the approved text, and `plan_released` is set.
  *  6. **Nothing wrote before approval and something wrote after it** — the file the plan names does not exist
  *     while the gate is held and does exist once the approved run has run, which is the whole of "blocks
@@ -369,22 +371,82 @@ results.noticeAtMinimum = {
   edit, editOpen, previewOpen,
 };
 
-// 3. Revise: a further cycle, carrying the changes stated, and still nothing written.
+// 3. Revise: a further cycle, carrying the changes stated, and still nothing written. Since 2026-10-07 the stated change is
+// about a thousand characters with a 120-character unbroken run (PD-ORCH-002 revision 3, OQ-204), so the next cycle's "You
+// asked for" line is longer than its cap and the reading at the minimum below measures it; three words never were.
+const STATED_CHANGES = `use fewer steps, ${'and name in each step the files it reads and the files it writes, so the review can follow it, '.repeat(9)}then check ${'x'.repeat(120)} at the end`;
 const log3 = await launch('revised', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_AFTER_MS: '16000',
-  ROTARIS_CAPTURE_EVAL_AT: `(() => { const el = document.querySelector('[data-testid="plan-gate-changes"], #plan-gate-changes'); if (el) { const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; setter.call(el, 'use fewer steps'); el.dispatchEvent(new Event('input', { bubbles: true })); } return el ? 'stated' : 'absent'; })()@6000`,
+  ROTARIS_CAPTURE_EVAL_AT: `(() => { const el = document.querySelector('[data-testid="plan-gate-changes"], #plan-gate-changes'); if (el) { const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(STATED_CHANGES)}); el.dispatchEvent(new Event('input', { bubbles: true })); } return el ? 'stated' : 'absent'; })()@6000`,
   ROTARIS_CAPTURE_CLICKS: '[data-testid="plan-revise"]@6600',
 });
 if (existsSync(PLANNED_FILE)) throw new Error('a revise cycle wrote a file the plan names');
 const revised = readStore();
 if (revised.cycles.length !== 2) throw new Error(`revise did not start a further cycle: ${revised.cycles.length}`);
 if (revised.cycles[0].decision !== 'revise') throw new Error('the first cycle does not record the answer taken');
-if (revised.cycles[1].changes !== 'use fewer steps') throw new Error(`the stated changes did not reach the next cycle: ${JSON.stringify(revised.cycles[1].changes)}`);
+if (STATED_CHANGES.length < 1000) throw new Error(`the stated change is ${STATED_CHANGES.length} characters, not the thousand the reading at the minimum needs`);
+if (revised.cycles[1].changes !== STATED_CHANGES) throw new Error(`the stated changes did not reach the next cycle: ${JSON.stringify(revised.cycles[1].changes)}`);
 if (revised.session.execution_status !== 'awaiting_plan_decision' || revised.session.plan_cycle !== 2) throw new Error('the second cycle is not holding');
 if (revised.session.plan_released !== 0) throw new Error('revise released execution');
 if (!revised.timeline.includes('plan_gate_resolved')) throw new Error('no plan_gate_resolved entry for the revise');
 results.revised = { cycles: revised.cycles.length, firstDecision: revised.cycles[0].decision, changes: revised.cycles[1].changes, released: revised.session.plan_released, plannedFileExists: false };
+
+/*
+ * 3b. The second cycle at REQ-SHELL-022's minimum beside REQ-NOTIFY-032's warning, as reading 2c stands the first
+ * (PD-ORCH-002 revision 3, OQ-204, ruled 2026-10-07 under R-072). A later cycle's "You asked for" line is bounded like the
+ * implied todo: at most its cap (64 px), scrolling inside itself and wrapping the unbroken run, so the gate never scrolls
+ * sideways, and the plan is still the tallest part, the only one that grows, nothing else yielding below its content, the
+ * three answers hit. Until the ruling the line had no bound, and the thousand characters stood taller than the plan's 72 px
+ * floor. The second reading opens the revision field by its summary and sets its height the way a drag does (inline
+ * `style.height`, 240 px): the field keeps it, the plan's floor reads 112 px and the plan is still the only part that grows
+ * and nothing else yields; "largest" is not asserted there, the one case revision 3 lets yield.
+ */
+const GATE_READ = `const g = document.querySelector('[data-testid="plan-gate"]'); const p = document.querySelector('[data-testid="plan-gate-prior"]'); const n = document.querySelector('.notice-slot'); const field = document.querySelector('.plan-gate__changes'); const details = document.querySelector('.plan-gate__changes-details'); const planBox = document.querySelector('.plan-gate__plan, .plan-gate__preview-wrap'); const reach = ['plan-approve', 'plan-revise', 'plan-cancel'].map((id) => { const e = document.querySelector('[data-testid="' + id + '"]'); if (!e) return id + '=absent'; const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return id + '=' + (hit === e || e.contains(hit) ? 'ok' : 'not-hit'); }).join('|'); const read = { size: innerWidth + 'x' + innerHeight, noticeText: n ? n.innerText.slice(0, 200) : '', prior: p ? { h: Math.round(p.getBoundingClientRect().height), scrollHeight: p.scrollHeight, clientHeight: p.clientHeight, chars: (p.textContent || '').length } : null, gateScrollWidth: g ? g.scrollWidth : null, gateClientWidth: g ? g.clientWidth : null, gateScrolls: g ? g.scrollHeight - g.clientHeight : null, open: details !== null && details.open, fieldH: field ? Math.round(field.getBoundingClientRect().height) : null, planMin: planBox ? getComputedStyle(planBox).minHeight : null, reach, children: g ? [...g.children].map((c) => ({ c: [...c.classList].find((k) => k.startsWith('plan-gate__')) || c.classList[0] || c.tagName, h: Math.round(c.getBoundingClientRect().height), grow: getComputedStyle(c).flexGrow, shrink: getComputedStyle(c).flexShrink })) : null };`;
+const PRIOR_AT_MINIMUM = `(async () => { for (let i = 0; i < 400 && !((${AT_MINIMUM_WITH_NOTICE}) && document.querySelector('[data-testid="plan-gate-prior"]') !== null); i += 1) await new Promise((r) => setTimeout(r, 100)); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); ${GATE_READ} document.body.dataset.revisedPrior = '1'; return read; })()`;
+const DRAGGED_AT_MINIMUM = `(async () => { for (let i = 0; i < 400 && document.body.dataset.revisedPrior !== '1'; i += 1) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.plan-gate__changes-summary')?.click(); for (let i = 0; i < 400 && !(document.querySelector('.plan-gate__changes-details')?.open === true && document.querySelector('.plan-gate__changes') !== null); i += 1) await new Promise((r) => setTimeout(r, 100)); const f = document.querySelector('.plan-gate__changes'); if (f) f.style.height = '240px'; await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); ${GATE_READ} document.body.dataset.revisedDragged = '1'; return read; })()`;
+const log3b = await launch('revised-at-minimum', {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_RESIZE: '1000x680@200',
+  ROTARIS_CAPTURE_NOTICES: [1500, 6000, 12000].map((at) => `${OTHER_FAILED}@${at}`).join(';;'),
+  ROTARIS_CAPTURE_EVAL_AT: [PRIOR_AT_MINIMUM, DRAGGED_AT_MINIMUM].map((probe) => `${probe}@2000`).join(';;'),
+  ROTARIS_CAPTURE_WAIT: "js:document.body.dataset.revisedPrior === '1' && document.body.dataset.revisedDragged === '1'",
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '1500',
+});
+{
+  const evals3b = parseEvals(log3b);
+  const prior = readEval(evals3b, 2000, PRIOR_AT_MINIMUM);
+  const dragged = readEval(evals3b, 2000, DRAGGED_AT_MINIMUM);
+  if (!prior?.children || !dragged?.children) throw new Error(`the second cycle was not read at the minimum with a notice:\n${log3b}`);
+  if (prior.size !== '1000x680' || !prior.noticeText.includes(OTHER_SESSION)) throw new Error(`the second cycle was not read at 1000x680 beside REQ-NOTIFY-032's notice: ${JSON.stringify({ size: prior.size, noticeText: prior.noticeText })}`);
+  const planOf = (read) => read.children.find((c) => /plan-gate__(preview-wrap|plan)$/.test(c.c))?.c;
+  const grewOnly = (read, label) => {
+    const plan = planOf(read);
+    const grew = read.children.filter((c) => Number(c.grow) > 0 && c.h > 1).map((c) => c.c);
+    if (plan === undefined || grew.length !== 1 || grew[0] !== plan) throw new Error(`${label}: the plan is not the only element that grows: ${JSON.stringify(grew)}`);
+    const shrank = read.children.filter((c) => Number(c.shrink) > 0 && c.c !== plan).map((c) => c.c);
+    if (shrank.length > 0) throw new Error(`${label}: a part other than the plan yields below its content: ${JSON.stringify(shrank)}`);
+    if (read.reach !== 'plan-approve=ok|plan-revise=ok|plan-cancel=ok') throw new Error(`${label}: an answer of the gate is not reachable (REQ-SHELL-048): ${read.reach}`);
+    return plan;
+  };
+  // Reading 1: the "You asked for" line capped, scrolling, wrapping; the plan the largest part.
+  if (prior.prior === null || prior.prior.chars < STATED_CHANGES.length) throw new Error(`the second cycle draws no "You asked for" line holding the stated change: ${JSON.stringify(prior.prior)}`);
+  if (prior.prior.h > 64) throw new Error(`the "You asked for" line stands ${prior.prior.h} px, past its 64 px cap (PD-ORCH-002 revision 3): ${prior.children.map((c) => `${c.c}=${c.h}`).join('|')}`);
+  if (!(prior.prior.scrollHeight > prior.prior.clientHeight)) throw new Error(`the capped "You asked for" line does not scroll inside itself: ${JSON.stringify(prior.prior)}`);
+  if (prior.gateScrollWidth > prior.gateClientWidth) throw new Error(`the gate scrolls sideways (${prior.gateScrollWidth} > ${prior.gateClientWidth}): the unbroken run in the "You asked for" line does not wrap (REQ-SHELL-022)`);
+  const plan1 = grewOnly(prior, 'at the second cycle at 1000x680 with a notice');
+  const tallest = prior.children.reduce((x, y) => (y.h > x.h ? y : x));
+  if (tallest.c !== plan1 || prior.children.some((c) => c.c !== plan1 && c.h >= tallest.h)) throw new Error(`at the second cycle at 1000x680 with a notice the plan is not the largest element of the gate: ${prior.children.map((c) => `${c.c}=${c.h}`).join('|')}`);
+  // Reading 2: the revision field dragged taller keeps the user's height; the plan at its raised floor, still the only grower.
+  if (!dragged.open || !(dragged.fieldH >= 238)) throw new Error(`the revision field dragged to 240 px did not keep that height: ${JSON.stringify({ open: dragged.open, fieldH: dragged.fieldH })}`);
+  if (dragged.planMin !== '112px') throw new Error(`with the revision field open the plan's floor reads ${dragged.planMin}, not 112px`);
+  grewOnly(dragged, 'with the revision field dragged taller');
+  results.revisedAtMinimum = {
+    prior: { line: prior.prior, gateScrollWidth: prior.gateScrollWidth, gateClientWidth: prior.gateClientWidth, gateScrolls: prior.gateScrolls, reach: prior.reach, children: prior.children },
+    dragged: { fieldH: dragged.fieldH, planMin: dragged.planMin, gateScrolls: dragged.gateScrolls, reach: dragged.reach, children: dragged.children },
+  };
+}
 
 // 4. Approve: execution released, the release recorded, and the work actually done.
 const log4 = await launch('approved', {

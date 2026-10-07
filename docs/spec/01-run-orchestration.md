@@ -50,7 +50,9 @@ A run takes one top-level user task and executes it through an autonomous, itera
   > revision 2 the gate expanded takes the whole reading area with no transcript drawn beneath it, and
   > collapsed is a bar above the transcript; the three answers of this requirement are offered in **both**
   > states. All gating, capability withholding, and three-answer decision mechanics remain fully governed by
-  > this requirement.
+  > this requirement. Revision 3 (2026-10-07): every part of the expanded gate but the plan is bounded below the
+  > plan's floor, a later cycle's 'You asked for' line capped and scrolling as the implied todo is; a revision field
+  > the user drags taller keeps that height; a gate shorter than its parts scrolls with its three answers pinned.
 - **REQ-ORCH-154** — A plan awaiting a decision MUST be directly editable by the user, and the edited text is the plan the run carries out; editing alone never approves it. Choosing revise MUST start a further plan cycle in which the producing role is given the plan as it currently stands together with the changes the user stated, and MUST yield a fresh plan for the same three-way decision; this document places no limit on how many such cycles a user may run. Approval is one-way for the run that received it: once execution has been released the run MUST NOT return to the gate, a plan produced later in the same run MUST NOT block execution, and a change to the mode setting made while a run is in flight takes effect only for the next run. Every plan cycle, the decision taken, and the text that was approved MUST be recorded in the session's durable record, with a `plan_gate_opened` timeline event when the gate blocks and a `plan_gate_resolved` timeline event naming the answer when it releases.
 
   > **Narrowed by [`PD-ORCH-002`](../product/directives.md#pd-orch-002), 2026-09-16.** Directly editable

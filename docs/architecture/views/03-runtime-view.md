@@ -194,8 +194,10 @@ shorter than the gate's parts, as at REQ-SHELL-022's minimum with a persistent n
 floor and the gate scrolls with its three answers pinned to its floor. Until 2026-10-06 the plan alone took the loss:
 41 px beside the todo's 56 under a 97 px notice
 (`docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md`).
-Parts sized by content with no bound (a later cycle's "You asked for" line, a revision field the user drags taller) can
-still stand taller than the plan's floor on a short window: OQ-204.
+Since 2026-10-07 every part but the plan is bounded below its floor (PD-ORCH-002 revision 3, OQ-204 ruled under R-072): a
+later cycle's "You asked for" line (`.plan-gate__prior`) takes the todo's cap, scrolls inside itself and wraps an unbroken
+run, so the plan stays the largest part the product sizes; a revision field the user drags taller keeps the user's height
+and may then stand taller than the plan, the one case where "largest" yields.
 
 While the hold stands, three places enforce the planning grants of REQ-ORCH-153 — the port's narrowing
 (`createToolPort`, which only removes, and which hands the gate the set of names it removed), `Gate.dispatch`

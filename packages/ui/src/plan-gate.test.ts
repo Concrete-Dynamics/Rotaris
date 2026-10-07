@@ -199,6 +199,34 @@ describe('PlanGate — the plan stays the largest part when the window is short 
     expect(rule('.plan-gate__changes')).not.toMatch(/(?:^|[;\s])(?:height|min-height):/);
   });
 
+  it('caps a later cycle\'s "You asked for" line below every plan floor, scrolling and wrapping inside itself (PD-ORCH-002 revision 3, OQ-204)', () => {
+    // Until 2026-10-07 the line had no bound: about 17.8 px a line (`--rt-text-xs` at `--rt-leading-body`), so five lines
+    // stood taller than the plan's 72 px floor at REQ-SHELL-022's minimum, and nine taller than the plan at 1440x900.
+    const prior = rule('.plan-gate__prior');
+    const cap = length(prior, 'max-height');
+    const adopted = /(?:^|\})\s*textarea\.input\s*\{([^}]*)\}/.exec(components)?.[1] ?? '';
+    const textareaFloor = Number(/min-height:\s*(\d+)px/.exec(adopted)?.[1]);
+    const open = '.plan-gate:has(.plan-gate__changes-details[open])';
+    expect(cap).toBe(length(rule('.plan-gate__todo'), 'max-height'));
+    expect(cap).toBeLessThan(length(rule('.plan-gate__preview-wrap'), 'min-height'));
+    expect(cap).toBeLessThan(textareaFloor);
+    expect(cap).toBeLessThan(length(rule(`${open} .plan-gate__preview-wrap, ${open} .plan-gate__plan`), 'min-height'));
+    expect(prior).toContain('overflow: auto;');
+    expect(prior).toContain('overflow-wrap: anywhere;');
+    expect(prior).not.toMatch(/(?:^|[;\s])(?:flex|flex-grow|flex-shrink|min-height|height):/);
+    // A cycle-2 gate draws the whole of what the user asked for inside that line; the cap scrolls it, nothing cuts it.
+    const changes = `${'make the plan shorter and name each file it touches; '.repeat(19)}${'x'.repeat(120)}`;
+    const markup = renderToStaticMarkup(createElement(PlanGate, {
+      gate: { cycle: 2, openedAt: '2026-10-07T07:00:00.000Z', plan: '## Step one', edited: null, intent: 'requirements', todo: '', changes },
+      collapsed: false,
+      onToggleCollapsed: () => {},
+      onEdit: async () => ({ ok: true as const }),
+      onDecide: async () => ({ ok: true as const }),
+    }));
+    expect(changes.length).toBeGreaterThan(1000);
+    expect(markup).toContain(`data-testid="plan-gate-prior">You asked for: ${changes}</p>`);
+  });
+
   it('keeps every other part at its content height, and grows nothing but the plan', () => {
     // PD-ORCH-002 revision 2: "every other part of the gate is sized by its own content". The todo keeps its content up to
     // its cap and never yields; below the plan's floor the gate scrolls instead, its answers pinned (plan-gate-proof, 2c).

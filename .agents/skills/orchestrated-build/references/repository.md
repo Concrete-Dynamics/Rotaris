@@ -56,7 +56,7 @@ bundle's merge gate meets it; a red that needs code goes to the owner or into a 
 ## Worktrees and branches — `docs/clean-room/agent-workflow.md`
 
 One temporary branch in one temporary worktree per bundle (`<repo>-wt-<short>`), cut from `origin/main`. The
-primary checkout is not a place to write. **Main's history is linear**: a verified bundle lands by a rebase onto
+primary checkout is not a place to write. **Main's history is linear**: a reviewed bundle lands by a rebase onto
 `origin/main` in its own worktree, the gate on that exact head checked out detached in the plan's integration worktree
 (`<repo>-wt-integ-<id>`, a tree other than the one it was built in), and a fast-forward push of it from there; never a
 merge commit, never a force (the owner, 2026-10-04: "please always use rebase instead of a merge commit for main."). A
@@ -82,9 +82,10 @@ owns, or when an entry point it names moves.
 
 ## The gate
 
-`pnpm check` (symbols, typecheck, lint, tests, and this skill's self-test) fully green under Node 24, in the worktree
-before it is verified and on the rebased head before every push. `pnpm build` before any proof or live run. The proof
-index is in `AGENTS.md`.
+`pnpm check` (symbols, typecheck, lint, tests, and this skill's self-test) fully green under Node 24 on the rebased
+head before every push: the reviewer runs it once per landing. Before handing over, a builder runs the quick checks
+(`pnpm symbols && pnpm typecheck && pnpm lint`) and the tests beside every unit it changed (`pnpm vitest run <paths>`).
+`pnpm build` before any proof or live run. The proof index is in `AGENTS.md`.
 
 ## Records
 
@@ -105,7 +106,7 @@ The same commits as the code carry:
 Small, one task's commits never mixed with another's, citing the requirement and directive ids in the subject
 (`fix(area): what (REQ-…)`), the body saying why, ending with the session's trailer lines exactly.
 
-## Boundaries the verifier checks — `docs/architecture/views/01-component-view.md`, `.claude/rules/`
+## Boundaries the reviewer checks — `docs/architecture/views/01-component-view.md`, `.claude/rules/`
 
 No import across a package edge the component view forbids; `electron` imported only in the five roots under
 `apps/desktop/src/`; engine code takes time from the clock ports; design-equivalent controls only in

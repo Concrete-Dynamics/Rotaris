@@ -21,10 +21,12 @@ template.
 
 ## Labels are the resume keys
 
-`implement:<key>`, `implement:<key> (resumed)`, `verify:<key>#<n>`, `fix:<key>#<n>`, `merge:<key>`,
+`implement:<key>`, `implement:<key> (resumed)`, `review:<key>#<n>`, `fix:<key>#<n>`,
 `accept:sweep-1#<round>`, `accept:sweep-2#<round>`, `accept:live#<round>`, `accept:autopsy#<round>`. `deriveState`
-in `scripts/orchestration.mjs` reads them; change a label's shape only together with it and its self-test. The
-`merge:<key>` stage lands its bundle as a rebase and a fast-forward push since 2026-10-04; its label keeps the name.
+in `scripts/orchestration.mjs` reads them; change a label's shape only together with it and its self-test. Since
+2026-10-07 the `review:<key>#<n>` stage reviews a bundle, repairs in place and lands it; journals written before by
+the `verify:<key>#<n>` and `merge:<key>` stages still resume, in the new stages: a passed verification or an
+interrupted merge at `review`, a failed verification or a refused merge at `fix`.
 
 ## Journals
 
@@ -67,11 +69,13 @@ every bundle's ending, acceptance); the journal holds every agent's.
   triage's own list (triage 4 wrote `after: ["fin6"]`); the mark never goes into `plan.json`, where `after` names
   bundles of the same plan only and `render` refuses any other. On 2026-10-02 fin8's `ladder-overrides` and
   `focus-bound-recovery` were held so while fin6's `auth-recovery` bundles had yet to merge.
-- Landings are serialized with a promise-chain lock, proof sweeps with another. Two workflows, or a workflow and you,
+- Landings are serialized with a promise-chain lock, which the review stage holds for its whole round, so the plan's
+  integration worktree has one user at a time; proof sweeps have another lock. Two workflows, or a workflow and you,
   coordinate through `origin/main`: a push that is not a fast-forward is rejected, and whoever is rejected fetches,
   rebases, runs the gate again and pushes again. Never run two runs of one `RUNS.txt` at once.
 
 ## Cost and duration, as observed
 
-A bundle takes one to three hours end to end; most pass on the first or second verification; a few needed five.
-Thirty bundles took about a day on two lanes; a 25-bundle repair phase another day.
+A bundle took one to three hours end to end with separate verify and merge stages (before 2026-10-07); most passed on
+the first or second verification; a few needed five. Thirty bundles took about a day on two lanes; a 25-bundle repair
+phase another day.

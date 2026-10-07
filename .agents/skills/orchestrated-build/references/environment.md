@@ -76,12 +76,12 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   on 2026-10-01 (fin3 20:10, fin4 20:16) on "weekly limit · resets Oct 5, 9pm (UTC)"; the "Continue from where you
   left off." turns at 21:16 UTC that day and 01:06 UTC the next were answered by the limit message; and a probe sent
   when the owner wrote "Continue" succeeded at 06:43 UTC on 2026-10-02.
-- **A merge agent lost mid-landing** leaves its bundle branch rebased but unpushed (the rebased head detached in
-  `<repo>-wt-integ-<id>`), or a rebase in progress in the bundle worktree. Nothing is lost: the re-rendered merge
-  stage's step 0 finds a landing that did happen (the rebased branch is part of origin/main); otherwise it aborts a
-  rebase left in progress, rebases again, gates the head and pushes. Before rebase landing (2026-10-04), the same
-  limit left fin3's `c6e5d96` and fin4's `bfc3f33`, merge commits unpushed in `<repo>-wt-integ-<id>`, and the
-  re-rendered merge stages merged again from origin/main.
+- **A reviewer lost mid-landing** (a merge agent, before 2026-10-07) leaves its bundle branch rebased but unpushed
+  (the rebased head detached in `<repo>-wt-integ-<id>`), or a rebase in progress in the bundle worktree. Nothing is
+  lost: the re-rendered review's landing step 0, which it runs first, finds a landing that did happen (the rebased
+  branch is part of origin/main); otherwise it aborts a rebase left in progress, reviews, rebases again, gates the head
+  and pushes. Before rebase landing (2026-10-04), the same limit left fin3's `c6e5d96` and fin4's `bfc3f33`, merge
+  commits unpushed in `<repo>-wt-integ-<id>`, and the re-rendered merge stages merged again from origin/main.
 
 ## Pause and backup
 
@@ -98,8 +98,8 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
   scratchpad's plans, ledger, notes and unfinished journals on an orphan branch
   (`git worktree add --orphan -b backup/orchestration-state-<date> <path>`), scanned first for the endpoint's host, the
   key file's content and token shapes. Restore steps go in `RESUME.md`, and the backup branches are deleted once
-  everything lands. A `backup/*` branch is no landing: what it holds reaches main only through a bundle, verified and
-  merged with the gate green.
+  everything lands. A `backup/*` branch is no landing: what it holds reaches main only through a bundle, reviewed and
+  landed with the gate green.
 
 ## Shell forms the harness blocks
 

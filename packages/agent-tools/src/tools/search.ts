@@ -80,10 +80,32 @@ export interface WalkOptions {
   readonly base: string;
 }
 
-/** Every file that passes the filters, as workspace-relative POSIX paths, in directory order. */
+/**
+ * Whether the whole-workspace scan would never reach this workspace-relative path (REQ-TOOLS-139): the root-down walk's own
+ * tests, applied to every step of the way down. A segment that is a hard-coded ignore component, a proper directory prefix
+ * the workspace `.gitignore` prunes, or the path itself ignored. The path is relative to the run's own root, so a root that
+ * lies under `.rotaris/worktrees/<w>` is not excluded by where it lies (OQ-219).
+ */
+export function scanExcludes(rules: readonly IgnoreRule[], relPosix: string, isDir: boolean): boolean {
+  if (relPosix === '' || relPosix === '.') return false;
+  const segments = relPosix.split('/');
+  if (segments.some((seg) => IGNORE_COMPONENTS.has(seg))) return true;
+  for (let i = 1; i < segments.length; i += 1) {
+    if (ignoredBy(rules, segments.slice(0, i).join('/'), true)) return true;
+  }
+  return ignoredBy(rules, relPosix, isDir);
+}
+
+/**
+ * Every file that passes the filters, as workspace-relative POSIX paths, in directory order. Beneath an explicit base the
+ * walk returns exactly what the whole-workspace walk returns beneath it (REQ-TOOLS-139, OQ-219): a base the root-down walk
+ * would have pruned is pruned here too, so it yields nothing.
+ */
 export function walkFiles(o: WalkOptions, onFile: (relPosix: string, abs: string) => boolean | void): void {
   const rootReal = realPathOf(o.root);
   const rel = (abs: string) => relative(rootReal, abs).split(sep).join('/');
+  const baseReal = realPathOf(o.base);
+  if (isInside(rootReal, baseReal) && scanExcludes(o.rules, rel(baseReal), true)) return;
   const visit = (dir: string): boolean => {
     let entries: Dirent[];
     try {
@@ -134,7 +156,10 @@ const grepSchema = z.object({
 export function grepTool(fence: FenceConfig): ToolExecutor<z.infer<typeof grepSchema>> {
   return {
     name: 'grep',
-    description: 'Search workspace files for a regular expression. Returns file:line:content per match (workspace-relative), up to max_matches.',
+    description: 'Search workspace files for a regular expression. Returns file:line:content per match (workspace-relative), up to max_matches. '
+      + 'Whatever path or paths are given, files under the fixed dependency, build-output, version-control and product-state directories '
+      + '(node_modules, dist, build, .git, .rotaris and the others) and gitignored files are never searched; read_file serves a named file, '
+      + 'its grep argument searches it, and read_file on a named directory lists it.',
     schema: grepSchema,
     label: (a) => `grep ${a.pattern}`,
     execute: async (a) => {
@@ -147,25 +172,33 @@ export function grepTool(fence: FenceConfig): ToolExecutor<z.infer<typeof grepSc
       const roots = (Array.isArray(a.paths) ? a.paths : a.paths ? [a.paths] : a.path ? [a.path] : ['.']);
       const rules = loadRules(fence.workspaceRoot);
       const out: string[] = [];
+      const search = (rel: string, abs: string): boolean | undefined => {
+        const bytes = readFileSync(abs);
+        if (probablyBinary(bytes)) return undefined;
+        const lines = bytes.toString('utf8').split('\n');
+        for (let i = 0; i < lines.length; i += 1) {
+          if (re.test(lines[i] as string)) {
+            out.push(`${rel}:${i + 1}:${lines[i]}`);
+            if (out.length >= a.max_matches) return false;
+          }
+        }
+        return undefined;
+      };
       for (const r of roots) {
         // REQ-TOOLS-139: outside the workspace is skipped, never served — the read-only roots grant nothing here.
         const v = checkFence({ ...fence, allowOutsideWorkspace: false, additionalReadOnlyRoots: [] }, r, 'read');
         if (!v.ok || !existsSync(v.resolved)) continue;
-        const base = statSync(v.resolved).isDirectory() ? v.resolved : resolve(v.resolved, '..');
-        const only = statSync(v.resolved).isDirectory() ? null : realPathOf(v.resolved).replace(/\\/g, '/').toLowerCase();
-        walkFiles({ root: fence.workspaceRoot, rules, base }, (rel, abs) => {
-          if (only && abs.replace(/\\/g, '/').toLowerCase() !== only) return;
-          const bytes = readFileSync(abs);
-          if (probablyBinary(bytes)) return;
-          const lines = bytes.toString('utf8').split('\n');
-          for (let i = 0; i < lines.length; i += 1) {
-            if (re.test(lines[i] as string)) {
-              out.push(`${rel}:${i + 1}:${lines[i]}`);
-              if (out.length >= a.max_matches) return false;
-            }
-          }
-          return undefined;
-        });
+        const st = statSync(v.resolved);
+        if (st.isDirectory()) {
+          walkFiles({ root: fence.workspaceRoot, rules, base: v.resolved }, search);
+        } else if (st.isFile()) {
+          /*
+           * A named file is searched directly, under the scan's own filters (OQ-219): only when the whole-workspace scan
+           * would search it. Its parent's subtree is not walked to find it, and no case-folded comparison can take a
+           * sibling that differs only in case.
+           */
+          if (!scanExcludes(rules, v.rel, false) && st.size <= MAX_FILE_BYTES) search(v.rel, v.resolved);
+        }
         if (out.length >= a.max_matches) break;
       }
       return observation(out.length === 0 ? 'No matches found' : out.join('\n'));
@@ -181,7 +214,10 @@ const globSchema = z.object({
 export function globTool(fence: FenceConfig): ToolExecutor<z.infer<typeof globSchema>> {
   return {
     name: 'glob',
-    description: 'Find workspace files matching a glob pattern such as **/*.ts. Returns workspace-relative POSIX paths, sorted.',
+    description: 'Find workspace files matching a glob pattern such as **/*.ts. Returns workspace-relative POSIX paths, sorted. '
+      + 'Whatever base_path is given, files under the fixed dependency, build-output, version-control and product-state directories '
+      + '(node_modules, dist, build, .git, .rotaris and the others) and gitignored files are never listed; read_file serves a named file '
+      + 'and lists a named directory.',
     schema: globSchema,
     label: (a) => `glob ${a.pattern}`,
     execute: async (a) => {

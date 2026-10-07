@@ -10973,3 +10973,47 @@ skipped `.rotaris` was false: it skipped nothing, recorded and repaired in the s
 so it now reads the same set. Pinned by the case "the code-intelligence marker directory is a
 hard-coded ignore component, named by the manifest" in `packages/agent-tools/src/tools/tools.test.ts`, red on `d12f1f2`.
 Findings L3, N6 and H3 close with it; the next duress live run is the measurement.
+
+**OQ-219 — Beneath an explicit `grep` path or `glob` base inside an ignored directory, what does a scan return?**
+*(REQ-TOOLS-139, the scan filters: "paths containing a hard-coded ignore component are skipped", the workspace's
+`.gitignore` honoured with "directories pruned during traversal", and the explicit-naming exemption given to `read_file`
+and `haet_read` alone; REQ-TOOLS-140, the components; REQ-TOOLS-141, a `glob` base "outside the workspace or not a
+directory is silently ignored"; REQ-TOOLS-138, workspace-relative result paths; REQ-TOOLS-134, whose listing skips "entries
+whose name is" a component. Raised 2026-10-07 by the R-072 consortium while ruling OQ-215 (live-run finding L3 at
+`c2fdd6a`, where the failed child d2 tried `glob .rotaris/**`, `.git/**` and `**/HEAD` and got unexplained empty answers),
+and ruled the same day.)*
+
+The walker tested only the names of entries below a base, never the base or its ancestors, and tested gitignore rules
+against each entry's full path, whose rules also match descendants. So the answer for a base inside an excluded directory
+depended on how the user spelled one line: under `node_modules/` a scan rooted at `node_modules/pkg` served the package's
+top-level files and dropped every subdirectory; under `node_modules` it served nothing; with no line it served everything but
+nested `dist`, `build`, `out`, `cache` and `node_modules`. `glob '*.js' base_path='node_modules/x'` returned a file that
+`glob 'node_modules/x/*.js'` did not, and `glob '*' base_path='.rotaris'` listed the product's own state. A `grep` entry
+naming one file walked its parent's whole subtree and compared lower-cased paths, so on a case-sensitive disk naming
+`src/a.ts` also searched `src/A.ts`. Recorded as
+[`an-explicit-search-base-inside-an-ignored-directory-is-walked.md`](../defects/fixed/an-explicit-search-base-inside-an-ignored-directory-is-walked.md).
+
+**What a ruling decides.** Whether an explicit base is the caller's decision (the component and gitignore filters stand
+aside below it, as `read_file`'s exemption does for a named file, which needs a directive), whether REQ-TOOLS-139 governs as
+written (a scan beneath any base returns exactly the whole-workspace scan beneath it), or whether the build's middle reading
+(the base honoured, nested components still skipped) is confirmed.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** REQ-TOOLS-139 governs as written.
+Beneath any explicit grep `paths` entry or glob `base_path`, a scan returns exactly what the whole-workspace scan returns
+beneath that base, so no result path contains a REQ-TOOLS-140 component or lies under a directory the workspace
+`.gitignore` prunes, and a grep entry naming one file is searched only when the whole-workspace scan would search that file.
+An excluded base stays the base (REQ-TOOLS-141 replaces only a base outside the workspace or one that is not a directory)
+and answers `No matches found` or `No files found`. The grep and glob descriptions state this filter and direct the caller to
+`read_file`, which serves a named file, searches it with its `grep` argument and lists a named directory. **The two
+recommendations weighed:** advocate A (the user's lens) recommended that the caller decides on an explicit base, the
+component and gitignore filters standing aside below an excluded base under a directive, so a search inside a named
+dependency is not a false `No matches found`; advocate B (the system's lens) recommended the literal reading of REQ-TOOLS-139
+as one invariant, a scan rooted at a base equal to the root scan restricted to it, repaired without a directive. The ruling
+followed **B**: A's exemption would need a directive and would open `.rotaris` and `.git` to bulk scans, and no autopsy
+records a scan rooted in an ignored directory; A's point that an unexplained empty answer is read as fact is kept in the two
+descriptions. No directive is minted: the requirement is faithful and the code departed from it. **Built 2026-10-07
+(fin27):** `scanExcludes` and the base test in `walkFiles`, and the direct search of a named file in `grepTool`
+(`packages/agent-tools/src/tools/search.ts`); pinned by the five cases under "an explicit base or a named file inside an
+excluded directory yields nothing" in `packages/agent-tools/src/tools/tools.test.ts`, four red on `d12f1f2` (the fifth, a
+run rooted under `.rotaris/worktrees/<w>`, guards the repair). Noticed while ruling and recorded open, not repaired here:
+[`a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md`](../defects/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md).

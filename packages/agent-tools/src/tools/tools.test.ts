@@ -478,6 +478,91 @@ describe('grep and glob (REQ-TOOLS-138..141)', () => {
     expect(named.text).toContain('project_name: fixture-token-pd12');
   });
 
+  describe('an explicit base or a named file inside an excluded directory yields nothing (REQ-TOOLS-139..141, OQ-219)', () => {
+    const lines = (t: string) => (t === 'No matches found' || t === 'No files found' ? [] : t.split('\n'));
+    const under = (base: string) => (p: string) => base === '.' || p.startsWith(`${base}/`);
+
+    it('a base or a named file inside a hard-coded ignore component finds nothing, while read_file serves and searches the file', async () => {
+      const g = grepTool(fence);
+      const gl = globTool(fence);
+      expect((await g.execute({ pattern: 'const a', paths: ['node_modules/x'], max_matches: 100 }, ctx())).text).toBe('No matches found');
+      expect((await g.execute({ pattern: 'const a', paths: ['node_modules/x/index.js'], max_matches: 100 }, ctx())).text).toBe('No matches found');
+      const rf = await readFileTool(state, fence).execute({ path: 'node_modules/x/index.js', offset: 1, limit: 2000, grep: 'const a', grep_context: 0 }, ctx());
+      expect(rf.text).toContain('>1: const a = 0;');
+      // the same files asked for two ways get one answer, and the excluded base stays the base (no root fallback)
+      expect((await gl.execute({ pattern: '*.js', base_path: 'node_modules/x' }, ctx())).text).toBe('No files found');
+      expect((await gl.execute({ pattern: 'node_modules/x/*.js' }, ctx())).text).toBe('No files found');
+      expect((await gl.execute({ pattern: '**/*.ts', base_path: 'node_modules' }, ctx())).text).toBe('No files found');
+      // the product's own state directory
+      mkdirSync(join(root, '.rotaris'), { recursive: true });
+      writeFileSync(join(root, '.rotaris', 'secrets.yaml'), 'token: const-secret\n');
+      expect((await gl.execute({ pattern: '*', base_path: '.rotaris' }, ctx())).text).toBe('No files found');
+      expect((await g.execute({ pattern: 'const', paths: ['.rotaris'], max_matches: 100 }, ctx())).text).toBe('No matches found');
+      expect((await g.execute({ pattern: 'const', paths: ['.rotaris/secrets.yaml'], max_matches: 100 }, ctx())).text).toBe('No matches found');
+    });
+
+    it('a base under a gitignored directory finds nothing, whichever way the line is spelled; a gitignored named file is not searched', async () => {
+      mkdirSync(join(root, 'gen', 'sub'), { recursive: true });
+      writeFileSync(join(root, 'gen', 'f.ts'), 'const f = 1;\n');
+      writeFileSync(join(root, 'gen', 'sub', 'g.ts'), 'const g = 1;\n');
+      writeFileSync(join(root, 'debug.log'), 'const a = 4;\n');
+      const g = grepTool(fence);
+      for (const spelling of ['gen/\n*.log\n', 'gen\n*.log\n', '/gen\n*.log\n']) {
+        writeFileSync(join(root, '.gitignore'), spelling);
+        expect((await g.execute({ pattern: 'const', paths: ['gen'], max_matches: 100 }, ctx())).text).toBe('No matches found');
+        expect((await g.execute({ pattern: 'const', paths: ['gen/sub'], max_matches: 100 }, ctx())).text).toBe('No matches found');
+        expect((await g.execute({ pattern: 'const', paths: ['gen/f.ts'], max_matches: 100 }, ctx())).text).toBe('No matches found');
+        expect((await globTool(fence).execute({ pattern: '**', base_path: 'gen' }, ctx())).text).toBe('No files found');
+      }
+      expect((await g.execute({ pattern: 'const', paths: ['debug.log'], max_matches: 100 }, ctx())).text).toBe('No matches found');
+      expect((await g.execute({ pattern: 'const b', paths: ['src/a.ts'], max_matches: 100 }, ctx())).text).toBe('src/a.ts:2:const b = 2;');
+    });
+
+    it('a named file is searched alone: its own case only, and no other file of its directory', async () => {
+      const upper = join(root, 'src', 'A.ts');
+      writeFileSync(upper, 'const upper = 1;\n');
+      const caseSensitive = readFileSync(join(root, 'src', 'a.ts'), 'utf8') !== readFileSync(upper, 'utf8');
+      const r = await grepTool(fence).execute({ pattern: 'const', paths: ['src/a.ts'], max_matches: 100 }, ctx());
+      expect(r.text).toBe('src/a.ts:1:const a = 1;\nsrc/a.ts:2:const b = 2;');
+      if (caseSensitive) expect(r.text).not.toContain('upper');
+      // a binary named file is skipped, as the scan skips it
+      expect((await grepTool(fence).execute({ pattern: 'PK', paths: ['bin.dat'], max_matches: 100 }, ctx())).text).toBe('No matches found');
+      // max_matches still stops a named file
+      expect(lines((await grepTool(fence).execute({ pattern: 'const', paths: ['src/a.ts', 'src/A.ts'], max_matches: 1 }, ctx())).text)).toHaveLength(1);
+    });
+
+    it('a run whose root lies under `.rotaris/worktrees/<w>` scans normally: the test is relative to the run\'s own root', async () => {
+      const isolated = join(outside, '.rotaris', 'worktrees', 'w');
+      mkdirSync(join(isolated, 'src'), { recursive: true });
+      writeFileSync(join(isolated, 'src', 'i.ts'), 'const i = 1;\n');
+      const f = { workspaceRoot: isolated, allowOutsideWorkspace: false, additionalReadOnlyRoots: [] };
+      expect((await grepTool(f).execute({ pattern: 'const i', max_matches: 100 }, ctx())).text).toBe('src/i.ts:1:const i = 1;');
+      expect((await grepTool(f).execute({ pattern: 'const i', paths: ['src'], max_matches: 100 }, ctx())).text).toBe('src/i.ts:1:const i = 1;');
+      expect((await grepTool(f).execute({ pattern: 'const i', paths: ['src/i.ts'], max_matches: 100 }, ctx())).text).toBe('src/i.ts:1:const i = 1;');
+      expect((await globTool(f).execute({ pattern: '*.ts', base_path: 'src' }, ctx())).text).toBe('src/i.ts');
+    });
+
+    it('beneath any base, a scan returns exactly the whole-workspace scan restricted to that base', async () => {
+      mkdirSync(join(root, 'gen', 'sub'), { recursive: true });
+      writeFileSync(join(root, 'gen', 'f.ts'), 'const f = 1;\n');
+      writeFileSync(join(root, 'gen', 'sub', 'g.ts'), 'const g = 1;\n');
+      mkdirSync(join(root, 'src', 'dist'), { recursive: true });
+      writeFileSync(join(root, 'src', 'dist', 'o.js'), 'const o = 1;\n');
+      writeFileSync(join(root, '.gitignore'), 'gen/\n');
+      const g = grepTool(fence);
+      const gl = globTool(fence);
+      const rootGrep = lines((await g.execute({ pattern: 'const', max_matches: 1000 }, ctx())).text);
+      const rootGlob = lines((await gl.execute({ pattern: '**' }, ctx())).text);
+      expect(rootGrep.length).toBeGreaterThan(0);
+      for (const base of ['.', 'src', 'node_modules/x', 'gen', 'gen/sub', 'src/dist']) {
+        const scoped = lines((await g.execute({ pattern: 'const', paths: [base], max_matches: 1000 }, ctx())).text);
+        expect(scoped, `grep under ${base}`).toEqual(rootGrep.filter((l) => under(base)(l.split(':')[0] as string)));
+        const scopedGlob = lines((await gl.execute({ pattern: '**', base_path: base }, ctx())).text);
+        expect(scopedGlob, `glob under ${base}`).toEqual(rootGlob.filter(under(base)));
+      }
+    });
+  });
+
   it('the gitignore reader: anchors, directories, negation, whole labels', () => {
     const rules = parseGitignore('/build\nlogs/\n*.tmp\n!keep.tmp\nsrc/**/gen\n');
     expect(ignoredBy(rules, 'build', true)).toBe(true);

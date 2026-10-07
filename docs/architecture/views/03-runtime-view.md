@@ -671,7 +671,11 @@ orchestrator is the one built-in persona declaring it, REQ-CHAT-094's one conver
 the session has an artifact store, and **`fetch`** (ADR-0023, Part N). `grep` and `read_file`'s `grep` filter share one
 pattern dialect (`compileSearchPattern`, `tools/search.ts`): the accelerator's, not the host engine's — leading
 `(?flags)` groups are read off and translated, because REQ-STARTUP-058 pins ripgrep and REQ-TOOLS-141 holds results
-identical whether or not it is present. `fetch` is the one executor that **reads configuration per call**: each call loads
+identical whether or not it is present. The search tools filter by workspace-relative path, relative to the run's own root
+(`scanExcludes`, `walkFiles`): an explicit `grep` path or `glob` base, or a named file, inside a hard-coded ignore component
+(REQ-TOOLS-140, the code-intelligence marker's directory among them since `PD-TOOLS-012`) or under a directory the
+`.gitignore` prunes yields nothing, exactly what the whole-workspace scan returns beneath it (REQ-TOOLS-139, OQ-219); `read_file`
+remains the route to a named file. `fetch` is the one executor that **reads configuration per call**: each call loads
 the workspace's **saved** files and the discovery snapshot (`egressReader`, no live state — REQ-SANDBOX-038/118,
 REQ-TOOLS-089; measured at 1.7–2.5 ms behind the run host, 3–4 ms median in the unit test), maps
 `runtime.network_*` to the egress policy and `runtime.tool_call_timeout` to the run-level deadline, classifies the

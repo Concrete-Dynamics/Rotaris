@@ -35,3 +35,17 @@ base outside the workspace or one that is not a directory.
 - `packages/config/src/init/gitignore.ts` — `ignoredBy`, whose rules also match descendants (shared with REQ-WORKSPACE-100's
   classifier; not changed by this repair).
 - `packages/agent-tools/src/tools/tools.test.ts` — the grep and glob cases.
+
+## Outcome — repaired 2026-10-07 (fin27), as OQ-219 rules
+
+`scanExcludes(rules, relPosix, isDir)` (`packages/agent-tools/src/tools/search.ts`) applies the root-down walk's own tests to
+every step of a workspace-relative path: a segment that is a hard-coded component, a proper directory prefix the
+`.gitignore` prunes, or the path itself ignored. `walkFiles` returns without visiting a base it excludes, the path taken
+relative to the run's own root, so a run rooted under `.rotaris/worktrees/<w>` scans normally. `grepTool` searches a named
+file directly when `scanExcludes` passes it and it is at most 2 MiB and not binary, with the same matching and `max_matches`
+stop; the parent walk and the lower-cased comparison are gone. `globTool` keeps an excluded base as the base, so it answers
+`No files found`. The two tool descriptions say which directories and files are never searched and name `read_file` as the
+route that remains. `ignoredBy` (`packages/config/src/init/gitignore.ts`) is unchanged. Pinned by the five cases under "an
+explicit base or a named file inside an excluded directory yields nothing" in
+`packages/agent-tools/src/tools/tools.test.ts`, among them the property that a scan beneath each of six bases equals the
+root scan restricted to it; four were red before the repair.

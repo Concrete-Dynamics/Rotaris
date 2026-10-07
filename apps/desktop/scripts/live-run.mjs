@@ -138,6 +138,7 @@ import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
 import { agentPlanTaskCount, coordinatorTodoReading, launchRunOverride } from './lib/coordinator-todo.mjs';
 import { PAUSE, pauseEvalSteps, pauseReading } from './lib/resume-pause.mjs';
+import { typingAllowanceMs } from './lib/prompt-typing.mjs';
 import { stallIssueCadence } from './lib/stall-issue-cadence.mjs';
 import { conclusive, pacedWindows, stallsWhileStreaming } from './lib/paced-arguments.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
@@ -710,7 +711,7 @@ function runElectron(args, { timeout, env }) {
     child.on('close', (status, signal) => {
       clearTimeout(timer);
       // `spawnSync` reports a timeout as a signal with a null status; the callers all read it that way.
-      resolve({ status: timedOut ? null : status, signal: timedOut ? 'SIGKILL' : signal, stdout, stderr, pid: child.pid });
+      resolve({ status: timedOut ? null : status, signal: timedOut ? 'SIGKILL' : signal, stdout, stderr, pid: child.pid, timedOut });
     });
     launchInFlight = child;
   });
@@ -735,8 +736,13 @@ async function launch(name, extra, timeoutMs = 180_000) {
   const paced = budget > 0 && extra['ROTARIS_CAPTURE_PNG_AT'] === undefined
     ? { ROTARIS_CAPTURE_PNG_AT: `${join(dir, `${name}.early.png`)}@${Math.round(budget * 0.2)};;${join(dir, `${name}.mid.png`)}@${Math.round(budget * 0.6)}` }
     : {};
+  /*
+   * The capture's bound counts from the prompt's submission (finding P6), this kill limit from the spawn: the typing
+   * time is added here so it no longer comes out of the margin (`lib/prompt-typing.mjs`).
+   */
+  const typingMs = typingAllowanceMs(extra);
   const result = await runElectron([join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    timeout: timeoutMs,
+    timeout: timeoutMs + typingMs,
     env: {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ profileRoot: sandbox, local, preferences: join(sandbox, 'preferences') }),
@@ -753,7 +759,12 @@ async function launch(name, extra, timeoutMs = 180_000) {
   const filtered = filterLog(log, sandbox);
   writeFileSync(join(dir, 'app.filtered.log'), `${filtered.text}\n`);
   scenarioEvidence[name] = { dir: relative(output, dir), lines: log.split('\n').length, filteredLines: filtered.text.split('\n').length, ...filtered.dropped };
-  if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${join(dir, 'app.log')}`);
+  if (result.status !== 0) {
+    const limit = result.timedOut === true
+      ? ` (the harness's limit of ${timeoutMs + typingMs} ms, ${typingMs} ms of it for typing the prompt)`
+      : '';
+    throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}${limit}; see ${join(dir, 'app.log')}`);
+  }
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   assertNoCredential(`${name}/app.log`, log);
   // PD-MONITOR-002, live-run findings a71-9 and U4: no launch's log carries one of the restatements `restated-facts.mjs`

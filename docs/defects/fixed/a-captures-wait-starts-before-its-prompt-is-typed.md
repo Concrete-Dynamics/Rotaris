@@ -29,6 +29,14 @@ wait for the result was satisfied 4,070 ms after the submission. Also seen there
 has taken the typed events, so the first read returned at the submission. **Not measured:** the next default live run's
 terminal scenario (the orchestrator's), where the session should start inside the wait's first seconds as counted.
 
+**Follow-up 2026-10-07 (fin31, the bundle's review).** With the capture's bound counting from the submission, the live
+run's own kill limit for the launch (`RUN_WAIT_MS` plus 90 or 120 s) still counted from the spawn, so the typing time came
+out of that margin instead. `launch` in `apps/desktop/scripts/live-run.mjs` now adds a typing allowance of 10 ms per
+character of `ROTARIS_CAPTURE_PROMPT` (about twice the 4.8 to 5.0 ms per character measured above;
+`apps/desktop/scripts/lib/prompt-typing.mjs`), and a launch the harness kills at its limit says so with the limit and the
+allowance in its error. **Pinned by** `apps/desktop/scripts/lib/prompt-typing.test.ts`. **Not measured:** a launch killed
+at that limit in a live run.
+
 ## Specs
 
 None: the capture seam and the live run are verification. The budget a scenario states (`LIVE_RUN_WAIT_MS`) is meant to
@@ -39,4 +47,6 @@ bound the run.
 - `apps/desktop/src/main/capture/probe.ts`: `installPromptSeam` (the typed prompt) and `installFinish` (the wait and its
   bound).
 - `apps/desktop/src/main/capture/index.ts`: where the two are installed.
-- `apps/desktop/scripts/live-run.mjs`: the terminal scenario's launch and its "what the model attempted" NOTE.
+- `apps/desktop/scripts/live-run.mjs`: the terminal scenario's launch and its "what the model attempted" NOTE; `launch`'s
+  kill limit.
+- `apps/desktop/scripts/lib/prompt-typing.mjs`: the typing allowance on that limit.

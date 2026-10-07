@@ -10783,8 +10783,9 @@ what the registry declares. `completionNotification` appends up to five of the p
 root's are those its task answers for (`openRootPlan`), a child parent's its own todo's. Pinned by
 `packages/engine/src/run/coordinator-plan.test.ts`, `packages/agent-tools/src/gate.test.ts`,
 `apps/desktop/src/run-host/tools.test.ts`, `packages/engine/src/children/notify.test.ts` and
-`packages/engine/src/children/children.test.ts`; the live run's harness checks it over every session it keeps
-(`apps/desktop/scripts/lib/coordinator-todo.mjs`). The first-executions row waits on the orchestrator's next default live run.
+`packages/engine/src/children/children.test.ts`, and shown in the built app by `pnpm mission-proof` item 1c; the proofs whose
+scripted coordinator delegates more than once open with the scripted client's `plan` step; the live run's harness checks it
+over every session it keeps (`apps/desktop/scripts/lib/coordinator-todo.mjs`). The first-executions row waits on the orchestrator's next default live run.
 
 **OQ-220 — Which todo item does a delegation answer for?** *(REQ-ORCH-028 and REQ-ORCH-029, "no two implementation delegations
 for the same todo item are outstanding at once"; resolution 15 (b) of `docs/spec/resolutions/01-run-orchestration.md`, ownership

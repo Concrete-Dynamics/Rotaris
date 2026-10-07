@@ -444,7 +444,7 @@ const ROUND_OVER = `(() => {
 // ---- 3. One connection per server per session ---------------------------------------------------------------
 {
   const r = await launch('one-process', {
-    ROTARIS_CAPTURE_PROMPT: 'fan out', ROTARIS_SCRIPT: 'delegate:coding-agent:one,delegate:coding-agent:two,wait:2500,delegate:coding-agent:three,wait:2500,answer', ROTARIS_CHILD_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '16000', ROTARIS_INTENT_SCRIPT: 'moderate_feature',
+    ROTARIS_CAPTURE_PROMPT: 'fan out', ROTARIS_SCRIPT: 'plan,delegate:coding-agent:one,delegate:coding-agent:two,wait:2500,delegate:coding-agent:three,wait:2500,answer', ROTARIS_CHILD_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '16000', ROTARIS_INTENT_SCRIPT: 'moderate_feature',
   }, { files: { global: globalYaml({ personas: { 'coding-agent': '{ mcp_servers: [alpha], tool_restrictions: { coding-agent: [read_file, echo] } }' } }), workspace: WORKSPACE.replace('  delegation_strategy: single\n', '  delegation_strategy: orchestrator\n') } });
   const db = new Database(oneDatabase(), { readonly: true });
   const s = latestSession(db);

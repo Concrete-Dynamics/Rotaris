@@ -675,7 +675,8 @@ if (wanted('interleave')) {
   // Read at an appointment well after the run's end (about ten seconds of scripted work), and checked against it below.
   const READ_AT = 30_000;
   const r = await launch('interleave', {
-    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,delegate:coding-agent:beta,answer',
+    // OQ-213: a coordinator that delegates twice keeps its own todo list first (`plan`), or its second delegation is refused.
+    ROTARIS_SCRIPT: 'plan,delegate:coding-agent:alpha,delegate:coding-agent:beta,answer',
     ROTARIS_CHILD_SCRIPT: CHILD,
     ROTARIS_SCRIPT_TERMINAL_ARGS: JSON.stringify({ hold: { command: 'sleep 2.5' } }),
     ROTARIS_CAPTURE_PROMPT: 'delegate to two agents',

@@ -116,7 +116,8 @@ const expect = (cond, message) => { if (!cond) throw new Error(message); };
 const stateOf = (rowText) => (/(running|waiting|queued|done|failed|cancelled)/.exec(rowText) ?? [])[1] ?? null;
 const seconds = (label) => { const m = /(?:(\d+)m )?(\d+)s/.exec(label); return m ? Number(m[1] ?? 0) * 60 + Number(m[2]) : null; };
 
-const THREE = 'delegate:coding-agent:alpha,delegate:coding-agent:beta,delegate:codebase-analyst:gamma,answer';
+// OQ-213: a coordinator that delegates more than once keeps its own todo list first (`plan`), or its second delegation is refused.
+const THREE = 'plan,delegate:coding-agent:alpha,delegate:coding-agent:beta,delegate:codebase-analyst:gamma,answer';
 
 // 1. Mission painted during a run with three live children.
 const s1 = scenario('painted');
@@ -187,6 +188,35 @@ const s1b = scenario('waiting');
   expect(meta6.some((t, i) => /^(waiting|queued) · /.test(t) && seconds(meta75[i] ?? '') > seconds(t)), `no waiting tree meta advanced: ${JSON.stringify(meta6)} → ${JSON.stringify(meta75)} (REQ-MONITOR-107)`);
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
   results.waiting = { statesAt6s: states6, elapsedAt6s: cells6, elapsedAt7_5s: cells75, treeMetaAt6s: meta6, treeMetaAt7_5s: meta75, png: join(output, 'mission-waiting.png') };
+}
+
+// 1c. OQ-213 as ruled (R-072), REQ-ORCH-029's todo clause in the built app: a scripted coordinator that delegates twice
+// before writing a todo list of its own has its second delegation refused at the gate — `blocked`, `todo_list_owed`, no child
+// spawned for it, no `tool_error` issue — then writes its list and repeats the call, which runs. Before the repair both
+// delegations ran with no plan behind them (live-run finding K2).
+const s1c = scenario('todo-list-owed');
+{
+  const r = await launch('todo-list-owed', s1c, {
+    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,delegate:coding-agent:beta,plan,delegate:coding-agent:beta,answer', ROTARIS_CHILD_SCRIPT: 'answer',
+    ROTARIS_CAPTURE_PROMPT: 'delegate twice', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1000',
+  });
+  const db = open(s1c);
+  const row = session(db);
+  const kids = children(db, row.session_id);
+  const calls = db.prepare("SELECT ordinal, tool_name, status, entry FROM tool_calls WHERE session_id = ? AND agent_name = 'orchestrator' ORDER BY ordinal").all(row.session_id)
+    .map((c) => ({ tool: c.tool_name, status: c.status, failureKind: JSON.parse(c.entry).failure_kind ?? null }));
+  const toolErrors = db.prepare("SELECT COUNT(*) AS n FROM issues WHERE session_id = ? AND kind = 'tool_error'").get(row.session_id).n;
+  const stored = JSON.parse(db.prepare('SELECT todo FROM sessions WHERE session_id = ?').get(row.session_id).todo);
+  db.close();
+  expect(row.execution_status === 'completed', `the run ended ${row.execution_status} (${row.stop_reason})`);
+  const shape = calls.map((c) => `${c.tool}:${c.status}${c.failureKind ? `:${c.failureKind}` : ''}`);
+  expect(JSON.stringify(shape) === JSON.stringify(['delegate:ok', 'delegate:blocked:todo_list_owed', 'todo:ok', 'delegate:ok']), `the coordinator's calls: ${JSON.stringify(shape)}`);
+  expect(kids.length === 2 && kids.map((k) => k.canonical_name).join(',') === 'alpha,beta', `the ledger holds ${JSON.stringify(kids.map((k) => k.canonical_name))}`);
+  expect(toolErrors === 0, `the refusal filed ${toolErrors} tool_error issue(s)`);
+  expect(stored.schema_version === 2 && stored.agent?.phases?.[0]?.tasks?.length === 1, `the stored todo carries no agent plan: ${JSON.stringify(stored).slice(0, 200)}`);
+  const warned = /began the task's second work item with no todo list of its own; the call was refused \(REQ-ORCH-029\)/.test(r.log);
+  expect(warned, 'the refusal was not logged as a warning citing REQ-ORCH-029 (see todo-list-owed.log)');
+  results.todoListOwed = { calls: shape, children: kids.map((k) => k.canonical_name), toolErrors, warningInLog: warned };
 }
 
 // 2. Parity across the three trees, then the 23-agent refresh with Mission visible.

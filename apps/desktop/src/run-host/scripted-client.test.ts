@@ -48,6 +48,23 @@ describe('scriptedClient — the step a call takes', () => {
   afterEach(() => { vi.unstubAllEnvs(); });
 
   /*
+   * OQ-213 (REQ-ORCH-029): the run refuses a coordinator's second work item until it has written a todo list of its own, so a
+   * proof whose scripted coordinator delegates more than once opens with `plan` — one `todo` replace whose single item is
+   * already complete, which the run counts as the list and REQ-ORCH-075 holds nothing open by.
+   */
+  it('`plan` writes a todo list of one completed item', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'plan,answer');
+    const client = scriptedClient(clock, () => {});
+    const parts = client.stream({ ...request([text('system', ORCHESTRATOR_SYSTEM), text('user', 'delegate twice')]), tools: [...TOOLS, { name: 'todo', description: 'todo', parameters: {} }] })[Symbol.asyncIterator]();
+    let call: { name: string; argsDelta: string } | null = null;
+    for (let r = await parts.next(); r.done !== true; r = await parts.next()) {
+      if (r.value.ok && r.value.value.kind === 'tool-call') call = r.value.value;
+    }
+    expect(call?.name).toBe('todo');
+    expect(JSON.parse(call!.argsDelta)).toEqual({ operation: 'replace', phases: [{ name: 'Scripted plan', tasks: [{ name: 'The scripted work', description: 'Delegated by the scripted coordinator.', state: 'COMPLETED' }] }] });
+  });
+
+  /*
    * The repair of fixed/the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md: every child
    * shares ROTARIS_CHILD_SCRIPT, so a completed wait may not remove anything from it. Three children started together,
    * each scripted `wait:1000,read,glob`, each read after the wait and then glob — where the shared list's splices handed

@@ -25,7 +25,7 @@ export interface ScriptedCallRecord {
  *
  * It answers the shape a real client answers (`ModelClient`) from a STEP LIST read out of the environment:
  * `ROTARIS_SCRIPT` names the orchestrator's steps, comma-separated, one per model call, and
- * `ROTARIS_CHILD_SCRIPT` every child's. `glob`, `read`, `write`, `rm`, `git`, `push`, `edit` request a tool
+ * `ROTARIS_CHILD_SCRIPT` every child's. `glob`, `read`, `write`, `rm`, `git`, `push`, `edit`, `todo`, `plan` request a tool
  * call; `fetch:<url>` a fetch of that URL; `wait:<ms>` holds the call that long ON THE CLOCK PORT and then
  * answers (the Overview proof needs a run longer than one token-sample period); anything else, or the end of
  * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
@@ -238,6 +238,10 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
     git: { name: 'terminal', args: { command: 'git status' } },
     push: { name: 'terminal', args: { command: 'git push origin main' } },
     todo: { name: 'todo', args: { operation: 'add_phase', name: 'main' } },
+    // OQ-213 (REQ-ORCH-029): a scripted coordinator that delegates more than once writes its own todo list first, as the run
+    // now requires before a task's second work item. The one item is written complete, so the scripted plan leaves nothing
+    // open for REQ-ORCH-075 to hold the task by: the double keeps a list without changing how its run ends.
+    plan: { name: 'todo', args: { operation: 'replace', phases: [{ name: 'Scripted plan', tasks: [{ name: 'The scripted work', description: 'Delegated by the scripted coordinator.', state: 'COMPLETED' }] }] } },
     // A terminal call its schema refuses (a negative timeout): settled `failed` with `outcome_kind: invalid_request`, never run,
     // and filed as a `tool_error` issue (REQ-SESSION-136) — the sessions proof reads it on summary.md's Tool errors line.
     badterm: { name: 'terminal', args: { command: 'echo proof', timeout: -1 } },

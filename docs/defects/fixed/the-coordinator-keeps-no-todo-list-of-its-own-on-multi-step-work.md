@@ -56,7 +56,11 @@ the run refuses that work item at dispatch until the entry role has written its 
 Pinned by `packages/engine/src/run/coordinator-plan.test.ts` (the OQ-213 block: twelve cases, six red with the check
 answering nothing), `packages/agent-tools/src/gate.test.ts` (eight cases, four red without the gate's check) and
 `apps/desktop/src/run-host/tools.test.ts` (three cases, a configured `system_prompt` among them, one red without the wiring).
-The live run's harness checks it over every session it keeps (`apps/desktop/scripts/lib/coordinator-todo.mjs`). What the
+The built app shows it in `pnpm mission-proof` item 1c (a scripted coordinator's calls read `delegate:ok`,
+`delegate:blocked:todo_list_owed`, `todo:ok`, `delegate:ok`; two children; no `tool_error`; the warning in the log), and the
+proofs whose scripted coordinator delegates more than once (mission, transcript, mcp, artifacts) open with the scripted
+client's new `plan` step. The live run's harness checks it over every session it keeps
+(`apps/desktop/scripts/lib/coordinator-todo.mjs`). What the
 orchestrator's next default live run should show: on the edit and resume runs a coordinator that delegates twice before
 planning has its second `delegate` refused once (a `blocked` row and a session-log warning citing REQ-ORCH-029), writes a
 plan and repeats the call; every multi-step coordinating session stores an agent plan and the task-plan strip reads "Agent

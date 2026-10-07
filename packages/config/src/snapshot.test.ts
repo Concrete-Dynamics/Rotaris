@@ -124,3 +124,15 @@ describe('REQ-MONITOR-060 / REQ-TOOLS-002: the role view names the tools each ro
     expect(verifier.declaredTools).toEqual(['read_file', 'grep']);
   });
 });
+
+/** PD-CONFIG-003 / REQ-MONITOR-286: the snapshot carries the per-agent timeout the Runtime category's third control reads. */
+describe('PD-CONFIG-003: the per-agent timeout reaches the snapshot', () => {
+  it('a value a file states reaches the view in seconds; with none stated it is REQ-CONFIG-113\'s 1200', () => {
+    const stated = dir('rotaris-timeout-');
+    mkdirSync(join(stated, '.rotaris'), { recursive: true });
+    writeFileSync(join(stated, '.rotaris', 'agents.yaml'), 'runtime:\n  child_timeout: 1250\n');
+    expect(readSnapshot(dir('rotaris-timeout-global-'), stated, undefined, isolated()).runtime.child_timeout).toBe(1250);
+    const bare = dir('rotaris-timeout-bare-');
+    expect(readSnapshot(dir('rotaris-timeout-global-'), bare, undefined, isolated()).runtime.child_timeout).toBe(1200);
+  });
+});

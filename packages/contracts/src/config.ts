@@ -55,6 +55,8 @@ export const RoleViewSchema = z.object({
 export const RuntimeViewSchema = z.object({
   max_depth: z.number().int(),
   max_active_children: z.number().int(),
+  /** PD-CONFIG-003 / REQ-MONITOR-286: the per-agent timeout in seconds (REQ-CONFIG-113), shown and edited in minutes. */
+  child_timeout: z.number().int().min(1),
   max_iterations: z.number().int(),
   allow_outside_workspace: z.boolean(),
   permission_mode: z.string(),

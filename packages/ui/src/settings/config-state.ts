@@ -12,6 +12,11 @@ export interface PendingSettings {
   readonly runtime: {
     readonly max_depth: number;
     readonly max_active_children: number;
+    /**
+     * PD-CONFIG-003 / REQ-MONITOR-286: the per-agent timeout, in SECONDS as `runtime.child_timeout` stores it (REQ-CONFIG-113);
+     * the control shows and takes whole minutes (`timeoutMinutesForDisplay`, `timeoutSecondsFromInput`).
+     */
+    readonly child_timeout: number;
     readonly max_iterations: number;
     readonly allow_outside_workspace: boolean;
     readonly permission_mode: string;
@@ -99,7 +104,7 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
   return {
     slots, slotThinking: thinking,
     runtime: {
-      max_depth: snapshot.runtime.max_depth, max_active_children: snapshot.runtime.max_active_children, max_iterations: snapshot.runtime.max_iterations,
+      max_depth: snapshot.runtime.max_depth, max_active_children: snapshot.runtime.max_active_children, child_timeout: snapshot.runtime.child_timeout, max_iterations: snapshot.runtime.max_iterations,
       allow_outside_workspace: snapshot.runtime.allow_outside_workspace, permission_mode: snapshot.runtime.permission_mode,
       improvement_collector_enabled: snapshot.runtime.improvement_collector_enabled, improvement_collector_timeout: snapshot.runtime.improvement_collector_timeout, keep_going: snapshot.runtime.keep_going, run_start_mode: snapshot.runtime.run_start_mode,
       sandbox_mode: snapshot.runtime.sandbox_mode, sandbox_writable_roots: snapshot.runtime.sandbox_writable_roots,
@@ -412,4 +417,29 @@ export function liveStateOf(pending: PendingSettings): LiveStatePayload {
 /** REQ-CONFIG-446: a stored value outside the offered range is shown clamped to the nearest stop, never rewritten. */
 export function clampForDisplay(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/** PD-CONFIG-003: the per-agent timeout control's widget clamp, in whole minutes. */
+export const CHILD_TIMEOUT_MINUTES = { min: 1, max: 240 } as const;
+
+/**
+ * PD-CONFIG-003 with REQ-CONFIG-446: the minutes the per-agent timeout control shows for the stored seconds — rounded to a
+ * whole minute and clamped to 1–240 for display only; the stored value itself is never rewritten by being shown.
+ */
+export function timeoutMinutesForDisplay(seconds: number): number {
+  return clampForDisplay(Math.round(seconds / 60), CHILD_TIMEOUT_MINUTES.min, CHILD_TIMEOUT_MINUTES.max);
+}
+
+/** PD-CONFIG-003: the seconds a user's entry stores — whole minutes clamped to 1–240, times 60. */
+export function timeoutSecondsFromInput(value: number): number {
+  const minutes = Number.isFinite(value) ? Math.round(value) : CHILD_TIMEOUT_MINUTES.min;
+  return clampForDisplay(minutes, CHILD_TIMEOUT_MINUTES.min, CHILD_TIMEOUT_MINUTES.max) * 60;
+}
+
+/**
+ * PD-CONFIG-003: the line beneath the control when the stored seconds are not what it shows (a value that is not a whole
+ * minute, or one outside 60–14,400 s): the exact figure, kept until the field is changed. `null` when the control shows it.
+ */
+export function storedTimeoutNote(seconds: number): string | null {
+  return timeoutMinutesForDisplay(seconds) * 60 === seconds ? null : `Stored as ${seconds} seconds; kept until you change this field.`;
 }

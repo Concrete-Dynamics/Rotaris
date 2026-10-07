@@ -11,7 +11,7 @@ runtime card shows a key only when a file states it (REQ-CONFIG-471), and the Ov
 only way to change it is a YAML key in seconds.
 
 Raised from the final live runs' findings and ruled the same day as T1 under the owner's delegation
-([R-072](../product/requests.md#r-072)), recorded as OQ-218: the control is built as a third delegation limit
+([R-072](../../product/requests.md#r-072)), recorded as OQ-218: the control is built as a third delegation limit
 (PD-CONFIG-003). Recorded here before the code, 2026-10-07.
 
 ## Specs
@@ -27,3 +27,15 @@ third control departs from — a directive's to decide).
 - `packages/contracts/src/config.ts` — `RuntimeViewSchema` carries no `child_timeout`.
 - `packages/config/src/snapshot.ts`, `packages/config/src/tiers.ts`, `packages/config/src/writers.ts` — the snapshot, the
   Tier B overlay and the desktop save, none of which carries the key.
+
+## Outcome
+
+**Repaired 2026-10-07 (fin28, bundle `fin28-window-gate-timeout`), under [OQ-218](../../architecture/open-questions.md)'s
+ruling ([`PD-CONFIG-003`](../../product/directives.md#pd-config-003)).** The snapshot carries `child_timeout`; Delegation
+limits draws a third control, "Per-agent timeout", in whole minutes (1–240) with a "minutes" suffix and a hint, reading 20
+on a default install; an entry is stored as minutes × 60 seconds, committed by Save and laid on the next run start by Tier B
+(`TIER_B_RUNTIME_KEYS`); a stored value it cannot show (1250 s, 36000 s) is shown clamped with "Stored as N seconds; kept
+until you change this field." and never rewritten until the field is changed. Pinned by
+`packages/ui/src/settings/child-timeout.test.ts`, `packages/config/src/writers.test.ts` and
+`packages/config/src/snapshot.test.ts`; shown in the built app with `pnpm app:drive` (20 at the default, 45 saved as 2700 and
+the next run logging `child_timeout=2700 s`, a stated 1250 read as 21 with its line).

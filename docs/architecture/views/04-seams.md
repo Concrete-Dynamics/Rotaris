@@ -230,7 +230,10 @@ A key the Settings screen *edits* takes four more, and they are the ones a first
 `PendingChange`, `applyChange` and `savePayload`, in that order. A key touching fewer than all six of
 those is a key that saves and does not mark dirty, or marks dirty and does not survive a reload.
 `instructions.overrides` (`PD-WORKSPACE-002`) is the worked example, and `skills.overrides` the one
-before it.
+before it. A key that also reaches a run start through the live state, as the delegation limits do, joins
+`TIER_B_RUNTIME_KEYS` (`packages/config/src/tiers.ts`): `runtime.child_timeout` (`PD-CONFIG-003`, 2026-10-07) is the
+latest — seconds in the file and the snapshot, whole minutes on the screen (`timeoutMinutesForDisplay`,
+`timeoutSecondsFromInput`), a stored value the control cannot show kept as stored until the field is changed.
 
 Invariants:
 

@@ -15,7 +15,8 @@ import type { FatalLoadReport } from './validate.js';
  * Tier C is the absence of a mechanism: everything outside A and B is read at the next load
  * (REQ-CONFIG-265), and nothing here watches a file.
  */
-export const TIER_B_RUNTIME_KEYS = ['permission_mode', 'max_depth', 'max_active_children', 'max_iterations', 'allow_outside_workspace', 'improvement_collector_enabled', 'keep_going', 'run_start_mode'] as const;
+/** PD-CONFIG-003 adds `child_timeout`: the per-agent timeout is a delegation limit and commits as the depth cap and fan-out limit do. */
+export const TIER_B_RUNTIME_KEYS = ['permission_mode', 'max_depth', 'max_active_children', 'child_timeout', 'max_iterations', 'allow_outside_workspace', 'improvement_collector_enabled', 'keep_going', 'run_start_mode'] as const;
 export type TierBRuntimeKey = (typeof TIER_B_RUNTIME_KEYS)[number];
 
 export interface LiveState {

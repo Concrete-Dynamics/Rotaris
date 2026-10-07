@@ -3822,6 +3822,64 @@ provider. The owner kept the built behaviour. What it costs: the list is longer,
 
 ---
 
+<a id="pd-config-003"></a>
+
+### PD-CONFIG-003 — the Runtime category offers the per-agent timeout as a third delegation limit, in minutes
+
+Settings › Runtime › **Delegation limits** SHALL show a third numeric control, "Per-agent timeout", after the depth cap and
+the fan-out limit: whole minutes with a "minutes" suffix (REQ-CONFIG-325's pattern), clamped at the widget to **1–240**. It
+is REQ-MONITOR-286's per-agent timeout, initialised from the effective `runtime.child_timeout` (REQ-CONFIG-113, in seconds)
+divided by 60, so a default install reads **20**. A user's entry is stored as the minutes times 60 seconds, committed by Save
+into the workspace file (REQ-CONFIG-256), and laid on the next run start by Tier B whether or not it is saved (REQ-CONFIG-262,
+REQ-CONFIG-263). A stored value the control cannot express — one that is not a whole minute, or lies outside 60–14,400
+seconds — is shown rounded and clamped for display only, a line beneath it states the stored seconds, and the value is
+never rewritten until the user changes the field (REQ-CONFIG-446, REQ-CONFIG-419). The control's hint says the limit bounds
+each **delegated** agent, that the step in flight gets up to 30 s more (PD-ORCH-004 revision 5), that an agent still making
+progress hands its work back to its parent, and that the value applies to runs started from now. The Overview caps line is
+unchanged (REQ-MONITOR-169). PD-ORCH-004 is not revised: its default and its limit stay as they are; this directive only
+lets the user move the limit.
+
+**As built.** `child_timeout` in `RuntimeViewSchema` (`packages/contracts/src/config.ts`) and the snapshot
+(`packages/config/src/snapshot.ts`), `TIER_B_RUNTIME_KEYS` (`packages/config/src/tiers.ts`), `DesktopSave.runtime`
+(`packages/config/src/writers.ts`, whose validation on assignment already refuses a value below 1, REQ-CONFIG-111);
+`PendingSettings.runtime.child_timeout`, `timeoutMinutesForDisplay`, `timeoutSecondsFromInput` and `storedTimeoutNote`
+(`packages/ui/src/settings/config-state.ts`); the `child-timeout` control in `packages/ui/src/settings/ConfigSettings.tsx`.
+
+**Why, and what it costs.** OQ-218, ruled 2026-10-07 under the owner's delegation (R-072, advocate A followed). REQ-MONITOR-286
+names three interface-level delegation controls and the build drew two: no surface showed the per-agent timeout, and the only
+route to the limit both duress live runs met ("Child timed out after 1200s"; 66 % of the run behind it at `c2fdd6a`, 61.5 % at
+`c2a9444`) was a YAML key in seconds — while the ruling that kept the 1200 s ceiling counts on that user being able to raise
+it. REQ-CONFIG-322's "two numeric controls" faithfully describes the reference, so a third is a directive. What it costs: a
+user can raise the limit so far (up to 4 h at the widget) that a looping child spends that long before it is stopped, and the
+same limit bounds a parent's resume attempt and a wait; a user who lowers it to minutes sees most delegated work fail. The
+240-minute ceiling is a chosen figure, twelve times the default, with no derivation behind it; a file may still state a
+longer value, which the control shows clamped and keeps.
+
+> **Narrows:** REQ-CONFIG-322, REQ-CONFIG-256, REQ-CONFIG-417
+> **Extends:** REQ-CONFIG-263
+
+*Raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the ruling of
+[OQ-218](../architecture/open-questions.md) (T1). Cites, without changing them: REQ-MONITOR-286, REQ-CONFIG-113,
+REQ-ORCH-088, REQ-CONFIG-446, REQ-NOTIFY-100 and PD-ORCH-004 revision 5. The ruling named REQ-CONFIG-256 and REQ-CONFIG-417
+as extended; both are already extended by PD-WORKSPACE-002 and the symbol generator admits one directive per verb, so this
+directive names them as narrowed — it changes their exact enumerations, which is what narrowing records (found while
+building).*
+
+> **First execution, 2026-10-07, built under [R-072](requests.md#r-072):** the directive held as written. **What was
+> measured.** `settings/child-timeout.test.ts` (the minutes and seconds both ways, the stored-value line, a stored 1250 s and
+> 36000 s kept and unsaved, no change on a repopulation, the save carrying `child_timeout` only after an edit, the live state
+> carrying it, and the third control drawn at 20 and at 21 with the stored line), `writers.test.ts` (the save writes 2700 and
+> refuses 0 before touching the file; a live 2700 s reaches the resolved runtime) and `snapshot.test.ts` (a stated 1250 reaches
+> the view; 1200 by default), each red on the source before. Driven in the built app (`pnpm app:drive`): a default install's
+> Runtime category read "Per-agent timeout 20 minutes", the field 66 px wide like the depth cap's; 45 typed and saved wrote
+> `child_timeout: 2700` into the workspace file, and the next run start logged `child_timeout=2700 s`; a workspace stating 1250
+> read 21 with "Stored as 1250 seconds; kept until you change this field." and the save bar clean. **What was not measured.**
+> A run started with an unsaved value (the unsaved-settings guard holds the person in Settings; the Tier B overlay and the
+> live state are pinned by unit cases), and a delegated child running past 20 minutes (the orchestrator's live run). The row
+> is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
 <a id="pd-tools-009"></a>
 
 ### PD-TOOLS-009 — exit 1 from a diff or a search is an answer, not a failure

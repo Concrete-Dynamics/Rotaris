@@ -1725,7 +1725,10 @@ counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, 
   runs the loader's own passes; the run's `RunConfig`, runtime posture, persona resolver, model references, entry
   tier, providers to lease and message limit come from that. Initial starts capture this once before
   credential preparation and pass the completed setup into `Sessions.start`. The authorized board grant
-  is a separate per-launch input carrying both fields required by REQ-TRACE-470.
+  is a separate per-launch input carrying both fields required by REQ-TRACE-470. The runtime keys the live state lays
+  on are `TIER_B_RUNTIME_KEYS`: the permission mode, the depth cap, the fan-out limit, **the per-agent timeout
+  (`child_timeout`, since 2026-10-07, PD-CONFIG-003 — the run's `childTimeoutMs`)**, the iteration cap, the outside-workspace
+  switch, the improvement loop, keep-going and the run-start mode.
 - **Tier C** — everything else is read at the next load; nothing watches a file. **The `display:` section** —
   REQ-CHAT-166's four transcript caps, the reader `SECTION_KEYS` declared and nothing stood behind until Part Z —
   is Tier C: it is read by `loadConfiguration`, carried on the configuration snapshot, and reaches every window over

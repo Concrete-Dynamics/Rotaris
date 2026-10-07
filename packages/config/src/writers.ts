@@ -219,7 +219,7 @@ function roleEditAt(edit: RoleEdit, scope: RoleEditScope): RoleFieldEdits | unde
 export interface DesktopSave {
   readonly slots?: Partial<Record<ModelSlot, string | null>>;
   readonly slotThinking?: Partial<Record<ModelSlot, ReasoningLevel | null>>;
-  readonly runtime?: Partial<Record<'max_depth' | 'max_active_children' | 'max_iterations' | 'allow_outside_workspace' | 'permission_mode' | 'improvement_collector_enabled' | 'keep_going' | 'run_start_mode' | 'sandbox_mode' | 'sandbox_writable_roots' | 'sandbox_allow_network' | 'network_egress_policy' | 'network_allowed_hosts' | 'network_denied_hosts', unknown>>;
+  readonly runtime?: Partial<Record<'max_depth' | 'max_active_children' | 'child_timeout' | 'max_iterations' | 'allow_outside_workspace' | 'permission_mode' | 'improvement_collector_enabled' | 'keep_going' | 'run_start_mode' | 'sandbox_mode' | 'sandbox_writable_roots' | 'sandbox_allow_network' | 'network_egress_policy' | 'network_allowed_hosts' | 'network_denied_hosts', unknown>>;
   readonly circuitBreakerEnabled?: boolean;
   readonly compressorThresholdPercentage?: number;
   readonly delegationStrategy?: DelegationStrategy;

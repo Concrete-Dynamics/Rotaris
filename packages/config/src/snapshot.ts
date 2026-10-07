@@ -66,7 +66,7 @@ export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv
     imageInputModels: Object.keys(cfg.models).filter((name) => cfg.models[name]!.accepts_image_input && !name.startsWith(STARTUP_SLOT_PREFIX) && !name.startsWith(PERSONA_SYNTHETIC_PREFIX)).sort(),
     roles: rolePreferences(cfg).map((r) => ({ role: r.role, rawModel: r.rawModel, modelOrigin: r.modelOrigin, effectiveModel: r.effectiveModel, inherited: r.inherited, builtInDefault: r.builtInDefault, rawThinking: r.rawThinking, thinkingOrigin: r.thinkingOrigin, tier: r.tier, tools: [...r.tools], declaredTools: [...declaredToolsOf(r.role, r.tools)] })),
     runtime: {
-      max_depth: cfg.runtime.max_depth, max_active_children: cfg.runtime.max_active_children, max_iterations: cfg.runtime.max_iterations,
+      max_depth: cfg.runtime.max_depth, max_active_children: cfg.runtime.max_active_children, child_timeout: cfg.runtime.child_timeout, max_iterations: cfg.runtime.max_iterations,
       allow_outside_workspace: cfg.runtime.allow_outside_workspace, permission_mode: cfg.runtime.permission_mode,
       improvement_collector_enabled: cfg.runtime.improvement_collector_enabled, improvement_collector_timeout: cfg.runtime.improvement_collector_timeout, retrospective_timeout: cfg.runtime.retrospective_timeout, keep_going: cfg.runtime.keep_going, run_start_mode: cfg.runtime.run_start_mode,
       memory_diagnostics_enabled: cfg.runtime.memory_diagnostics_enabled,
@@ -102,7 +102,7 @@ export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: 
   return {
     workspaceRoot, loadOk: false, fatal: report, slots: [], models: [], imageInputModels: [], roles: [],
     runtime: {
-      max_depth: RUNTIME_DEFAULTS.max_depth, max_active_children: RUNTIME_DEFAULTS.max_active_children, max_iterations: RUNTIME_DEFAULTS.max_iterations,
+      max_depth: RUNTIME_DEFAULTS.max_depth, max_active_children: RUNTIME_DEFAULTS.max_active_children, child_timeout: RUNTIME_DEFAULTS.child_timeout, max_iterations: RUNTIME_DEFAULTS.max_iterations,
       allow_outside_workspace: RUNTIME_DEFAULTS.allow_outside_workspace, permission_mode: RUNTIME_DEFAULTS.permission_mode,
       improvement_collector_enabled: RUNTIME_DEFAULTS.improvement_collector_enabled, improvement_collector_timeout: RUNTIME_DEFAULTS.improvement_collector_timeout, retrospective_timeout: RUNTIME_DEFAULTS.retrospective_timeout, keep_going: RUNTIME_DEFAULTS.keep_going, run_start_mode: RUNTIME_DEFAULTS.run_start_mode,
       memory_diagnostics_enabled: RUNTIME_DEFAULTS.memory_diagnostics_enabled,

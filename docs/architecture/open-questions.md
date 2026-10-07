@@ -10859,6 +10859,43 @@ root's are those its task answers for (`openRootPlan`), a child parent's its own
 scripted coordinator delegates more than once open with the scripted client's `plan` step; the live run's harness checks it
 over every session it keeps (`apps/desktop/scripts/lib/coordinator-todo.mjs`). The first-executions row waits on the orchestrator's next default live run.
 
+**OQ-218 — Is REQ-MONITOR-286's per-agent timeout a control, and where does it stand?** *(REQ-MONITOR-286, the three
+"interface-level delegation controls", the per-agent timeout "presented in minutes" and initialised from its policy value;
+REQ-CONFIG-322, Delegation limits as "two numeric controls"; REQ-CONFIG-256, REQ-CONFIG-263 and REQ-CONFIG-417, the written
+keys, the Tier B overlay and destination 1, none naming it; REQ-CONFIG-113 and REQ-ORCH-088, `runtime.child_timeout` in
+seconds, 1200 by default; REQ-MONITOR-169, the Overview caps caption. Raised 2026-10-07 from the final live runs' findings —
+both duress autopsies (`c2fdd6a`: three of seven children cut off at 1200 s, 66 % of the run behind the ceiling; `c2a9444`:
+61.5 %) — as the consortium's question T1, and recorded here as OQ-218, the number the round assigned it.
+[`no-surface-presents-the-per-agent-timeout.md`](../defects/fixed/no-surface-presents-the-per-agent-timeout.md) records the
+gap. ~~Open.~~ **Ruled 2026-10-07.**)*
+
+No surface shows the per-agent timeout: Settings › Runtime › Delegation limits draws the depth cap and the fan-out limit,
+the advanced runtime card shows a key only when a file states it, and the caps line is count against cap. Whether
+REQ-MONITOR-286's third item is a control a user moves (then a third Delegation limits control, which departs from
+REQ-CONFIG-322's two and from the three enumerations that omit the key), a figure shown read-only, or a figure on the
+Overview caps line, the specification does not settle.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** Settings › Runtime › Delegation
+limits presents the per-agent timeout as a third numeric control, "Per-agent timeout", in whole minutes clamped 1–240. It is
+initialised from the effective `runtime.child_timeout`, so a default install reads 20. It writes minutes × 60 seconds to
+`runtime.child_timeout` through Save and the Tier B overlay, the same way as the depth cap and fan-out limit beside it. A
+stored value the control cannot express is shown clamped for display with its exact seconds stated beneath, and is never
+rewritten until the user changes the field (REQ-CONFIG-446). The Overview caps line keeps REQ-MONITOR-169's caption. Recorded
+as [`PD-CONFIG-003`](../product/directives.md#pd-config-003), which narrows REQ-CONFIG-322, REQ-CONFIG-256 and REQ-CONFIG-417
+and extends REQ-CONFIG-263 (the ruling named 256 and 417 as extended; PD-WORKSPACE-002 already extends both and the symbol
+generator admits one directive per verb, so they are named as narrowed — found while building).
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: a third Delegation limits control in whole minutes,
+1–240, writing seconds through Save and Tier B, minted as a directive; the caps line unchanged. *Advocate B (the system's
+lens)*: a read-only row in minutes under Delegation limits naming the key and the file to edit, recorded as a reading with no
+directive, since REQ-CONFIG-322 and the three enumerations list the editable set exactly. **The ruling followed A**:
+REQ-MONITOR-286 names controls a user moves and initialises them from policy values, and the 1200 s ceiling the duress runs met
+is kept only because a user can raise it. From B it kept the exact seconds on screen where the field cannot show them, a hint
+saying the limit bounds delegated agents, and the defect note on the unlisted analysis-timeout control
+([`the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`](../defects/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md),
+recorded, not repaired). The 240-minute ceiling is a chosen figure, twelve times the default; a file can still state a longer
+value.
+
 **OQ-220 — Which todo item does a delegation answer for?** *(REQ-ORCH-028 and REQ-ORCH-029, "no two implementation delegations
 for the same todo item are outstanding at once"; resolution 15 (b) of `docs/spec/resolutions/01-run-orchestration.md`, ownership
 "per todo item and at no other granularity"; REQ-TOOLS-144, the plan's schema; REQ-TOOLS-152, the `delegate` call's

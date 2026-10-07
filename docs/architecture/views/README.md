@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**Settings presents the per-agent timeout as a third delegation limit, in minutes (PD-CONFIG-003, REQ-MONITOR-286; OQ-218
+ruled under R-072, fin28).** `RuntimeViewSchema` and the snapshot carry `child_timeout` (seconds); `PendingSettings.runtime`
+holds it, the Runtime category's Delegation limits draws it in whole minutes (1–240), and it is saved by the desktop save
+and laid on a run start by Tier B (`TIER_B_RUNTIME_KEYS`). The **seams view**'s configuration-key section and the **runtime
+view**'s Tier B paragraph say so. No package, edge, process, channel, command or store column changed.
+
 **A later cycle's "You asked for" line is capped like the implied todo (PD-ORCH-002 revision 3, REQ-ORCH-153; OQ-204 ruled
 under R-072, fin28).** `.plan-gate__prior` (`packages/ui/src/shell.css`) takes `max-height: var(--rt-space-16)`, scrolls inside
 itself and wraps with `overflow-wrap: anywhere`; a revision field dragged taller keeps its height. The **runtime view**'s plan

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
-import { clampForDisplay, scopeCellOf, type PendingChange, type PendingSettings } from './config-state.js';
+import { CHILD_TIMEOUT_MINUTES, clampForDisplay, scopeCellOf, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 
@@ -274,6 +274,15 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
         <DesignInput id="max-depth" className="input settings__number" type="number" min={1} max={12} value={clampForDisplay(rt.max_depth, 1, 12)} onChange={(e) => onChange({ kind: 'runtime', key: 'max_depth', value: clampForDisplay(Number(e.currentTarget.value) || 1, 1, 12) })} />
         <label htmlFor="max-active">Fan-out limit</label>
         <DesignInput id="max-active" className="input settings__number" type="number" min={1} max={64} value={clampForDisplay(rt.max_active_children, 1, 64)} onChange={(e) => onChange({ kind: 'runtime', key: 'max_active_children', value: clampForDisplay(Number(e.currentTarget.value) || 1, 1, 64) })} />
+      </div>
+      {/* PD-CONFIG-003 / REQ-MONITOR-286: the per-agent timeout, the third delegation limit, in whole minutes (1–240) over
+          `runtime.child_timeout`'s seconds. A stored value it cannot show is shown clamped and stated beneath, never
+          rewritten until the field is changed (REQ-CONFIG-446, REQ-CONFIG-419). */}
+      <div className="settings__action">
+        <label htmlFor="child-timeout">Per-agent timeout</label>
+        <DesignInput id="child-timeout" className="input settings__number" type="number" min={CHILD_TIMEOUT_MINUTES.min} max={CHILD_TIMEOUT_MINUTES.max} step={1} aria-description={`Stored as ${rt.child_timeout} seconds.`} value={timeoutMinutesForDisplay(rt.child_timeout)} onChange={(e) => onChange({ kind: 'runtime', key: 'child_timeout', value: timeoutSecondsFromInput(Number(e.currentTarget.value) || CHILD_TIMEOUT_MINUTES.min) })} /><span className="text-secondary">minutes</span>
+        <span className="text-secondary settings__hint" data-testid="child-timeout-hint">Each delegated agent is stopped this long after it starts; the step in flight gets up to 30 s more, and an agent still making progress hands its work back to its parent. Applies to runs started from now.</span>
+        {storedTimeoutNote(rt.child_timeout) !== null && <span className="text-secondary settings__hint" data-testid="child-timeout-stored">{storedTimeoutNote(rt.child_timeout)}</span>}
       </div>
       <h2 className="settings__heading">Runtime policy</h2>
       <DesignCard className="card settings__card">

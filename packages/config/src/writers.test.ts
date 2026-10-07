@@ -196,6 +196,15 @@ describe('REQ-CONFIG-441..444 the scoped per-field write path', () => {
     const r = await writeConfigFields(s.wsFile, { runtime: { memory_diagnostics_enabled: true } });
     expect(r.ok && r.value.text).toBe('runtime:\n  memory_diagnostics_enabled: true\n');
   });
+  it('PD-CONFIG-003: the desktop save writes runtime.child_timeout in seconds, and refuses one below 1 before touching the file (REQ-CONFIG-111)', async () => {
+    const s = scope();
+    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { runtime: { child_timeout: 2700 } });
+    expect(r.ok).toBe(true);
+    expect(readFileSync(s.wsFile, 'utf8')).toBe('runtime:\n  child_timeout: 2700\n');
+    const bad = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { runtime: { child_timeout: 0 } });
+    expect(bad.ok).toBe(false);
+    expect(readFileSync(s.wsFile, 'utf8')).toBe('runtime:\n  child_timeout: 2700\n');
+  });
 });
 
 describe('REQ-LIBRARY verifier gate writer', () => {
@@ -360,6 +369,17 @@ describe('ADR-0037 Tier B — the live state over the merged document, resolved 
     // The loaded configuration is untouched: a pure function.
     expect(loaded.value.runtime.max_depth).toBe(4);
     expect(loaded.value.personas['tester']?.model).toBe('slow');
+  });
+
+  it('PD-CONFIG-003: a live per-agent timeout reaches the resolved runtime the run host reads (`childTimeoutMs`)', () => {
+    const s = scope();
+    writeFileSync(s.wsFile, 'runtime:\n  child_timeout: 1200\n');
+    const loaded = loadConfiguration({ globalDir: s.globalDir, workspaceRoot: s.workspaceRoot, keepIgnored: false });
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const live = overlayLiveState(loaded.value, { runtime: { child_timeout: 2700 } });
+    expect(live.ok && live.value.runtime.child_timeout).toBe(2700);
+    expect(loaded.value.runtime.child_timeout).toBe(1200);
   });
 });
 

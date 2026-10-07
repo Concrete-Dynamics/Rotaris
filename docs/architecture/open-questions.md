@@ -118,6 +118,8 @@ was found, with what the build shipped meanwhile, so a ruling replaces an interi
 
 **On 2026-10-06 the owner ruled every decision still waiting ([R-071](../product/requests.md#r-071)).** The rulings confirmed as built are written into each entry, dated and citing R-071: OQ-2, OQ-4, OQ-6, OQ-10, OQ-17, OQ-18, OQ-22, OQ-25, OQ-29, OQ-32 to OQ-34, OQ-39, OQ-40, OQ-43, OQ-47, OQ-50 to OQ-52, OQ-58, OQ-59, OQ-65, OQ-67 to OQ-71, OQ-79 to OQ-82, OQ-84, OQ-85, OQ-87 to OQ-93, OQ-100 to OQ-104, OQ-106 to OQ-109, OQ-117, OQ-118, OQ-120 to OQ-126, OQ-128 to OQ-138, OQ-141 to OQ-153, and in `owner-decisions.md` ESC-36 and ESC-41. Where a ruling departs from a requirement's text it is carried by a directive with its back-pointer: `PD-PROVIDER-001`, `PD-CONFIG-002`, `PD-TOOLS-009`, `PD-TOOLS-010`, `PD-SHELL-004` to `PD-SHELL-006`, `PD-CHAT-007`, `PD-WORKSPACE-003`, `PD-WORKSPACE-004`, `PD-STARTUP-002` to `PD-STARTUP-005`, `PD-ORCH-005` revision 6 and `PD-ORCH-003` revision 3. Two rulings meet a build that does something else, and each entry says so with a defect note: OQ-6 (the quota cap lives in configuration, not on the catalogue entry) and OQ-33 (the preference root honours the configuration-home variable on every platform). One entry described its build wrongly and its ruling states the build as it is, with no defect: OQ-59, whose chooser is filtered to Markdown files (`.md`), not to `SKILL.md`, the name check being the loader's. OQ-39's amendment was already in REQ-SANDBOX-101's text. **Deferred by the same ruling, and the work counts as finished without them:** OQ-72 to OQ-75 and OQ-83 (the release pipeline's notices and signing), OQ-140 (Linux confinement), and OQ-48, OQ-62, OQ-183 and OQ-195 (after the first release); each entry carries the deferral. The questions ruled as a change to build are ruled in their own entries by the plans that build them. **The rest of the confirm-as-built rulings, written the same day (plan fin20):** OQ-154 to OQ-156, OQ-158 to OQ-161, OQ-164, OQ-166, OQ-167, OQ-169, OQ-173 to OQ-176, OQ-178, OQ-179, OQ-181, OQ-184, OQ-186, OQ-187, OQ-190 to OQ-193, OQ-197 and OQ-198, and OQ-200, OQ-201 and OQ-203, raised that day after the overview the owner answered and confirmed under the same instruction at the readings their entries say the build proceeds under. Where one departs from a requirement's text it is carried by a directive with its back-pointer: `PD-HOOKS-001`, `PD-ORCH-010` to `PD-ORCH-012`, `PD-ORCH-006` revision 2, `PD-MONITOR-003` to `PD-MONITOR-005`, `PD-WORKSPACE-006` to `PD-WORKSPACE-008`, `PD-SHELL-007`, `PD-SHELL-008`, `PD-SESSION-001`, `PD-CHAT-008` and `PD-CHAT-003` revision 2. The defect notes that waited on them close with them, in `docs/defects/fixed/`.
 
+**On 2026-10-07 the open questions were ruled under the owner's delegation ([R-072](../product/requests.md#r-072)) by a consortium of two advocates and a ruling agent:** advocate A argued from the user's lens and advocate B from the system's, and a ruling agent weighed both and ruled; each entry carries its ruling, dated and citing R-072, with the two recommendations it weighed and which it followed. OQ-204 to OQ-212 were open; OQ-213 to OQ-219 were raised that day by the final live runs and by the rulings themselves, each opened and ruled in its own entry. OQ-204, changed; OQ-205, confirmed as built; OQ-206, changed; OQ-207, changed; OQ-208, changed; OQ-209, confirmed as built; OQ-210, changed; OQ-211, confirmed as built; OQ-212, confirmed as built; OQ-213, changed; OQ-214, confirmed as built; OQ-215, changed; OQ-216, changed; OQ-217, changed; OQ-218, changed; OQ-219, changed. Where a ruling departs from a requirement's text it is carried by a directive with its back-pointer, written by the plan that builds it.
+
 ***Three of those counts changed on 2026-09-02 and the direction is not the usual one, so a reader should
 not skim them.*** The seven escalations this register carried as open were **all ruled on that date** and
 all seven have landed in requirements; OQ-14 and OQ-44 were **closed by amendment** and their entries below
@@ -10941,6 +10943,54 @@ cut-off cases in `children.test.ts` (the request a scripted run sends carries th
 "Outcome: failed — Child timed out after 1200s" (and the statement where the child was making progress), each such stored
 summary stating the limit in its first sentence and claiming no completion, every such report's status `failed`, and
 OQ-111's count of zero denials holding.
+
+**OQ-214 — Does a working child's 1200 s ceiling stay when a model that reasons before it answers fills each life with
+generation?** *(REQ-ORCH-088, the child timeout and its expiry path; REQ-CONFIG-113, `runtime.child_timeout`, default 1200;
+REQ-NOTIFY-100; REQ-MONITOR-121; REQ-ORCH-062 and REQ-TOOLS-156, which forbid a separate deadline on a wait because every
+child is bounded; REQ-ORCH-093, each parent resume bounded by it; REQ-ORCH-144, the per-role stall threshold for slow
+models; [`PD-ORCH-004`](../product/directives.md#pd-orch-004) revisions 1 to 5, R-048's limit kept and R-071's 30 s landing
+(OQ-196). Raised 2026-10-07 from findings L1 of the orchestrator's duress live run at `c2fdd6a` (pack
+`2026-10-06T16-02-48-699Z` of the live worktree) and N4 of its duress live run at `c2a9444` (pack
+`2026-10-06T17-59-41-271Z`), the self-hosted reasoning model, and ruled the same day.)*
+
+The two duress runs cut five working children off at the ceiling while each was making progress: at `c2fdd6a` d (reconcile),
+e (decisions) and d2 (d's continuation), at `c2a9444` d (reconcile) and d-continuation. Each landed 0.39 to 26.7 s after the
+ceiling (+7.3, +0.39, +26.7, +1.44, +7.23 s), none aborted; every report carried the cut-off statement and its changed paths;
+the three that were not continuations carried revision 5's offer with its sentence, and the two continuations carried none
+(read from the packs' `children` rows). Reasoning was 76 to 96 % of the children's output, mean steps 18 to 43 s. Of the eight
+continuations made since 2026-09-29, five succeeded; the three that failed all continued the reconcile item. f succeeded at
+1,087 s, 91 % of the ceiling. The children's time went largely to work other rulings own: d reasoned about a terminal it does
+not hold in 22 of its 66 requests at `c2fdd6a` and its successor in 23 of 35 at `c2a9444` (L4/N3), d2 named `.serena`,
+`.rotaris` or `.git` in 37 of its 45 requests (L3/N6, OQ-215), d-continuation met the empty file an undone create left (N2,
+repaired, [`undoing-a-create-leaves-an-empty-file.md`](../defects/fixed/undoing-a-create-leaves-an-empty-file.md)), and e had a
+complete file by minute five.
+
+**What the build proceeds under.** `runtime.child_timeout`, default 1200 and minimum 1
+(`packages/config/src/sections/runtime.ts`), handed to the run (`apps/desktop/src/run-host/configuration.ts`); the timer and
+`CHILD_LANDING_GRACE`, the run's one 30 s allowance (`packages/engine/src/children/orchestration.ts`); one continuation, never
+chained (PD-ORCH-004).
+
+**What a ruling decides.** Whether the default rises, the ceiling extends while the child makes progress, the ceiling scales
+with the model, a continuation may be chained or longer, or the ceiling stands as R-048 and R-071 left it.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the working child's ceiling stays
+as ruled. `runtime.child_timeout` keeps its 1200 s default and its hard bound with the 30 s landing, a piece of work is
+continued once and never chained, and PD-ORCH-004 (revisions 1 to 5), R-048 and R-071 stand unrevised. The five cut-offs of the
+2026-10-06 duress runs were each handled as written and are reported back into PD-ORCH-004 as revision 5's live execution.
+The question reopens on new evidence: either (a) once the marker-directory (L3/N6, OQ-215) and personas'-tools (L4/N3) rulings
+are built, a live run cuts off both a child and its continuation while each spent more than half its requests on its own task,
+or (b) any child of a default live run reaches the ceiling. **The measure for (a)** is the autopsy's per-request
+classification as L1 and N4 counted it: a request counts as off-task if its reasoning addresses a tool the child does not hold,
+the code-intelligence marker directory, or a file outside its brief; on-task otherwise. **The two recommendations weighed:**
+advocate A (the user's lens) recommended confirming the ceiling as built, since the long children were circling problems more
+time would only multiply, and reporting the two runs back into PD-ORCH-004 with a two-lives reopening test; advocate B (the
+system's lens) recommended the same confirmation, since REQ-TOOLS-156, REQ-ORCH-062 and REQ-ORCH-093 rely on the hard bound,
+PD-ORCH-004's progress test passes a looping child and the model did not predict the hits, with a reopening criterion measured
+per request. The ruling followed **both**: A's report-back, made mandatory by revision 5's "evidence owed", and A's two-lives
+test measured by B's per-request count. Two facts stay on record as risk: f succeeded at 91 % of the ceiling, and no surface
+presents the setting (REQ-MONITOR-286), which is OQ-218's question. **Recorded 2026-10-07 (fin27):** no code, test, view or
+specification text changed; PD-ORCH-004's report-back and its row in `first-executions.md` are written. Findings L1 and N4
+close as ruled.
 
 **OQ-215 — Do the built-in search and listing tools skip the code-intelligence runtime's marker directory, and do its
 memories leave the workspace?** *(REQ-TOOLS-140, the hard-coded ignore components, a closed list holding `.rotaris` and not

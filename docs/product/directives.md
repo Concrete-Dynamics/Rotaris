@@ -2088,6 +2088,21 @@ so a child that genuinely loops is still stopped at the same point.
 > `pnpm resilience-proof` (the ladder, the waits and the fallbacks) passed. **What was not measured.** No built-app or
 > live run cut a child off at its limit: the duress live run's continuations are the evidence owed. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **First live execution of revision 5, 2026-10-06 (duress at `c2fdd6a` and `c2a9444`), recorded 2026-10-07 under
+> [R-072](requests.md#r-072):** the evidence owed above. Packs `2026-10-06T16-02-48-699Z` and `2026-10-06T17-59-41-271Z` of
+> the live worktree, the self-hosted reasoning model. **Five cut-offs**, every one while making progress: at `c2fdd6a` d
+> (reconcile), e (decisions) and d2 (d's continuation); at `c2a9444` d (reconcile) and d-continuation. **The landing:** at
+> +7.3, +0.39, +26.7, +1.44 and +7.23 s after the ceiling, none aborted (the autopsies' figures). **The reports:** every one
+> carried the timeout error, the cut-off statement and its changed paths; the three that were not continuations carried the
+> offer with revision 5's sentence ("The continuation starts with no memory of this child's work …"), and both continuations
+> carried none, "continued once and never chained" (read again from the packs' `children` rows on 2026-10-07). **The
+> continuations:** both briefs stood alone, as OQ-114 asks, and both were cut off on the reconcile item, whose time went
+> largely to a terminal the child does not hold (L4/N3), the code-intelligence marker directory (L3/N6, OQ-215) and the empty
+> file an undone create left (N2, repaired). Nothing in the text was wrong. The premise R-071 accepted, "the continuation
+> offer already recovers", held for five of the eight continuations made since 2026-09-29; the three that failed all
+> continued the reconcile item. Reaffirmed 2026-10-07 under R-072 (OQ-214): the limit and its default stand, with OQ-214's
+> reopening condition. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 ---
 
 <a id="pd-monitor-002"></a>

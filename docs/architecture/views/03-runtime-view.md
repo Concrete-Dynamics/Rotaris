@@ -1914,4 +1914,4 @@ otherwise carry one row's state onto another.
 
 **Older rows** are fetched by `session.pageOlder` when the reader scrolls toward the top and placed above by the
 replica's `prependOlder`, off the interface thread, with the anchor holding the reader still; a failed load says so
-and is re-attemptab
+and is re-attemptable, and reaching the oldest recorded row is a different state from a failure (REQ-CHAT-165).

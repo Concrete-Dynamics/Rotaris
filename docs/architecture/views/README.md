@@ -2488,4 +2488,7 @@ only, and the three views that existed before it say exactly what they said.
 The code reconciled the same day is in the log with everything before it: the cost a metered provider
 reports (`PD-MONITOR-001`), no loop supervision while the plan gate holds a run (`PD-ORCH-001`), one activity
 line per working agent (`PD-CHAT-004` revision 2 and `PD-CHAT-005`), the timed-out child asked to land, the
-MCP child's stderr and the catalogue readers' duplicate read. This pass moved th
+MCP child's stderr and the catalogue readers' duplicate read. This pass moved those entries; it did not
+change what any of them says.
+
+Everything reconciled before this date is in [`reconciliation-log.md`](reconciliation-log.md), newest first.

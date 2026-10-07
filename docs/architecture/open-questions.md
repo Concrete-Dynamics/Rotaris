@@ -10496,8 +10496,8 @@ REQ-STARTUP-046 and REQ-SHELL-119. **The ruling followed A**: B's own risks (a r
 its approvals opening over another project, the other window's switch refused about a run it never showed) are not the
 product working under PD-SHELL-002, and PD-ORCH-005 makes the stop resumable. From B it kept: no question at a quit outside
 any window, the corrected logout claim (on Windows, Electron emits no `before-quit` at a logout or shutdown —
-[`a-windows-logout-skips-the-orderly-shutdown.md`](../defects/a-windows-logout-skips-the-orderly-shutdown.md), recorded, not
-repaired), a separate defect note for that, and the test of two windows closed in one gesture. macOS Dock Quit is a
+[`a-windows-logout-skips-the-orderly-shutdown.md`](../defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md), recorded, not
+repaired by this ruling; built on a main window's `session-end` by fin29 the same day), a separate defect note for that, and the test of two windows closed in one gesture. macOS Dock Quit is a
 person's quit outside any window and is to be reopened when a macOS release is authorized (IC-3, PD-STARTUP-001).
 [`closing-a-window-while-a-run-is-active-asks-no-confirmation.md`](../defects/fixed/closing-a-window-while-a-run-is-active-asks-no-confirmation.md)
 closes with it.

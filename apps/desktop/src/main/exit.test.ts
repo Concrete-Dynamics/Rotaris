@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessEvent, ProcessReply } from '@rotaris/contracts';
 import { FakeClock, millis } from '@rotaris/kernel';
-import { CHILD_CLOSE_BOUND_MS, ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
+import { CHILD_CLOSE_BOUND_MS, ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
 
 /** A window whose destruction reports `closed` at once, later, or never. */
 function win(opts: { parent: boolean; closes?: 'now' | 'never' }, log: string[], name: string): ClosableWindow & { closed: () => void } {
@@ -185,72 +185,97 @@ describe('PD-ORCH-005 clause 9: what the application\'s quit closes answers noth
     expect(dialogCloseAnswersDeny({ answered: true, quitting: false })).toBe(false);
   });
 
+  // The run host's events as `runHost.onEvent` in index.ts routes them: it relays an event unless `holdsBack` answers true.
+  const snapshot = (sessionId: string, executionStatus: string): ProcessEvent => ({ kind: 'publish.snapshot', payload: { sessionId, session: { executionStatus } } }) as unknown as ProcessEvent;
+  const notice = (sessionId: string): ProcessEvent => ({ kind: 'notice.publish', severity: 'info', title: 'Run stopped', message: '', detail: '', sessionId, persistent: true });
+  const result = (sessionId: string): ProcessEvent => ({ kind: 'run.result', sessionId, result: {} }) as unknown as ProcessEvent;
+  /** The close's stop as `stopWorkspaceRuns` in index.ts makes it: the mark taken as it is asked, then the reply. */
+  const stop = (q: QuitState, ids: string[]) => { q.stoppedByClose(ids, q.stopAsked()); };
+
   it('PD-SHELL-009: a dialog its window\'s close stopped the run of answers nothing — the stop withdraws it — and any other still answers Deny', () => {
     const q = new QuitState();
-    q.stoppedByClose(['S1']);
+    stop(q, ['S1']);
     expect(dialogCloseAnswersDeny({ answered: false, quitting: false, withdrawnByClose: q.withdrawnByClose('S1') })).toBe(false);
     expect(dialogCloseAnswersDeny({ answered: false, quitting: false, withdrawnByClose: q.withdrawnByClose('S2') })).toBe(true);
   });
 
-  it('PD-SHELL-009: a stopped session stays withdrawn through its rest, and a later run the person starts is its own again', () => {
-    const q = new QuitState();
-    q.observeStatus('S1', true);
-    expect(q.withdrawnByClose('S1')).toBe(false);
-    q.stoppedByClose(['S1']);
-    q.observeStatus('S1', true);
-    expect(q.withdrawnByClose('S1')).toBe(true);
-    q.observeStatus('S1', false);
-    expect(q.withdrawnByClose('S1')).toBe(true);
-    q.observeStatus('S1', true);
-    expect(q.withdrawnByClose('S1')).toBe(false);
-  });
-
-  // The run host's events as `runHost.onEvent` in index.ts routes them: it relays an event unless `holdsBack` answers true.
-  const snapshot = (sessionId: string, executionStatus: string): ProcessEvent => ({ kind: 'publish.snapshot', payload: { sessionId, session: { executionStatus } } }) as unknown as ProcessEvent;
-  const notice = (sessionId: string): ProcessEvent => ({ kind: 'notice.publish', severity: 'info', title: 'Run stopped', message: '', detail: '', sessionId, persistent: true });
-
   it("REQ-STARTUP-046's last sentence under PD-SHELL-009: a stopped session's notice is held back from the windows that stay, another session's is relayed", () => {
     const q = new QuitState();
     expect(q.holdsBack(snapshot('S1', 'running'))).toBe(false);
-    q.stoppedByClose(['S1']);
+    stop(q, ['S1']);
     expect(q.holdsBack(notice('S1'))).toBe(true);
     expect(q.holdsBack(notice('S2'))).toBe(false);
     expect(q.holdsBack(notice(''))).toBe(false);
-    // Its rest is published (relayed, never held) and its rest's notice is still held back.
+    // Its rest is published (relayed, never held) and a notice while it comes to rest is still held back.
     expect(q.holdsBack(snapshot('S1', 'paused'))).toBe(false);
     expect(q.holdsBack(notice('S1'))).toBe(true);
-    // A later run the person starts publishes active: its notices are its own again.
-    expect(q.holdsBack(snapshot('S1', 'running'))).toBe(false);
+    // Another session's run ending ends nothing of S1's hold.
+    expect(q.holdsBack(result('S2'))).toBe(false);
+    expect(q.withdrawnByClose('S1')).toBe(true);
+  });
+
+  it("PD-SHELL-009 (fin28 reviewers' finding c): the stopped run's own outcome is held, and the hold ends with it — a session never continued has its later notices relayed", () => {
+    const q = new QuitState();
+    stop(q, ['S1']);
+    q.holdsBack(snapshot('S1', 'paused'));
+    // The rest's own notice: main raises the run's outcome from `run.result`, and it is held as the run's notices are.
+    expect(q.holdsBack(result('S1'))).toBe(true);
+    expect(q.withdrawnByClose('S1')).toBe(false);
+    // Nothing more comes of the stop: a later notice of the session (an analysis's outcome) is relayed.
+    expect(q.holdsBack(notice('S1'))).toBe(false);
+    // A later run the person starts is its own: its outcome is relayed, its dialog's close answers Deny.
+    q.holdsBack(snapshot('S1', 'running'));
+    expect(q.holdsBack(result('S1'))).toBe(false);
+    expect(dialogCloseAnswersDeny({ answered: false, quitting: false, withdrawnByClose: q.withdrawnByClose('S1') })).toBe(true);
+  });
+
+  it("PD-SHELL-009 (fin28 reviewers' finding b): a run stopped before it had saved an active status — released from the plan gate, or continued — stays held through its `cancelling`", () => {
+    const q = new QuitState();
+    // Its last published status is the gate's, inactive; the run the release started accepts the stop before saving its own.
+    q.holdsBack(snapshot('S1', 'awaiting_plan_decision'));
+    stop(q, ['S1']);
+    expect(q.holdsBack(snapshot('S1', 'cancelling'))).toBe(false);
+    expect(q.holdsBack(notice('S1'))).toBe(true);
+    expect(q.withdrawnByClose('S1')).toBe(true);
+    q.holdsBack(snapshot('S1', 'paused'));
+    expect(q.holdsBack(notice('S1'))).toBe(true);
+    expect(q.holdsBack(result('S1'))).toBe(true);
     expect(q.holdsBack(notice('S1'))).toBe(false);
   });
 
-  it('PD-SHELL-009: the published snapshots are what end the hold — a stopped session whose snapshots never reach `holdsBack` stays held', () => {
-    const q = new QuitState();
-    q.stoppedByClose(['S1']);
-    q.holdsBack(snapshot('S1', 'paused'));
-    q.holdsBack(snapshot('S1', 'starting'));
-    expect(q.withdrawnByClose('S1')).toBe(false);
-    const unobserved = new QuitState();
-    unobserved.stoppedByClose(['S1']);
-    expect(unobserved.withdrawnByClose('S1')).toBe(true);
-  });
-
-  it('PD-SHELL-009: a rest published before the stop reply reached main is not mistaken for the stop pending, so a later run is its own (verifier, repair round 1)', () => {
+  it("PD-SHELL-009 (fin28 reviewers' finding a): a stopped run whose end reached main before the stop's reply is not held, so a later run is its own", () => {
     const q = new QuitState();
     q.holdsBack(snapshot('S1', 'cancelling'));
-    // The stop was already pending; its rest was published before `runs.stopped` came back.
+    const asked = q.stopAsked();
+    // The stop was already pending; the run's rest and its end came back before `runs.stopped` did.
     q.holdsBack(snapshot('S1', 'paused'));
-    q.stoppedByClose(['S1']);
-    expect(q.holdsBack(notice('S1'))).toBe(true);
-    // Continue from the window that stays.
-    q.holdsBack(snapshot('S1', 'running'));
+    expect(q.holdsBack(result('S1'))).toBe(false);
+    q.stoppedByClose(['S1'], asked);
     expect(q.withdrawnByClose('S1')).toBe(false);
+    // Continue from the window that stays: its notices, its dialog and its dock are its own.
+    q.holdsBack(snapshot('S1', 'running'));
     expect(q.holdsBack(notice('S1'))).toBe(false);
+    expect(dialogCloseAnswersDeny({ answered: false, quitting: false, withdrawnByClose: q.withdrawnByClose('S1') })).toBe(true);
+    // An end seen before the stop was asked is an earlier run's: the stopped run is held.
+    const r = new QuitState();
+    r.holdsBack(result('S1'));
+    stop(r, ['S1']);
+    expect(r.withdrawnByClose('S1')).toBe(true);
+  });
+
+  it('PD-SHELL-009: a stopped session whose end never reaches `holdsBack` stays held — the routed events are what end the hold', () => {
+    const q = new QuitState();
+    stop(q, ['S1']);
+    q.holdsBack(snapshot('S1', 'paused'));
+    q.holdsBack(snapshot('S1', 'starting'));
+    expect(q.withdrawnByClose('S1')).toBe(true);
+    q.holdsBack(result('S1'));
+    expect(q.withdrawnByClose('S1')).toBe(false);
   });
 
   it('PD-SHELL-009: a queued approval of a stopped session is not reported unshown, another session\'s is, and none is while the application quits', () => {
     const q = new QuitState();
-    q.stoppedByClose(['S1']);
+    stop(q, ['S1']);
     const approvals = [{ request_id: 'r1', session_id: 'S1' }, { request_id: 'r2', session_id: 'S2' }];
     expect(q.unshownToReport(approvals, false)).toEqual([{ request_id: 'r2', session_id: 'S2' }]);
     expect(q.unshownToReport(approvals, true)).toEqual([]);
@@ -418,5 +443,41 @@ describe('PD-MONITOR-002: a child process main ended itself is not a loss (live-
     await done;
     expect(kills).toBe(0);
     expect(ended.gone(RUN_HOST).level).toBe('error');
+  });
+});
+
+describe("REQ-SHELL-121 on Windows: the desktop session's end runs the orderly shutdown Electron's `before-quit` never starts there (exit.ts)", () => {
+  it('the first `session-end` marks the quit, runs the shutdown once, and exits after it; later windows\' events wait on the same shutdown', async () => {
+    const quit = new QuitState();
+    const log: string[] = [];
+    let finish!: () => void;
+    let shutdowns = 0;
+    const end = new SessionEndShutdown({
+      quit,
+      shutdown: () => { shutdowns += 1; log.push('shutdown'); return new Promise<void>((r) => { finish = r; }); },
+      exit: () => log.push('exit'),
+      log: (m) => log.push(m),
+    });
+    const first = end.sessionEnding(['logoff']);
+    // What a closing dialog would send is the shutdown's to withdraw from here (PD-ORCH-005 clause 9).
+    expect(quit.quitting([{ wcId: 1, destroyed: false }])).toBe(true);
+    expect(dialogCloseAnswersDeny({ answered: false, quitting: quit.quitting([{ wcId: 1, destroyed: false }]) })).toBe(false);
+    const second = end.sessionEnding(['logoff']);
+    expect(second).toBe(first);
+    expect(shutdowns).toBe(1);
+    expect(log).not.toContain('exit');
+    finish();
+    await first;
+    expect(log).toEqual([expect.stringMatching(/^quit: the desktop session is ending \(logoff\); the orderly shutdown runs now/), 'shutdown', 'exit']);
+  });
+
+  it('a shutdown that fails is said at `error`, and the process still exits', async () => {
+    const lines: [string, string | undefined][] = [];
+    let exited = 0;
+    const end = new SessionEndShutdown({ quit: new QuitState(), shutdown: () => Promise.reject(new Error('store busy')), exit: () => { exited += 1; }, log: (m, level) => lines.push([m, level]) });
+    await end.sessionEnding([]);
+    expect(exited).toBe(1);
+    expect(lines[0]![0]).toMatch(/\(no reason given\)/);
+    expect(lines[1]).toEqual([expect.stringMatching(/the orderly shutdown at the session's end failed \(Error: store busy\)/), 'error']);
   });
 });

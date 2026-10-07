@@ -4982,7 +4982,8 @@ wired in `confirmRunsAtClose` (`apps/desktop/src/main/index.ts`), which awaits t
 close guard confirms the close, so the stop reaches the run host before the window's presenter is revoked; the stopped
 sessions are kept in `QuitState.stoppedByClose` (`apps/desktop/src/main/exit.ts`), which `dialogCloseAnswersDeny`, the
 question dock's cancellation (`apps/desktop/src/main/commands/session.ts`), the unshown-approval report and the notice
-relay read until the session's rest is published. The run host's count and stop are keyed by the session row's
+relay read until the session's rest is published *(as first built; since fin29 the same day, until the stopped run's own
+`run.result`, whose outcome notice is held too — see the follow-up below)*. The run host's count and stop are keyed by the session row's
 `workspace_root` (`Sessions.activeRunCount(workspaceRoot?)`, `Sessions.stopActiveIn`, `packages/engine/src/sessions.ts`;
 `runs.active` and `runs.stopWorkspace` in `apps/desktop/src/run-host/dispatch.ts`).
 
@@ -4994,7 +4995,7 @@ return to a window that never held the run. PD-SHELL-002 has each project's runs
 this directive makes the box true at every close that shows it. What it costs: a window can no longer be closed with its
 run left going — a person who wants the run to carry on minimizes the window instead; a logout warns about nothing (on
 Windows Electron emits no `before-quit` at a logout or shutdown at all,
-[`a-windows-logout-skips-the-orderly-shutdown.md`](../defects/a-windows-logout-skips-the-orderly-shutdown.md)); and macOS
+[`a-windows-logout-skips-the-orderly-shutdown.md`](../defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md)); and macOS
 Dock Quit is a person's quit outside any window, which asks nothing — to be reopened when a macOS release is authorized
 (IC-3, PD-STARTUP-001).
 
@@ -5029,6 +5030,27 @@ Dock Quit is a person's quit outside any window, which asks nothing — to be re
 > makes a stopped session publish a notice or hold a dialog as its window closes, so the one-line calls in `index.ts` are
 > exercised by no test or proof; a Windows host (IC-3). The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Follow-up, 2026-10-07, fin29 (fin28 reviewers' findings on the landed build, 2631eaf).** Four claims of the first
+> execution were short of the directive, each recorded and repaired: **the hold followed statuses, not the run** — a run
+> stopped before it had saved an active status (one released from the plan gate, or continued) lost its hold at its
+> `cancelling`, a session never continued kept its notices held for as long as main ran, and the stopped run's own outcome
+> notice (raised by main from `run.result`) was never held at all; `QuitState` now holds a stopped session until its run's
+> `run.result`, holds that outcome, and ends there
+> ([`a-window-close-registers-a-stopped-session-by-the-status-main-last-saw.md`](../defects/fixed/a-window-close-registers-a-stopped-session-by-the-status-main-last-saw.md),
+> [`a-stopped-session-that-is-never-continued-keeps-its-notices-held.md`](../defects/fixed/a-stopped-session-that-is-never-continued-keeps-its-notices-held.md));
+> **the box counted runs its Yes could not stop** (a run still ending is `isRunActive` and takes no stop), so the close now
+> asks `runs.active` with `scope: 'stoppable'`, the stop's own predicate
+> ([`the-window-close-box-counts-runs-its-yes-cannot-stop.md`](../defects/fixed/the-window-close-box-counts-runs-its-yes-cannot-stop.md));
+> and **what was not measured above is now measured**: `run.test.ts` pins the workspace stop's withdrawal of a pending wait and
+> its end of a background session (clauses 9 and 10), REQ-SHELL-021 carries a cross-reference to this directive by way of
+> REQ-SHELL-122, and `part-j-proof`'s two-window launch closes A while its run waits on an approval dialog — the store
+> records `approval_withdrawn` and no `approval_denied`, and the stopped run's outcome is held back from B
+> ([`pd-shell-009s-withdrawal-and-hold-paths-are-pinned-by-no-engine-case-or-proof.md`](../defects/fixed/pd-shell-009s-withdrawal-and-hold-paths-are-pinned-by-no-engine-case-or-proof.md)).
+> The Windows logout recorded above now runs the orderly shutdown on a main window's `session-end`
+> ([`a-windows-logout-skips-the-orderly-shutdown.md`](../defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md)); the
+> Windows run that shows it is owed. **Still not measured:** the unshown-approval report in the built app (no proof queues a
+> second approval behind an open dialog); a Windows host.
 
 ---
 

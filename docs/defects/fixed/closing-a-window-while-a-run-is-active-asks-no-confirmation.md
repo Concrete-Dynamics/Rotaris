@@ -48,7 +48,7 @@ window asks nothing, as before. Pinned by `close-confirmation.test.ts`, `exit.te
 `dispatch.test.ts`, `main-windows.test.ts` (two windows closed in one gesture) and `run.test.ts` (the keyed count and the
 workspace stop), fourteen cases red on the source before the change; shown by `pnpm part-j-proof`'s two-window launch
 (`pair-app`). The Windows logout claim this note's repair relied on is recorded apart:
-[`a-windows-logout-skips-the-orderly-shutdown.md`](../a-windows-logout-skips-the-orderly-shutdown.md).
+[`a-windows-logout-skips-the-orderly-shutdown.md`](a-windows-logout-skips-the-orderly-shutdown.md).
 
 ## Outcome so far (2026-10-06, kept as written)
 

@@ -3314,6 +3314,24 @@ export class Sessions {
   }
 
   /**
+   * PD-SHELL-009: the workspace's runs the close of one of several main windows would stop — counted with the very predicate
+   * `stopActiveIn` stops by, so the box that close asks never counts a run its Yes cannot stop. `activeRunCount` also
+   * counts a run whose end is written but which has not finished ending (the teardown's terminal status, the plan gate's
+   * park, the message-limit pause, with the drain and the `session_end` hooks still awaited): that run accepts no stop and
+   * ends on its own (`docs/defects/fixed/the-window-close-box-counts-runs-its-yes-cannot-stop.md`).
+   */
+  stoppableRunCount(workspaceRoot: string): number {
+    let n = 0;
+    for (const [id, s] of this.live) if (Sessions.stoppable(s) && this.inWorkspace(id, workspaceRoot)) n += 1;
+    return n;
+  }
+
+  /** REQ-SESSION-186: a live run whose end is not yet written — the one predicate the workspace stop counts and stops by. */
+  private static stoppable(s: Live): boolean {
+    return s.run !== null && !s.run.isEnded && s.run.acceptsStop;
+  }
+
+  /**
    * PD-SHELL-009: the close of one of several main windows stops the active runs of its workspace as the stop control does
    * — REQ-SESSION-186's graceful stop, the `cancel` op without force — so each rests `paused` with interruption `stop`, its
    * pending approvals and questions withdrawn and its background terminal sessions ended (PD-ORCH-005 clauses 3, 9, 10 and
@@ -3324,7 +3342,7 @@ export class Sessions {
     const stopped: SessionId[] = [];
     for (const [id, s] of this.live) {
       const run = s.run;
-      if (!run || run.isEnded || !run.acceptsStop || !this.inWorkspace(id, workspaceRoot)) continue;
+      if (!run || !Sessions.stoppable(s) || !this.inWorkspace(id, workspaceRoot)) continue;
       if (!run.stop.requested) {
         s.presence.returned();
         run.stop.request('user_cancelled', false);

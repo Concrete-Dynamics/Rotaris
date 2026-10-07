@@ -202,4 +202,9 @@ of several main windows. `run.test.ts` pins both (two workspaces, one stopped `p
 `dispatch.test.ts` pins the run host's hop. The consequence's text stands; what it claimed is now true. The keyed count's
 readers are REQ-SHELL-021's gate 3, the restore's refusal and the close of one of several windows; `session.start`'s forced
 isolation (REQ-GIT-120: "whenever any run is active") asks the instance's count with the empty id, so a launch in an idle
-project while another project's run executes is still placed in a worktree (`commands/session.test.ts`'s REQ-GIT-120 case).
+project while another project's run executes is still placed in a worktree (`commands/session.test.ts`'s REQ-GIT-120 case). *Corrected 2026-10-07 by fin29 (fin28 reviewers' finding d), the claim above kept:* "the close of one of several windows"
+is no longer a reader of `activeRunCount`. That count reads `isRunActive`, which holds for a run whose end is written but
+which is still ending, a run `stopActiveIn` does not stop, so the box counted runs its Yes could not stop. The close now asks
+`runs.active` with `scope: 'stoppable'`, answered by `stoppableRunCount(workspaceRoot)`, which counts with `stopActiveIn`'s
+own predicate (a live run whose end is not yet written; `run.test.ts` pins the two apart on a run held while it forwards its
+end). Gate 3 and the restore's refusal still read `activeRunCount`.

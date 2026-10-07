@@ -248,8 +248,13 @@ Linux `app.exit` over an open modal child segfaults. Neither sends `shutdown`; b
 capture whose wait timed out ends through `app.quit()`** rather than `exitCleanly` (`CaptureHost.quit`, `capture/probe.ts`):
 both then take the user's path below and send `shutdown`, so a live run comes to rest as a quit leaves it (PD-ORCH-005
 clause 3). A capture whose wait was satisfied, or that had none, still ends by `exitCleanly`
-(`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`). A quit Electron starts on its own account (SIGTERM, the desktop's logout where Electron emits `before-quit` — **on Windows it emits none at a logout or system shutdown**, so the process ends without the run host's `shutdown`, `docs/defects/a-windows-logout-skips-the-orderly-shutdown.md` — `app.quit()`)
-is turned into the same path: `before-quit` is held while any main window is open, and the main windows are closed
+(`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`). A quit Electron starts on its own account (SIGTERM, the desktop's logout where Electron emits `before-quit`, `app.quit()`)
+is turned into the same path. **On Windows Electron emits no `before-quit` at a logout, restart or system shutdown**; since
+2026-10-07 (fin29) each main window's `session-end` (Windows only, and not refusable) starts the same orderly shutdown
+`window-all-closed` runs — memoized, so it runs once whichever starts it — with the quit marked as the process's exit and no
+guard asked, and the process exits when it is done (`SessionEndShutdown`, `main/exit.ts`;
+`docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`; not yet observed on a Windows host). For the quits
+that do emit it: `before-quit` is held while any main window is open, and the main windows are closed
 through their guards, all or none (`closeThroughGuards`: every guard asked, every close confirmed, then every window
 closed). Nothing a quit closes answers for a person. `QuitState` (`main/exit.ts`) knows the quit from
 `exitCleanly` and from each main window's confirmed close, which `guardClose` reports before closing. While it is under
@@ -263,16 +268,23 @@ the adapter's `confirmRunsAtClose`). Only Yes confirms the close; Cancel leaves 
 were. A close made while the guards are being asked is held and asks nothing more. The application's quit
 (`closeThroughGuards`) asks the renderer's guard alone: it is not a person's close of a window. **Since 2026-10-07 the close
 of one of several main windows ends its own project's runs, asking first** (PD-SHELL-009, OQ-206 ruled under R-072; fin28):
-main → run host `runs.active {workspaceId}` counts that workspace's active runs (the session row's `workspace_root`; the empty
-id counts the instance's, as the last window's close and the update's close ask), and while it is above zero (or cannot be
-read) the box asks "Close this window while a run is active?" (`windowCloseBox`). Its Yes sends `runs.stopWorkspace
+main → run host `runs.active {workspaceId, scope: 'stoppable'}` counts that workspace's runs the stop would take (the
+session row's `workspace_root`, `Sessions.stoppableRunCount`: a live run whose end is not yet written — the predicate
+`Sessions.stopActiveIn` stops by, since fin29; the plain keyed count, `activeRunCount`, also counts a run still ending, which
+no stop takes; the empty id counts the instance's, as the last window's close and the update's close ask), and while it is
+above zero (or cannot be read) the box asks "Close this window while a run is active?" (`windowCloseBox`). Its Yes sends `runs.stopWorkspace
 {workspaceId}` → `runs.stopped {workspaceId, sessionIds}` — the stop control's graceful stop over that workspace's runs
 (`Sessions.stopActiveIn`), which rest `paused` by `stop` — and only then does the guard confirm the close, so the stop reaches
-the run host before `presenter.revoke`. Main keeps the stopped ids in `QuitState.stoppedByClose`: until a `publish.snapshot`
-shows the session at rest and then active again, an approval dialog closing for one answers nothing, a queued approval is
-not reported unshown, the question dock's cancellation is not forwarded (the stop withdraws all three, PD-ORCH-005 clause
-9), and a `notice.publish` for it is held back from the windows that stay (REQ-STARTUP-046's last sentence) — the event
-relay asks `QuitState.holdsBack` of every run host event, and `unshownApprovals` filters through `QuitState.unshownToReport`. A window whose
+the run host before `presenter.revoke`. Main keeps the stopped ids in `QuitState.stoppedByClose`: until the stopped run's own `run.result`
+arrives, an approval dialog closing for one answers nothing, a queued approval is not reported unshown, the question dock's
+cancellation is not forwarded (the stop withdraws all three, PD-ORCH-005 clause 9), and a `notice.publish` for it is held
+back from the windows that stay (REQ-STARTUP-046's last sentence); the `run.result` is the rest's own notice — main holds
+the outcome notice it would raise from it and does the rest of what it asks — and ends the hold. A run whose `run.result`
+reached main between the stop's request and its reply (`QuitState.stopAsked`) is not held. (Until fin29 the hold followed
+`publish.snapshot` statuses — rest, then active — which named no run: a run stopped before it had saved an active status lost
+its hold at its `cancelling`, a session never continued kept its notices held for good, and the outcome notice was never
+held.) The event relay asks `QuitState.holdsBack` of every run host event, and `unshownApprovals` filters through
+`QuitState.unshownToReport`. A window whose
 workspace has no active run closes unasked. REQ-SHELL-021's gate 3 and the restore's refusal send their window's workspace
 id and so count that workspace alone; `session.start`'s forced isolation (REQ-GIT-120, REQ-MONITOR-251: "whenever any run is
 active") sends the empty id, so a launch without an explicit tree is placed in a worktree while a run executes in any

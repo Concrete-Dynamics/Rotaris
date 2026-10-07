@@ -42,7 +42,7 @@ if (!process.argv.includes('--skip-build')) {
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
-function scenario(name, agentsYaml) {
+function scenario(name, agentsYaml, permissionMode = 'autonomous') {
   const root = join(output, name);
   const workspace = join(root, 'workspace');
   const local = join(root, 'local');
@@ -52,7 +52,7 @@ function scenario(name, agentsYaml) {
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
     'models:', '  scripted: { provider: scripted, model_id: scripted }',
     'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
-    'runtime:', '  permission_mode: autonomous', ...agentsYaml,
+    'runtime:', `  permission_mode: ${permissionMode}`, ...agentsYaml,
     // Since Part T the shipped code_intelligence entry is enabled by default and its discovery costs every run start
     // about 4.5 s (ADR-0035's note, finding 6); this proof measures the control channel, so the entry is off here.
     'mcp_servers:', '  code_intelligence: { enabled: false }',
@@ -378,24 +378,30 @@ const declinedLog = await launch('quit-declined', s6b, { ROTARIS_SCRIPT: 'read,r
 // active?", answered Yes (`ROTARIS_CAPTURE_ANSWERS`, which needs the capture flag; its own finish is set past the launch's
 // end), and A's session rests `paused`, `user_cancelled`, its iteration open by `stop`, before the window closes. The last
 // window's quit then asks nothing: no run is active anywhere.
+//
+// Since fin29 (fin28 reviewers' finding g), A's run waits on a person as its window closes: A runs under `permission_mode:
+// ask` and its root's `write_file` holds REQ-TOOLS-063's approval dialog open over A. The window close's stop withdraws it
+// (PD-ORCH-005 clause 9): the store records `approval_withdrawn` and no `approval_denied` — the dialog that closes with its
+// window answers nothing (`dialogCloseAnswersDeny` reading `QuitState.withdrawnByClose`). And the stopped run's own outcome
+// is the notice `QuitState.holdsBack` holds from the window that stays (REQ-STARTUP-046's last sentence), which main logs.
 const PAIR_WINDOW_BOX = /capture: message box "Close this window while a run is active\?" \| Close this window while a run is active\? \| A run is still executing in this project\. Closing this window ends it: Rotaris will stop the run, and work in flight may not finish\. Choose Cancel to return to the window and let it finish\. \| buttons \["Cancel","Yes"\] default 0 → answered (\d)/;
-const pairA = scenario('pair-a', []);
+const pairA = scenario('pair-a', [], 'ask');
 const pairB = scenario('pair-b', []);
 {
   const pairRoot = join(output, 'pair-app');
   const started = await startApp({
     root: pairRoot, workspace: pairA.workspace, timeoutMs: 90_000,
-    extra: { ROTARIS_SCRIPT: 'read,wait:120000,answer', ROTARIS_CAPTURE_PROJECT_FOLDER: pairB.workspace, ROTARIS_CAPTURE_PNG: join(output, 'pair-unused.png'), ROTARIS_CAPTURE_AFTER_MS: '170000', ROTARIS_CAPTURE_ANSWERS: '1' },
+    extra: { ROTARIS_SCRIPT: 'read,write,answer', ROTARIS_CAPTURE_PROJECT_FOLDER: pairB.workspace, ROTARIS_CAPTURE_PNG: join(output, 'pair-unused.png'), ROTARIS_CAPTURE_AFTER_MS: '170000', ROTARIS_CAPTURE_ANSWERS: '1' },
   });
   const d = started.driver;
   const readLog = () => (existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '');
   const windowsOf = async () => { const r = await d.windows(); return Array.isArray(r?.windows) ? r.windows : []; };
   const storeOf = () => findDatabases(started.local).map((file) => {
     const db = new Database(file, { readonly: true });
-    try { return { file, sessions: db.prepare('SELECT session_id, workspace_root, execution_status, stop_reason FROM sessions').all(), iterations: db.prepare('SELECT session_id, iteration, state, interruption FROM iterations ORDER BY iteration').all() }; }
+    try { return { file, sessions: db.prepare('SELECT session_id, workspace_root, execution_status, stop_reason FROM sessions').all(), iterations: db.prepare('SELECT session_id, iteration, state, interruption FROM iterations ORDER BY iteration').all(), timeline: db.prepare("SELECT session_id, name FROM timeline WHERE name LIKE 'approval_%' ORDER BY ordinal").all() }; }
     finally { db.close(); }
   });
-  const pairSessionA = () => storeOf().flatMap((s) => s.sessions.map((row) => ({ ...row, iterations: s.iterations.filter((i) => i.session_id === row.session_id) }))).find((row) => String(row.workspace_root).endsWith('pair-a/workspace') || String(row.workspace_root).endsWith('pair-a\\workspace'));
+  const pairSessionA = () => storeOf().flatMap((s) => s.sessions.map((row) => ({ ...row, iterations: s.iterations.filter((i) => i.session_id === row.session_id), approvals: s.timeline.filter((t) => t.session_id === row.session_id).map((t) => t.name) }))).find((row) => String(row.workspace_root).endsWith('pair-a/workspace') || String(row.workspace_root).endsWith('pair-a\\workspace'));
   let failure = null;
   const reading = {};
   try {
@@ -405,7 +411,8 @@ const pairB = scenario('pair-b', []);
     await d.chord('Ctrl+L');
     await until(() => d.eval("document.activeElement?.classList.contains('composer__input') === true"), (v) => v === true, { timeoutMs: 10_000, what: 'the composer holding focus' });
     await d.type('hold this run while the windows close', { enter: true });
-    await d.waitFor('[data-testid="run-header"][data-state="running"]', { timeoutMs: 30_000 });
+    // A's root asks to write: REQ-TOOLS-063's dialog opens over A, and the run waits on it through both closes.
+    await until(() => d.windows(), (w) => Array.isArray(w?.auxiliary) && w.auxiliary.some((a) => a.selector === 'approval'), { timeoutMs: 30_000, what: "A's approval dialog open" });
     // B, the idle window, on the other project; then B's own close, one of two windows: nothing is asked.
     await d.command({ kind: 'workspace.choose', newWindow: true });
     await until(windowsOf, (w) => w.length === 2, { timeoutMs: 30_000, what: 'two main windows' });
@@ -415,7 +422,7 @@ const pairB = scenario('pair-b', []);
     await until(windowsOf, (w) => w.length === 1, { timeoutMs: 15_000, what: "the idle window closed by its own close" });
     reading.idleClose = { boxes: (readLog().match(/capture: message box /g) ?? []).length, aStatus: pairSessionA()?.execution_status ?? null };
     if (reading.idleClose.boxes !== 0) throw new Error(`the idle window's close asked a box (PD-SHELL-009: a window with no active run of its own closes without asking); see pair-app.log`);
-    if (reading.idleClose.aStatus !== 'running') throw new Error(`the idle window's close touched the other project's run: ${JSON.stringify(pairSessionA())}`);
+    if (!['running', 'waiting'].includes(reading.idleClose.aStatus)) throw new Error(`the idle window's close touched the other project's run: ${JSON.stringify(pairSessionA())}`);
     // B again; then A's own close, one of two windows with its project's run active: the window box, answered Yes.
     await d.command({ kind: 'workspace.choose', newWindow: true });
     await until(windowsOf, (w) => w.length === 2, { timeoutMs: 30_000, what: 'two main windows again' });
@@ -439,7 +446,14 @@ const pairB = scenario('pair-b', []);
   const session = reading.runningClose.session;
   if (session.stop_reason !== 'user_cancelled') throw new Error(`the window's close did not stop the run as the stop control does: ${JSON.stringify(session)}`);
   if (!session.iterations.some((i) => i.state === 'open' && i.interruption === 'stop')) throw new Error(`the stopped run's iteration is not left open by \`stop\` (PD-ORCH-005 clause 3): ${JSON.stringify(session.iterations)}`);
-  results.pairWindows = { idleClose: reading.idleClose, runningClose: { session, box: 'Close this window while a run is active? — answered Yes' }, boxesAsked: boxes, quit: { exit: stopped.exit } };
+  // PD-ORCH-005 clause 9 through the window close (fin28 reviewers' finding g): the approval A waited on is withdrawn, never
+  // denied — its dialog closed with its window and sent nothing.
+  if (!session.approvals.includes('approval_withdrawn') || session.approvals.includes('approval_denied')) throw new Error(`the approval A's run waited on was not withdrawn by its window's close, or was denied: ${JSON.stringify(session.approvals)}; see pair-app.log`);
+  // REQ-STARTUP-046's last sentence: the stopped run's own outcome is held back from the window that stays (`QuitState.holdsBack`).
+  const heldOutcome = /run (\S+): its outcome "([^"]*)" held back: its window's close stopped the run \(REQ-STARTUP-046, PD-SHELL-009\)/.exec(log);
+  if (heldOutcome === null || heldOutcome[1] !== session.session_id) throw new Error(`the stopped run's outcome was not held back from the window that stays; see pair-app.log`);
+  if (new RegExp(`notice from the run host: [^\\n]*\\(session ${session.session_id}\\)`).test(log)) throw new Error(`a notice of the stopped session reached the window that stays; see pair-app.log`);
+  results.pairWindows = { idleClose: reading.idleClose, runningClose: { session, box: 'Close this window while a run is active? — answered Yes', heldOutcome: heldOutcome[2] }, boxesAsked: boxes, quit: { exit: stopped.exit } };
 }
 
 // 6. A root resumed before its first reply in a later iteration (the repair of

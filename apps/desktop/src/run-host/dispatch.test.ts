@@ -216,6 +216,7 @@ describe('runs.active counts the workspace it names, and runs.stopWorkspace stop
     stores: new Map([['W1', { root: '/ws/one' }], ['W2', { root: '/ws/two' }]]),
     sessions: {
       activeRunCount: (root?: string) => { seen.push(['count', root]); return root === undefined ? 3 : root === '/ws/one' ? 2 : 1; },
+      stoppableRunCount: (root: string) => { seen.push(['stoppable', root]); return root === '/ws/one' ? 1 : 0; },
       stopActiveIn: (root: string) => { seen.push(['stop', root]); return root === '/ws/one' ? ['S1', 'S2'] : []; },
     },
   }) as unknown as RunHost;
@@ -227,6 +228,15 @@ describe('runs.active counts the workspace it names, and runs.stopWorkspace stop
     expect(await dispatch({ kind: 'runs.active', workspaceId: '' }, host)).toEqual({ kind: 'runs.count', workspaceId: '', count: 3 });
     expect(await dispatch({ kind: 'runs.active', workspaceId: 'W9' }, host)).toEqual({ kind: 'runs.count', workspaceId: 'W9', count: 0 });
     expect(seen).toEqual([['count', '/ws/one'], ['count', undefined]]);
+  });
+
+  it("counts, under `scope: 'stoppable'`, only what the workspace stop would stop — the close box's predicate (fin28 reviewers' finding d)", async () => {
+    const seen: unknown[] = [];
+    const host = hostFor(seen);
+    expect(await dispatch({ kind: 'runs.active', workspaceId: 'W1', scope: 'stoppable' }, host)).toEqual({ kind: 'runs.count', workspaceId: 'W1', count: 1 });
+    expect(await dispatch({ kind: 'runs.active', workspaceId: 'W1', scope: 'active' }, host)).toEqual({ kind: 'runs.count', workspaceId: 'W1', count: 2 });
+    expect(await dispatch({ kind: 'runs.active', workspaceId: 'W9', scope: 'stoppable' }, host)).toEqual({ kind: 'runs.count', workspaceId: 'W9', count: 0 });
+    expect(seen).toEqual([['stoppable', '/ws/one'], ['count', '/ws/one']]);
   });
 
   it('stops the named workspace\'s runs and answers the sessions it stopped', async () => {

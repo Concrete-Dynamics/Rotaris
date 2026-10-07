@@ -19,3 +19,12 @@ stop control does"), REQ-STARTUP-046 (the box conveys that closing the window en
 - `packages/engine/src/sessions.ts` — `activeRunCount`, `isRunActive`, `stopActiveIn`.
 - `apps/desktop/src/run-host/dispatch.ts` — `runs.active`, `runs.stopWorkspace`.
 - `apps/desktop/src/main/index.ts` — `confirmRunsAtClose`'s `workspaceRuns`.
+
+## Repaired — 2026-10-07, fin29 (PD-SHELL-009, REQ-STARTUP-046)
+
+The close of one of several main windows now counts with the stop's own predicate: `runs.active` takes `scope:
+'stoppable'`, which the run host answers with `Sessions.stoppableRunCount(workspaceRoot)`; it and `stopActiveIn` share one
+predicate (`Sessions.stoppable`: a live run whose end is not yet written). `activeRunCount` is unchanged for REQ-SHELL-021's
+gate 3, the restore's refusal and the instance-wide counts. Pinned by `run.test.ts`'s "finding d" case (a run held while it
+forwards its end is counted active and not stoppable, and the stop takes nothing) and `dispatch.test.ts`'s scope case, both
+red on the source before (no such count existed). ADR-0013's sixth execution carries the correction beside its claim.

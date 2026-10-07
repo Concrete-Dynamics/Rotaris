@@ -22,3 +22,13 @@ session not on screen names it).
 
 - `apps/desktop/src/main/exit.ts` — `QuitState.holdsBack`, `observeStatus`.
 - `apps/desktop/src/main/index.ts` — `runHost.onEvent`: the `notice.publish` branch and the `run.result` branch.
+
+## Repaired — 2026-10-07, fin29 (PD-SHELL-009, REQ-STARTUP-046)
+
+The stopped run's `run.result` is now the hold's end, and it is held itself: `QuitState.holdsBack` answers true for it once,
+and main, which still does everything else the `run.result` asks (the failure tracker's end, the improvement checkpoint, the
+log line), does not raise the outcome notice and logs it as held back ("run <id>: its outcome "…" held back: its window's
+close stopped the run"). A later notice of the session — an analysis's outcome — is relayed again, whether or not the session
+is ever continued. Pinned by `exit.test.ts`'s "finding c" case (red on the source before: the result was not held and the
+later notice was), and shown by `part-j-proof`'s two-window launch, whose stopped session's outcome is held back and logged,
+and which finds no `notice from the run host` line for that session.

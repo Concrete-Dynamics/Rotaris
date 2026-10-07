@@ -54,7 +54,7 @@ import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
 import { anotherMainWindowStays, confirmActiveRunClose } from './close-confirmation.js';
-import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
+import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
@@ -96,6 +96,8 @@ const endedByMain = new ChildrenEndedByMain();
  * held refused to the next launch until its pid stops answering. Nothing to wait for until the run host is forked.
  */
 let endRunHost: () => Promise<void> = () => Promise.resolve();
+/** REQ-SHELL-121 on Windows: built once the orderly shutdown exists (`main`), before the desktop session can end. */
+let sessionEnd: SessionEndShutdown | null = null;
 /** Every immediate exit goes through this: on Linux, `app.exit` over an open modal child segfaults (`exit.ts`). */
 const exitCleanly = (code: number): void => { quit.exiting(); exitAfterChildWindows({ windows: () => BrowserWindow.getAllWindows(), exit: (c) => { void endRunHost().then(() => app.exit(c)); }, timers: clocks.timers, nextTurn: (fn) => setImmediate(fn) }, code); };
 const dirs = resolveUserDirs();
@@ -1024,7 +1026,8 @@ async function main(): Promise<void> {
 
   // ADR-0044: main RELAYS a publication unchanged; the number on it is the run host's.
   runHost.onEvent((e) => {
-    // PD-SHELL-009: a session a window's close stopped is seen to rest, or a later run of it to start, and its notices held back.
+    // PD-SHELL-009: the notices of a session a window's close stopped are held back until its run's own end, whose outcome
+    // notice is held too and ends the hold (`QuitState.holdsBack`).
     const heldBackByClose = quit.holdsBack(e);
     if (e.kind === 'publish.increment') relay.relaySequenced(CHANNEL.transcriptIncrement, e.payload);
     else if (e.kind === 'publish.snapshot') relay.relaySequenced(CHANNEL.sessionSnapshot, e.payload);
@@ -1124,7 +1127,11 @@ async function main(): Promise<void> {
        */
       runFailures.ended(e.sessionId);
       const publication = runEndingPublication(e.sessionId, e.result);
-      if (publication.kind === 'reported') {
+      if (heldBackByClose) {
+        // REQ-STARTUP-046's last sentence under PD-SHELL-009: the outcome of a run its window's close stopped is the rest's
+        // own notice, and it does not appear on the window that stays (`docs/defects/fixed/a-stopped-session-that-is-never-continued-keeps-its-notices-held.md`).
+        log(`run ${e.sessionId}: its outcome "${e.result.summary}" held back: its window's close stopped the run (REQ-STARTUP-046, PD-SHELL-009)`);
+      } else if (publication.kind === 'reported') {
         log(`run ${e.sessionId}: completion unconfirmed, last durable event ordinal ${e.result.persistence?.last_event_ordinal} — the recording-failure notice already carries it (REQ-EVENTS-088)`);
       } else if (publication.kind === 'failure') {
         void runFailures.failed(e.sessionId, publication.failureClass, publication.failure);
@@ -1260,10 +1267,16 @@ async function main(): Promise<void> {
   };
 
   const electronMainWindowAdapter = createElectronMainWindowAdapter({
-    createWindow: (options) => new BrowserWindow({
-      ...options,
-      webPreferences: { ...options.webPreferences, preload: join(__dirname, '../preload/index.cjs') },
-    }),
+    createWindow: (options) => {
+      const win = new BrowserWindow({
+        ...options,
+        webPreferences: { ...options.webPreferences, preload: join(__dirname, '../preload/index.cjs') },
+      });
+      // REQ-SHELL-121 on Windows: the desktop session's end emits no `before-quit`; each main window's `session-end` starts
+      // the orderly shutdown, once (`SessionEndShutdown`, `exit.ts`).
+      win.on('session-end', (event) => { void sessionEnd?.sessionEnding(event.reasons); });
+      return win;
+    },
     themeBackground,
     capturing,
     timers: { after: (delayMs, callback) => clocks.timers.after(millis(delayMs), callback) },
@@ -1315,13 +1328,15 @@ async function main(): Promise<void> {
           return active?.kind === 'runs.count' ? active.count : null;
         },
         workspaceRuns: workspaceId ? async () => {
-          const active = await runHost.request({ kind: 'runs.active', workspaceId }, millis(5_000)).catch(() => null);
+          // The runs the Yes stops, counted with the stop's own predicate (`scope: 'stoppable'`).
+          const active = await runHost.request({ kind: 'runs.active', workspaceId, scope: 'stoppable' }, millis(5_000)).catch(() => null);
           return active?.kind === 'runs.count' ? active.count : null;
         } : undefined,
         stopWorkspaceRuns: workspaceId ? async () => {
+          const asked = quit.stopAsked();
           const r = await runHost.request({ kind: 'runs.stopWorkspace', workspaceId }, millis(5_000));
           if (r.kind !== 'runs.stopped') throw new Error(`the run host answered ${r.kind}`);
-          quit.stoppedByClose(r.sessionIds);
+          quit.stoppedByClose(r.sessionIds, asked);
           log(`close: window ${wcId}'s close stopped ${r.sessionIds.length === 0 ? 'no run' : `session(s) ${r.sessionIds.join(', ')}`} before it closed (PD-SHELL-009)`);
         } : undefined,
         ask: (box) => askBox(win.isDestroyed() ? null : win, box),
@@ -1836,8 +1851,8 @@ async function main(): Promise<void> {
 
   /*
    * PD-ORCH-005 clause 9: a quit Electron starts on its own account — SIGTERM, the desktop's logout where Electron emits
-   * `before-quit` (on Windows it emits none at a logout or shutdown: `docs/defects/a-windows-logout-skips-the-orderly-shutdown.md`),
-   * `app.quit()` —
+   * `before-quit` (on Windows it emits none at a logout or shutdown; a main window's `session-end` starts the orderly shutdown
+   * there, `SessionEndShutdown`: `docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`), `app.quit()` —
    * closes every window at once, an approval dialog before its main window's close guard has answered, and the dialog's
    * close would be sent as the person's Deny. Such a quit is turned into the main windows' guarded close, all or none
    * (`closeThroughGuards`): every guard is asked, every close is confirmed, and only then does any window close, so a
@@ -1860,10 +1875,16 @@ async function main(): Promise<void> {
     });
   });
 
-  app.on('window-all-closed', () => {
-    // ADR-0014: quit is main-driven, run-host-executed. The skeleton asks and waits, bounded.
+  /*
+   * ADR-0014: quit is main-driven, run-host-executed. The skeleton asks and waits, bounded. Run once, whichever starts it:
+   * the last main window's close (`window-all-closed`, below), or on Windows the desktop session's end, which emits no
+   * `before-quit` (`SessionEndShutdown`, `exit.ts`; REQ-SHELL-121).
+   */
+  let shutdownRun: Promise<void> | null = null;
+  const orderlyShutdown = (): Promise<void> => {
+    if (shutdownRun !== null) return shutdownRun;
     improvementCoordinator.shutdown();
-    void (async () => {
+    shutdownRun = (async () => {
       // REQ-STARTUP-046 / REQ-SHELL-121: an update check, download or install still in flight is waited for at most
       // 5000 ms; past that the download is abandoned and its partial file discarded, and the close completes.
       await updater.quiesce(millis(5_000));
@@ -1878,9 +1899,11 @@ async function main(): Promise<void> {
       await Promise.all([...services].map(([key, s]) => shutdownAtQuit(() => s.link.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(330_000)), s.exit, (cause) => { log(`quit: the workspace service for ${key} did not complete its shutdown (${String(cause)}); its in-flight work may be lost`, 'error'); })));
       // The run host is gone before main is, so no session lock it held outlives this instance (`endBeforeMain`).
       await endBeforeMain(runHostEndable, runHostExit, clocks.timers, { graceMs: RUN_HOST_END_BOUND_MS, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
-      app.quit();
     })();
-  });
+    return shutdownRun;
+  };
+  sessionEnd = new SessionEndShutdown({ quit, shutdown: orderlyShutdown, exit: () => { exitCleanly(0); }, log });
+  app.on('window-all-closed', () => { void orderlyShutdown().then(() => { app.quit(); }); });
 }
 
 void main();

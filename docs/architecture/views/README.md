@@ -92,6 +92,13 @@ and question-dock cancellations and holds back their notices until their rest. T
 **runtime view**'s control table say so. One request and one reply kind on the main ↔ run host channel; no package, edge,
 process, command or store column changed.
 
+**The window close's follow-ups, and the Windows session's end (PD-SHELL-009, REQ-STARTUP-046, REQ-SHELL-121; fin29).** The
+close of one of several main windows counts with the stop's own predicate (`runs.active` gains `scope: 'stoppable'`,
+`Sessions.stoppableRunCount`); `QuitState` holds a stopped session's notices until that run's own `run.result`, whose outcome
+notice it holds too, rather than following published statuses; and each main window's `session-end` (Windows only) starts the
+orderly shutdown `window-all-closed` runs, now memoized (`SessionEndShutdown`). The **process view**'s quit and close
+paragraphs say so. One optional field on an existing request; no package, edge, process, command or store column changed.
+
 **`can_publish_artifacts` gates `artifact_write` (REQ-CONFIG-106, REQ-TOOLS-004, REQ-TOOLS-150; OQ-212 ruled under R-072).**
 `Persona` gains `canPublishArtifacts`, false for every built-in role and carried from a role's configuration by
 `personaResolverFor`; `createToolPort` passes it to the registry's prerequisites, which removes a declared `artifact_write`

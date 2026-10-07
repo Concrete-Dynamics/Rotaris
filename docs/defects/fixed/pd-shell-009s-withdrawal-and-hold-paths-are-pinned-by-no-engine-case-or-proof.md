@@ -25,3 +25,19 @@ REQ-TOOLS-063.
 - `docs/spec/12-desktop-shell-windows.md` — REQ-SHELL-021 and its notes.
 - `apps/desktop/scripts/part-j-proof.mjs` — the two-window launch (`pair-app`).
 - `apps/desktop/src/main/index.ts` — the approval dialog's close (`dialogCloseAnswersDeny`), `runHost.onEvent`, `unshownApprovals`.
+
+## Repaired — 2026-10-07, fin29 (PD-SHELL-009, PD-ORCH-005 clauses 9 and 10, REQ-SHELL-021)
+
+- **(e)** `run.test.ts` gains "finding e": a workspace stop of a run whose root waits on a person withdraws the wait by `stop`
+  (never cancelled as an answer, no `approval_denied`) and ends its running background session, recorded as ended by `stop`.
+  It pins behaviour that already held: it passes on the source before, and fails with the withdrawal or the terminal end
+  removed from the stop's path.
+- **(f)** REQ-SHELL-021 carries a cross-reference (no requirement text changed, no back-pointer verb, so the register's one
+  narrowing directive for it stays `PD-SHELL-001`): gate (3)'s "with a run active" is REQ-SHELL-122's test, which
+  `PD-SHELL-009` narrows to the requesting window's workspace.
+- **(g)** `part-j-proof`'s two-window launch now runs A under `permission_mode: ask` with a root that asks to write, so A's
+  run waits on REQ-TOOLS-063's dialog as its window closes. The proof requires `approval_withdrawn` and no `approval_denied`
+  in A's timeline (the dialog that closed with its window answered nothing: `dialogCloseAnswersDeny` reading
+  `QuitState.withdrawnByClose`), the stopped run's outcome held back and logged (`QuitState.holdsBack`), and no notice of A's
+  session relayed. `quit.unshownToReport` stays reached by its `exit.test.ts` case only: the scripted client raises one call
+  per step, so no proof yet queues a second approval behind an open dialog.

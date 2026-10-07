@@ -62,6 +62,11 @@ Rotaris presents a single main desktop window containing seven primary views sel
   > sentence above still governs — selecting the folder already open builds no replacement window and
   > leaves the current window in place — and the directive adds an offer of a new session beside it.
   > What it changes is that this outcome is no longer silent; no window, workspace or preference moves.
+  >
+  > *Cross-reference, 2026-10-07 (no text above changes).* Gate (3)'s "with a run active" is REQ-SHELL-122's test, and
+  > [`PD-SHELL-009`](../product/directives.md#pd-shell-009) narrows REQ-SHELL-122's count, at this gate, to the runs active
+  > in the requesting window's own workspace: a window whose project has no run active passes gate (3) while another
+  > window's project runs. This requirement's own narrowing directive is still `PD-SHELL-001` alone.
 
 ### Main window structure
 

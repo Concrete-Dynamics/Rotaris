@@ -1,4 +1,4 @@
-import { isActiveStatus, type ProcessEvent, type ProcessReply } from '@rotaris/contracts';
+import type { ProcessEvent, ProcessReply } from '@rotaris/contracts';
 import { millis, type Timers } from '@rotaris/kernel';
 import type { AppLogLevel } from './app-log.js';
 
@@ -33,9 +33,9 @@ export interface ExitDeps {
 /**
  * PD-ORCH-005 clause 9: the application's quit, as main can tell it. A quit is the process exiting at once
  * (`exitCleanly`), or every main window's close confirmed by its guard; a quit Electron starts on its own account
- * (SIGTERM, the desktop's logout where Electron emits `before-quit` — on Windows it emits none at a logout or shutdown,
- * `docs/defects/a-windows-logout-skips-the-orderly-shutdown.md` — `app.quit()`) is turned into the second before any window closes (`before-quit` in
- * `index.ts`). While it is under way, what a closing surface would send as a person's answer — REQ-TOOLS-063's Deny
+ * (SIGTERM, the desktop's logout where Electron emits `before-quit`, `app.quit()`) is turned into the second before any
+ * window closes (`before-quit` in `index.ts`); on Windows, where a logout or shutdown emits no `before-quit`, the session's
+ * end marks the first (`SessionEndShutdown`, below). While it is under way, what a closing surface would send as a person's answer — REQ-TOOLS-063's Deny
  * for an approval dialog, REQ-CHAT-101's cancellation from the question dock — is the quit's, and is not sent: the run
  * host's `shutdown` withdraws the approval or the question instead, and a withdrawal is never recorded as an answer.
  * Before this, the last window's close denied the call first, and the agent took one more model step on the denial
@@ -44,10 +44,11 @@ export interface ExitDeps {
 export class QuitState {
   #exiting = false;
   readonly #closing = new Set<number>();
-  /** PD-SHELL-009: the sessions a window's close stopped, by whether their rest has yet been seen. */
-  readonly #stoppedByClose = new Map<string, 'stopping' | 'rested'>();
-  /** The last status the run host published for each session, as active or not (`observeStatus`). */
-  readonly #lastActive = new Map<string, boolean>();
+  /** PD-SHELL-009: the sessions a window's close stopped whose run has not yet ended (its `run.result` not yet seen). */
+  readonly #stoppedByClose = new Set<string>();
+  /** How many `run.result` events main has seen, and when (in that count) each session's last one came. */
+  #results = 0;
+  readonly #lastResult = new Map<string, number>();
 
   /** The process is about to exit at once. */
   exiting(): void { this.#exiting = true; }
@@ -60,43 +61,46 @@ export class QuitState {
   }
 
   /**
+   * PD-SHELL-009: the mark a window close's stop is asked at (`runs.stopWorkspace`), handed back to `stoppedByClose` with
+   * the reply, so a stopped run whose end reached main before the reply is known to have ended already.
+   */
+  stopAsked(): number { return this.#results; }
+  /**
    * PD-SHELL-009: the close of one of several main windows stopped these sessions' runs (`runs.stopWorkspace`) before the
    * window closed. Like the quit's shutdown, that stop withdraws what they wait on (PD-ORCH-005 clause 9): an approval
    * dialog or a question dock the closing window held for one of them answers nothing as it closes, and an approval queued
    * behind it is not reported unshown. And as REQ-STARTUP-046's last sentence has it, no notice of theirs appears on the
    * window that stays while they come to rest.
+   *
+   * Each is held until ITS RUN's end — the `run.result` the run host sends once per run, after the reply for every run the
+   * stop took, since the stop takes only a run whose end is not yet written (`Sessions.stopActiveIn`). A published status
+   * was read here before (fin28): a status names no run, so "inactive" could not tell the stop's rest from a run stopped
+   * before it had saved its first status (one released from the plan gate, or continued), whose `cancelling` then ended
+   * the hold (`docs/defects/fixed/a-window-close-registers-a-stopped-session-by-the-status-main-last-saw.md`). A run whose
+   * end reached main between `asked` (`stopAsked`) and the reply has ended already, and nothing is held for it.
    */
-  stoppedByClose(sessionIds: readonly string[]): void {
-    // A session whose rest was published before the run host's reply reached main (a stop already pending when the close
-    // asked) has rested already: its next active status is a later run's, never this stop's.
-    for (const id of sessionIds) this.#stoppedByClose.set(id, this.#lastActive.get(id) === false ? 'rested' : 'stopping');
+  stoppedByClose(sessionIds: readonly string[], asked: number): void {
+    for (const id of sessionIds) if ((this.#lastResult.get(id) ?? 0) <= asked) this.#stoppedByClose.add(id);
   }
   /** Whether the session's waits are the window close's stop to withdraw, and its notices held back. */
   withdrawnByClose(sessionId: string): boolean {
     return this.#stoppedByClose.has(sessionId);
   }
-  /**
-   * A publication of the session's status. Its rest (not active) is the stop having landed; a later active status is a new
-   * run the person started (Continue from another window), whose waits and notices are its own again.
-   */
-  observeStatus(sessionId: string, active: boolean): void {
-    this.#lastActive.set(sessionId, active);
-    const held = this.#stoppedByClose.get(sessionId);
-    if (held === undefined) return;
-    if (!active) this.#stoppedByClose.set(sessionId, 'rested');
-    else if (held === 'rested') this.#stoppedByClose.delete(sessionId);
-  }
 
   /**
    * The run host's events, as a window close's stop concerns them (`runHost.onEvent` in `index.ts` asks this of every
-   * event before routing it). A published snapshot is the session's status observed (`observeStatus`); a notice for a
-   * session the close stopped is held back from the windows that stay, as REQ-STARTUP-046's last sentence has it. Answers
-   * whether main holds the event back rather than relays it.
+   * event before routing it). A notice for a session the close stopped is held back from the windows that stay, as
+   * REQ-STARTUP-046's last sentence has it, and so is the stopped run's own outcome (`run.result`, whose notice main would
+   * raise): that is the rest's own notice, and the hold ends with it, so a session never continued has its later notices
+   * relayed again and a later run the person starts is its own
+   * (`docs/defects/fixed/a-stopped-session-that-is-never-continued-keeps-its-notices-held.md`). Answers whether main holds
+   * the event's notice back rather than relays it; main still does everything else a `run.result` asks.
    */
   holdsBack(e: ProcessEvent): boolean {
-    if (e.kind === 'publish.snapshot') {
-      this.observeStatus(e.payload.sessionId, isActiveStatus(e.payload.session.executionStatus));
-      return false;
+    if (e.kind === 'run.result') {
+      this.#results += 1;
+      this.#lastResult.set(e.sessionId, this.#results);
+      return this.#stoppedByClose.delete(e.sessionId);
     }
     return e.kind === 'notice.publish' && this.withdrawnByClose(e.sessionId);
   }
@@ -124,6 +128,45 @@ export async function closeThroughGuards(guards: readonly { ask(): Promise<boole
   for (const g of guards) g.confirm();
   for (const g of guards) g.close();
   return true;
+}
+
+/**
+ * REQ-SHELL-121 on Windows: a logout, a restart or a shutdown of the desktop session ends the application without
+ * `before-quit` or `will-quit` (Electron's typings: neither "will be emitted if the app is closed due to a
+ * shutdown/restart of the system or a user logout"), so the orderly shutdown those hang on — the main windows' guarded
+ * close, then `window-all-closed`'s shutdown of the children, the run host's resting every run under PD-ORCH-005 clause 3
+ * — never ran, and the runs were left as a crash leaves them. Electron's documented hook for that end is a window's
+ * `session-end` (Windows only): "Emitted when a session is about to end due to a shutdown, machine restart, or user
+ * log-off. Once this event fires, there is no way to prevent the session from ending." So on the first `session-end`
+ * of any main window the quit is marked as the process's own exit (`QuitState.exiting`: what a closing dialog or dock
+ * would send as an answer is the shutdown's to withdraw, PD-ORCH-005 clause 9), the same orderly shutdown
+ * `window-all-closed` runs starts at once, and the process exits when it is done. No guard is asked and no box is shown:
+ * the session's end cannot be refused, as a quit outside any window asks nothing (PD-SHELL-009). Every main window
+ * reports the event; the shutdown runs once
+ * (`docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`).
+ */
+export class SessionEndShutdown {
+  #begun: Promise<void> | null = null;
+
+  constructor(private readonly deps: {
+    readonly quit: QuitState;
+    /** The orderly shutdown `window-all-closed` runs (memoized there: it runs once whichever starts it). */
+    readonly shutdown: () => Promise<void>;
+    /** The process's exit once the shutdown is done. */
+    readonly exit: () => void;
+    readonly log: (message: string, level?: AppLogLevel) => void;
+  }) {}
+
+  /** A main window's `session-end`, with the reasons Windows gave. Answers when the shutdown is done. */
+  sessionEnding(reasons: readonly string[]): Promise<void> {
+    if (this.#begun !== null) return this.#begun;
+    this.deps.quit.exiting();
+    this.deps.log(`quit: the desktop session is ending (${reasons.length === 0 ? 'no reason given' : reasons.join(', ')}); the orderly shutdown runs now, asking nothing (REQ-SHELL-121)`);
+    this.#begun = this.deps.shutdown()
+      .catch((cause: unknown) => { this.deps.log(`quit: the orderly shutdown at the session's end failed (${String(cause)})`, 'error'); })
+      .then(() => { this.deps.exit(); });
+    return this.#begun;
+  }
 }
 
 /**

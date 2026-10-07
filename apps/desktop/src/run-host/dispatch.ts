@@ -568,9 +568,11 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       // ADR-0013: the registry's predicate. PD-SHELL-009: a workspace's id counts that workspace's runs (REQ-SHELL-021's gate
       // 3, the close of one of several main windows, the restore's refusal); the empty id counts the instance's (the last
       // window's close, the update's close). A workspace this run host does not hold has no run here.
+      // `scope: 'stoppable'` counts with `runs.stopWorkspace`'s own predicate (the window close's box, PD-SHELL-009).
       if (req.workspaceId === '') return { kind: 'runs.count', workspaceId: '', count: sessions.activeRunCount() };
       const s = stores.get(req.workspaceId);
-      return { kind: 'runs.count', workspaceId: req.workspaceId, count: s ? sessions.activeRunCount(s.root) : 0 };
+      const count = !s ? 0 : req.scope === 'stoppable' ? sessions.stoppableRunCount(s.root) : sessions.activeRunCount(s.root);
+      return { kind: 'runs.count', workspaceId: req.workspaceId, count };
     }
     case 'runs.stopWorkspace': {
       // PD-SHELL-009: the stop control's graceful stop, applied to the workspace's active runs alone (PD-ORCH-005 clauses 3, 9, 10, 21).

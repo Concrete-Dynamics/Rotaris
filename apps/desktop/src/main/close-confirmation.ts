@@ -16,8 +16,9 @@
  * agents rest `paused` by `stop` and Continue resumes them). A window with no active run of its own closes without asking.
  * A quit that starts outside any window (`before-quit`: a signal, the end of the desktop session where Electron emits it,
  * the driver's or the capture's `app.quit()`) is not a person's close of a window and asks no active-run confirmation. On
- * Windows, Electron emits no `before-quit` at a logout or shutdown at all
- * (`docs/defects/a-windows-logout-skips-the-orderly-shutdown.md`).
+ * Windows, Electron emits no `before-quit` at a logout or shutdown at all; a main window's `session-end` starts the orderly
+ * shutdown there instead, asking nothing (`SessionEndShutdown`, `exit.ts`;
+ * `docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`).
  */
 
 /** The answer `1` is Yes, "close anyway"; `0`, Cancel, is the default and what Escape and the close control give. */

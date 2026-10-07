@@ -146,8 +146,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.pageOlder'), sessionId: z.string(), beforeIndex: z.number().int() }),
   /** ADR-0010 channel 1: a control against a live run, answered `{ok, value?}` and never raised (REQ-MONITOR-005/007). */
   z.object({ kind: z.literal('session.control'), request: ControlRequestSchema }),
-  /** REQ-SHELL-122's count: a non-empty `workspaceId` counts that workspace's active runs (PD-SHELL-009), an empty one the instance's. */
-  z.object({ kind: z.literal('runs.active'), workspaceId: z.string() }),
+  /**
+   * REQ-SHELL-122's count: a non-empty `workspaceId` counts that workspace's active runs (PD-SHELL-009), an empty one the
+   * instance's. `scope: 'stoppable'` (with a workspace) counts only the runs `runs.stopWorkspace` would stop — the predicate
+   * the close of one of several main windows asks by, so its box never counts a run its Yes cannot stop (PD-SHELL-009).
+   */
+  z.object({ kind: z.literal('runs.active'), workspaceId: z.string(), scope: z.enum(['active', 'stoppable']).optional() }),
   /** PD-SHELL-009: the close of one of several main windows stops its workspace's active runs as the stop control does. */
   z.object({ kind: z.literal('runs.stopWorkspace'), workspaceId: z.string().min(1) }),
   /** ADR-0019: the presenter is a capability main registers per window and revokes on close; the poll reply carries the windows it holds. */

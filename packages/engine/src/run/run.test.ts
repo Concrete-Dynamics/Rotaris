@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot, TranscriptIncrement } from '@rotaris/contracts';
-import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, type AgentBackend, type ScriptedCall, type TurnReport } from '@rotaris/model';
-import { parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type Publisher, type RunConfig, type RunNotice, type RunResult } from '../index.js';
+import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall, type TurnReport } from '@rotaris/model';
+import { parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type LiveTerminal, type PortToolResult, type Publisher, type RunConfig, type RunNotice, type RunResult, type SessionsDeps, type ToolPort } from '../index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -33,7 +33,7 @@ describe('engine/run — the run loop end to end against a real store and a scri
 
   const config = (over: Partial<RunConfig> = {}): RunConfig => ({ ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', ...over });
 
-  function sessionsWith(backend: AgentBackend, over: Partial<RunConfig> = {}, extra: { onRunResult?: (id: SessionId, r: RunResult) => void; notice?: (n: RunNotice) => void } = {}) {
+  function sessionsWith(backend: AgentBackend, over: Partial<RunConfig> = {}, extra: { onRunResult?: (id: SessionId, r: RunResult) => void; notice?: (n: RunNotice) => void } & Partial<Pick<SessionsDeps, 'tools' | 'terminals'>> = {}) {
     const pub = recorder();
     let n = 0;
     const sessions = new Sessions({
@@ -484,6 +484,7 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(sessions.activeRunCount('C:/ws')).toBe(1);
     expect(sessions.activeRunCount('C:/other')).toBe(1);
     expect(sessions.activeRunCount('C:/none')).toBe(0);
+    expect(sessions.stoppableRunCount('C:/ws')).toBe(1);
     expect(sessions.stopActiveIn('C:/ws')).toEqual([a]);
     await sessions.running(a);
     // PD-ORCH-005 clauses 3 and 21: the stop control's rest — `paused`, `user_cancelled`, the iteration left open by `stop`.
@@ -497,6 +498,64 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(sessions.stopActiveIn('C:/ws')).toEqual([]);
     await sessions.closeAll();
     expect(dal.getSession(b)!.stop_reason).toBe('application_shutdown');
+  });
+
+  it("PD-SHELL-009 (PD-ORCH-005 clauses 9 and 10; fin28 reviewers' finding e): a workspace stop withdraws the approval its run waits on — never answering it — and ends its background terminal sessions", async () => {
+    // The run's root waits on a person: its `write_file` call is held until the stop, as an approval holds it.
+    const withdrawn: string[] = [];
+    let cancelled = 0;
+    const port: ToolPort = {
+      specs: () => [{ name: 'write_file', description: 'write', parameters: { type: 'object' } }],
+      dispatch: async (c, signal): Promise<PortToolResult> => {
+        await new Promise<void>((r) => signal.addEventListener('abort', () => r(), { once: true }));
+        return { text: 'cancelled', isError: true, status: 'failed', durationMs: 1, label: c.name, args: {} };
+      },
+      cancelPending: () => { cancelled += 1; return 0; },
+      withdrawPending: (cause) => { withdrawn.push(cause); return 1; },
+      setMode: (m) => ({ requested: m as 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }),
+      currentMode: () => 'ask',
+      answerApproval: () => false,
+    };
+    const live: { -readonly [K in keyof LiveTerminal]: LiveTerminal[K] }[] = [
+      { id: 'ts_serve', taskId: 'bg_agent01', command: 'serve', startedAt: '2026-10-07T00:00:00.000Z', status: 'running', exitCode: null, tail: 'listening' },
+    ];
+    const ended: string[][] = [];
+    const terminals: SessionsDeps['terminals'] = () => ({ list: () => live, end: async (ids) => { ended.push([...ids]); for (const t of live) if (ids.includes(t.id)) { t.status = 'killed'; t.exitCode = -1; } } });
+    const { backend } = scripted([toolCalls([{ callId: 'c1', name: 'write_file', args: { path: 'a' } }]), answer('never')]);
+    const { sessions } = sessionsWith(backend, {}, { tools: () => port, terminals });
+    const a = (sessions.start(dal, 'C:/ws', 'a') as { value: SessionId }).value;
+    for (let i = 0; i < 400 && !dal.residentRows(a).some((r) => r.kind === 'tool'); i += 1) await new Promise((r) => setTimeout(r, 2));
+    expect(sessions.stopActiveIn('C:/ws')).toEqual([a]);
+    // Clause 9: withdrawn at once by the stop, and never answered — no Deny, no cancellation of the wait as an answer.
+    expect(withdrawn).toEqual(['stop']);
+    expect(cancelled).toBe(0);
+    await sessions.running(a);
+    // Clause 10: the background session the run's agent left running is ended, and recorded as ended by the stop.
+    expect(ended).toEqual([['ts_serve']]);
+    expect(dal.agentTerminalsOf(a).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'stop']]);
+    expect(dal.getSession(a)!.execution_status).toBe('paused');
+    expect(dal.timelineOf(a).map((t) => t.name)).not.toContain('approval_denied');
+  });
+
+  it("PD-SHELL-009 (fin28 reviewers' finding d): the close box's count is the stop's own predicate — a run whose end is written but which is still ending is counted active, not stoppable, and the stop takes nothing", async () => {
+    // The run answers and writes its end; the forwarding of its terminal pair is held, so it has not finished ending.
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    let ending = false;
+    const { backend } = scripted([answer('done')]);
+    const { sessions } = sessionsWith(backend);
+    const a = (sessions.start(dal, 'C:/ws', 'a') as { value: SessionId }).value;
+    sessions.bus.attach(a, { mode: 'blocking', deliver: (e) => { if (e.event === 'result') { ending = true; return held; } return undefined; } });
+    for (let i = 0; i < 400 && !ending; i += 1) await new Promise((r) => setTimeout(r, 2));
+    expect(ending).toBe(true);
+    expect(sessions.isRunActive(a)).toBe(true);
+    expect(sessions.activeRunCount('C:/ws')).toBe(1);
+    expect(sessions.stoppableRunCount('C:/ws')).toBe(0);
+    expect(sessions.stopActiveIn('C:/ws')).toEqual([]);
+    release();
+    await sessions.running(a);
+    expect(dal.getSession(a)!.execution_status).toBe('completed');
+    expect(sessions.stoppableRunCount('C:/ws')).toBe(0);
   });
 
   it('OQ-42: quarantines sibling runs, refuses admission and probes explicit reopen recovery', async () => {

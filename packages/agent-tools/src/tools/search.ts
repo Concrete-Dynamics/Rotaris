@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from 'no
 import { join, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import { globToRegExp } from '@rotaris/kernel';
-import { CODE_INTELLIGENCE_MARKER_SEGMENTS, ignoredBy, loadRules, parseGitignore, type IgnoreRule } from '@rotaris/config';
+import { CODE_INTELLIGENCE_MARKER_SEGMENTS, ignoredBy, ignoredHere, loadRules, parseGitignore, type IgnoreRule } from '@rotaris/config';
 import { checkFence, isInside, realPathOf, type FenceConfig } from './fence.js';
 import { errorObservation, observation, type ToolExecutor } from './types.js';
 
@@ -31,7 +31,7 @@ export const MAX_FILE_BYTES = 2 * 1024 * 1024;
  * walk that classifies a workspace. Two readers would have meant `grep` and the classifier disagreeing
  * about which files the repository says are part of it.
  */
-export { ignoredBy, loadRules, parseGitignore };
+export { ignoredBy, ignoredHere, loadRules, parseGitignore };
 export type { IgnoreRule };
 
 /** Read off the leading `(?flags)` groups, one after another, so that `(?i)(?m)x` sets both. */
@@ -90,9 +90,7 @@ export function scanExcludes(rules: readonly IgnoreRule[], relPosix: string, isD
   if (relPosix === '' || relPosix === '.') return false;
   const segments = relPosix.split('/');
   if (segments.some((seg) => IGNORE_COMPONENTS.has(seg))) return true;
-  for (let i = 1; i < segments.length; i += 1) {
-    if (ignoredBy(rules, segments.slice(0, i).join('/'), true)) return true;
-  }
+  // `ignoredBy` asks every proper directory prefix before the path itself, as git and the walk do.
   return ignoredBy(rules, relPosix, isDir);
 }
 
@@ -119,12 +117,13 @@ export function walkFiles(o: WalkOptions, onFile: (relPosix: string, abs: string
       if (IGNORE_COMPONENTS.has(e.name)) continue;
       const r = rel(abs);
       if (e.isDirectory()) {
-        if (ignoredBy(o.rules, r, true)) continue;
+        // The walk reached this entry through kept directories only, so its own verdict decides.
+        if (ignoredHere(o.rules, r, true)) continue;
         if (!visit(abs)) return false;
         continue;
       }
       if (!e.isFile()) continue;
-      if (ignoredBy(o.rules, r, false)) continue;
+      if (ignoredHere(o.rules, r, false)) continue;
       if (!isInside(rootReal, abs)) continue;
       let size: number;
       try { size = statSync(abs).size; } catch { continue; }

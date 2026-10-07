@@ -93,6 +93,12 @@ observation carries the terminal's `outcome_kind: 'timeout'`; an MCP call or a f
 dropped, once both the tool-call record and the issues record have dropped rows. The **runtime view**'s rings row and its
 `summary.md` paragraph say so. No package, edge, process, channel, command or store column changed.
 
+**The workspace `.gitignore` reader answers in git's order (REQ-WORKSPACE-100, REQ-TOOLS-139; fin30).** A rule matches the
+path itself and nothing beneath it, and `ignoredBy` asks every proper directory prefix first, so a directory re-included
+under an ignored glob (`gen/*` then `!gen/keep/`) keeps what it holds for the search tools and the contains-code walk; the
+pruning walks ask an entry's own verdict (`ignoredHere`). The **runtime view**'s search-tools and setup paragraphs say so.
+No package, edge, process, channel, command or store column changed.
+
 **Settings presents the per-agent timeout as a third delegation limit, in minutes (PD-CONFIG-003, REQ-MONITOR-286; OQ-218
 ruled under R-072, fin28).** `RuntimeViewSchema` and the snapshot carry `child_timeout` (seconds); `PendingSettings.runtime`
 holds it, the Runtime category's Delegation limits draws it in whole minutes (1–240), and it is saved by the desktop save

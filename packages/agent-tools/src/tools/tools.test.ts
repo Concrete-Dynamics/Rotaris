@@ -563,6 +563,25 @@ describe('grep and glob (REQ-TOOLS-138..141)', () => {
     });
   });
 
+  /** docs/defects/fixed/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md: the search tools' walk. */
+  it('a directory re-included under an ignored glob is searched, as git keeps it (REQ-TOOLS-139, REQ-WORKSPACE-100)', async () => {
+    mkdirSync(join(root, 'gen', 'keep', 'sub'), { recursive: true });
+    writeFileSync(join(root, 'gen', 'x.ts'), 'const x = 1;\n');
+    writeFileSync(join(root, 'gen', 'keep', 'f.ts'), 'const f = 1;\n');
+    writeFileSync(join(root, 'gen', 'keep', 'sub', 'g.ts'), 'const g = 1;\n');
+    writeFileSync(join(root, '.gitignore'), 'gen/*\n!gen/keep/\n');
+    const g = grepTool(fence);
+    const gl = globTool(fence);
+    const found = (await gl.execute({ pattern: '**/*.ts' }, ctx())).text.split('\n');
+    expect(found).toContain('gen/keep/f.ts');
+    expect(found).toContain('gen/keep/sub/g.ts');
+    expect(found).not.toContain('gen/x.ts');
+    expect((await g.execute({ pattern: 'const [fgx]', max_matches: 100 }, ctx())).text.split('\n').sort()).toEqual(['gen/keep/f.ts:1:const f = 1;', 'gen/keep/sub/g.ts:1:const g = 1;']);
+    expect((await g.execute({ pattern: 'const f', paths: ['gen/keep/f.ts'], max_matches: 100 }, ctx())).text).toBe('gen/keep/f.ts:1:const f = 1;');
+    expect((await gl.execute({ pattern: '**', base_path: 'gen/keep' }, ctx())).text.split('\n')).toEqual(['gen/keep/f.ts', 'gen/keep/sub/g.ts']);
+    expect((await g.execute({ pattern: 'const x', paths: ['gen/x.ts'], max_matches: 100 }, ctx())).text).toBe('No matches found');
+  });
+
   it('the gitignore reader: anchors, directories, negation, whole labels', () => {
     const rules = parseGitignore('/build\nlogs/\n*.tmp\n!keep.tmp\nsrc/**/gen\n');
     expect(ignoredBy(rules, 'build', true)).toBe(true);

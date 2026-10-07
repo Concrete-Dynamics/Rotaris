@@ -11198,7 +11198,10 @@ descriptions. No directive is minted: the requirement is faithful and the code d
 (`packages/agent-tools/src/tools/search.ts`); pinned by the five cases under "an explicit base or a named file inside an
 excluded directory yields nothing" in `packages/agent-tools/src/tools/tools.test.ts`, four red on `d12f1f2` (the fifth, a
 run rooted under `.rotaris/worktrees/<w>`, guards the repair). Noticed while ruling and recorded open, not repaired here:
-[`a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md`](../defects/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md).
+[`a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md`](../defects/fixed/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md). **Repaired 2026-10-07 (fin30):** a rule now matches
+the path itself and nothing beneath it, and `ignoredBy` asks every proper directory prefix before the path, in git's
+order, so `gen/*` then `!gen/keep/` keeps `gen/keep/f.ts` for the search tools and the contains-code walk alike
+(`packages/config/src/init/gitignore.ts`).
 
 **OQ-224 — For REQ-GIT-119's lock, REQ-GIT-120's force and refusal and REQ-MONITOR-251's placement, which runs are "another
 run is active"?** *(REQ-GIT-119, the launch dialog's mandatory isolation "while another run is active", its tooltip and hint;

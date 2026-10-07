@@ -86,7 +86,8 @@ function compileBody(pattern: string): string {
       const segmentStart = i === 0 || pattern[i - 1] === '/';
       if (segmentStart && pattern[i + 2] === '/') { re += '(?:[^/]+/)*'; i += 3; continue; }
       if (segmentStart && i + 2 === pattern.length) { re += '.*'; i += 2; continue; }
-      re += '.*';
+      // Any other run of asterisks is an ordinary `*` in git: it stops at a slash (`a**b` keeps `ax/yb`).
+      re += '[^/]*';
       i += 2;
       continue;
     }
@@ -120,21 +121,42 @@ export function parseGitignore(text: string): IgnoreRule[] {
     const anchored = line.includes('/');
     if (line.startsWith('/')) line = line.slice(1);
     const body = compileBody(line);
-    // A matching directory carries everything beneath it, which is also how a pruning walk asks.
-    const pattern = anchored ? `^${body}(?:/.*)?$` : `(?:^|/)${body}(?:/.*)?$`;
+    // A rule matches the path itself and nothing beneath it: what lies beneath an ignored directory is
+    // ignored through that ancestor (`ignoredBy`), the one order in which a re-included directory under
+    // an ignored glob (`gen/*` then `!gen/keep/`) keeps its files, as git keeps them. The descendant
+    // suffix every rule carried until 2026-10-07 matched `gen/keep/f.ts` by `gen/*` itself, where the
+    // directory-only `!gen/keep/` is never asked about a file, and so dropped what git keeps
+    // (docs/defects/fixed/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md).
+    const pattern = anchored ? `^${body}$` : `(?:^|/)${body}$`;
     rules.push({ re: new RegExp(pattern), negated, dirOnly });
   }
   return rules;
 }
 
-/** REQ-WORKSPACE-100: the last pattern matching a path decides it. */
-export function ignoredBy(rules: readonly IgnoreRule[], relPosix: string, isDir: boolean): boolean {
+/**
+ * The path's own verdict, its ancestors taken as kept: the last pattern matching the path decides it
+ * (REQ-WORKSPACE-100), a directory-only pattern asked only about a directory. A walk that prunes every
+ * ignored directory before descending has already asked about the ancestors, and asks only this.
+ */
+export function ignoredHere(rules: readonly IgnoreRule[], relPosix: string, isDir: boolean): boolean {
   let ignored = false;
   for (const r of rules) {
     if (r.dirOnly && !isDir) continue;
     if (r.re.test(relPosix)) ignored = !r.negated;
   }
   return ignored;
+}
+
+/**
+ * Whether the repository treats this workspace-relative path as ignored (REQ-WORKSPACE-100), in git's
+ * order: a path beneath an ignored directory is ignored, whatever a later pattern says of the path,
+ * because git never looks inside an excluded directory; otherwise the path's own verdict decides.
+ */
+export function ignoredBy(rules: readonly IgnoreRule[], relPosix: string, isDir: boolean): boolean {
+  for (let slash = relPosix.indexOf('/'); slash !== -1; slash = relPosix.indexOf('/', slash + 1)) {
+    if (ignoredHere(rules, relPosix.slice(0, slash), true)) return true;
+  }
+  return ignoredHere(rules, relPosix, isDir);
 }
 
 export function loadRules(root: string): IgnoreRule[] {

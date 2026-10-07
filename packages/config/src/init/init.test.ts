@@ -27,12 +27,35 @@ describe('the gitignore matcher', () => {
     expect(ignores('/build', 'src/build')).toBe(false);
     expect(ignores('build', 'src/build')).toBe(true);
     expect(ignores('build', 'src/rebuild')).toBe(false);
-    // A matching pattern carries everything beneath it...
+    // An ignored directory carries everything beneath it, a directory-only rule's included: git never
+    // looks inside an excluded directory, so nothing beneath it can be re-included.
     expect(ignores('build', 'build/x/y.ts')).toBe(true);
-    // ...but a directory-only rule is never asked about a file: it takes effect by pruning the
-    // directory, which is how git re-inclusion under an excluded directory is impossible.
-    expect(ignores('build/', 'build/x/y.ts')).toBe(false);
+    expect(ignores('build/', 'build/x/y.ts')).toBe(true);
     expect(ignores('build/', 'build/x', true)).toBe(true);
+    expect(ignores('build/\n!build/x/y.ts', 'build/x/y.ts')).toBe(true);
+  });
+
+  /*
+   * docs/defects/fixed/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md: every rule carried
+   * a descendant suffix, so `gen/*` matched `gen/keep/f.ts` itself and the directory-only `!gen/keep/` was
+   * never asked about the file. Git decides a path by its ancestors first, then by the rules matching the
+   * path alone, and keeps the file.
+   */
+  it('keeps what a re-included directory under an ignored glob holds, as git does', () => {
+    const rules = parseGitignore('gen/*\n!gen/keep/\n');
+    expect(ignoredBy(rules, 'gen/x.ts', false)).toBe(true);
+    expect(ignoredBy(rules, 'gen/drop', true)).toBe(true);
+    expect(ignoredBy(rules, 'gen/drop/f.ts', false)).toBe(true);
+    expect(ignoredBy(rules, 'gen/keep', true)).toBe(false);
+    expect(ignoredBy(rules, 'gen/keep/f.ts', false)).toBe(false);
+    expect(ignoredBy(rules, 'gen/keep/sub', true)).toBe(false);
+    expect(ignoredBy(rules, 'gen/keep/sub/g.ts', false)).toBe(false);
+    // A file named like the re-included directory is still ignored: `!gen/keep/` is for a directory.
+    expect(ignoredBy(rules, 'gen/keep', false)).toBe(true);
+    // `*` stops at a slash in the path itself as well as through an ancestor.
+    expect(ignores('gen/*.ts', 'gen/a/b.ts')).toBe(false);
+    expect(ignores('docs/*\n!docs/*.md\n', 'docs/a.md')).toBe(false);
+    expect(ignores('docs/*\n!docs/*.md\n', 'docs/sub/a.md')).toBe(true);
   });
 
   it('applies negation with last-match-wins', () => {
@@ -49,6 +72,9 @@ describe('the gitignore matcher', () => {
     expect(ignoredBy(rules, 'z/a/b.ts', false)).toBe(false);
     expect(ignores('**/vendor', 'a/b/vendor', true)).toBe(true);
     expect(ignores('logs/**', 'logs/a/b.txt')).toBe(true);
+    // Any other run of asterisks is an ordinary `*`, which stops at a slash.
+    expect(ignores('a**b', 'axyb')).toBe(true);
+    expect(ignores('a**b', 'ax/yb')).toBe(false);
   });
 
   /** The gap the subset reader left: `[` and `]` were escaped and matched as characters. */
@@ -126,6 +152,17 @@ describe('workspace classification', () => {
     writeFileSync(join(nested, 'vendor', '.gitignore'), 'lib.ts\n');
     writeFileSync(join(nested, 'vendor', 'lib.ts'), 'x');
     expect(classifyWorkspace(nested)).toBe('code');
+  });
+
+  /** docs/defects/fixed/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md: the classifier's walk. */
+  it('counts source in a directory re-included under an ignored glob, as git keeps it', () => {
+    const root = tree();
+    mkdirSync(join(root, 'gen', 'keep'), { recursive: true });
+    writeFileSync(join(root, '.gitignore'), 'gen/*\n!gen/keep/\n');
+    writeFileSync(join(root, 'gen', 'x.ts'), 'x');
+    expect(classifyWorkspace(root)).toBe('non-code');
+    writeFileSync(join(root, 'gen', 'keep', 'f.ts'), 'x');
+    expect(classifyWorkspace(root)).toBe('code');
   });
 
   it('does not descend into .git', () => {

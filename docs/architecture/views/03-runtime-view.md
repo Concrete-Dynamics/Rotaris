@@ -690,7 +690,10 @@ pattern dialect (`compileSearchPattern`, `tools/search.ts`): the accelerator's, 
 identical whether or not it is present. The search tools filter by workspace-relative path, relative to the run's own root
 (`scanExcludes`, `walkFiles`): an explicit `grep` path or `glob` base, or a named file, inside a hard-coded ignore component
 (REQ-TOOLS-140, the code-intelligence marker's directory among them since `PD-TOOLS-012`) or under a directory the
-`.gitignore` prunes yields nothing, exactly what the whole-workspace scan returns beneath it (REQ-TOOLS-139, OQ-219); `read_file`
+`.gitignore` prunes yields nothing, exactly what the whole-workspace scan returns beneath it (REQ-TOOLS-139, OQ-219). The
+reader answers in git's order (`ignoredBy`, `packages/config/src/init/gitignore.ts`): what lies beneath an ignored
+directory is ignored, otherwise the last rule matching the path itself decides, so `gen/*` then `!gen/keep/` keeps
+`gen/keep/` and what it holds; the pruning walks ask only an entry's own verdict (`ignoredHere`); `read_file`
 remains the route to a named file. `fetch` is the one executor that **reads configuration per call**: each call loads
 the workspace's **saved** files and the discovery snapshot (`egressReader`, no live state — REQ-SANDBOX-038/118,
 REQ-TOOLS-089; measured at 1.7–2.5 ms behind the run host, 3–4 ms median in the unit test), maps
@@ -979,7 +982,7 @@ MCP category before any run can trigger it, `REQ-MCP-118`), warm afterwards. **T
 derived from the entry (REQ-MCP-036 — a remote or launch-less entry is the non-retryable "not a local launch",
 answered as a finished status whose outcome is `unavailable`, not as a refusal; the one refusal `startSetup` makes is
 a second run while one is running), the contains-code walk once (breadth-first from the root, VCS directories skipped, the root `.gitignore`
-honoured, dot-directories walked, no symlink followed, first indexable file stops it), the marker
+honoured in git's order, a directory re-included under an ignored glob walked, dot-directories walked, no symlink followed, first indexable file stops it), the marker
 (`.serena/project.yml`) skipping creation, then the three steps in order with the closed status vocabulary; one run at
 a time, re-runnable, cancellable; the status held in the run host for the application's life, never on disk.
 

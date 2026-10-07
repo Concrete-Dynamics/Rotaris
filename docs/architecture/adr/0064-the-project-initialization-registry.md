@@ -107,6 +107,13 @@ rule, `REQ-WORKSPACE-082`'s prompt condition, the silent marking of a workspace 
 `REQ-WORKSPACE-086`'s stamp on an empty skip, `REQ-WORKSPACE-105`'s set-wise equality,
 `REQ-WORKSPACE-114`'s six-state precedence, and the full gitignore grammar.
 
+> **Corrected 2026-10-07 (fin30), the falsified claim kept above:** "the full gitignore grammar" held for the patterns
+> this proof wrote, not for re-inclusion beneath an ignored glob. Every rule carried a descendant suffix and a
+> directory-only rule was never asked about a file, so `gen/*` then `!gen/keep/` dropped `gen/keep/f.ts`, which git keeps,
+> from the contains-code walk and the search tools alike, and `a**b` matched across a slash. The reader now answers in
+> git's order, ancestors first
+> ([note](../../defects/fixed/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md)).
+
 **(1) Classification was decided by the runtime's own extension list, not by this domain's.** The
 contains-code test that gates a 1800 s indexing stage matched against
 `CODE_INTELLIGENCE_MANIFEST.extensions` — **152 suffixes** generated from serena-agent 1.7.0's language

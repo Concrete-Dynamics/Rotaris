@@ -1,6 +1,6 @@
 import { readdirSync, type Dirent } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { ignoredBy, loadRules } from './gitignore.js';
+import { ignoredHere, loadRules } from './gitignore.js';
 import { readWorkspaceDocument, sourceExtensionOverrideOf, type WorkspaceClassification } from './state.js';
 
 /**
@@ -72,14 +72,15 @@ export function classifyWorkspace(root: string, options: ClassifyOptions = {}): 
       const rel = relative(root, full).split(sep).join('/');
       if (e.isDirectory()) {
         if (e.name === NOT_DESCENDED) continue;
-        if (ignoredBy(rules, rel, true)) continue;
+        // Every ancestor was asked before this directory was queued, so the entry's own verdict decides.
+        if (ignoredHere(rules, rel, true)) continue;
         queue.push(full);
         continue;
       }
       if (!e.isFile()) continue;
       const ext = extensionOf(e.name);
       if (ext === null || !accepted.has(ext)) continue;
-      if (ignoredBy(rules, rel, false)) continue;
+      if (ignoredHere(rules, rel, false)) continue;
       return 'code';
     }
   }

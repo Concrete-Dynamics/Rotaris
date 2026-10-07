@@ -58,7 +58,8 @@ gate paragraph says so. No package, edge, process, channel, command or store col
 
 **Closing one of several main windows ends its own project's runs, asking first (PD-SHELL-009, REQ-STARTUP-046, REQ-SHELL-119,
 REQ-SHELL-122; OQ-206 ruled under R-072, fin28).** The run host's `runs.active` counts the named workspace's runs (the session
-row's `workspace_root`, `Sessions.activeRunCount(workspaceRoot?)`) and the empty id the instance's; a new request
+row's `workspace_root`, `Sessions.activeRunCount(workspaceRoot?)`) and the empty id the instance's (which `session.start`'s
+REQ-GIT-120 forced isolation still asks, since that rule counts any run); a new request
 `runs.stopWorkspace` → `runs.stopped` stops a workspace's active runs as the stop control does (`Sessions.stopActiveIn`).
 `confirmActiveRunClose` asks `windowCloseBox` at a close that leaves another main window open, and its Yes awaits the stop
 before the close is confirmed; `QuitState.stoppedByClose` withdraws the stopped sessions' approval dialogs, queued approvals

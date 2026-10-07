@@ -12,7 +12,7 @@ import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
 import { startDriver, type AuxiliaryWindow } from './driver.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
-import { isActiveStatus, REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
+import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
 import { requirementColumnFoldsKey, type PreferenceKey } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
@@ -1024,12 +1024,10 @@ async function main(): Promise<void> {
 
   // ADR-0044: main RELAYS a publication unchanged; the number on it is the run host's.
   runHost.onEvent((e) => {
+    // PD-SHELL-009: a session a window's close stopped is seen to rest, or a later run of it to start, and its notices held back.
+    const heldBackByClose = quit.holdsBack(e);
     if (e.kind === 'publish.increment') relay.relaySequenced(CHANNEL.transcriptIncrement, e.payload);
-    else if (e.kind === 'publish.snapshot') {
-      // PD-SHELL-009: a session a window's close stopped is seen to rest, or a later run of it to start.
-      quit.observeStatus(e.payload.sessionId, isActiveStatus(e.payload.session.executionStatus));
-      relay.relaySequenced(CHANNEL.sessionSnapshot, e.payload);
-    }
+    else if (e.kind === 'publish.snapshot') relay.relaySequenced(CHANNEL.sessionSnapshot, e.payload);
     else if (e.kind === 'improvement.job') improvementCoordinator.enqueue(e.job);
     else if (e.kind === 'presenter.poll') {
       // ADR-0019: the reply carries the windows main holds; answered at once, never from a blocked loop.
@@ -1058,7 +1056,7 @@ async function main(): Promise<void> {
         if (open && open.requestId === e.requestId) { open.answered = true; if (!open.win.isDestroyed()) open.win.close(); }
       });
     }
-    else if (e.kind === 'notice.publish' && quit.withdrawnByClose(e.sessionId)) {
+    else if (e.kind === 'notice.publish' && heldBackByClose) {
       // REQ-STARTUP-046's last sentence under PD-SHELL-009: no notice of a run its window's close stopped appears on the
       // window that stays while it comes to rest.
       log(`notice "${e.title}" for session ${e.sessionId} held back: its window's close stopped the run (REQ-STARTUP-046, PD-SHELL-009)`);
@@ -1369,9 +1367,8 @@ async function main(): Promise<void> {
     // longer bounds its wait, so main says so — REQ-TOOLS-058's presenter-error denial — rather than leave it to hang.
     // PD-ORCH-005 clause 9: a quit's closing windows answer nothing; the run host's shutdown withdraws the request.
     unshownApprovals: (approvals) => {
-      if (quitting()) return;
       // PD-SHELL-009: one its window's close stopped the run of is the stop's to withdraw, as the quit's is.
-      for (const approval of approvals.filter((a) => !quit.withdrawnByClose(a.session_id))) void runHost.request({ kind: 'approval.shown', requestId: approval.request_id, ok: false, error: 'its main window closed before it was shown' }, millis(5_000)).catch(() => undefined);
+      for (const approval of quit.unshownToReport(approvals, quitting())) void runHost.request({ kind: 'approval.shown', requestId: approval.request_id, ok: false, error: 'its main window closed before it was shown' }, millis(5_000)).catch(() => undefined);
     },
     // REQ-STARTUP-043/114: the update check, initiated from the post-show activation of every main window and nowhere else.
     postShowActivation: (window) => { void updater.activate({ windowId: window.wcId }); },

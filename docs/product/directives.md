@@ -5007,7 +5007,11 @@ Dock Quit is a person's quit outside any window, which asks nothing — to be re
 > record carried was false. The run host's per-workspace predicate ADR-0013 names as its registry's job was not built: every
 > count was instance-wide (`runs.active`'s "Sessions are not keyed by workspace yet"); it now keys by the session row's
 > `workspace_root`, which REQ-SHELL-021's gate 3 and the restore's refusal (REQ-SESSION-201), which already passed the
-> window's workspace id, now read. The record's claim that "the desktop's logout" reaches `before-quit` holds on Linux and
+> window's workspace id, now read. A third caller passed the window's workspace id too and must not read the keyed count:
+> `session.start`'s forced isolation (REQ-GIT-120, REQ-MONITOR-251: "whenever **any** run is active"), which keyed would have
+> stopped forcing a launch in an idle project into a worktree while another project's run executed. It asks the instance's
+> count (the empty id) instead, so the launch rule is unchanged by this directive; `commands/session.test.ts`'s REQ-GIT-120
+> case pins it, red on the keyed request (found by the verifier of this change, repair round 1). The record's claim that "the desktop's logout" reaches `before-quit` holds on Linux and
 > macOS only; on Windows Electron's own typings say neither `before-quit` nor `will-quit` is emitted at a logout or shutdown
 > (recorded as a defect, not repaired here). **What was measured.** `close-confirmation.test.ts`, `exit.test.ts`,
 > `commands/session.test.ts`, `dispatch.test.ts`, `main-windows.test.ts` (the two-window gesture) and `run.test.ts` (the
@@ -5015,8 +5019,15 @@ Dock Quit is a person's quit outside any window, which asks nothing — to be re
 > cases red on the source before this change; and `part-j-proof`'s two-window launch (`pair-app`), driven: the idle
 > window's close asked nothing and left the other project's run `running`, the running window's close asked "Close this
 > window while a run is active?" once, answered Yes, and its session rested `paused`, `user_cancelled`, its iteration open by
-> `stop`, before the window closed; the last window's quit asked nothing. **What was not measured.** A held-back notice and a
-> withdrawn approval dialog in the built app (both pinned by unit tests only); a Windows host (IC-3). The row is in
+> `stop`, before the window closed; the last window's quit asked nothing. The routing that holds a stopped session's notice
+> back, ends the hold at a later run's start and keeps its queued approvals from being reported unshown is
+> `QuitState.holdsBack` and `QuitState.unshownToReport` (`apps/desktop/src/main/exit.ts`), which `runHost.onEvent` and
+> `unshownApprovals` in `index.ts` call; `exit.test.ts` pins each gate, every case red with its gate removed (as first
+> built the routing sat inline in `main()`, where no test reached it: found by the verifier, repair round 1, which also
+> found that a rest published before the stop's reply left the session held for its next run, now repaired and pinned).
+> **What was not measured.** A held-back notice, a withdrawn approval dialog or question dock in the built app: no proof
+> makes a stopped session publish a notice or hold a dialog as its window closes, so the one-line calls in `index.ts` are
+> exercised by no test or proof; a Windows host (IC-3). The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---

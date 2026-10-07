@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ProcessReply } from '@rotaris/contracts';
+import type { ProcessEvent, ProcessReply } from '@rotaris/contracts';
 import { FakeClock, millis } from '@rotaris/kernel';
 import { CHILD_CLOSE_BOUND_MS, ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
 
@@ -203,6 +203,58 @@ describe('PD-ORCH-005 clause 9: what the application\'s quit closes answers noth
     expect(q.withdrawnByClose('S1')).toBe(true);
     q.observeStatus('S1', true);
     expect(q.withdrawnByClose('S1')).toBe(false);
+  });
+
+  // The run host's events as `runHost.onEvent` in index.ts routes them: it relays an event unless `holdsBack` answers true.
+  const snapshot = (sessionId: string, executionStatus: string): ProcessEvent => ({ kind: 'publish.snapshot', payload: { sessionId, session: { executionStatus } } }) as unknown as ProcessEvent;
+  const notice = (sessionId: string): ProcessEvent => ({ kind: 'notice.publish', severity: 'info', title: 'Run stopped', message: '', detail: '', sessionId, persistent: true });
+
+  it("REQ-STARTUP-046's last sentence under PD-SHELL-009: a stopped session's notice is held back from the windows that stay, another session's is relayed", () => {
+    const q = new QuitState();
+    expect(q.holdsBack(snapshot('S1', 'running'))).toBe(false);
+    q.stoppedByClose(['S1']);
+    expect(q.holdsBack(notice('S1'))).toBe(true);
+    expect(q.holdsBack(notice('S2'))).toBe(false);
+    expect(q.holdsBack(notice(''))).toBe(false);
+    // Its rest is published (relayed, never held) and its rest's notice is still held back.
+    expect(q.holdsBack(snapshot('S1', 'paused'))).toBe(false);
+    expect(q.holdsBack(notice('S1'))).toBe(true);
+    // A later run the person starts publishes active: its notices are its own again.
+    expect(q.holdsBack(snapshot('S1', 'running'))).toBe(false);
+    expect(q.holdsBack(notice('S1'))).toBe(false);
+  });
+
+  it('PD-SHELL-009: the published snapshots are what end the hold — a stopped session whose snapshots never reach `holdsBack` stays held', () => {
+    const q = new QuitState();
+    q.stoppedByClose(['S1']);
+    q.holdsBack(snapshot('S1', 'paused'));
+    q.holdsBack(snapshot('S1', 'starting'));
+    expect(q.withdrawnByClose('S1')).toBe(false);
+    const unobserved = new QuitState();
+    unobserved.stoppedByClose(['S1']);
+    expect(unobserved.withdrawnByClose('S1')).toBe(true);
+  });
+
+  it('PD-SHELL-009: a rest published before the stop reply reached main is not mistaken for the stop pending, so a later run is its own (verifier, repair round 1)', () => {
+    const q = new QuitState();
+    q.holdsBack(snapshot('S1', 'cancelling'));
+    // The stop was already pending; its rest was published before `runs.stopped` came back.
+    q.holdsBack(snapshot('S1', 'paused'));
+    q.stoppedByClose(['S1']);
+    expect(q.holdsBack(notice('S1'))).toBe(true);
+    // Continue from the window that stays.
+    q.holdsBack(snapshot('S1', 'running'));
+    expect(q.withdrawnByClose('S1')).toBe(false);
+    expect(q.holdsBack(notice('S1'))).toBe(false);
+  });
+
+  it('PD-SHELL-009: a queued approval of a stopped session is not reported unshown, another session\'s is, and none is while the application quits', () => {
+    const q = new QuitState();
+    q.stoppedByClose(['S1']);
+    const approvals = [{ request_id: 'r1', session_id: 'S1' }, { request_id: 'r2', session_id: 'S2' }];
+    expect(q.unshownToReport(approvals, false)).toEqual([{ request_id: 'r2', session_id: 'S2' }]);
+    expect(q.unshownToReport(approvals, true)).toEqual([]);
+    expect(new QuitState().unshownToReport(approvals, false)).toEqual(approvals);
   });
 });
 

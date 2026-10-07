@@ -271,9 +271,12 @@ read) the box asks "Close this window while a run is active?" (`windowCloseBox`)
 the run host before `presenter.revoke`. Main keeps the stopped ids in `QuitState.stoppedByClose`: until a `publish.snapshot`
 shows the session at rest and then active again, an approval dialog closing for one answers nothing, a queued approval is
 not reported unshown, the question dock's cancellation is not forwarded (the stop withdraws all three, PD-ORCH-005 clause
-9), and a `notice.publish` for it is held back from the windows that stay (REQ-STARTUP-046's last sentence). A window whose
+9), and a `notice.publish` for it is held back from the windows that stay (REQ-STARTUP-046's last sentence) — the event
+relay asks `QuitState.holdsBack` of every run host event, and `unshownApprovals` filters through `QuitState.unshownToReport`. A window whose
 workspace has no active run closes unasked. REQ-SHELL-021's gate 3 and the restore's refusal send their window's workspace
-id and so count that workspace alone.
+id and so count that workspace alone; `session.start`'s forced isolation (REQ-GIT-120, REQ-MONITOR-251: "whenever any run is
+active") sends the empty id, so a launch without an explicit tree is placed in a worktree while a run executes in any
+project.
 
 **The session browser's actions (Part U).** Renderer → main: `session.repair {sessionId?}` (one stale session, or every
 stale session when the id is absent — REQ-SESSION-060/182) → `{report: {repaired[{sessionId, from, to: interrupted,

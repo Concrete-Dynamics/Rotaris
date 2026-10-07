@@ -86,12 +86,14 @@ export function sessionCommands(
       // REQ-MONITOR-251 / REQ-GIT-120: the 2nd+ concurrent launch is placed in a worktree. The dialog
       // locks isolation on (REQ-GIT-119), but a start arriving without an explicit tree — e.g. a retry
       // holding pre-dialog launch options — must not share the base tree with the live run, so main
-      // force-creates the default isolated tree instead of refusing or colliding.
+      // force-creates the default isolated tree instead of refusing or colliding. REQ-GIT-120 says "whenever ANY run is
+      // active", so the count asked is the instance's (the empty id), not this workspace's: since PD-SHELL-009 keyed
+      // `runs.active` by workspace, a named id would no longer count a run in another project.
       let effectiveIsolation = req.isolation;
       const effectiveAttach = req.attach;
       let forcedSessionId: string | undefined;
       if (!effectiveIsolation && !effectiveAttach) {
-        const active = await runHost.request({ kind: 'runs.active', workspaceId: w.workspaceId }, millis(5_000)).catch(() => null);
+        const active = await runHost.request({ kind: 'runs.active', workspaceId: '' }, millis(5_000)).catch(() => null);
         if (active?.kind === 'runs.count' && active.count > 0) {
           forcedSessionId = mainWindows.takeMintedSession(w.wcId) ?? randomUUID();
           effectiveIsolation = { branch: `rotaris/session/${forcedSessionId}` };

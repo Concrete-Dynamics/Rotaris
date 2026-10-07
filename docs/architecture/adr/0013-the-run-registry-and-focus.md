@@ -199,4 +199,7 @@ project's run. It is built now: `activeRunCount(workspaceRoot?)` counts the live
 `workspace_root` is the root (no root: the instance, as the last window's close and the update's close ask), and
 `stopActiveIn(workspaceRoot)` applies the stop control's graceful stop to that workspace's active runs for the close of one
 of several main windows. `run.test.ts` pins both (two workspaces, one stopped `paused` by `stop`, the other untouched);
-`dispatch.test.ts` pins the run host's hop. The consequence's text stands; what it claimed is now true.
+`dispatch.test.ts` pins the run host's hop. The consequence's text stands; what it claimed is now true. The keyed count's
+readers are REQ-SHELL-021's gate 3, the restore's refusal and the close of one of several windows; `session.start`'s forced
+isolation (REQ-GIT-120: "whenever any run is active") asks the instance's count with the empty id, so a launch in an idle
+project while another project's run executes is still placed in a worktree (`commands/session.test.ts`'s REQ-GIT-120 case).

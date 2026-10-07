@@ -1,4 +1,4 @@
-import type { ProcessReply } from '@rotaris/contracts';
+import { isActiveStatus, type ProcessEvent, type ProcessReply } from '@rotaris/contracts';
 import { millis, type Timers } from '@rotaris/kernel';
 import type { AppLogLevel } from './app-log.js';
 
@@ -46,6 +46,8 @@ export class QuitState {
   readonly #closing = new Set<number>();
   /** PD-SHELL-009: the sessions a window's close stopped, by whether their rest has yet been seen. */
   readonly #stoppedByClose = new Map<string, 'stopping' | 'rested'>();
+  /** The last status the run host published for each session, as active or not (`observeStatus`). */
+  readonly #lastActive = new Map<string, boolean>();
 
   /** The process is about to exit at once. */
   exiting(): void { this.#exiting = true; }
@@ -65,7 +67,9 @@ export class QuitState {
    * window that stays while they come to rest.
    */
   stoppedByClose(sessionIds: readonly string[]): void {
-    for (const id of sessionIds) this.#stoppedByClose.set(id, 'stopping');
+    // A session whose rest was published before the run host's reply reached main (a stop already pending when the close
+    // asked) has rested already: its next active status is a later run's, never this stop's.
+    for (const id of sessionIds) this.#stoppedByClose.set(id, this.#lastActive.get(id) === false ? 'rested' : 'stopping');
   }
   /** Whether the session's waits are the window close's stop to withdraw, and its notices held back. */
   withdrawnByClose(sessionId: string): boolean {
@@ -76,10 +80,34 @@ export class QuitState {
    * run the person started (Continue from another window), whose waits and notices are its own again.
    */
   observeStatus(sessionId: string, active: boolean): void {
+    this.#lastActive.set(sessionId, active);
     const held = this.#stoppedByClose.get(sessionId);
     if (held === undefined) return;
     if (!active) this.#stoppedByClose.set(sessionId, 'rested');
     else if (held === 'rested') this.#stoppedByClose.delete(sessionId);
+  }
+
+  /**
+   * The run host's events, as a window close's stop concerns them (`runHost.onEvent` in `index.ts` asks this of every
+   * event before routing it). A published snapshot is the session's status observed (`observeStatus`); a notice for a
+   * session the close stopped is held back from the windows that stay, as REQ-STARTUP-046's last sentence has it. Answers
+   * whether main holds the event back rather than relays it.
+   */
+  holdsBack(e: ProcessEvent): boolean {
+    if (e.kind === 'publish.snapshot') {
+      this.observeStatus(e.payload.sessionId, isActiveStatus(e.payload.session.executionStatus));
+      return false;
+    }
+    return e.kind === 'notice.publish' && this.withdrawnByClose(e.sessionId);
+  }
+
+  /**
+   * The approvals a closing main window held unshown that main reports to the run host as unshown (`approval.shown`, not
+   * ok). None while the application quits (PD-ORCH-005 clause 9: the shutdown withdraws them), and none of a session the
+   * window's close stopped (PD-SHELL-009: the stop withdraws them).
+   */
+  unshownToReport<T extends { readonly session_id: string }>(approvals: readonly T[], quitting: boolean): readonly T[] {
+    return quitting ? [] : approvals.filter((a) => !this.withdrawnByClose(a.session_id));
   }
 }
 

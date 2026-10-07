@@ -193,6 +193,33 @@ describe('session.start, driven without a process behind it', () => {
     expect((h.hostAsked[0] as { worktree?: { created_by_session?: boolean } }).worktree?.created_by_session).toBe(true);
     expect(h.logs.some((l) => l.includes('bound to'))).toBe(true);
   });
+
+  /*
+   * REQ-GIT-120 / REQ-MONITOR-251: "whenever ANY run is active" a launch without an explicit tree is forced into one. Since
+   * PD-SHELL-009 the run host's `runs.active` counts the named workspace alone, so this host answers the way the keyed
+   * count does with a run in another project and none in this one: the start must still ask the instance's count.
+   */
+  it("a launch in an idle project while another project's run is active is still forced into a worktree (REQ-GIT-120)", async () => {
+    const h = harness(
+      () => ({ ...created, kind: 'worktree.created' }),
+      (req) => (req.kind === 'runs.active'
+        ? { kind: 'runs.count', workspaceId: req.workspaceId, count: req.workspaceId === '' ? 1 : 0 }
+        : { kind: 'session.started', sessionId: 'minted-1' }),
+    );
+    const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'));
+    expect(out).toEqual({ ok: true, value: { sessionId: 'minted-1' } });
+    expect(h.hostAsked[0]).toEqual({ kind: 'runs.active', workspaceId: '' });
+    expect(h.svcAsked).toEqual([expect.objectContaining({ kind: 'worktree.create', branch: 'rotaris/session/minted-1' })]);
+    expect(h.hostAsked.find((r) => r.kind === 'session.start')).toMatchObject({ sessionId: 'minted-1', effectiveRoot: created.path });
+    expect(h.logs.some((l) => l.includes('force-creating isolated worktree rotaris/session/minted-1'))).toBe(true);
+  });
+
+  it('a launch with no run active anywhere shares the base tree (REQ-GIT-120)', async () => {
+    const h = harness(() => ({ ...created, kind: 'worktree.created' }), (req) => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: req.workspaceId, count: 0 } : { kind: 'session.started', sessionId: 'minted-1' }));
+    expect(await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'))).toEqual({ ok: true, value: { sessionId: 'minted-1' } });
+    expect(h.svcAsked).toEqual([]);
+    expect(h.hostAsked.find((r) => r.kind === 'session.start')).not.toHaveProperty('effectiveRoot');
+  });
 });
 
 /*

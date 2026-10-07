@@ -176,7 +176,16 @@ not replayed, a repair journaled before the restart reaches the resume state and
 `next: review` and `next: fix`, and the old-label journal `wf_old` resumes a passed verification at `review`.
 
 **Review answered.** The independent review of `056482d` came back CHANGES-NEEDED. B1, the owner's confirmation of the
-invariant's wording, is the orchestrator's to settle with the owner. B2: the invariant keeps "the gate, which it runs
+invariant's wording, was settled with the owner directly: at about 06:10 UTC on 2026-10-07 the orchestrator asked them,
+through the session's question tool, "Do you confirm the texts in the preview (invariant, CLAUDE.md and AGENTS.md
+lines), the stated consequence, and parallel reviews?", with a preview holding (1) this invariant word for word as it
+now reads, "the gate, which it runs itself" included, (2) CLAUDE.md's command-list line, (3) AGENTS.md's gate sentence
+as it now reads, (4) the consequence the review named: "a fix the reviewer makes itself is checked by the full gate on
+the pushed head, the final proof sweep and the live runs, and by no second agent", and (5) parallel reviews, each
+landing from its own tree, a push rejected because main moved rebased, gated and pushed again. The owner chose
+"Confirm all (Recommended)" over "Confirm, keep serialized" and "Hold it". The opening's "every bundle is checked by an
+agent that did not build it" is read with that consequence: the builder's work is checked by the reviewer, and the
+reviewer's own repairs by the gate, the sweep and the live runs. B2: the invariant keeps "the gate, which it runs
 itself" (`990cd41`). B3: a landing with blocking findings is flagged and kept, as above (`670c441`, `a4ee099`). B4: the
 review effort's floor is asserted (`670c441`). O1, which the orchestrator asked the owner to confirm, gives each bundle
 its own landing worktree and drops the in-run landing lock: on the measured means a review takes about 25 minutes while

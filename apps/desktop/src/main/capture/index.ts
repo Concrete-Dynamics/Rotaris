@@ -44,13 +44,13 @@ export async function runCapture(host: CaptureHost): Promise<boolean> {
   // first opens a stored session needs the transcript on screen before the composer means anything.
   const resumeWanted = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_RESUME'] : undefined;
   const prompt = process.env['ROTARIS_CAPTURE_PROMPT'];
-  if (prompt) installPromptSeam(host, prompt, Boolean(resumeWanted));
+  const typing = prompt ? installPromptSeam(host, prompt, Boolean(resumeWanted)) : undefined;
 
   if (__ROTARIS_SEAMS__) {
     const { installSeams } = await import('./seams.js');
     installSeams(host, { prompt, resumeWanted });
   }
 
-  installFinish(host, capture, prompt);
+  installFinish(host, capture, prompt, typing);
   return true;
 }

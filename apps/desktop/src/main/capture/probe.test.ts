@@ -20,12 +20,12 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-function host(resultSeen: () => boolean) {
+function host(resultSeen: () => boolean, composer: () => string | null = () => null) {
   const clock = new FakeClock();
   const ended: string[] = [];
   const lines: string[] = [];
   const stub = {
-    win: { webContents: { capturePage: () => Promise.resolve({ toPNG: () => Buffer.from('png') }), executeJavaScript: () => Promise.resolve(null), sendInputEvent: () => undefined } },
+    win: { webContents: { capturePage: () => Promise.resolve({ toPNG: () => Buffer.from('png') }), executeJavaScript: (code: string) => Promise.resolve(code.includes('composer__input') ? composer() : null), sendInputEvent: () => undefined } },
     clocks: clock,
     log: (m: string) => { lines.push(m); },
     resultSeen,
@@ -67,6 +67,62 @@ describe('a capture ends by the immediate exit or by the application\'s quit (pr
     h.clock.advance(500);
     seen = true;
     h.clock.advance(500);
+    h.clock.advance(100);
+    await settle();
+    expect(h.ended).toEqual(['exit 0']);
+  });
+});
+
+/**
+ * When the wait starts (live-run finding P6, `docs/defects/fixed/a-captures-wait-starts-before-its-prompt-is-typed.md`): the
+ * final default live run at a68f121 typed the terminal scenario's 5,755-character prompt for about 27 s of its 420 s wait.
+ * With a typed prompt the bound counts from the submission — the composer that held the text reads empty — and a prompt
+ * never submitted is still bounded from the launch.
+ */
+describe('a capture\'s wait counts from the submission of its typed prompt (probe.ts, installFinish)', () => {
+  const tick = async (h: ReturnType<typeof host>, ms: number): Promise<void> => {
+    for (let t = 0; t < ms; t += 500) { h.clock.advance(500); await settle(); }
+  };
+
+  it('a prompt typed for 1.5 s leaves the whole 2 s bound to the run', async () => {
+    const png = environment('result');
+    let composer = '';
+    let sent: number | null = null;
+    const h = host(() => false, () => composer);
+    installFinish(h.host, png, 'a prompt', { sentAt: () => sent });
+    sent = 0;
+    composer = 'a pro';
+    await tick(h, 1_500);
+    composer = '';
+    await tick(h, 500);
+    expect(h.lines).toContain('capture: the prompt was submitted 2000 ms after the wait was installed; the wait for result counts from here');
+    // Before the change the bound ran out 2 s after the launch, a moment after the prompt was submitted.
+    await tick(h, 1_500);
+    expect(h.lines.some((l) => l.includes('timed out'))).toBe(false);
+    await tick(h, 1_000);
+    expect(h.lines).toContain('capture: wait for result timed out after 2000 ms');
+  });
+
+  it('a prompt never submitted is bounded from the launch, and the log says so', async () => {
+    const png = environment('result');
+    const h = host(() => false, () => 'still typing');
+    installFinish(h.host, png, 'a prompt', { sentAt: () => 0 });
+    await tick(h, 2_500);
+    h.clock.advance(100);
+    await settle();
+    expect(h.lines).toContain('capture: wait for result timed out after 2000 ms (no submission of the typed prompt was seen; counted from the launch)');
+    expect(h.ended).toEqual(['quit']);
+  });
+
+  it('a short prompt typed between two reads counts as submitted once the composer reads empty a poll later', async () => {
+    const png = environment('result');
+    let seen = false;
+    const h = host(() => seen, () => '');
+    installFinish(h.host, png, 'hi', { sentAt: () => 0 });
+    await tick(h, 1_000);
+    expect(h.lines.some((l) => l.startsWith('capture: the prompt was submitted'))).toBe(true);
+    seen = true;
+    await tick(h, 500);
     h.clock.advance(100);
     await settle();
     expect(h.ended).toEqual(['exit 0']);

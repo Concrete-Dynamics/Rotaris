@@ -36,8 +36,9 @@
  *                 files on disk, from `git diff`, and by running `node --test` again in this script. The work is
  *                 split between two children writing IN PARALLEL, each under a declared write scope (PD-TOOLS-006):
  *                 both delegated with a scope, live at once, told the live scopes at start, and any refusal named.
- *   3b. resume  — PD-ORCH-005 against a real model: a delegating run paused through the composer's own Pause while a
- *                 child runs, the paused composer read, and the run continued through its own Continue. Asserted
+ *   3b. resume  — PD-ORCH-005 against a real model: a delegating run paused through the composer's own Pause while two
+ *                 children run (one, once the first has run alone for 45 s; `lib/resume-pause.mjs`, which reports how
+ *                 many the pause held), the paused composer read, and the run continued through its own Continue. Asserted
  *                 from the store and the traffic: the iteration left open and resumed, every paused child resumed
  *                 under its task id with its record continuing across the pause, and its next request carrying
  *                 what it recorded last; the notes it was asked for are read back from disk.
@@ -136,6 +137,7 @@ import { starterMissing } from './lib/starter-config.mjs';
 import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
 import { agentPlanTaskCount, coordinatorTodoReading, launchRunOverride } from './lib/coordinator-todo.mjs';
+import { PAUSE, pauseEvalSteps, pauseReading } from './lib/resume-pause.mjs';
 import { stallIssueCadence } from './lib/stall-issue-cadence.mjs';
 import { conclusive, pacedWindows, stallsWhileStreaming } from './lib/paced-arguments.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
@@ -1342,7 +1344,7 @@ if (wanted.includes('edit')) {
 // ── 3b. A paused run resumes every agent from its own record ────────────────────────────────────────────────
 /*
  * PD-ORCH-005, measured against a real model. A delegating run is paused through the composer's own Pause as soon as
- * a child is running, and continued through the composer's own Continue as soon as the paused composer has been
+ * two children are running (bounded, `lib/resume-pause.mjs`), and continued through the composer's own Continue as soon as the paused composer has been
  * read. What is asserted comes from the store and the recorded traffic, never from the model's prose:
  * - the pause left the iteration open and its unfinished children `paused` by `pause` (clauses 2 and 3), and the
  *   composer drew them `paused` with the Continue action's count (clauses 6, 13 and 19);
@@ -1352,14 +1354,14 @@ if (wanted.includes('edit')) {
  * - the run finished the work, read back from the files on disk.
  */
 if (wanted.includes('resume')) {
-  const PAUSE = '.workspace:has(.agent-row[data-state="running"]) button[aria-label="Pause the run"]';
+  // Live-run finding P7 at a68f121: the Pause waits (bounded) for two running children (`lib/resume-pause.mjs`).
   // Read the paused composer once, and mark the read on <body> so the Continue press waits for it.
   const READ_PAUSED = "(document.body.dataset.pausedRead = '1', JSON.stringify({ paused: document.querySelectorAll('.agent-row[data-state=\"paused\"]').length, count: document.getElementById('composer-resume-count')?.textContent ?? null, run: document.querySelector('[data-testid=\"run-header\"]')?.dataset.state ?? null }))";
   const CONTINUE = 'body[data-paused-read="1"] button[aria-label="Continue run"]';
   const log = await launch('resume', {
     ROTARIS_CAPTURE_PROMPT: 'Write two short notes in parallel. First write your todo list with the todo tool, one task per note. Then, in ONE turn, delegate two coding-agent children in the background: one reads src/todos.js and then writes docs/notes-functions.md listing each exported function with one sentence on what it does; the other reads src/todos.test.js and then writes docs/notes-tests.md listing each test with one sentence on what it checks. Wait for both with wait_for_tasks, then reply with the two file names. Delegate nothing else.',
     ROTARIS_CAPTURE_CLICKS: [`${PAUSE}@~${EDIT_WAIT_MS}`, `${CONTINUE}@~${EDIT_WAIT_MS}`].join(';;'),
-    ROTARIS_CAPTURE_EVAL_AT: `${READ_PAUSED}>>button[aria-label="Continue run"]@~${EDIT_WAIT_MS}`,
+    ROTARIS_CAPTURE_EVAL_AT: [...pauseEvalSteps(EDIT_WAIT_MS), `${READ_PAUSED}>>button[aria-label="Continue run"]@~${EDIT_WAIT_MS}`].join(';;'),
     ROTARIS_CAPTURE_WAIT: `js:document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed'`,
     ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
   }, EDIT_WAIT_MS + 90_000);
@@ -1386,6 +1388,11 @@ if (wanted.includes('resume')) {
     const pausedChildren = timeline.filter((t) => t.name === 'child_paused' && t.meta.interruption === 'pause').map((t) => t.meta.task_id);
     const resumedChildren = new Set(timeline.filter((t) => t.name === 'child_resumed').map((t) => t.meta.task_id));
     check(pausedChildren.length > 0, 'the pause left at least one child `paused` (clause 3)', pausedChildren.join(', ') || 'none');
+    // P7: how many children the press found running and how many the pause held. Two is what clauses 3, 4 and 13 are
+    // measured on; one is the model's pacing (the second child not running within the bound), a NOTE and not a failure.
+    const pause = pauseReading(log, pausedChildren.length);
+    if (pause.enough) check(true, `the pause held ${pause.held} children, so clauses 3, 4 and 13 were measured on more than one`, pause.detail);
+    else noted('the pause held fewer than two children', pause.detail);
     check(pausedChildren.every((id) => resumedChildren.has(id)), 'every paused child resumed under its own task id (clause 4)', `${pausedChildren.length} paused, ${pausedChildren.filter((id) => resumedChildren.has(id)).length} resumed`);
     const iterations = db.prepare('SELECT iteration, state, outcome, interruption FROM iterations WHERE session_id = ? ORDER BY iteration').all(sid);
     check(iterations.length > 0 && iterations.every((it) => it.state === 'closed') && iterations.some((it) => it.outcome === 'succeeded'), 'the resumed iteration closed succeeded', JSON.stringify(iterations));
@@ -1424,7 +1431,7 @@ if (wanted.includes('resume')) {
     const unreadable = carried.filter((c) => c.fragment === null);
     check(carried.filter((c) => c.fragment !== null).every((c) => c.sent), 'each resumed child\'s next request carried what it recorded before the pause (clause 4)', carried.map((c) => `${c.id}: ${c.fragment === null ? 'no plain fragment' : c.sent ? 'carried' : 'NOT carried'}`).join('; '));
     if (unreadable.length > 0) noted('children whose last entry offered no plain fragment to look for', unreadable.map((c) => c.id).join(', '));
-    rest = { pausedChildren: pausedChildren.length, iteration: iterationPaused?.meta.iteration ?? null, records: records.map((r) => ({ id: r.id, before: r.before.length, after: r.after.length })), carried, shown, iterations };
+    rest = { pausedChildren: pausedChildren.length, runningAtPause: pause.atPress, pauseBoundRanOut: pause.boundRanOut, iteration: iterationPaused?.meta.iteration ?? null, records: records.map((r) => ({ id: r.id, before: r.before.length, after: r.after.length })), carried, shown, iterations };
   } finally { db.close(); }
   const notes = ['notes-functions.md', 'notes-tests.md'].map((name) => ({ name, text: existsSync(join(workspace, 'docs', name)) ? readFileSync(join(workspace, 'docs', name), 'utf8') : '' }));
   check(notes.every((n) => n.text.trim() !== ''), 'both notes were written after the continue', notes.map((n) => `${n.name}: ${n.text.length} chars`).join(', '));
@@ -2058,7 +2065,12 @@ if (wanted.includes('terminal')) {
   if (runEnd.kind === 'ended-early') noted('the terminal run ended before any terminal call', `${runEnd.detail}; every shape reads as not attempted`);
   const seen = {};
   for (const shape of SHAPES) seen[shape.id] = attempted(shape.id).length;
-  noted('what the model attempted', SHAPES.map((s) => `${s.id}×${seen[s.id]}`).join(', '));
+  // Live-run finding P6 at a68f121: the counts are over every terminal call the session holds, so a shape a later iteration's
+  // agent ran again counts twice; the NOTE read "×2" as if the model had tried one shape twice in one pass. It says what it
+  // counted, and by which agents when more than one ran the shapes.
+  const byAgent = new Map();
+  for (const call of terminals) if (SHAPES.some((shape) => shape.match.test(String(call.args.command ?? '')))) byAgent.set(call.agent_name, (byAgent.get(call.agent_name) ?? 0) + 1);
+  noted('what the model attempted', `${SHAPES.map((s) => `${s.id}×${seen[s.id]}`).join(', ')} — counted over every terminal call the session holds, every iteration and agent included, so a count above 1 can be a later iteration's or another agent's repeat rather than a retry${byAgent.size > 1 ? `; the shapes' calls by agent: ${[...byAgent].map(([agent, n]) => `${agent} ${n}`).join(', ')}` : ''}`);
 
   const hereString = attempted('here-string')[0];
   if (hereString === undefined) noted('the here-string was not attempted', 'no terminal call carried it; nothing is asserted about the PTY');

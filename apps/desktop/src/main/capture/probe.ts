@@ -81,7 +81,8 @@ export function submitEvents(text: string, per: 'char' | 'key'): TypedEvent[] {
  * `ROTARIS_CAPTURE_PROMPT_MS` says when — the MCP proof toggles a Settings control first, and a launch
  * that resumes a stored session first needs the transcript on screen before the composer means anything.
  */
-export function installPromptSeam(host: CaptureHost, prompt: string, resuming: boolean): void {
+export function installPromptSeam(host: CaptureHost, prompt: string, resuming: boolean): PromptTyping {
+  let sentAt: number | null = null;
   host.clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_PROMPT_MS'] ?? (resuming ? 2_600 : 800))), () => {
     const wc = host.win.webContents;
     wc.sendInputEvent({ type: 'keyDown', keyCode: '2', modifiers: ['control'] });
@@ -90,9 +91,23 @@ export function installPromptSeam(host: CaptureHost, prompt: string, resuming: b
       wc.sendInputEvent({ type: 'keyDown', keyCode: 'L', modifiers: ['control'] });
       wc.sendInputEvent({ type: 'keyUp', keyCode: 'L', modifiers: ['control'] });
       for (const event of promptEvents(prompt)) wc.sendInputEvent(inputEvent(event));
+      sentAt = host.clocks.monotonic.now();
     });
   });
+  return { sentAt: () => sentAt };
 }
+
+/**
+ * The typed prompt as `installFinish` sees it: when its last event was handed to the renderer, or null before. Handing them
+ * over is immediate; the renderer then takes them one at a time, which is the part that takes long — the final default live
+ * run at a68f121 typed the terminal scenario's 5,755 characters for about 27 s (live-run finding P6).
+ */
+export interface PromptTyping {
+  readonly sentAt: () => number | null;
+}
+
+/** The composer's text, or null where there is no composer — what tells `installFinish` the typed prompt has been submitted. */
+const COMPOSER_TEXT = "document.querySelector('textarea.composer__input')?.value ?? null";
 
 /**
  * The end of the launch: wait, open a last view, read the probes, photograph, exit.
@@ -118,8 +133,15 @@ export function installPromptSeam(host: CaptureHost, prompt: string, resuming: b
  * (the duress live run of 2026-09-29, session `379f1490`;
  * `docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`). The quit brings it to rest as a
  * person's quit at that moment would (PD-ORCH-005 clause 3).
+ *
+ * When the wait starts. With a typed prompt (`typing`), the bound counts from the moment the prompt was SUBMITTED — the
+ * composer, which held the typed text, reads empty again — not from this call, so the budget measures the run and not the
+ * typing (live-run finding P6: the terminal scenario's session started 27.4 s into its 420 s wait). Until a submission is seen
+ * the bound counts from this call, as before, so a prompt never submitted, or typed for longer than the whole bound, still
+ * ends the capture.
+ * The prompt is still typed one character at a time: what a person does, and what the packaged probe exercises.
  */
-export function installFinish(host: CaptureHost, capture: string, prompt: string | undefined): void {
+export function installFinish(host: CaptureHost, capture: string, prompt: string | undefined, typing?: PromptTyping): void {
   const after = Number(process.env['ROTARIS_CAPTURE_AFTER_MS'] ?? (prompt ? 3_000 : 1_500));
   const wait = process.env['ROTARIS_CAPTURE_WAIT'];
   const waitBound = Number(process.env['ROTARIS_CAPTURE_WAIT_MS'] ?? 600_000);
@@ -151,14 +173,35 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
   let jsHit = false;
   const expression = wait.startsWith('js:') ? wait.slice(3) : null;
   const satisfied = () => (wait === 'result' ? host.resultSeen() : wait.startsWith('file:') ? existsSync(wait.slice(5)) : expression !== null ? jsHit : true);
-  const started = host.clocks.monotonic.now();
+  const installed = host.clocks.monotonic.now();
+  // P6: the submission the wait counts from. The composer is read on the same poll; text seen in it and then none means the
+  // Enter was taken. A short prompt can be typed between two reads, so an empty composer a poll after the events were all
+  // handed over counts as well.
+  let submittedAt: number | null = null;
+  let sawText = false;
+  const watchSubmission = (): void => {
+    const sentAt = typing?.sentAt() ?? null;
+    if (submittedAt !== null || sentAt === null) return;
+    void host.win.webContents.executeJavaScript(COMPOSER_TEXT)
+      .then((text: unknown) => {
+        if (submittedAt !== null || typeof text !== 'string') return;
+        if (text !== '') { sawText = true; return; }
+        const now = host.clocks.monotonic.now();
+        if (!sawText && now - sentAt < 500) return;
+        submittedAt = now;
+        host.log(`capture: the prompt was submitted ${Math.round(now - installed)} ms after the wait was installed; the wait for ${wait} counts from here`);
+      })
+      .catch(() => undefined);
+  };
   const poll = host.clocks.timers.every(millis(500), () => {
     if (expression !== null && !jsHit) {
       void host.win.webContents.executeJavaScript(`(async () => { try { return Boolean(await (${expression})); } catch { return false; } })()`)
         .then((hit: unknown) => { jsHit = hit === true; })
         .catch(() => { jsHit = false; });
     }
+    watchSubmission();
+    const started = submittedAt ?? installed;
     if (satisfied()) { poll.cancel(); host.log(`capture: wait for ${wait} satisfied after ${Math.round(host.clocks.monotonic.now() - started)} ms`); finish(); }
-    else if (host.clocks.monotonic.now() - started > waitBound) { poll.cancel(); host.log(`capture: wait for ${wait} timed out after ${waitBound} ms`); finish(true); }
+    else if (host.clocks.monotonic.now() - started > waitBound) { poll.cancel(); host.log(`capture: wait for ${wait} timed out after ${waitBound} ms${submittedAt === null && typing !== undefined ? ' (no submission of the typed prompt was seen; counted from the launch)' : ''}`); finish(true); }
   });
 }

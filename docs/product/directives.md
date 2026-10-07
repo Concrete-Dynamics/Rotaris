@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Eighty.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Eighty-one.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -4370,9 +4370,24 @@ and may leave a partly written project or index for the next setup to redo.
 
 ### PD-ORCH-009 — an entry role that ends its turn without an answer is asked once more, and the person is told if it still writes none
 
+*Revision 2 (2026-10-07, [R-072](requests.md#r-072)) — **no re-prompt after an answer**, the ruling of OQ-225 beside
+[`PD-ORCH-015`](#pd-orch-015). The first sentence is narrowed below and its revision-1 text quoted beside it. Revision 1
+(2026-10-06, [R-071](requests.md#r-071)) is otherwise unchanged.*
+
 When the entry role of an execution iteration ends its turn with neither text nor a tool call — its last model step wrote
 nothing for the person — and the run is not stopping, pausing or coming to rest, the run SHALL send it one further message
-in its own conversation asking it to answer, and SHALL let it take that turn as it takes any. It SHALL be asked once in
+in its own conversation asking it to answer, and SHALL let it take that turn as it takes any — **revision 2:** only where no
+earlier turn of the same execution of the root wrote an answer. A turn that follows a plan correction (REQ-ORCH-078,
+`PD-ORCH-015`) after an answer is never re-prompted, and the answer it followed stays the iteration's answer.
+
+> Revision 1 said, and no longer governs: "When the entry role of an execution iteration ends its turn with neither text
+> nor a tool call — its last model step wrote nothing for the person — and the run is not stopping, pausing or coming to
+> rest, the run SHALL send it one further message in its own conversation asking it to answer, and SHALL let it take that
+> turn as it takes any." It was written when a plan correction followed only a positive validation-retry setting; under
+> `PD-ORCH-015` every root that answers with its plan open is corrected, and a correction answered by a `todo` write and no
+> text would have been asked for a second copy of the answer the person had already been shown.
+
+The re-prompt SHALL be asked once in
 each execution of the iteration's root, never twice. Where the turn that message leads to still ends without an answer, the
 iteration SHALL close as it would have, and the run SHALL tell the person once, in a `system` row in the transcript and a
 warning `incomplete_execution` issue naming the entry role: where the run ends after that iteration (REQ-ORCH-069's stop
@@ -5815,6 +5830,47 @@ logged as [R-072](requests.md#r-072).*
 > continued a paused base-tree session in `C:/ws` beside a second base-tree run of `C:/ws` — exactly what REQ-GIT-120 now
 > refuses. What they pin is REQ-CONFIG-094's per-model cap across the process, so their second session is now another
 > project's (`C:/other`), and both pass; the refusal itself stays pinned by `run.test.ts`.
+
+---
+
+<a id="pd-orch-015"></a>
+
+### PD-ORCH-015 — a root that answers with its plan open is corrected in its own conversation; a held answer is carried to the next root and announced
+
+When the coordinating root of an execution iteration answers `succeeded` while items of its own plan that its task answers
+for are still open (REQ-ORCH-029, REQ-ORCH-075 under `PD-ORCH-012`), the run SHALL send it a plan correction in its own
+conversation before its task is re-queued, up to **the larger of 1 and the validation-retry setting**
+(`runtime.auto_retries_validation`) times, so a setting of 0 no longer means no correction. Where an earlier turn of the
+same execution wrote an answer, the correction SHALL say that the answer has been shown to the person, and in every case it
+SHALL ask the root to record each item's true state with the todo tool, `COMPLETED` where the work is done and `ABANDONED`
+where it will not be done, without redoing done work or repeating its answer. The validation-retry setting itself, and what
+it counts for validation-class model failures (REQ-ORCH-092, REQ-CONFIG-120, REQ-NOTIFY-100), are unchanged.
+
+Where the corrections are spent and the task is still re-queued (REQ-ORCH-075) or given up on (REQ-ORCH-077) for an open
+plan, the run SHALL write one `system` row in the transcript saying that the coordinator answered with items of its plan not
+done, naming them, and that the task was not marked complete and returned to the queue, or given up on at the retry limit.
+A re-queued task's continuation payload SHALL carry, beside the marker block, the answer the held iteration wrote (the
+longest answer of its root's execution), cut to 6,000 characters and labelled as the previous iteration's answer the person
+was shown; only the same task's next fresh root receives it, it is kept with the task until then, and it is dropped when
+the task completes or is given up on. The run SHALL never mark a plan item itself.
+
+**Why, and what it costs.** OQ-225, from finding P1 of the final default live run at `a68f121`: a coordinator answered its
+request in full while its plan's "report" item still read `PENDING`. With REQ-ORCH-078's default of 0 the hold sent the item
+past the one agent that held the evidence to a fresh root that REQ-ORCH-072, REQ-ORCH-075 and REQ-TOOLS-155 keep blind;
+it redid the whole task, told the person the report was never delivered, and could have ended a met request `failed` at
+REQ-ORCH-077's limit. The correction was already built and pinned for a positive setting; a floor of one at the correction
+site is the smallest change that lets a met request close `succeeded`, and keeping it off the shared setting's default
+leaves validation retries as they were. What it costs: one more model call, carrying the root's whole conversation, on every
+iteration whose root answers with an item open, which REQ-ORCH-029's todo clause under OQ-213 now makes common; a reply that
+may restate the whole answer; a weak model that may tick an item it did not do to satisfy the correction (the same exposure
+the marker already had); a setting of 0 no longer turns the correction off; and up to 6,000 more characters in a re-queued
+root's first message, carrying a wrong answer as it stands.
+
+> **Narrows:** REQ-ORCH-078
+> **Extends:** REQ-ORCH-075
+
+*Raised under the owner's delegation, 2026-10-07, ruling OQ-225 (the consortium's ruling P1 of the final default live run);
+logged as [R-072](requests.md#r-072).*
 
 ---
 

@@ -11261,3 +11261,48 @@ widening PD-CONFIG-003's heading. It departs from A on the dispositions: REQ-CON
 60 s default stands.
 [`a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md`](../defects/fixed/a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md)
 records the notice's half, written before its code.
+
+**OQ-225 — What does the run do when REQ-ORCH-029's hold fires on an iteration that has answered?** *(REQ-ORCH-029, the
+coordinator "does not report the run successful while a todo item is non-terminal or while a todo item's recorded state
+disagrees with what happened"; REQ-ORCH-075, the re-queue's continuation payload, the stripped base payload plus the marker;
+REQ-ORCH-078, todo-correction retries reusing the validation-retry setting, "default 0: … re-queues without an
+in-conversation retry"; REQ-ORCH-072, a fresh root per iteration; REQ-TOOLS-155, a new root refused the previous root's
+children; REQ-ORCH-067, iteration ends visible in the transcript; REQ-ORCH-077, the give-up at the third pending outcome;
+PD-ORCH-009, the re-prompt of an answerless root. Raised 2026-10-07 from finding P1 of the final default live run at
+`a68f121`, the pack's one FAIL: in session `5df89df3` (terminal) the coordinator answered in full (traffic #24, transcript
+row 48) while its plan's "Report one line per command" read `PENDING`; with no correction the task was re-queued, the fresh
+root (traffic #25: the task and the marker only; tool call `#25`, `background_output`, refused "not found among your
+children") re-delegated the whole probe, and transcript row 54 told the person the report "never delivered". Recorded as
+[`a-re-queued-tasks-fresh-root-cannot-see-the-answer-its-iteration-was-held-back-for.md`](../defects/a-re-queued-tasks-fresh-root-cannot-see-the-answer-its-iteration-was-held-back-for.md).
+Ruled the same day.)*
+
+The hold behaves as the specification states, and the G5 repair's note priced its cost ("the fresh root, which has none of
+the previous conversation, may redo work to finish it"). What the specification does not settle is what a re-queued root
+learns of the iteration it continues, and whether the root that wrote the answer should first be asked to record its plan's
+true state while it still holds the evidence: REQ-ORCH-078's default of 0 says it is not.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** if the coordinating root of an
+execution iteration answers `succeeded` while items of its own plan are still open, the run sends it at least one plan
+correction in its own conversation. The count is the larger of 1 and `runtime.auto_retries_validation`. When the root has
+already answered, the correction says the answer has been shown and asks the root to record each item's true state with the
+todo tool. A turn that follows the correction is never asked again for an answer the execution has already written. If the
+corrections are used up and the task is still re-queued (REQ-ORCH-075) or given up on (REQ-ORCH-077), the run writes one
+`system` row in the transcript saying so. The re-queued task's next fresh root receives the held iteration's answer, cut to
+6,000 characters, beside the continuation marker. The run never marks a plan item itself. Recorded as
+[`PD-ORCH-015`](../product/directives.md#pd-orch-015), which narrows REQ-ORCH-078 and extends REQ-ORCH-075, and as
+[`PD-ORCH-009`](../product/directives.md#pd-orch-009) revision 2. REQ-ORCH-092, REQ-CONFIG-120 and REQ-NOTIFY-100 (the
+validation-retry setting's own default of 0) are untouched.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)* recommended an in-conversation correction by default,
+with the count the larger of 1 and the validation-retry setting, a correction text saying the answer was shown and a done
+item is recorded rather than redone, no re-prompt after an answer, and, where the hold still re-queues, a `system` row and
+the held answer with the open item ids carried to the fresh root. *Advocate B (the system's lens)* recommended the same
+floor of one correction kept apart from REQ-ORCH-092's default, the correction naming ABANDONED as a true state, a revision
+of PD-ORCH-009 so a correction's silent turn after an answer is not re-prompted, and a `system` row on the re-queue, with
+the fresh root's payload unchanged. **The ruling followed both**: B in keeping the floor off the shared setting's default,
+its ABANDONED wording and its transcript row (extended to the give-up, which REQ-ORCH-067's iteration-end visibility already
+asks for), and its numbering of the PD-ORCH-009 revision; A on the fallback, since without the held answer a root that
+ignores its correction reproduces P1 one step later. It dropped A's item ids and children's replies. Both advocates rejected
+letting the run tick a "report" item from the answer's wording (it would make the run's guess the plan's record), and so
+does the ruling. Related and repaired separately, as a defect: finding P4, the follow-up payload's "Recent iterations" reading
+timeline entries nothing writes.

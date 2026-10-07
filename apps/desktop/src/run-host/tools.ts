@@ -413,13 +413,6 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const nativeResolved = [...callable.keys()];
 
   /*
-   * REQ-TOOLS-048 (narrowed by PD-TOOLS-002): the requested mode is SELECTED here, at agent construction, from
-   * the persona's `permission_mode` pin, the session-level override a mid-session change recorded, and
-   * `runtime.permission_mode` (which is what `ctx.requestedMode` carries). The pin wins over the override unless
-   * the override is at least as restrictive as it — the same direction REQ-TOOLS-074 gives a live agent. The
-   * selected name IS the effective one: there is no downgrade left to re-resolve.
-   */
-  /*
    * OQ-213 as ruled (R-072), REQ-ORCH-029's todo clause: the entry agent's gate refuses the call that would start its task's
    * second work item while it keeps no todo list of its own — only where the one resolution left it `todo`, so the list can
    * be written. Without the tool the check refuses nothing and the run says so once. The engine supplies the context's check
@@ -428,6 +421,13 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const todoList = isEntry && ctx.todoList !== undefined
     ? (callable.has('todo') ? { directWork, owed: ctx.todoList.owed, started: ctx.todoList.started } : (ctx.todoList.unavailable(), undefined))
     : undefined;
+  /*
+   * REQ-TOOLS-048 (narrowed by PD-TOOLS-002): the requested mode is SELECTED here, at agent construction, from
+   * the persona's `permission_mode` pin, the session-level override a mid-session change recorded, and
+   * `runtime.permission_mode` (which is what `ctx.requestedMode` carries). The pin wins over the override unless
+   * the override is at least as restrictive as it — the same direction REQ-TOOLS-074 gives a live agent. The
+   * selected name IS the effective one: there is no downgrade left to re-resolve.
+   */
   const pin = persona.permissionMode ?? null;
   let mode: PermissionPreset = selectRequestedMode({ pin, override: ctx.modeOverride ?? null, runtime: ctx.requestedMode });
   const policy = new PolicyContext(buildPolicy({ preset: mode, workspaceRoot: root }));

@@ -360,12 +360,12 @@ function imageInputRefusal(prompt: RestartPrompt, model: { readonly acceptsImage
   return { code: 'image-input-unsupported', reason: `The last prompt carries ${prompt.inputs.length === 1 ? 'an image' : `${prompt.inputs.length} images`}, and ${named} does not declare image input support.` };
 }
 
-/** REQ-NOTIFY-069's "a recorded last prompt": a submitted prompt with text or images, over released rows too. */
 /** OQ-213 (REQ-ORCH-029): the entry agent's todo-list check, read live through the run the session holds. */
 function todoListCheck(run: () => Run | undefined): TodoListCheck {
   return { owed: () => run()?.todoListOwed() ?? null, started: () => { run()?.workItemStarted(); }, unavailable: () => { run()?.todoListUnavailable(); } };
 }
 
+/** REQ-NOTIFY-069's "a recorded last prompt": a submitted prompt with text or images, over released rows too. */
 function hasPrompt(dal: StoreDal, sessionId: SessionId): boolean {
   const last = lastSubmittedPrompt(dal, sessionId);
   return last !== null && (last.text.trim() !== '' || last.attachments.length > 0);

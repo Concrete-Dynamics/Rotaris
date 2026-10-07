@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset } from '@rotaris/contracts';
 import { CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, loadConfiguration, renderMcpSection, type LoadedConfiguration, type PersonaMcpSurface } from '@rotaris/config';
-import { anySchema, gitReadTool, grantFacets, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type ToolExecutor } from '@rotaris/agent-tools';
+import { anySchema, gitReadTool, grantFacets, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type TerminalManager, type ToolExecutor } from '@rotaris/agent-tools';
 import { SessionWriter, UserPresence, type ArtifactOps, type ToolPortContext } from '@rotaris/engine';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { personaResolverFor, runtimeFromConfiguration, type ConfiguredRun } from './configuration.js';
@@ -755,12 +755,6 @@ ${flag}`;
 });
 
 /**
- * REQ-MCP-034's isolated-run clause, found by the default live run at 1763f7f (finding D1): a run confined to a worktree had
- * its code-intelligence server launched with `--project <the anchoring workspace root>`, so its diagnostics answered from
- * the main checkout. The port hands the MCP host the configuration it launches from; the command line it carries is read
- * here, whole, for a port whose context names a worktree as its execution root.
- */
-/**
  * OQ-213 as ruled under the owner's delegation (R-072), building REQ-ORCH-029's todo clause: the entry port hands its gate the
  * run's todo-list check only where the one resolution left the entry role `todo`; without it nothing is refused and the run
  * is told once. A configured `system_prompt` replaces the instruction text whole (REQ-CONFIG-100) and changes nothing here.
@@ -784,7 +778,7 @@ describe('the entry port\'s todo list owed before a second work item (OQ-213, RE
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
   /** The entry orchestrator's port over a configured persona; `tools` and `prompt` are the persona's own. */
-  function entryPort(orchestrator: string, extra: Partial<ToolPortContext> = {}) {
+  function entryPort(orchestrator: string, extra: Partial<ToolPortContext> = {}, terminal: TerminalManager | null = null) {
     mkdirSync(join(dir, '.rotaris'), { recursive: true });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), `default_persona: orchestrator
 models:
@@ -822,7 +816,7 @@ ${orchestrator}runtime:
       sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona: 'orchestrator', agentName: 'orchestrator', parentId: 'root:1', depth: 0, delegation,
       requestedMode: 'autonomous', modeOverride: null, attended: () => true, warn: () => undefined, abortRun: () => undefined,
       readTodo: () => null, writeTodo: () => { written = true; return true; }, todoList, ...extra,
-    }, { clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver, presenter: { present: async () => ({ ok: true }), close: () => undefined }, nextSequence: () => 1, fileStates: new Map(), terminal: null, egress: () => permissivePolicyRead });
+    }, { clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver, presenter: { present: async () => ({ ok: true }), close: () => undefined }, nextSequence: () => 1, fileStates: new Map(), terminal, egress: () => permissivePolicyRead });
     const call = (callId: string, name: string, args: Record<string, unknown>) => ({ callId, name, rawArgs: JSON.stringify(args), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' });
     const del = (callId: string, task: string) => port.dispatch(call(callId, 'delegate', { persona: 'coding-agent', task_name: task, task }), new AbortController().signal);
     return { port, delegated, log, call, del };
@@ -839,6 +833,21 @@ ${orchestrator}runtime:
     expect((await e.del('d3', 'second')).status).toBe('ok');
     expect(e.delegated).toEqual(['first', 'second']);
     expect(e.log).toEqual(['started', 'started']);
+  });
+
+  it('on a direct-work grant a write is a work item: a write then a terminal call, and the terminal call is refused until the list is written', async () => {
+    // A terminal manager the refused call never reaches: the gate refuses before the executor runs.
+    let ran = 0;
+    const terminal = { backend: { kind: 'posix', file: '/bin/sh' }, setBackgroundLimits: () => undefined, run: () => { ran += 1; } } as unknown as TerminalManager;
+    const e = entryPort('    tools: [read_file, grep, todo, delegate]\n', { grant: 'direct-work' }, terminal);
+    const write = await e.port.dispatch(e.call('w1', 'write_file', { path: 'notes.txt', content: 'one\n' }), new AbortController().signal);
+    expect(write.status).toBe('ok');
+    expect(existsSync(join(dir, 'notes.txt'))).toBe(true);
+    const refused = await e.port.dispatch(e.call('t1', 'terminal', { command: 'echo two' }), new AbortController().signal);
+    expect(refused).toMatchObject({ status: 'blocked', isError: true, text: 'a todo list is owed' });
+    expect(ran).toBe(0);
+    expect(e.log).toEqual(['started']);
+    expect(e.delegated).toEqual([]);
   });
 
   it('an entry role whose resolved set holds no todo is never refused, and the run is told once per port', async () => {
@@ -995,6 +1004,12 @@ ${personas === '' ? '' : `personas:\n${personas}`}runtime:
   });
 });
 
+/**
+ * REQ-MCP-034's isolated-run clause, found by the default live run at 1763f7f (finding D1): a run confined to a worktree had
+ * its code-intelligence server launched with `--project <the anchoring workspace root>`, so its diagnostics answered from
+ * the main checkout. The port hands the MCP host the configuration it launches from; the command line it carries is read
+ * here, whole, for a port whose context names a worktree as its execution root.
+ */
 describe('REQ-MCP-034: the code-intelligence binding of a run in an isolated working tree', () => {
   let dir: string;
   let worktree: string;

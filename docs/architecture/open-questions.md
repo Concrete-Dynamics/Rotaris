@@ -10856,7 +10856,10 @@ calls dispatch in order, so a `todo` write earlier in the step satisfies the che
 ruling's text, stated so the next round can see them: a work item is **counted when it reaches execution** (past the schema,
 the permission and the pre-execution hooks), not when it passes this check, so a call refused for another reason starts no
 work item; and a tool the registry carries **no declaration** for (an MCP or plugin tool) is no work item, the ruling counting
-what the registry declares. `completionNotification` appends up to five of the parent's open plan items (REQ-ORCH-059): the
+what the registry declares. *A third, added 2026-10-07 (fin29, from fin27's review):* the ruling's "test that a configured
+`system_prompt` is still covered" is read **at the entry port** (`apps/desktop/src/run-host/tools.test.ts`, "a configured
+system_prompt does not lift it"), where the persona's configured text is resolved, and not at the engine, whose scripted runs
+carry no persona text; the refusal reads no instruction text at all, so the port is where a replaced text could matter. `completionNotification` appends up to five of the parent's open plan items (REQ-ORCH-059): the
 root's are those its task answers for (`openRootPlan`), a child parent's its own todo's. Pinned by
 `packages/engine/src/run/coordinator-plan.test.ts`, `packages/agent-tools/src/gate.test.ts`,
 `apps/desktop/src/run-host/tools.test.ts`, `packages/engine/src/children/notify.test.ts` and

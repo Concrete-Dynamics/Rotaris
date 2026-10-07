@@ -542,6 +542,28 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
       expect(refusals(warnings)).toHaveLength(1);
     });
 
+    it('pause then continue after the list is written: the written list is kept with the task, so the resumed iteration\'s next work item is not refused', async () => {
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => { release = resolve; });
+      let entered!: () => void;
+      const reached = new Promise<void>((resolve) => { entered = resolve; });
+      const { sessions, workItemsRun, warnings } = sessionsWith([
+        writePlan('p1', ['IN_PROGRESS', 'PENDING']), del('d1', 'one'),
+        del('d2', 'two'), writePlan('p2', ['COMPLETED', 'COMPLETED']), answer('Both done.'),
+      ], null, async (callId) => { if (callId === 'd1') { entered(); await held; } });
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      await reached;
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      expect(planner(sid)[0]).toMatchObject({ workItems: 1, listWritten: true });
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Without the stored fact the resumed run read the task as one work item in with no list, and refused d2.
+      expect(workItemsRun).toEqual(['one', 'two']);
+      expect(refusals(warnings)).toEqual([]);
+    });
+
     it('a later task whose earlier list is all done is refused until it writes its own', async () => {
       const { sessions, workItemsRun, warnings } = sessionsWith([
         writePlan('a1', ['COMPLETED', 'COMPLETED']), del('a2', 'a-one'), del('a3', 'a-two'), answer('A done.'),

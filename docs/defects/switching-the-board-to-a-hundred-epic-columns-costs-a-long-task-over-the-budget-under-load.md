@@ -21,6 +21,12 @@ Recorded open: whether this is a product defect is decided by a quiet run, which
 figure holds above 100 ms, the candidates the profile names are the grouping (memoised per axis and membership) and the
 forced layout (the band read after the browser's own layout rather than inside the commit).
 
+**Seen again in fin30's review, 2026-10-07** (`pnpm requirements-proof --skip-build`, every functional stage green): at load
+9.6 to 15.2 the axis switch read 140 ms and the generated store's arrival a 121 ms task after the engine's answer (its
+view mount, 419 ms, reported apart); at load 10.2 to 10.1 the run stopped earlier, on the minimum window's board at 106 ms.
+The builder's run at load 9.5 to 9.8 read 47 ms for the arrival and 62 ms for the minimum window. None of these was taken
+on a quiet host.
+
 ## Specs
 
 REQ-TRACE-239 (100 ms, "measured at the minimum supported window size under the reference conditions of REQ-TRACE-088" —

@@ -5914,7 +5914,7 @@ logged as [R-072](requests.md#r-072).* *Revision 2 raised under the owner's dele
 > run's sandbox is gone), and the duress measurement above, which is still owed. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 >
-> **Revision 1, first live execution, 2026-10-07 (the duress run at `a68f121`, pack `2026-10-07T07-09-30-708Z`, session
+> **Revision 1, first duress execution, 2026-10-07 (the duress run at `a68f121`, pack `2026-10-07T07-09-30-708Z`, session
 > `e6747bd0`, finding D4):** the rule held as written. The six whole-tree `glob **/*` calls (#1, #24, #29, #73, #126, #135) and
 > `**/.*` (#65) listed neither directory; 0 file-tool calls named one as a path; the delivered overview listed no marker files.
 > **What it did not reach:** the terminal — 5 terminal commands put the directories in front of the agents, and 21 calls and 32

@@ -6970,8 +6970,13 @@ detail and the description in `terminal/index.ts`):
   soft-paused command, and a host without `/proc` leave the call unwatched.
 - **The handshake honours the call's cancel and a kill from the terminal window.** The no-op line is awaited before
   the call's command is written, so a run's stop or pause that lands on it ends the round trip where it stands: the
-  command is never written, and the call reads as any cancelled call does (`timeout`, 124, `session_reset`, "the call
-  was cancelled", the snapshot re-applied). A kill from the terminal window that lands on it reads as a killed call
+  command is never written, and the call reads as any cancelled call does: ~~(`timeout`, 124, `session_reset`, "the call
+  was cancelled", the snapshot re-applied)~~ since OQ-226's ruling (2026-10-07, R-072,
+  [`PD-TOOLS-013`](../product/directives.md#pd-tools-013)) `interrupted` / `warning`, no exit code, `session_reset`, a
+  detail saying the run cancelled the call before the command was written so it never ran, and the snapshot re-applied.
+  *(The struck reading was a description in passing, swept into R-071's confirmation of this entry without being raised;
+  it reported a cancel as REQ-TOOLS-099's hard timeout. Replaced, not repaired quietly; R-071's ruled behaviour for a
+  replaced or ended shell stands.)* A kill from the terminal window that lands on it reads as a killed call
   (−1, `session_reset`, "killed from the terminal window"), and the command is not written to the shell the kill ended.
   *(Added 2026-09-30 by acceptance round 1's verifier, who found both lost in the first form of this build: the cancel
   was ignored and the command ran to its own end — 5,075 ms and `success` where origin/main answered the cancel in
@@ -11400,3 +11405,50 @@ against the old generator (29/32) and 32/32 after. Notes moved to `docs/defects/
 and
 [`the-symbol-generator-drops-an-identifier-written-on-a-new-line.md`](../defects/fixed/the-symbol-generator-drops-an-identifier-written-on-a-new-line.md).
 No product behaviour changed, so a live run shows nothing new.
+
+**OQ-226 — How is a foreground terminal call its run cancels recorded?** *(REQ-TOOLS-097, the hard bound whose observation
+is returned "on reaching" it; REQ-TOOLS-099, the hard-timeout contract and its detail; REQ-TOOLS-179, 124 reserved for a
+hard timeout; REQ-TOOLS-103, a failure before completion; REQ-TOOLS-100 and REQ-TOOLS-112, the closed `failure_kind` and
+`outcome_kind` vocabularies, neither of which holds a cancellation kind; REQ-SESSION-136, the outcome-driven issues;
+PD-ORCH-005 clause 3, a call a quit cut off "is recorded as interrupted"; OQ-144's handshake sentence. Raised 2026-10-07
+from finding P2 of the orchestrator's final default live run at `a68f121` (the self-hosted endpoint), and ruled the same
+day.)*
+
+A foreground call the run cancels (the tool context's signal aborted: a pause past REQ-ORCH-134's tool deadline, a stop, a
+quit, the explicit cancel, an agent's cancellation or its limit, a cancel during OQ-144's handshake) ends its process tree
+and restarts the session, and was then reported as a hard timeout: exit 124, `timeout`, `TimeoutError`, "The command
+exceeded its timeout of N seconds", a `terminal_timeout` issue at `error`, and a Timeouts count in `summary.md`. In that
+run's terminal session (`5df89df3`), call `#36`, the re-run child's 45 s wedge, ran 3,505 ms before the quit cut it and is
+recorded `failed`, `timeout`, exit 124, "The command exceeded its timeout of 100 seconds; … (the call was cancelled)";
+issue 10 is `terminal_timeout` at `error`, and `summary.md` reads "Timeouts: 1". The console's NOTE said the hard cap was
+not reached. Recorded as
+[`a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md`](../defects/a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md).
+
+**What the build proceeded under, until 2026-10-07.** Both abort branches of `ForegroundSession.run`
+(`packages/agent-tools/src/terminal/foreground.ts`) returned 124 and `timedOut: true` with the error "the call was
+cancelled", and `terminal/index.ts` read `timedOut` as the `timeout` kind and wrote REQ-TOOLS-099's detail.
+
+**What a ruling decides.** Whether the cancel keeps the hard-timeout reading, is REQ-TOOLS-103's `execution_error` within
+the vocabulary as it stands, or gains a kind of its own, the `interrupted` the question and delegation tools already carry,
+under a directive that widens REQ-TOOLS-100's and REQ-TOOLS-112's closed sets; and whether such a call files an issue.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a new directive,
+[`PD-TOOLS-013`](../product/directives.md#pd-tools-013), governs. A foreground terminal call that its run cancels is
+recorded with `failure_kind` and `outcome_kind` `interrupted`, severity `warning`, `is_error` true, no exit code and
+`timeout` false; this covers a pause past the tool deadline, a stop, a quit, the explicit cancel, an agent's cancellation or
+limit, and a cancel during OQ-144's handshake. Its detail says the run cancelled the call, what became of the session and
+what was restored, and the call files no outcome-driven issue. The hard-timeout reading (124, `timeout`,
+`terminal_timeout`) stays reserved for a call that reached its hard bound, as REQ-TOOLS-097, -099 and -179 state, so the
+timeout encoding a cancel carried is repaired as a defect against them. **The two recommendations weighed:** advocate A
+(the user's lens) recommended repairing within the vocabulary, the cancel read as REQ-TOOLS-103's `execution_error` with no
+exit code and a marker that suppresses the issue, and no directive; advocate B (the system's lens) recommended the
+directive, `interrupted` as a fifth failure kind and an eleventh outcome kind at severity `warning`, the kind PD-ORCH-005
+already gives every other call a run cuts short, with no issue filed and the gate unchanged. The ruling followed **B**: A's
+`execution_error` reads a deliberate cancel at severity `error`, in the bucket of real backend faults, still departs from
+REQ-SESSION-136's letter, and gives the gate a second way to mark an interrupted call, where B reuses the product's own
+word and the gate's existing branch. It takes A's test plan (a mid-command cancel, the real timeouts pinned, Timeouts
+reading 0). OQ-144's handshake parenthetical is revised in place beside the struck reading; R-071's ruled behaviour for
+replaced and ended shells stands. The ruling's directive number was written as `PD-TOOLS-011` by advocate B, taken; it is
+`PD-TOOLS-013`. Noticed while ruling and recorded, not repaired: the gate's catch and fetch still file a `tool_error` for
+a call the run cancels
+([`a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md`](../defects/a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md)).

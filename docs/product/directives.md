@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Eighty-one.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Eighty-two.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -5960,6 +5960,55 @@ logged as [R-072](requests.md#r-072).*
 > is sent" warning, no second iteration, no re-delegation and no `background_output` refusal, and the session ending
 > `completed` / `tasks_complete` inside the 420 s wait. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+---
+
+<a id="pd-tools-013"></a>
+
+### PD-TOOLS-013 — a terminal call its run cancels reads `interrupted`
+
+A foreground `terminal` call that its run cancels SHALL be recorded as interrupted: `failure_kind` and `outcome_kind`
+`interrupted`, `outcome_severity` `warning`, `is_error` true, no exit code, and `timeout` false. Its run cancels it when
+the tool context's signal is aborted before the command completes: a pause past REQ-ORCH-134's tool deadline, a stop, a
+quit, the explicit cancel, an agent's cancellation or its limit, and a cancel that lands during OQ-144's first-call
+handshake. The call ends the command's process tree and restarts the session, as built, and re-applies PD-TOOLS-001's
+snapshot. `kill_status` is `session_reset` or `reset_failed`. Its detail SHALL say that the run cancelled the call before
+the command completed, or before the command was written so that it never ran, what became of the session, that shell
+state was lost, and what was restored; it SHALL NOT say that the command exceeded its timeout. Its output is labelled
+`[terminal_output]`.
+
+- **REQ-TOOLS-100:** the `failure_kind` vocabulary holds a fifth member, `interrupted`.
+- **REQ-TOOLS-112:** the `outcome_kind` vocabulary holds an eleventh member, `interrupted`, and test 1 maps the failure kind
+  `interrupted` to `interrupted` / `warning`.
+- **REQ-SESSION-136:** a tool call recorded as interrupted under PD-ORCH-005 clause 3 files no outcome-driven issue. That
+  covers the terminal's call under this directive, and the question tool's, the delegation tool's and a withdrawn approval's
+  as the gate already records them.
+
+The hard-timeout reading (exit code 124, `timeout`, `terminal_timeout`) stays reserved for a call that reached its hard
+bound, as REQ-TOOLS-097, REQ-TOOLS-099 and REQ-TOOLS-179 state; those three, and REQ-TOOLS-103, are untouched.
+
+**Why, and what it costs.** The build reported every cancel as a hard timeout: exit 124, "The command exceeded its timeout
+of 100 seconds", `TimeoutError`, a `terminal_timeout` issue at `error`, and a Timeouts count in `summary.md`. In the final
+default live run at `a68f121` (session `5df89df3`, call `#36`) a quit cut a 45 s wedge after 3,505 ms, and the record
+claimed the 100 s bound had been hit; on Continue the agent would have read the same. REQ-TOOLS-103's `execution_error`
+would have told the truth about the cause but read a deliberate cancel as a backend fault at severity `error` and filed a
+`tool_error` warning for every quit. The product already has the word: the question tool, the delegation tool and a
+withdrawn approval carry `interrupted`, and the gate settles that kind as interrupted with no issue. What it costs: two
+closed vocabularies that REQ-TOOLS-100 calls exact gain a member, so a reader of exported records that assumed the closed
+sets meets a new token; severity `warning` with `is_error` true is the one terminal kind whose `is_error` is not derived
+from its severity; and the terminal's own text cannot tell a quit from a stop or a child's limit, so the cause comes from the
+turn's interrupted result, and a child's limit that cut a call is recorded at the child, not at the call.
+
+> **Narrows:** REQ-TOOLS-100
+> **Extends:** REQ-TOOLS-112, REQ-SESSION-136
+
+*The ruling named all three as narrowed. The symbol generator admits one directive per verb on a requirement
+(`README.md`: "precedence must be unambiguous"), and `PD-TOOLS-009` already narrows REQ-TOOLS-112 and `PD-SESSION-003`
+REQ-SESSION-136, so those two are named as extended, as OQ-218's build did for PD-CONFIG-003; the case each one meets is
+stated above, exhaustively. Found while building, 2026-10-07.*
+
+*Raised under the owner's delegation, 2026-10-07, ruling OQ-226 (the consortium's ruling of finding P2 of the final default
+live run at `a68f121`); logged as [R-072](requests.md#r-072).*
 
 ---
 

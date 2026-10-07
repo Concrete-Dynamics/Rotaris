@@ -334,6 +334,10 @@ Captured foreground output is capped at 100,000 characters per call. When a comm
 
 **REQ-TOOLS-100** — Observation `failure_kind` values are exactly {`timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`}; `backend` is stamped on every observation and names the terminal backend that ran the command. Exactly one terminal backend ships, and the name it stamps is `single-session`. A second name this field once carried is withdrawn together with the pooled backend it described: nothing ever stated when that backend was used, what selected it, or whether it had to exist, it could not be provided on the platform whose shell REQ-TOOLS-104 mandates, and it was required to be observationally identical to the shipped backend in every respect but its own name. The field itself is deliberately kept rather than removed, so that adding a backend in a later release changes what this field says and not the shape of an observation; a consumer therefore reads `backend` as a name to record and report, and must not treat the single value shipped today as a closed vocabulary. Every observation carries a `[terminal_diagnostic]` JSON block (sorted keys, null-valued keys dropped) including backend, command, detail, error class, exit code, failure kind, kill status, outcome kind, outcome severity, output-truncated (only when the capture was truncated under REQ-TOOLS-097), session-reinitialized, timeout, timeout seconds, warnings, working directory, and session fields when applicable. Output captured before a hard timeout is labeled `[partial_terminal_output]` instead of `[terminal_output]`.
 
+> **Narrowed by [`PD-TOOLS-013`](../product/directives.md#pd-tools-013), 2026-10-07.** The `failure_kind` vocabulary also
+> holds `interrupted`, carried by a foreground call its run cancelled before the command completed. The other four values
+> and everything else above still govern.
+
 **REQ-TOOLS-101** — Request validation failures return `invalid_request` observations (the fixed compatibility error class `ValueError`, independent of implementation language) for: `reset=true` with `is_input=true` (`Cannot use reset=True with is_input=True in the same terminal call.`); `background=true` with `is_input=true` or `reset=true`; `background=true` with an empty command (`A command is required when background=True.`); an unknown `session_action`; and `send_input` without `input_data`. `failure_kind` and outcome kind are the stable product codes. Schema-level refusals for these cases MUST preserve this diagnostic contract through the tool gate.
 
 **REQ-TOOLS-102** — `reset=true` creates a fresh session before running anything. An empty command with reset returns a confirmation observation (text stating the session has been reset and all previous environment variables and session state cleared; command label `[RESET]`; exit code 0). With a command, the reset note is prepended and the command label becomes `[RESET] <command>`.
@@ -380,6 +384,10 @@ Captured foreground output is capped at 100,000 characters per call. When a comm
 > **Narrowed by [`PD-TOOLS-009`](../product/directives.md#pd-tools-009), 2026-10-06.** Test 4 does not apply to
 > exit code 1 from `diff`, `git … diff …`, `grep`, `egrep`, `fgrep`, `rg` or `findstr`, which classifies `success`
 > / `info`. Every other test, and every other non-zero exit, is unchanged.
+
+> **Extended by [`PD-TOOLS-013`](../product/directives.md#pd-tools-013), 2026-10-07.** The `outcome_kind` vocabulary
+> also holds `interrupted`, and test 1 maps the failure kind `interrupted` to `interrupted` / `warning`. Every other test
+> and value is unchanged.
 
 **REQ-TOOLS-113** — Three independent checks run over the output of a command that exited 0. Each contributes at most one warning, and one or more warnings makes the observation `suspicious_success`:
 - **Literal failure markers**, searched case-insensitively anywhere in the output, in this fixed order: `Traceback (most recent call last):`, `ERROR: file or directory not found`, `no tests ran`, `AssertionError`, `FAILED ` (the trailing space is part of the marker). The earliest marker in that order that is present produces the single marker warning, whose text names the marker that matched; further markers present in the same output add nothing.

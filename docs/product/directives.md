@@ -5600,6 +5600,13 @@ advocate A's change of behaviour and advocate B's confirmation as built and foll
 > **What was not measured.** No built-app launch edits an artifact and then supersedes or re-reports it:
 > that survival is measured on the real store on disk by the unit tests. The orchestrator's live run should show unedited
 > artifacts read as before. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **First live execution, 2026-10-07 (the final default live run at `a68f121`, pack `2026-10-07T06-48-50-123Z`):** what the
+> paragraph above asked of the orchestrator's live run held. In the terminal session, iteration 2's fresh root read the child
+> report `art_KKd3l5TA` with `artifact_read` (tool call `#24`), and it returned the document clause (a) makes the body: its
+> frontmatter, title, Summary, Key Findings and Commands. Found nothing against the directive. **Not reached:** an edited
+> artifact (clauses (c) to (e)) and the Key Findings section's indentation case; no person edited an artifact in the pack.
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

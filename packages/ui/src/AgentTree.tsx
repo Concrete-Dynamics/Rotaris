@@ -2,6 +2,7 @@ import { useState, type KeyboardEvent } from 'react';
 import type { AgentRecord } from '@rotaris/contracts';
 import { markMotionStart } from './motion.js';
 import { stalledText } from './agents.js';
+import { wholeSeconds } from './composer.js';
 import { Tag as DesignTag } from './design-system/index.js';
 
 /**
@@ -65,7 +66,8 @@ export function elapsedLabel(a: AgentRecord, nowIso: string | null): string {
   const from = new Date(a.spawnedAt).getTime();
   const to = new Date(a.completedAt ?? nowIso).getTime();
   if (Number.isNaN(from) || Number.isNaN(to)) return a.presentationState;
-  const s = Math.max(0, Math.round((to - from) / 1000));
+  // REQ-MONITOR-107 with REQ-CHAT-158: whole seconds by the header's rule, so the run-level row and the header agree (K1).
+  const s = wholeSeconds((to - from) / 1000);
   return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
 }
 

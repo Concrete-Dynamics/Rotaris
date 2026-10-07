@@ -458,11 +458,22 @@ export function historyDown(walk: HistoryWalk | null, history: readonly string[]
 }
 
 /**
+ * REQ-CHAT-158, REQ-MONITOR-107: the one rule every elapsed figure uses to turn a duration into whole seconds — the
+ * seconds completed, as a clock reads, never the nearest. The run header and the inspector's run-level row read the same
+ * interval, and until 2026-10-07 the header floored it while the row (`elapsedLabel`) rounded it, so one run showed two
+ * durations a second apart (acceptance K1,
+ * `docs/defects/fixed/the-run-header-and-the-inspectors-run-level-row-read-one-run-duration-a-second-apart.md`).
+ */
+export function wholeSeconds(seconds: number): number {
+  return Math.max(0, Math.floor(seconds));
+}
+
+/**
  * REQ-CHAT-158: `M:SS`, or `H:MM:SS` once the value reaches one hour. Shared with the wait header's countdown
  * (REQ-NOTIFY-263), which formats the same shape — one implementation, so the two can never drift.
  */
 export function formatDuration(seconds: number): string {
-  const total = Math.max(0, Math.floor(seconds));
+  const total = wholeSeconds(seconds);
   const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 }

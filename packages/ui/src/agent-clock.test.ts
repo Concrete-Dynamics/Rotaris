@@ -3,7 +3,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONTEXT_CAPACITY, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { AgentTable } from './AgentTable.js';
-import { AgentTree, clockAdvances, elapsedShown } from './AgentTree.js';
+import { AgentTree, clockAdvances, elapsedLabel, elapsedShown } from './AgentTree.js';
+import { runLevelAgent } from './agents.js';
+import { runTimingLabel, runTimingSeconds } from './composer.js';
 import { Inspector } from './Inspector.js';
 import { PersonaWindow } from './PersonaWindow.js';
 
@@ -112,5 +114,38 @@ describe('REQ-ORCH-089 / REQ-MONITOR-119/120, the repair of a-stalled-child-is-n
   it('a recovered agent (null) draws nothing on any surface', () => {
     for (const html of [tree(running, NOW), table(running, NOW), persona(running, NOW), inspector(running, NOW)]) expect(badge(html)).toBeNull();
     expect(inspectorMeta(inspector(running, NOW))).toBe('running · 1m 3s · 2 tool calls');
+  });
+});
+
+/**
+ * REQ-CHAT-158, REQ-MONITOR-107 (acceptance K1, defect note "the run header and the inspector's run-level row read one run
+ * duration a second apart"): the run header and the inspector's run-level row read one interval, `runStartedAt` to
+ * `updatedAt`, and turn it into whole seconds by one rule, so a run never shows two durations. The intervals are the live
+ * run's at `c2fdd6a`: 133.67 s read "2:13" against "2m 14s", 213.79 s "3:33" against "3m 34s", 20.74 s "0:20" against "21s".
+ */
+describe('REQ-CHAT-158, REQ-MONITOR-107 (K1): the run header and the run-level row read one run duration alike', () => {
+  const entry = { persona: 'orchestrator', model: 'scripted/alpha', reasoning: 'high', tools: [] };
+  const ended = (start: string, end: string): SessionRecord => ({ ...session([]), executionStatus: 'completed', runStartedAt: start, updatedAt: end });
+  const cases: [string, string, string, string][] = [
+    ['2026-10-05T15:47:52.310Z', '2026-10-05T15:50:05.981Z', '2:13', '2m 13s'],
+    ['2026-10-05T16:00:00.000Z', '2026-10-05T16:03:33.790Z', '3:33', '3m 33s'],
+    ['2026-10-05T16:10:00.000Z', '2026-10-05T16:10:20.740Z', '0:20', '20s'],
+    ['2026-10-05T16:20:00.000Z', '2026-10-05T16:21:08.220Z', '1:08', '1m 8s'],
+    ['2026-10-05T16:30:00.000Z', '2026-10-05T16:30:00.500Z', '0:00', '0s'],
+  ];
+  for (const [start, end, header, row] of cases) {
+    it(`${start} to ${end}: the header reads ${header} and the run-level row ${row}`, () => {
+      const s = ended(start, end);
+      expect(runTimingLabel(runTimingSeconds({ runStartedAt: s.runStartedAt, updatedAt: s.updatedAt, busy: false, stepStartedAt: null }, Date.parse(end) + 60_000))).toBe(header);
+      const run = runLevelAgent(s, entry, false)!;
+      expect(run.completedAt).toBe(end);
+      expect(elapsedLabel(run, end)).toBe(row);
+      expect(meta(tree(run, end), 'agent-row__meta mono')).toBe(`done · ${row}`);
+    });
+  }
+
+  it('a live agent\'s clock floors too: 62.6 s since its spawn reads 1m 2s, as the header reads 1:02', () => {
+    expect(elapsedLabel(agent({ state: 'running', presentationState: 'running', live: true }), '2026-09-05T10:01:02.600Z')).toBe('1m 2s');
+    expect(runTimingLabel(62.6)).toBe('1:02');
   });
 });

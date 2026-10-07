@@ -45,6 +45,8 @@
  * Every scenario that reads a session also asserts its PRICE (PD-MONITOR-001 revision 2): at registered prices the
  * cost reads `configured` and equals the store's tokens times those prices exactly. One run, several mechanisms —
  * so a feature is measured working beside the others, and the run costs no extra scenario for it.
+ * `ask`, `edit`, `frictions` and `terminal` also read, at their capture, the run header's frozen duration against the
+ * inspector's run-level row: one interval, one figure (REQ-CHAT-158, REQ-MONITOR-107; K1 of the default live run at c2fdd6a).
  *   4. requirements — the REQUIREMENTS BOARD, driven as a person drives it: REQ-104 selected, the move control
  *                 pressed, the release confirmed, and the run that follows watched from `backlog` through
  *                 `running` to `review`, its review decision taken and the card left resting in `done`. Asserted
@@ -136,6 +138,7 @@ import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
 import { stallIssueCadence } from './lib/stall-issue-cadence.mjs';
 import { conclusive, pacedWindows, stallsWhileStreaming } from './lib/paced-arguments.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
+import { DURATION_PROBES, runDurationReading } from './lib/run-duration-agreement.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, toolIntervals, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
@@ -788,6 +791,18 @@ function expectedConfiguredCost(tokensIn, tokensOut) {
   const units = BigInt(tokensIn) * a.units * 10n ** BigInt(scale - a.scale) + BigInt(tokensOut) * b.units * 10n ** BigInt(scale - b.scale);
   return canonicalDecimal(units, scale + 6);
 }
+/**
+ * REQ-CHAT-158, REQ-MONITOR-107 (acceptance K1 of the default live run at c2fdd6a): at the capture the run header's frozen
+ * duration and the inspector's run-level row read one interval and must read one figure; the header floored it and the
+ * row rounded it, a second apart in 3 of 4 runs. Asserted when the inspector shows the run-level agent; a capture that
+ * shows another agent is noted, since the row it reads is then not the run's.
+ */
+function checkRunDuration(name, log) {
+  const reading = runDurationReading(log, 'orchestrator');
+  const detail = `header "${reading.header}" (data-seconds ${reading.dataSeconds}, frozen ${reading.frozen}) · inspector "${reading.name}" "${reading.meta}"`;
+  if (reading.header !== null && reading.meta !== null && !reading.runLevel) { noted(`${name}: the inspector showed another agent at the capture, so the run duration's agreement is not read`, detail); return; }
+  check(reading.agree, `${name}: the run header and the inspector's run-level row read the run's duration as one figure (K1)`, detail);
+}
 function checkPricing(name, session) {
   if (!session) return;
   const counted = (session.tokens_input ?? 0) + (session.tokens_output ?? 0) > 0;
@@ -1166,7 +1181,7 @@ if (wanted.includes('ask')) {
     ROTARIS_CAPTURE_PROMPT: 'Read src/todos.js in this workspace and reply, in one sentence, with the names of the functions it exports.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
     // Acceptance A36: the inspector's ring caption, which `ask.png` showed denying the reading it stated one line above.
-    ROTARIS_CAPTURE_PROBE: '.inspector__ring-caption',
+    ROTARIS_CAPTURE_PROBE: ['.inspector__ring-caption', ...DURATION_PROBES].join(';;'),
   }, RUN_WAIT_MS + 90_000);
   const requests = [...new Set((log.match(/model request POST (\S+)/g) ?? []).map((line) => line.replace('model request POST ', '')))];
   // The lease's report is the run host's (REQ-PROVIDER-068, `LeaseReportLog`); main no longer restates it (a71-9).
@@ -1187,6 +1202,7 @@ if (wanted.includes('ask')) {
   // Acceptance A36 (REQ-MONITOR-089/065): the run-level agent's caption states its own context window and never denies it.
   const caption = JSON.parse(/capture: probe \.inspector__ring-caption → (\[.*\])\s*$/m.exec(log)?.[1] ?? '[]')[0]?.text ?? '';
   check(/This agent's own context window: [\d,.\s]+ of [\d,.\s]+ tokens\./.test(caption) && !/does not carry/.test(caption), 'the inspector\'s ring caption states the reading and does not deny it', caption);
+  checkRunDuration('ask', log);
   /*
    * The recording is itself asserted, not assumed. A proxy that forwarded but recorded nothing would leave the
    * run green and the pack empty — the exact shape of gap this whole change exists to close — so the first
@@ -1214,11 +1230,12 @@ if (wanted.includes('edit')) {
     // One run, several mechanisms at once: the implementation and its tests are written by two children working in
     // PARALLEL, each under a declared write scope (PD-TOOLS-006), and priced at configured rates (PD-MONITOR-001).
     ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js and export it, and add tests for it to src/todos.test.js. Do the two in parallel: in ONE turn, delegate two coding-agent children in the background, one for the implementation with write_scope ["src/todos.js"] and one for the tests with write_scope ["src/todos.test.js"], then wait for both with wait_for_tasks. You hold no terminal, so tell each child to run `node --test` in the terminal before it reports, and tell me whether the suite passed. Delegate nothing else, and answer as soon as both have reported.',
-    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000', ROTARIS_CAPTURE_PROBE: DURATION_PROBES.join(';;'),
   }, EDIT_WAIT_MS + 90_000);
   check(!/capture: wait for result timed out/.test(log), 'the run reached its result inside the wait');
   const read = readSession();
   checkPricing('edit', read?.session);
+  checkRunDuration('edit', log);
   const tools = (read?.rows ?? []).filter((row) => row.kind === 'tool');
   const names = [...new Set(tools.map((row) => row.tool_name))];
   const source = readFileSync(join(workspace, 'src', 'todos.js'), 'utf8');
@@ -1631,11 +1648,12 @@ if (wanted.includes('shell')) {
 if (wanted.includes('frictions')) {
   const log = await launch('frictions', {
     ROTARIS_CAPTURE_PROMPT: 'Create a file called friction-probe.txt in the workspace root containing exactly one line with the text probe-ok. Then run `node -e "setTimeout(() => {}, 20000)"` in the terminal and stop it by sending SIGINT to its session. Reply DONE when both are finished.',
-    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000', ROTARIS_CAPTURE_PROBE: DURATION_PROBES.join(';;'),
   }, RUN_WAIT_MS + 90_000);
   check(!/capture: wait for result timed out/.test(log), 'the probe run reached its result inside the wait');
   const read = readSession();
   checkPricing('frictions', read?.session);
+  checkRunDuration('frictions', log);
   check(read?.session.execution_status === 'completed', 'the probe run completed', `${read?.session.execution_status} (${read?.session.stop_reason})`);
   const tools = (read?.rows ?? []).filter((row) => row.kind === 'tool');
   const names = [...new Set(tools.map((row) => row.tool_name))];
@@ -1977,11 +1995,12 @@ if (wanted.includes('terminal')) {
   ].join('\n');
   const log = await launch('terminal', {
     ROTARIS_CAPTURE_PROMPT: PROMPT,
-    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000', ROTARIS_CAPTURE_PROBE: DURATION_PROBES.join(';;'),
   }, RUN_WAIT_MS + 120_000);
   check(!/capture: wait for result timed out/.test(log), 'the terminal run reached its result inside the wait');
   const read = readSession();
   checkPricing('terminal', read?.session);
+  checkRunDuration('terminal', log);
   const calls = read === null ? [] : readToolCalls(read.session.session_id);
   const terminals = calls.filter((call) => call.tool_name === 'terminal');
   const shapeOf = (id) => SHAPES.find((shape) => shape.id === id);

@@ -1,19 +1,19 @@
 ---
 name: orchestrated-build
-description: 'Drive a very large implementation (a release backlog, every open defect, a whole feature set) through a multi-agent workflow: bundles of two tasks per builder, an independent verifier per bundle, repair rounds until it passes, serialized merges, then acceptance rounds (full proof sweep, live run against a real model, autopsy) whose findings go back through the same loop. Survives container restarts and usage limits by resuming from the workflow journals. Use when the owner asks to "fix everything before release", "do all open defects", "implement the whole backlog", "plan it and delegate with a workflow", or names this skill. The skill improves itself: read "Improving this skill" before finishing.'
+description: 'Drive a very large implementation (a release backlog, every open defect, a whole feature set) through a multi-agent workflow: bundles of two tasks per builder, an independent reviewer per bundle that repairs what it can in place and lands it, repair rounds until it passes, one landing at a time, then acceptance rounds (full proof sweep, live run against a real model, autopsy) whose findings go back through the same loop. Survives container restarts and usage limits by resuming from the workflow journals. Use when the owner asks to "fix everything before release", "do all open defects", "implement the whole backlog", "plan it and delegate with a workflow", or names this skill. The skill improves itself: read "Improving this skill" before finishing.'
 argument-hint: '[scope, e.g. "every open defect and unimplemented feature except signing"]'
 ---
 
 # Orchestrated build
 
-You are the orchestrator. You plan, launch, watch, recover and report; agents build, verify, repair, land and
+You are the orchestrator. You plan, launch, watch, recover and report; agents build, review, repair, land and
 accept. Quality rests on two things you never trade away: **every bundle is checked by an agent that did not build
 it**, and **nothing lands unless the repository's gate is green on the exact head that lands**. A bundle lands on main
 as a rebase and a fast-forward push, never a merge commit (`references/repository.md`, Worktrees and branches).
 
 | File (relative to this skill) | What it holds |
 | --- | --- |
-| `scripts/workflow.template.js` | The one workflow every run uses: lanes → build → verify → repair → merge, then acceptance |
+| `scripts/workflow.template.js` | The one workflow every run uses: lanes → build → review (repair in place, land) → repair, then acceptance |
 | `scripts/orchestration.mjs` | `render` a plan (fresh, or resumed from journals), `status`, `dry-run`, `self-test` |
 | `profiles/<repo>.json` | One repository's commands and places (gate, setup, proofs, live runs, worktrees) |
 | `references/environment.md` | The host: toolchain, long jobs, load, restarts, limits, pause and backup, blocked shell forms |
@@ -74,7 +74,7 @@ Write `plan.json` in the scratchpad:
 - **A task body is self-contained**: the note or requirement to read, the evidence (file:line, proof output, pack),
   the proof or live scenario that shows the repair, and the rulings that apply. A task only the owner can close is
   no task: record it and report it. A builder that meets one inside a bundle lists it in `ownerBlocked` with the
-  record it made, and finishes the rest; the verifier judges that task on its record.
+  record it made, and finishes the rest; the reviewer judges that task on its record.
 - Optional per bundle: `title`, `branch`, `short`, `effort`, `efforts` (per stage), `reopen` (§4).
 
 ## 3. Render, dry-run, launch
@@ -92,7 +92,7 @@ node $K/scripts/orchestration.mjs render --plan $S/plan.json --profile $K/profil
 authorization), checks that the reference worktree's copy of this skill matches the one rendering, embeds the plan
 in the template, and dry-runs the result against stub agents; it refuses to write a script
 that leaves a bundle unsettled. Launch with `Workflow({ scriptPath: "$S/run-1.js" })` and write the run id as the
-first line of `$S/RUNS.txt`. The first merge agent creates the plan's integration worktree.
+first line of `$S/RUNS.txt`. The first reviewer to land creates the plan's integration worktree.
 
 Schedule a fallback check-in (`send_later`, ~120 minutes) whose message says: read the last run of `RUNS.txt`, run
 `status`, look for another writer on main (`references/repository.md`), recover if it stopped, else re-arm
@@ -108,7 +108,7 @@ silently. Re-arm at every check-in. It survives restarts; background tasks do no
 | `blocked` | No task could proceed | Report it; or `reopen` it (below) |
 | `needs-owner` | Two repair budgets spent, findings survive | Report the last findings to the owner |
 | `unverified` | One budget spent | Re-render: it gets a fresh budget at `max` with a root-cause note |
-| `merge-failed` | The rebased head was green but the push failed | Re-render: the landing is retried (its step 0 finds one that did happen) |
+| `merge-failed` | The rebased head was green but the push failed | Re-render: a review retries the landing (its step 0 finds one that did happen) |
 | `*-lost`, `halted`, `error` | An agent came back empty, or three in a row did | Recover (below) |
 
 The run's own `status`: `complete`; `incomplete` (a plan bundle did not settle, so acceptance was skipped: re-render);
@@ -134,14 +134,14 @@ lives only in the container, which needs the owner's word (`references/environme
 Recovering, above.
 
 **Reopening a blocked bundle** that holds good work: add `"reopen": "<the accepted outcome of the blocked task>"`
-to it in the plan and render; every later stage of it sees that scope, and it is verified again and merged.
+to it in the plan and render; every later stage of it sees that scope, and it is reviewed again and lands.
 Acceptance results are not replayed while a plan bundle still has to land.
 
-**A refused live scenario** in a bundle comes back as not verified, with the exact command its builder or verifier
+**A refused live scenario** in a bundle comes back as not verified, with the exact command its builder or reviewer
 sent: run that scenario yourself on merged main once the bundle has landed (`references/live-runs.md`, Running).
 
-**Verifiers' optional findings** come back per bundle (`optional`). One that is a real defect elsewhere is recorded
-(repository.md says how) on a docs-only branch merged with the gate green.
+**Reviewers' optional findings** come back per bundle (`optional`), beside what they repaired in place (`repaired`). One
+that is a real defect elsewhere is recorded (repository.md says how) on a docs-only branch merged with the gate green.
 
 **Status to the owner**: a short paragraph per event worth knowing (merges, a stuck bundle, a decision needed),
 numbers first; no narration of routine steps.
@@ -198,16 +198,18 @@ answered; a statement in it proved false; a measured alternative proved better.
 
 **Protected invariants**: an improvement never weakens them without the owner's explicit approval:
 - `CLAUDE.md`'s hard boundary binds every agent the skill starts;
-- the verifier never built what it verifies, reads the full diff and the requirement texts itself, and runs the
-  gate itself; no step of its checklist or of the builder's rules is removed or loosened; a bundle passes only
-  with zero blocking findings and lands only after it passes;
+- the reviewer never built what it reviews, reads the full diff and the requirement texts itself, may repair
+  blocking findings in place in its own commits, and lands only with zero blocking findings remaining and the gate
+  green on the exact head it pushes; the builder runs the quick checks, and the full gate runs once per landing, on
+  the pushed head (the owner, 2026-10-07: "Maybe one implementer, one fix, and then merge." and "Uh, yes, go ahead
+  and make the change. I approve it."); no step of its checklist or of the builder's rules is removed or loosened;
 - the record obligations and boundaries `references/repository.md` states may be added to, or corrected toward
   their authorities, never dropped;
 - the gate runs on the exact head that is pushed, before every push; main's history stays linear, a rebase and a
   fast-forward push and never a merge commit (the owner, 2026-10-04: "please always use rebase instead of a merge
   commit for main."); nothing is forced or reset, and no branch is rewritten but a bundle's own unlanded one, by its
   rebase onto main;
-- the verify and merge stages' model and effort, the repair budget and the needs-owner cap are never lowered;
+- the review stage's model and effort, the repair budget and the needs-owner cap are never lowered;
 - the acceptance sweep, the autopsy, the record-every-finding step and the Done criteria are never reduced; the
   profile's `gate` is never narrowed;
 - live runs need the owner's quoted authorization; nothing grants permissions, spends, rules an owner's decision,

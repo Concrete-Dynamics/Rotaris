@@ -23,6 +23,14 @@ building `PD-SESSION-002`, which counts the build's elisions as `summary.md`'s m
 which budget and which dropping rule govern is a conflict between two requirements, to be classified on its own (an open
 question, or a defect found by building and its amendment round).
 
+**Outcome (repaired 2026-10-07, fin29).** Classified as [OQ-221](../../architecture/open-questions.md) and ruled under the owner's
+delegation (R-072): REQ-TOOLS-152's 100,000 characters with the build's skip-and-continue, recorded as `PD-TOOLS-006` revision 5,
+which narrows REQ-TOOLS-152 and REQ-LIBRARY-098. `FULL_CONTEXT_BUDGET` is 100,000; `selectAttachments` is the one selection the
+observation and the block read; the observation states how many attachments the child is given and names the ids left out for
+size with the budget, the unresolved references and the unreadable documents (`attachmentWarnings`). Pinned by
+`packages/engine/src/artifacts/artifacts.test.ts`, `packages/engine/src/children/children.test.ts` ("PD-TOOLS-006 revision 5") and
+`packages/agent-tools/src/tools/delegation.test.ts`, red on the code before, and shown by `pnpm artifacts-proof` launch 7.
+
 ## Specs
 
 REQ-TOOLS-152 (100,000 characters; the first overflowing attachment and every later one dropped; the observation warns how

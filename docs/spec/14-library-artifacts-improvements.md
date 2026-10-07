@@ -305,6 +305,10 @@ After every completed task run the product may perform an optional, strictly non
 **REQ-LIBRARY-097** — A newly created agent MUST be given a `PRIOR SIBLING ARTIFACT INDEX` context block listing the session's existing artifacts, one artifact per line, each line carrying that artifact's slug, id, persona, status, and its summary truncated to at most 160 characters. The block MUST NOT exceed 10,000 characters; when not every artifact fits, the block MUST end with a marker stating how many were left out and naming the `artifact_list` tool as the way to reach them. Artifacts whose status is neither `succeeded` nor `published` — every unsuccessful member of the set REQ-LIBRARY-088 forms, which this requirement does not enumerate — MUST be ordered ahead of artifacts whose status is `succeeded` or `published`, so a failure is never the entry elided while a success survives. Within each of those two groups the ordering MUST be newest first by creation time, ties broken by ascending artifact id, so the ordering is total and two readings of the same session produce the same block. Artifacts are dropped from the tail of that total order until the block fits. The elision marker MUST state how many artifacts were left out and MUST name the `artifact_list` tool as the way to reach them; its wording is left to the implementation.
 
 **REQ-LIBRARY-098** — Explicitly attached artifacts MUST be injected as a `PRIOR AGENT CONTEXT (FULL)` block within a 48,000-character budget, reporting unresolvable references and elided ids; both injection paths record a context-selection diagnostic.
+  > **Narrowed by [`PD-TOOLS-006`](../product/directives.md#pd-tools-006), 2026-10-07 (revision 5).** The block's budget is
+  > REQ-TOOLS-152's 100,000 characters, not 48,000: attachments are considered in the caller's order, each body carried whole
+  > or not at all, an overflowing one left out and every later one still considered. The heading, the in-block reports of
+  > unresolvable references and elided ids, and the context-selection diagnostic still govern.
 
 **REQ-LIBRARY-099** — The agent-facing `artifact_read(id_or_slug, sections=[])` tool MUST return the full Markdown body by default, or a filtered view of sections from {`summary`, `key_findings`, `snippets`, `highlights`, `files`}; a miss returns the error observation `Artifact not found: <ref>`; every successful read marks the reading persona as a consumer.
   > **Narrowed by [`PD-LIBRARY-001`](../product/directives.md#pd-library-001), 2026-09-12.** The set
@@ -547,6 +551,7 @@ Held per session in the workspace store: one full record per artifact plus a met
 
 - `PRIOR SIBLING ARTIFACT INDEX` — every artifact rendered on its own single line carrying slug, id, persona, status and a ≤ 160-character summary; 10,000-char budget, unsuccessful statuses ordered ahead of `succeeded` (REQ-LIBRARY-097), elision marker naming the omitted count and the `artifact_list` tool.
 - `PRIOR AGENT CONTEXT (FULL)` — full bodies of explicitly attached artifacts, 48,000-char budget, missing references and elided ids reported.
+  > *Note, 2026-10-07:* the budget is 100,000 characters with skip-and-continue, by [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 5 (REQ-LIBRARY-098's back-pointer); the line above is kept as written.
 - `persona_memory_<persona>` — the persona's memory file content (≤ 200 lines), injected at agent creation only.
 
 ### Saved prompts

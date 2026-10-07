@@ -164,6 +164,13 @@ under an ignored glob (`gen/*` then `!gen/keep/`) keeps what it holds for the se
 pruning walks ask an entry's own verdict (`ignoredHere`). The **runtime view**'s search-tools and setup paragraphs say so.
 No package, edge, process, channel, command or store column changed.
 
+**A delegated child's attached artifacts: 100,000 characters, skip-and-continue, and an observation that names what the child is
+given (PD-TOOLS-006 revision 5, REQ-TOOLS-152/153, REQ-LIBRARY-098; OQ-221 ruled under R-072, fin29).** `selectAttachments`
+(`children/orchestration.ts`) is the one selection both the delegate observation at acceptance and the payload's block read;
+`AttachmentOutcome` carries `given`, `elidedForSize`, `unresolved`, `unreadable` and `budget`, rendered by `attachmentWarnings`
+(`agent-tools/tools/delegation.ts`); `FULL_CONTEXT_BUDGET` is 100,000. The **runtime view**'s delegation section says so. No
+package, edge, process, channel, command or store column changed.
+
 **Settings presents the per-agent timeout as a third delegation limit, in minutes (PD-CONFIG-003, REQ-MONITOR-286; OQ-218
 ruled under R-072, fin28).** `RuntimeViewSchema` and the snapshot carry `child_timeout` (seconds); `PendingSettings.runtime`
 holds it, the Runtime category's Delegation limits draws it in whole minutes (1–240), and it is saved by the desktop save

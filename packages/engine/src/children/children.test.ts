@@ -952,6 +952,59 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
   });
 
+  /**
+   * PD-TOOLS-006 revision 5 (OQ-221, ruled 2026-10-07 under R-072): the delegate observation and the child's block read ONE
+   * selection, so what the caller is told it was given is what the child receives — the repair of
+   * `docs/defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`.
+   */
+  describe('PD-TOOLS-006 revision 5: the delegate observation names what the child is given of its attachments', () => {
+    it('for a child started at once, the observation\'s left-out ids are the context_selection entry\'s, its given count the entry\'s, and the payload carries exactly those', async () => {
+      const outcomes: { attachments?: unknown }[] = [];
+      const ids: Record<string, string> = {};
+      const tool: TestTool = (name, a, ctx) => {
+        if (name === 'publish') {
+          // Two long bodies and a short one: 60,000 + 45,000 overflow the 100,000 section, and 60,000 alone overflowed 48,000.
+          for (const [slug, body] of [['long-one', 'L'.repeat(60_000)], ['long-two', 'M'.repeat(45_000)], ['short-one', 'the short body']] as const) {
+            const w = ctx.artifacts!.write({ slug, title: slug, body, tags: ['research'], supersedes: null });
+            if (w.ok) ids[slug] = w.id;
+          }
+          return Promise.resolve({ text: 'Published.', isError: false, status: 'ok', durationMs: 1, label: 'publish', args: a });
+        }
+        if (name !== 'delegate') return undefined;
+        return (async () => {
+          const ops = ctx.delegation!;
+          const r = await ops.delegate(ctx.parentId!, { persona: 'coding-agent', taskName: 'build', task: 'TASK: build', dependsOn: [], inheritedContext: [], category: '', runInBackground: false, writeScope: [], attachArtifacts: ['long-one', 'long-two', 'short-one', 'no-such-artifact'] });
+          outcomes.push(r as { attachments?: unknown });
+          if (r.status !== 'rejected') await ops.waitForTasks(ctx.parentId!, [r.taskId]);
+          return { text: r.message, isError: false, status: 'ok' as const, durationMs: 1, label: 'delegate', args: a };
+        })();
+      };
+      const payloads: string[] = [];
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'p1', name: 'publish', args: {} }], 'Publishing.');
+          if (turn === 2) return toolCalls([{ callId: 'd1', name: 'delegate', args: {} }], 'Delegating.');
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        payloads.push(req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n'));
+        return answer('Built it.');
+      }, { tool });
+      const sid = (sessions.start(dal, 'C:/ws', 'attach three') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const build = children(sid).find((c) => c.canonical_name === 'build')!;
+      const entry = dal.timelineOf(sid).filter((t) => t.name === 'context_selection').map((t) => JSON.parse(t.metadata) as Record<string, unknown>).find((m) => m['task_id'] === build.task_id)!;
+      expect(outcomes).toHaveLength(1);
+      expect(outcomes[0]!.attachments).toEqual({ given: 2, elidedForSize: [ids['long-two']], unresolved: ['no-such-artifact'], unreadable: [], budget: 100_000 });
+      expect(entry).toMatchObject({ attached_included: 2, attached_elided: [ids['long-two']], attached_unresolved: ['no-such-artifact'] });
+      const payload = payloads[0]!;
+      expect(payload).toContain(`## long-one (${ids['long-one']})`);
+      expect(payload).toContain(`## short-one (${ids['short-one']})`);
+      expect(payload).not.toContain(`## long-two (${ids['long-two']})`);
+      expect(payload).toContain(`was left out: ${ids['long-two']}`);
+    });
+  });
+
   describe('PD-ORCH-005 clause 22 / PD-TOOLS-006 revision 3 (OQ-66, R-067): a follow-up by session_id resumes the caller\'s own settled child from its record', () => {
     const textOf = (m: ModelRequest['messages'][number]): string => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('');
     const isRoot = (req: ModelRequest) => /^You are the orchestrator/.test(textOf(req.messages[0]!));

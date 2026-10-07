@@ -33,6 +33,13 @@
  *                  statuses — checked in SQLite, through the `artifact_read` sections filter (the tool path
  *                  the port's drifted allow-list broke), in the Markdown sidecar via the stock parser, and
  *                  rendered in the artifact inspector.
+ *   7. attached  — PD-TOOLS-006 revision 5 (OQ-221, REQ-TOOLS-152/153, REQ-LIBRARY-098): the orchestrator publishes two long
+ *                  artifacts and a short one and delegates a child attaching all three and a reference to nothing, in that
+ *                  order. The 100,000-character section carries the first long body (which the old 48,000 budget left out),
+ *                  leaves the second out because both would overflow it, and still carries the short one after it. The
+ *                  delegate observation in the tool-call record names exactly that: two given whole, the second long id left
+ *                  out for size with the budget, the reference unresolved. The child's `context_selection` entry and its
+ *                  first message carry the same selection, and `summary.md` counts the one left out (PD-SESSION-002).
  *
  * Evidence under `.proof/artifacts-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
  */
@@ -571,6 +578,60 @@ let edited = null;
     ledger, sidecarHeadings: parsed.headings, toolFilteredRead: readText,
     inspectorPreview: { headings: previewHeadings, commandItems: previewItems.slice(-3) },
     row: { id: record.id, slug: record.slug, status: record.status, importance: record.importance, persona: record.source_persona, task: record.source_task_id },
+  };
+}
+
+// ---- 7. The attached-artifact section: 100,000 characters, skip-and-continue, an accurate observation -------------
+{
+  // Bodies chosen so the selection is visible: 55,000 + 46,000 overflow 100,000, 55,000 alone overflowed 48,000, and the
+  // short one fits after the second is left out. The three bodies travel in one environment variable, under Linux's
+  // 128 KiB limit for one.
+  const ATTACH = { 'long-one': 'L'.repeat(55_000), 'long-two': 'M'.repeat(46_000), 'short-one': 'The short attached body.' };
+  await launch('attached', {
+    ROTARIS_CAPTURE_PROMPT: 'publish three and attach them', ROTARIS_CAPTURE_PROMPT_MS: '1200',
+    ROTARIS_SCRIPT: 'artifact:artifact_write:long-one,artifact:artifact_write:long-two,artifact:artifact_write:short-one,delegate:coding-agent:build,wait:6000,answer',
+    ROTARIS_CHILD_SCRIPT: 'answer',
+    ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify(Object.fromEntries(Object.entries(ATTACH).map(([slug, body]) => [slug, { slug, title: slug, body, tags: ['research'] }]))),
+    ROTARIS_SCRIPT_DELEGATE_ARGS: JSON.stringify({ build: { attach_artifacts: ['long-one', 'long-two', 'short-one', 'no-such-artifact'] } }),
+    ROTARIS_INTENT_SCRIPT: 'moderate_feature',
+    ROTARIS_CAPTURE_AFTER_MS: '12000',
+  }, { files: { workspace: WORKSPACE_ORCHESTRATOR } });
+  const db = new Database(oneDatabase(), { readonly: true });
+  const s = latestSession(db);
+  const rows = artifacts(db, s.session_id);
+  const id = (slug) => rows.find((x) => x.slug === slug)?.id;
+  for (const slug of Object.keys(ATTACH)) if (!id(slug)) throw new Error(`the scripted publish of ${slug} stored no artifact: ${JSON.stringify(rows.map((x) => x.slug))}`);
+  const child = db.prepare("SELECT task_id, state FROM children WHERE session_id = ? AND canonical_name = 'build'").get(s.session_id);
+  const delegated = toolRows(db, s.session_id, 'delegate');
+  const selection = db.prepare("SELECT metadata FROM timeline WHERE session_id = ? AND name = 'context_selection' ORDER BY ordinal").all(s.session_id).map((x) => JSON.parse(x.metadata)).filter((m) => m.task_id === child?.task_id);
+  const firstMessage = child ? db.prepare("SELECT body FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'message' ORDER BY seq").all(s.session_id, child.task_id).map((x) => JSON.parse(x.body)).find((m) => m.role === 'user') : undefined;
+  db.close();
+  if (!child) throw new Error('the child `build` was not delegated');
+  if (delegated.length !== 1) throw new Error(`expected one delegate call, found ${delegated.length}`);
+  const observed = String(delegated[0].entry.result ?? '');
+  const leftOut = id('long-two');
+  const EXPECTED_OBSERVATION = [
+    '2 attached artifacts will be given to the child whole.',
+    `1 attached artifact was left out for size, because its whole body would carry the 100,000-character attachment budget past its limit: ${leftOut}; the child is told and can fetch it with artifact_read.`,
+    '1 attachment could not be resolved: no-such-artifact.',
+  ];
+  for (const line of EXPECTED_OBSERVATION) if (!observed.includes(line)) throw new Error(`the delegate observation lacks "${line}": ${JSON.stringify(observed)}`);
+  if (/attached to its context/.test(observed)) throw new Error(`the delegate observation still counts references before the budget: ${JSON.stringify(observed)}`);
+  if (selection.length !== 1) throw new Error(`expected one context_selection entry for the child, found ${selection.length}`);
+  const entry = selection[0];
+  if (entry.attached_included !== 2 || JSON.stringify(entry.attached_elided) !== JSON.stringify([leftOut]) || JSON.stringify(entry.attached_unresolved) !== JSON.stringify(['no-such-artifact'])) throw new Error(`the context_selection entry is not the observation's selection: ${JSON.stringify(entry)}`);
+  const payload = (firstMessage?.content ?? []).map((p) => (p.kind === 'text' ? p.text : '')).join('');
+  if (!payload.includes(`## long-one (${id('long-one')})`) || !payload.includes(`## short-one (${id('short-one')})`)) throw new Error('the child\'s first message does not carry the two attachments it was said to be given');
+  if (payload.includes(`## long-two (${leftOut})`) || !payload.includes(`left out: ${leftOut}`)) throw new Error('the child\'s first message does not leave the second long attachment out by name');
+  const block = payload.slice(payload.indexOf('PRIOR AGENT CONTEXT (FULL)'));
+  const blockSections = block.slice(0, block.search(/\n\(/) === -1 ? block.length : block.search(/\n\(/));
+  if (blockSections.length > 100_000) throw new Error(`the attached-artifact section is ${blockSections.length} characters, past REQ-TOOLS-152's 100,000`);
+  const summary = readFileSync(join(filesDir(s.session_id), 'summary.md'), 'utf8');
+  const elidedLine = summary.split('\n').find((l) => l.startsWith('- Mostly-elided artifacts:')) ?? '';
+  if (!/^- Mostly-elided artifacts: 1 \(/.test(elidedLine)) throw new Error(`summary.md does not count the one attachment left out (PD-SESSION-002): "${elidedLine}"`);
+  results.attached = {
+    childState: child.state, observation: observed.slice(0, 600), contextSelection: entry,
+    sectionCharacters: blockSections.length, payloadCarries: ['long-one', 'short-one'], leftOut: { slug: 'long-two', id: leftOut }, summaryLine: elidedLine,
   };
 }
 

@@ -1337,6 +1337,18 @@ and keeps the attached artifacts, which the caller named; the `context_selection
 `sibling_index_suppressed`. Because the flag is on the row, REQ-ORCH-088's retry and a resumed child's retry omit it too;
 the attached references are read from the row (`children.attach_artifacts`, v28) on the same terms.
 
+**The attached artifacts: one selection, 100,000 characters (REQ-TOOLS-152, REQ-TOOLS-153, REQ-LIBRARY-098 as `PD-TOOLS-006`
+revision 5 narrows them; OQ-221 ruled 2026-10-07 under R-072; fin29).** `selectAttachments` (`children/orchestration.ts`)
+resolves each reference, reads each body and applies `fullContextBlock` (`artifacts/context.ts`): the caller's order, each body
+whole or not at all, an overflowing one left out and every later one still tried, within `FULL_CONTEXT_BUDGET` (100,000; 48,000
+until this revision) measured over the heading and the carried sections with their separators. `IterationChildren.delegate`
+calls it at acceptance (`resolveAttachments`) and returns `AttachmentOutcome` — `given`, `elidedForSize`, `unresolved`,
+`unreadable`, `budget` — which `delegate`'s observation renders (`attachmentWarnings`, `agent-tools/tools/delegation.ts`);
+`artifactContext` calls it again at each payload assembly and writes the `context_selection` entry (`attached_included`,
+`attached_elided`, `attached_unresolved`) from the same result. For a child started at once the two readings name the same
+ids; for one assembled later (held for a slot, waiting on dependencies, resumed) the observation is a forecast and the entry is
+the record.
+
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest
 model step) and `contextLimit` — **from Part AH the model's own `max_input_tokens`** where the configuration states one

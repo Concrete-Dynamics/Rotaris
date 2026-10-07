@@ -2426,6 +2426,12 @@ are not recorded, and cannot be recovered afterwards.
 
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
+*Revision 5 (2026-10-07, [R-072](requests.md#r-072)) — **the attached-artifact budget, and what the caller is told**, a section
+added after revision 4's; the ruling of [OQ-221](../architecture/open-questions.md) under the owner's delegation. It replaces
+REQ-TOOLS-152's dropping rule and REQ-LIBRARY-098's figure, both quoted below, and adds REQ-LIBRARY-098 to the Narrows line. It
+lands here for the reason revision 3 states: this directive holds REQ-TOOLS-152's one narrowing slot, so a narrowing of
+`delegate`'s fields lands here whatever it is about.*
+
 *Revision 4 (2026-10-07, [R-072](requests.md#r-072)) — **what `delegate` tells its caller about each persona**, a section
 added after revision 3's; the ruling of [OQ-216](../architecture/open-questions.md) under the owner's delegation. Nothing is
 replaced. It lands here for the reason revision 3 did: this directive already extends REQ-ORCH-028 and narrows
@@ -2491,6 +2497,25 @@ and to hand command output to a persona that runs no commands through `depends_o
 states the grant that holds once execution is released; while a plan gate holds the run, REQ-ORCH-153's refusal stands.
 Revision 3's write-scope refusal stays as it is.
 
+**The attached-artifact budget, and what the caller is told (revision 5).** The attached-artifact section of a delegated
+child's payload is its `PRIOR AGENT CONTEXT (FULL)` block (REQ-LIBRARY-098), budgeted at 100,000 characters. Attachments SHALL
+be considered in the order the caller listed them, and each body is carried whole or not at all. An attachment whose whole body
+would carry the section past the budget SHALL be left out, and every later attachment SHALL still be considered. The
+observation's attachment warning (REQ-TOOLS-153) SHALL carry:
+- how many attachments the child will be given;
+- how many were left out for size, naming their ids and citing the budget;
+- the references that could not be resolved;
+- the ids whose document could not be read.
+
+The warning is computed at acceptance by the same selection that assembles the block. For a child whose payload is assembled
+later (held for a model slot, waiting on its dependencies, or resumed), it is a forecast, and REQ-LIBRARY-098's
+context-selection diagnostic is the record. REQ-LIBRARY-098's heading, its in-block reports and its context-selection diagnostic
+still govern. REQ-TOOLS-153 governs unchanged, since its "any attachment warning" defers the warning's content to REQ-TOOLS-152;
+REQ-TOOLS-154's order is unchanged.
+
+> REQ-TOOLS-152 said, and no longer governs: "the first whose full body would carry the section past the budget is dropped, and
+> so is every attachment after it." REQ-LIBRARY-098 said, and no longer governs: "within a 48,000-character budget".
+
 **What is unchanged.** A child delegated without a `write_scope` claims nothing and is refused only where a
 live sibling's claim reaches. A `write_scope` never limits the child that declared it: that child may write
 outside its own patterns wherever no other claim reaches. A claim belongs to one run and lapses with its child, so a
@@ -2547,12 +2572,25 @@ each caller's `tool_restrictions`. What it costs:
   (revision 3: the file tools only);
 - the coordinator may commission more children, a command runner beside a writer.
 
-> **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154
+**Why revision 5, and what it costs.** Two requirements budgeted one block differently. REQ-TOOLS-152 set 100,000 characters
+and dropped the first overflowing attachment with every one after it; REQ-LIBRARY-098 set 48,000. The build used 48,000 with a
+skip-and-continue it took from neither, and its observation said "N artifacts were attached to its context", counting the
+references that resolved before any budget applied, so a caller could be told of an artifact its child never received
+([`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md)).
+REQ-TOOLS-152 calls itself the whole `delegate` contract, REQ-ORCH-032 hands the oversized attachment to it, and domain 05's
+resolution 26 and limits inventory carry 100,000; REQ-LIBRARY-098's restatement is the one the reconciliation missed.
+Skip-and-continue keeps resolution 26's three reasons (deterministic, order-preserving, never partial) and never displaces an
+earlier attachment, so the child always receives a superset of what the prefix rule gives. What it costs:
+- up to about 25,000 tokens more on a child's first message, and on every later turn that carries it;
+- a later attachment can arrive without an earlier one it builds on, where the prefix rule withheld both;
+- for a child held before its payload is assembled, the observation is a forecast the store may outrun.
+
+> **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154, REQ-LIBRARY-098
 > **Extends:** REQ-ORCH-028
 
 *Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049). Revision 2 logged as [R-059](requests.md#r-059),
 revision 3 as [R-067](requests.md#r-067). Revision 4 ruled under the owner's delegation, [R-072](requests.md#r-072), from
-the final live runs' findings L4 and N3.*
+the final live runs' findings L4 and N3. Revision 5 ruled under the same delegation from OQ-221 (the consortium's question AB1).*
 
 > **First execution, 2026-09-23, the day it was ruled:** the mechanism was built as written, and one clause of
 > the disclosure proved false for one reader. The block lists "the `write_scope` of every other child of the run
@@ -2670,6 +2708,31 @@ the final live runs' findings L4 and N3.*
 > `intent-classifier`, which the defaults call a persona outside the delegation vocabulary (the pack's finding P5; no
 > coordinator delegated to it). **Still owed:** the duress counts named above (briefs, `write_scope` refusals, rows spent on a
 > missing tool, stray files). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 5, 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-221](../architecture/open-questions.md)),
+> built by fin29:** built as written, and the text met the code in two places.
+>
+> - **The budget's measure.** The build measured the heading and each carried section, but joined the sections with one more
+>   newline it did not count, so a block could pass its budget by one character per carried section after the first. The
+>   separator is now counted, and a block that fits exactly is carried (`fullContextBlock`, `packages/engine/src/artifacts/context.ts`).
+> - **The budget in the warning.** The engine owns the figure and `agent-tools` renders the warning, and neither imports the
+>   other, so the outcome carries the budget beside the counts (`AttachmentOutcome.budget`) rather than a second copy of 100,000.
+>
+> The one selection is `selectAttachments` (`packages/engine/src/children/orchestration.ts`), read by the observation at
+> acceptance and by the block at each assembly; the observation is `attachmentWarnings` (`packages/agent-tools/src/tools/delegation.ts`).
+>
+> **What was measured.** In `artifacts/artifacts.test.ts`: the constant is 100,000; [over, short] carries the short one;
+> [short, over, short] carries both short ones in order; an exact fit is carried and one character more is left out; an
+> unreadable document in the middle leaves the others. In `children/children.test.ts`, a child started at once: the observation's
+> left-out ids and given count equal its `context_selection` entry's, and its first message carries exactly those sections. In
+> `tools/delegation.test.ts`: the warning's four parts and the rendered observation. The ten new cases, and the existing block case whose budget wording changed, are red on the code before. In the
+> built app, `pnpm artifacts-proof` launch 7 (`attached`): three artifacts of 55,000, 46,000 and 24 characters and a reference to
+> nothing, attached in that order; the observation read "2 attached artifacts will be given to the child whole", named the
+> 46,000-character artifact as left out for size with the 100,000-character budget and the reference as unresolved; the
+> `context_selection` entry held `attached_included` 2 with the same id elided; the child's first message carried the
+> 55,000-character body (left out under 48,000) and the short one after the elided one, a section of 56,099 characters; and
+> `summary.md` read "Mostly-elided artifacts: 1". **What was not measured.** No live run attached artifacts; none of the four
+> autopsied live runs did. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -5994,8 +6057,15 @@ session's `context_selection` entries.
 > attachments that overflowed the 48,000-character budget, so a non-zero line has been seen in unit tests only. **Found on
 > the way:** the delegate tool's observation counts attachments before the budget applies, and REQ-TOOLS-152 budgets the
 > section at 100,000 characters where REQ-LIBRARY-098 and the build use 48,000
-> ([`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../defects/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md),
+> ([`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md),
 > recorded, not repaired). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Cross-reference, 2026-10-07 ([OQ-221](../architecture/open-questions.md), under [R-072](requests.md#r-072)):** no clause
+> above changes, so this directive gains no revision. "That block's budget (REQ-LIBRARY-098)" now reads as
+> [`PD-TOOLS-006`](#pd-tools-006) revision 5's 100,000-character section and its skip-and-continue rule. The count reads the
+> distinct agent-and-artifact pairs whose body did not fit that section after the attachments carried before it; for every
+> child whose payload was assembled, those are exactly the ids its delegate observation named as left out for size. The note
+> found on the way above is repaired by that revision.
 
 ---
 

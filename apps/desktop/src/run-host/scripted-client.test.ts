@@ -128,6 +128,29 @@ describe('scriptedClient — the step a call takes', () => {
   });
 
   /*
+   * PD-TOOLS-006 revision 5 (OQ-221): the artifacts proof attaches artifacts to a scripted delegation, so a named
+   * `delegate:<persona>:<name>` step merges ROTARIS_SCRIPT_DELEGATE_ARGS' entry for that name into its arguments.
+   */
+  it('`delegate:<persona>:<name>` merges ROTARIS_SCRIPT_DELEGATE_ARGS\' entry for that name, and a name without one is unchanged', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'delegate:coding-agent:build,delegate:tester:check');
+    vi.stubEnv('ROTARIS_SCRIPT_DELEGATE_ARGS', JSON.stringify({ build: { attach_artifacts: ['long-one', 'short-one'] } }));
+    const client = scriptedClient(clock, () => {});
+    const delegating = [...TOOLS, { name: 'delegate', description: 'delegate', parameters: {} }];
+    const callOf = async (messages: readonly ChatMessage[]) => {
+      const parts = client.stream({ ...request(messages), tools: delegating })[Symbol.asyncIterator]();
+      let call: { name: string; argsDelta: string } | null = null;
+      for (let r = await parts.next(); r.done !== true; r = await parts.next()) if (r.value.ok && r.value.value.kind === 'tool-call') call = r.value.value;
+      return JSON.parse(call!.argsDelta) as Record<string, unknown>;
+    };
+    const root = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'build it')];
+    const first = await callOf(root);
+    expect(first).toMatchObject({ persona: 'coding-agent', task_name: 'build', attach_artifacts: ['long-one', 'short-one'] });
+    const second = await callOf([...root, ...step('c1', 'delegate')]);
+    expect(second).toMatchObject({ persona: 'tester', task_name: 'check' });
+    expect('attach_artifacts' in second).toBe(false);
+  });
+
+  /*
    * The repair of fixed/the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md: every child
    * shares ROTARIS_CHILD_SCRIPT, so a completed wait may not remove anything from it. Three children started together,
    * each scripted `wait:1000,read,glob`, each read after the wait and then glob — where the shared list's splices handed

@@ -10581,7 +10581,7 @@ so B's `n/a` would hide a fact the store holds. A was corrected twice: the count
 ~~a REQ-ORCH-088 retry rebuilds a child's payload and writes a second entry~~ another execution of the same child (a resumed
 child's REQ-ORCH-088 retry in a later run, or a follow-up of a child that never started) assembles its payload again and writes
 a second entry, while a retry within one execution reuses the blocks it built (narrowed by fin30); and the conflict A noticed is wider than its wording,
-recorded in [`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../defects/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md).
+recorded in [`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md).
 "Mostly" here means "wholly", a cost the directive states. Built by fin28 (`elidedAttachmentsOf` and `warningLines` in
 `packages/engine/src/run/summary.ts`, `StoreDal.elidedAttachmentRowsOf`); the note
 [`summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`](../defects/fixed/summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md)
@@ -12178,3 +12178,63 @@ the renderer's launch state no longer carries `permissionMode` or `allowUnsandbo
 `unattendedAdvisory()`. The `advisory` prop and the `start-session-advisory` paragraph stay as REQ-TOOLS-192's presentation
 seam. Pinned by `packages/ui/src/start-session-advisory.test.ts` (its first case red on the old form: the function took one
 input). Nothing a user sees changes.
+
+**OQ-221 — Which budget and which dropping rule govern a delegated child's attached artifacts, and what is the caller told?**
+*(REQ-TOOLS-152, the attached-artifact section budgeted at 100,000 characters, "the first whose full body would carry the
+section past the budget is dropped, and so is every attachment after it", "the observation warns how many were dropped for
+size"; REQ-TOOLS-153, "any attachment warning"; REQ-TOOLS-154 item (4); REQ-LIBRARY-098, the `PRIOR AGENT CONTEXT (FULL)`
+block "within a 48,000-character budget"; REQ-ORCH-032; domain 05's resolution 26 and limits inventory; `PD-SESSION-002`,
+which counts the block's elisions. Raised 2026-10-07 from
+[`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md),
+recorded by fin28 while building `PD-SESSION-002`; the consortium's question AB1, numbered OQ-221 as the round assigned. Ruled
+the same day.)*
+
+Two requirements budget one block differently, and the build followed neither whole: it used REQ-LIBRARY-098's 48,000
+(`FULL_CONTEXT_BUDGET`, `packages/engine/src/artifacts/context.ts`), skipped an overflowing body and kept trying the later ones,
+where REQ-TOOLS-152 drops every attachment after the first that overflows, and its observation said "N artifacts were attached
+to its context", counting the references that resolved at delegation before any budget applied
+(`resolveAttachments`, `packages/engine/src/children/orchestration.ts`). A caller could be told of an artifact its child never
+received, and no observation warned how many were dropped for size.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the `PRIOR AGENT CONTEXT (FULL)`
+block, the attached-artifact section of a delegated child's payload, is budgeted at REQ-TOOLS-152's 100,000 characters.
+Attachments are taken in the caller's order and each body is carried whole or not at all. A body that would carry the section
+past the budget is left out, and every later attachment is still tried. The delegate observation is computed at acceptance by
+the same selection that assembles the block: it states how many attachments the child will be given, and names the ids left
+out for size (citing the budget), the references that could not be resolved and the attachments whose document could not be
+read. `PD-SESSION-002`'s count then reads the distinct agent-and-artifact pairs whose body did not fit the 100,000-character
+section after the attachments carried before it; for every child whose payload was assembled, those are exactly the ids its
+observation named as left out for size. Recorded as [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) **revision 5**
+(the ruling text names it revision 4; revision 4 is OQ-216's, landed in `e02a308`, and the round assigned this one revision 5),
+which narrows REQ-TOOLS-152 and REQ-LIBRARY-098 to this rule: that directive holds REQ-TOOLS-152's one narrowing slot, and
+revision 3 states that a narrowing of `delegate`'s fields lands there. REQ-TOOLS-153 keeps governing, since its "any attachment
+warning" defers the warning's content to REQ-TOOLS-152, and REQ-TOOLS-154's order is unchanged. `PD-SESSION-002` gains a dated
+cross-reference note and no revision.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)* recommended the 100,000 budget with the build's
+skip-and-continue, carried by `PD-TOOLS-006` as a narrowing of REQ-TOOLS-152 and REQ-LIBRARY-098, and an observation counting
+only what the child receives, naming each id left out for size, unresolved or unreadable. *Advocate B (the system's lens)*
+recommended REQ-TOOLS-152 whole: 100,000 with the prefix rule (the first overflowing attachment and every one after it dropped),
+an observation stating how many the child carries and how many were dropped for size, and a new `PD-LIBRARY-005` narrowing
+REQ-LIBRARY-098's 48,000. The advocates agreed that the budget is 100,000, that the observation is a defect against faithful
+requirements, and that the observation and the block must share one selection. **The ruling followed A** on the dropping rule:
+resolution 26 gave its reasons as determinism, preserved order and never-partial bodies, and skip-and-continue keeps all three
+while never displacing an earlier attachment, so the child always receives a superset of what the prefix rule gives; under the
+prefix rule a short attachment withheld for its position costs the same characters plus a turn through `artifact_read`. B's
+strongest point, that a bare count does not identify what is missing, is answered by naming the ids. B's point about the
+narrowing slot was settled earlier: the generator admits one narrowing directive per requirement, and revision 3 places a
+narrowing of `delegate`'s fields in `PD-TOOLS-006`. A's fallback of a `PD-LIBRARY-005` narrowing only REQ-LIBRARY-098 was
+rejected, since it would leave REQ-TOOLS-152's prefix rule governing. From B the ruling adopted that the dropped-for-size count
+is required content, and B's boundary and unreadable-in-the-middle tests.
+
+*Built 2026-10-07 (fin29, `fin29-delegate-admission`); its first execution is reported in `PD-TOOLS-006` revision 5.*
+`FULL_CONTEXT_BUDGET` is 100,000 and `fullContextBlock` counts the separator between sections (`packages/engine/src/artifacts/context.ts`);
+`selectAttachments` is the one selection the observation at acceptance and the block at assembly read, and `AttachmentOutcome`
+carries `given`, `elidedForSize`, `unresolved`, `unreadable` and `budget` (`packages/engine/src/children/orchestration.ts`,
+`delegation.ts`); `attachmentWarnings` renders it (`packages/agent-tools/src/tools/delegation.ts`). Pinned by
+`artifacts/artifacts.test.ts`, `children/children.test.ts` and `tools/delegation.test.ts`, red on the code before, and shown in the
+built app by `pnpm artifacts-proof` launch 7. **What a live run then shows:** only when a `delegate` call uses `attach_artifacts`
+(none of the four autopsied runs did): within 100,000 characters every attachment reaches the child whole and the observation says
+how many; over it, the observation names the id left out for size with the budget, a later attachment that fits is still carried,
+the child's block names the same id, the `context_selection` entry's `attached_elided` lists it and `summary.md`'s Mostly-elided
+line counts it.

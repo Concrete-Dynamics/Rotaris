@@ -9,9 +9,43 @@ import { errorObservation, INTERRUPTED_FAILURE_KIND, observation, type ToolExecu
  * `run_in_background: false` enrols the parent in the one waiting mechanism as if it had called
  * `wait_for_tasks` with the returned id.
  */
+/**
+ * PD-TOOLS-006 revision 5 (REQ-TOOLS-152, REQ-TOOLS-153): what the child will be given of the caller's attachments, as the
+ * engine's one selection decides it — the count carried whole, the ids left out for size under `budget` characters, the
+ * references that resolved to nothing and the ids whose document could not be read.
+ */
+export interface AttachmentReport {
+  given: number;
+  elidedForSize: readonly string[];
+  unresolved: readonly string[];
+  unreadable: readonly string[];
+  budget: number;
+}
+
+/**
+ * REQ-TOOLS-153's attachment warning, as PD-TOOLS-006 revision 5 states its content: how many attachments the child is given
+ * whole; how many were left out for size, by id, with the budget; and the references and documents that failed. The wording
+ * is the implementation's. Until 2026-10-07 it said "N artifacts were attached to its context", counting the references that
+ * resolved before the budget applied, so a caller could be told of an artifact its child never received.
+ */
+export function attachmentWarnings(a: AttachmentReport): readonly string[] {
+  const warnings: string[] = [];
+  const wereWas = (n: number) => (n === 1 ? 'was' : 'were');
+  warnings.push(a.given > 0
+    ? `${countNoun(a.given, 'attached artifact')} will be given to the child whole.`
+    : 'No attached artifact will be given to the child.');
+  if (a.elidedForSize.length > 0) {
+    const n = a.elidedForSize.length;
+    warnings.push(`${countNoun(n, 'attached artifact')} ${wereWas(n)} left out for size, because ${n === 1 ? 'its' : 'each'} whole body would carry the ${a.budget.toLocaleString('en-US')}-character attachment budget past its limit: ${a.elidedForSize.join(', ')}; the child is told and can fetch ${n === 1 ? 'it' : 'them'} with artifact_read.`);
+  }
+  if (a.unresolved.length > 0) warnings.push(`${countNoun(a.unresolved.length, 'attachment')} could not be resolved: ${a.unresolved.join(', ')}.`);
+  if (a.unreadable.length > 0) warnings.push(`The document of ${countNoun(a.unreadable.length, 'attached artifact')} could not be read: ${a.unreadable.join(', ')}.`);
+  return warnings;
+}
+
 export interface DelegationPort {
   delegate(parentId: string, req: { persona: string; taskName: string; task: string; dependsOn: readonly string[]; inheritedContext: readonly string[]; category: string; runInBackground: boolean; attachArtifacts: readonly string[]; writeScope: readonly string[]; continuationOf?: string | undefined; suppressAutoContext?: boolean | undefined; sessionId?: string | undefined }): Promise<
-    | { status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; canonicalName: string; taskId: string; message: string; attachments?: { attached: number; unresolved: readonly string[] } | undefined }
+    | { status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; canonicalName: string; taskId: string; message: string; attachments?: AttachmentReport | undefined }
     | { status: 'rejected'; canonicalName: string; message: string }
   >;
   backgroundOutput(parentId: string, taskId: string, detail: 'summary' | 'verbatim'): { status: 'ok' | 'still_running' | 'not_found'; state: string; text: string };
@@ -95,15 +129,12 @@ export function delegateTool(port: DelegationPort, parentId: string, catalogue: 
     execute: async (a) => {
       const r = await port.delegate(parentId, { persona: a.persona, taskName: a.task_name, task: a.task, dependsOn: a.depends_on, inheritedContext: a.inherited_context, category: a.category ?? '', runInBackground: a.run_in_background, attachArtifacts: a.attach_artifacts, writeScope: a.write_scope, ...(a.continuation_of === undefined ? {} : { continuationOf: a.continuation_of }), ...(a.suppress_auto_context ? { suppressAutoContext: true } : {}), ...(a.session_id === undefined || a.session_id === '' ? {} : { sessionId: a.session_id }) });
       if (r.status === 'rejected') return errorObservation(renderDelegateObservation(r.canonicalName, 'rejected', r.message, null));
-      // REQ-LIBRARY-098 (Part Y): the attachments are injected as the child's `PRIOR AGENT CONTEXT (FULL)` block; what
-      // the store could not resolve is reported HERE, to the caller, rather than only inside the child's own block.
-      // The placeholder this replaced said "the artifact store is not built yet"; it is, and the falsified line is gone
-      // from the code with its reason kept in this comment.
-      const warnings: string[] = [];
-      if (r.attachments) {
-        if (r.attachments.attached > 0) warnings.push(`${countNoun(r.attachments.attached, 'artifact')} ${r.attachments.attached === 1 ? 'was' : 'were'} attached to its context.`);
-        if (r.attachments.unresolved.length > 0) warnings.push(`${countNoun(r.attachments.unresolved.length, 'attachment')} could not be resolved: ${r.attachments.unresolved.join(', ')}.`);
-      }
+      // REQ-LIBRARY-098 (Part Y): the attachments are injected as the child's `PRIOR AGENT CONTEXT (FULL)` block; what the
+      // child will be given of them is reported HERE, to the caller, rather than only inside the child's own block
+      // (PD-TOOLS-006 revision 5: the count given, the ids left out for size, the unresolved and the unreadable). The
+      // placeholder this replaced said "the artifact store is not built yet"; it is, and the falsified line is gone from
+      // the code with its reason kept in this comment.
+      const warnings = r.attachments ? attachmentWarnings(r.attachments) : [];
       let text = renderDelegateObservation(r.canonicalName, r.status, [r.message, ...warnings].join(' '), r.taskId);
       if (!a.run_in_background) {
         // REQ-TOOLS-153: the same mechanism as wait_for_tasks, over exactly this one task.

@@ -460,12 +460,20 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } };
         return;
       }
-      // delegate:<persona>:<name>[:after] — `after` depends on the last task id a tool result reported.
+      // delegate:<persona>:<name>[:after] — `after` depends on the last task id a tool result reported. Further arguments for a
+      // named delegation come from ROTARIS_SCRIPT_DELEGATE_ARGS by task name (a JSON map), in the shape of the artifact map
+      // below: PD-TOOLS-006 revision 5's proof attaches artifacts (`attach_artifacts`). Verification only.
       const delegate = /^delegate:([a-z-]+):([^:]+)(:after)?$/.exec(step);
       if (delegate && (req.tools ?? []).some((t) => t.name === 'delegate')) {
         const lastId = delegate[3] ? [...req.messages].reverse().flatMap((m) => [...m.content] as { kind: string; result?: string }[]).map((p) => (p.kind === 'tool-result' && p.result ? /task_id: (bg_[0-9a-f]{8})/.exec(p.result)?.[1] : undefined)).find((x) => x !== undefined) : undefined;
+        let extra: Record<string, unknown> = {};
+        try {
+          const map = JSON.parse(process.env['ROTARIS_SCRIPT_DELEGATE_ARGS'] ?? '{}') as Record<string, unknown>;
+          const named = map[delegate[2]!];
+          if (named !== null && typeof named === 'object' && !Array.isArray(named)) extra = named as Record<string, unknown>;
+        } catch { extra = {}; }
         yield ok<StreamPart>({ kind: 'text', delta: `Delegating to ${delegate[1]}. ` });
-        yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'delegate', argsDelta: JSON.stringify({ persona: delegate[1], task_name: delegate[2], task: `TASK: ${delegate[2]}\nEXPECTED OUTCOME: done\nMUST DO: use your tools\nMUST NOT DO: nothing else\nCONTEXT: scripted`, ...(lastId ? { depends_on: [lastId] } : {}) }) });
+        yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'delegate', argsDelta: JSON.stringify({ persona: delegate[1], task_name: delegate[2], task: `TASK: ${delegate[2]}\nEXPECTED OUTCOME: done\nMUST DO: use your tools\nMUST NOT DO: nothing else\nCONTEXT: scripted`, ...(lastId ? { depends_on: [lastId] } : {}), ...extra }) });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
         yield finished('other');
         return;

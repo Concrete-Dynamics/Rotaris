@@ -44,10 +44,21 @@ export interface DelegateRequest {
   readonly sessionId?: string | undefined;
 }
 
-/** REQ-LIBRARY-098: what became of the caller's attachments, so the tool reports it rather than guessing. */
+/**
+ * REQ-TOOLS-152 / REQ-TOOLS-153 as PD-TOOLS-006 revision 5 states them: what the child will be given of the caller's
+ * attachments, by the selection that assembles its block, so the tool reports it rather than guessing.
+ */
 export interface AttachmentOutcome {
-  readonly attached: number;
+  /** How many attachments the child is given whole. */
+  readonly given: number;
+  /** The ids left out because their whole body would have carried the section past `budget`. */
+  readonly elidedForSize: readonly string[];
+  /** The references that named no artifact. */
   readonly unresolved: readonly string[];
+  /** The ids whose document could not be read. */
+  readonly unreadable: readonly string[];
+  /** The attached-artifact section's budget in characters (REQ-TOOLS-152's 100,000). */
+  readonly budget: number;
 }
 
 export type DelegateOutcome =

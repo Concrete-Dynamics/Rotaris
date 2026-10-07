@@ -9,7 +9,7 @@ import { ArtifactStore } from './store.js';
 import { artifactOps } from './port.js';
 import { deriveImportance, mintArtifactId, uniqueSlug } from './record.js';
 import { renderSidecar, SIDECAR_SECTIONS } from './sidecar.js';
-import { fullContextBlock, siblingIndexBlock, siblingIndexOrder, SIBLING_INDEX_BUDGET } from './context.js';
+import { FULL_CONTEXT_BUDGET, FULL_CONTEXT_HEADING, fullContextBlock, siblingIndexBlock, siblingIndexOrder, SIBLING_INDEX_BUDGET, type AttachedResolution } from './context.js';
 
 /**
  * Part Y — the session artifact store (REQ-LIBRARY-087..101), against the real store on disk. What is measured
@@ -445,7 +445,76 @@ describe('engine/artifacts — the session artifact store', () => {
     const tiny = fullContextBlock(resolved, 60);
     expect(tiny.included).toBe(0);
     expect(tiny.elided).toEqual([record.id]);
-    expect(tiny.text).toContain('did not fit the context budget');
+    expect(tiny.text).toContain('did not fit the 60-character context budget');
+  });
+
+  /**
+   * PD-TOOLS-006 revision 5 (OQ-221, ruled 2026-10-07 under R-072): REQ-TOOLS-152's 100,000-character section, each body
+   * whole or not at all, an overflowing one left out and every later one still tried — the repair of
+   * `docs/defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`.
+   */
+  describe('PD-TOOLS-006 revision 5: the attached-artifact section is 100,000 characters, skip-and-continue', () => {
+    /** Three published records whose bodies the cases set, so each section's length is the test's to choose. */
+    function records() {
+      const store = storeFor();
+      return ['first', 'second', 'third'].map((slug) => { const r = publish(store, { slug, title: slug }); if (!r.ok) throw new Error('publish'); return store.lookup(r.value.id)!; });
+    }
+    const at = (record: ReturnType<typeof records>[number], body: string | null): AttachedResolution => ({ reference: record.slug, record, body, failure: body === null ? 'the disk refused' : null });
+    /** The length of a record's section as the block writes it, before its body, and the separator a later section carries. */
+    const sectionHead = (record: ReturnType<typeof records>[number]) => `\n## ${record.slug} (${record.id}) — ${record.title}\n\n`.length;
+
+    it('the budget is REQ-TOOLS-152\'s 100,000 characters, where REQ-LIBRARY-098\'s 48,000 governed before', () => {
+      expect(FULL_CONTEXT_BUDGET).toBe(100_000);
+      const [a] = records();
+      // A 60,000-character body, which the 48,000 budget left out, is carried whole.
+      const block = fullContextBlock([at(a!, 'x'.repeat(60_000))]);
+      expect(block.carried).toEqual([a!.id]);
+      expect(block.elided).toEqual([]);
+      expect(block.text).toContain('x'.repeat(60_000));
+    });
+
+    it('[over the budget, short]: the short one is carried and the long one left out, named in the block', () => {
+      const [a, b] = records();
+      const block = fullContextBlock([at(a!, 'L'.repeat(100_001)), at(b!, 'short body')]);
+      expect(block.carried).toEqual([b!.id]);
+      expect(block.included).toBe(1);
+      expect(block.elided).toEqual([a!.id]);
+      expect(block.text).toContain('short body');
+      expect(block.text).not.toContain('LLLL');
+      expect(block.text).toContain(`1 attached artifact did not fit the 100,000-character context budget and was left out: ${a!.id}`);
+    });
+
+    it('[short, over, short]: both short ones are carried, in the caller\'s order — every later attachment is still tried', () => {
+      const [a, b, c] = records();
+      const block = fullContextBlock([at(a!, 'first body'), at(b!, 'L'.repeat(99_990)), at(c!, 'third body')]);
+      expect(block.carried).toEqual([a!.id, c!.id]);
+      expect(block.elided).toEqual([b!.id]);
+      expect(block.text.indexOf('first body')).toBeLessThan(block.text.indexOf('third body'));
+    });
+
+    it('a block that fits exactly is carried, one character more is left out — the separator between sections counted', () => {
+      const [a, b] = records();
+      const head = `${FULL_CONTEXT_HEADING}\n`.length;
+      const firstBody = 'a'.repeat(1_000);
+      const used = head + sectionHead(a!) + firstBody.length;
+      // The second section carries one more newline, which the budget counts.
+      const room = FULL_CONTEXT_BUDGET - used - (sectionHead(b!) + 1);
+      const fits = fullContextBlock([at(a!, firstBody), at(b!, 'b'.repeat(room))]);
+      expect(fits.carried).toEqual([a!.id, b!.id]);
+      expect(fits.text.length).toBe(FULL_CONTEXT_BUDGET);
+      const over = fullContextBlock([at(a!, firstBody), at(b!, 'b'.repeat(room + 1))]);
+      expect(over.carried).toEqual([a!.id]);
+      expect(over.elided).toEqual([b!.id]);
+    });
+
+    it('an unreadable document in the middle leaves the others unaffected, and is reported by id', () => {
+      const [a, b, c] = records();
+      const block = fullContextBlock([at(a!, 'first body'), at(b!, null), at(c!, 'third body')]);
+      expect(block.carried).toEqual([a!.id, c!.id]);
+      expect(block.unreadable).toEqual([b!.id]);
+      expect(block.elided).toEqual([]);
+      expect(block.text).toContain(`the document of ${b!.id} could not be read: the disk refused`);
+    });
   });
 
   it('an id is `art_` plus eight base62 characters, and two mints differ', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, ROLE_SPAWN_ALIASES } from '@rotaris/contracts';
 import { expandDeclared } from '../registry.js';
-import { delegateTool, grantFacets, renderDelegateCatalogue, type DelegateCatalogue, type DelegationPort } from './delegation.js';
+import { attachmentWarnings, delegateTool, grantFacets, renderDelegateCatalogue, type AttachmentReport, type DelegateCatalogue, type DelegationPort } from './delegation.js';
 import type { ToolContext } from './types.js';
 
 /**
@@ -163,5 +163,49 @@ describe('delegate — what each persona can do (PD-TOOLS-006 revision 4)', () =
     expect(text).toContain('When the child will write files, give write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit.');
     expect(text).toContain("When a child's report makes a continuation offer, give continuation_of: that child's task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains.");
     expect(text).toContain('To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead.');
+  });
+});
+
+/**
+ * PD-TOOLS-006 revision 5 (OQ-221, ruled 2026-10-07 under R-072; REQ-TOOLS-152, REQ-TOOLS-153): the observation states what
+ * the child is GIVEN of its attachments — never the references that resolved before the budget applied.
+ */
+describe('delegate — the attachment warning (PD-TOOLS-006 revision 5)', () => {
+  const report = (over: Partial<AttachmentReport> = {}): AttachmentReport => ({ given: 0, elidedForSize: [], unresolved: [], unreadable: [], budget: 100_000, ...over });
+  function observed(attachments: AttachmentReport) {
+    const port: DelegationPort = {
+      delegate: async (_parent, req) => ({ status: 'queued', canonicalName: req.taskName, taskId: 'bg_00000002', message: 'Accepted.', attachments }),
+      backgroundOutput: () => ({ status: 'not_found', state: '', text: '' }),
+      waitForTasks: async () => ({ immediate: true, requested: 0, text: '' }),
+    };
+    const tool = delegateTool(port, 'root:1', BUILT_IN_CATALOGUE);
+    return tool.execute(tool.schema.parse({ persona: 'coder', task_name: 'build', task: 'TASK: build', attach_artifacts: ['a'] }), {} as ToolContext);
+  }
+
+  it('states how many attachments the child is given whole', () => {
+    expect(attachmentWarnings(report({ given: 2 }))).toEqual(['2 attached artifacts will be given to the child whole.']);
+    expect(attachmentWarnings(report({ given: 1 }))).toEqual(['1 attached artifact will be given to the child whole.']);
+    expect(attachmentWarnings(report({ given: 0, unresolved: ['ghost'] }))[0]).toBe('No attached artifact will be given to the child.');
+  });
+
+  it('names each id left out for size, cites the 100,000-character budget, and says the child is told and can read it', () => {
+    expect(attachmentWarnings(report({ given: 1, elidedForSize: ['art_00000002', 'art_00000003'] }))[1]).toBe(
+      '2 attached artifacts were left out for size, because each whole body would carry the 100,000-character attachment budget past its limit: art_00000002, art_00000003; the child is told and can fetch them with artifact_read.',
+    );
+    expect(attachmentWarnings(report({ elidedForSize: ['art_00000002'] }))[1]).toContain('1 attached artifact was left out for size, because its whole body would carry the 100,000-character');
+  });
+
+  it('names the references that could not be resolved and the ids whose document could not be read', () => {
+    expect(attachmentWarnings(report({ given: 1, unresolved: ['ghost', 'gone'], unreadable: ['art_00000004'] }))).toEqual([
+      '1 attached artifact will be given to the child whole.',
+      '2 attachments could not be resolved: ghost, gone.',
+      'The document of 1 attached artifact could not be read: art_00000004.',
+    ]);
+  });
+
+  it('the observation carries the warning after the message, and no longer says the artifacts "were attached to its context"', async () => {
+    const r = await observed(report({ given: 1, elidedForSize: ['art_00000002'] }));
+    expect(r.text).toMatch(/^Task 'build': queued — Accepted\. 1 attached artifact will be given to the child whole\. 1 attached artifact was left out for size, .*: art_00000002; the child is told and can fetch it with artifact_read\.\ntask_id: bg_00000002$/);
+    expect(r.text).not.toContain('attached to its context');
   });
 });

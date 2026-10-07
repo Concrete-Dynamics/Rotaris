@@ -6,13 +6,17 @@ import type { ArtifactRecord } from './record.js';
  * REQ-LIBRARY-097 and REQ-LIBRARY-098 — the two context blocks a newly created agent is given.
  *
  * The sibling index is automatic and bounded at 10,000 characters; the full block is explicit
- * (`attach_artifacts` on `delegate`) and bounded at 48,000. Both report what they left out: the index by an
- * elision marker naming the `artifact_list` tool, the full block by naming the ids it elided and the
- * references it could not resolve. The wording of each marker is the implementation's; what it must convey
- * is the requirement's.
+ * (`attach_artifacts` on `delegate`) and bounded at REQ-TOOLS-152's 100,000 (PD-TOOLS-006 revision 5, which narrows
+ * REQ-TOOLS-152 and REQ-LIBRARY-098 to one figure and one dropping rule). Both report what they left out: the index by an
+ * elision marker naming the `artifact_list` tool, the full block by naming the ids it elided and the references it could
+ * not resolve. The wording of each marker is the implementation's; what it must convey is the requirement's.
+ *
+ * The full block's budget was 48,000 until 2026-10-07, REQ-LIBRARY-098's figure, read as the one that governed. It was not:
+ * REQ-TOOLS-152 calls itself the whole `delegate` contract, REQ-ORCH-032 hands the oversized attachment to it, and domain
+ * 05's limits inventory carries 100,000; REQ-LIBRARY-098's restatement was the one the reconciliation missed (OQ-221, AB1).
  */
 export const SIBLING_INDEX_BUDGET = 10_000;
-export const FULL_CONTEXT_BUDGET = 48_000;
+export const FULL_CONTEXT_BUDGET = 100_000;
 export const SIBLING_SUMMARY_CAP = 160;
 export const SIBLING_INDEX_HEADING = 'PRIOR SIBLING ARTIFACT INDEX';
 export const FULL_CONTEXT_HEADING = 'PRIOR AGENT CONTEXT (FULL)';
@@ -71,30 +75,54 @@ export interface AttachedResolution {
   readonly failure: string | null;
 }
 
+/** What the full block carried and left out, by id and reference; `included` is `carried.length`. */
+export interface FullContextBlock {
+  readonly text: string;
+  readonly included: number;
+  /** The ids carried whole, in the caller's order. */
+  readonly carried: readonly string[];
+  /** The ids left out because their whole body would have carried the section past the budget. */
+  readonly elided: readonly string[];
+  /** The references that named no artifact. */
+  readonly unresolved: readonly string[];
+  /** The ids whose document could not be read (REQ-LIBRARY-091). */
+  readonly unreadable: readonly string[];
+}
+
 /**
- * REQ-LIBRARY-098: the explicitly attached artifacts, in the order they were named, inside a 48,000-character
- * budget; unresolvable references and elided ids are reported IN the block, so a child is never left to infer
- * that an attachment it was promised is missing.
+ * REQ-LIBRARY-098 as PD-TOOLS-006 revision 5 narrows it with REQ-TOOLS-152: the explicitly attached artifacts, in the order
+ * they were named, inside a 100,000-character section. Each body is carried whole or not at all. One whose whole section
+ * would carry the block past the budget is left out, and every later attachment is still tried: REQ-TOOLS-152's "and so is
+ * every attachment after it" no longer governs, so a short attachment named after a long one still arrives. The budget is
+ * measured over the heading and the carried sections, the separator between two sections included, so a block that fits
+ * exactly is carried; the closing notes naming what was left out sit outside it. Unresolvable references, unreadable
+ * documents and elided ids are reported IN the block, so a child is never left to infer that an attachment it was promised
+ * is missing, and returned, so the caller's observation names the same ids (`selectAttachments`).
  */
-export function fullContextBlock(resolved: readonly AttachedResolution[], budget = FULL_CONTEXT_BUDGET): { readonly text: string; readonly included: number; readonly elided: readonly string[]; readonly unresolved: readonly string[] } {
+export function fullContextBlock(resolved: readonly AttachedResolution[], budget = FULL_CONTEXT_BUDGET): FullContextBlock {
   const unresolved = resolved.filter((r) => r.record === null).map((r) => r.reference);
   const failures = resolved.filter((r) => r.record !== null && r.body === null);
   const usable = resolved.filter((r) => r.record !== null && r.body !== null);
   const head = `${FULL_CONTEXT_HEADING}\n`;
   const sections: string[] = [];
+  const carried: string[] = [];
   const elided: string[] = [];
   let used = head.length;
   for (const entry of usable) {
     const record = entry.record!;
-    const section = `\n## ${record.slug} (${record.id}) — ${record.title}\n\n${entry.body ?? ''}`;
+    // Every section after the first is set off by one more newline, which the budget counts.
+    const section = `${sections.length > 0 ? '\n' : ''}\n## ${record.slug} (${record.id}) — ${record.title}\n\n${entry.body ?? ''}`;
     if (used + section.length > budget) { elided.push(record.id); continue; }
     used += section.length;
     sections.push(section);
+    carried.push(record.id);
   }
+  const unreadable = failures.map((f) => f.record!.id);
   const notes: string[] = [];
   for (const f of failures) notes.push(`\n(the document of ${f.record!.id} could not be read: ${f.failure ?? 'unknown reason'})`);
   if (unresolved.length > 0) notes.push(`\n(${countNoun(unresolved.length, 'attached reference')} could not be resolved: ${unresolved.join(', ')})`);
-  if (elided.length > 0) notes.push(`\n(${countNoun(elided.length, 'attached artifact')} did not fit the context budget and ${elided.length === 1 ? 'was' : 'were'} left out: ${elided.join(', ')}; call artifact_read to fetch ${elided.length === 1 ? 'it' : 'one'})`);
-  if (sections.length === 0 && notes.length === 0) return { text: '', included: 0, elided, unresolved };
-  return { text: `${head}${sections.join('\n')}${notes.join('')}`, included: sections.length, elided, unresolved };
+  if (elided.length > 0) notes.push(`\n(${countNoun(elided.length, 'attached artifact')} did not fit the ${budget.toLocaleString('en-US')}-character context budget and ${elided.length === 1 ? 'was' : 'were'} left out: ${elided.join(', ')}; call artifact_read to fetch ${elided.length === 1 ? 'it' : 'one'})`);
+  const outcome = { included: sections.length, carried, elided, unresolved, unreadable };
+  if (sections.length === 0 && notes.length === 0) return { text: '', ...outcome };
+  return { text: `${head}${sections.join('')}${notes.join('')}`, ...outcome };
 }

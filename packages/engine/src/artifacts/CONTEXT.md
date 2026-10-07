@@ -39,8 +39,9 @@ Findings, Highlight Paths, Snippets, Edited Files, Created Files. It is the reco
 
 **Context block**:
 Artifact material placed into a child's payload — the **prior sibling artifact index** (one line per
-artifact, unsuccessful statuses first) or **prior agent context** (full bodies of explicitly
-attached artifacts). — `REQ-LIBRARY-097`
+artifact, unsuccessful statuses first, 10,000 characters) or **prior agent context** (full bodies of explicitly
+attached artifacts, each whole or not at all, within REQ-TOOLS-152's 100,000 characters; an overflowing body is left
+out and later ones still tried). — `REQ-LIBRARY-097`, `REQ-LIBRARY-098`, `REQ-TOOLS-152`, `PD-TOOLS-006` revision 5
 _Avoid_: injection, attachment (an *attachment* is what a caller asks for; the block is what arrives)
 
 ### Improvements

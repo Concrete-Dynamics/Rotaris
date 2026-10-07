@@ -8,7 +8,7 @@ import { isSteeringMessage, runTurn, type SteeringPrompt, type ToolPort, type Tu
 import { answerOpenCalls, recordCutChild } from '../run/crash.js';
 import { callsRun } from '../run/interruption.js';
 import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
-import { fullContextBlock, siblingIndexBlock, type AttachedResolution } from '../artifacts/context.js';
+import { FULL_CONTEXT_BUDGET, fullContextBlock, siblingIndexBlock, type AttachedResolution, type FullContextBlock } from '../artifacts/context.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { ChildLedger, storeChildReport, userCancellation, writeCancelledTeardown, writeTeardown, type Budget } from './ledger.js';
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
@@ -528,17 +528,24 @@ export class IterationChildren implements DelegationOps {
   }
 
   /**
-   * REQ-LIBRARY-098: the references are resolved AT DELEGATION so the caller is told at once what could not
-   * be resolved; the block itself is assembled when the child's payload is built, from the references stored with
-   * its record and the store as it stands then. Where no artifact store exists every reference is reported
-   * unresolved rather than silently dropped.
+   * REQ-TOOLS-152 and REQ-TOOLS-153 as PD-TOOLS-006 revision 5 states them: the caller is told at acceptance what its child
+   * will be given, by the very selection that assembles the child's block (`selectAttachments`), over the store as it stands
+   * now — how many attachments are carried whole, the ids left out for size, the references that resolved to nothing and
+   * the ids whose document could not be read. For a child started at once the block is assembled from the same store
+   * moments later and names the same ids; for one assembled later (held for a model slot, waiting on its dependencies, or
+   * resumed in a later run) this is a forecast, and the `context_selection` timeline entry its assembly writes is the record.
+   * Where no artifact store exists every reference is reported unresolved rather than silently dropped.
+   *
+   * Until 2026-10-07 this counted the references that resolved, before any budget applied, and the observation said "N
+   * artifacts were attached to its context", so a caller could be told of an artifact its child never received
+   * (`docs/defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`).
    */
   private resolveAttachments(references: readonly string[]): AttachmentOutcome | undefined {
     if (references.length === 0) return undefined;
     const store = this.deps.artifacts;
-    if (!store) return { attached: 0, unresolved: [...references] };
-    const unresolved = references.filter((ref) => store.lookup(ref) === null);
-    return { attached: references.length - unresolved.length, unresolved };
+    if (!store) return { given: 0, elidedForSize: [], unresolved: [...references], unreadable: [], budget: FULL_CONTEXT_BUDGET };
+    const block = selectAttachments(store, references);
+    return { given: block.included, elidedForSize: block.elided, unresolved: block.unresolved, unreadable: block.unreadable, budget: FULL_CONTEXT_BUDGET };
   }
 
   backgroundOutput(parentId: string, taskId: string, detail: 'summary' | 'verbatim'): BackgroundOutput {
@@ -1533,15 +1540,9 @@ export class IterationChildren implements DelegationOps {
     const index = suppressed ? { text: '', included: 0, elided: 0 } : siblingIndexBlock(store.hydrate().records);
     if (index.text !== '') blocks.push(index.text);
     const references = JSON.parse(row.attach_artifacts) as string[];
-    let full: ReturnType<typeof fullContextBlock> | null = null;
+    let full: FullContextBlock | null = null;
     if (references.length > 0) {
-      const resolved: AttachedResolution[] = references.map((reference) => {
-        const record = store.lookup(reference);
-        if (!record) return { reference, record: null, body: null, failure: 'the reference names no artifact in this session' };
-        const body = store.body(record.id);
-        return body.ok ? { reference, record, body: body.value.text, failure: null } : { reference, record, body: null, failure: body.error.reason };
-      });
-      full = fullContextBlock(resolved);
+      full = selectAttachments(store, references);
       if (full.text !== '') blocks.push(full.text);
     }
     if (blocks.length > 0) {
@@ -1619,6 +1620,22 @@ export function refreshing<T>(drain: () => readonly T[], refresh: () => void): (
 /** PD-TOOLS-006 revision 2: the write scope a child's record stores, as the patterns it declared; none when unreadable. */
 function storedScope(row: ChildRow): string[] {
   try { const v = JSON.parse(row.write_scope) as unknown; return Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string') : []; } catch { return []; }
+}
+
+/**
+ * PD-TOOLS-006 revision 5 (REQ-TOOLS-152, REQ-LIBRARY-098): the ONE selection of a child's attached artifacts — each
+ * reference resolved, each body read, and REQ-TOOLS-152's 100,000-character section applied by `fullContextBlock` — which
+ * both the delegate observation at acceptance and the payload's block at assembly read, so the caller is never told of an
+ * attachment the block leaves out.
+ */
+export function selectAttachments(store: ArtifactStore, references: readonly string[]): FullContextBlock {
+  const resolved: AttachedResolution[] = references.map((reference) => {
+    const record = store.lookup(reference);
+    if (!record) return { reference, record: null, body: null, failure: 'the reference names no artifact in this session' };
+    const body = store.body(record.id);
+    return body.ok ? { reference, record, body: body.value.text, failure: null } : { reference, record, body: null, failure: body.error.reason };
+  });
+  return fullContextBlock(resolved);
 }
 
 /**

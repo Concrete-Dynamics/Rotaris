@@ -11390,7 +11390,8 @@ REQ-TOOLS-069, REQ-TOOLS-071, REQ-TOOLS-072 and REQ-SHELL-119, the REQ-MONITOR-1
 gained a dated sentence, and domain 14's introduction reads as a cross-reference. `docs/product/README.md`, "The
 back-pointer, in place", states the cross-reference rule and the two-way check. `tools/symbol-artifact/generate.mjs`
 refuses a `New:` line naming a requirement (on the line or its continuation) and New beside another verb; `pnpm symbols`
-reads 180 narrowed and 55 extended (177 and 51 before). Pinned by `tools/symbol-artifact/back-pointers.test.ts` (no note
+gains three narrowed and four extended entries (177 and 51 to 180 and 55 as built; 181 and 53 to 184 and 57 on the head
+rebased onto origin/main at landing). Pinned by `tools/symbol-artifact/back-pointers.test.ts` (no note
 disagrees, red on the old record with the six; every register entry has its note, red with REQ-TOOLS-069 and
 REQ-SHELL-119; the OQ-222 case, red on the old register) and by three counterfactuals in `pnpm directive-proof`, red
 against the old generator (29/32) and 32/32 after. Notes moved to `docs/defects/fixed/`:

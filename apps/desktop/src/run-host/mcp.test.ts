@@ -430,7 +430,7 @@ describe('an MCP call checked against the input schema the model was given (REQ-
    * OQ-208, ruled 2026-10-07 under the owner's delegation (R-072): an `outcome_kind` names how a call ended, and `mcp` names a
    * tool family, so an MCP call's record carries none and keeps its `failure_kind`; REQ-SESSION-139 derives its histogram
    * bucket from `status` and `is_error`. Until the ruling every MCP record carried `outcome_kind: 'mcp'`, succeeding or
-   * failing alike, and the c2a9444 duress run's failed `edit_memory` call sat inside `mcp 17`.
+   * failing alike, and the c2a9444 duress run's failed memory edit sat inside `mcp 17`.
    */
   it('a call the server answers, fails with isError, or fails by throwing settles with no outcome_kind and keeps its failure_kind (OQ-208 as ruled)', async () => {
     const ok = rig(EDIT_MEMORY);

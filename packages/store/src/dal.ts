@@ -301,8 +301,13 @@ export interface ChildRow {
   readonly attach_artifacts: string;
   /** v28 — REQ-TOOLS-152 / REQ-TOOLS-154 (5): the inherited-context block as rendered at the call; `''` when nothing was carried. */
   readonly inherited_context_block: string;
+  /**
+   * v34 — PD-TOOLS-006 revision 6 (REQ-ORCH-028/029): the id of the item of the delegating agent's own plan the call named
+   * as the one it serves (`todo_item`), or the continued child's; null when it named none.
+   */
+  readonly todo_item: string | null;
 }
-export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo' | 'continuation_of' | 'interruption' | 'resume_state' | 'write_scope' | 'suppress_auto_context' | 'attach_artifacts' | 'inherited_context_block'> & { readonly todo?: string | null; readonly continuation_of?: string | null; readonly write_scope?: string; readonly suppress_auto_context?: number; readonly attach_artifacts?: string; readonly inherited_context_block?: string };
+export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo' | 'continuation_of' | 'interruption' | 'resume_state' | 'write_scope' | 'suppress_auto_context' | 'attach_artifacts' | 'inherited_context_block' | 'todo_item'> & { readonly todo?: string | null; readonly continuation_of?: string | null; readonly write_scope?: string; readonly suppress_auto_context?: number; readonly attach_artifacts?: string; readonly inherited_context_block?: string; readonly todo_item?: string | null };
 
 /**
  * v23 — PD-ORCH-005 clause 1: one execution iteration and the task id of its root, open from the moment it begins until it
@@ -633,8 +638,8 @@ export class StoreDal {
       issuesOf: db.prepare('SELECT * FROM issues WHERE session_id = ? ORDER BY ordinal'),
 
       // ADR-0012: the child ledger. Every statement carries session_id (REQ-ORCH-151, asserted by a test over this text).
-      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of, write_scope, suppress_auto_context, attach_artifacts, inherited_context_block)
-        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of, @write_scope, @suppress_auto_context, @attach_artifacts, @inherited_context_block)`),
+      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of, write_scope, suppress_auto_context, attach_artifacts, inherited_context_block, todo_item)
+        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of, @write_scope, @suppress_auto_context, @attach_artifacts, @inherited_context_block, @todo_item)`),
       getChild: db.prepare('SELECT * FROM children WHERE session_id = ? AND task_id = ?'),
       // Acceptance order: children accepted in the same millisecond keep the order they were inserted in, which the
       // resume's re-claim of their write scopes depends on (PD-TOOLS-006 revision 2; found by phase 4's review).
@@ -789,7 +794,7 @@ export class StoreDal {
   }
 
   insertChild(row: ChildInsert): void {
-    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null, continuation_of: row.continuation_of ?? null, write_scope: row.write_scope ?? '[]', suppress_auto_context: row.suppress_auto_context ?? 0, attach_artifacts: row.attach_artifacts ?? '[]', inherited_context_block: row.inherited_context_block ?? '' });
+    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null, continuation_of: row.continuation_of ?? null, write_scope: row.write_scope ?? '[]', suppress_auto_context: row.suppress_auto_context ?? 0, attach_artifacts: row.attach_artifacts ?? '[]', inherited_context_block: row.inherited_context_block ?? '', todo_item: row.todo_item ?? null });
   }
   getChild(id: SessionId, taskId: string): ChildRow | undefined {
     return this.stmts['getChild']!.get(id, taskId) as ChildRow | undefined;

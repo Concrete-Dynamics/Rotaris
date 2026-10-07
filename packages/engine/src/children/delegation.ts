@@ -42,6 +42,12 @@ export interface DelegateRequest {
    * message, under its own task id, persona, dependencies and write scope. Absent or empty delegates a new child.
    */
   readonly sessionId?: string | undefined;
+  /**
+   * PD-TOOLS-006 revision 6 (OQ-220): the id of the item of the caller's own todo list the delegation serves, stored with the
+   * child's record. Absent or empty names none; a continuation then inherits the continued child's, and a follow-up keeps its
+   * own (OQ-131: a follow-up reads no other field).
+   */
+  readonly todoItem?: string | undefined;
 }
 
 /**

@@ -10,7 +10,7 @@ import { SessionWriter, UserPresence, type ArtifactOps, type ToolPortContext } f
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { personaResolverFor, runtimeFromConfiguration, type ConfiguredRun } from './configuration.js';
 import type { McpHost } from './mcp.js';
-import { createToolPort, isEntryPort, RunHostPresenter, toolSpec, type ToolPortDeps } from './tools.js';
+import { createToolPort, implementationRole, isEntryPort, RunHostPresenter, toolSpec, type ToolPortDeps } from './tools.js';
 
 /**
  * Part N's finding: the entry test was written against the root id `root`, which Part B had already made
@@ -982,6 +982,43 @@ ${personas === '' ? '' : `personas:\n${personas}`}runtime:
     // Another caller's map does not name tester: a child of a planner (configured here to delegate) would still run commands.
     const fromPlanner = await expectCatalogueMatchesChildGrants(personas, 'planner');
     expect(fromPlanner.get('tester')).toBe('reads workspace files, writes workspace files, runs commands');
+  });
+
+  /**
+   * PD-TOOLS-006 revision 6 (OQ-220) with REQ-ORCH-028: the run reads which delegations are implementation delegations from the
+   * same grant the description states, so the todo-item refusal and the description never disagree about a persona.
+   */
+  it('PD-TOOLS-006 revision 6: implementationRole is the catalogue\'s "writes workspace files", for every known role and caller', async () => {
+    const personas = `  orchestrator:
+    name: orchestrator
+    model: selected
+    tool_restrictions:
+      tester: [read_file, grep, terminal]
+  planner:
+    name: planner
+    model: selected
+    tools: [read_file, grep, delegate]
+  refactorer:
+    name: refactorer
+    model: selected
+    read_only: true
+  release-manager:
+    name: release-manager
+    model: selected
+    tools: [git_read, write_file, todo]
+`;
+    const { resolver, portOf } = setup(personas);
+    for (const caller of ['orchestrator', 'planner']) {
+      const catalogue = catalogueOf(descriptionOf(portOf(caller, { parentId: 'root:1', depth: 0 })));
+      const callerPersona = resolver!.resolve(caller)!.persona;
+      for (const role of resolver!.knownRoles()) {
+        expect({ caller, role, implementation: implementationRole(resolver!.resolve(role)!.persona, callerPersona) }).toEqual({ caller, role, implementation: catalogue.get(role)!.split(', ').includes('writes workspace files') });
+      }
+    }
+    const of = (role: string, caller = 'orchestrator') => implementationRole(resolver!.resolve(role)!.persona, resolver!.resolve(caller)!.persona);
+    expect([of('coding-agent'), of('docs-writer'), of('release-manager')]).toEqual([true, true, true]);
+    // The orchestrator's map leaves tester no writer, a planner's does not; read_only and the research roles never write.
+    expect([of('tester'), of('tester', 'planner'), of('refactorer'), of('codebase-analyst'), of('verifier')]).toEqual([false, true, false, false, false]);
   });
 
   it('a read_only persona reads only, and a persona the configuration adds is named with its grant', async () => {

@@ -18,6 +18,7 @@ import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } 
 import { Scheduler } from './scheduler.js';
 import { correctiveInstruction, hadCorrectiveMessage, recordCorrectiveMessage, StallWatch, stallRecords, stallRecoveryDue } from './stall.js';
 import { fileWriters, scopeWithoutWriterReason, validateWriteScope, WriteClaims, writeScopeBlock, writesFiles, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
+import { admitTodoItem, type CallerPlan } from './todo-item.js';
 import type { HookPort } from '../hooks-port.js';
 import { withContextUnits, withPlaybook } from '../run/run.js';
 import { STOP_GRACE } from '../run/grace.js';
@@ -178,6 +179,20 @@ export interface ChildrenDeps {
   readonly openTodoFor?: ((agentId: string) => readonly string[]) | undefined;
   /** PD-ORCH-005 clause 1: the conversation record each child's turn appends to; absent means nothing is recorded. */
   readonly record?: ConversationRecord | undefined;
+  /**
+   * PD-TOOLS-006 revision 6 (OQ-220): the plan the delegating agent `callerId` keeps — the root's own plan with OQ-213's
+   * `listWritten` for the current task, or a child's stored todo — read live at each delegate call. Absent means no plan is
+   * known, and no delegation's todo item is checked.
+   */
+  readonly todoPlanFor?: ((callerId: string) => CallerPlan) | undefined;
+  /**
+   * PD-TOOLS-006 revision 6 with REQ-ORCH-028: whether a child of `parentPersona` as `persona` would hold an implementation
+   * delegation — a granted tool the public tool-name registry declares as writing workspace files (REQ-TOOLS-001). The run
+   * host injects the resolution `delegate`'s description is built from (`resolveAgentGrant`, PD-TOOLS-006 revision 4), so
+   * the description and the refusal cannot disagree; the engine holds no copy of the declarations (ADR-0002). Absent means
+   * the engine's own reading of the file-writing tools (`writesFiles`), which agrees with it for every built-in tool.
+   */
+  readonly implementationRole?: ((persona: Persona, parentPersona: Persona | undefined) => boolean) | undefined;
 }
 
 /**
@@ -350,6 +365,11 @@ export class IterationChildren implements DelegationOps {
       const refusal = this.continuationRefusalFor(parentId, continuationOf);
       if (refusal !== null) return { status: 'rejected', canonicalName: req.taskName, message: refusal };
     }
+    // PD-TOOLS-006 revision 6 (OQ-220): the todo item the delegation serves, refused before a record exists like every
+    // refusal here — an id the caller's plan does not hold, a finished item, an item another outstanding implementation
+    // child holds, or no item from a coordinator that keeps a list (REQ-ORCH-028, REQ-ORCH-029).
+    const admitted = this.admitTodoItem(parentId, req, persona, parentPersona, continuationOf);
+    if (!admitted.ok) return { status: 'rejected', canonicalName: req.taskName, message: admitted.reason };
     const r = this.ledger.spawn({
       parentId, parentDepth, persona: req.persona, taskName: req.taskName, task: req.task, dependsOn: req.dependsOn, inheritedContext: req.inheritedContext,
       category: req.category, background: req.runInBackground, modelKey: childModelKey(persona, this.deps),
@@ -360,6 +380,7 @@ export class IterationChildren implements DelegationOps {
       // PD-ORCH-005 lets a child outlive the run that accepted it and every assembly of its payload reads them from there
       // (the repair of `a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`).
       ...((req.attachArtifacts ?? []).length > 0 ? { attachArtifacts: req.attachArtifacts } : {}),
+      ...(admitted.item !== null ? { todoItem: admitted.item } : {}),
     });
     if (!r.ok) return { status: 'rejected', canonicalName: req.taskName, message: r.error.reason };
     const { row, held, aliasResolved } = r.value;
@@ -407,6 +428,15 @@ export class IterationChildren implements DelegationOps {
     }
     // REQ-ORCH-153 needs no second check here: the gate holds only a plan cycle, whose children were admitted under it.
     const row = this.ledger.get(taskId)!;
+    // PD-TOOLS-006 revision 6 (OQ-220): a follow-up keeps its stored item and reads no `todo_item` (OQ-131); it is refused only
+    // while another outstanding implementation child of the plan holds that item (REQ-ORCH-028).
+    if (row.todo_item !== null && this.isImplementation(row)) {
+      const holder = this.holderOf(parentId, row.todo_item, row.task_id);
+      if (holder !== undefined) {
+        this.deps.warn(`${row.canonical_name}'s follow-up was refused: its todo item ${row.todo_item} is held by ${holder.canonical_name} (REQ-ORCH-028)`);
+        return rejected(`session_id '${taskId}' serves todo item '${row.todo_item}', which ${holder.canonical_name} (${holder.persona}, task_id ${holder.task_id}, state ${holder.state}) now holds: no two delegations to personas that write workspace files serve one todo item at once. Wait for ${holder.canonical_name} with wait_for_tasks, then follow this child up.`);
+      }
+    }
     // Clause 4's rule for a record: every call it holds has its result before a message follows it. An execution that
     // raised out of a call leaves one open; it is answered as cut off, naming no rest.
     answerOpenCalls(this.deps.dal, this.deps.writer, this.deps.sessionId, { taskId, name: row.canonical_name }, row.iteration, null);
@@ -462,6 +492,43 @@ export class IterationChildren implements DelegationOps {
       if (prior) this.ledger.markContextInjected(row.task_id);
     }
     return childPayload(this.deps.workspaceRoot, row.task, prior, this.artifactContext(row), writeScopeBlock(this.disclosures.get(row.task_id)), row.inherited_context_block);
+  }
+
+  /**
+   * PD-TOOLS-006 revision 6 (OQ-220): the todo item a new delegation serves, admitted against the caller's own plan
+   * (`todo-item.ts`), or the refusal, logged as a warning citing the requirement it holds.
+   */
+  private admitTodoItem(parentId: string, req: DelegateRequest, persona: Persona | undefined, parentPersona: Persona | undefined, continuationOf: string): { readonly ok: true; readonly item: string | null } | { readonly ok: false; readonly reason: string } {
+    const lookup = this.deps.todoPlanFor;
+    const named = (req.todoItem ?? '').trim();
+    const inherited = named === '' && continuationOf !== '' ? this.ledger.get(continuationOf)?.todo_item ?? null : null;
+    if (lookup === undefined) return { ok: true, item: named !== '' ? named : inherited };
+    const implementation = persona !== undefined && this.implementationRole(persona, parentPersona);
+    const admission = admitTodoItem({ named, inherited, plan: lookup(parentId), implementation, persona: persona?.name ?? req.persona, holderOf: (item) => this.holderOf(parentId, item, null) });
+    if (!admission.ok) this.deps.warn(`a delegation of '${req.taskName}' to ${persona?.name ?? req.persona} was refused for its todo item (${admission.requirement}): ${admission.reason}`);
+    return admission;
+  }
+
+  /** REQ-ORCH-028: whether `persona`, as a child of `parentPersona`, would hold an implementation delegation. */
+  private implementationRole(persona: Persona, parentPersona: Persona | undefined): boolean {
+    return this.deps.implementationRole ? this.deps.implementationRole(persona, parentPersona) : writesFiles(persona, parentPersona);
+  }
+
+  /** Whether the child `row` holds an implementation delegation, judged as a child of the agent that delegated it. */
+  private isImplementation(row: ChildRow): boolean {
+    const persona = personaOf(this.deps, row.persona);
+    if (persona === undefined) return false;
+    const parentName = this.parentPersonaOf(row.parent_id);
+    return this.implementationRole(persona, parentName === undefined ? undefined : personaOf(this.deps, parentName));
+  }
+
+  /**
+   * PD-TOOLS-006 revision 6 (c): the non-terminal implementation child of the plan `parentId` keeps — its direct children,
+   * every root's counting as one plan as `owns` reads them — that holds `item`, other than `except`. Queued, waiting,
+   * running, summarising and paused children all hold; a terminal child frees its item.
+   */
+  private holderOf(parentId: string, item: string, except: string | null): ChildRow | undefined {
+    return this.ledger.all().find((c) => c.task_id !== except && c.todo_item === item && !isTerminalChildState(c.state) && this.owns(parentId, c) && this.isImplementation(c));
   }
 
   /** REQ-TOOLS-155: whether `row` is a direct child of the agent `parentId` — the root's children whichever name the root goes by. */

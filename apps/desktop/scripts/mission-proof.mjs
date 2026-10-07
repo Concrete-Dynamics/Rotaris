@@ -15,8 +15,11 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *                    the table with one row per agent and state text, elapsed advancing between two probes 1.5 s apart.
  *   1b. waiting    — the model's slot cap one, two children waiting behind it: every row's Elapsed cell and tree meta
  *                    carries a figure, and a waiting row's advances (REQ-MONITOR-107/111).
+ *   1c. todo list  — OQ-213: a second delegation before the coordinator's own todo list is refused, then runs after it.
  *   1d. timed out  — a child cut off at a 3 s per-agent timeout, with and without progress: the tree and table tags, the
  *                    inspector's and the persona window's line, and their geometry (PD-CONFIG-003 revision 3, OQ-234).
+ *   1e. todo item  — PD-TOOLS-006 revision 6 (OQ-220): a held item and an unnamed delegation after the list are refused;
+ *                    named ones run, and each child's record holds its item.
  *   2. parity      — the Mission tree, the Overview card and the Workspace sidebar probed in one run: identical ids and
  *                    states; then a 23-agent record (20 seeded) refreshed with Mission visible, the apply-to-paint time.
  *   3. pause       — a child selected → Pause refused with the explanation, no control sent; the run selected → accepted,
@@ -118,8 +121,10 @@ const expect = (cond, message) => { if (!cond) throw new Error(message); };
 const stateOf = (rowText) => (/(running|waiting|queued|done|failed|cancelled)/.exec(rowText) ?? [])[1] ?? null;
 const seconds = (label) => { const m = /(?:(\d+)m )?(\d+)s/.exec(label); return m ? Number(m[1] ?? 0) * 60 + Number(m[2]) : null; };
 
-// OQ-213: a coordinator that delegates more than once keeps its own todo list first (`plan`), or its second delegation is refused.
-const THREE = 'plan,delegate:coding-agent:alpha,delegate:coding-agent:beta,delegate:codebase-analyst:gamma,answer';
+// OQ-213: a coordinator that delegates more than once keeps its own todo list first, or its second delegation is refused; and
+// since PD-TOOLS-006 revision 6 (OQ-220) each implementation delegation after the list names the open item it serves
+// (`plan:3` writes three, each `delegate` names the next, `done` completes them so REQ-ORCH-075 holds the task by none).
+const THREE = 'plan:3,delegate:coding-agent:alpha,delegate:coding-agent:beta,delegate:codebase-analyst:gamma,done,answer';
 
 // 1. Mission painted during a run with three live children.
 const s1 = scenario('painted');
@@ -199,7 +204,7 @@ const s1b = scenario('waiting');
 const s1c = scenario('todo-list-owed');
 {
   const r = await launch('todo-list-owed', s1c, {
-    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,delegate:coding-agent:beta,plan,delegate:coding-agent:beta,answer', ROTARIS_CHILD_SCRIPT: 'answer',
+    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,delegate:coding-agent:beta,plan:1,delegate:coding-agent:beta,done,answer', ROTARIS_CHILD_SCRIPT: 'answer',
     ROTARIS_CAPTURE_PROMPT: 'delegate twice', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1000',
   });
   const db = open(s1c);
@@ -212,7 +217,7 @@ const s1c = scenario('todo-list-owed');
   db.close();
   expect(row.execution_status === 'completed', `the run ended ${row.execution_status} (${row.stop_reason})`);
   const shape = calls.map((c) => `${c.tool}:${c.status}${c.failureKind ? `:${c.failureKind}` : ''}`);
-  expect(JSON.stringify(shape) === JSON.stringify(['delegate:ok', 'delegate:blocked:todo_list_owed', 'todo:ok', 'delegate:ok']), `the coordinator's calls: ${JSON.stringify(shape)}`);
+  expect(JSON.stringify(shape) === JSON.stringify(['delegate:ok', 'delegate:blocked:todo_list_owed', 'todo:ok', 'delegate:ok', 'todo:ok']), `the coordinator's calls: ${JSON.stringify(shape)}`);
   expect(kids.length === 2 && kids.map((k) => k.canonical_name).join(',') === 'alpha,beta', `the ledger holds ${JSON.stringify(kids.map((k) => k.canonical_name))}`);
   expect(toolErrors === 0, `the refusal filed ${toolErrors} tool_error issue(s)`);
   expect(stored.schema_version === 2 && stored.agent?.phases?.[0]?.tasks?.length === 1, `the stored todo carries no agent plan: ${JSON.stringify(stored).slice(0, 200)}`);
@@ -286,6 +291,41 @@ const s1d = scenario('timed-out', ['  child_timeout: 3']);
   expect(t.title === TIMEOUT_LINE(false), `the idle child's tag title: "${t.title}"`);
   expect(unexpected(r2.errors).length === 0, `renderer errors: ${unexpected(r2.errors).join(' | ')}`);
   results.timedOutIdle = { table: t, png: r2.png };
+}
+
+// 1e. PD-TOOLS-006 revision 6 (OQ-220, ruled 2026-10-07 under R-072), REQ-ORCH-028/029's per-item ownership in the built app: the
+// scripted coordinator writes two open items and delegates `alpha` for the first. `beta` names the same item while alpha runs
+// and is refused, naming alpha; `gamma` names no item although the coordinator keeps a list, and is refused with the open
+// items listed; `delta` names the next open item and runs. Each child's record holds the item it served; no refusal spawns a
+// child; each is logged as a warning citing its requirement. Before the ruling a delegation named no item, and nothing refused
+// a second implementation delegation for one.
+const s1e = scenario('todo-item');
+{
+  const r = await launch('todo-item', s1e, {
+    ROTARIS_SCRIPT: 'plan:2,delegate:coding-agent:alpha,delegate:coding-agent:beta,delegate:coding-agent:gamma,delegate:coding-agent:delta,done,answer', ROTARIS_CHILD_SCRIPT: 'wait:6000,answer',
+    ROTARIS_SCRIPT_DELEGATE_ARGS: JSON.stringify({ beta: { todo_item: '@1' }, gamma: { todo_item: null } }),
+    ROTARIS_CAPTURE_PROMPT: 'delegate two items', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1000',
+  });
+  const db = open(s1e);
+  const row = session(db);
+  const kids = db.prepare('SELECT canonical_name, todo_item FROM children WHERE session_id = ? ORDER BY spawned_at').all(row.session_id);
+  const delegates = db.prepare("SELECT status, entry FROM tool_calls WHERE session_id = ? AND agent_name = 'orchestrator' AND tool_name = 'delegate' ORDER BY ordinal").all(row.session_id)
+    .map((c) => ({ status: c.status, result: String(JSON.parse(c.entry).result ?? '') }));
+  const stored = JSON.parse(db.prepare('SELECT todo FROM sessions WHERE session_id = ?').get(row.session_id).todo);
+  db.close();
+  const items = (stored.agent?.phases ?? []).flatMap((p) => p.tasks.map((t) => t.id));
+  expect(row.execution_status === 'completed', `the run ended ${row.execution_status} (${row.stop_reason})`);
+  expect(items.length === 2, `the stored plan holds ${items.length} items`);
+  expect(JSON.stringify(kids) === JSON.stringify([{ canonical_name: 'alpha', todo_item: items[0] }, { canonical_name: 'delta', todo_item: items[1] }]), `the ledger holds ${JSON.stringify(kids)} for items ${JSON.stringify(items)}`);
+  const [alpha, beta, gamma, delta] = delegates;
+  expect(delegates.length === 4, `the coordinator made ${delegates.length} delegate calls`);
+  expect(/^Task 'alpha': queued/.test(alpha.result) && /^Task 'delta': queued/.test(delta.result), `the named delegations: ${alpha.result.slice(0, 80)} / ${delta.result.slice(0, 80)}`);
+  expect(new RegExp(`^Task 'beta': rejected — todo_item '${items[0]}' \\('Scripted item 1'\\) is held by alpha \\(coding-agent, task_id bg_[0-9a-f]{8}, state \\w+\\)`).test(beta.result), `beta's refusal: ${beta.result}`);
+  expect(gamma.result.startsWith("Task 'gamma': rejected — This delegation names no todo item") && gamma.result.includes(`Scripted item 1 (${items[0]}), Scripted item 2 (${items[1]})`), `gamma's refusal: ${gamma.result}`);
+  const warned028 = /was refused for its todo item \(REQ-ORCH-028\)/.test(r.log);
+  const warned029 = /was refused for its todo item \(REQ-ORCH-029\)/.test(r.log);
+  expect(warned028 && warned029, `the refusals were not logged as warnings citing REQ-ORCH-028 and REQ-ORCH-029 (see todo-item.log): ${warned028} ${warned029}`);
+  results.todoItem = { items, children: kids, refusals: { beta: beta.result.slice(0, 240), gamma: gamma.result.slice(0, 240) }, warnings: { 'REQ-ORCH-028': warned028, 'REQ-ORCH-029': warned029 } };
 }
 
 // 2. Parity across the three trees, then the 23-agent refresh with Mission visible.

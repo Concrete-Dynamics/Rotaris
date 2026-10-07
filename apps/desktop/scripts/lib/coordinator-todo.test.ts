@@ -6,7 +6,8 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { agentPlanTaskCount, coordinatorTodoReading, launchRunOverride } from './coordinator-todo.mjs';
+import { agentPlanTaskCount, coordinatorTodoReading, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading, WRITER_ROLES } from './coordinator-todo.mjs';
+import { BUILT_IN_ROLE_TOOLS } from '@rotaris/contracts';
 
 const call = (ordinal: number, tool_name: string, agent_name = 'orchestrator', status = 'ok', failureKind: string | null = null) => ({ ordinal, tool_name, agent_name, status, failureKind });
 
@@ -63,5 +64,55 @@ describe('coordinatorTodoReading (OQ-213, REQ-ORCH-029)', () => {
     expect(agentPlanTaskCount(JSON.stringify({ schema_version: 1, phases: [{ name: 'main', tasks: [{}] }] }))).toBeNull();
     expect(agentPlanTaskCount(null)).toBeNull();
     expect(agentPlanTaskCount('{')).toBeNull();
+  });
+});
+
+/**
+ * PD-TOOLS-006 revision 6 (OQ-220): the live run reads which item each child served from the store (`children.todo_item`,
+ * v34): a root implementation child spawned after the coordinator's first list names an item, no two implementation children
+ * of one plan hold one item at once, and every named item is one its plan still holds.
+ */
+describe('todoItemReading (PD-TOOLS-006 revision 6, OQ-220)', () => {
+  const kid = (canonical_name: string, over: Partial<{ task_id: string; persona: string; parent_id: string; depth: number; todo_item: string | null; spawned_at: string; completed_at: string | null; todo: string | null }> = {}) => ({
+    task_id: `bg_${canonical_name.padStart(8, '0').slice(-8)}`, canonical_name, persona: 'coding-agent', parent_id: 'bg_root0000', depth: 1, todo_item: null, spawned_at: '2026-10-07T10:00:10.000Z', completed_at: '2026-10-07T10:01:00.000Z', todo: null, ...over,
+  });
+  const listedAt = Date.parse('2026-10-07T10:00:05.000Z');
+
+  it('the writer roles are the built-in table\'s roles that declare a file-writing tool, the coordinator-only orchestrator aside', () => {
+    const writers = Object.entries(BUILT_IN_ROLE_TOOLS).filter(([role, tools]) => role !== 'orchestrator' && tools.some((t) => ['write_file', 'haet_edit', 'haet'].includes(t))).map(([role]) => role);
+    expect([...WRITER_ROLES].sort()).toEqual(writers.sort());
+  });
+
+  it('as ruled: the first delegation before the list serves none, every later implementation child names an item, none overlap', () => {
+    const r = todoItemReading([{ scenario: 'edit', listedAt, rootPlanIds: ['0000000a', '0000000b'], children: [
+      kid('first', { spawned_at: '2026-10-07T10:00:01.000Z', completed_at: '2026-10-07T10:00:04.000Z' }),
+      kid('a', { todo_item: '0000000a', completed_at: '2026-10-07T10:00:30.000Z' }),
+      kid('b', { todo_item: '0000000b' }),
+      kid('a-again', { todo_item: '0000000a', spawned_at: '2026-10-07T10:00:31.000Z', completed_at: null }),
+      kid('survey', { persona: 'codebase-analyst' }),
+    ] }]);
+    expect(r).toMatchObject({ unnamed: [], overlaps: [], stale: [] });
+    expect(r.named.map((n: { child: string }) => n.child)).toEqual(['a', 'b', 'a-again']);
+  });
+
+  it('reports an unnamed implementation child after the list, two holders of one item at once, and an item the plan no longer holds', () => {
+    const r = todoItemReading([{ scenario: 'duress', listedAt, rootPlanIds: ['0000000a'], children: [
+      kid('loose'),
+      kid('one', { todo_item: '0000000a', completed_at: null }),
+      kid('two', { todo_item: '0000000a', spawned_at: '2026-10-07T10:00:20.000Z' }),
+      kid('gone', { todo_item: 'deadbeef', persona: 'tester' }),
+      kid('sub', { depth: 2, parent_id: 'bg_0000lead', todo_item: '000000c1' }),
+      kid('lead', { task_id: 'bg_0000lead', persona: 'planner', todo: JSON.stringify({ schema_version: 1, phases: [{ id: 'p', name: 'p', tasks: [{ id: '000000c2' }] }] }) }),
+    ] }]);
+    expect(r.unnamed).toEqual([{ scenario: 'duress', child: 'loose', persona: 'coding-agent' }]);
+    expect(r.overlaps).toEqual([{ scenario: 'duress', item: '0000000a', children: ['one', 'two'] }]);
+    expect(r.stale).toEqual([{ scenario: 'duress', child: 'gone', item: 'deadbeef' }, { scenario: 'duress', child: 'sub', item: '000000c1' }]);
+  });
+
+  it('reads the stored plans', () => {
+    const root = rootAgentPlan(JSON.stringify({ schema_version: 2, planner: {}, agent: { schema_version: 1, phases: [{ tasks: [{ id: '0000000a' }, { id: '0000000b' }] }] } }));
+    expect(planItemIds(root)).toEqual(['0000000a', '0000000b']);
+    expect(rootAgentPlan('{')).toBeNull();
+    expect(planItemIds(null)).toBeNull();
   });
 });

@@ -10905,6 +10905,10 @@ root's are those its task answers for (`openRootPlan`), a child parent's its own
 `packages/engine/src/children/children.test.ts`, and shown in the built app by `pnpm mission-proof` item 1c; the proofs whose
 scripted coordinator delegates more than once open with the scripted client's `plan` step; the live run's harness checks it
 over every session it keeps (`apps/desktop/scripts/lib/coordinator-todo.mjs`). The first-executions row waits on the orchestrator's next default live run.
+*Amended 2026-10-07 by OQ-220's ruling (`PD-TOOLS-006` revision 6, fin29):* the refusal text (`TODO_LIST_OWED_TEXT`) now ends
+"…; its result gives each item's id. Then make this call again, and on a delegate call to a persona that writes workspace files
+give todo_item: the id of the item it serves." It read, until then: "…, one item per step with only the step you are on
+IN_PROGRESS, then make this call again."
 
 **First live execution, 2026-10-07 (the final default live run at `a68f121`, pack `2026-10-07T06-48-50-123Z`, the registered
 self-hosted endpoint):** the refusal held as built. It fired three times in the ten sessions: edit `#7` (a `delegate`, in the
@@ -11001,7 +11005,7 @@ they are: it narrows REQ-TOOLS-152 and REQ-TOOLS-154 and extends REQ-ORCH-028. T
 REQ-ORCH-029 as written and needs no directive, following OQ-213's precedent; if a later round reads "a delegation made before
 the list serves no item" as a narrowing of REQ-ORCH-029, it lands as `PD-ORCH-006` revision 3, the one narrowing slot
 REQ-ORCH-029 admits. The build lacked any way to hold or read the per-item constraint, recorded as
-[`no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md`](../defects/no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md).
+[`no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md`](../defects/fixed/no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md).
 
 **The two recommendations weighed, and the ruling followed both.** *Advocate A (the user's lens)* recommended that the
 coordinator names the item at the call: an optional `todo_item` stored on the child's record; once the coordinating entry role
@@ -11019,6 +11023,19 @@ delegation (REQ-TOOLS-152's `inherited_context` precedent) and the harness check
 revision 4 had landed for OQ-216, and that a model cannot name an id its own step creates, so `delegate`'s description and
 OQ-213's refusal text tell it to write the list first. A refusal that misfires costs one model step (17.7 to 19.6 s measured);
 a duplicate costs a whole child, up to 1,200 s.
+
+*Built 2026-10-07 (fin29, `fin29-delegate-admission`); its first execution is reported in `PD-TOOLS-006` revision 6.* Store
+v34's `children.todo_item`; `admitTodoItem` (`packages/engine/src/children/todo-item.ts`) called by `IterationChildren.delegate`
+before the spawn and by `followUp` for the held check; `Run.todoPlanFor` reads the caller's plan and `listWritten`; the run
+host injects `implementationRole` (`apps/desktop/src/run-host/tools.ts`); `delegate`'s `todo_item` and its description sentence
+(`TODO_ITEM_SENTENCE`); `TODO_LIST_OWED_TEXT` names the ids (OQ-213's entry quotes the text it replaced); the live run's
+`todoItemReading` (`apps/desktop/scripts/lib/coordinator-todo.mjs`). Shown in the built app by `pnpm mission-proof` item 1e.
+**What a live run then shows:** every implementation child the coordinator spawns after its first accepted root `todo` write
+carries a `todo_item` naming an item of its agent plan (only a task's first delegation, made before any list, carries none); no
+two implementation children holding one item are outstanding at once; a continuation, such as the duress run's d2, carries the
+item of the child it continues; `rejected` delegations for an unnamed, unknown, finished or held item are counted, the target
+at most one per run, each followed on the next step by a delegation that names an item; the harness's coordinator-todo check
+reports all of these.
 
 **OQ-216 — Is the coordinator told which personas hold a terminal or a file-writing tool?** *(REQ-ORCH-028, a routing table
 from need to role, with two capability clauses (`codebase-analyst` "reads the workspace but does not modify it", `librarian`

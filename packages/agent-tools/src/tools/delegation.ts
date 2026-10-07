@@ -44,7 +44,7 @@ export function attachmentWarnings(a: AttachmentReport): readonly string[] {
 }
 
 export interface DelegationPort {
-  delegate(parentId: string, req: { persona: string; taskName: string; task: string; dependsOn: readonly string[]; inheritedContext: readonly string[]; category: string; runInBackground: boolean; attachArtifacts: readonly string[]; writeScope: readonly string[]; continuationOf?: string | undefined; suppressAutoContext?: boolean | undefined; sessionId?: string | undefined }): Promise<
+  delegate(parentId: string, req: { persona: string; taskName: string; task: string; dependsOn: readonly string[]; inheritedContext: readonly string[]; category: string; runInBackground: boolean; attachArtifacts: readonly string[]; writeScope: readonly string[]; continuationOf?: string | undefined; suppressAutoContext?: boolean | undefined; sessionId?: string | undefined; todoItem?: string | undefined }): Promise<
     | { status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; canonicalName: string; taskId: string; message: string; attachments?: AttachmentReport | undefined }
     | { status: 'rejected'; canonicalName: string; message: string }
   >;
@@ -69,6 +69,8 @@ const delegateSchema = z.object({
   write_scope: z.array(z.string()).default([]),
   /** PD-ORCH-004: the task_id of your own child whose report offered a continuation; the new child is recorded as continuing it. */
   continuation_of: z.string().optional(),
+  /** PD-TOOLS-006 revision 6 (OQ-220): the id of the item of your own todo list this delegation serves. */
+  todo_item: z.string().optional(),
 });
 
 /** REQ-TOOLS-153: `Task '<canonical>': <status> — <message>` then `task_id: <id>` wherever one was issued. */
@@ -117,17 +119,23 @@ export function renderDelegateCatalogue(catalogue: DelegateCatalogue): string {
   return `The personas you can delegate to, each with what the product's own tools a child of yours would be granted let it do (tool-server and plugin tools are not described): ${personas.join('; ')}.${aliases} Ask a persona only for work its tools allow: a persona that does not run commands cannot run tests, builds or scripts, and one that does not write workspace files cannot change a file. Where a persona that runs no commands needs command output, delegate the command to a persona that runs commands and hand its result on with depends_on or inherited_context.`;
 }
 
+/**
+ * PD-TOOLS-006 revision 6 (OQ-220, ruled 2026-10-07 under R-072): what `todo_item` is and when the run refuses without it. A
+ * model cannot name an id its own step creates, so the sentence tells it to write the list first and delegate in the next step.
+ */
+export const TODO_ITEM_SENTENCE = 'Give todo_item: the id of the item of your todo list this delegation serves, as the todo tool\'s last result shows it. Once you keep a todo list, every delegation to a persona that writes workspace files names an open item, and no two such delegations hold one item at once. Write the list in one step and delegate in the next: an item\'s id exists only once the todo call has returned.';
+
 export function delegateTool(port: DelegationPort, parentId: string, catalogue: DelegateCatalogue): ToolExecutor<z.infer<typeof delegateSchema>> {
   return {
     name: 'delegate',
     // OQ-114 as ruled (R-071, PD-ORCH-004 revision 5): `continuation_of`'s sentence says a continuation starts with no memory.
     // PD-TOOLS-006 revision 4 (OQ-216): the persona list is the caller's catalogue with each persona's facets; the sentences
     // after it are unchanged.
-    description: `Delegate a task to a specialist persona. ${renderDelegateCatalogue(catalogue)} Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false. When the child will write files, give write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit. When a child's report makes a continuation offer, give continuation_of: that child\'s task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains. To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead.`,
+    description: `Delegate a task to a specialist persona. ${renderDelegateCatalogue(catalogue)} Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false. When the child will write files, give write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit. When a child's report makes a continuation offer, give continuation_of: that child\'s task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains. To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead. ${TODO_ITEM_SENTENCE}`,
     schema: delegateSchema,
     label: (a) => `delegate ${a.persona}: ${a.task_name}`,
     execute: async (a) => {
-      const r = await port.delegate(parentId, { persona: a.persona, taskName: a.task_name, task: a.task, dependsOn: a.depends_on, inheritedContext: a.inherited_context, category: a.category ?? '', runInBackground: a.run_in_background, attachArtifacts: a.attach_artifacts, writeScope: a.write_scope, ...(a.continuation_of === undefined ? {} : { continuationOf: a.continuation_of }), ...(a.suppress_auto_context ? { suppressAutoContext: true } : {}), ...(a.session_id === undefined || a.session_id === '' ? {} : { sessionId: a.session_id }) });
+      const r = await port.delegate(parentId, { persona: a.persona, taskName: a.task_name, task: a.task, dependsOn: a.depends_on, inheritedContext: a.inherited_context, category: a.category ?? '', runInBackground: a.run_in_background, attachArtifacts: a.attach_artifacts, writeScope: a.write_scope, ...(a.continuation_of === undefined ? {} : { continuationOf: a.continuation_of }), ...(a.suppress_auto_context ? { suppressAutoContext: true } : {}), ...(a.session_id === undefined || a.session_id === '' ? {} : { sessionId: a.session_id }), ...(a.todo_item === undefined || a.todo_item.trim() === '' ? {} : { todoItem: a.todo_item.trim() }) });
       if (r.status === 'rejected') return errorObservation(renderDelegateObservation(r.canonicalName, 'rejected', r.message, null));
       // REQ-LIBRARY-098 (Part Y): the attachments are injected as the child's `PRIOR AGENT CONTEXT (FULL)` block; what the
       // child will be given of them is reported HERE, to the caller, rather than only inside the child's own block

@@ -18,6 +18,7 @@ import type { Budget as ChildBudget } from '../children/ledger.js';
 import { canonicaliseName, mintTaskId, takenTaskIds } from '../children/naming.js';
 import type { SummariserDeps } from '../children/report.js';
 import type { ClaimHit } from '../children/write-scope.js';
+import type { CallerPlan } from '../children/todo-item.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
 import type { CountUsage } from './metered.js';
 import type { HookPort, RunNotice } from '../hooks-port.js';
@@ -265,6 +266,12 @@ export interface RunDeps {
   readonly continuation?: boolean | undefined;
   /** ADR-0036: the configured personas over the built-in table. */
   readonly personas?: PersonaResolver | undefined;
+  /**
+   * PD-TOOLS-006 revision 6 with REQ-ORCH-028: whether a child of `parentPersona` as `persona` holds an implementation
+   * delegation, as the host's tool registry reads its grant (`IterationChildren`'s `implementationRole`). Absent means the
+   * engine's own reading of the file-writing tools.
+   */
+  readonly implementationRole?: ((persona: Persona, parentPersona: Persona | undefined) => boolean) | undefined;
   /** REQ-ORCH-084: the message limit in force for the session; null = disabled. */
   readonly messageLimit?: number | null | undefined;
   /**
@@ -1807,6 +1814,10 @@ export class Run {
         ...(this.deps.plan ? { planGate: { held: () => this.planHeld, withholds: this.deps.plan.withholds } } : {}),
         // REQ-ORCH-059: the open items a completion notification reminds its parent of.
         openTodoFor: (agentId: string) => this.openTodoFor(agentId),
+        // PD-TOOLS-006 revision 6 (OQ-220): the caller's own plan and OQ-213's `listWritten`, read live at each delegate call,
+        // and the host's reading of which roles hold an implementation delegation.
+        todoPlanFor: (callerId: string) => this.todoPlanFor(callerId),
+        ...(this.deps.implementationRole ? { implementationRole: this.deps.implementationRole } : {}),
       }, iteration)
       : null;
     this.children = children;
@@ -2481,6 +2492,17 @@ export class Run {
     const current = this.iterationTaskRecord();
     const tasks = current !== null ? [current] : this.planHeld ? this.todo.pendingTasks() : [];
     for (const task of tasks) task.listWritten = true;
+  }
+
+  /**
+   * PD-TOOLS-006 revision 6 (OQ-220): the plan the delegating agent `callerId` keeps, as a delegation's todo item is admitted
+   * against it — the root's own plan while it coordinates, with OQ-213's `listWritten` for the current execution task (so an
+   * unnamed implementation delegation is refused once the list is written), or a child's own stored todo, which holds no
+   * such flag.
+   */
+  private todoPlanFor(callerId: string): CallerPlan {
+    if (this.isRootAgent(callerId)) return { document: this.coordinatorPlan(), listWritten: this.workItemTask()?.listWritten === true };
+    return { document: this.agentTodoFor(callerId, false), listWritten: false };
   }
 
   /**

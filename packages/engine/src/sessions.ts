@@ -44,7 +44,7 @@ import type { PlanDecision, PlanGatePayload, ResumablePayload } from '@rotaris/c
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import { meteredBackend, type CountUsage } from './run/metered.js';
 import { mintTodoId, taskTitle, Todo, type TodoDocument } from './run/todo.js';
-import type { PersonaResolver } from './children/personas.js';
+import type { Persona, PersonaResolver } from './children/personas.js';
 import type { AgentActivity } from './children/activity.js';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, projectSessionTodos, sessionTaskTitle, type AgentTodoDocument } from './todo-view.js';
@@ -245,6 +245,13 @@ export interface SessionsDeps {
    * the engine does not import (ADR-0002); absent means the plan gate refuses no delegation on a role's tools.
    */
   readonly planWithholds?: ((tool: string) => boolean) | undefined;
+  /**
+   * PD-TOOLS-006 revision 6 with REQ-ORCH-028 (OQ-220): whether a child of `parentPersona` as `persona` would hold an
+   * implementation delegation — a granted tool the registry declares as writing workspace files — resolved as the child's
+   * own port and `delegate`'s description resolve its grant. Injected for the reason `planWithholds` is; absent means the
+   * engine's own reading of the file-writing tools.
+   */
+  readonly implementationRole?: ((persona: Persona, parentPersona: Persona | undefined) => boolean) | undefined;
   /** The tool surface per session; absent means the model is offered no tool. */
   readonly tools?: (ctx: ToolPortContext) => ToolPort;
   /** REQ-TOOLS-053/069: whether a prompt can be put in front of a person, at the moment asked. */
@@ -1572,6 +1579,7 @@ export class Sessions {
     const run = new Run({
       sessionId, workspaceRoot, effectiveRoot, task: prompt, taskContent: [...(prompt === '' ? [] : [{ kind: 'text' as const, text: prompt }]), ...storedAttachments.content], taskId: mintTodoId(new Set()), writer, owner, bus: this.bus, clocks: this.deps.clocks,
       ...(setup.value.personas ? { personas: setup.value.personas } : {}),
+      ...(this.deps.implementationRole ? { implementationRole: this.deps.implementationRole } : {}),
       ...(setup.value.models ? { models: setup.value.models } : {}),
       // REQ-WORKSPACE-060 (ADR-0063): the session's always-active context units, as a getter the run calls at
       // every agent construction (REQ-CONFIG-166 reads the policy at creation, never mid-agent).
@@ -1861,6 +1869,7 @@ export class Sessions {
     const run = new Run({
       sessionId, workspaceRoot, effectiveRoot, task: payload, taskContent: [{ kind: 'text', text: payload }, ...attachmentContent], taskLabel: prompt, taskId: continuedTaskId(s.dal, sessionId, todo),
       ...(setupIn.personas ? { personas: setupIn.personas } : {}),
+      ...(this.deps.implementationRole ? { implementationRole: this.deps.implementationRole } : {}),
       ...(setupIn.models ? { models: setupIn.models } : {}),
       // REQ-WORKSPACE-073 (ADR-0063): a continuation is where an invoked skill first reaches a model — the
       // command is typed between prompts, so the units MUST be re-read here and not carried from the launch.

@@ -203,7 +203,13 @@ Invariants:
   `tool_restrictions` lists and the prerequisites (the persona's own `can_publish_artifacts` among them, OQ-212); an agent's port applies it to itself, and `delegateCatalogue` applies it,
   on a child's terms, to every persona the agent can delegate to, so the facets the description states
   (`renderDelegateCatalogue`, from `DECLARATIONS`) are the grant a child receives. A new tool's facets therefore reach
-  every coordinator's description with no edit beyond step 2.
+  every coordinator's description with no edit beyond step 2. The same resolution answers which delegations are
+  implementation delegations (`implementationRole`, injected as `SessionsDeps.implementationRole`), so the todo-item
+  refusals of `PD-TOOLS-006` revision 6 (OQ-220) and the description never disagree about a persona.
+- **A `delegate` field the run must admit** lands in three places, as `todo_item` did (revision 6): the tool's schema and the
+  `DelegationPort` request (`agent-tools/tools/delegation.ts`), `DelegateRequest` (`engine/children/delegation.ts`), and
+  `IterationChildren.delegate`'s admission, before `ChildLedger.spawn`, with a refusal `rejected` and no record. A field the
+  child's record keeps is a store column (§3) and a `ChildSpawn` field carried by `spawn`.
 - The gate decides; the executor never asks. An approval travels `gate → presenter → main → dialog` — see
   [`06-sequences.md` §2](06-sequences.md#2-a-permission-approval-end-to-end).
 - A tool that reaches the filesystem states its read roots; a tool that reaches the network reads the egress

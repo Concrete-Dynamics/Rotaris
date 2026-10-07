@@ -164,6 +164,13 @@ under an ignored glob (`gen/*` then `!gen/keep/`) keeps what it holds for the se
 pruning walks ask an entry's own verdict (`ignoredHere`). The **runtime view**'s search-tools and setup paragraphs say so.
 No package, edge, process, channel, command or store column changed.
 
+**A delegation names the todo item it serves (PD-TOOLS-006 revision 6, REQ-ORCH-028/029; OQ-220 ruled under R-072, fin29).**
+Store **v34** appends `children.todo_item`; `delegate` gains `todo_item` (`DelegateRequest.todoItem`); `IterationChildren.delegate`
+admits it before the spawn (`admitTodoItem`, `children/todo-item.ts`) over the caller's plan (`ChildrenDeps.todoPlanFor`,
+`Run.todoPlanFor`) and the host's implementation reading (`SessionsDeps.implementationRole`, `implementationRole` in
+`run-host/tools.ts`). The **runtime view**'s delegation section and store table, and the **seams view**'s tool invariants, say so.
+One store column; no package, edge, process, channel or command changed.
+
 **A delegated child's attached artifacts: 100,000 characters, skip-and-continue, and an observation that names what the child is
 given (PD-TOOLS-006 revision 5, REQ-TOOLS-152/153, REQ-LIBRARY-098; OQ-221 ruled under R-072, fin29).** `selectAttachments`
 (`children/orchestration.ts`) is the one selection both the delegate observation at acceptance and the payload's block read;

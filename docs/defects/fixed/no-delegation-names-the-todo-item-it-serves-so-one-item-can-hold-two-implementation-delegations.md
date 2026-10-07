@@ -10,9 +10,18 @@ ledger records none (`children`, store v33), and admission (`IterationChildren.d
 implementation children on one item at once, the run cannot refuse it, and no record says which item any child served.
 The constraint stands on instruction text alone, which REQ-ORCH-029 says may not decide it.
 
-Raised as [OQ-220](../architecture/open-questions.md) by fin27 while building OQ-213, which made the coordinator keep a todo
+Raised as [OQ-220](../../architecture/open-questions.md) by fin27 while building OQ-213, which made the coordinator keep a todo
 list of its own (the precondition, not the measure); recorded as a defect 2026-10-07 by fin29 when the ruling of OQ-220
 (under R-072) settled how a delegation names its item. REQ-ORCH-030's per-item attempt count rests on the same missing key.
+
+**Outcome (repaired 2026-10-07, fin29).** Built as OQ-220's ruling under R-072, `PD-TOOLS-006` revision 6: `delegate`'s
+`todo_item` is stored on the child's record (`children.todo_item`, store v34), and `IterationChildren.delegate` admits it
+before the spawn (`admitTodoItem`, `packages/engine/src/children/todo-item.ts`) against the caller's own plan and OQ-213's
+`listWritten`, refusing an unknown id, and for an implementation delegation a finished item, a held item or none after the
+list; a continuation inherits its item, a follow-up keeps its own. Pinned by `children/todo-item.test.ts`, the
+"PD-TOOLS-006 revision 6" cases of `children/children.test.ts` (each refusal red with its check removed), the migration case
+in `store/src/store.test.ts`, `tools/delegation.test.ts`, `run-host/tools.test.ts` and `scripts/lib/coordinator-todo.test.ts`;
+shown in the built app by `pnpm mission-proof` item 1e. The live run reads the column (`todoItemReading`).
 
 ## Specs
 

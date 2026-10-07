@@ -1117,6 +1117,19 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE plan_roots ADD COLUMN tool_calls INTEGER;
     `,
   },
+  {
+    to: 34,
+    /*
+     * PD-TOOLS-006 revision 6 (OQ-220, ruled 2026-10-07 under R-072) with REQ-ORCH-028 and REQ-ORCH-029: a delegation names
+     * the todo item it serves, so "no two implementation delegations for the same todo item are outstanding at once" can be
+     * held at admission and read from the run's own records. `todo_item` is the 8-hex id of an item of the delegating agent's
+     * own plan the `delegate` call named, inherited by a continuation; NULL where the call named none, and on every row
+     * written before this version, which is true of them: no delegation named an item before it.
+     */
+    sql: `
+      ALTER TABLE children ADD COLUMN todo_item TEXT;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

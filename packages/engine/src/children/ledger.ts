@@ -143,6 +143,8 @@ export interface SpawnInput {
   readonly suppressAutoContext?: boolean | undefined;
   /** REQ-LIBRARY-098: the call's `attach_artifacts`, as given, stored with its record; absent means none. */
   readonly attachArtifacts?: readonly string[] | undefined;
+  /** PD-TOOLS-006 revision 6: the item of the caller's own plan the delegation serves, admitted before the spawn; absent means none. */
+  readonly todoItem?: string | undefined;
 }
 
 export type SpawnRejection = { readonly reason: string };
@@ -360,6 +362,9 @@ export class ChildLedger {
       // unfinished may have completed by then, so the ids alone would not say which counted.
       attach_artifacts: JSON.stringify(input.attachArtifacts ?? []),
       inherited_context_block: inheritedContextBlock(inherited),
+      // PD-TOOLS-006 revision 6 (REQ-ORCH-028/029): the item the delegation serves, so a second implementation delegation for
+      // it is refused while this child is outstanding, and the run's records say which item each child answered for.
+      todo_item: input.todoItem ?? null,
     };
     const r = this.deps.writer.spawnChild(row);
     if (!r.ok) return { ok: false, error: { reason: `The child could not be recorded: ${r.error.code}` } };

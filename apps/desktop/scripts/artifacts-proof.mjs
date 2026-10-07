@@ -250,7 +250,7 @@ const results = {};
     ROTARIS_CAPTURE_PROMPT: 'delegate twice', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     // The orchestrator publishes FIRST, so the children are created with a session that already holds an
     // artifact: REQ-LIBRARY-097's `PRIOR SIBLING ARTIFACT INDEX` reaches them and its diagnostic is recorded.
-    ROTARIS_SCRIPT: 'artifact:artifact_write,plan,delegate:coding-agent:one,delegate:tester:two,wait:4000,answer', ROTARIS_CHILD_SCRIPT: 'answer',
+    ROTARIS_SCRIPT: 'artifact:artifact_write,plan:2,delegate:coding-agent:one,delegate:tester:two,wait:4000,done,answer', ROTARIS_CHILD_SCRIPT: 'answer',
     ROTARIS_INTENT_SCRIPT: 'moderate_feature',
     ROTARIS_CAPTURE_VIEWS: '6@16000',
     // Live-run finding K1 (REQ-MONITOR-052/060/061, REQ-LIBRARY-102/131): WHILE THE RUN IS STILL ACTIVE (it ends after

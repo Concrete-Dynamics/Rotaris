@@ -217,6 +217,49 @@ function conversationOf(messages: readonly ChatMessage[]): readonly ChatMessage[
   return messages[0]?.role === 'system' ? messages.slice(1) : messages;
 }
 
+/**
+ * PD-TOOLS-006 revision 6 (OQ-220): the plan the scripted coordinator's latest `todo` call left, read from that call's result
+ * as the model reads it (REQ-TOOLS-147's rendered summary: `Phase <name> (<id>)`, then `  [<STATE>] <name> (<id>)`), and the
+ * delegate results that came after it. A scripted delegation names the item a real coordinator would: the next open one.
+ */
+export interface ScriptedPlan {
+  readonly phases: readonly { readonly id: string; readonly name: string; readonly tasks: readonly { readonly id: string; readonly name: string; readonly state: string }[] }[];
+  /** How many delegations were admitted (their result carries a task id) since the todo result. */
+  readonly admittedSince: number;
+}
+
+export function latestScriptedPlan(messages: readonly ChatMessage[]): ScriptedPlan | null {
+  const results = messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-result' ? [{ name: p.name, result: p.result }] : [])));
+  let at = -1;
+  for (let i = results.length - 1; i >= 0; i--) if (results[i]!.name === 'todo' && /^Todo state:/m.test(results[i]!.result)) { at = i; break; }
+  if (at < 0) return null;
+  const phases: { id: string; name: string; tasks: { id: string; name: string; state: string }[] }[] = [];
+  for (const line of results[at]!.result.split('\n')) {
+    const phase = /^Phase (.+) \(([0-9a-f]{8})\)$/.exec(line);
+    if (phase) { phases.push({ id: phase[2]!, name: phase[1]!, tasks: [] }); continue; }
+    const task = /^ {2}\[(PENDING|IN_PROGRESS|COMPLETED|ABANDONED)\] (.+?) \(([0-9a-f]{8})\)(?: — .*)?$/.exec(line);
+    if (task && phases.length > 0) phases[phases.length - 1]!.tasks.push({ id: task[3]!, name: task[2]!, state: task[1]! });
+  }
+  const admittedSince = results.slice(at + 1).filter((r) => r.name === 'delegate' && /task_id: bg_[0-9a-f]{8}/.test(r.result)).length;
+  return { phases, admittedSince };
+}
+
+/**
+ * The `todo_item` a scripted delegation names: `@<k>` in its ROTARIS_SCRIPT_DELEGATE_ARGS entry is the k-th item (1-based) of
+ * the latest plan, any other string is sent as it is, null names none; with no entry, the next open item after those the
+ * admitted delegations since the plan took, or none where no plan or no such item exists.
+ */
+export function scriptedTodoItem(plan: ScriptedPlan | null, explicit: unknown): string | undefined {
+  const items = plan?.phases.flatMap((p) => p.tasks) ?? [];
+  if (explicit === null) return undefined;
+  if (typeof explicit === 'string') {
+    const k = /^@(\d+)$/.exec(explicit);
+    return k ? items[Number(k[1]) - 1]?.id : explicit;
+  }
+  const open = items.filter((t) => t.state !== 'COMPLETED' && t.state !== 'ABANDONED');
+  return open[plan?.admittedSince ?? 0]?.id;
+}
+
 export function scriptedClient(c: Clocks, log: (message: string) => void, record?: (call: ScriptedCallRecord) => void, ledger?: StandingLedger): ModelClient {
   const parse = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
   // ROTARIS_SCRIPT drives the orchestrator; ROTARIS_CHILD_SCRIPT every child (a `delegate:<persona>:<name>` step delegates).
@@ -472,8 +515,12 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
           const named = map[delegate[2]!];
           if (named !== null && typeof named === 'object' && !Array.isArray(named)) extra = named as Record<string, unknown>;
         } catch { extra = {}; }
+        // PD-TOOLS-006 revision 6 (OQ-220): after a `todo` call, the delegation names the item it serves, as the run requires
+        // of a coordinator that keeps a list (`scriptedTodoItem`); an entry's `todo_item` overrides it.
+        const { todo_item: explicitItem, ...rest } = extra;
+        const item = scriptedTodoItem(latestScriptedPlan(req.messages), 'todo_item' in extra ? explicitItem : undefined);
         yield ok<StreamPart>({ kind: 'text', delta: `Delegating to ${delegate[1]}. ` });
-        yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'delegate', argsDelta: JSON.stringify({ persona: delegate[1], task_name: delegate[2], task: `TASK: ${delegate[2]}\nEXPECTED OUTCOME: done\nMUST DO: use your tools\nMUST NOT DO: nothing else\nCONTEXT: scripted`, ...(lastId ? { depends_on: [lastId] } : {}), ...extra }) });
+        yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'delegate', argsDelta: JSON.stringify({ persona: delegate[1], task_name: delegate[2], task: `TASK: ${delegate[2]}\nEXPECTED OUTCOME: done\nMUST DO: use your tools\nMUST NOT DO: nothing else\nCONTEXT: scripted`, ...(lastId ? { depends_on: [lastId] } : {}), ...rest, ...(item === undefined ? {} : { todo_item: item }) }) });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
         yield finished('other');
         return;
@@ -575,8 +622,16 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         yield finished('other');
         return;
       }
+      // plan:<n> — PD-TOOLS-006 revision 6 (OQ-220): a todo list of n open items, which the delegations after it name in turn;
+      // `done` writes the latest list back with every item COMPLETED, so REQ-ORCH-075 holds the task by none of them.
+      const planSteps = /^plan:(\d+)$/.exec(step);
+      const latest = step === 'done' ? latestScriptedPlan(req.messages) : null;
+      const dynamic = planSteps
+        ? { name: 'todo', args: { operation: 'replace', phases: [{ name: 'Scripted plan', tasks: Array.from({ length: Number(planSteps[1]) }, (_, i) => ({ name: `Scripted item ${i + 1}`, description: 'Delegated by the scripted coordinator.', state: 'PENDING' })) }] } }
+        : latest ? { name: 'todo', args: { operation: 'replace', phases: latest.phases.map((p) => ({ id: p.id, name: p.name, tasks: p.tasks.map((t) => ({ id: t.id, name: t.name, description: 'Delegated by the scripted coordinator.', state: 'COMPLETED' })) })) } }
+          : null;
       // fetch:<url> — everything after the first `fetch:` is the URL (the fetch proof's step).
-      const tool = step.startsWith('fetch:') ? { name: 'fetch', args: { url: step.slice('fetch:'.length) } } : TOOL_STEPS[step];
+      const tool = dynamic ?? (step.startsWith('fetch:') ? { name: 'fetch', args: { url: step.slice('fetch:'.length) } } : TOOL_STEPS[step]);
       if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {
         yield ok<StreamPart>({ kind: 'text', delta: `Calling ${tool.name}. ` });
         yield ok<StreamPart>({ kind: 'tool-call', callId, name: tool.name, argsDelta: JSON.stringify(tool.args) });

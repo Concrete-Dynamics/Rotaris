@@ -5,7 +5,7 @@ import { rebuild } from '@rotaris/engine';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileLedger, memoryLedger, scriptedClient } from './scripted-client.js';
+import { fileLedger, latestScriptedPlan, memoryLedger, scriptedClient, scriptedTodoItem } from './scripted-client.js';
 
 /*
  * The scripted client is verification only; these tests pin the step it takes, which is what a driven proof scripts
@@ -148,6 +148,47 @@ describe('scriptedClient — the step a call takes', () => {
     const second = await callOf([...root, ...step('c1', 'delegate')]);
     expect(second).toMatchObject({ persona: 'tester', task_name: 'check' });
     expect('attach_artifacts' in second).toBe(false);
+  });
+
+  /*
+   * PD-TOOLS-006 revision 6 (OQ-220): a coordinator that keeps a list names the item each implementation delegation serves. The
+   * scripted coordinator writes `plan:<n>` open items, names the next open one at each delegation, and `done` completes them.
+   */
+  it('`plan:<n>` writes n open items; each delegation after it names the next one; `done` writes them COMPLETED with their ids', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'plan:2,delegate:coding-agent:one,delegate:coding-agent:two,delegate:codebase-analyst:three,done');
+    vi.stubEnv('ROTARIS_SCRIPT_DELEGATE_ARGS', JSON.stringify({ three: { todo_item: '@1' } }));
+    const client = scriptedClient(clock, () => {});
+    const tools = [...TOOLS, { name: 'todo', description: 'todo', parameters: {} }, { name: 'delegate', description: 'delegate', parameters: {} }];
+    const callOf = async (messages: readonly ChatMessage[]) => {
+      const parts = client.stream({ ...request(messages), tools })[Symbol.asyncIterator]();
+      let call: { name: string; argsDelta: string } | null = null;
+      for (let r = await parts.next(); r.done !== true; r = await parts.next()) if (r.value.ok && r.value.value.kind === 'tool-call') call = r.value.value;
+      return { name: call!.name, args: JSON.parse(call!.argsDelta) as Record<string, unknown> };
+    };
+    const answered = (callId: string, name: string, args: Record<string, unknown>, result: string): ChatMessage[] => [
+      { role: 'assistant', content: [{ kind: 'tool-call', callId, name, args: JSON.stringify(args) }] },
+      { role: 'tool', content: [{ kind: 'tool-result', callId, name, result, isError: false }] },
+    ];
+    let messages: ChatMessage[] = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'build two things')];
+    const plan = await callOf(messages);
+    expect(plan).toEqual({ name: 'todo', args: { operation: 'replace', phases: [{ name: 'Scripted plan', tasks: [1, 2].map((i) => ({ name: `Scripted item ${i}`, description: 'Delegated by the scripted coordinator.', state: 'PENDING' })) }] } });
+    messages = [...messages, ...answered('c1', 'todo', plan.args, 'Replaced the todo list: 1 phase, 2 tasks.\nTodo state:\nPhase Scripted plan (0000aaaa)\n  [PENDING] Scripted item 1 (0000000a) — Delegated by the scripted coordinator.\n  [PENDING] Scripted item 2 (0000000b) — Delegated by the scripted coordinator.')];
+    const one = await callOf(messages);
+    expect(one.args['todo_item']).toBe('0000000a');
+    messages = [...messages, ...answered('c2', 'delegate', one.args, "Task 'one': queued — Accepted.\ntask_id: bg_00000001")];
+    const two = await callOf(messages);
+    expect(two.args['todo_item']).toBe('0000000b');
+    // A refused delegation takes no item: the next one names the same item again.
+    expect(scriptedTodoItem(latestScriptedPlan([...messages, ...answered('c3', 'delegate', two.args, "Task 'two': rejected — held")]), undefined)).toBe('0000000b');
+    messages = [...messages, ...answered('c3', 'delegate', two.args, "Task 'two': queued — Accepted.\ntask_id: bg_00000002")];
+    const three = await callOf(messages);
+    expect(three.args['todo_item']).toBe('0000000a');
+    messages = [...messages, ...answered('c4', 'delegate', three.args, "Task 'three': queued — Accepted.\ntask_id: bg_00000003")];
+    const done = await callOf(messages);
+    expect(done).toEqual({ name: 'todo', args: { operation: 'replace', phases: [{ id: '0000aaaa', name: 'Scripted plan', tasks: [['0000000a', 1], ['0000000b', 2]].map(([id, i]) => ({ id, name: `Scripted item ${i}`, description: 'Delegated by the scripted coordinator.', state: 'COMPLETED' })) }] } });
+    // An entry's null names no item, and no plan names none.
+    expect(scriptedTodoItem(latestScriptedPlan(messages), null)).toBeUndefined();
+    expect(scriptedTodoItem(null, undefined)).toBeUndefined();
   });
 
   /*

@@ -2613,7 +2613,7 @@ earlier attachment, so the child always receives a superset of what the prefix r
 the coordinator to no two implementation delegations for one item outstanding at once, checkable from the run's records. OQ-213
 made the coordinator keep a list of its own; nothing in the build named which item a delegation served, so the per-item
 constraint stood on instruction text and no record could check it
-([`no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md`](../defects/no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md)).
+([`no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md`](../defects/fixed/no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md)).
 Only the coordinator knows which item a delegation serves, so the call names it, where the run can still refuse before a child
 is paid for. What it costs:
 - a refusal that misfires costs the coordinator one model step (17.7 to 19.6 s measured), where a duplicate costs a whole
@@ -2771,6 +2771,38 @@ the final live runs' findings L4 and N3. Revision 5 ruled under the same delegat
 > 55,000-character body (left out under 48,000) and the short one after the elided one, a section of 56,099 characters; and
 > `summary.md` read "Mostly-elided artifacts: 1". **What was not measured.** No live run attached artifacts; none of the four
 > autopsied live runs did. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 6, 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-220](../architecture/open-questions.md)),
+> built by fin29:** built as written, and the text met the code in four places.
+>
+> - **Which delegations are implementation delegations.** The engine holds no copy of the registry's declarations, so the run
+>   host injects `implementationRole` (`apps/desktop/src/run-host/tools.ts`): revision 4's `resolveAgentGrant` on the
+>   catalogue's terms, a granted tool declaring "writes workspace files". `run-host/tools.test.ts` holds it equal to the
+>   catalogue's facet for every known role and two callers. Where no host injects it, the engine's `writesFiles` stands in.
+> - **Inheritance meets only the held check.** A continuation's inherited item is checked by the held-item refusal alone; a
+>   COMPLETED inherited item, or one the plan no longer holds, is not refused, since the continued child named it and the
+>   continuation finishes that work.
+> - **One step's list and delegation.** A `todo` write and an unnamed implementation delegation in one step leave the
+>   delegation refused, with the ids the list now holds named in its reason, as the ruling foresaw.
+> - **The scripted coordinator.** The proofs' scripted `plan` step writes one COMPLETED item, which no implementation
+>   delegation may name; the dialect gains `plan:<n>` (n open items), names each delegation's item in turn from the `todo`
+>   result as a model would, and `done` completes the list. Four proofs whose coordinator delegates implementation after its
+>   list were moved to it; `mcp-proof`'s children are restricted to reading, so its `plan` stays.
+>
+> **What was measured.** `children/todo-item.test.ts` (six cases) and twelve end-to-end cases in `children/children.test.ts`:
+> before any list an unnamed delegation is admitted; after it an unnamed one is refused naming the open items and a named one
+> admitted and stored; a read-only role delegates unnamed; one step's list and delegation; an unknown id refused for any role;
+> a COMPLETED or ABANDONED item refused to implementation and admitted read-only; a held item refused naming its holder, two
+> items in parallel, the item freed once its holder ended; a read-only child never holds; a child waiting on its dependencies
+> holds; a follow-up never refused as unnamed; a child's own plan; a continuation inheriting. Each refusal is red with its
+> check removed. In the built app, `pnpm mission-proof` item 1e: a two-item list, `alpha` named the first item, `beta` naming
+> it while alpha ran was refused "held by alpha (coding-agent, task_id …, state running)", `gamma` naming none was refused with
+> both items listed, `delta` named the second and ran; the children's records held `565a0565` and `a4257486`, the session
+> completed, and both refusals were logged citing REQ-ORCH-028 and REQ-ORCH-029. **What was not measured.** No live run: the
+> next default and duress runs should show every root implementation child after the first `todo` write naming an item
+> (`coordinator-todo.mjs`'s `todoItemReading`), no two holders of one item at once, a continuation carrying its predecessor's
+> item, and the refusals counted (target at most one per run, each followed by a named delegation). The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

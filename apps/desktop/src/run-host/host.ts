@@ -5,7 +5,7 @@ import type { PromptLists, StoreDal, StoreHandle } from '@rotaris/store';
 import { meteredBackend, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
 import { ConfinementService, PresenterRegistry, renderUnavailability, spawnTrial, type AvailabilityVerdict, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
-import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
+import { createToolPort, fileAppender, implementationRole, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { createTerminalHost } from './terminal.js';
 import { createHookPort } from './hooks.js';
 import { runPreflight } from './intent.js';
@@ -408,6 +408,9 @@ export function createRunHost() {
     // REQ-ORCH-153 (ADR-0062): the registry predicate the plan gate's child-admission check reads; the engine holds
     // no copy of the tool declarations (ADR-0002's boundaries).
     planWithholds: withheldUnderPlanGate,
+    // PD-TOOLS-006 revision 6 (OQ-220) with REQ-ORCH-028: which delegations are implementation delegations, read from the
+    // grant `delegate`'s description states, for the todo-item refusals at admission.
+    implementationRole,
     tools: (ctx) => createToolPort(ctx, {
       clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal, mcp, configured: () => configuredRuns.get(ctx.sessionId) ?? null,
       // PD-ORCH-005 clause 9: the quit closed the last window and its shutdown is still to come (`PresenterRegistry.quitting`).

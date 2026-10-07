@@ -139,7 +139,7 @@ import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
-import { agentPlanTaskCount, coordinatorTodoReading, launchRunOverride } from './lib/coordinator-todo.mjs';
+import { agentPlanTaskCount, coordinatorTodoReading, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading } from './lib/coordinator-todo.mjs';
 import { PAUSE, pauseEvalSteps, pauseReading } from './lib/resume-pause.mjs';
 import { typingAllowanceMs } from './lib/prompt-typing.mjs';
 import { nearMissReading } from './lib/near-miss-edits.mjs';
@@ -968,17 +968,24 @@ function checkToolRecord() {
 function checkCoordinatorTodo() {
   if (preservedSessions.length === 0) return;
   let r;
+  let items;
   try {
     const Database = require('better-sqlite3');
     const db = new Database(oneDatabase(), { readonly: true });
     try {
-      r = coordinatorTodoReading(preservedSessions.map(({ scenario, sessionId }) => ({
-        scenario,
-        rootNames: db.prepare('SELECT DISTINCT root_persona FROM iterations WHERE session_id = ?').all(sessionId).map((row) => row.root_persona),
-        calls: readToolCalls(sessionId),
-        agentPlanTasks: agentPlanTaskCount(db.prepare('SELECT todo FROM sessions WHERE session_id = ?').get(sessionId)?.todo ?? null),
-        runOverride: launchRunOverride(db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sessionId)?.payload ?? null),
-      })));
+      const read = preservedSessions.map(({ scenario, sessionId }) => {
+        const rootNames = db.prepare('SELECT DISTINCT root_persona FROM iterations WHERE session_id = ?').all(sessionId).map((row) => row.root_persona);
+        const calls = readToolCalls(sessionId);
+        const todo = db.prepare('SELECT todo FROM sessions WHERE session_id = ?').get(sessionId)?.todo ?? null;
+        // PD-TOOLS-006 revision 6 (OQ-220): the item each child served (`children.todo_item`, store v34).
+        const children = db.prepare('SELECT task_id, canonical_name, persona, parent_id, depth, todo_item, spawned_at, completed_at, todo FROM children WHERE session_id = ? ORDER BY spawned_at, rowid').all(sessionId);
+        const listed = calls.find((c) => rootNames.includes(c.agent_name) && c.tool_name === 'todo' && c.status === 'ok');
+        return { scenario, rootNames, calls, agentPlanTasks: agentPlanTaskCount(todo), listedAt: listed?.endedAt ?? null, rootPlanIds: planItemIds(rootAgentPlan(todo)), children,
+          runOverride: launchRunOverride(db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sessionId)?.payload ?? null),
+        };
+      });
+      r = coordinatorTodoReading(read);
+      items = todoItemReading(read);
     } finally { db.close(); }
   } catch (cause) {
     check(false, 'the coordinator\'s tool calls and stored todo were read for every session the run kept', cause instanceof Error ? cause.message : String(cause));
@@ -989,6 +996,13 @@ function checkCoordinatorTodo() {
   check(r.withoutPlan.length === 0, 'every multi-step coordinating session stores an agent plan (REQ-ORCH-029, REQ-TOOLS-147)', r.withoutPlan.length === 0 ? `${r.multiStep.length} multi-step session(s)` : `no agent plan stored: ${r.withoutPlan.join(', ')}`);
   if (r.refused.length > 0) noted('the gate refused a coordinator\'s second work item until it wrote its todo list (OQ-213)', r.refused.map(at).join(', '));
   if (r.single.length > 0) noted('sessions launched under the `single` run override were not read for the coordinator\'s todo list (REQ-ORCH-025)', r.single.join(', '));
+  // PD-TOOLS-006 revision 6 (OQ-220): which todo item each implementation child served, read from the store.
+  const child = (c) => `${c.scenario}: ${c.child}`;
+  check(items.unnamed.length === 0, 'every root implementation delegation after the coordinator\'s first todo list names the item it serves (PD-TOOLS-006 revision 6, OQ-220)', items.unnamed.length === 0 ? `${items.named.length} child(ren) named an item` : items.unnamed.map((c) => `${child(c)} (${c.persona})`).join(', '));
+  check(items.overlaps.length === 0, 'no two implementation children of one plan held one todo item at once (REQ-ORCH-028, REQ-ORCH-029)', items.overlaps.length === 0 ? `${items.read.length} session(s) read` : items.overlaps.map((o) => `${o.scenario}: ${o.children.join(' and ')} on ${o.item}`).join('; '));
+  check(items.stale.length === 0, 'every todo item a child served is one its plan still holds (PD-TOOLS-006 revision 6)', items.stale.length === 0 ? `${items.named.length} named item(s)` : items.stale.map((c) => `${child(c)} on ${c.item}`).join(', '));
+  const itemRefusals = preservedSessions.flatMap(({ scenario, sessionId }) => readToolCalls(sessionId).filter((c) => c.tool_name === 'delegate' && /todo item|todo_item '/.test(c.result) && /rejected/.test(c.result)).map((c) => ({ scenario, ordinal: c.ordinal, tool_name: c.tool_name })));
+  if (itemRefusals.length > 0) noted('delegations refused for their todo item: unnamed, unknown, finished or held (PD-TOOLS-006 revision 6; target at most one per run, each followed by a named delegation)', itemRefusals.map(at).join(', '));
 }
 
 /**

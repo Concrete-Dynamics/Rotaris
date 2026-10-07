@@ -1,9 +1,9 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { toIsoUtc, type Clocks } from '@rotaris/kernel';
-import { presetRank, resolvePreset, restrictionsAllow, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
+import { presetRank, resolvePreset, restrictionsAllow, TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
-  askQuestionsTool, buildPolicy, directWorkBundle, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
+  askQuestionsTool, buildPolicy, directWorkBundle, grantsOn, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type DelegateCatalogue, type GateSink, type PolicyRead, type Prerequisites, type PresenterPort, type ResolvedToolSet, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, EMPTY_MCP_EVIDENCE, ROLE_ALIASES, toolRestrictionsFor, type AgentGrant, type ModeChange, type Persona, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
@@ -277,6 +277,28 @@ export function delegateCatalogue(resolver: PersonaResolver | null, caller: Pers
     .filter(([alias]) => (resolver ? resolver.resolve(alias) !== null : true))
     .map(([alias, target]) => ({ alias, target: (resolver ? resolver.resolve(alias)?.persona.name : undefined) ?? target }));
   return { personas, aliases };
+}
+
+/**
+ * PD-TOOLS-006 revision 6 (OQ-220) with REQ-ORCH-028: the prerequisites a child's grant is read under when the run asks
+ * whether a delegation is an implementation delegation — every executor the build registers, a delegation runtime, a
+ * terminal backend and a store. They decide nothing for the writing facet but `git_commit`, which has no executor and so
+ * is never granted, as the child's own port would find.
+ */
+const IMPLEMENTATION_PREREQUISITES: Prerequisites = {
+  delegationRuntime: true, userPromptChannel: true, artifactStore: true, canPublishArtifacts: true, terminalBackend: true,
+  executors: new Set(Object.entries(TOOL_IMPLEMENTATIONS).filter(([, executor]) => executor !== null).map(([name]) => name)),
+};
+
+/**
+ * PD-TOOLS-006 revision 6 (OQ-220) with REQ-ORCH-028: whether a child of `parentPersona` as `persona` holds an implementation
+ * delegation — "one whose target role holds a tool the public tool-name registry declares as writing workspace files". The
+ * grant is `resolveAgentGrant`'s, on the terms `delegateCatalogue` states each persona's facets on, so `delegate`'s
+ * description and the run's todo-item refusal never disagree about a persona. The engine holds no copy of the
+ * declarations (ADR-0002), so the host injects this (`SessionsDeps.implementationRole`).
+ */
+export function implementationRole(persona: Persona, parentPersona: Persona | undefined): boolean {
+  return resolveAgentGrant(persona, { parentPersona: parentPersona ?? null, coordinating: true, prerequisites: IMPLEMENTATION_PREREQUISITES, isEntry: false }).tools.some((t) => grantsOn(t, 'writesWorkspaceFiles'));
 }
 
 export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPort {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, ROLE_SPAWN_ALIASES } from '@rotaris/contracts';
 import { expandDeclared } from '../registry.js';
-import { attachmentWarnings, delegateTool, grantFacets, renderDelegateCatalogue, type AttachmentReport, type DelegateCatalogue, type DelegationPort } from './delegation.js';
+import { attachmentWarnings, delegateTool, grantFacets, renderDelegateCatalogue, TODO_ITEM_SENTENCE, type AttachmentReport, type DelegateCatalogue, type DelegationPort } from './delegation.js';
 import type { ToolContext } from './types.js';
 
 /**
@@ -207,5 +207,35 @@ describe('delegate — the attachment warning (PD-TOOLS-006 revision 5)', () => 
     const r = await observed(report({ given: 1, elidedForSize: ['art_00000002'] }));
     expect(r.text).toMatch(/^Task 'build': queued — Accepted\. 1 attached artifact will be given to the child whole\. 1 attached artifact was left out for size, .*: art_00000002; the child is told and can fetch it with artifact_read\.\ntask_id: bg_00000002$/);
     expect(r.text).not.toContain('attached to its context');
+  });
+});
+
+/** PD-TOOLS-006 revision 6 (OQ-220, ruled 2026-10-07 under R-072): `todo_item` names the item of the caller's plan a delegation serves. */
+describe('delegate — todo_item (PD-TOOLS-006 revision 6)', () => {
+  function capture() {
+    const seen: Parameters<DelegationPort['delegate']>[1][] = [];
+    const port: DelegationPort = {
+      delegate: async (_parent, req) => { seen.push(req); return { status: 'queued', canonicalName: req.taskName, taskId: 'bg_00000002', message: 'Accepted.' }; },
+      backgroundOutput: () => ({ status: 'not_found', state: '', text: '' }),
+      waitForTasks: async () => ({ immediate: true, requested: 0, text: '' }),
+    };
+    return { seen, tool: delegateTool(port, 'root:1', BUILT_IN_CATALOGUE) };
+  }
+  const ctx = {} as ToolContext;
+
+  it('carries the named id to the port trimmed, and omits the field when the call names none or an empty one', async () => {
+    const { seen, tool } = capture();
+    await tool.execute(tool.schema.parse({ persona: 'coder', task_name: 'a', task: 'TASK: a', todo_item: ' 0a1b2c3d ' }), ctx);
+    await tool.execute(tool.schema.parse({ persona: 'coder', task_name: 'b', task: 'TASK: b' }), ctx);
+    await tool.execute(tool.schema.parse({ persona: 'coder', task_name: 'c', task: 'TASK: c', todo_item: '' }), ctx);
+    expect(seen[0]!.todoItem).toBe('0a1b2c3d');
+    expect('todoItem' in seen[1]!).toBe(false);
+    expect('todoItem' in seen[2]!).toBe(false);
+  });
+
+  it('the description says what todo_item names, when it is required, and to write the list in one step and delegate in the next', () => {
+    const { tool } = capture();
+    expect(tool.description.endsWith(TODO_ITEM_SENTENCE)).toBe(true);
+    expect(TODO_ITEM_SENTENCE).toBe("Give todo_item: the id of the item of your todo list this delegation serves, as the todo tool's last result shows it. Once you keep a todo list, every delegation to a persona that writes workspace files names an open item, and no two such delegations hold one item at once. Write the list in one step and delegate in the next: an item's id exists only once the todo call has returned.");
   });
 });

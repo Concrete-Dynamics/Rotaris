@@ -76,3 +76,75 @@ export function agentPlanTaskCount(todoJson) {
     return agent.phases.reduce((n, phase) => n + (Array.isArray(phase.tasks) ? phase.tasks.length : 0), 0);
   } catch { return null; }
 }
+
+/**
+ * PD-TOOLS-006 revision 6 (OQ-220, ruled 2026-10-07 under R-072), building REQ-ORCH-028's and REQ-ORCH-029's "no two
+ * implementation delegations for the same todo item are outstanding at once" from the run's own records: each child row's
+ * `todo_item` (store v34), its spawn and completion times, and the plans the store keeps (`sessions.todo`'s agent plan for the
+ * root's children, the parent's own `children.todo` for a child's).
+ *
+ * An **implementation** child is one whose persona the built-in table grants a tool that writes workspace files
+ * (`WRITER_ROLES`; `coordinator-todo.test.ts` holds it equal to `BUILT_IN_ROLE_TOOLS`). A live run configures no persona,
+ * so the built-in table is the grant its children receive.
+ */
+export const WRITER_ROLES = new Set(['coding-agent', 'tester', 'docs-writer', 'refactorer']);
+
+/** The ids of every task a stored agent plan holds (`{ schema_version: 1, phases }`), or null where there is none. */
+export function planItemIds(plan) {
+  if (!plan || !Array.isArray(plan.phases)) return null;
+  return plan.phases.flatMap((phase) => (Array.isArray(phase.tasks) ? phase.tasks.map((t) => t.id).filter((id) => typeof id === 'string') : []));
+}
+
+/** The root's agent plan out of `sessions.todo`'s version-2 envelope, or null. */
+export function rootAgentPlan(todoJson) {
+  if (typeof todoJson !== 'string' || todoJson === '') return null;
+  try { const v = JSON.parse(todoJson); return v && v.schema_version === 2 ? v.agent ?? null : null; } catch { return null; }
+}
+
+/**
+ * `sessions`: `{ scenario, listedAt: number | null, rootPlanIds: string[] | null, children: { task_id, canonical_name, persona,
+ * parent_id, depth, todo_item, spawned_at, completed_at, todo }[] }[]`, where `listedAt` is when the first accepted root `todo`
+ * call ended (ms) and `rootPlanIds` the stored root plan's item ids. Returns, over every session:
+ * - `unnamed` — each root implementation child spawned after `listedAt` with no item (only a task's first delegation, made
+ *   before any list, may carry none);
+ * - `overlaps` — each pair of implementation children of one plan holding one item whose lives (`spawned_at` to
+ *   `completed_at`, or still open) overlap;
+ * - `stale` — each child whose item its plan, as stored, no longer holds.
+ */
+export function todoItemReading(sessions) {
+  const unnamed = [];
+  const overlaps = [];
+  const stale = [];
+  const named = [];
+  for (const s of sessions) {
+    const kids = s.children ?? [];
+    const implementation = kids.filter((c) => WRITER_ROLES.has(c.persona));
+    for (const c of kids) if (c.todo_item) named.push({ scenario: s.scenario, child: c.canonical_name, item: c.todo_item });
+    for (const c of implementation) {
+      if (c.depth === 1 && !c.todo_item && s.listedAt !== null && Date.parse(c.spawned_at) > s.listedAt) unnamed.push({ scenario: s.scenario, child: c.canonical_name, persona: c.persona });
+    }
+    const planOf = (c) => (c.depth === 1 ? 'root' : c.parent_id);
+    for (let i = 0; i < implementation.length; i++) {
+      for (let j = i + 1; j < implementation.length; j++) {
+        const a = implementation[i];
+        const b = implementation[j];
+        if (!a.todo_item || a.todo_item !== b.todo_item || planOf(a) !== planOf(b)) continue;
+        const end = (c) => (c.completed_at ? Date.parse(c.completed_at) : Infinity);
+        if (Date.parse(a.spawned_at) < end(b) && Date.parse(b.spawned_at) < end(a)) overlaps.push({ scenario: s.scenario, item: a.todo_item, children: [a.canonical_name, b.canonical_name] });
+      }
+    }
+    for (const c of kids) {
+      if (!c.todo_item) continue;
+      let ids;
+      if (c.depth === 1) ids = s.rootPlanIds;
+      else {
+        const parent = kids.find((p) => p.task_id === c.parent_id);
+        let plan = null;
+        try { plan = parent && typeof parent.todo === 'string' ? JSON.parse(parent.todo) : null; } catch { plan = null; }
+        ids = planItemIds(plan);
+      }
+      if (!(ids ?? []).includes(c.todo_item)) stale.push({ scenario: s.scenario, child: c.canonical_name, item: c.todo_item });
+    }
+  }
+  return { read: sessions.map((s) => s.scenario), named, unnamed, overlaps, stale };
+}

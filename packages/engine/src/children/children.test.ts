@@ -398,7 +398,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     };
     const builtIn = async (name: string, a: Record<string, unknown>, ok: (text: string) => PortToolResult): Promise<PortToolResult> => {
       if (name === 'delegate') {
-        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: (a['inherited_context'] as string[] | undefined) ?? [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}), ...(typeof a['session_id'] === 'string' ? { sessionId: a['session_id'] } : {}), ...(a['suppress_auto_context'] === true ? { suppressAutoContext: true } : {}), ...(Array.isArray(a['attach_artifacts']) ? { attachArtifacts: a['attach_artifacts'] as string[] } : {}) });
+        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: (a['inherited_context'] as string[] | undefined) ?? [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}), ...(typeof a['session_id'] === 'string' ? { sessionId: a['session_id'] } : {}), ...(a['suppress_auto_context'] === true ? { suppressAutoContext: true } : {}), ...(Array.isArray(a['attach_artifacts']) ? { attachArtifacts: a['attach_artifacts'] as string[] } : {}), ...(typeof a['todo_item'] === 'string' ? { todoItem: a['todo_item'] } : {}) });
         if (r.status === 'rejected') return { ...ok(`Task '${r.canonicalName}': rejected — ${r.message}`), isError: true, status: 'failed' };
         let text = `Task '${r.canonicalName}': ${r.status} — ${r.message}\ntask_id: ${r.taskId}`;
         if (a['run_in_background'] === false) { const w = await ops.waitForTasks(parentId, [r.taskId]); text += `\n\n${'refused' in w ? w.refused : 'interrupted' in w ? w.interrupted : w.text}`; }
@@ -518,9 +518,10 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const written = ctx.writeTodo?.(plan(a['states'] as string[]) as never) ?? false;
       return Promise.resolve({ text: written ? 'Plan updated.' : 'not written', isError: !written, status: written ? 'ok' : 'failed', durationMs: 1, label: 'todo', args: a });
     };
+    // PD-TOOLS-006 revision 6 (OQ-220): a coordinator that keeps a list names the item its implementation delegation serves.
     const { sessions, client } = sessionsWith((persona, turn) => {
       if (persona === 'orchestrator') {
-        if (turn === 1) return toolCalls([{ callId: 't1', name: 'todo', args: { states: ['IN_PROGRESS', 'PENDING'] } }, { callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'implement', task: 'TASK: write it' } }], 'Planning, then delegating.');
+        if (turn === 1) return toolCalls([{ callId: 't1', name: 'todo', args: { states: ['IN_PROGRESS', 'PENDING'] } }, { callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'implement', task: 'TASK: write it', todo_item: '00000000' } }], 'Planning, then delegating.');
         if (turn === 2) return answer('The child is working on it.');
         if (turn === 3) return toolCalls([{ callId: 't2', name: 'todo', args: { states: ['COMPLETED', 'COMPLETED'] } }], 'Done.');
         return answer('All done: implemented and checked.');
@@ -2120,6 +2121,218 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
   });
 
+  /**
+   * PD-TOOLS-006 revision 6 (OQ-220, ruled 2026-10-07 under R-072): a delegation names the item of its caller's own plan it
+   * serves, the record stores it, and admission refuses an unknown id, a finished item, an item another outstanding
+   * implementation child holds, and — once the coordinating root keeps a list — an implementation delegation naming none
+   * (REQ-ORCH-028, REQ-ORCH-029). Each refusal is red with its check removed.
+   */
+  describe('PD-TOOLS-006 revision 6: a delegation names the todo item it serves', () => {
+    const IDS = ['0000000a', '0000000b', '0000000c'] as const;
+    type ItemState = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED';
+    const planOf = (states: readonly ItemState[], ids: readonly string[] = IDS) => ({ schema_version: 1 as const, phases: [{ id: 'e002ab7d', name: 'Build', tasks: states.map((state, i) => ({ id: ids[i]!, name: ['Implement it', 'Test it', 'Document it'][i]!, description: '', state })) }] });
+    const todoCall = (callId: string, states: readonly ItemState[], ids?: readonly string[]) => ({ callId, name: 'todo', args: { states, ...(ids ? { ids } : {}) } });
+    const del = (callId: string, persona: string, name: string, extra: Record<string, unknown> = {}) => ({ callId, name: 'delegate', args: { persona, task_name: name, task: `TASK: ${name}`, ...extra } });
+    /** The todo tool as the run host's is to the run, and every delegate observation the agents read, in order. */
+    function tools(observed: string[]): TestTool {
+      return (name, a, ctx, builtIn) => {
+        if (name === 'todo') {
+          const written = ctx.writeTodo?.(planOf(a['states'] as ItemState[], (a['ids'] as string[] | undefined) ?? IDS) as never) ?? false;
+          return Promise.resolve({ text: written ? 'Plan updated.' : 'not written', isError: !written, status: written ? 'ok' : 'failed', durationMs: 1, label: 'todo', args: a });
+        }
+        if (name === 'delegate') return builtIn().then((r) => { observed.push(r.text); return r; });
+        return undefined;
+      };
+    }
+    /** A gate the test opens; a child whose task names HOLD waits on it before answering. */
+    const gate = () => { let open!: () => void; const p = new Promise<void>((r) => { open = r; }); return { p, open }; };
+    const childAnswer = (req: ModelRequest, hold: Promise<void>): ScriptedCall => {
+      const held = req.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text.includes('HOLD')));
+      return held ? { parts: [{ hold }, { part: { kind: 'text', delta: 'Built it.' } }, { part: { kind: 'finish', reason: 'stop' } }] } : answer('Built it.');
+    };
+    /** The root takes `steps` in order, then writes its plan complete and answers; every child answers, HOLD ones once opened. */
+    async function runSteps(steps: readonly ReturnType<typeof toolCalls>[], openAfter = 0) {
+      const observed: string[] = [];
+      const hold = gate();
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === openAfter + 1) hold.open();
+          if (turn <= steps.length) return steps[turn - 1]!;
+          if (turn === steps.length + 1) return toolCalls([todoCall('done', ['COMPLETED', 'COMPLETED', 'COMPLETED'])]);
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return childAnswer(req, hold.p);
+      }, { tool: tools(observed) });
+      const sid = (sessions.start(dal, 'C:/ws', 'build it') as { value: SessionId }).value;
+      if (openAfter === 0) hold.open();
+      const result = await sessions.running(sid)!;
+      return { sid, result, observed, rows: children(sid) };
+    }
+    const itemOf = (rows: readonly ChildRow[], name: string) => rows.find((c) => c.canonical_name === name)?.todo_item;
+
+    it('before the coordinator keeps a list, an unnamed implementation delegation is admitted and serves no item', async () => {
+      const { observed, rows } = await runSteps([toolCalls([del('d1', 'coding-agent', 'first')])]);
+      expect(observed[0]).toMatch(/^Task 'first': queued/);
+      expect(itemOf(rows, 'first')).toBeNull();
+    });
+
+    it('(d) once it keeps a list, an unnamed implementation delegation is refused with the open items named, and a named one is admitted and stored', async () => {
+      const { observed, rows } = await runSteps([
+        toolCalls([todoCall('t1', ['IN_PROGRESS', 'PENDING', 'COMPLETED'])]),
+        toolCalls([del('d1', 'coding-agent', 'unnamed'), del('d2', 'coding-agent', 'named', { todo_item: '0000000a' })]),
+      ]);
+      expect(observed[0]).toBe("Task 'unnamed': rejected — This delegation names no todo item, and you keep a todo list for this task: a delegation to 'coding-agent', which writes workspace files, gives todo_item, the id of the open item it serves. Its open items: Implement it (0000000a), Test it (0000000b).");
+      expect(observed[1]).toMatch(/^Task 'named': queued/);
+      expect(rows.map((c) => c.canonical_name)).toEqual(['named']);
+      expect(itemOf(rows, 'named')).toBe('0000000a');
+      expect(warnings.some((w) => w.includes("'unnamed'") && w.includes('(REQ-ORCH-029)'))).toBe(true);
+    });
+
+    it('(d) binds implementation delegations only: a read-only role still delegates unnamed after the list', async () => {
+      const { observed, rows } = await runSteps([
+        toolCalls([todoCall('t1', ['PENDING', 'PENDING', 'PENDING'])]),
+        toolCalls([del('d1', 'codebase-analyst', 'survey')]),
+      ]);
+      expect(observed[0]).toMatch(/^Task 'survey': queued/);
+      expect(itemOf(rows, 'survey')).toBeNull();
+    });
+
+    it('a todo write and an unnamed implementation delegate in one step leave the delegate refused, with the ids listed', async () => {
+      const { observed } = await runSteps([toolCalls([todoCall('t1', ['PENDING', 'PENDING', 'PENDING']), del('d1', 'coding-agent', 'build')])]);
+      expect(observed[0]).toMatch(/^Task 'build': rejected — This delegation names no todo item.*Implement it \(0000000a\), Test it \(0000000b\), Document it \(0000000c\)\.$/);
+    });
+
+    it('(a) an id the caller\'s plan does not hold is refused for any delegation, read-only roles included', async () => {
+      const { observed, rows } = await runSteps([
+        toolCalls([todoCall('t1', ['PENDING', 'PENDING', 'PENDING'])]),
+        toolCalls([del('d1', 'codebase-analyst', 'survey', { todo_item: 'ffffffff' }), del('d2', 'coding-agent', 'build', { todo_item: 'ffffffff' })]),
+      ]);
+      expect(observed[0]).toBe("Task 'survey': rejected — todo_item 'ffffffff' names no item of your todo list. Name an id your todo tool's last result shows. Its open items: Implement it (0000000a), Test it (0000000b), Document it (0000000c).");
+      expect(observed[1]).toMatch(/^Task 'build': rejected — todo_item 'ffffffff' names no item of your todo list\./);
+      expect(rows).toEqual([]);
+    });
+
+    it('(a) before any list, a named id is refused and the reason says to write the list first', async () => {
+      const { observed } = await runSteps([toolCalls([del('d1', 'coding-agent', 'build', { todo_item: '0000000a' })])]);
+      expect(observed[0]).toBe("Task 'build': rejected — todo_item '0000000a' names no item of your todo list. You keep no todo list with items yet: write one with the todo tool first, and name an id its result shows.");
+    });
+
+    it('(b) a COMPLETED or ABANDONED item is refused to an implementation delegation, and admitted for a read-only one', async () => {
+      const { observed, rows } = await runSteps([
+        toolCalls([todoCall('t1', ['COMPLETED', 'ABANDONED', 'PENDING'])]),
+        toolCalls([del('d1', 'coding-agent', 'redo', { todo_item: '0000000a' }), del('d2', 'tester', 'retest', { todo_item: '0000000b' }), del('d3', 'codebase-analyst', 'review', { todo_item: '0000000a' })]),
+      ]);
+      expect(observed[0]).toBe("Task 'redo': rejected — todo_item '0000000a' names 'Implement it', which is COMPLETED, and a delegation to 'coding-agent', which writes workspace files, serves an open item. Reopen it with todo update, or name or add an open item. Its open items: Document it (0000000c).");
+      expect(observed[1]).toMatch(/^Task 'retest': rejected — todo_item '0000000b' names 'Test it', which is ABANDONED/);
+      expect(observed[2]).toMatch(/^Task 'review': queued/);
+      expect(rows.map((c) => [c.canonical_name, c.todo_item])).toEqual([['review', '0000000a']]);
+    });
+
+    it('(c) an item an outstanding implementation child holds is refused, naming the holder; two items run in parallel; a terminal holder frees its item', async () => {
+      const { observed, rows } = await runSteps([
+        toolCalls([todoCall('t1', ['IN_PROGRESS', 'PENDING', 'PENDING'])]),
+        toolCalls([del('d1', 'coding-agent', 'first', { todo_item: '0000000a', task: 'TASK: HOLD first' }), del('d2', 'coding-agent', 'second', { todo_item: '0000000a' }), del('d3', 'tester', 'other', { todo_item: '0000000b', task: 'TASK: HOLD other' })]),
+        // Once the hold opens and `first` has ended, the same item is admitted again.
+        toolCalls([{ callId: 'w1', name: 'wait_for_tasks', args: { task_ids: [] } }]),
+        toolCalls([del('d4', 'coding-agent', 'again', { todo_item: '0000000a' })]),
+      ], 2);
+      const first = rows.find((c) => c.canonical_name === 'first')!;
+      expect(observed[1]).toMatch(/^Task 'second': rejected — todo_item '0000000a' \('Implement it'\) is held by first \(coding-agent, task_id bg_[0-9a-f]{8}, state (queued|starting|running)\): no two delegations/);
+      expect(observed[1]).toContain(`task_id ${first.task_id}`);
+      expect(observed[1]).toContain(`follow it up with session_id: "${first.task_id}"`);
+      expect(observed[2]).toMatch(/^Task 'other': queued/);
+      expect(observed[3]).toMatch(/^Task 'again': queued/);
+      expect(rows.map((c) => [c.canonical_name, c.todo_item])).toEqual([['first', '0000000a'], ['other', '0000000b'], ['again', '0000000a']]);
+      expect(warnings.some((w) => w.includes("'second'") && w.includes('(REQ-ORCH-028)'))).toBe(true);
+    });
+
+    it('(c) a read-only child naming an item never holds it', async () => {
+      const { observed, rows } = await runSteps([
+        toolCalls([todoCall('t1', ['PENDING', 'PENDING', 'PENDING'])]),
+        toolCalls([del('d1', 'codebase-analyst', 'survey', { todo_item: '0000000b', task: 'TASK: HOLD survey' }), del('d2', 'coding-agent', 'build', { todo_item: '0000000b' })]),
+      ], 2);
+      expect(observed[0]).toMatch(/^Task 'survey': queued/);
+      // The read-only survey holds nothing, so the implementation delegation for the same item is admitted beside it.
+      expect(observed[1]).toMatch(/^Task 'build': queued/);
+      expect(rows.map((c) => [c.canonical_name, c.todo_item])).toEqual([['survey', '0000000b'], ['build', '0000000b']]);
+    });
+
+    it('(c) a child waiting on its dependencies holds its item', async () => {
+      const observed: string[] = [];
+      const hold = gate();
+      let sid = '' as SessionId;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([todoCall('t1', ['PENDING', 'PENDING', 'PENDING'])]);
+          if (turn === 2) return toolCalls([del('d1', 'coding-agent', 'base', { todo_item: '0000000a', task: 'TASK: HOLD base' })]);
+          if (turn === 3) {
+            const base = children(sid).find((c) => c.canonical_name === 'base')!.task_id;
+            return toolCalls([del('d2', 'coding-agent', 'dependant', { todo_item: '0000000b', depends_on: [base] }), del('d3', 'tester', 'rival', { todo_item: '0000000b' })]);
+          }
+          if (turn === 4) { hold.open(); return toolCalls([todoCall('done', ['COMPLETED', 'COMPLETED', 'COMPLETED'])]); }
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return childAnswer(req, hold.p);
+      }, { tool: tools(observed) });
+      sid = (sessions.start(dal, 'C:/ws', 'build it') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      const dependant = children(sid).find((c) => c.canonical_name === 'dependant')!;
+      expect(observed[1]).toMatch(/^Task 'dependant': waiting_on_dependencies/);
+      expect(observed[2]).toBe(`Task 'rival': rejected — todo_item '0000000b' ('Test it') is held by dependant (coding-agent, task_id ${dependant.task_id}, state waiting_on_dependencies): no two delegations to personas that write workspace files serve one todo item at once. Wait for it with wait_for_tasks and follow it up with session_id: "${dependant.task_id}", or split the item with todo add_task and name the new item's id.`);
+    });
+
+    it('a follow-up by session_id is never refused as unnamed: it keeps its stored item, here none', async () => {
+      let firstId = '';
+      const observed: string[] = [];
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([del('d1', 'coding-agent', 'build', { run_in_background: false })]);
+          if (turn === 2) return toolCalls([todoCall('t1', ['PENDING', 'PENDING', 'PENDING'])]);
+          if (turn === 3) return toolCalls([del('d2', 'coding-agent', 'build-again', { session_id: firstId, run_in_background: false })]);
+          if (turn === 4) return toolCalls([todoCall('done', ['COMPLETED', 'COMPLETED', 'COMPLETED'])]);
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return answer('Built it.');
+      }, { tool: (name, a, ctx, builtIn) => { if (name === 'delegate' && firstId === '') { return builtIn().then((r) => { firstId = /task_id: (bg_[0-9a-f]{8})/.exec(r.text)?.[1] ?? ''; observed.push(r.text); return r; }); } return tools(observed)(name, a, ctx, builtIn); } });
+      const sid = (sessions.start(dal, 'C:/ws', 'build it') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(observed[1]).toMatch(/^Task 'build': queued — Following up build/);
+      expect(children(sid)).toHaveLength(1);
+    });
+
+    it('a child keeps its own plan: it names its own item, and the root\'s id is not one of its plan', async () => {
+      const observed: string[] = [];
+      const hold = gate();
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([todoCall('t1', ['PENDING', 'PENDING', 'PENDING'])]);
+          if (turn === 2) return toolCalls([del('d1', 'planner', 'lead', { todo_item: '0000000a', run_in_background: false })]);
+          if (turn === 3) return toolCalls([todoCall('done', ['COMPLETED', 'COMPLETED', 'COMPLETED'])]);
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        const text = req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
+        if (text.includes('TASK: lead')) {
+          const step = req.messages.filter((m) => m.role === 'assistant').length + 1;
+          if (step === 1) return toolCalls([todoCall('c1', ['PENDING', 'PENDING'], ['000000c1', '000000c2'])]);
+          if (step === 2) return toolCalls([del('c2', 'coding-agent', 'sub-own', { todo_item: '000000c1', run_in_background: false }), del('c3', 'coding-agent', 'sub-root', { todo_item: '0000000b' })]);
+          return answer('Led it.');
+        }
+        return childAnswer(req, hold.p);
+      }, { tool: tools(observed) });
+      hold.open();
+      const sid = (sessions.start(dal, 'C:/ws', 'lead it') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      const rows = children(sid);
+      expect(itemOf(rows, 'lead')).toBe('0000000a');
+      expect(itemOf(rows, 'sub-own')).toBe('000000c1');
+      expect(observed.find((o) => o.startsWith("Task 'sub-root'"))).toMatch(/^Task 'sub-root': rejected — todo_item '0000000b' names no item of your todo list\. .*Implement it \(000000c1\)/);
+    });
+  });
+
   describe('PD-ORCH-004: a child cut off while making progress hands its work back', () => {
     const tick = () => new Promise((r) => setTimeout(r, 10));
     const textOf = (m: ModelRequest['messages'][number]) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('');
@@ -2206,6 +2419,47 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const agents = snapshots.at(-1)!.agents;
       expect(agents.find((a) => a.name === 'build')!.timedOut).toEqual({ limitSeconds: 1200, makingProgress: true });
       expect(agents.find((a) => a.name === 'build-rest')!.timedOut).toBeNull();
+    });
+
+    /**
+     * PD-TOOLS-006 revision 6 (OQ-220): a continuation that names no todo item inherits the item of the child it continues, so
+     * the coordinator that keeps a list is not refused for leaving it out, and the record says which item the continuation
+     * serves.
+     */
+    it('PD-TOOLS-006 revision 6: a continuation naming no todo item inherits the continued child\'s', async () => {
+      const g = gate();
+      const hold = gate();
+      let sid = '' as SessionId;
+      const plan = { schema_version: 1 as const, phases: [{ id: 'e002ab7d', name: 'Build', tasks: [{ id: '0000000a', name: 'Build it', description: '', state: 'IN_PROGRESS' as const }] }] };
+      const done = { ...plan, phases: [{ ...plan.phases[0]!, tasks: [{ ...plan.phases[0]!.tasks[0]!, state: 'COMPLETED' as const }] }] };
+      const files = fileTools({ gate: g.p });
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 't1', name: 'todo', args: { done: false } }, { callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build', task: 'TASK: build', todo_item: '0000000a' } }]);
+          if (turn === 3) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build-rest', task: 'TASK: continue', continuation_of: children(sid)[0]!.task_id } }]);
+          if (turn === 5) return toolCalls([{ callId: 't2', name: 'todo', args: { done: true } }]);
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('not json');
+        if (hasTask(req, 'TASK: continue')) return answer('Finished the rest.');
+        if (stepOf(req) === 1) return toolCalls([{ callId: 'w1', name: 'write_file', args: { path: 'src/a.ts', content: 'a' } }, { callId: 'r1', name: 'read_file', args: { path: 'gate' } }]);
+        return { parts: [{ hold: hold.p }, { part: { kind: 'text', delta: 'I wrote a and was reading on' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+      }, { tool: (name, a, ctx) => {
+        if (name === 'todo') { const written = ctx.writeTodo?.((a['done'] === true ? done : plan) as never) ?? false; return Promise.resolve({ text: written ? 'Plan updated.' : 'not written', isError: !written, status: written ? 'ok' : 'failed', durationMs: 1, label: 'todo', args: a }); }
+        return files(name, a);
+      } });
+      sid = (sessions.start(dal, '/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(1_110_000);
+      g.open();
+      await tick();
+      clock.advance(90_000);
+      hold.open();
+      await sessions.running(sid)!;
+      const [build, rest] = [children(sid).find((c) => c.canonical_name === 'build')!, children(sid).find((c) => c.canonical_name === 'build-rest')];
+      expect(build.todo_item).toBe('0000000a');
+      expect(rest?.continuation_of).toBe(build.task_id);
+      expect(rest?.todo_item).toBe('0000000a');
     });
 
     it('a call completed one millisecond before the final 90 s is not progress: exactly REQ-ORCH-088\'s report, and no continuation is admitted', async () => {

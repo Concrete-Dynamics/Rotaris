@@ -131,8 +131,10 @@ _Avoid_: lease, lock, partition, ownership (ownership is per todo item, `REQ-ORC
 
 **Implementation delegation**:
 A delegation whose target role holds a tool the public tool-name registry declares as writing
-workspace files. Exclusive ownership is measured per todo item and at no other granularity. —
-`REQ-ORCH-028`
+workspace files. Exclusive ownership is measured per todo item and at no other granularity: the
+delegation names the item of its caller's own plan it serves (`todo_item`, stored on the child's
+record), and the run refuses one for an item another outstanding implementation child holds. —
+`REQ-ORCH-028`, `PD-TOOLS-006` revision 6
 
 **Task id**:
 A child's identifier, `bg_` plus eight lowercase hex characters, unique within the session. —

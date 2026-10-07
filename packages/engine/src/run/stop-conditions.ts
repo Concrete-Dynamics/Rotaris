@@ -164,9 +164,12 @@ export function planHeldRowText(iteration: number, open: readonly string[], give
  * OQ-213 as ruled under the owner's delegation (R-072), building REQ-ORCH-029's "work spanning more than one step is
  * accompanied by a todo list it keeps current": what the coordinating entry role reads when the call that would start its
  * task's second work item is refused because it keeps no todo list of its own for the task. The call was not run; the remedy
- * is one `todo` call away, and the same call then runs as it was asked.
+ * is one `todo` call away, and the same call then runs as it was asked. PD-TOOLS-006 revision 6 (OQ-220) adds what the list
+ * is for at a delegation: once it is written, a delegation to a persona that writes workspace files names the item it serves,
+ * by the id the `todo` result gives. It said, until 2026-10-07: "… one item per step with only the step you are on
+ * IN_PROGRESS, then make this call again."
  */
-export const TODO_LIST_OWED_TEXT = 'This call was not run: this task now spans more than one step and you keep no todo list for it (REQ-ORCH-029). Write one with the todo tool, one item per step with only the step you are on IN_PROGRESS, then make this call again.';
+export const TODO_LIST_OWED_TEXT = 'This call was not run: this task now spans more than one step and you keep no todo list for it (REQ-ORCH-029). Write one with the todo tool, one item per step with only the step you are on IN_PROGRESS; its result gives each item\'s id. Then make this call again, and on a delegate call to a persona that writes workspace files give todo_item: the id of the item it serves.';
 
 /** The open items named (up to the first five, REQ-ORCH-075) and the instruction to continue from the plan. */
 function planItemsBlock(open: readonly string[]): string {

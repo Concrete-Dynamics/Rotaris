@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Seventy-eight.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Seventy-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 

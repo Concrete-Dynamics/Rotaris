@@ -64,7 +64,9 @@
  *                 named calls (does the ladder wait, fall back and finish?), then a stream that stops
  *                 mid-answer with the socket held open (is that reported as a user cancellation, which is
  *                 the eighty-second defect's signature?). Neither injected refusal reaches the endpoint,
- *                 so the ladder half costs nothing but retries.
+ *                 so the ladder half costs nothing but retries. Then one tool call's arguments streamed slowly
+ *                 (`faults-args`, the proxy's `pace` rule, the stall threshold lowered for that launch): is any agent
+ *                 reported stalled while it streams them (L2 at c2fdd6a, N1 at c2a9444)?
  *   8. terminal  — the TERMINAL under duress, one run, the named shapes replayed from the record: a
  *                 multi-line here-string, forty lines of long output, off Windows a here-document longer than the
  *                 PTY's input line (live-run M1), off Windows an `exec bash` that replaces the
@@ -132,6 +134,7 @@ import { starterMissing } from './lib/starter-config.mjs';
 import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
 import { stallIssueCadence } from './lib/stall-issue-cadence.mjs';
+import { conclusive, pacedWindows, stallsWhileStreaming } from './lib/paced-arguments.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 import { ensureBundle, runBundleScript } from './lib/code-intelligence-bundle.mjs';
 import { codeIntelligenceStatement } from './lib/code-intelligence-discovery.mjs';
@@ -1724,7 +1727,7 @@ if (wanted.includes('frictions')) {
  * abort is not covered, it needs an endpoint fault". The recording proxy is already in the path, so the
  * endpoint fault is now something this harness can produce, on a call it NAMES rather than on one it hopes for.
  *
- * Two launches, because one fault can end a run before the next would fire, and a rule that never fired is not
+ * Separate launches, because one fault can end a run before the next would fire, and a rule that never fired is not
  * evidence about anything:
  *
  *   faults-ladder — a 429 on the second completion and a 500 on the third. Neither reaches the endpoint, so
@@ -1736,6 +1739,9 @@ if (wanted.includes('frictions')) {
  *                   is the eighty-second defect's: a model timeout once collapsed into the same `aborted` flag
  *                   a user's stop sets, and the run reported itself `user_cancelled` with nobody having
  *                   pressed anything. That is the assertion below, and it is a real regression guard.
+ *   faults-args   — (since 2026-10-07) every piece of a tool call's streamed arguments held back a little, so one call
+ *                   streams for several stall thresholds: is any agent reported stalled while it streams? See its
+ *                   own note below.
  *
  * NEVER EXECUTED AT THE TIME OF WRITING. The fault mechanism is unit-tested against a loopback upstream
  * (`lib/model-traffic.test.ts`); what these two checks claim about the PRODUCT is unverified until a live run
@@ -1862,6 +1868,60 @@ if (wanted.includes('faults')) {
       results.scenarios['faults-stall'] = { fired: stallFired, holdMs: HOLD_MS, status: stallRead.session.execution_status, stopReason: stallRead.session.stop_reason, issues: issues.map((issue) => ({ kind: issue.kind, severity: issue.severity, recordedAt: issue.recorded_at, message: issue.message })) };
     }
     results.scenarios['faults-stall'] ??= { fired: stallFired, holdMs: HOLD_MS, status: null, stopReason: null, issues: [] };
+    await budgetGate();
+
+    /*
+     * faults-args — one tool call streamed slowly, on purpose. The duress live runs at c2fdd6a (L2) and c2a9444 (N1) found
+     * a child warned "appears stalled: no model event or token for 94 seconds" while the endpoint streamed the 3,011
+     * argument pieces of its 502-line `write_file` at full speed: the adapter forwarded none of the pieces, so every layer
+     * above it heard silence until the call was complete
+     * (`docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md`). That depended on a model choosing
+     * to write a long file in a long run. Here the recording proxy holds each piece of every tool call's arguments
+     * `ARGS_PACE_MS` behind the one before it (its `pace` rule), and the stall threshold is lowered to `ARGS_STALL_S` for
+     * this launch alone, so a few hundred pieces stream for several thresholds. The question: was any `stall` issue
+     * written while an agent streamed paced arguments (`stallsWhileStreaming`)? A window shorter than the threshold and one
+     * evaluation is no evidence either way, and fails as such: the scenario must reach what it asks about.
+     */
+    const ARGS_STALL_S = Number(process.env['LIVE_RUN_ARGS_STALL_S'] ?? 10);
+    const ARGS_PACE_MS = Number(process.env['LIVE_RUN_ARGS_PACE_MS'] ?? 60);
+    const argsPrompt = 'Create a new file named PACED.md in the workspace root with one write_file call, without reading any file first: a Markdown list of the integers from 1 to 120, one per line, each followed by its English name (for example "- 7 seven"). Then reply with one sentence saying it is written.';
+    const agentsBefore = readFileSync(agentsFile, 'utf8');
+    const lowered = /^\s+child_stall_timeout:/m.test(agentsBefore)
+      ? agentsBefore.replace(/^(\s+child_stall_timeout:\s*)\d+/m, `$1${ARGS_STALL_S}`)
+      : agentsBefore.replace(/^runtime:\n/m, `runtime:\n  child_stall_timeout: ${ARGS_STALL_S}\n`);
+    proxy.setFaults([{ kind: 'pace', every: true, delayMs: ARGS_PACE_MS }]);
+    let argsRead = null;
+    try {
+      writeFileSync(agentsFile, lowered);
+      check(lowered.includes(`child_stall_timeout: ${ARGS_STALL_S}`), 'faults-args lowered the stall threshold for its launch', `runtime.child_stall_timeout: ${ARGS_STALL_S}`);
+      await launch('faults-args', {
+        ROTARIS_CAPTURE_PROMPT: argsPrompt,
+        ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
+      }, RUN_WAIT_MS + 90_000);
+      argsRead = readSession();
+    } finally {
+      writeFileSync(agentsFile, agentsBefore);
+    }
+    const argsFired = proxy.stats().faultsFired;
+    const windows = pacedWindows(readTraffic('faults-args'));
+    const thresholdMs = ARGS_STALL_S * 1000;
+    const longest = windows[0] ?? null;
+    check(longest !== null && conclusive(longest, thresholdMs), 'faults-args streamed a tool call\'s arguments for longer than the stall threshold', longest === null
+      ? `no call carried a tool-call piece to pace (${argsFired.length} fired) — the scenario never reached what it asks about`
+      : `longest: ${longest.events} piece(s) over ${(longest.spanMs / 1000).toFixed(1)} s against a ${ARGS_STALL_S} s threshold; ${windows.length} paced call(s)`);
+    if (argsRead === null) {
+      check(false, 'the faults-args run left a session row', 'no session was recorded');
+    } else {
+      const argsIssues = readIssues(argsRead.session.session_id);
+      const during = stallsWhileStreaming(argsIssues, windows, thresholdMs);
+      check(during.length === 0, 'no agent was reported stalled while it streamed a tool call\'s arguments (REQ-ORCH-089, REQ-MONITOR-119)', during.length === 0
+        ? `${argsIssues.filter((issue) => issue.kind === 'stall').length} \`stall\` issue(s) in the session, none inside ${windows.length} paced window(s)`
+        : during.map(({ issue, window }) => `${issue.actor}: ${String(issue.message).slice(0, 100)} at ${issue.recorded_at}, inside a ${(window.spanMs / 1000).toFixed(1)} s window of ${window.events} piece(s)`).join('; '));
+      noted('what the faults-args run settled as', `${argsRead.session.execution_status} / ${argsRead.session.stop_reason}; PACED.md ${existsSync(join(workspace, 'PACED.md')) ? 'written' : 'not written'}`);
+      preserveRun('faults-args', argsRead.session.session_id);
+      results.scenarios['faults-args'] = { fired: argsFired.length, thresholdS: ARGS_STALL_S, paceMs: ARGS_PACE_MS, windows, stallsWhileStreaming: during.map(({ issue }) => ({ actor: issue.actor, recordedAt: issue.recorded_at, message: issue.message })), status: argsRead.session.execution_status, stopReason: argsRead.session.stop_reason };
+    }
+    results.scenarios['faults-args'] ??= { fired: argsFired.length, thresholdS: ARGS_STALL_S, paceMs: ARGS_PACE_MS, windows, stallsWhileStreaming: [], status: null, stopReason: null };
     proxy.setFaults([]);
     await budgetGate();
   }

@@ -24,6 +24,7 @@
 import { createServer, request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { appendFileSync } from 'node:fs';
+import { StringDecoder } from 'node:string_decoder';
 
 /** Header names whose value is a credential, whatever the endpoint calls it. */
 const SECRET_HEADERS = new Set(['authorization', 'api-key', 'x-api-key', 'x-goog-api-key']);
@@ -104,8 +105,11 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
     calls.set(key, index);
     const rule = watched.find((f) => f.at === index && f.spent !== true) ?? null;
     if (rule !== null) { rule.spent = true; fired.push({ kind: rule.kind, at: rule.at, path: key }); everFired.push({ kind: rule.kind, at: rule.at, path: key }); }
-    return rule;
+    // A rule with `every: true` (the `pace` kind) acts on every call of its path; it is recorded as fired by the call it
+    // actually acted on (`paceFired`), since most calls carry nothing it paces.
+    return rule ?? watched.find((f) => f.every === true) ?? null;
   };
+  const paceFired = (rule, key) => { fired.push({ kind: rule.kind, at: rule.at ?? 'every', path: key }); everFired.push({ kind: rule.kind, at: rule.at ?? 'every', path: key }); };
 
   /**
    * Write one record to the file `target` names — the file of the scenario that MADE the call, captured when the
@@ -132,7 +136,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
     const backChunks = [];
     const headers = { ...clientReq.headers, host: upstream.host };
     const rule = ruleFor(path);
-    const note = rule === null ? {} : { fault: { kind: rule.kind, at: rule.at, ...(rule.status ? { status: rule.status } : {}), ...(rule.afterChunks === undefined ? {} : { afterChunks: rule.afterChunks }) } };
+    const note = rule === null ? {} : { fault: { kind: rule.kind, at: rule.at ?? 'every', ...(rule.status ? { status: rule.status } : {}), ...(rule.afterChunks === undefined ? {} : { afterChunks: rule.afterChunks }), ...(rule.delayMs === undefined ? {} : { delayMs: rule.delayMs }) } };
 
     /** The endpoint's answer once its headers arrive; null while it is still thinking. */
     let upstreamRes = null;
@@ -216,9 +220,41 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
         clientRes.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
         let forwarded = 0;
         let severed = false;
+        /*
+         * `pace`: every server-sent event whose text holds `match` (by default `"tool_calls"`, a piece of a tool call's
+         * streamed arguments on an OpenAI-shaped endpoint) reaches the client `delayMs` after the event before it; every
+         * other event passes as soon as its turn comes. Nothing is dropped and nothing reordered: the endpoint answers at
+         * its own speed and the client reads one slow tool call, the shape of the duress live runs' 97 s `write_file`
+         * (`docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md`). The record carries `paced`:
+         * how many events were held back, and the instants the first and the last of them were written.
+         */
+        const pace = rule?.kind === 'pace' ? { decoder: new StringDecoder('utf8'), pending: '', chain: Promise.resolve(), events: 0, firstAt: null, lastAt: null } : null;
+        const paced = () => (pace === null ? {} : { paced: { events: pace.events, firstAt: pace.firstAt, lastAt: pace.lastAt } });
+        const paceEvent = (event) => {
+          pace.chain = pace.chain.then(async () => {
+            if (ended || letGo || clientRes.destroyed) return;
+            if (event.includes(rule.match ?? '"tool_calls"')) {
+              await new Promise((r) => setTimeout(r, rule.delayMs ?? 100));
+              if (ended || letGo || clientRes.destroyed) return;
+              const now = Date.now();
+              pace.events += 1;
+              pace.firstAt ??= now;
+              pace.lastAt = now;
+            }
+            clientRes.write(event);
+          });
+        };
         upstreamRes.on('data', (chunk) => {
           backChunks.push(chunk);
           if (severed) return;
+          if (pace !== null) {
+            // Whole events only: an event split across two chunks is held until its blank line arrives.
+            pace.pending += pace.decoder.write(chunk);
+            const events = pace.pending.split(/(?<=\r?\n\r?\n)/);
+            pace.pending = /\r?\n\r?\n$/.test(events.at(-1) ?? '') ? '' : events.pop() ?? '';
+            for (const event of events) paceEvent(event);
+            return;
+          }
           forwarded += 1;
           const after = rule?.afterChunks ?? 1;
           /*
@@ -258,6 +294,17 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
         });
         upstreamRes.on('end', () => {
           if (stallTimer !== null) return;
+          if (pace !== null) {
+            const rest = pace.pending + pace.decoder.end();
+            if (rest !== '') paceEvent(rest);
+            void pace.chain.then(() => {
+              if (ended || letGo) return;
+              if (pace.events > 0) paceFired(rule, rule.path ?? '/chat/completions');
+              clientRes.end();
+              settle('complete', paced());
+            });
+            return;
+          }
           if (!severed) { clientRes.end(); settle('complete'); }
         });
         // The endpoint dropping the stream is its failure, written as such — never mistaken for the client's abort.

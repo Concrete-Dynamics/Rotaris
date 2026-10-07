@@ -369,6 +369,41 @@ describe('the live run\'s recording proxy', () => {
       expect(proxy.totals().recorded).toBe(3);
     });
 
+    /*
+     * `pace` (the `faults-args` launch; docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md): every
+     * event carrying a piece of a tool call's arguments is held `delayMs` behind the one before it, so one step streams a
+     * long tool call; nothing is dropped or reordered, and the record says how many pieces were paced and over what span.
+     */
+    it('paces each tool-call piece of every call, passes the rest at once, and records the paced span', async () => {
+      const piece = (args: string) => `data: ${JSON.stringify({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: args } }] } }] })}\n\n`;
+      const body = ['data: {"choices":[{"index":0,"delta":{"content":"Writing."}}]}\n\n', ...['{"pa', 'th":"a', '.md"}'].map(piece), 'data: [DONE]\n\n'].join('');
+      // The upstream answers in one write, splitting an event across two chunks to exercise the reassembly.
+      const target = await upstream((_req, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.write(body.slice(0, 70)); setTimeout(() => res.end(body.slice(70)), 5); });
+      const { proxy, sink } = await proxyTo(target, [{ kind: 'pace', every: true, delayMs: 60 }]);
+      const started = Date.now();
+      const first = await (await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' })).text();
+      const tookMs = Date.now() - started;
+      expect(first).toBe(body);
+      expect(tookMs).toBeGreaterThanOrEqual(3 * 60 - 10);
+      const paced = records(sink)[0]['paced'] as { events: number; firstAt: number; lastAt: number };
+      expect(paced.events).toBe(3);
+      expect(paced.lastAt - paced.firstAt).toBeGreaterThanOrEqual(2 * 60 - 10);
+      expect(records(sink)[0]['fault']).toMatchObject({ kind: 'pace', at: 'every', delayMs: 60 });
+      // A second call of the same launch is paced too; a call with no piece is passed whole and fires nothing.
+      expect(await (await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' })).text()).toBe(body);
+      expect(proxy.stats().faultsFired).toHaveLength(2);
+    });
+
+    it('a `pace` rule passes a call with no tool-call piece at once and records nothing paced', async () => {
+      const target = await upstream((_req, res) => { res.writeHead(200); res.end('{"ok":true}'); });
+      const { proxy, sink } = await proxyTo(target, [{ kind: 'pace', every: true, delayMs: 5_000 }]);
+      const started = Date.now();
+      expect(await (await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' })).text()).toBe('{"ok":true}');
+      expect(Date.now() - started).toBeLessThan(2_000);
+      expect(records(sink)[0]['paced']).toEqual({ events: 0, firstAt: null, lastAt: null });
+      expect(proxy.stats().faultsFired).toEqual([]);
+    });
+
     it('leaves every other call untouched when no rule matches', async () => {
       const target = await upstream((_req, res) => { res.writeHead(200); res.end('{"ok":true}'); });
       const { proxy, sink } = await proxyTo(target, [{ kind: 'status', at: 99, status: 500 }]);

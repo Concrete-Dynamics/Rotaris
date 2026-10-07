@@ -11,6 +11,8 @@
     "shellPrefix": "{node24}",
     "setup": "pnpm install --prefer-offline && node node_modules/electron/install.js && pnpm symbols",
     "gate": "pnpm check",
+    "quickGate": "pnpm symbols && pnpm typecheck && pnpm lint",
+    "tests": "pnpm vitest run <paths>",
     "build": "pnpm symbols && pnpm build",
     "afterMerge": "pnpm install --prefer-offline (only if pnpm-lock.yaml changed) && pnpm symbols",
     "defectsDir": "docs/defects/",

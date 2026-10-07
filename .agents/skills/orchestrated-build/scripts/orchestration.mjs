@@ -4,7 +4,7 @@
 //
 //   node orchestration.mjs render   --plan P.json --profile F.json --out run.js [--runs RUNS.txt] [--journal-root DIR] [--repo DIR]
 //   node orchestration.mjs status   --runs RUNS.txt [--journal-root DIR]
-//   node orchestration.mjs dry-run  run.js [--fail-verify key=N ...] [--findings N] [--block key ...]
+//   node orchestration.mjs dry-run  run.js [--fail-review key=N ...] [--findings N] [--block key ...]
 //   node orchestration.mjs self-test
 //
 // RUNS.txt lists the run ids of one orchestration in launch order, one per line ('#' starts a comment). `render`
@@ -79,13 +79,34 @@ export function readEvents(runIds, root) {
 // ------------------------------------------------------------------------------------------------ where each bundle stands
 const MOVED_ON = (main) => 'If `git log HEAD..origin/' + main + '` is not empty (other bundles merged since this branch last took origin/' + main + '), first `git fetch origin ' + main + ' && git merge origin/' + main + '` into the branch, resolving conflicts as repository.md (Merge conflicts) says, and commit the merge with the trailers. '
 const INTERRUPTED = (who) => 'An earlier ' + who + ' of this bundle was stopped by a restart and may have committed part of its work or left an uncommitted edit. Read `git log` and `git status` first, decide what it already did and whether it is sound (keep an uncommitted edit only if it is right), then finish the rest. '
-const VERIFIER_INTERRUPTED = 'An earlier verifier of this bundle was stopped by a restart, possibly in the middle of reverting a hunk to watch a test fail. The builder reports its work as committed, so anything `git status` shows uncommitted in the worktree is that verifier\'s probe: save it (`git diff > <scratchpad>/interrupted-probe.diff`), restore with `git checkout -- .` and `git clean -fd` for files the probe created (never a file a commit added), and say so in your evidence. '
+const REVIEWER_INTERRUPTED = 'An earlier reviewer of this bundle (or, before 2026-10-07, its verifier or merge agent) was stopped by a restart, possibly in the middle of reverting a hunk to watch a test fail, a repair, a rebase or a landing. Part C\'s step 0 comes first, as always: it finds a landing that did happen. Otherwise, in the bundle worktree, abort a rebase or merge it left in progress (`git rebase --abort`, `git merge --abort`). Commits the report does not list are its repairs: review them like the rest. The builder reports its work as committed, so anything `git status` shows uncommitted in the worktree is that agent\'s probe or unfinished repair: save it (`git diff > <scratchpad>/interrupted-probe.diff`), restore with `git checkout -- .` and `git clean -fd` for files the probe created (never a file a commit added), and say so in your evidence. '
+const PUSH_FAILED = (problem) => 'An earlier review of this bundle found it ready and its gate green on the rebased head, but the push failed (' + (problem || 'no reason given') + '). Review it as always, then land it: step 0 first, since the push may have gone through after all. '
 const STUBBORN = 'This bundle already spent a full repair budget and these findings survived it: find the ROOT cause of each (a finding that recurs in a new shape means an earlier repair treated a symptom), and prove each repair with a test that fails without it. '
+
+/** A landing on main: a review (or, in journals before 2026-10-07, a merge agent) that pushed its bundle. */
+const LANDED = (e) => (e.stage === 'review' || e.stage === 'merge') && e.result && e.result.merged && e.result.pushed
+
+/**
+ * The blocking findings an agent's result hands a repairer, or null: a review that did not land (its unrepaired
+ * findings, or a red gate on the rebased head), and in journals before 2026-10-07 a failed verification or a refused
+ * merge. The template's `drive` hands a repairer the same.
+ */
+function findingsOf(e, mainBranch) {
+  const r = e.result
+  if (!r) return null
+  const red = () => [{ title: 'The gate is red on the bundle rebased onto origin/' + mainBranch, detail: r.problem || r.checkOnMain }]
+  if (e.stage === 'verify') return r.pass ? null : r
+  if (e.stage === 'merge') return r.merged ? null : { pass: false, blocking: red(), optional: [] }
+  if (e.stage === 'review') return r.merged ? null : { ...r, pass: false, blocking: r.blocking && r.blocking.length ? r.blocking : red() }
+  return null
+}
 
 /**
  * Where each bundle stands across all runs of one orchestration:
  * `seed` (settled: merged, blocked, or needs-owner), `resume` (the stage to pick up at, with what the agent needs),
- * and `cache` (finished acceptance agents still valid for replay).
+ * and `cache` (finished acceptance agents still valid for replay). Journals written before 2026-10-07 by the old
+ * verify and merge stages resume in the new ones: a passed verification or an interrupted merge at `review`, a failed
+ * verification or a refused merge at `fix`.
  */
 export function deriveState(events, { mainBranch = 'main', maxFixRounds = DEFAULT_MAX_FIX_ROUNDS, reopen = {}, freshAcceptance = false } = {}) {
   const byKey = {}
@@ -93,7 +114,7 @@ export function deriveState(events, { mainBranch = 'main', maxFixRounds = DEFAUL
   events.forEach((e, i) => {
     if (e.stage === 'accept') {
       // A finished acceptance agent is replayed only while nothing but repair bundles merged after it.
-      const planMergeAfter = events.slice(i + 1).some((x) => x.stage === 'merge' && x.result && x.result.merged && x.result.pushed && !REPAIR_KEY_RE.test(x.key))
+      const planMergeAfter = events.slice(i + 1).some((x) => LANDED(x) && !REPAIR_KEY_RE.test(x.key))
       if (e.result && !freshAcceptance && !planMergeAfter) cache[e.label] = e.result
       return
     }
@@ -102,46 +123,42 @@ export function deriveState(events, { mainBranch = 'main', maxFixRounds = DEFAUL
   const seed = {}, resume = {}
   for (const [key, evs] of Object.entries(byKey)) {
     const done = evs.filter((e) => e.result)
-    const merge = done.filter((e) => e.stage === 'merge').pop()
+    const landing = done.filter(LANDED).pop()
     const report = done.filter((e) => e.stage === 'implement' || e.stage === 'fix').pop()?.result
-    if (merge && merge.result.merged && merge.result.pushed) {
-      seed[key] = { key, status: 'merged', mainCommit: merge.result.mainCommit, notesMoved: report?.notesMoved, notesRecorded: report?.notesRecorded, questionsRaised: report?.questionsRaised }
+    if (landing) {
+      seed[key] = { key, status: 'merged', mainCommit: landing.result.mainCommit, notesMoved: report?.notesMoved, notesRecorded: report?.notesRecorded, questionsRaised: report?.questionsRaised }
       continue
     }
     const last = evs[evs.length - 1]
-    const verdicts = done.filter((e) => e.stage === 'verify').map((e) => e.result)
-    const verdict = verdicts[verdicts.length - 1]
-    const failedVerdict = verdicts.filter((v) => !v.pass).pop()
+    const failedAt = done.filter((e) => findingsOf(e, mainBranch)).pop()
+    const failedVerdict = failedAt ? findingsOf(failedAt, mainBranch) : undefined
     const fixes = done.filter((e) => e.stage === 'fix').length
     if (last.result && last.result.blocked) {
-      if (reopen[key]) resume[key] = { stage: 'verify', impl: last.result, roundBase: fixes, note: 'This bundle stopped as blocked. The orchestrator reopens it with this scope: ' + reopen[key] }
+      if (reopen[key]) resume[key] = { stage: 'review', impl: last.result, roundBase: fixes, note: 'This bundle stopped as blocked. The orchestrator reopens it with this scope: ' + reopen[key] }
       else seed[key] = { key, status: 'blocked', blockedReason: last.result.blockedReason }
       continue
     }
     const stubborn = fixes >= maxFixRounds
+    const handedBack = findingsOf(last, mainBranch)
     let r
     if (last.stage === 'implement' && !last.result) {
       r = { stage: 'implement', existing: INTERRUPTED('builder') + MOVED_ON(mainBranch) }
     } else if (last.stage === 'fix' && !last.result) {
       r = { stage: 'fix', impl: report, verdict: failedVerdict, roundBase: fixes, note: INTERRUPTED('repairer') + (stubborn ? STUBBORN : '') + MOVED_ON(mainBranch) }
-    } else if (last.stage === 'verify' && !last.result) {
+    } else if (!last.result) {
+      // An interrupted reviewer (or an old verifier or merge agent): a review runs again, its landing's step 0 first.
       const lastFix = done.filter((e) => e.stage === 'fix').pop()
-      const failedAt = evs.findIndex((e) => e.result === failedVerdict)
-      const answered = failedVerdict && lastFix && failedAt < evs.indexOf(lastFix)
-      r = { stage: 'verify', impl: report, roundBase: fixes, previous: answered ? failedVerdict : undefined, note: VERIFIER_INTERRUPTED }
-    } else if (last.stage === 'verify' && !last.result.pass) {
-      if (fixes >= maxFixRounds * BUDGETS_BEFORE_OWNER) { seed[key] = { key, status: 'needs-owner', lastBlocking: last.result.blocking, reason: BUDGETS_BEFORE_OWNER + ' repair budgets spent; the owner decides' }; continue }
-      r = { stage: 'fix', impl: report, verdict: last.result, roundBase: fixes, note: (stubborn ? STUBBORN : '') + MOVED_ON(mainBranch) }
-    } else if (last.stage === 'verify') {
-      r = { stage: 'merge', impl: report, verdict: last.result }
-    } else if (last.stage === 'merge' && last.result && !last.result.merged) {
-      // The merge gate refused it: that is a finding for the repairer, like a verifier's.
-      r = { stage: 'fix', impl: report, verdict: { pass: false, blocking: [{ title: 'The gate is red on the bundle rebased onto origin/' + mainBranch, detail: last.result.problem || last.result.checkOnMain }], optional: [] }, roundBase: fixes, note: MOVED_ON(mainBranch) }
-    } else if (last.stage === 'merge') {
-      r = { stage: 'merge', impl: report, verdict }
+      const answered = failedAt && lastFix && evs.indexOf(failedAt) < evs.indexOf(lastFix)
+      r = { stage: 'review', impl: report, roundBase: fixes, previous: answered ? failedVerdict : undefined, note: REVIEWER_INTERRUPTED }
+    } else if (handedBack) {
+      if (fixes >= maxFixRounds * BUDGETS_BEFORE_OWNER) { seed[key] = { key, status: 'needs-owner', lastBlocking: handedBack.blocking, reason: BUDGETS_BEFORE_OWNER + ' repair budgets spent; the owner decides' }; continue }
+      r = { stage: 'fix', impl: report, verdict: handedBack, roundBase: fixes, note: (stubborn ? STUBBORN : '') + MOVED_ON(mainBranch) }
+    } else if (last.stage === 'implement' || last.stage === 'fix') {
+      // A builder's or repairer's report with no review after it.
+      r = { stage: 'review', impl: report, roundBase: fixes, previous: last.stage === 'fix' ? failedVerdict : undefined }
     } else {
-      // A builder's or repairer's report with no verification after it.
-      r = { stage: 'verify', impl: report, roundBase: fixes, previous: last.stage === 'fix' ? failedVerdict : undefined }
+      // An old passed verification, or a review or merge whose push failed: a review lands it.
+      r = { stage: 'review', impl: report, roundBase: fixes, note: last.result.merged ? PUSH_FAILED(last.result.problem) : undefined }
     }
     if (stubborn && r.stage === 'fix') r.efforts = { fix: 'max' }
     if (r.stage !== 'implement' && !r.impl) throw new Error('bundle ' + key + ' has no report to resume from')
@@ -319,31 +336,33 @@ function compile(script) {
 
 // ------------------------------------------------------------------------------------------------ dry run
 /**
- * Runs a rendered script against stub agents. `failVerify[key]` verifications of a bundle fail; `mergeRefuse[key]`
- * merges are refused; `block` keys report blocked; `lose` labels (or every label, with `loseAll`) come back empty;
- * `liveRefused` has the permission system refuse the live-runner's first launch (`'second'`: its second, the first
- * judged). Each agent's schema is kept beside its prompt.
+ * Runs a rendered script against stub agents. A bundle's first `failReview[key]` reviews hand back a blocking finding
+ * they did not repair (beside one they did); its next `landRefuse[key]` find the gate red on the rebased head;
+ * `landUnpushed` keys' pushes fail; `block` keys report blocked; `lose` labels (or every label, with `loseAll`) come
+ * back empty; `liveRefused` has the permission system refuse the live-runner's first launch (`'second'`: its second,
+ * the first judged). Each agent's schema is kept beside its prompt.
  */
-export async function dryRun(script, { failVerify = {}, mergeRefuse = {}, mergeUnpushed = [], findings = [], block = [], lose = [], loseAll = false, liveRefused = false, quiet = true } = {}) {
+export async function dryRun(script, { failReview = {}, landRefuse = {}, landUnpushed = [], findings = [], block = [], lose = [], loseAll = false, liveRefused = false, quiet = true } = {}) {
   const calls = [], prompts = {}, schemas = {}, logs = []
-  let active = 0, peak = 0, activeMerges = 0, peakMerges = 0
+  let active = 0, peak = 0, activeLandings = 0, peakLandings = 0
   const counts = {}
   const agent = async (prompt, o) => {
     active++; peak = Math.max(peak, active)
     const [stage, rest] = [o.label.slice(0, o.label.indexOf(':')), o.label.slice(o.label.indexOf(':') + 1)]
-    if (stage === 'merge') { activeMerges++; peakMerges = Math.max(peakMerges, activeMerges) }
+    if (stage === 'review') { activeLandings++; peakLandings = Math.max(peakLandings, activeLandings) }
     calls.push(o.label + ' [' + o.effort + ']'); prompts[o.label] = prompt; schemas[o.label] = o.schema
     await new Promise((r) => setTimeout(r, 2))
-    active--; if (stage === 'merge') activeMerges--
+    active--; if (stage === 'review') activeLandings--
     if (loseAll || lose.includes(o.label)) return null
     const key = rest.split('#')[0].replace(' (resumed)', '')
     const n = (counts[stage + key] = (counts[stage + key] || 0) + 1)
     if (stage === 'implement' || stage === 'fix') return { worktree: '/wt/' + key, branch: key, commits: ['c'], summary: 's', verified: 'v', notVerified: '', blocked: block.includes(key), blockedReason: block.includes(key) ? 'stub' : undefined }
-    if (stage === 'verify') { const fail = n <= (failVerify[key] || 0); return { pass: !fail, blocking: fail ? [{ title: 'stub finding ' + n, detail: 'd' }] : [], evidence: 'e', optional: ['opt'] } }
-    if (stage === 'merge') {
-      if (n <= (mergeRefuse[key] || 0)) return { merged: false, pushed: false, checkOnMain: 'red', problem: 'merged gate red' }
-      if (mergeUnpushed.includes(key)) return { merged: true, pushed: false, checkOnMain: 'green', problem: 'push rejected' }
-      return { merged: true, pushed: true, mainCommit: 'm-' + key, checkOnMain: 'green' }
+    if (stage === 'review') {
+      const reviewed = { blocking: [], repaired: [], evidence: 'e', optional: ['opt'] }
+      if (n <= (failReview[key] || 0)) return { ...reviewed, pass: false, blocking: [{ title: 'stub finding ' + n, detail: 'd' }], repaired: [{ finding: 'stub repair ' + n, commit: 'r' + n }], merged: false, pushed: false, checkOnMain: 'not run: a blocking finding remains' }
+      if (n <= (failReview[key] || 0) + (landRefuse[key] || 0)) return { ...reviewed, pass: true, merged: false, pushed: false, checkOnMain: 'red', problem: 'rebased gate red' }
+      if (landUnpushed.includes(key)) return { ...reviewed, pass: true, merged: true, pushed: false, checkOnMain: 'green', problem: 'push rejected' }
+      return { ...reviewed, pass: true, merged: true, pushed: true, mainCommit: 'm-' + key, checkOnMain: 'green' }
     }
     if (rest.startsWith('sweep')) return { head: 'h', gate: 'green', results: [{ proof: 'p', status: 'pass', summary: '', evidence: '' }] }
     if (rest.startsWith('live')) {
@@ -361,7 +380,7 @@ export async function dryRun(script, { failVerify = {}, mergeRefuse = {}, mergeU
   const log = (m) => { logs.push(m); if (!quiet) console.log('LOG', m) }
   let timer
   const stalled = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('the dry run never finished: a bundle waits on one that never settles (last calls: ' + calls.slice(-3).join(', ') + ')')), 15000) })
-  try { return { result: await Promise.race([compile(script)(agent, parallel, log, () => {}, undefined), stalled]), calls, prompts, schemas, logs, peak, peakMerges } } finally { clearTimeout(timer) }
+  try { return { result: await Promise.race([compile(script)(agent, parallel, log, () => {}, undefined), stalled]), calls, prompts, schemas, logs, peak, peakLandings } } finally { clearTimeout(timer) }
 }
 
 // ------------------------------------------------------------------------------------------------ status
@@ -436,40 +455,67 @@ export async function selfTest({ quiet = false } = {}) {
     fs.writeFileSync(path.join(tmp, 'empty.txt'), '# nothing\n')
     assert.throws(() => readRuns(path.join(tmp, 'empty.txt')), /names no run/)
 
-    // A fresh run: dependencies, serialized merges, repair loop, merge refusal, acceptance and its repairs.
+    // A fresh run: dependencies, serialized landings, the review-and-repair loop, a red rebased head, acceptance and its repairs.
     const script = render(args)
     assert.ok(script.includes(JSON.stringify('keep $& and $$ and $\' verbatim').slice(1, -1)), 'plan text survives rendering verbatim')
-    let run = await dryRun(script, { failVerify: { a1: 2 }, mergeRefuse: { b3: 1 }, findings: [{ area: 'pkg/a/x.ts' }, { area: 'pkg/a/y.ts' }, { area: 'other/z.ts' }] })
+    let run = await dryRun(script, { failReview: { a1: 2 }, landRefuse: { b3: 1 }, findings: [{ area: 'pkg/a/x.ts' }, { area: 'pkg/a/y.ts' }, { area: 'other/z.ts' }] })
     assert.equal(run.result.status, 'complete')
     for (const k of Object.keys(args.bundles)) assert.equal(settledStatus(run, k), 'merged', k + ' merges')
-    assert.ok(run.calls.indexOf('implement:b2 [high]') > run.calls.indexOf('merge:b1 [high]'), 'a dependent starts only after its dependency merged')
-    assert.ok(run.calls.indexOf('implement:a3 [high]') > run.calls.indexOf('merge:b2 [high]'), 'a cross-lane dependent waits too')
-    assert.equal(run.peakMerges, 1, 'merges are serialized')
-    assert.ok(run.calls.includes('fix:a1#2 [high]') && run.calls.includes('verify:a1#3 [high]'), 'a failing bundle is repaired and re-verified')
-    assert.match(run.prompts['verify:a1#2'], /previous round's BLOCKING findings[\s\S]*stub finding 1/, 'a verifier sees the findings the repair answered')
-    assert.match(run.prompts['verify:a1#1'], /Co-Authored-By: A/, 'the verifier sees the trailers it checks')
-    assert.match(run.prompts['merge:a1'], /Co-Authored-By: A/, 'the merge agent sees the trailers it writes')
-    assert.ok(run.calls.includes('fix:b3#1 [high]'), 'a merge refused on a red gate goes back to repair')
-    assert.match(run.prompts['merge:b3'], /Red: do not push; report `merged: false`/, 'the merge agent is told how to report a red merged result')
+    assert.ok(!run.calls.some((c) => /^(verify|merge):/.test(c)), 'no verify or merge stage drives a bundle: its reviewer lands it')
+    assert.ok(run.calls.indexOf('implement:b2 [high]') > run.calls.indexOf('review:b1#1 [high]'), 'a dependent starts only after its dependency merged')
+    assert.ok(run.calls.indexOf('implement:a3 [high]') > run.calls.indexOf('review:b2#1 [high]'), 'a cross-lane dependent waits too')
+    assert.equal(run.peakLandings, 1, 'landings are serialized: one reviewer at a time holds the landing lock')
+    assert.ok(run.calls.includes('fix:a1#2 [high]') && run.calls.includes('review:a1#3 [high]'), 'a bundle handed back is repaired and reviewed again')
+    assert.match(run.prompts['review:a1#2'], /previous round's BLOCKING findings[\s\S]*stub finding 1/, 'a reviewer sees the findings the repair answered')
+    for (const label of ['implement:a1', 'review:a1#1', 'fix:a1#1']) assert.match(run.prompts[label], /Co-Authored-By: A/, label + ' sees the trailers it writes and checks')
+    assert.ok(run.calls.includes('fix:b3#1 [high]') && run.calls.includes('review:b3#2 [high]'), 'a red gate on the rebased head the reviewer could not repair goes back to repair')
+    assert.match(run.prompts['fix:b3#1'], /The gate is red on the bundle rebased onto origin\/main[\s\S]*rebased gate red/, 'the repairer is told what was red on the rebased head')
+    assert.match(run.prompts['review:b3#1'], /Red: do not push\. A red you can repair [^\n]*repeat this step; any other red: report it in `blocking` with `merged: false`/, 'the reviewer is told how to report a red rebased head')
     // The owner, 2026-10-04: "please always use rebase instead of a merge commit for main." A bundle lands as a rebase in
     // its own worktree, the gate on that exact head in the integration worktree, and a fast-forward push from there.
-    const landing = run.prompts['merge:a1']
+    const landing = run.prompts['review:a1#1']
     assert.match(landing, /2\. Gate the exact rebased head in the integration worktree `\/srv\/repo-wt-integ-st`[^\n]*`git fetch origin main && git checkout -q --detach a1`, and `git merge-base --is-ancestor origin\/main HEAD` must succeed/, 'the gate runs on the exact rebased head, in a tree other than the one it was built in')
-    assert.match(landing, /1\. [^\n]*in progress is aborted \(`git rebase --abort`, `git merge --abort`\)[^\n]*`git fetch origin main && git rebase origin\/main`: the branch's own merges/, 'the merge agent rebases the bundle onto origin/main')
-    assert.match(landing, /Push the head the gate passed on, from \/srv\/repo-wt-integ-st, as a fast-forward: `git push origin HEAD:main`/, 'the merge agent pushes the rebased head as a fast-forward')
+    assert.match(landing, /1\. [^\n]*in progress is aborted \(`git rebase --abort`, `git merge --abort`\)[^\n]*`git fetch origin main && git rebase origin\/main`: the branch's own merges/, 'the reviewer rebases the bundle onto origin/main')
+    assert.match(landing, /Push the head the gate passed on, from \/srv\/repo-wt-integ-st, as a fast-forward: `git push origin HEAD:main`/, 'the reviewer pushes the rebased head as a fast-forward')
     assert.match(landing, /rejected because origin\/main moved: step 1 again \(`git fetch origin main && git rebase origin\/main` in the bundle worktree\), step 2 again, then push again/, 'a rejected push is rebased again and gated again before it is pushed again')
-    assert.ok(!/merge --no-ff|Merge branch '[^']*': </.test(landing), 'the merge agent makes no merge commit')
-    assert.match(landing, /Never force or reset, and never rewrite a branch but this bundle's own, unlanded one, by its rebase onto origin\/main\./, 'the merge agent forces nothing, resets nothing, and rewrites only its own unlanded branch')
+    assert.ok(!/merge --no-ff|Merge branch '[^']*': </.test(landing), 'the reviewer makes no merge commit')
+    assert.match(landing, /Never force or reset, and never rewrite a branch but this bundle's own, unlanded one, by its rebase onto origin\/main\./, 'the reviewer forces nothing, resets nothing, and rewrites only its own unlanded branch')
     assert.match(landing, /0\. [^\n]*merge-base --is-ancestor a1 origin\/main[^\n]*`git -C \/srv\/repo rev-parse a1`[^\n]*by its subject/, 'the landed test needs no merge commit: the rebased branch is part of main, or its commits are found by subject')
-    assert.match(run.schemas['merge:a1'].properties.pushed.description, /rebased head is on origin\/main, pushed as a fast-forward/, 'the merge schema reports the rebased head')
-    const unpushed = await dryRun(script, { mergeUnpushed: ['b3'] })
-    assert.equal(settledStatus(unpushed, 'b3'), 'merge-failed', 'a merge whose push failed ends merge-failed, never sent to repair')
+    assert.match(landing, /First do Part C's step 0/, 'a reviewer looks for an earlier landing before anything else')
+    assert.match(run.schemas['review:a1#1'].properties.pushed.description, /rebased head is on origin\/main, pushed as a fast-forward/, 'the review schema reports the rebased head')
+    // The owner, 2026-10-07: one reviewer per bundle, which did not build it, reviews it, repairs in place what it can,
+    // and lands it with the full gate run once, on the exact head it pushes; the builder runs the quick checks.
+    assert.match(landing, /You did not build it\. Try to FAIL it/, 'the reviewer never built what it reviews')
+    for (const step of [/1\. [^\n]*the FULL `git diff origin\/main\.\.\.HEAD`/, /2\. Read the requirement, directive and note texts yourself and check every clause/, /3\. [^\n]*revert one hunk, watch the test fail, restore\. Missing or vacuous tests are BLOCKING/, /5\. Record obligations[^\n]*BLOCKING/, /6\. Boundaries[^\n]*BLOCKING/, /7\. Adversarially/, /`ownerBlocked` is judged on its raise and its record/, /Pass \(`pass: true`\) ONLY with zero blocking findings across all tasks/]) assert.match(landing, step, 'the reviewer keeps every step of the verifier\'s checklist: ' + step)
+    assert.match(landing, /Part B — Repair in place\n[^\n]*repair at its ROOT[^\n]*in your own commits[^\n]*each with a test beside the unit that fails without the repair[^\n]*list it in `repaired`[\s\S]*you do NOT repair: report it in `blocking` and do not land \(`merged: false`/, 'the reviewer repairs what it can in place, in its own tested commits, and hands the rest back unlanded')
+    assert.match(landing, /Part C — Land, only with zero blocking findings remaining\n/, 'the reviewer lands only with zero blocking findings remaining')
+    assert.ok(landing.includes('`' + profile.run.gate + '` (re-run a timing red once alone first)'), 'the reviewer runs the full gate on the rebased head')
+    assert.match(landing, /The gate does not run here: it runs once, in Part C, on the exact head you push/, 'the full gate runs once per landing')
+    for (const label of ['implement:a1', 'fix:a1#1']) {
+      const rule5 = /^5\. .*$/m.exec(run.prompts[label])[0]
+      assert.ok(rule5.includes('`' + profile.run.quickGate + '`') && rule5.includes('`' + profile.run.tests + '`'), label + ' runs the quick checks and the tests beside every unit it changed')
+      assert.ok(rule5.includes('The full gate (`' + profile.run.gate + '`) runs once, on the rebased head') && !rule5.includes('`' + profile.run.gate + '` fully green'), label + ' leaves the full gate to the landing')
+    }
+    assert.ok(['pass', 'blocking', 'repaired', 'merged', 'pushed'].every((k) => run.schemas['review:a1#1'].required.includes(k)), 'a reviewer reports what it repaired and whether it landed')
+    const unpushed = await dryRun(script, { landUnpushed: ['b3'] })
+    assert.equal(settledStatus(unpushed, 'b3'), 'merge-failed', 'a landing whose push failed ends merge-failed, never sent to repair')
     assert.ok(!unpushed.calls.includes('fix:b3#1 [high]'))
     assert.match(run.prompts['implement:a1'], /Live runs are NOT authorised/, 'without authorization agents are told not to launch live runs')
     assert.match(run.prompts['implement:a1'], /Bash tool's own `timeout` parameter/, 'agents give a long background job an explicit timeout')
-    assert.match(run.prompts['verify:a1#1'], /completion notice or the Monitor tool/, 'agents wait on a long job without a sleep loop of their own')
-    assert.match(run.prompts['verify:a1#1'], /alone with nothing before it \(the shell prefix does not apply to it\)/, 'a polling loop is sent alone, without the shell prefix')
-    for (const label of ['implement:a1', 'verify:a1#1', 'fix:a1#1', 'merge:a1']) assert.match(run.prompts[label], /Never `git stash`/, label + ' is told that every worktree shares one stash')
+    assert.match(run.prompts['review:a1#1'], /completion notice or the Monitor tool/, 'agents wait on a long job without a sleep loop of their own')
+    assert.match(run.prompts['review:a1#1'], /alone with nothing before it \(the shell prefix does not apply to it\)/, 'a polling loop is sent alone, without the shell prefix')
+    for (const label of ['implement:a1', 'review:a1#1', 'fix:a1#1']) assert.match(run.prompts[label], /Never `git stash`/, label + ' is told that every worktree shares one stash')
+    // A bundle that passes takes two agents; one handed back takes a repairer and a fresh review.
+    const solo = render(buildArgs({ id: 'st', bundles: [{ key: 'solo', tasks: [task('x'), task('y')] }], acceptance: { rounds: 0 } }, profile))
+    let pair = await dryRun(solo, {})
+    assert.equal(settledStatus(pair, 'solo'), 'merged')
+    assert.deepEqual(pair.calls, ['implement:solo [high]', 'review:solo#1 [high]'], 'a passing bundle lands with exactly two agents: its builder and one reviewer')
+    pair = await dryRun(solo, { failReview: { solo: 1 } })
+    assert.equal(settledStatus(pair, 'solo'), 'merged')
+    assert.deepEqual(pair.calls, ['implement:solo [high]', 'review:solo#1 [high]', 'fix:solo#1 [high]', 'review:solo#2 [high]'], 'unrepaired blocking findings go to a repairer, then to a fresh review')
+    assert.match(pair.prompts['fix:solo#1'], /BLOCKING findings[\s\S]*stub finding 1[\s\S]*already repaired in place[\s\S]*stub repair 1/, 'the repairer sees what is blocking and what the reviewer already repaired')
+    assert.match(pair.prompts['review:solo#2'], /previous round's BLOCKING findings[\s\S]*stub finding 1/, 'the fresh review checks the previous findings first')
+    assert.deepEqual(pair.result.bundles[0].repaired, [{ finding: 'stub repair 1', commit: 'r1' }], 'the completion result lists what reviewers repaired in place')
     assert.ok(!run.calls.some((c) => c.startsWith('accept:live')), 'no live-runner without authorization')
     assert.equal(run.result.acceptance.length, 2)
     assert.ok(run.calls.includes('implement:accept1-1 [high]') && run.calls.includes('implement:accept1-2 [high]') && !run.calls.includes('implement:accept1-3 [high]'), 'findings that share a directory pair; the rest stand alone')
@@ -503,7 +549,7 @@ export async function selfTest({ quiet = false } = {}) {
     assert.ok(run.peak <= profile.run.repairPool, 'the repair pool bounds concurrency (peak ' + run.peak + ')')
 
     // Endings: a spent budget, a blocked bundle, a halt, a lost autopsy.
-    run = await dryRun(script, { failVerify: { b3: 9 } })
+    run = await dryRun(script, { failReview: { b3: 9 } })
     assert.equal(settledStatus(run, 'b3'), 'unverified')
     assert.equal(run.result.status, 'incomplete', 'acceptance is skipped while a plan bundle is unsettled')
     assert.ok(!run.calls.some((c) => c.startsWith('accept:')))
@@ -516,7 +562,8 @@ export async function selfTest({ quiet = false } = {}) {
     run = await dryRun(script, { lose: ['accept:autopsy#1'] })
     assert.equal(run.result.status, 'acceptance-incomplete', 'a lost autopsy never reads as a clean acceptance')
 
-    // Resume from journals.
+    // Resume from journals. wf_one and wf_two were written by the stages before 2026-10-07 (verify, then merge): a plan
+    // rendered before that change and re-rendered after a restart resumes in the new stages.
     const jroot = path.join(tmp, 'journals')
     const journal = (id, entries) => {
       fs.mkdirSync(path.join(jroot, id), { recursive: true })
@@ -528,6 +575,8 @@ export async function selfTest({ quiet = false } = {}) {
     const fail = (t = 't') => ({ pass: false, blocking: [{ title: t, detail: 'd' }], evidence: 'e' })
     const pass = { pass: true, blocking: [], evidence: 'e' }
     const merged = (c) => ({ merged: true, pushed: true, mainCommit: c, checkOnMain: 'g' })
+    const landed = (c) => ({ pass: true, blocking: [], repaired: [], evidence: 'e', merged: true, pushed: true, mainCommit: c, checkOnMain: 'g' })
+    const handedBack = (t = 't') => ({ pass: false, blocking: [{ title: t, detail: 'd' }], repaired: [], evidence: 'e', merged: false, pushed: false, checkOnMain: 'not run' })
     journal('wf_one', [
       ['accept:sweep-1#1', { head: 'old', gate: 'g', results: [] }],
       ['implement:a1', rep('a1')], ['verify:a1#1', pass], ['merge:a1', merged('m1')],
@@ -551,44 +600,83 @@ export async function selfTest({ quiet = false } = {}) {
     const st = deriveState(events)
     assert.equal(st.seed.a1.status, 'merged')
     assert.equal(st.seed.p1.status, 'blocked')
-    assert.equal(st.resume.b1.stage, 'fix'); assert.match(st.resume.b1.note, /stopped by a restart/)
-    assert.equal(st.resume.a2.stage, 'merge', 'a lost merge is retried (its step 0 finds an earlier landing)')
+    assert.equal(st.resume.b1.stage, 'fix', 'an old failed verification resumes as a repair'); assert.match(st.resume.b1.note, /stopped by a restart/)
+    assert.equal(st.resume.a2.stage, 'review', 'an old lost merge resumes at review (its landing\'s step 0 finds an earlier landing)'); assert.match(st.resume.a2.note, /step 0 comes first/)
     assert.equal(st.resume.b3.stage, 'implement'); assert.match(st.resume.b3.existing, /stopped by a restart/)
-    assert.equal(st.resume.p2.stage, 'verify'); assert.match(st.resume.p2.note, /reverting a hunk/)
-    assert.equal(st.resume.p2.previous.blocking[0].title, 'first', 'a resumed verifier sees what the repair answered')
-    assert.equal(st.resume.a3.stage, 'fix', 'a merge refused on a red gate resumes as a repair'); assert.match(st.resume.a3.verdict.blocking[0].detail, /tests red/)
+    assert.equal(st.resume.p2.stage, 'review', 'an old lost verifier resumes at review'); assert.match(st.resume.p2.note, /reverting a hunk/)
+    assert.equal(st.resume.p2.previous.blocking[0].title, 'first', 'a resumed reviewer sees what the repair answered')
+    assert.equal(st.resume.a3.stage, 'fix', 'an old merge refused on a red gate resumes as a repair'); assert.match(st.resume.a3.verdict.blocking[0].detail, /tests red/)
     assert.equal(st.resume.b4.stage, 'fix'); assert.equal(st.resume.b4.roundBase, 3); assert.equal(st.resume.b4.efforts.fix, 'max')
     assert.match(st.resume.b4.note, /ROOT cause/, 'a budget spent across a restart still earns the root-cause round')
     assert.equal(st.seed.a4.status, 'needs-owner', 'after two spent budgets a bundle goes to the owner')
-    assert.equal(st.resume.b2.stage, 'verify')
+    assert.equal(st.resume.b2.stage, 'review', 'a builder\'s report with no review after it resumes at review')
     assert.ok(!st.cache['accept:sweep-1#1'], 'an acceptance result older than a later merge is not replayed')
     assert.ok(st.cache['accept:sweep-2#1'], 'a current acceptance result is replayed')
     assert.equal(deriveState(events, { freshAcceptance: true }).cache['accept:sweep-2#1'], undefined)
+    journal('wf_old', [['implement:v', rep('v')], ['verify:v#1', pass], ['implement:w', rep('w')], ['verify:w#1', pass], ['merge:w', merged('mw')]])
+    const old = deriveState(readEvents(['wf_old'], jroot))
+    assert.equal(old.resume.v.stage, 'review', 'an old passed verification resumes at review, which lands it')
+    assert.equal(old.seed.w.status, 'merged', 'an old landing stays settled')
     const scope = 'task 2 stays open as an owner note'
     const reopened = deriveState(events, { reopen: { p1: scope } })
-    assert.equal(reopened.resume.p1.stage, 'verify')
+    assert.equal(reopened.resume.p1.stage, 'review')
     const reopenPlan = { ...plan, bundles: plan.bundles.map((b) => (b.key === 'p1' ? { ...b, reopen: scope } : b)) }
-    run = await dryRun(render(buildArgs(reopenPlan, profile, reopened)), { failVerify: { p1: 1 } })
-    for (const label of ['verify:p1#1', 'fix:p1#1', 'verify:p1#2']) assert.match(run.prompts[label], /task 2 stays open/, 'the reopen scope reaches ' + label)
+    run = await dryRun(render(buildArgs(reopenPlan, profile, reopened)), { failReview: { p1: 1 } })
+    for (const label of ['review:p1#1', 'fix:p1#1', 'review:p1#2']) assert.match(run.prompts[label], /task 2 stays open/, 'the reopen scope reaches ' + label)
     args = buildArgs(plan, profile, st)
     run = await dryRun(render(args), {})
     assert.ok(!run.calls.some((c) => c.startsWith('implement:a1')), 'a merged bundle is not rebuilt')
-    assert.ok(run.calls.includes('fix:b4#4 [max]') && run.calls.includes('merge:a2 [high]') && run.calls.includes('implement:b3 (resumed) [high]') && run.calls.includes('fix:a3#1 [high]'))
+    assert.ok(run.calls.includes('fix:b4#4 [max]') && run.calls.includes('review:a2#1 [high]') && run.calls.includes('implement:b3 (resumed) [high]') && run.calls.includes('fix:a3#1 [high]'))
+    assert.ok(!run.calls.some((c) => /^(verify|merge):/.test(c)), 'old journals resume in the new stages only')
     assert.equal(settledStatus(run, 'a4'), 'needs-owner')
     assert.ok(run.calls.some((c) => c.startsWith('accept:sweep-2#1')), 'no acceptance result is replayed while plan bundles still have to land')
     assert.ok(run.calls.some((c) => c.startsWith('accept:sweep-1#1')), 'the stale sweep is run again')
     assert.throws(() => buildArgs({ ...plan, bundles: plan.bundles.filter((b) => b.key !== 'b3') }, profile, st), /no longer has/, 'resume state for a bundle the plan dropped is refused')
+    // The same cases in journals of the review stage.
+    journal('wf_seven', [
+      ['accept:sweep-1#1', { head: 'old', gate: 'g', results: [] }],
+      ['implement:a1', rep('a1')], ['review:a1#1', landed('m1')],
+      ['implement:b1', rep('b1')], ['review:b1#1', handedBack()], ['fix:b1#1'],
+      ['implement:a2', rep('a2')], ['review:a2#1'],
+      ['implement:b3'],
+      ['implement:p1', { ...rep('p1'), blocked: true, blockedReason: 'owner' }],
+      ['implement:p2', rep('p2')], ['review:p2#1', handedBack('first')], ['fix:p2#1', rep('p2')], ['review:p2#2'],
+      ['implement:a3', rep('a3')], ['review:a3#1', { ...handedBack(), pass: true, blocking: [], checkOnMain: 'red', problem: 'tests red after the rebase' }],
+      ['implement:b4', rep('b4')], ['review:b4#1', handedBack()], ['fix:b4#1', rep('b4')], ['review:b4#2', handedBack()], ['fix:b4#2', rep('b4')], ['review:b4#3', handedBack()], ['fix:b4#3', rep('b4')], ['review:b4#4', handedBack('recurring')],
+      ['implement:b2', rep('b2')], ['review:b2#1', { ...landed(''), pushed: false, problem: 'push rejected' }],
+      ['implement:a4', rep('a4')], ...[1, 2, 3, 4, 5, 6].flatMap((n) => [['review:a4#' + n, handedBack()], ['fix:a4#' + n, rep('a4')]]), ['review:a4#7', handedBack()],
+      ['accept:sweep-2#1', { head: 'h', gate: 'g', results: [] }],
+    ])
+    const st7 = deriveState(readEvents(['wf_seven'], jroot))
+    assert.equal(st7.seed.a1.status, 'merged', 'a review that landed settles its bundle')
+    assert.equal(st7.seed.p1.status, 'blocked')
+    assert.equal(st7.resume.b1.stage, 'fix'); assert.match(st7.resume.b1.note, /stopped by a restart/); assert.equal(st7.resume.b1.verdict.blocking[0].title, 't')
+    assert.equal(st7.resume.a2.stage, 'review', 'a lost reviewer is retried'); assert.match(st7.resume.a2.note, /reverting a hunk[\s\S]*step 0 comes first[\s\S]*`git rebase --abort`/, 'the retried reviewer is told what a lost one may have left')
+    assert.equal(st7.resume.b3.stage, 'implement')
+    assert.equal(st7.resume.p2.stage, 'review'); assert.equal(st7.resume.p2.previous.blocking[0].title, 'first', 'a resumed reviewer sees what the repair answered')
+    assert.equal(st7.resume.a3.stage, 'fix', 'a red rebased head resumes as a repair'); assert.match(st7.resume.a3.verdict.blocking[0].detail, /tests red/)
+    assert.equal(st7.resume.b4.stage, 'fix'); assert.equal(st7.resume.b4.roundBase, 3); assert.equal(st7.resume.b4.efforts.fix, 'max'); assert.match(st7.resume.b4.note, /ROOT cause/)
+    assert.equal(st7.seed.a4.status, 'needs-owner', 'after two spent budgets a bundle goes to the owner')
+    assert.equal(st7.resume.b2.stage, 'review', 'a landing whose push failed is retried by a review'); assert.match(st7.resume.b2.note, /push failed \(push rejected\)/)
+    assert.ok(!st7.cache['accept:sweep-1#1'] && st7.cache['accept:sweep-2#1'], 'an acceptance result older than a later landing is not replayed')
+    const rows7 = Object.fromEntries(status(['wf_seven'], jroot).rows.map((x) => [x[0], x[1]]))
+    assert.deepEqual([rows7.a1, rows7.a2, rows7.b1, rows7.b3], ['merged', 'next: review', 'next: fix', 'next: implement'], 'status prints the new stages')
+    run = await dryRun(render(buildArgs(plan, profile, st7)), {})
+    assert.ok(run.calls.includes('fix:b4#4 [max]') && run.calls.includes('review:a2#1 [high]') && run.calls.includes('review:b2#1 [high]') && run.calls.includes('fix:a3#1 [high]') && run.calls.includes('fix:b1#1 [high]'))
+    assert.match(run.prompts['review:a2#1'], /Orchestrator's note for this review\n[^\n]*stopped by a restart/, 'the resume note reaches the retried reviewer')
+    assert.match(run.prompts['review:p2#2'], /previous round's BLOCKING findings[\s\S]*first/)
+    assert.equal(settledStatus(run, 'a4'), 'needs-owner')
     // A budget spent across a restart (one fix, then three) still earns the root-cause round at max effort.
     journal('wf_four', [
-      ['implement:q', rep('q')], ['verify:q#1', fail()], ['fix:q#1', rep('q')], ['verify:q#2', fail()], ['fix:q#2', rep('q')], ['verify:q#3', fail()],
-      ['fix:q#3', rep('q')], ['verify:q#4', fail()], ['fix:q#4', rep('q')], ['verify:q#5', fail('recurring')],
+      ['implement:q', rep('q')], ['review:q#1', handedBack()], ['fix:q#1', rep('q')], ['review:q#2', handedBack()], ['fix:q#2', rep('q')], ['review:q#3', handedBack()],
+      ['fix:q#3', rep('q')], ['review:q#4', handedBack()], ['fix:q#4', rep('q')], ['review:q#5', handedBack('recurring')],
     ])
     const four = deriveState(readEvents(['wf_four'], jroot)).resume.q
     assert.equal(four.efforts.fix, 'max', 'the second budget runs at max effort after four fixes')
     assert.match(four.note, /ROOT cause/, 'the second budget carries the root-cause note after four fixes')
     // Acceptance that ran before a plan bundle lands is never replayed: a reopened bundle is accepted afresh.
     journal('wf_five', [
-      ['implement:a1', rep('a1')], ['verify:a1#1', pass], ['merge:a1', merged('m1')],
+      ['implement:a1', rep('a1')], ['review:a1#1', landed('m1')],
       ['implement:p1', { ...rep('p1'), blocked: true, blockedReason: 'owner' }],
       ['accept:sweep-1#1', { head: 'h', gate: 'g', results: [] }], ['accept:sweep-2#1', { head: 'h', gate: 'g', results: [] }], ['accept:autopsy#1', { report: 'r', findings: [] }],
     ])
@@ -600,7 +688,7 @@ export async function selfTest({ quiet = false } = {}) {
     journal('wf_three', [
       ['accept:sweep-1#1', { head: 'h', gate: 'g', results: [] }], ['accept:sweep-2#1', { head: 'h', gate: 'g', results: [] }],
       ['accept:autopsy#1', { report: 'r', findings: [{ id: 'F0', kind: 'product-defect', severity: 'degrades', title: 't0', detail: 'd', evidence: 'e', files: 'f', area: 'x/a.ts' }, { id: 'F1', kind: 'product-defect', severity: 'degrades', title: 't1', detail: 'd', evidence: 'e', files: 'f', area: 'y/b.ts' }] }],
-      ['implement:accept1-1', rep('accept1-1')], ['verify:accept1-1#1', pass], ['merge:accept1-1', merged('r1')],
+      ['implement:accept1-1', rep('accept1-1')], ['review:accept1-1#1', landed('r1')],
       ['implement:accept1-2'],
     ])
     const acc = deriveState(readEvents(['wf_three'], jroot))
@@ -705,9 +793,9 @@ async function main() {
     console.log('acceptance agents replayable: ' + (s.acceptance.join(', ') || 'none'))
     for (const h of s.handoff) console.log('live hand-off, yours to run: ' + h)
   } else if (cmd === 'dry-run') {
-    const failVerify = Object.fromEntries((o['fail-verify'] || []).map((x) => { const [k, n] = x.split('='); return [k, Number(n)] }))
+    const failReview = Object.fromEntries((o['fail-review'] || []).map((x) => { const [k, n] = x.split('='); return [k, Number(n)] }))
     const findings = Array.from({ length: Number(one(o, 'findings') || 0) }, (_, i) => ({ area: 'area' + i + '/f.ts' }))
-    const run = await dryRun(fs.readFileSync(o._[0], 'utf8'), { failVerify, findings, block: o.block || [], quiet: false })
+    const run = await dryRun(fs.readFileSync(o._[0], 'utf8'), { failReview, findings, block: o.block || [], quiet: false })
     console.log(run.calls.join('\n'))
     console.log('status: ' + run.result.status + '; peak concurrency in the stub: ' + run.peak)
     for (const b of run.result.bundles) console.log(b.key + ': ' + b.status)

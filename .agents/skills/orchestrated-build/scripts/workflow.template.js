@@ -1,11 +1,10 @@
 export const meta = {
   name: 'orchestrated-build',
-  description: 'Bundles of tasks through build, independent verification and repair, merged one at a time; then acceptance rounds (proof sweep, live run, autopsy) whose findings go back through the same loop',
+  description: 'Bundles of tasks through a build and an independent review that repairs in place and lands, one landing at a time; then acceptance rounds (proof sweep, live run, autopsy) whose findings go back through the same loop',
   phases: [
     { title: 'Implement', detail: 'one worktree and branch per bundle', model: 'opus' },
-    { title: 'Verify', detail: 'an independent verifier tries to fail each bundle', model: 'opus' },
-    { title: 'Fix', detail: 'blocking findings go back to a repairer', model: 'opus' },
-    { title: 'Merge', detail: 'one merge at a time through the integration worktree', model: 'opus' },
+    { title: 'Review', detail: 'an independent reviewer tries to fail each bundle, repairs what it can in place, and lands it through the integration worktree, one landing at a time', model: 'opus' },
+    { title: 'Fix', detail: 'blocking findings the reviewer could not repair go back to a repairer', model: 'opus' },
     { title: 'Accept', detail: 'proof sweep, live run and autopsy on merged main', model: 'opus' },
     { title: 'Repair', detail: 'acceptance findings, paired by area, through the same loop', model: 'opus' },
   ],
@@ -36,24 +35,19 @@ const IMPL_SCHEMA = {
   },
   required: ['worktree', 'branch', 'commits', 'summary', 'verified', 'notVerified', 'blocked'],
 }
-const VERDICT_SCHEMA = {
+const REVIEW_SCHEMA = {
   type: 'object',
   properties: {
-    pass: { type: 'boolean' },
-    blocking: { type: 'array', items: { type: 'object', properties: { task: { type: 'string' }, title: { type: 'string' }, detail: { type: 'string' }, where: { type: 'string' } }, required: ['title', 'detail'] } },
+    pass: { type: 'boolean', description: 'true when zero blocking findings remain after your repairs' },
+    blocking: { type: 'array', description: 'the blocking findings you did not repair', items: { type: 'object', properties: { task: { type: 'string' }, title: { type: 'string' }, detail: { type: 'string' }, where: { type: 'string' } }, required: ['title', 'detail'] } },
+    repaired: { type: 'array', description: 'each blocking finding you repaired in place, with its commit', items: { type: 'object', properties: { finding: { type: 'string' }, commit: { type: 'string' } }, required: ['finding', 'commit'] } },
     optional: { type: 'array', items: { type: 'string' } },
     evidence: { type: 'string' },
-  },
-  required: ['pass', 'blocking', 'evidence'],
-}
-const MERGE_SCHEMA = {
-  type: 'object',
-  properties: {
-    merged: { type: 'boolean', description: 'false when the bundle cannot land because of its own content (a conflict you could not resolve, the gate or a proof red on the rebased head): it goes back to repair. true when the rebased head is green.' },
+    merged: { type: 'boolean', description: 'false when the bundle does not land: a blocking finding remains, or its own content keeps it off (a conflict you could not resolve, the gate or a proof red on the rebased head): it goes back to repair. true when the rebased head is green.' },
     pushed: { type: 'boolean', description: 'true when the rebased head is on origin/' + R.mainBranch + ', pushed as a fast-forward. merged true with pushed false means only the push failed after its retries: the landing is tried again later.' },
     mainCommit: { type: 'string' }, checkOnMain: { type: 'string' }, conflicts: { type: 'string' }, problem: { type: 'string' },
   },
-  required: ['merged', 'pushed', 'checkOnMain'],
+  required: ['pass', 'blocking', 'repaired', 'evidence', 'merged', 'pushed', 'checkOnMain'],
 }
 const SWEEP_SCHEMA = {
   type: 'object',
@@ -142,7 +136,7 @@ function builderRules(bundle, impl) {
     '3. Record obligations (repository.md, Records) land in the same commits as the code. A defect you notice outside your tasks is recorded, never fixed on the side. A question the specification leaves open is raised, never ruled by you.',
     '4. Commits: small, one task\'s commits never mixed with another\'s, citing the requirement ids, each ending with exactly these lines after a blank line:',
     trailerBlock(),
-    '5. Gate before you finish: `' + R.gate + '` fully green in your worktree; run the narrowest tests while you work; after `' + R.build + '`, run every proof (and, if authorised, live scenario) your tasks name. Do NOT merge, push or remove the worktree: a verifier checks your work and a merge agent lands it.',
+    '5. Checks before you finish: run the narrowest tests while you work; then `' + R.quickGate + '` green in your worktree, the tests beside every unit you changed (`' + R.tests + '`), and, after `' + R.build + '`, every proof (and, if authorised, live scenario) your tasks name. The full gate (`' + R.gate + '`) runs once, on the rebased head, when the reviewer lands the bundle. Do NOT merge, push or remove the worktree: an independent reviewer checks your work and lands it.',
     '6. A task only the owner can close (a ruling, a permission, a platform this host lacks): record it as repository.md says, list it in `ownerBlocked` with the reason and the record you made, and finish every other task. Set `blocked` only when NO task can proceed.',
     '7. Report faithfully, PER TASK: what you verified with the exact commands and outcomes, what you could not and why. A skipped step is stated as skipped.',
   ].join('\n')
@@ -156,58 +150,58 @@ function implementPrompt(bundle) {
   ].join('\n')
 }
 
-function verifyPrompt(bundle, impl, round, ctx) {
+function reviewPrompt(bundle, impl, round, ctx) {
   const previous = ctx && ctx.previous
+  const pushes = R.pushTargets.map((t) => '`git push origin HEAD:' + t + '`').join(', then ')
+  const main = 'origin/' + R.mainBranch
   return [
-    'You are the INDEPENDENT VERIFIER of one bundle of ' + bundle.tasks.length + ' task(s). You did not build it. Try to FAIL it: every way it falls short of the requirement, the directive, the defect note, the repository\'s process or its own claims, for EACH task. ' + OUTPUT_RULE,
+    'You are the INDEPENDENT REVIEWER of one bundle of ' + bundle.tasks.length + ' task(s), and you land it. You did not build it. Try to FAIL it: every way it falls short of the requirement, the directive, the defect note, the repository\'s process or its own claims, for EACH task (Part A). Repair in place what you can (Part B). Land it only with zero blocking findings remaining and the gate green on the exact head you push (Part C). ' + OUTPUT_RULE,
     '', grounding(), '',
     '## What was asked', tasksText(bundle), '',
-    '## What the builder reports (verification round ' + round + ')', JSON.stringify(impl, null, 2), '',
+    '## What the builder reports (review round ' + round + '; branch `' + impl.branch + '`, worktree `' + impl.worktree + '`)', JSON.stringify(impl, null, 2), '',
     previous ? '## The previous round\'s BLOCKING findings\nCheck each one FIRST: repaired, or correctly rebutted (the report\'s `answers`)? One neither repaired nor rebutted with evidence is still blocking.\n' + JSON.stringify(previous.blocking, null, 2) + '\n' : '',
-    ctx && ctx.note ? '## Orchestrator\'s note for this verification\n' + ctx.note + '\n' : '',
-    '## Verify in the builder\'s worktree (`cd ' + impl.worktree + '`; never commit; restore exactly anything you touch)',
+    ctx && ctx.note ? '## Orchestrator\'s note for this review\n' + ctx.note + '\n' : '',
+    'Never write in ' + R.repo + '. First do Part C\'s step 0: if the bundle already landed, report as it says and stop. Otherwise Parts A, B and C, in order.',
+    '',
+    '## Part A — Review in the builder\'s worktree (`cd ' + impl.worktree + '`; commit nothing in this part; restore exactly anything you touch)',
     '1. `git fetch origin ' + R.mainBranch + '`; read `git log origin/' + R.mainBranch + '..HEAD` and the FULL `git diff origin/' + R.mainBranch + '...HEAD`. Every commit ends with exactly these lines:',
     trailerBlock(),
     '   Every commit cites its ids and belongs to one task; nothing outside the tasks changes behaviour; nothing an agent never edits (repository.md) is edited unless the orchestrator\'s notes authorise it.',
     '2. Read the requirement, directive and note texts yourself and check every clause against the code. A clause misread or omitted is BLOCKING; so is a word the domain glossary lacks that the code minted.',
     '3. Each behaviour claim has a test beside the unit that fails without the change: read at least two per task, and where cheap revert one hunk, watch the test fail, restore. Missing or vacuous tests are BLOCKING; a weakened proof assertion is BLOCKING.',
-    '4. Run `' + R.gate + '` yourself (anything red is BLOCKING; re-run a timing red once alone first). After `' + R.build + '`, run the proofs (and, if authorised, live scenarios) the tasks name and compare with the claims; a claim you cannot reproduce is BLOCKING.',
+    '4. After `' + R.build + '`, run the proofs (and, if authorised, live scenarios) the tasks name and compare with the claims; a claim you cannot reproduce is BLOCKING. The gate does not run here: it runs once, in Part C, on the exact head you push.',
     '5. Record obligations (repository.md, Records): each one missing, or a record statement no longer true of the branch, is BLOCKING; a note moved that is not actually repaired is BLOCKING.',
     '6. Boundaries (repository.md, Boundaries): every violation is BLOCKING.',
     '7. Adversarially: what input, platform, ordering, crash, restart, concurrent call or loaded host breaks it? Where a test can decide it, run one.',
     'A task the builder lists in `ownerBlocked` is judged on its raise and its record, not on completion: if it truly needs the owner and is recorded as repository.md says, it is not blocking; if an agent could have closed it, it is.',
-    'Pass ONLY with zero blocking findings across all tasks; style is `optional`. Every finding names the task, the file and what to change. Put the exact commands and their tails in `evidence`.',
+    'Pass (`pass: true`) ONLY with zero blocking findings across all tasks once Part B is done; style is `optional`. Every finding names the task, the file and what to change. Put the exact commands and their tails in `evidence`.',
+    '',
+    '## Part B — Repair in place',
+    'Each blocking finding you can repair within the bundle\'s tasks, repair at its ROOT on branch `' + impl.branch + '` in `' + impl.worktree + '`, in your own commits (one finding\'s commits never mixed with another\'s, citing the ids, each ending with exactly the lines of Part A step 1), each with a test beside the unit that fails without the repair, and with the record obligations (repository.md, Records) in the same commits. Run that test and the tests beside every unit you changed (`' + R.tests + '`), check each repair against Part A steps 2 to 6 as you checked the builder\'s work, and list it in `repaired` (the finding, the commit).',
+    'A finding that needs a task rebuilt, a decision the record does not make, an owner ruling, or more than a contained repair, you do NOT repair: report it in `blocking` and do not land (`merged: false`, `pushed: false`); the bundle goes to a repairer, then to a fresh review. A defect you notice outside the tasks is recorded as repository.md says, never fixed on the side; never widen a task.',
+    '',
+    '## Part C — Land, only with zero blocking findings remaining',
+    'The bundle lands on ' + R.mainBranch + ' as a REBASE and a FAST-FORWARD push, never a merge commit: ' + R.mainBranch + '\'s history is linear. Within this workflow landings are serialized (you hold the landing lock); another session or workflow may push to ' + main + ' at the same time, so ' + main + ' is the coordination point.',
+    '0. `git -C ' + R.repo + ' fetch origin ' + R.mainBranch + '`. If `git -C ' + R.repo + ' merge-base --is-ancestor ' + impl.branch + ' ' + main + '` succeeds, an earlier reviewer or merge agent already landed it (the rebased branch is part of ' + main + '): report `merged: true, pushed: true` with `mainCommit` the landed head (`git -C ' + R.repo + ' rev-parse ' + impl.branch + '`), do step 4, and stop. If the branch no longer exists, an earlier agent\'s step 4 deleted it after the landing: find the bundle\'s newest commit on ' + main + ' by its subject (`git -C ' + R.repo + ' log --format=\'%H %s\' ' + main + '`, the subjects in the report\'s commits; a landing older than rebasing is a merge commit `Merge branch \'' + impl.branch + '\'`), report it as `mainCommit` with `merged: true, pushed: true`, and stop.',
+    '1. Rebase, in the bundle worktree `' + impl.worktree + '` (re-create it with `git -C ' + R.repo + ' worktree add ' + impl.worktree + ' ' + impl.branch + '` if it is gone). A rebase or merge an interrupted agent left in progress is aborted (`git rebase --abort`, `git merge --abort`); otherwise `git status` must be clean (else stop and report). `git fetch origin ' + R.mainBranch + ' && git rebase ' + main + '`: the branch\'s own merges of ' + main + ' drop out, and each replayed commit that conflicts is resolved by reading both sides, as repository.md (Merge conflicts) says, its paths staged by name, then `git rebase --continue`. `git rebase --skip` only a commit the resolution left empty. A conflict you cannot resolve: `git rebase --abort` and report it in `blocking` with `merged: false` and it in `problem`.',
+    '2. Gate the exact rebased head in the integration worktree `' + R.integ + '` (detached HEAD; a tree other than the one the bundle was built in): if it does not exist, `git -C ' + R.repo + ' worktree add --detach ' + R.integ + ' ' + main + ' && cd ' + R.integ + ' && ' + R.shellPrefix + ' && ' + R.setup + '`. `git status --short` clean. `git fetch origin ' + R.mainBranch + ' && git checkout -q --detach ' + impl.branch + '`, and `git merge-base --is-ancestor ' + main + ' HEAD` must succeed (else back to step 1). Then `' + R.afterMerge + '`, `' + R.gate + '` (re-run a timing red once alone first), and after `' + R.build + '` the proofs the tasks name. Red: do not push. A red you can repair (the rebase\'s own: a conflict resolution, or ' + main + '\'s new code meeting the bundle\'s; or a defect of the bundle\'s tasks, as Part B says) you repair in a new commit on the branch in the bundle worktree, with the trailers (and, for a defect, a test that fails without the repair), and repeat this step; any other red: report it in `blocking` with `merged: false` and what failed in `problem` (the bundle goes back to repair).',
+    '3. Push the head the gate passed on, from ' + R.integ + ', as a fast-forward: ' + pushes + ' (a later target rejected as non-fast-forward because someone else pushed it: fetch it and push only if HEAD contains it; not blocking). The push to ' + R.mainBranch + ' rejected because ' + main + ' moved: step 1 again (`git fetch origin ' + R.mainBranch + ' && git rebase ' + main + '` in the bundle worktree), step 2 again, then push again; a commit on ' + main + ' you did not make is someone else\'s, never undone. Retry network failures with backoff 2/4/8/16 s. Never force or reset, and never rewrite a branch but this bundle\'s own, unlanded one, by its rebase onto ' + main + '. If the push to ' + R.mainBranch + ' still fails, report `merged: true, pushed: false` with the push error in `problem`.',
+    '4. Only after the bundle is on ' + main + ': `git -C ' + R.repo + ' worktree remove ' + impl.worktree + '` (`--force` only when the only untracked content is build output or evidence; say so), then `git -C ' + R.repo + ' branch -d ' + impl.branch + '`.',
+    'Report `pass` (true only when zero blocking findings remain after your repairs), `blocking` (the ones you did not repair), `repaired`, `optional` and `evidence`; the pushed head in `mainCommit`, whether pushed, the gate\'s summary line on that head in ' + R.integ + ' in `checkOnMain` (or why it did not run), and every conflict and how you resolved it.',
   ].join('\n')
 }
 
 function fixPrompt(bundle, impl, verdict, round, extra) {
   return [
-    'You are the REPAIRER of one bundle: an independent verifier (or the merge gate) found blocking findings in it, and you repair them on the same branch. ' + OUTPUT_RULE,
+    'You are the REPAIRER of one bundle: an independent reviewer found blocking findings in it that it did not repair in place (or the gate was red on the bundle rebased onto origin/' + R.mainBranch + '), and you repair them on the same branch. ' + OUTPUT_RULE,
     '', grounding(), '', builderRules(bundle, impl), '',
     '## The tasks as they were asked', tasksText(bundle), '',
     '## The report so far', JSON.stringify(impl, null, 2), '',
     '## BLOCKING findings (repair round ' + round + ' of ' + MAX_FIX_ROUNDS + (extra && extra.continued ? ', in a resumed run: earlier rounds ran before a restart' : '') + ')', JSON.stringify(verdict.blocking, null, 2), '',
+    verdict.repaired && verdict.repaired.length ? '## What the reviewer already repaired in place (its commits are on the branch)\n' + JSON.stringify(verdict.repaired, null, 2) + '\n' : '',
     '## Optional findings (carry the plainly correct ones; say which you left and why)', JSON.stringify(verdict.optional || [], null, 2), '',
     extra && extra.note ? '## Orchestrator\'s note for this round\n' + extra.note + '\n' : '',
-    'Repair every blocking finding at its ROOT: a finding that comes back in a new shape means an earlier repair treated a symptom. If a finding is wrong, do not change code for it: answer it in `answers` with evidence, and the verifier re-checks. Do not start over and do not widen a task. Re-run the gate and every proof the tasks name. Return the same report as the builder, with `commits` listing ALL commits on the branch and `answers` holding one entry per blocking finding.',
-  ].join('\n')
-}
-
-function mergePrompt(bundle, impl) {
-  const pushes = R.pushTargets.map((t) => '`git push origin HEAD:' + t + '`').join(', then ')
-  const main = 'origin/' + R.mainBranch
-  return [
-    'You are the MERGE agent for one verified bundle. It lands on ' + R.mainBranch + ' as a REBASE and a FAST-FORWARD push, never a merge commit: ' + R.mainBranch + '\'s history is linear. Within this workflow landings are serialized; another session or workflow may push to ' + main + ' at the same time, so ' + main + ' is the coordination point. ' + OUTPUT_RULE,
-    '', grounding(), '',
-    '## The bundle', bundle.title + ' — branch `' + impl.branch + '`, worktree `' + impl.worktree + '`.', 'Summary: ' + impl.summary, '', '### Its tasks', tasksText(bundle), '',
-    '## Commit trailers (every commit you make ends with exactly these lines)', trailerBlock(), '',
-    '## Steps (never write in ' + R.repo + ')',
-    '0. `git -C ' + R.repo + ' fetch origin ' + R.mainBranch + '`. If `git -C ' + R.repo + ' merge-base --is-ancestor ' + impl.branch + ' ' + main + '` succeeds, an earlier merge agent already landed it (the rebased branch is part of ' + main + '): report `merged: true, pushed: true` with `mainCommit` the landed head (`git -C ' + R.repo + ' rev-parse ' + impl.branch + '`), do step 4, and stop. If the branch no longer exists, an earlier agent\'s step 4 deleted it after the landing: find the bundle\'s newest commit on ' + main + ' by its subject (`git -C ' + R.repo + ' log --format=\'%H %s\' ' + main + '`, the subjects in the report\'s commits; a landing older than rebasing is a merge commit `Merge branch \'' + impl.branch + '\'`), report it as `mainCommit` with `merged: true, pushed: true`, and stop.',
-    '1. Rebase, in the bundle worktree `' + impl.worktree + '` (re-create it with `git -C ' + R.repo + ' worktree add ' + impl.worktree + ' ' + impl.branch + '` if it is gone). A rebase or merge an interrupted agent left in progress is aborted (`git rebase --abort`, `git merge --abort`); otherwise `git status` must be clean (else stop and report). `git fetch origin ' + R.mainBranch + ' && git rebase ' + main + '`: the branch\'s own merges of ' + main + ' drop out, and each replayed commit that conflicts is resolved by reading both sides, as repository.md (Merge conflicts) says, its paths staged by name, then `git rebase --continue`. `git rebase --skip` only a commit the resolution left empty. A conflict you cannot resolve: `git rebase --abort` and report `merged: false` with it in `problem`.',
-    '2. Gate the exact rebased head in the integration worktree `' + R.integ + '` (detached HEAD; a tree other than the one the bundle was built in): if it does not exist, `git -C ' + R.repo + ' worktree add --detach ' + R.integ + ' ' + main + ' && cd ' + R.integ + ' && ' + R.shellPrefix + ' && ' + R.setup + '`. `git status --short` clean. `git fetch origin ' + R.mainBranch + ' && git checkout -q --detach ' + impl.branch + '`, and `git merge-base --is-ancestor ' + main + ' HEAD` must succeed (else back to step 1). Then `' + R.afterMerge + '`, `' + R.gate + '`, and after `' + R.build + '` the proofs the tasks name. Red: do not push; report `merged: false` with what failed in `problem` (the bundle goes back to repair), unless the red is the rebase\'s own (a conflict resolution, or ' + main + '\'s new code meeting the bundle\'s): fix that in a new commit on the branch in the bundle worktree, with the trailers, and repeat this step.',
-    '3. Push the head the gate passed on, from ' + R.integ + ', as a fast-forward: ' + pushes + ' (a later target rejected as non-fast-forward because someone else pushed it: fetch it and push only if HEAD contains it; not blocking). The push to ' + R.mainBranch + ' rejected because ' + main + ' moved: step 1 again (`git fetch origin ' + R.mainBranch + ' && git rebase ' + main + '` in the bundle worktree), step 2 again, then push again; a commit on ' + main + ' you did not make is someone else\'s, never undone. Retry network failures with backoff 2/4/8/16 s. Never force or reset, and never rewrite a branch but this bundle\'s own, unlanded one, by its rebase onto ' + main + '. If the push to ' + R.mainBranch + ' still fails, report `merged: true, pushed: false` with the push error in `problem`.',
-    '4. Only after the bundle is on ' + main + ': `git -C ' + R.repo + ' worktree remove ' + impl.worktree + '` (`--force` only when the only untracked content is build output or evidence; say so), then `git -C ' + R.repo + ' branch -d ' + impl.branch + '`.',
-    'Report the pushed head in `mainCommit`, whether pushed, the gate\'s summary line on that head in ' + R.integ + ' in `checkOnMain`, and every conflict and how you resolved it.',
+    'Repair every blocking finding at its ROOT: a finding that comes back in a new shape means an earlier repair treated a symptom. If a finding is wrong, do not change code for it: answer it in `answers` with evidence, and the next reviewer re-checks. Do not start over and do not widen a task. Run rule 5\'s checks again and every proof the tasks name. Return the same report as the builder, with `commits` listing ALL commits on the branch and `answers` holding one entry per blocking finding.',
   ].join('\n')
 }
 
@@ -216,15 +210,17 @@ let mergeQueue = Promise.resolve()
 function withMergeLock(fn) { const run = mergeQueue.then(fn, fn); mergeQueue = run.then(() => undefined, () => undefined); return run }
 
 // resume: undefined | { stage: 'implement', existing } | { stage: 'fix', impl, verdict, roundBase, note, efforts }
-//       | { stage: 'verify', impl, roundBase, previous, note } | { stage: 'merge', impl, verdict, note }
+//       | { stage: 'review', impl, roundBase, previous, note }
 async function drive(bundle, resume) {
   const r = resume || {}
   const base = r.roundBase || 0
-  const continued = r.stage === 'fix' || r.stage === 'verify'
+  const continued = r.stage === 'fix' || r.stage === 'review'
   const effort = (stage) => (r.efforts && r.efforts[stage]) || (bundle.efforts && bundle.efforts[stage]) || (stage === 'implement' ? bundle.effort || 'high' : 'high')
+  // The review stage lands bundles: its effort is never below `high`, whatever a plan asks.
+  const reviewEffort = effort('review') === 'max' ? 'max' : 'high'
   const lost = (status, extra) => ({ key: bundle.key, status: HALTED ? 'halted' : status, ...extra })
   let impl
-  if (r.stage === 'fix' || r.stage === 'verify' || r.stage === 'merge') {
+  if (r.stage === 'fix' || r.stage === 'review') {
     impl = r.impl
   } else {
     const b = r.existing ? { ...bundle, existing: r.existing } : bundle
@@ -233,44 +229,37 @@ async function drive(bundle, resume) {
     if (impl.blocked) return { key: bundle.key, status: 'blocked', impl }
   }
   let round = 0
-  let verdict = r.stage === 'merge' ? r.verdict || null : null
   let pending = r.stage === 'fix' ? { verdict: r.verdict, note: r.note } : null
-  let verifyCtx = r.stage === 'verify' ? { previous: r.previous, note: r.note } : null
-  let toMerge = r.stage === 'merge'
+  let reviewCtx = r.stage === 'review' ? { previous: r.previous, note: r.note } : null
+  const repaired = []
   for (;;) {
-    if (!toMerge) {
-      if (pending) {
-        if (round >= MAX_FIX_ROUNDS) return { key: bundle.key, status: 'unverified', rounds: base + round, impl, verdict: pending.verdict }
-        round++
-        const fixed = await call(fixPrompt(bundle, impl, pending.verdict, round, { continued, note: pending.note }), { label: 'fix:' + bundle.key + '#' + (base + round), phase: 'Fix', schema: IMPL_SCHEMA, effort: effort('fix'), model: MODEL })
-        if (!fixed) return lost('fixer-lost', { impl, verdict: pending.verdict })
-        if (fixed.blocked) return { key: bundle.key, status: 'blocked', impl: fixed, verdict: pending.verdict }
-        verifyCtx = { previous: pending.verdict }
-        impl = fixed
-        pending = null
-      }
-      verdict = await call(verifyPrompt(bundle, impl, base + round + 1, verifyCtx), { label: 'verify:' + bundle.key + '#' + (base + round + 1), phase: 'Verify', schema: VERDICT_SCHEMA, effort: effort('verify'), model: MODEL })
-      if (!verdict) return lost('verifier-lost', { impl })
-      if (!verdict.pass) {
-        log(bundle.key + ': verify round ' + (base + round + 1) + ' found ' + verdict.blocking.length + ' blocking finding(s)')
-        pending = { verdict }
-        continue
-      }
+    if (pending) {
+      if (round >= MAX_FIX_ROUNDS) return { key: bundle.key, status: 'unverified', rounds: base + round, impl, verdict: pending.verdict, repaired }
+      round++
+      const fixed = await call(fixPrompt(bundle, impl, pending.verdict, round, { continued, note: pending.note }), { label: 'fix:' + bundle.key + '#' + (base + round), phase: 'Fix', schema: IMPL_SCHEMA, effort: effort('fix'), model: MODEL })
+      if (!fixed) return lost('fixer-lost', { impl, verdict: pending.verdict })
+      if (fixed.blocked) return { key: bundle.key, status: 'blocked', impl: fixed, verdict: pending.verdict }
+      reviewCtx = { previous: pending.verdict }
+      impl = fixed
+      pending = null
     }
-    toMerge = false
-    const merged = await withMergeLock(() => call(mergePrompt(bundle, impl), { label: 'merge:' + bundle.key, phase: 'Merge', schema: MERGE_SCHEMA, effort: 'high', model: MODEL }))
-    if (!merged) return lost('merger-lost', { impl, verdict })
-    if (merged.merged && merged.pushed) {
-      log(bundle.key + ': merged and pushed (' + merged.mainCommit + ')')
-      return { key: bundle.key, status: 'merged', rounds: base + round, mainCommit: merged.mainCommit, impl: summary(impl), optional: verdict ? verdict.optional || [] : [] }
+    // One reviewer at a time holds the landing lock: landings stay serialized and the integration worktree has one user.
+    const n = base + round + 1
+    const review = await withMergeLock(() => call(reviewPrompt(bundle, impl, n, reviewCtx), { label: 'review:' + bundle.key + '#' + n, phase: 'Review', schema: REVIEW_SCHEMA, effort: reviewEffort, model: MODEL }))
+    if (!review) return lost('reviewer-lost', { impl })
+    repaired.push(...(review.repaired || []))
+    if (review.merged && review.pushed) {
+      log(bundle.key + ': reviewed, ' + (review.repaired || []).length + ' finding(s) repaired in place, landed and pushed (' + review.mainCommit + ')')
+      return { key: bundle.key, status: 'merged', rounds: base + round, mainCommit: review.mainCommit, impl: summary(impl), optional: review.optional || [], repaired }
     }
-    if (merged.merged) {
-      log(bundle.key + ': merged but NOT pushed: ' + (merged.problem || 'no reason given'))
-      return { key: bundle.key, status: 'merge-failed', rounds: base + round, impl, verdict, problem: merged.problem }
+    if (review.merged) {
+      log(bundle.key + ': merged but NOT pushed: ' + (review.problem || 'no reason given'))
+      return { key: bundle.key, status: 'merge-failed', rounds: base + round, impl, verdict: review, problem: review.problem, repaired }
     }
-    log(bundle.key + ': MERGE REFUSED: ' + (merged.problem || 'no reason given'))
-    // A red gate on the rebased head is a finding like any other: it goes back to repair, within the budget.
-    pending = { verdict: { pass: false, blocking: [{ title: 'The gate is red on the bundle rebased onto origin/' + R.mainBranch, detail: merged.problem || merged.checkOnMain }], optional: [] } }
+    // Blocking findings the reviewer did not repair, or a red gate on the rebased head, go back to repair, within the budget.
+    const blocking = review.blocking && review.blocking.length ? review.blocking : [{ title: 'The gate is red on the bundle rebased onto origin/' + R.mainBranch, detail: review.problem || review.checkOnMain }]
+    log(bundle.key + ': review round ' + n + ' left ' + blocking.length + ' blocking finding(s) unrepaired' + (review.problem ? ': ' + review.problem : ''))
+    pending = { verdict: { ...review, pass: false, blocking } }
   }
 }
 const summary = (impl) => ({ worktree: impl.worktree, branch: impl.branch, commits: impl.commits, summary: impl.summary, ownerBlocked: impl.ownerBlocked, notesMoved: impl.notesMoved, notesRecorded: impl.notesRecorded, questionsRaised: impl.questionsRaised, notVerified: impl.notVerified })
@@ -433,6 +422,6 @@ else {
 
 return {
   status,
-  bundles: Object.values(done).map((x) => ({ key: x.key, status: x.status, rounds: x.rounds, mainCommit: x.mainCommit || null, ownerBlocked: x.impl ? x.impl.ownerBlocked : null, notesMoved: x.impl ? x.impl.notesMoved : x.notesMoved, notesRecorded: x.impl ? x.impl.notesRecorded : x.notesRecorded, questionsRaised: x.impl ? x.impl.questionsRaised : x.questionsRaised, notVerified: x.impl ? x.impl.notVerified : null, optional: x.optional || null, lastBlocking: x.verdict && !x.verdict.pass ? x.verdict.blocking : x.lastBlocking || null, blockedReason: x.impl ? x.impl.blockedReason : x.blockedReason, error: x.error || null })),
+  bundles: Object.values(done).map((x) => ({ key: x.key, status: x.status, rounds: x.rounds, mainCommit: x.mainCommit || null, ownerBlocked: x.impl ? x.impl.ownerBlocked : null, notesMoved: x.impl ? x.impl.notesMoved : x.notesMoved, notesRecorded: x.impl ? x.impl.notesRecorded : x.notesRecorded, questionsRaised: x.impl ? x.impl.questionsRaised : x.questionsRaised, notVerified: x.impl ? x.impl.notVerified : null, optional: x.optional || null, repaired: x.repaired && x.repaired.length ? x.repaired : null, lastBlocking: x.verdict && !x.verdict.pass ? x.verdict.blocking : x.lastBlocking || null, blockedReason: x.impl ? x.impl.blockedReason : x.blockedReason, error: x.error || null })),
   acceptance: acceptance.map((a) => ({ round: a.round, gate: a.sweeps.map((s) => s.gate), sweep: a.sweeps.map((s) => s.results.map((y) => y.proof + ':' + y.status).join(', ')), live: a.live, handoff: a.handoff, findings: a.findings, missing: a.missing, report: a.report })),
 }

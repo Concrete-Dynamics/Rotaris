@@ -25,10 +25,22 @@ prompt and the scenario's other checks are unchanged (fin29 rewords the prompt).
 `child_paused`; one child alone was pressed when the bound ran out, 45.0 s after it started (`→ -1`), and one was paused.
 **Not measured:** the live model's resume scenario (the orchestrator's next default live run).
 
+**Follow-up 2026-10-07 (fin31, the bundle's review).** The reading was a second eval waiting on the press's own
+condition, polled independently of the click: a pause that took the children out of `running` before that eval's next
+probe left "no reading at the press" (a NOTE, never a false PASS). The arming step now also installs a capture-phase click
+listener that writes, at the press and before the product's own handler runs, how many children were running and whether
+the bound had run out (`body[data-running-at-press]`, negative once it had); the press requires the arming step to have run
+(`body[data-pause-armed="1"]`), and the second eval reads the mark (`Number(document.body.dataset.runningAtPress)`).
+**Pinned by** the cases under "the press leaves its own reading" in `apps/desktop/scripts/lib/resume-pause.test.ts`, which
+run the arming expression against a stand-in page, red before. **Measured in the built app** with the scripted model (load
+about 15): two children that appeared in the same poll were armed 41 ms before the press, which read `→ 2`, and the timeline
+recorded two `child_paused`; one child alone was pressed 45.0 s after it started, read `→ -1`, and one was paused.
+
 ## Specs
 
 None contradicted; PD-ORCH-005 clauses 3, 4 and 13 are what the scenario measures.
 
 ## Relevant files
 
-- `apps/desktop/scripts/live-run.mjs`: the resume scenario's `PAUSE` selector, its click and eval steps, and its checks.
+- `apps/desktop/scripts/live-run.mjs`: the resume scenario's click and eval steps, and its checks.
+- `apps/desktop/scripts/lib/resume-pause.mjs`: the `PAUSE` selector, the arming and reading steps, and `pauseReading`.

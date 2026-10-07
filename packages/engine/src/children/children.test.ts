@@ -15,6 +15,8 @@ import { callsRun, interruptedResult } from '../run/interruption.js';
 import { recordCrash } from '../run/crash.js';
 import { decodeStoredTodo } from '../todo-view.js';
 import { resumableOf } from '../sessions.js';
+import { summaryFactsOf } from '../run/summary.js';
+import { FULL_CONTEXT_BUDGET } from '../artifacts/context.js';
 import { userCancellation } from './ledger.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
@@ -915,6 +917,38 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(payloads.get('build')).toContain('no-such-artifact');
       const buildSelection = selection.map((t) => JSON.parse(t.metadata) as Record<string, unknown>).find((m) => m['task_id'] === build.task_id);
       expect(buildSelection).toMatchObject({ sibling_index_suppressed: true, sibling_index_included: 0, attached_unresolved: ['no-such-artifact'] });
+    });
+
+    /*
+     * PD-SESSION-002 (OQ-207, ruled 2026-10-07): summary.md's Mostly-elided artifacts line reads the `task_id` and the
+     * `attached_elided` that `artifactContext` writes on a `context_selection` entry. Each side names those keys on its own
+     * (`orchestration.ts` writes them, `StoreDal.elidedAttachmentRowsOf` and `elidedAttachmentsOf` read them), so this case
+     * drives a real delegation whose attachment overflows FULL_CONTEXT_BUDGET and reads it back through `summaryFactsOf`:
+     * a rename on either side fails here, where each side's own test would still pass (fin28's reviewers).
+     */
+    it('PD-SESSION-002: a delegation whose attachment does not fit its budget reaches summaryFactsOf as one mostly-elided artifact', async () => {
+      // The survey's report is its summariser's findings: well over FULL_CONTEXT_BUDGET in all.
+      const findings = Array.from({ length: 2 * Math.ceil(FULL_CONTEXT_BUDGET / 1_000) }, (_, i) => `Finding ${i}: ${'x'.repeat(1_000)}`);
+      let sid = '' as SessionId;
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: survey', run_in_background: false } }], 'Surveying.');
+          if (turn === 2) {
+            const survey = dal.artifactsOf(sid).find((a) => a.canonical_name === 'survey')!;
+            return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build', task: 'TASK: build', run_in_background: false, attach_artifacts: [survey.id] } }], 'Building.');
+          }
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer(JSON.stringify({ summary: 'surveyed', key_findings: findings, tags: [] }));
+        return answer('Done it.');
+      });
+      sid = (sessions.start(dal, 'C:/ws', 'survey then build') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const survey = dal.artifactsOf(sid).find((a) => a.canonical_name === 'survey')!;
+      const build = children(sid).find((c) => c.canonical_name === 'build')!;
+      const selection = dal.timelineOf(sid).filter((t) => t.name === 'context_selection').map((t) => JSON.parse(t.metadata) as Record<string, unknown>).find((m) => m['task_id'] === build.task_id);
+      expect(selection).toMatchObject({ attached_included: 0, attached_elided: [survey.id] });
+      expect(summaryFactsOf(dal, sid)!.elidedAttachments).toEqual({ artifacts: 1, agents: 1 });
     });
   });
 

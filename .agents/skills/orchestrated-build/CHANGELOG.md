@@ -193,6 +193,8 @@ two lanes deliver a build about every 20, so serialized reviews would have eaten
 O3, O4 and O6 as above (`670c441`, and `9da5632` for O2's lint); O5 is AGENTS.md's sentence above (`4dde48d`); O7
 is the failed-push note above.
 
+**Second review: PASS** at `d3473ce` (its self-test, `pnpm check` 06:16 to 06:23 UTC at load 4.6 to 7.9, and each answer reverted alone turning the self-test red at its named assertion). Its optional findings carried before landing: `meta.description` no longer says "one landing at a time"; two self-test comments name the landing worktrees; SKILL.md's opening states the confirmed consequence beside "every bundle is checked by an agent that did not build it". Left for the first run on the new stages: whether concurrent reviewers' gates make "re-run a timing red once alone" unattainable, and whether sibling pushes meet a ref-lock warning on `refs/remotes/origin/main`; record what it shows in `references/environment.md`.
+
 **Not changed.** The acceptance stages and their prompts, `grounding()`, the builder's rules but rule 5, the profile's
 `gate`, the budget, and the needs-owner cap.
 

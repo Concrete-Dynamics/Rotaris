@@ -478,7 +478,7 @@ export async function selfTest({ quiet = false } = {}) {
     fs.writeFileSync(path.join(tmp, 'empty.txt'), '# nothing\n')
     assert.throws(() => readRuns(path.join(tmp, 'empty.txt')), /names no run/)
 
-    // A fresh run: dependencies, serialized landings, the review-and-repair loop, a red rebased head, acceptance and its repairs.
+    // A fresh run: dependencies, concurrent landings from their own trees, the review-and-repair loop, a red rebased head, acceptance and its repairs.
     const script = render(args)
     assert.ok(script.includes(JSON.stringify('keep $& and $$ and $\' verbatim').slice(1, -1)), 'plan text survives rendering verbatim')
     let run = await dryRun(script, { failReview: { a1: 2 }, landRefuse: { b3: 1 }, findings: [{ area: 'pkg/a/x.ts' }, { area: 'pkg/a/y.ts' }, { area: 'other/z.ts' }] })
@@ -499,7 +499,7 @@ export async function selfTest({ quiet = false } = {}) {
     assert.match(run.prompts['fix:b3#1'], /The gate is red on the bundle rebased onto origin\/main[\s\S]*rebased gate red/, 'the repairer is told what was red on the rebased head')
     assert.match(run.prompts['review:b3#1'], /Red: do not push\. A red you can repair [^\n]*repeat this step; any other red: report it in `blocking` with `merged: false`/, 'the reviewer is told how to report a red rebased head')
     // The owner, 2026-10-04: "please always use rebase instead of a merge commit for main." A bundle lands as a rebase in
-    // its own worktree, the gate on that exact head in the integration worktree, and a fast-forward push from there.
+    // its own worktree, the gate on that exact head in the bundle's own landing worktree, and a fast-forward push from there.
     const landing = run.prompts['review:a1#1']
     assert.match(landing, /2\. Gate the exact rebased head in this bundle's own landing worktree `\/srv\/repo-wt-integ-st-st-a1` \(detached HEAD; a tree other than the one the bundle was built in\)[^\n]*`git status --short` clean\. `git fetch origin main && git checkout -q --detach a1`, and `git merge-base --is-ancestor origin\/main HEAD` must succeed/, 'the gate runs on the exact rebased head, in a clean tree other than the one it was built in')
     assert.match(landing, /1\. [^\n]*in progress is aborted \(`git rebase --abort`, `git merge --abort`\)[^\n]*`git fetch origin main && git rebase origin\/main`: the branch's own merges/, 'the reviewer rebases the bundle onto origin/main')

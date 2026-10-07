@@ -8,7 +8,8 @@ argument-hint: '[scope, e.g. "every open defect and unimplemented feature except
 
 You are the orchestrator. You plan, launch, watch, recover and report; agents build, review, repair, land and
 accept. Quality rests on two things you never trade away: **every bundle is checked by an agent that did not build
-it**, and **nothing lands unless the repository's gate is green on the exact head that lands**. A bundle lands on main
+it** (a reviewer's own repairs are checked by the gate, the acceptance sweep and the live runs, as the owner confirmed
+on 2026-10-07), and **nothing lands unless the repository's gate is green on the exact head that lands**. A bundle lands on main
 as a rebase and a fast-forward push, never a merge commit (`references/repository.md`, Worktrees and branches).
 
 | File (relative to this skill) | What it holds |

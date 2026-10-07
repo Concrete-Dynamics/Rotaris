@@ -1,6 +1,6 @@
 export const meta = {
   name: 'orchestrated-build',
-  description: 'Bundles of tasks through a build and an independent review that repairs in place and lands, one landing at a time; then acceptance rounds (proof sweep, live run, autopsy) whose findings go back through the same loop',
+  description: 'Bundles of tasks through a build and an independent review that repairs in place and lands, each bundle from its own landing worktree; then acceptance rounds (proof sweep, live run, autopsy) whose findings go back through the same loop',
   phases: [
     { title: 'Implement', detail: 'one worktree and branch per bundle', model: 'opus' },
     { title: 'Review', detail: 'an independent reviewer tries to fail each bundle, repairs what it can in place, and lands it from its own landing worktree', model: 'opus' },

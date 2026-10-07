@@ -442,7 +442,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       }
       // `think:<deltas>:<ms>` streams a LONG deliberation: that many reasoning deltas, one every <ms> on the clock port, then the
       // answer — a reasoning model's minutes of thought, which the duress live run at a68f121 streamed from two children at
-      // once when the renderer threw React error #185 (finding D8). Verification only.
+      // once when the renderer threw React error 185 ("Maximum update depth exceeded") (finding D8). Verification only.
       const longThink = /^think:(\d+):(\d+)$/.exec(step);
       if (longThink) {
         for (let i = 0; i < Number(longThink[1]); i += 1) {

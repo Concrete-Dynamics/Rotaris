@@ -86,7 +86,7 @@ describe('scriptedClient — the step a call takes', () => {
   });
 
   /*
-   * Finding D8 of the final duress run at a68f121: the renderer threw React error #185 while two children streamed minutes of
+   * Finding D8 of the final duress run at a68f121: the renderer threw React error 185 while two children streamed minutes of
    * reasoning. `think:<deltas>:<ms>` is the scripted producer of that stream — that many reasoning deltas, one every <ms> on
    * the clock port, then the answer — so a drive can put two long deliberations on screen at once.
    */

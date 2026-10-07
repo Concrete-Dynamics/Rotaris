@@ -10804,3 +10804,50 @@ implementation delegation for one item, as before OQ-213.
 **What a ruling decides.** Whether a delegation names the todo item it serves (a `delegate` argument, a field on the plan's
 item, or a link the run infers), whether a second implementation delegation for an item already served is refused at dispatch,
 and what a delegation that names no item counts as.
+
+**OQ-216 — Is the coordinator told which personas hold a terminal or a file-writing tool?** *(REQ-ORCH-028, a routing table
+from need to role, with two capability clauses (`codebase-analyst` "reads the workspace but does not modify it", `librarian`
+"likewise does not modify the workspace") and no persona's tools; REQ-TOOLS-001, the three facets every public tool declares;
+REQ-TOOLS-006, the controls that narrow a grant; REQ-TOOLS-152, `delegate`'s fields; REQ-CONFIG-100, a configured
+`system_prompt` replacing the built-in one; `PD-TOOLS-006` revision 3, which refuses a `write_scope` for a persona that holds
+no file-writing tool and names the ones that do. Raised 2026-10-07 from the final live runs' findings L4 (the `c2fdd6a`
+duress autopsy) and N3 with N2 (the `c2a9444` duress autopsy), recorded in
+[`the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md`](../defects/the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md),
+and ruled the same day under the owner's delegation; the consortium's question L4.)*
+
+In both duress runs of 2026-10-06 the orchestrator briefed `docs-writer` children, which hold no `terminal`, to "Run
+`node --test` yourself in the terminal". At `c2a9444` the two failed children (2,443.5 s of the critical path) spent 22 of
+57 and 23 of 35 rows reasoning about the missing shell, one wrote `.tmp-run-tests.sh` as a workaround, and the answer to the
+user said the continuation "ran the suite". At `c2fdd6a` the brief appeared twice, a child called a `run_command` tool that
+does not exist, the coordinator wondered whether `verifier` had a shell, and the answer blamed the timeouts on the missing
+shell. Each run spent 34 to 37 s on two `write_scope` refusals, `codebase-analyst` given a write task in both. Nothing the
+coordinator reads states a persona's tools: the built routing table names roles, and `delegate`'s description was a fixed
+list of the built-in names. The specification does not say whether the coordinator is told.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** `delegate`'s description is
+built for each calling agent from the persona catalogue. It names every persona that agent can delegate to, with the
+REQ-TOOLS-001 facets (reads workspace files, writes workspace files, runs commands) that a child of that agent would be
+granted after REQ-TOOLS-006's controls, and it tells the caller to ask a persona only for work its tools allow; revision 3's
+write-scope refusal stays as built. By [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 4, which already
+extends REQ-ORCH-028 and narrows REQ-TOOLS-152: the symbol generator admits one directive per requirement for each
+relation, so a new directive extending REQ-ORCH-028 could not be built. Separately, the built routing table carries the two
+capability clauses REQ-ORCH-028 states for `codebase-analyst` and `librarian`; that repair is covered by REQ-ORCH-028 and
+needs no directive
+([`the-built-routing-table-drops-req-orch-028s-capability-clauses.md`](../defects/the-built-routing-table-drops-req-orch-028s-capability-clauses.md)).
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended building `delegate`'s description per caller from the resolved catalogue,
+  each persona with the facets its child grant would hold, telling the caller to brief a persona only for work its tools
+  allow, recorded as `PD-TOOLS-006` revision 4 with the write-scope refusal kept. The ruling followed A on the vehicle and
+  on the record: revision 4, not a new directive.
+- **Advocate B (the system's lens)** recommended the same per-caller catalogue, generated from the same resolution that
+  builds the child's grant, and found what A missed: the built routing table drops REQ-ORCH-028's own clauses for
+  `codebase-analyst` and `librarian`, the role given write tasks in both runs. The ruling followed B on restoring the
+  clauses as covered work, on the run host computing the facets from the child's own grant resolution (the engine and
+  `agent-tools` do not import each other), and on the equality test between the catalogue and the grant a child receives.
+  B's proposed new `PD-ORCH` directive was not followed, since the generator refuses it.
+
+Both advocates rejected a refusal for this case: the request to run a command sits in free text, and REQ-TOOLS-001 never
+infers a facet from prose. Both rejected the system prompt as the vehicle: REQ-CONFIG-100 replaces it whenever configuration
+supplies one, and it cannot apply each caller's `tool_restrictions` (OQ-145). The statement is advice and enforces nothing;
+whether it removes the impossible briefs is measured at the next duress live run.

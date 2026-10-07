@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**A child's code-intelligence EDIT-tier writes are file-writing calls (PD-ORCH-004, REQ-MCP-015, REQ-ORCH-109; the a68f121
+duress run's D1, fin32).** `writtenPathsOf` (`engine/src/children/report.ts`) is the one reading of the paths a call writes:
+the three native file tools by `path`/`file_path`, and the binding manifest's `edit` tier by the argument its new
+`editArguments` names (`codeIntelligenceEditPaths`, `config/src/mcp/code-intelligence.ts`; a `dry_run` preview names none).
+`ProgressLog.completed` (the cut-off's changed paths) and `editedFilesFrom` (the report's edited files, its facts, the
+fallback's "Files touched") both read it; `write-scope.ts` keeps PD-TOOLS-006's fence on the native tools
+(`isNativeFileWritingTool`). The **runtime view**'s REQ-ORCH-088 and report paragraphs and the **component view**'s
+code-intelligence manifest paragraph say so. No package, edge, process, channel, command or store column changed.
+
 **Each closed iteration writes its `iteration_end` timeline entry, which the follow-up payload's "Recent iterations" reads
 (REQ-SESSION-115, REQ-ORCH-139, REQ-ORCH-067; live-run finding P4, fin31).** `Run.iterate` appends it after
 `writer.endIteration` with the iteration's number, task title, outcome and summary; `buildContinuationPayload` already read
@@ -2468,7 +2477,4 @@ only, and the three views that existed before it say exactly what they said.
 The code reconciled the same day is in the log with everything before it: the cost a metered provider
 reports (`PD-MONITOR-001`), no loop supervision while the plan gate holds a run (`PD-ORCH-001`), one activity
 line per working agent (`PD-CHAT-004` revision 2 and `PD-CHAT-005`), the timed-out child asked to land, the
-MCP child's stderr and the catalogue readers' duplicate read. This pass moved those entries; it did not
-change what any of them says.
-
-Everything reconciled before this date is in [`reconciliation-log.md`](reconciliation-log.md), newest first.
+MCP child's stderr and the catalogue readers' duplicate read. This pass moved th

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { ChatMessage } from '@rotaris/model';
-import { commandsFrom, deterministicTesterReport, editedFilesFrom, fallbackReport, produceReport, reportFacts, reportTranscript, TRANSCRIPT_CAP, type ReportInput, type SummariserDeps } from './report.js';
+import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
+import { commandsFrom, deterministicTesterReport, editedFilesFrom, fallbackReport, isFileWritingTool, produceReport, reportFacts, reportTranscript, TRANSCRIPT_CAP, writtenPathsOf, type ReportInput, type SummariserDeps } from './report.js';
 import { commandsForArtifact } from './ledger.js';
 import { childPayload } from './notify.js';
 import { interruptedResult, ranBeforeItWasCut } from '../run/interruption.js';
@@ -113,6 +114,50 @@ describe('engine/children/report — edited files derived from the transcript (R
     const messages = [call('w1', 'write_file', { operation: 'create', path: 'docs/a.md', content: 'x' })];
     expect(editedFilesFrom(messages, ['docs/a.md', 'Memory: domain-design/core-domain'])).toEqual(['docs/a.md', 'Memory: domain-design/core-domain']);
     expect(editedFilesFrom([], ['docs/only-the-model-said-so.md'])).toEqual(['docs/only-the-model-said-so.md']);
+  });
+});
+
+/**
+ * fin32, the a68f121 duress run's D1 (session e6747bd0): wave3b edited `docs/verification.md` 11 times through the
+ * code-intelligence server's single-file content replacement, every call answered `ok`, and its report's `edited_files`
+ * was empty and the pass's facts read "Edited files: (none)". REQ-MCP-015's EDIT tier writes files (PD-ORCH-004,
+ * REQ-ORCH-109); the tools and the argument naming each one's path come from the binding manifest.
+ */
+describe('engine/children/report — a code-intelligence EDIT-tier write is an edit (PD-ORCH-004, REQ-MCP-015, REQ-ORCH-109)', () => {
+  const edit = CODE_INTELLIGENCE_MANIFEST.tiers.edit;
+  const at = CODE_INTELLIGENCE_MANIFEST.editArguments;
+  const failed = (callId: string, name: string, text: string): ChatMessage => ({ role: 'tool', content: [{ kind: 'tool-result', callId, name, result: text, isError: true }] });
+  const messages = [
+    say('user', 'TASK: finish verification'),
+    call('r1', CODE_INTELLIGENCE_MANIFEST.tiers.read.patternSearch, { substring_pattern: 'finding 12', [at.replaceInFile.path]: 'docs/verification.md' }), result('r1', CODE_INTELLIGENCE_MANIFEST.tiers.read.patternSearch, '{}'),
+    call('e1', edit.replaceInFile, { [at.replaceInFile.path]: 'docs/verification.md', needle: 'nine', repl: 'ten', mode: 'literal' }), failed('e1', edit.replaceInFile, 'Error: no match'),
+    call('e2', edit.replaceInFile, { [at.replaceInFile.path]: 'docs/verification.md', needle: 'Nine', repl: 'Ten', mode: 'literal' }), result('e2', edit.replaceInFile, 'OK'),
+    call('e3', edit.replaceInFile, { [at.replaceInFile.path]: 'docs/verification.md', needle: '§3', repl: '§3 (re-run)', mode: 'literal' }), result('e3', edit.replaceInFile, 'OK'),
+    call('e4', edit.insertAfterSymbol, { name_path: 'list', [at.insertAfterSymbol.path]: 'src/never.js', body: 'x' }), failed('e4', edit.insertAfterSymbol, 'Error: symbol not found'),
+    call('e5', edit.replaceAcrossFiles, { needle: 'a', repl: 'b', mode: 'literal', [at.replaceAcrossFiles.path]: 'src', [at.replaceAcrossFiles.preview]: true }), result('e5', edit.replaceAcrossFiles, 'diffs'),
+    say('assistant', 'All citations check out.'),
+  ];
+
+  it('lists the path of every EDIT-tier call answered without an error, once, and nothing for a failed call, a preview or a read', () => {
+    expect(editedFilesFrom(messages)).toEqual(['docs/verification.md']);
+  });
+
+  it('the facts the pass is told never to deny name it, and the summariser cannot drop it', async () => {
+    expect(reportFacts(messages)).toBe('Edited files: docs/verification.md\nCommands run: (none)');
+    expect(fallbackReport(input({ messages, toolCallCount: 6, lastText: '' }), 'no summariser is configured').summary).toContain('Files touched: docs/verification.md.');
+    const backend = { runTurn: async () => ({ status: 'succeeded' as const, usage: { input: 1, output: 1 }, text: JSON.stringify({ summary: 'attempted edits', key_findings: [], next_actions: [], tags: [], edited_files: [] }) }) };
+    const s: SummariserDeps = { backend: backend as never, model: { providerId: 'a', modelId: 'a1', dialect: 'chat' }, thinking: 'unset', timers: new FakeClock().timers, credentialFor: () => async () => 'k' };
+    expect((await produceReport(input({ messages, toolCallCount: 6 }), s, new AbortController().signal))!.edited_files).toEqual(['docs/verification.md']);
+  });
+
+  it('the native file tools and the EDIT tier share one reading, and the terminal stays outside it (PD-TOOLS-006)', () => {
+    expect(writtenPathsOf('write_file', { path: 'a.md' })).toEqual(['a.md']);
+    expect(writtenPathsOf('HAET', { file_path: 'b.md' })).toEqual(['b.md']);
+    expect(writtenPathsOf(edit.renameSymbol, { name_path: 'f', [at.renameSymbol.path]: 'src/f.ts', new_name: 'g' })).toEqual(['src/f.ts']);
+    expect(writtenPathsOf('terminal', { command: 'touch t.md' })).toBeNull();
+    expect(writtenPathsOf(CODE_INTELLIGENCE_MANIFEST.tiers.memoryWrite.memoryWriting, { memory_file_name: 'm' })).toBeNull();
+    for (const name of Object.values(edit)) expect(isFileWritingTool(name)).toBe(true);
+    expect(isFileWritingTool('read_file')).toBe(false);
   });
 });
 

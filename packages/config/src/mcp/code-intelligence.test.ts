@@ -6,7 +6,7 @@ import { BUILT_IN_ROLE_NAMES } from '@rotaris/contracts';
 import { builtInDefaults } from '../defaults.js';
 import {
   CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, CODE_INTELLIGENCE_HOME_SEGMENT, CODE_INTELLIGENCE_LANGUAGE_SERVER_STORE, CODE_INTELLIGENCE_LANGUAGE_SERVERS,
-  CODE_INTELLIGENCE_MANIFEST, CODE_INTELLIGENCE_MEMORY_GATE, CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceLanguageServerStore,
+  CODE_INTELLIGENCE_MANIFEST, CODE_INTELLIGENCE_MEMORY_GATE, CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceEditPaths, codeIntelligenceLanguageServerStore,
   deriveSetupInvocation, grantForTiers, hasIndexableExtension, memoriesBlockApplies, neverGrantNames, PROJECT_MEMORIES_BLOCK, tierNames,
 } from './code-intelligence.js';
 import { CODE_INTELLIGENCE_TOKEN, resolveCommand } from './commands.js';
@@ -107,6 +107,44 @@ describe('the code-intelligence binding manifest (REQ-MCP-116)', () => {
     walk(join(repo, 'packages'));
     walk(join(repo, 'apps', 'desktop', 'src'));
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * PD-ORCH-004 / REQ-ORCH-109 (fin32; the a68f121 duress run's D1): a child that edited through the EDIT tier was reported
+ * as having changed no workspace paths, because the run counted only the native file tools. The paths an edit-tier call
+ * writes are read from its arguments as the manifest names them.
+ */
+describe('the paths an EDIT-tier call writes (PD-ORCH-004, REQ-MCP-015, REQ-ORCH-109)', () => {
+  const edit = CODE_INTELLIGENCE_MANIFEST.tiers.edit;
+  const args = CODE_INTELLIGENCE_MANIFEST.editArguments;
+
+  it('names an argument for every capability of the edit tier, and only those', () => {
+    expect(Object.keys(args).sort()).toEqual(Object.keys(edit).sort());
+  });
+
+  it('reads each edit tool\'s path from the argument the manifest names, under its own name, the collision prefix or another casing', () => {
+    for (const [capability, name] of Object.entries(edit)) {
+      const at = (args as Record<string, { path: string }>)[capability]!.path;
+      expect(codeIntelligenceEditPaths(name, { [at]: 'docs/verification.md' })).toEqual(['docs/verification.md']);
+      expect(codeIntelligenceEditPaths(`code_intelligence_${name}`, { [at]: 'src/a.ts' })).toEqual(['src/a.ts']);
+      expect(codeIntelligenceEditPaths(name.toUpperCase(), { [at]: 'src/b.ts' })).toEqual(['src/b.ts']);
+    }
+  });
+
+  it('is null for every tool outside the edit tier, the native file tools among them', () => {
+    for (const name of [...tierNames('read'), ...tierNames('memoryWrite'), ...tierNames('onboard'), ...neverGrantNames(), 'write_file', 'terminal']) {
+      expect(codeIntelligenceEditPaths(name, { relative_path: 'docs/a.md' })).toBeNull();
+    }
+  });
+
+  it('a preview changes nothing, and a call naming no path lists none', () => {
+    const across = edit.replaceAcrossFiles;
+    expect(codeIntelligenceEditPaths(across, { relative_path: 'src', [args.replaceAcrossFiles.preview]: true })).toEqual([]);
+    expect(codeIntelligenceEditPaths(across, { relative_path: 'src', [args.replaceAcrossFiles.preview]: false })).toEqual(['src']);
+    expect(codeIntelligenceEditPaths(across, { needle: 'a', repl: 'b' })).toEqual([]);
+    expect(codeIntelligenceEditPaths(edit.replaceInFile, { relative_path: 7 })).toEqual([]);
+    expect(codeIntelligenceEditPaths(edit.replaceInFile, null)).toEqual([]);
   });
 });
 

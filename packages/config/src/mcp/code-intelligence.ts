@@ -34,6 +34,32 @@ export function neverGrantNames(): string[] {
   return [...Object.values(CODE_INTELLIGENCE_MANIFEST.neverGrant) as string[]].sort(compareCodePoints);
 }
 
+/**
+ * PD-ORCH-004 / REQ-ORCH-109 (fin32; the a68f121 duress run's finding D1): the workspace paths a call of the EDIT tier
+ * writes, read from its arguments as the manifest names them (`editArguments`), or null when `callable` is no tool of
+ * that tier. The tool is matched by the name the model called — the runtime's own, or that name under the `<server>_`
+ * prefix a collision gives it (`persona.ts`, `reservedNames`) — in lower case, as the native file tools are. A call
+ * whose preview argument is `true` changes nothing and names no path; a call whose path argument is absent or not a
+ * string names none either.
+ *
+ * The bound, stated rather than hidden: a cross-file capability is listed by the one file or directory its arguments
+ * confine it to, so a symbol rename lists the file that declares the symbol and not the files whose references it
+ * rewrote, and a replacement across the whole project (no path argument) lists nothing. The arguments name no more
+ * than that; the result's text is the server's and is not read.
+ */
+const EDIT_TOOLS: ReadonlyMap<string, { readonly path: string; readonly preview?: string }> = new Map(
+  Object.entries(CODE_INTELLIGENCE_MANIFEST.tiers.edit).map(([capability, name]) => [name.toLowerCase(), (CODE_INTELLIGENCE_MANIFEST.editArguments as Record<string, { readonly path: string; readonly preview?: string }>)[capability]!] as const),
+);
+export function codeIntelligenceEditPaths(callable: string, args: Readonly<Record<string, unknown>> | null): readonly string[] | null {
+  const lower = callable.toLowerCase();
+  const prefix = `${CODE_INTELLIGENCE_SERVER_NAME}_`;
+  const spec = EDIT_TOOLS.get(lower) ?? (lower.startsWith(prefix) ? EDIT_TOOLS.get(lower.slice(prefix.length)) : undefined);
+  if (spec === undefined) return null;
+  if (spec.preview !== undefined && args?.[spec.preview] === true) return [];
+  const path = args?.[spec.path];
+  return typeof path === 'string' && path !== '' ? [path] : [];
+}
+
 /** REQ-MCP-034/036: the launch subcommand and the two project-selection options, as command resolution binds on them. */
 export const CODE_INTELLIGENCE_BINDING = Object.freeze({
   launchSubcommand: CODE_INTELLIGENCE_MANIFEST.launchSubcommand,

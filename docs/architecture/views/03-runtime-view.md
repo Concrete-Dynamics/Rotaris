@@ -768,8 +768,11 @@ text no further tool activity followed. **A child cut off while making progress 
 expiry instant — not at the backstop — the child's `ProgressLog` answers whether it completed a tool call within the
 final stall window (the role's `stall_timeout`, else `runtime.child_stall_timeout`, 90 s by default; the bound is
 inclusive). If it did, and the child then ends failed on that timeout, the stored report gains `cut_off`: the statement,
-the workspace paths its own `write_file`/`haet_edit`/`haet` calls changed with `ok` (the name matched in lower case, as the
-gate's fallback dispatches it; resolved lexically against the root; both attempts, in the order first changed, each once), and — unless the child is itself a continuation — the offer naming `continuation_of`, which since 2026-10-06 also tells
+the workspace paths its own file-writing calls changed with `ok` — `write_file`/`haet_edit`/`haet` and, since fin32, the
+code-intelligence EDIT tier of REQ-MCP-015, each call's path read by the one `writtenPathsOf` (`children/report.ts`) the
+report's edited files share, an EDIT-tier tool's from the argument the binding manifest's `editArguments` names (the name
+matched in lower case, as the gate's fallback dispatches it; resolved lexically against the root; both attempts, in the
+order first changed, each once; the terminal outside, as PD-TOOLS-006 has it), and — unless the child is itself a continuation — the offer naming `continuation_of`, which since 2026-10-06 also tells
 the parent that a continuation starts with no memory, so it writes a complete brief (`PD-ORCH-004` revision 5, OQ-114; and
 `delegate`'s description says the same). The report block and
 `background_output` render it after the result text; nothing resumes the child. See §4 for the continuation.
@@ -998,7 +1001,8 @@ turn loop under its persona's tools, model, credential and supervisor; its **rep
 which reads the task as given (the ledger row's, the payload's blocks ahead of it marked omitted) and the most recent
 part of the transcript within 12,000 characters, the omission marked between them, beside the report's deterministic
 facts — edited files (a write the record answers as refused, or cut before it started, is not one; a write cut off
-while under way is), commands and exit codes (OQ-111; OQ-120 asks the facts' bound). The task is kept whole within the
+while under way is; since fin32 a code-intelligence EDIT-tier call is a write, its path read from the argument the binding
+manifest's `editArguments` names — `writtenPathsOf`, PD-ORCH-004), commands and exit codes (OQ-111; OQ-120 asks the facts' bound). The task is kept whole within the
 12,000, exempt from the 2,000 per event every other event keeps (OQ-119 as ruled, `PD-ORCH-007`). For a child the runner
 settled other than `succeeded`, the facts open with an **Outcome line** — the status, the end reasons the run recorded and,
 for a child cut off while making progress, PD-ORCH-004's statement (`ReportInput.cutOffStatement`) — and the ask tells the
@@ -1907,4 +1911,4 @@ otherwise carry one row's state onto another.
 
 **Older rows** are fetched by `session.pageOlder` when the reader scrolls toward the top and placed above by the
 replica's `prependOlder`, off the interface thread, with the anchor holding the reader still; a failed load says so
-and is re-attemptable, and reaching the oldest recorded row is a different state from a failure (REQ-CHAT-165).
+and is re-attemptab

@@ -1991,7 +1991,9 @@ so a child that genuinely loops is still stopped at the same point.
 > completed exactly `child_stall_timeout` seconds before the expiry is progress, and one a millisecond earlier is not.
 > The rule is read at the expiry of the attempt that ended failed, so calls completed during the landing do not
 > count. A path "changed" when a `write_file`, `haet_edit` or `haet` call naming it returned `ok`; the name is matched
-> in lower case, as the gate's own fallback dispatches `Write_File` to `write_file`. Paths are collected across both
+> in lower case, as the gate's own fallback dispatches `Write_File` to `write_file`. *(This reading was falsified by the
+> duress live run at `a68f121` on 2026-10-07 and replaced by fin32: the code-intelligence EDIT tier's calls are
+> file-writing calls too — see "The changed-paths reading falsified" below. Kept as written.)* Paths are collected across both
 > attempts of REQ-ORCH-088's retry and resolved lexically against the workspace root, so a write outside the root is not
 > a workspace path and is left out. Lexical is not what the file tools' fence does, which decides "inside" on real
 > paths. So a write spelled through the real path of a root reached by a symbolic link (macOS `/var` →
@@ -2148,6 +2150,35 @@ so a child that genuinely loops is still stopped at the same point.
 > offer already recovers", held for five of the eight continuations made since 2026-09-29; the three that failed all
 > continued the reconcile item. Reaffirmed 2026-10-07 under R-072 (OQ-214): the limit and its default stand, with OQ-214's
 > reopening condition. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **The changed-paths reading falsified, 2026-10-07 (duress at `a68f121`, finding D1), and its replacement, built by
+> fin32:** the first execution's open reading (4), "a path 'changed' when a `write_file`, `haet_edit` or `haet` call naming
+> it returned `ok`", is kept above as written. Pack `2026-10-07T07-09-30-708Z` of the live worktree, session `e6747bd0`:
+> `wave3b-finish-verification`, a tester continuing `wave3-verify-all`, made 11 single-file content replacements of
+> `docs/verification.md` through the code-intelligence server that returned `ok` (tool calls #367 to #392), taking it from
+> 387 lines (#334) to 469 (#393), and was cut off while making progress. Its report carried `changed_paths: []` and "Its
+> file-writing calls changed no workspace paths.", which the parent read in #336's result; the pass's facts (request 275)
+> read "Edited files: (none)" and the summary called the edits "attempted"; the artifact listed no edited files; and the
+> coordinator spent rows 751 and 761 on the contradiction before reading the file itself. REQ-MCP-015's EDIT tier — seven
+> tools, among them single-file and cross-file content replacement, carried by coding-agent, tester and refactorer —
+> writes files, so its calls are this directive's "file-writing calls". **The replacement:** a call is file-writing when
+> its tool is one of the three native file tools or a tool of the binding manifest's `edit` tier (one source, matched in
+> lower case and under the `code_intelligence_` collision prefix); its path is read from its arguments as the manifest
+> names them (`editArguments`, generated and checked against the server's own input schema); and it changed that path
+> when it returned `ok`. One reading, `writtenPathsOf` (`packages/engine/src/children/report.ts`), now feeds the cut-off's
+> changed paths, the report's `edited_files`, the facts the pass is told never to deny and the fallback's "Files
+> touched". The terminal stays outside, as PD-TOOLS-006 states. **A literal reading taken, open for the owner:** a
+> cross-file EDIT capability is listed by the one file or directory its arguments confine it to — a symbol rename lists
+> the file declaring the symbol, not the files whose references it rewrote, and a replacement across the whole project
+> (no path argument) lists none — because the arguments name no more and the result's text is the server's; a preview
+> (`dry_run`) changes nothing and lists none. **What was measured:** `cut-off.test.ts`, `report.test.ts` and `config`'s
+> `code-intelligence.test.ts`, red before the change; `pnpm code-intel-proof`'s eighth launch (`child-edit`), a delegated
+> tester's single replacement through the built app, read from its stored report and its child-report artifact (red on a
+> build of the unrepaired engine, the report's `edited_files` `[]`; green after, `["src/edit.ts"]`, in 64.9 s at a load of
+> about 12 on four CPUs).
+> **Not measured:** a live run since the repair. The note is
+> [`fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md`](../defects/fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md);
+> the row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 ---
 
 <a id="pd-monitor-002"></a>

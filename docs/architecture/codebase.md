@@ -1360,7 +1360,9 @@ launches the app seven times: the branch guard on the dev entry and, under `ROTA
 propagated); discovery of the real runtime through the token with the tier's names in the prompt and the memories
 block; the workspace binding on the launch line; a real `get_symbols_overview` call; the three-step project setup —
 completed, skipped on the marker, `skipped-no-code`, a launch-less entry refused, a cancel mid-step; the manifest's
-drift refused; the packaged binary with outbound traffic blocked, which names the fetch it needs (IC-7). Evidence under
+drift refused; the packaged binary with outbound traffic blocked, which names the fetch it needs (IC-7); and, since fin32,
+a delegated tester's EDIT-tier content replacement read back as an edited path from its stored report and its artifact
+(PD-ORCH-004, the a68f121 duress run's D1). Evidence under
 `.proof/code-intel-proof/`. The runtime's home, which it keeps across runs, is the product's own on the running platform
 (`join(dataDirFor(local), 'code-intelligence')`, as `main/sentinel.ts` joins it) since 2026-09-29 (R-067; the Windows
 spelling kept a directory the product never used off Windows,

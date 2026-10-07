@@ -1,6 +1,7 @@
 import { countNoun, millis, type Millis, type Timers } from '@rotaris/kernel';
 import { normaliseReportStatus, type ReportStatus } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
+import { codeIntelligenceEditPaths } from '@rotaris/config';
 import type { CutOff } from './cut-off.js';
 import { ranBeforeItWasCut } from '../run/interruption.js';
 
@@ -225,12 +226,39 @@ export function reportFacts(messages: readonly ChatMessage[], outcome?: Pick<Rep
 const WRITE_TOOLS: ReadonlySet<string> = new Set(['write_file', 'haet_edit', 'haet']);
 
 /**
- * Whether a call of `toolName` writes a file at the path its arguments name — the one list the report and PD-ORCH-004's
- * path list share. Compared in lower case, as REQ-TOOLS-024 compares a tool's name, so both readers agree on a call
- * dispatched under another casing.
+ * Whether `toolName` is one of the product's own file tools that write — `write_file`, `haet_edit`, `haet` — the tools
+ * PD-TOOLS-006's write-scope claim fences (`write-scope.ts`), which leaves the terminal and MCP tools outside it.
+ * Compared in lower case, as REQ-TOOLS-024 compares a tool's name.
  */
-export function isFileWritingTool(toolName: string): boolean {
+export function isNativeFileWritingTool(toolName: string): boolean {
   return WRITE_TOOLS.has(toolName.toLowerCase());
+}
+
+/**
+ * The workspace paths a call of `toolName` writes, read from its arguments, or null when the tool writes no file — the
+ * one reading the report's edited files, its facts and PD-ORCH-004's changed paths share. A native file tool writes the
+ * path its `path` (or `file_path`) argument names; a code-intelligence EDIT-tier tool (REQ-MCP-015) the path its
+ * arguments name as the binding manifest defines them (`codeIntelligenceEditPaths`, `@rotaris/config`). Both are
+ * matched in lower case, so the readers agree on a call dispatched under another casing. The terminal stays outside, as
+ * PD-TOOLS-006 states it.
+ *
+ * The reason the EDIT tier was not read, kept beside its replacement: until fin32 only the three native tools counted,
+ * a reading PD-ORCH-004's first execution stated as open. The duress live run at `a68f121` falsified it: a tester
+ * continuation made 11 single-file content replacements of one document that returned `ok`, and its report read "Its
+ * file-writing calls changed no workspace paths.", its edited files empty
+ * (`docs/defects/fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md`).
+ */
+export function writtenPathsOf(toolName: string, args: Readonly<Record<string, unknown>> | null): readonly string[] | null {
+  if (isNativeFileWritingTool(toolName)) {
+    const target = asText(args?.['path']) || asText(args?.['file_path']);
+    return target === '' ? [] : [target];
+  }
+  return codeIntelligenceEditPaths(toolName, args);
+}
+
+/** Whether a call of `toolName` writes a file at a path its arguments name (`writtenPathsOf`). */
+export function isFileWritingTool(toolName: string): boolean {
+  return writtenPathsOf(toolName, null) !== null;
 }
 /** `REQ-TOOLS-100`: every terminal observation ends with this block, sorted, with null-valued keys DROPPED. */
 const DIAGNOSTIC = '[terminal_diagnostic] ';
@@ -286,9 +314,10 @@ export function commandsFrom(messages: readonly ChatMessage[]): readonly { comma
 }
 
 /**
- * REQ-ORCH-108/109: the files the child edited — the path of every write-tool call the record does not answer
- * as refused, under either argument name the file tools accept (`path`, `file_path`), in call order and never
- * repeated. The summariser's own list is UNIONED after them rather than replacing or replaced, so a genuine
+ * REQ-ORCH-108/109: the files the child edited — the path of every file-writing call the record does not answer
+ * as refused, as `writtenPathsOf` reads it (either argument name the file tools accept, `path` or `file_path`; for a
+ * code-intelligence EDIT-tier call, the argument the binding manifest names — PD-ORCH-004, fin32), in call order and
+ * never repeated. The summariser's own list is UNIONED after them rather than replacing or replaced, so a genuine
  * mention it made (a document written through a route with no tool call of its own) is not lost, while an
  * invented one can no longer be the only thing the field holds — and it cannot name a path whose every write
  * the record answered as refused.
@@ -331,11 +360,13 @@ export function editedFilesFrom(messages: readonly ChatMessage[], reported: read
   for (const m of messages) {
     if (m.role !== 'assistant') continue;
     for (const p of m.content) {
-      if (p.kind !== 'tool-call' || !isFileWritingTool(p.name)) continue;
-      const a = jsonObject(p.args);
-      const path = asText(a?.['path']) || asText(a?.['file_path']);
-      if (erred.has(p.callId)) refused.add(pathKey(path));
-      else add(path);
+      if (p.kind !== 'tool-call') continue;
+      const paths = writtenPathsOf(p.name, jsonObject(p.args));
+      if (paths === null) continue;
+      for (const path of paths) {
+        if (erred.has(p.callId)) refused.add(pathKey(path));
+        else add(path);
+      }
     }
   }
   for (const r of reported) if (!refused.has(pathKey(r)) || listed.has(pathKey(r))) add(r);

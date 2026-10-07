@@ -2,7 +2,7 @@ import { posix } from 'node:path';
 import { globToRegExp } from '@rotaris/kernel';
 import { restrictionsAllow } from '@rotaris/contracts';
 import { BUILT_IN_PERSONAS, toolRestrictionsFor, type Persona, type PersonaResolver } from './personas.js';
-import { isFileWritingTool } from './report.js';
+import { isNativeFileWritingTool } from './report.js';
 
 /**
  * PD-TOOLS-006: a delegated child's declared write scope, and the claims live scopes make on workspace paths.
@@ -43,7 +43,7 @@ const ABSOLUTE = /^(?:[\\/]|[A-Za-z]:)/;
  */
 export function writesFiles(persona: Pick<Persona, 'name' | 'tools' | 'coordinatorOnly' | 'readOnly' | 'toolRestrictions'>, parentPersona?: Pick<Persona, 'toolRestrictions'> | null): boolean {
   const lists = toolRestrictionsFor(persona, parentPersona);
-  return !persona.coordinatorOnly && !persona.readOnly && persona.tools.some((t) => isFileWritingTool(t) && restrictionsAllow(lists, t));
+  return !persona.coordinatorOnly && !persona.readOnly && persona.tools.some((t) => isNativeFileWritingTool(t) && restrictionsAllow(lists, t));
 }
 
 /**

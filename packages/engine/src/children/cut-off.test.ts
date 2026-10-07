@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { millis } from '@rotaris/kernel';
+import { CODE_INTELLIGENCE_MANIFEST } from '@rotaris/config';
 import type { ChildRow } from '@rotaris/store';
 import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, workspacePath } from './cut-off.js';
 
@@ -76,6 +77,27 @@ describe('PD-ORCH-004: the paths a child\'s own file-writing calls changed', () 
     log.completed(millis(1), 'Write_File', { path: 'src/a.ts' }, true);
     log.completed(millis(2), 'HAET_EDIT', { path: 'src/b.ts' }, true);
     expect(log.changedPaths()).toEqual(['src/a.ts', 'src/b.ts']);
+  });
+
+  /**
+   * fin32, the a68f121 duress run's D1: wave3b's 11 single-file content replacements of `docs/verification.md` returned
+   * `ok` and its cut-off report read "Its file-writing calls changed no workspace paths." REQ-MCP-015's EDIT tier writes
+   * files; its calls are file-writing calls (PD-ORCH-004), their paths read as the binding manifest names them.
+   */
+  it('a code-intelligence EDIT-tier call that returned ok changed the path its arguments name; one that failed, a preview and a read changed nothing', () => {
+    const edit = CODE_INTELLIGENCE_MANIFEST.tiers.edit;
+    const path = CODE_INTELLIGENCE_MANIFEST.editArguments.replaceInFile.path;
+    const log = new ProgressLog(ROOT);
+    log.completed(millis(1), edit.replaceInFile, { [path]: 'docs/verification.md', needle: 'a', repl: 'b', mode: 'literal' }, true);
+    log.completed(millis(2), edit.replaceInFile, { [path]: 'docs/verification.md', needle: 'c', repl: 'd', mode: 'literal' }, true);
+    log.completed(millis(3), edit.replaceSymbolBody, { name_path: 'f', [CODE_INTELLIGENCE_MANIFEST.editArguments.replaceSymbolBody.path]: './src/a.ts', body: '' }, true);
+    log.completed(millis(4), edit.insertAfterSymbol, { name_path: 'f', [CODE_INTELLIGENCE_MANIFEST.editArguments.insertAfterSymbol.path]: 'src/failed.ts', body: '' }, false);
+    log.completed(millis(5), edit.replaceAcrossFiles, { [CODE_INTELLIGENCE_MANIFEST.editArguments.replaceAcrossFiles.path]: 'src/preview', [CODE_INTELLIGENCE_MANIFEST.editArguments.replaceAcrossFiles.preview]: true }, true);
+    log.completed(millis(6), CODE_INTELLIGENCE_MANIFEST.tiers.read.fileSymbolOverview, { [path]: 'src/read.ts' }, true);
+    log.completed(millis(7), `code_intelligence_${edit.safeDeleteSymbol}`, { name_path_pattern: 'g', [CODE_INTELLIGENCE_MANIFEST.editArguments.safeDeleteSymbol.path]: 'src/c.ts' }, true);
+    expect(log.changedPaths()).toEqual(['docs/verification.md', 'src/a.ts', 'src/c.ts']);
+    expect(cutOffReport({ taskId: 'bg_0000000c', limitS: 1200, stallS: 90, changedPaths: log.changedPaths(), isContinuation: true }).changes)
+      .toBe('Workspace paths its file-writing calls changed, in the order first changed: docs/verification.md, src/a.ts, src/c.ts.');
   });
 
   it('workspacePath resolves lexically against the root', () => {

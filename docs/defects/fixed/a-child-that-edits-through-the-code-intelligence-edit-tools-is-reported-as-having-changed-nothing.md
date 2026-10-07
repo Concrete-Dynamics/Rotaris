@@ -37,3 +37,38 @@ call (#323) was hidden the same way; its path was listed through a `haet_edit`.
 - `packages/engine/src/children/cut-off.ts` — `ProgressLog.completed`, which lists a path only for the native list.
 - `packages/engine/src/children/orchestration.ts` — `onToolCompleted`, which feeds `ProgressLog`.
 - `packages/config/src/mcp/code-intelligence-manifest.generated.ts` — the `edit` tier, the one source of the seven names.
+
+## Outcome
+
+**Repaired 2026-10-07 by fin32** (a plain defect against PD-ORCH-004, REQ-MCP-015 and REQ-ORCH-109; no ruling needed).
+
+Confirmed on the branch first: `cut-off.test.ts`'s case "a code-intelligence EDIT-tier call that returned ok changed the
+path its arguments name …" and `report.test.ts`'s describe "a code-intelligence EDIT-tier write is an edit" were red on
+the code as it stood (the changed paths, the edited files, the facts and the shaped report all empty of the edited file).
+
+The repair has one source and one reading:
+
+- **The manifest names each EDIT-tier tool's path argument.** `apps/desktop/scripts/code-intelligence/manifest.mjs` holds,
+  by capability, the argument naming the file the tool writes (for a cross-file capability, the file or directory it is
+  confined to) and, for the cross-file replacement, its preview argument; generation checks each against the input schema
+  the server lists for that tool, and the regenerated module carries them as `editArguments`. `codeIntelligenceEditPaths`
+  (`packages/config/src/mcp/code-intelligence.ts`) reads them: null for a tool outside the tier, the path otherwise, none
+  for a preview or a call naming no path. Matched in lower case and under the `code_intelligence_` collision prefix.
+- **`writtenPathsOf`** (`packages/engine/src/children/report.ts`) is the one reading of the paths a call writes: the native
+  file tools by `path`/`file_path`, the EDIT tier through the manifest. `ProgressLog.completed` (the cut-off's changed paths)
+  and `editedFilesFrom` (the report's edited files, the pass's facts, the fallback's "Files touched", the deterministic
+  tester report) both read it. A call answered with an error is still not an edit.
+- **PD-TOOLS-006's fence is unchanged**: `write-scope.ts` reads `isNativeFileWritingTool`, the three native tools, and the
+  terminal stays outside every count.
+
+Pinned by the two engine cases above and `config`'s describe "the paths an EDIT-tier call writes", and shown in the built
+app by `pnpm code-intel-proof`'s eighth launch (`child-edit`): a delegated tester's one single-file replacement, the file
+changed on disk, and `src/edit.ts` in the child's stored report's `edited_files` and in its child-report artifact's — red
+on a build of the unrepaired engine (`edited_files: []`), green after.
+
+The falsified reading is kept beside its replacement in PD-ORCH-004's first execution, with the report-back
+("The changed-paths reading falsified"); the row is in `docs/architecture/first-executions.md`.
+
+**The bound, stated:** a cross-file capability is listed by the one file or directory its arguments name — a symbol rename
+lists the file declaring the symbol, not the files whose references it rewrote; a replacement across the whole project lists
+none — recorded in PD-ORCH-004 as a literal reading open for the owner.

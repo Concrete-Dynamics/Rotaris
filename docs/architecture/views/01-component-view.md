@@ -231,7 +231,10 @@ starts the bundled runtime, reads `tools/list` and its version and the extension
 `packages/config/src/mcp/code-intelligence-manifest.generated.ts` — REQ-MCP-116's binding manifest, committed so
 `pnpm check` needs no Python, regenerated and diffed by `pnpm package` (`--check`). Since `PD-MCP-001` (2026-10-06) the
 generator also writes the product's own descriptions for named capabilities (`productDescriptions`), held in
-`manifest.mjs` and checked only to name a capability of the tiers. `config/src/mcp/code-intelligence.ts`
+`manifest.mjs` and checked only to name a capability of the tiers. Since fin32 (PD-ORCH-004, the a68f121 duress run's D1)
+it also writes `editArguments`: for each EDIT-tier capability, the argument naming the file its tool writes and, where it
+has one, the preview argument, checked against the input schema the server lists; `codeIntelligenceEditPaths` reads it,
+and `engine`'s child report and cut-off (an edge `engine → config` it already had) read the paths through it. `config/src/mcp/code-intelligence.ts`
 is the typed reader every consumer goes through (a test greps the tree for a runtime tool name anywhere else).
 **Edges unchanged**: `config` still imports nothing new; `mcp` gains `setup.ts` (REQ-MCP-099's step runner over
 `platform`'s spawn helper and the clock ports); the run host's `mcp.ts` reads `agent-tools`' gitignore reader for the

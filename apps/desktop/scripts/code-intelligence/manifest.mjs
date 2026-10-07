@@ -71,6 +71,22 @@ const CAPABILITIES = {
 };
 const NEVER_GRANT = { memoryDeletion: 'delete_memory', memoryRename: 'rename_memory', dashboardOpening: 'open_dashboard' };
 /**
+ * PD-ORCH-004 / REQ-ORCH-109 (fin32, the a68f121 duress run's D1): for each capability of the EDIT tier, the argument of
+ * its tool that names the file it writes (`path`) — for a cross-file capability, the file or directory its change is
+ * confined to — and, where the tool has one, the argument that asks for a preview and changes nothing (`preview`). The
+ * run reads them to list the workspace paths a child's edit-tier calls changed. Checked against the input schema the
+ * server lists for the tool, so a renamed argument fails generation rather than a report.
+ */
+const EDIT_ARGUMENTS = {
+  replaceSymbolBody: { path: 'relative_path' },
+  insertBeforeSymbol: { path: 'relative_path' },
+  insertAfterSymbol: { path: 'relative_path' },
+  renameSymbol: { path: 'relative_path' },
+  safeDeleteSymbol: { path: 'relative_path' },
+  replaceInFile: { path: 'relative_path' },
+  replaceAcrossFiles: { path: 'relative_path', preview: 'dry_run' },
+};
+/**
  * PD-MCP-001 (OQ-115, ruled by the owner under R-071): descriptions WRITTEN BY THE PRODUCT, by capability, that replace
  * the runtime's own for the tool the capability names wherever the product hands that description to a model. Not the
  * runtime's answer, so not checked against it beyond the capability existing: the runtime's usage-instruction tool
@@ -197,7 +213,7 @@ async function serverListing() {
     child.stdin.end();
     const exit = await new Promise((r) => child.on('exit', (c) => r(c)));
     clearTimeout(timer);
-    return { names: tools.tools.map((t) => t.name).sort(), listMs, preamble, exit, protocol: init.protocolVersion, serverName: init.serverInfo?.name, stderrTail: stderr.slice(-600) };
+    return { names: tools.tools.map((t) => t.name).sort(), schemas: Object.fromEntries(tools.tools.map((t) => [t.name, t.inputSchema ?? {}])), listMs, preamble, exit, protocol: init.protocolVersion, serverName: init.serverInfo?.name, stderrTail: stderr.slice(-600) };
   } catch (e) {
     clearTimeout(timer); child.kill();
     fail(`the server did not answer: ${e.message}\n${stderr.slice(-1200)}`);
@@ -223,6 +239,13 @@ for (const [cap, name] of Object.entries(NEVER_GRANT)) {
   if (!vocabulary.includes(name)) fail(`never-grant '${name}' (${cap}) is not in the runtime's tool vocabulary — an upstream rename? (REQ-MCP-015)`);
 }
 for (const name of [...all, ...Object.values(NEVER_GRANT)]) if (!vocabulary.includes(name)) fail(`'${name}' is absent from the vocabulary`);
+for (const cap of Object.keys(CAPABILITIES.edit)) if (!Object.prototype.hasOwnProperty.call(EDIT_ARGUMENTS, cap)) fail(`edit capability ${cap} names no path argument (PD-ORCH-004)`);
+for (const [cap, args] of Object.entries(EDIT_ARGUMENTS)) {
+  const name = CAPABILITIES.edit[cap];
+  if (name === undefined) fail(`an edit argument names '${cap}', which is no capability of the edit tier`);
+  const properties = server.schemas[name]?.properties ?? {};
+  for (const [role, arg] of Object.entries(args)) if (!Object.prototype.hasOwnProperty.call(properties, arg)) fail(`edit tier: '${name}' (${cap}) lists no '${arg}' argument for its ${role} — an upstream rename? (PD-ORCH-004)`);
+}
 for (const [cap, text] of Object.entries(PRODUCT_DESCRIPTIONS)) {
   if (!Object.values(CAPABILITIES).some((map) => Object.prototype.hasOwnProperty.call(map, cap))) fail(`a product description names '${cap}', which is no capability of the tiers (PD-MCP-001)`);
   if (typeof text !== 'string' || text.trim() === '') fail(`the product description for '${cap}' is empty (PD-MCP-001)`);
@@ -268,6 +291,8 @@ const lines = [
   '  tiers: {',
   ...Object.entries(CAPABILITIES).map(([tier, map]) => `    ${tier}: { ${Object.entries(map).map(([cap, name]) => `${cap}: ${q(name)}`).join(', ')} },`),
   '  },',
+  '  /** PD-ORCH-004 / REQ-ORCH-109: by edit capability, the argument naming the file its tool writes (for a cross-file one, the file or directory it is confined to), and the one asking for a preview that changes nothing. */',
+  `  editArguments: { ${Object.entries(EDIT_ARGUMENTS).map(([cap, a]) => `${cap}: { ${Object.entries(a).map(([k, v]) => `${k}: ${q(v)}`).join(', ')} }`).join(', ')} },`,
   '  /** REQ-MCP-015: never in a built-in grant. */',
   `  neverGrant: { ${Object.entries(NEVER_GRANT).map(([cap, name]) => `${cap}: ${q(name)}`).join(', ')} },`,
   '  /** PD-MCP-001: descriptions written by the product, not reported by the runtime, by capability — each replaces the runtime\'s own description of the tool it names. */',

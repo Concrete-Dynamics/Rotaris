@@ -22,6 +22,11 @@
  *   7. contained  — (packaged only) the packaged executable with the token, outbound blocked, a fresh runtime home:
  *                   tools/list answers; the symbol overview either answers or names what the runtime tried to fetch.
  *
+ *   8. child edit — (fin32, PD-ORCH-004, REQ-MCP-015, REQ-ORCH-109) a delegated tester edits a file through the EDIT tier's
+ *                   single-file content replacement → the call `ok`, the file changed on disk, and the path in the child's
+ *                   stored report's `edited_files` and its child-report artifact's: the duress live run at `a68f121`
+ *                   reported such a child as having changed nothing (finding D1).
+ *
  * Evidence under `.proof/code-intel-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -47,7 +52,7 @@ if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === 
 const TOKEN = 'builtin:code-intelligence';
 // `--steps=1,2` runs a subset (the launches are long); `--keep` leaves the previous evidence and merges results.json.
 const stepsArg = process.argv.find((a) => a.startsWith('--steps='));
-const wanted = new Set((stepsArg ? stepsArg.slice('--steps='.length) : '1,2,3,4,5,6,7').split(',').map((s) => s.trim()));
+const wanted = new Set((stepsArg ? stepsArg.slice('--steps='.length) : '1,2,3,4,5,6,7,8').split(',').map((s) => s.trim()));
 const want = (n) => wanted.has(String(n));
 const keepOutput = process.argv.includes('--keep');
 
@@ -142,9 +147,9 @@ function sessionFrom(r) {
 function toolRows(db, sessionId, tool) { return db.prepare('SELECT ordinal, status, is_error, entry FROM tool_calls WHERE session_id = ? AND tool_name = ? ORDER BY ordinal').all(sessionId, tool).map((r) => ({ ...r, entry: JSON.parse(r.entry) })); }
 function eventOrdinals(db, sessionId, kind) { return db.prepare('SELECT ordinal, payload FROM events WHERE session_id = ? AND kind = ? ORDER BY ordinal').all(sessionId, kind); }
 
-async function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_000 } = {}) {
+async function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_000, workspaceConfig = WORKSPACE } = {}) {
   writeFileSync(join(configDir, 'agents.yaml'), global);
-  writeFileSync(join(ws, '.rotaris', 'agents.yaml'), WORKSPACE);
+  writeFileSync(join(ws, '.rotaris', 'agents.yaml'), workspaceConfig);
   const png = join(output, `${name}.png`);
   const started = Date.now();
   const result = await spawnBounded(electron, [mainEntry, ...hostSwitches, ws], {
@@ -452,6 +457,41 @@ if (want(6)) {
   if (clean.status !== 0) throw new Error(`drift: the check refused the committed module:\n${clean.stderr}`);
   results.drift = { doctoredRefused: true, refusal: (check.stderr ?? '').trim().slice(0, 300), committedAccepted: true };
   console.log(`[code-intel-proof] 6 drift: refused — ${results.drift.refusal.slice(0, 100)}`);
+}
+
+// ---- 8. a child's EDIT-tier write reaches its report ---------------------------------------------------------------
+// fin32 (PD-ORCH-004, REQ-MCP-015, REQ-ORCH-109): the duress live run at a68f121 had a tester continuation edit one document
+// eleven times through the single-file content replacement, every call `ok`, and its report said it changed nothing
+// (docs/defects/fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md).
+// A delegating workspace (no `delegation_strategy: single`), a tester child whose one call is that tool, then its stored
+// report and its child-report artifact read for the path.
+if (want(8)) {
+  const edited = join(workspace, 'src', 'edit.ts');
+  writeFileSync(edited, "export const state = 'before';\n");
+  const delegating = WORKSPACE.replace('rotaris:\n  delegation_strategy: single\n', '');
+  if (delegating === WORKSPACE) throw new Error('child-edit: the workspace configuration could not be made delegating');
+  const r = await launch('child-edit', {
+    ROTARIS_CAPTURE_PROMPT: 'delegate one tester that edits src/edit.ts', ROTARIS_INTENT_SCRIPT: 'moderate_feature',
+    ROTARIS_SCRIPT: 'delegate:tester:edit-through-code-intelligence,wait:20000,answer',
+    ROTARIS_CHILD_SCRIPT: 'mcp:code_intelligence.replace_content,answer',
+    ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ replace_content: { relative_path: 'src/edit.ts', needle: 'before', repl: 'after', mode: 'literal' } }),
+    ROTARIS_CAPTURE_AFTER_MS: '60000',
+  }, { workspaceConfig: delegating, timeout: 240_000 });
+  const { db, session: s } = sessionFrom(r);
+  const calls = toolRows(db, s.session_id, 'replace_content');
+  const children = db.prepare('SELECT canonical_name, persona, state, report FROM children WHERE session_id = ?').all(s.session_id);
+  const artifacts = db.prepare("SELECT edited_files FROM artifacts WHERE session_id = ? AND kind = 'child_report'").all(s.session_id);
+  db.close();
+  if (calls.length !== 1 || calls[0].status !== 'ok') throw new Error(`child-edit: the replacement did not succeed: ${JSON.stringify(calls).slice(0, 800)}\n${lines(r.log, /code_intelligence|scripted:/).slice(-10).join('\n')}`);
+  const onDisk = readFileSync(edited, 'utf8');
+  if (!onDisk.includes("'after'")) throw new Error(`child-edit: src/edit.ts was not changed on disk: ${JSON.stringify(onDisk)}`);
+  if (children.length !== 1) throw new Error(`child-edit: expected one child, found ${children.length}: ${JSON.stringify(children)}`);
+  const report = JSON.parse(children[0].report ?? 'null');
+  if (!report || !Array.isArray(report.edited_files) || !report.edited_files.includes('src/edit.ts')) throw new Error(`child-edit: the child's report does not list src/edit.ts among its edited files: ${JSON.stringify(report?.edited_files)} (PD-ORCH-004, REQ-ORCH-109)`);
+  const artifactFiles = artifacts.map((a) => JSON.parse(a.edited_files ?? '[]'));
+  if (artifactFiles.length !== 1 || !artifactFiles[0].some((f) => (typeof f === 'string' ? f : f?.path) === 'src/edit.ts')) throw new Error(`child-edit: the child-report artifact does not list src/edit.ts: ${JSON.stringify(artifactFiles)} (REQ-LIBRARY-088)`);
+  results.childEdit = { call: calls[0].status, child: children[0].canonical_name, persona: children[0].persona, state: children[0].state, reportEditedFiles: report.edited_files, artifactEditedFiles: artifactFiles[0], elapsedMs: r.elapsedMs };
+  console.log(`[code-intel-proof] 8 child edit: ${children[0].persona} ${children[0].state}, report edited_files ${JSON.stringify(report.edited_files)}, artifact ${JSON.stringify(artifactFiles[0])} (${r.elapsedMs} ms)`);
 }
 
 // ---- 7. self-containment (packaged only) ---------------------------------------------------------------------------

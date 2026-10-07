@@ -1,7 +1,7 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { millis, type Millis } from '@rotaris/kernel';
 import type { ChildRow } from '@rotaris/store';
-import { isFileWritingTool } from './report.js';
+import { writtenPathsOf } from './report.js';
 
 /**
  * PD-ORCH-004 — a child cut off while making progress hands its work back to the parent. REQ-ORCH-088's expiry path
@@ -53,17 +53,23 @@ export class ProgressLog {
 
   /**
    * One tool call returned to the child at `at`. A call completes whatever it returned — an error or a refusal is a
-   * completed call too. A file-writing call (`write_file`, `haet_edit`, `haet`) changed its path only when it
-   * returned `ok`; a failed edit or a refused write changed nothing and is not listed. The name is matched in lower
-   * case, because the gate dispatches a call whose name matches no executor under its lower-case spelling
-   * (`Write_File` runs `write_file`), and a write it ran is a write whatever the model called it.
+   * completed call too. A file-writing call (`writtenPathsOf`: `write_file`, `haet_edit`, `haet`, and since fin32 the
+   * code-intelligence EDIT tier of REQ-MCP-015, its path read from the argument the binding manifest names) changed
+   * its path only when it returned `ok`; a failed edit or a refused write changed nothing and is not listed. The name
+   * is matched in lower case, because the gate dispatches a call whose name matches no executor under its lower-case
+   * spelling (`Write_File` runs `write_file`), and a write it ran is a write whatever the model called it.
+   *
+   * The reason the EDIT tier was not read, kept beside its replacement: the three native tools were the whole list,
+   * and the a68f121 duress run's tester continuation, which edited one document 11 times through the tier, was
+   * reported as having changed no workspace paths (finding D1).
    */
   completed(at: Millis, toolName: string, args: Readonly<Record<string, unknown>>, ok: boolean): void {
     this.lastCompletedAt = at;
-    if (!ok || !isFileWritingTool(toolName)) return;
-    const target = args['path'] ?? args['file_path'];
-    const path = typeof target === 'string' ? workspacePath(this.workspaceRoot, target) : null;
-    if (path !== null && !this.changed.includes(path)) this.changed.push(path);
+    if (!ok) return;
+    for (const target of writtenPathsOf(toolName, args) ?? []) {
+      const path = workspacePath(this.workspaceRoot, target);
+      if (path !== null && !this.changed.includes(path)) this.changed.push(path);
+    }
   }
 
   /**

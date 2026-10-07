@@ -54,8 +54,24 @@ export function backgroundStartedMessage(started: readonly ChildRow[]): string {
   ].join('\n');
 }
 
-/** REQ-ORCH-059: one completion notification per background child, announced exactly once. */
-export function completionNotification(done: ChildRow, stillRunning: number, durationS: number): string {
+/**
+ * REQ-ORCH-059's open-todo reminder lines: the parent's open plan items, up to the first five, so the parent sees what its
+ * own plan still holds as its children finish. None when nothing is open. Missing until 2026-10-07
+ * (`docs/defects/fixed/the-completion-notification-carries-no-open-todo-reminder-lines.md`, found ruling OQ-213).
+ */
+export function openTodoReminderLines(open: readonly string[]): string[] {
+  if (open.length === 0) return [];
+  const shown = open.slice(0, 5);
+  const more = open.length - shown.length;
+  return [`Your todo list still holds ${countNoun(open.length, 'open item')}:`, ...shown.map((name) => `- ${name}`), ...(more > 0 ? [`(and ${more} more)`] : [])];
+}
+
+/**
+ * REQ-ORCH-059: one completion notification per background child, announced exactly once. `openTodo` is the parent's open
+ * plan items, appended as the requirement's open-todo reminder lines: for the root, those its task answers for
+ * (`Run.openRootPlan`); for a child that delegated, its own todo's.
+ */
+export function completionNotification(done: ChildRow, stillRunning: number, durationS: number, openTodo: readonly string[] = []): string {
   const lines = [
     '[Background task completed]',
     `task_id: ${done.task_id}`,
@@ -65,6 +81,7 @@ export function completionNotification(done: ChildRow, stillRunning: number, dur
   ];
   if (stillRunning > 0) lines.push(`${countNoun(stillRunning, 'background task')} still running; you will be notified when all complete — do not poll, continue productive work. Retrieve this result with background_output(task_id="${done.task_id}") (detail_level "summary" or "verbatim").`);
   else lines.push('All background tasks have completed.');
+  lines.push(...openTodoReminderLines(openTodo));
   return lines.join('\n');
 }
 

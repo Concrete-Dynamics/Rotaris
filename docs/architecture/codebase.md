@@ -621,7 +621,9 @@ in `configuration.ts`'s header.)
    5 s grace because `cmd.exe` is never the command; the single notice slot loses the advisory to the run's outcome.
 
 11. **children and the scheduler (2026-09-03):** the orchestrator is coordination-only (`REQ-ORCH-029`; `ROTARIS_RUN_OVERRIDE=single`
-   grants it the direct-work bundle and withholds `delegate`). A `delegate` call is admitted through the five checks in
+   grants it the direct-work bundle and withholds `delegate`; since 2026-10-07 the entry port's gate refuses a task's second
+   work item until the coordinator has written its own todo list, `Run.todoListOwed`, OQ-213, and a background child's
+   completion notification names the coordinator's open plan items, REQ-ORCH-059). A `delegate` call is admitted through the five checks in
    order and creates one row in the ledger — `queued`, `waiting_on_dependencies`, or `waiting_on_model_slot` behind a
    cap — and the scheduler's pass claims it (one conditional update), runs it as its own turn loop under its persona
    and tool grant, tags its rows by its canonical name, produces its report through the bounded summarising pass,

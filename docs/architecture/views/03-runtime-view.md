@@ -286,6 +286,27 @@ in the stored todo, so the iteration a continue resumes, and a fresh iteration o
 back; both are removed when the task completes or is given up on. Under a `single` override (`RuntimePosture.runOverride`,
 `RunDeps.coordinating: false`) the entry role is the worker and nothing of this applies (REQ-ORCH-025).
 
+**The coordinator's todo list on multi-step work (REQ-ORCH-029, REQ-ORCH-059; OQ-213, ruled 2026-10-07 under R-072,
+live-run finding K2).** The list REQ-ORCH-029 holds the coordinator to is its own plan (`Run.agentTodo`), never the planner
+plan the run writes itself. While the entry role coordinates, the call that would start the current task's **second work
+item** is refused at dispatch until the entry role has written a todo list of its own for that task. A work item is a
+`delegate` call, or on a direct-work grant a call of a public tool the registry declares as writing workspace files or
+running commands (`isWorkItem`, `packages/agent-tools/src/todo-list-gate.ts`). Two facts live on the planner task beside
+`planExcused`, so a continue and a later run read them back, and both are removed when the task completes or is given up on:
+`workItems`, counted by `Run.workItemStarted` when a work item reaches execution, and `listWritten`, set by
+`Run.replaceAgentTodo` for the root when an accepted write leaves the plan holding at least one task (for the current
+iteration's task; in a plan cycle, for every task it plans). A person's edit (`editTodo`) never sets it. `Run.todoListOwed`
+answers the refusal (`TODO_LIST_OWED_TEXT`) and logs `iteration N: <root> began the task's second work item with no todo
+list of its own; the call was refused (REQ-ORCH-029)`. It answers nothing under `single`, in a plan cycle (whose calls neither
+count nor are refused), or outside an iteration. The check reaches the gate as the depth-0 context's `todoList` (both
+`toolsFor` closures in `sessions.ts`) and the entry port's `GateDeps.todoList` (`run-host/tools.ts`), and only where the
+entry role's resolved set holds `todo`; otherwise `Run.todoListUnavailable` warns once per run and nothing is refused.
+`Gate.dispatch` refuses after the plan-gate check and before the schema parse: `blocked`, `failure_kind: todo_list_owed`,
+no `tool_error` issue. A step's calls dispatch in order, so a `todo` write earlier in the step satisfies the check.
+REQ-ORCH-059's open-todo reminder lines: `completionNotification` appends up to five of the parent's open plan items
+(`IterationChildren`'s `openTodoFor` → `Run.openTodoFor`: the root's are those its task answers for, `openRootPlan`; a child
+parent's, its own todo's).
+
 **Coming to rest (PD-ORCH-005 clauses 2, 3, 9, 10, 11; `Run.restCause`).** A run comes to rest by a pause, a stop (the
 `cancel` operation, graceful or forced) or a quit (`application_shutdown`); `restCause` names which, and is null for the
 explicit cancel (the reserved run id: `StopRequest.final`), for a stop the run raised itself (`agent_session_aborted`)

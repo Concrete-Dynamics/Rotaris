@@ -60,6 +60,20 @@ export interface Task {
    * closes otherwise, and when the task completes or is given up on.
    */
   planLeftOpen?: string[];
+  /**
+   * OQ-213 as ruled (R-072), REQ-ORCH-029's todo clause: the work items of this task's execution iterations that reached
+   * execution — `delegate` calls, and on a direct-work grant calls of tools the registry declares as writing workspace files
+   * or running commands. From the second on the coordinator keeps a todo list of its own for the task (`listWritten`). Kept
+   * with the task in the stored todo, as `planExcused` is, so a continue and a later run read it back; removed when the task
+   * completes or is given up on.
+   */
+  workItems?: number;
+  /**
+   * OQ-213: the entry role has made an accepted `todo` write since this task's take-up — in an iteration of the task, or in
+   * the plan cycle that planned it — leaving its plan holding at least one task. A person's own edit of the plan does not set
+   * it. Kept and removed on the terms of `workItems`.
+   */
+  listWritten?: true;
 }
 export interface Phase {
   /**

@@ -10740,8 +10740,8 @@ progress display"; REQ-ORCH-059, "Open-todo reminder lines are appended"; REQ-OR
 `c2a9444`): on 3 of the 6 multi-step runs (edit, resume, frictions) the coordinator delegated more than once and wrote no plan
 of its own, the task-plan strip read "Planner plan" with one row, the prompt itself, and the inspector read "todo not used";
 on the requirements and terminal runs it planned unasked. Recorded as
-[`the-coordinator-keeps-no-todo-list-of-its-own-on-multi-step-work.md`](../defects/the-coordinator-keeps-no-todo-list-of-its-own-on-multi-step-work.md).
-Ruled the same day.)*
+[`the-coordinator-keeps-no-todo-list-of-its-own-on-multi-step-work.md`](../defects/fixed/the-coordinator-keeps-no-todo-list-of-its-own-on-multi-step-work.md),
+repaired by fin27. Ruled the same day.)*
 
 **Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** the todo list REQ-ORCH-029
 requires of the coordinator is its own plan, the one the `todo` tool writes; the run's planner plan does not satisfy the
@@ -10765,6 +10765,26 @@ the persona text skipped on half the multi-step runs; the specification already 
 never on a coordinator that already planned. From A it took the logged warning line, the test that a configured
 `system_prompt` is still covered, and the reading of "step" as a work item. The engine glossary's "Todo list" names the planner
 plan, and the specification uses the phrase for both lists, so the glossary gains a separate "Agent plan" entry.
+
+**As built** (fin27, 2026-10-07). The planner task keeps two facts in the stored todo beside `planExcused`, so a continue and
+a later run read them back, both removed when the task completes or is given up on: `workItems`, the task's work items that
+reached execution in its execution iterations, and `listWritten`, set by an accepted root `todo` write after the task's take-up
+that leaves the agent plan holding at least one task (for the current iteration's task; in the plan cycle that plans the task,
+for every task it plans). A person's own edit of the plan never sets it. `Run.todoListOwed` answers the refusal while the run
+coordinates (`RunDeps.coordinating !== false`), outside a plan cycle (whose calls neither count nor are refused), when the
+task already has a work item and no list; the depth-0 context carries it, and the entry port hands it to the gate only where
+the entry role's resolved tool set holds `todo`, the run warning once otherwise and refusing nothing. The gate refuses after
+the plan-gate check and before the schema parse: `blocked`, `failure_kind: todo_list_owed`, no `tool_error` issue; a step's
+calls dispatch in order, so a `todo` write earlier in the step satisfies the check. Two places where the build reads the
+ruling's text, stated so the next round can see them: a work item is **counted when it reaches execution** (past the schema,
+the permission and the pre-execution hooks), not when it passes this check, so a call refused for another reason starts no
+work item; and a tool the registry carries **no declaration** for (an MCP or plugin tool) is no work item, the ruling counting
+what the registry declares. `completionNotification` appends up to five of the parent's open plan items (REQ-ORCH-059): the
+root's are those its task answers for (`openRootPlan`), a child parent's its own todo's. Pinned by
+`packages/engine/src/run/coordinator-plan.test.ts`, `packages/agent-tools/src/gate.test.ts`,
+`apps/desktop/src/run-host/tools.test.ts`, `packages/engine/src/children/notify.test.ts` and
+`packages/engine/src/children/children.test.ts`; the live run's harness checks it over every session it keeps
+(`apps/desktop/scripts/lib/coordinator-todo.mjs`). The first-executions row waits on the orchestrator's next default live run.
 
 **OQ-220 — Which todo item does a delegation answer for?** *(REQ-ORCH-028 and REQ-ORCH-029, "no two implementation delegations
 for the same todo item are outstanding at once"; resolution 15 (b) of `docs/spec/resolutions/01-run-orchestration.md`, ownership

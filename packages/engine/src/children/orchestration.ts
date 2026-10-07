@@ -171,6 +171,11 @@ export interface ChildrenDeps {
   readonly planGate?: { readonly held: () => boolean; readonly withholds: (tool: string) => boolean } | undefined;
   /** REQ-ORCH-072: the iteration's root execution record. */
   readonly rootRecord?: RootExecutionRecord | undefined;
+  /**
+   * REQ-ORCH-059's open-todo reminder lines: the open items of the plan the agent `agentId` (the root's id, or a child's task
+   * id) keeps — for the root, those its task answers for. Absent means none are named.
+   */
+  readonly openTodoFor?: ((agentId: string) => readonly string[]) | undefined;
   /** PD-ORCH-005 clause 1: the conversation record each child's turn appends to; absent means nothing is recorded. */
   readonly record?: ConversationRecord | undefined;
 }
@@ -904,7 +909,8 @@ export class IterationChildren implements DelegationOps {
         continue;
       }
       const stillRunning = this.ledger.childrenOf(agentId).filter((c) => !isTerminalChildState(c.state)).length;
-      const notices = newly.filter((c) => c.background === 1).map((c) => completionNotification(c, stillRunning, this.durationS(c)));
+      const open = newly.some((c) => c.background === 1) ? this.deps.openTodoFor?.(agentId) ?? [] : [];
+      const notices = newly.filter((c) => c.background === 1).map((c) => completionNotification(c, stillRunning, this.durationS(c), open));
       const message = [...notices, resumeMessage(newly, stillRunning)].join('\n\n');
       outcome = await turn(message, history);
       history = outcome.messages;

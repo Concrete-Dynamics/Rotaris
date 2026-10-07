@@ -760,6 +760,101 @@ ${flag}`;
  * the main checkout. The port hands the MCP host the configuration it launches from; the command line it carries is read
  * here, whole, for a port whose context names a worktree as its execution root.
  */
+/**
+ * OQ-213 as ruled under the owner's delegation (R-072), building REQ-ORCH-029's todo clause: the entry port hands its gate the
+ * run's todo-list check only where the one resolution left the entry role `todo`; without it nothing is refused and the run
+ * is told once. A configured `system_prompt` replaces the instruction text whole (REQ-CONFIG-100) and changes nothing here.
+ */
+describe('the entry port\'s todo list owed before a second work item (OQ-213, REQ-ORCH-029)', () => {
+  let dir: string;
+  let dal: StoreDal;
+  let writer: SessionWriter;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-port-todo-list-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+    const created = SessionWriter.create(
+      { dal, sessionId: asSessionId('S1'), wall: new FakeClock(), retentionCap: 0, warn: () => undefined, onCommitted: () => undefined },
+      { workspaceRoot: dir, pid: 1, host: mintMachineId('0000000000000000000000000000000a') },
+    );
+    if (!created.ok) throw new Error('writer');
+    writer = created.value;
+  });
+  afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  /** The entry orchestrator's port over a configured persona; `tools` and `prompt` are the persona's own. */
+  function entryPort(orchestrator: string, extra: Partial<ToolPortContext> = {}) {
+    mkdirSync(join(dir, '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), `default_persona: orchestrator
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+  orchestrator:
+    name: orchestrator
+    model: selected
+${orchestrator}runtime:
+  permission_mode: autonomous
+`);
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
+    if (!loaded.ok) throw new Error('configuration');
+    const cfg = loaded.value;
+    const resolver = personaResolverFor(cfg, true, () => undefined);
+    const delegated: string[] = [];
+    const delegation = {
+      delegate: async (_parent: string, req: { task: string }) => { delegated.push(req.task); return { status: 'queued' as const, canonicalName: `c${delegated.length}`, taskId: `bg_${delegated.length}`, message: 'started' }; },
+    } as unknown as NonNullable<ToolPortContext['delegation']>;
+    const log: string[] = [];
+    let written = false;
+    let started = 0;
+    const todoList = {
+      owed: () => (started >= 1 && !written ? 'a todo list is owed' : null),
+      started: () => { started += 1; log.push('started'); },
+      unavailable: () => { log.push('unavailable'); },
+    };
+    const port = createToolPort({
+      sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona: 'orchestrator', agentName: 'orchestrator', parentId: 'root:1', depth: 0, delegation,
+      requestedMode: 'autonomous', modeOverride: null, attended: () => true, warn: () => undefined, abortRun: () => undefined,
+      readTodo: () => null, writeTodo: () => { written = true; return true; }, todoList, ...extra,
+    }, { clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver, presenter: { present: async () => ({ ok: true }), close: () => undefined }, nextSequence: () => 1, fileStates: new Map(), terminal: null, egress: () => permissivePolicyRead });
+    const call = (callId: string, name: string, args: Record<string, unknown>) => ({ callId, name, rawArgs: JSON.stringify(args), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' });
+    const del = (callId: string, task: string) => port.dispatch(call(callId, 'delegate', { persona: 'coding-agent', task_name: task, task }), new AbortController().signal);
+    return { port, delegated, log, call, del };
+  }
+
+  it('a configured system_prompt does not lift it: the second delegate waits for the list, and runs once the list is written', async () => {
+    const e = entryPort('    tools: [read_file, grep, todo, delegate]\n    system_prompt: You are a lead engineer. Say nothing of todo lists.\n');
+    expect((await e.del('d1', 'first')).status).toBe('ok');
+    const refused = await e.del('d2', 'second');
+    expect(refused).toMatchObject({ status: 'blocked', isError: true, text: 'a todo list is owed' });
+    expect(e.delegated).toEqual(['first']);
+    const todo = await e.port.dispatch(e.call('t1', 'todo', { operation: 'replace', phases: [{ name: 'Work', tasks: [{ name: 'first' }, { name: 'second' }] }] }), new AbortController().signal);
+    expect(todo.status).toBe('ok');
+    expect((await e.del('d3', 'second')).status).toBe('ok');
+    expect(e.delegated).toEqual(['first', 'second']);
+    expect(e.log).toEqual(['started', 'started']);
+  });
+
+  it('an entry role whose resolved set holds no todo is never refused, and the run is told once per port', async () => {
+    const e = entryPort('    tools: [read_file, grep, delegate]\n');
+    expect(e.log).toEqual(['unavailable']);
+    for (const task of ['one', 'two', 'three']) expect((await e.del(`d-${task}`, task)).status).toBe('ok');
+    expect(e.delegated).toEqual(['one', 'two', 'three']);
+  });
+
+  it('a child\'s port carries no check, whatever its context holds', async () => {
+    const e = entryPort('    tools: [read_file, grep, todo, delegate]\n', { parentId: 'bg_0a1b2c3d', depth: 1 });
+    for (const task of ['one', 'two']) expect((await e.del(`d-${task}`, task)).status).toBe('ok');
+    expect(e.log).toEqual([]);
+  });
+});
+
 describe('REQ-MCP-034: the code-intelligence binding of a run in an isolated working tree', () => {
   let dir: string;
   let worktree: string;

@@ -6,7 +6,7 @@ import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { Committed, SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
-import { classifyStop, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planNotDoneSummary, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
+import { classifyStop, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planNotDoneSummary, statusForResult, stopCondition, summarise, TODO_LIST_OWED_TEXT, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { mintTodoId, taskLine, Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
@@ -538,6 +538,8 @@ export class Run {
    * launching the next segment (ADR-0062) rather than by flipping a flag under a running turn.
    */
   private planHeld = false;
+  /** OQ-213: whether this run has said its entry role holds no `todo` tool (`todoListUnavailable`). */
+  private todoListUnavailableTold = false;
   /**
    * REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child), each with
    * the name it was announced under, which the not-delivered line repeats (`reportUndeliveredSteering`).
@@ -1307,7 +1309,7 @@ export class Run {
     // REQ-ORCH-075: a task completed or given up on carries nothing further, to its own iterations or any other task's; an
     // iteration that closed for another reason than its plan left open leaves nothing to tell the next (a cancelled one
     // did not finish, and the items the one before it left open still stand).
-    if (task.state === 'complete' || task.state === 'abandoned') { delete task.planLeftOpen; delete task.planExcused; }
+    if (task.state === 'complete' || task.state === 'abandoned') { delete task.planLeftOpen; delete task.planExcused; delete task.workItems; delete task.listWritten; }
     else if (outcome !== 'cancelled' && !leftPlanOpen) delete task.planLeftOpen;
     // PD-ORCH-005 clause 1: `iteration.end` and the iteration's record closing with its outcome, in one transaction — with
     // the todo its task and held messages were just closed in, so no death before the save below strands them in progress.
@@ -1785,6 +1787,8 @@ export class Run {
         ...(this.deps.artifacts ? { artifacts: this.deps.artifacts } : {}),
         // REQ-ORCH-153: the live hold and the registry predicate, for the child-admission refusal.
         ...(this.deps.plan ? { planGate: { held: () => this.planHeld, withholds: this.deps.plan.withholds } } : {}),
+        // REQ-ORCH-059: the open items a completion notification reminds its parent of.
+        openTodoFor: (agentId: string) => this.openTodoFor(agentId),
       }, iteration)
       : null;
     this.children = children;
@@ -2426,10 +2430,77 @@ export class Run {
 
   replaceAgentTodo(ownerId: string | null, root: boolean, document: AgentTodoDocument): boolean {
     if (this.endWritten) return false;
-    if (root) this.agentTodo = document;
-    else if (!this.storeChildTodo(ownerId, document)) return false;
+    if (root) {
+      this.agentTodo = document;
+      this.noteListWritten(document);
+    } else if (!this.storeChildTodo(ownerId, document)) return false;
     this.saveRunning({});
     return true;
+  }
+
+  /**
+   * OQ-213 (REQ-ORCH-029): an accepted root `todo` write that leaves the coordinator's plan holding at least one task is the
+   * todo list its task's further work items wait for — the current iteration's task, or in a plan cycle every task it plans
+   * (REQ-ORCH-153: the cycle's plan is theirs, as `planCycleTakeUp` records). A person's edit (`editTodo`) never comes here.
+   */
+  private noteListWritten(document: AgentTodoDocument): void {
+    if (this.coordinatorPlan() === null || !document.phases.some((phase) => phase.tasks.length > 0)) return;
+    const current = this.iterationTaskRecord();
+    const tasks = current !== null ? [current] : this.planHeld ? this.todo.pendingTasks() : [];
+    for (const task of tasks) task.listWritten = true;
+  }
+
+  /**
+   * OQ-213 as ruled under the owner's delegation (R-072), building REQ-ORCH-029's "work spanning more than one step is
+   * accompanied by a todo list it keeps current": the planner task whose work items the entry port's calls are — the current
+   * execution iteration's, while the entry role coordinates. None under `single` (REQ-ORCH-025), none in a plan cycle (its
+   * calls neither count nor are refused), none outside an iteration.
+   */
+  private workItemTask(): Task | null {
+    if (this.deps.coordinating === false || this.planHeld) return null;
+    return this.iterationTaskRecord();
+  }
+
+  /**
+   * OQ-213: the refusal the entry port's gate returns for the call that would start the current task's second work item
+   * while the coordinator keeps no todo list of its own for it (`Task.listWritten`), or null. Each refusal is logged as a
+   * warning citing REQ-ORCH-029. Read live at each dispatch through the tool context's `todoList`.
+   */
+  todoListOwed(): string | null {
+    const task = this.workItemTask();
+    if (task === null || (task.workItems ?? 0) < 1 || task.listWritten === true) return null;
+    this.deps.warn(`iteration ${this.rootRecord?.iteration ?? this.iterationsCompleted + 1}: ${this.rootName} began the task's second work item with no todo list of its own; the call was refused (REQ-ORCH-029)`);
+    return TODO_LIST_OWED_TEXT;
+  }
+
+  /** OQ-213: a work item of the entry port reached execution; counted with the current task and saved at once. */
+  workItemStarted(): void {
+    const task = this.workItemTask();
+    if (task === null) return;
+    task.workItems = (task.workItems ?? 0) + 1;
+    this.saveRunning({});
+  }
+
+  /**
+   * OQ-213: the entry role's resolved tool set holds no `todo`, so no list can be written and the check refuses nothing —
+   * said once per run, while the entry role coordinates, so a persona configured without the tool is not deadlocked silently.
+   */
+  todoListUnavailable(): void {
+    if (this.deps.coordinating === false || this.todoListUnavailableTold) return;
+    this.todoListUnavailableTold = true;
+    this.deps.warn(`${this.rootName} holds no todo tool, so REQ-ORCH-029's todo list cannot be kept and no work item waits for one on this run`);
+  }
+
+  /**
+   * REQ-ORCH-059: the open plan items a completion notification reminds the agent `agentId` of — the root's, those its
+   * current task answers for (`openRootPlan`); a child's, its own todo's.
+   */
+  private openTodoFor(agentId: string): readonly string[] {
+    if (this.isRootAgent(agentId)) {
+      const task = this.iterationTaskRecord();
+      return task === null ? openPlanItems(this.coordinatorPlan()) : this.openRootPlan(task);
+    }
+    return openPlanItems(this.agentTodoFor(agentId, false));
   }
 
   private storeChildTodo(ownerId: string | null, document: AgentTodoDocument): boolean {

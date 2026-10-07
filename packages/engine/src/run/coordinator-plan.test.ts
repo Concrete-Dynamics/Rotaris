@@ -7,6 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type RuntimePosture, type ToolPort, type ToolPortContext } from '../index.js';
 import { decodeStoredTodo, projectSessionTodos, type AgentTodoDocument } from '../todo-view.js';
+import { TODO_LIST_OWED_TEXT } from './stop-conditions.js';
 
 /**
  * The repair of `the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` (live-run finding G5):
@@ -42,13 +43,30 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  function sessionsWith(calls: ScriptedCall[], runOverride: 'single' | 'swarm' | null = null, gate?: (callId: string) => Promise<void>, config: Partial<typeof RUN_CONFIG_DEFAULTS> = {}, runStartMode: 'auto' | 'plan' = 'auto') {
+  function sessionsWith(calls: ScriptedCall[], runOverride: 'single' | 'swarm' | null = null, gate?: (callId: string) => Promise<void>, config: Partial<typeof RUN_CONFIG_DEFAULTS> = {}, runStartMode: 'auto' | 'plan' = 'auto', withoutTodo = false) {
     const client = new ScriptedModelClient(calls);
+    const workItemsRun: string[] = [];
+    const warnings: string[] = [];
     const runtime: RuntimePosture = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runOverride, runStartMode };
     // The `todo` tool as the run host's is to the run: it writes the root's plan through the context's `writeTodo`.
-    const portFor = (ctx: ToolPortContext): ToolPort => ({
-      specs: () => [{ name: 'todo', description: 'the plan', parameters: { type: 'object' } }],
+    const portFor = (ctx: ToolPortContext): ToolPort => {
+      // OQ-213: the run host tells the run when the entry role's resolved set holds no `todo`, and hands its gate no check.
+      if (withoutTodo && ctx.todoList) { ctx.todoList.unavailable(); ctx = { ...ctx, todoList: undefined }; }
+      return portOver(ctx);
+    };
+    const portOver = (ctx: ToolPortContext): ToolPort => ({
+      specs: () => [{ name: 'todo', description: 'the plan', parameters: { type: 'object' } }, { name: 'delegate', description: 'a work item', parameters: { type: 'object' } }],
       dispatch: async (call) => {
+        // OQ-213: a work item as the run host's gate treats one — refused while the run owes a todo list, else counted and run.
+        if (call.name === 'delegate') {
+          const args = JSON.parse(call.rawArgs) as Record<string, unknown>;
+          await gate?.(call.callId);
+          const owed = ctx.todoList?.owed() ?? null;
+          if (owed !== null) return { text: owed, isError: true, status: 'blocked', durationMs: 0, label: 'delegate', args, blockedReason: owed };
+          ctx.todoList?.started();
+          workItemsRun.push(String(args['task']));
+          return { text: 'delegated', isError: false, status: 'ok', durationMs: 0, label: 'delegate', args };
+        }
         const args = JSON.parse(call.rawArgs) as { states: Parameters<typeof plan>[0] };
         await gate?.(call.callId);
         const written = ctx.writeTodo?.(plan(args.states)) ?? false;
@@ -57,11 +75,11 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
       cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
     });
     const sessions = new Sessions({
-      clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 86, host: HOST, retentionCap: 20_000, warn: () => undefined,
+      clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 86, host: HOST, retentionCap: 20_000, warn: (m) => { warnings.push(m); },
       mintSessionId: () => `S-plan-${++minted}`, model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, ...config, model: MODEL, credentialFor: () => async () => 'k' } }, runtime,
       sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), tools: portFor, attended: () => true,
     });
-    return { sessions, client };
+    return { sessions, client, workItemsRun, warnings };
   }
   const firstUser = (r: ModelRequest): string => r.messages.find((m) => m.role === 'user')!.content.map((c) => (c.kind === 'text' ? c.text : '')).join('\n');
   const outcomes = (sid: SessionId) => dal.iterationsOf(sid).map((r) => r.outcome);
@@ -376,6 +394,183 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
     expect((await sessions.running(sid)!).status).toBe('completed');
     expect(outcomes(sid)).toEqual(['succeeded']);
+  });
+
+  /**
+   * OQ-213 as ruled under the owner's delegation (R-072), building REQ-ORCH-029's "work spanning more than one step is
+   * accompanied by a todo list it keeps current": while the entry role coordinates, the call that would start the current
+   * task's second work item is refused until the entry role has written a todo list of its own for that task. The port here
+   * stands in for the run host's gate (`apps/desktop/src/run-host/tools.ts`, `packages/agent-tools/src/gate.ts`): a
+   * `delegate` call is a work item, refused while the run owes a list, counted once it runs.
+   */
+  describe('the todo list owed before a task\'s second work item (OQ-213, REQ-ORCH-029)', () => {
+    const del = (callId: string, task: string): ScriptedCall => toolCalls([{ callId, name: 'delegate', args: { task } }], 'working');
+    const refusals = (warnings: readonly string[]) => warnings.filter((w) => w.includes('began the task\'s second work item with no todo list of its own; the call was refused (REQ-ORCH-029)'));
+    const toolResultsOf = (r: ModelRequest) => r.messages.flatMap((m) => [...m.content] as { kind: string }[]).filter((c) => c.kind === 'tool-result') as unknown as { callId: string; result: string }[];
+    const planner = (sid: SessionId) => decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases.flatMap((p) => p.tasks);
+
+    it('two delegations with no list: the second is refused and logged; once the list is written the same call runs', async () => {
+      const { sessions, client, workItemsRun, warnings } = sessionsWith([
+        del('d1', 'one'), del('d2', 'two'),
+        writePlan('p1', ['COMPLETED', 'IN_PROGRESS']), del('d3', 'two'),
+        writePlan('p2', ['COMPLETED', 'COMPLETED']), answer('Both done.'),
+      ]);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Without the refusal both delegations ran with no plan behind them: ['one', 'two', 'two'].
+      expect(workItemsRun).toEqual(['one', 'two']);
+      expect(refusals(warnings)).toHaveLength(1);
+      expect(refusals(warnings)[0]).toMatch(/iteration 1: orchestrator began/);
+      const refused = toolResultsOf(client.requests[2]!).find((r) => r.callId === 'd2')!;
+      expect(refused.result).toBe(TODO_LIST_OWED_TEXT);
+      expect(outcomes(sid)).toEqual(['succeeded']);
+      // A task completed carries neither fact any further.
+      expect(planner(sid)[0]).not.toHaveProperty('workItems');
+      expect(planner(sid)[0]).not.toHaveProperty('listWritten');
+    });
+
+    it('a coordinator that plans first is never refused', async () => {
+      const { sessions, workItemsRun, warnings } = sessionsWith([
+        writePlan('p1', ['IN_PROGRESS', 'PENDING']), del('d1', 'one'), del('d2', 'two'),
+        writePlan('p2', ['COMPLETED', 'COMPLETED']), answer('Both done.'),
+      ]);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(workItemsRun).toEqual(['one', 'two']);
+      expect(refusals(warnings)).toEqual([]);
+    });
+
+    it('[delegate, delegate, todo] in one step: the second delegate is refused — the calls dispatch in order', async () => {
+      const { sessions, workItemsRun, warnings } = sessionsWith([
+        toolCalls([{ callId: 'd1', name: 'delegate', args: { task: 'one' } }, { callId: 'd2', name: 'delegate', args: { task: 'two' } }, { callId: 'p1', name: 'todo', args: { states: ['COMPLETED', 'COMPLETED'] } }], 'all at once'),
+        del('d3', 'two'), answer('Both done.'),
+      ]);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(workItemsRun).toEqual(['one', 'two']);
+      expect(refusals(warnings)).toHaveLength(1);
+    });
+
+    it('[todo, delegate, delegate] in one step: a list written earlier in the step satisfies the check', async () => {
+      const { sessions, workItemsRun, warnings } = sessionsWith([
+        toolCalls([{ callId: 'p1', name: 'todo', args: { states: ['COMPLETED', 'COMPLETED'] } }, { callId: 'd1', name: 'delegate', args: { task: 'one' } }, { callId: 'd2', name: 'delegate', args: { task: 'two' } }], 'plan, then both'),
+        answer('Both done.'),
+      ]);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(workItemsRun).toEqual(['one', 'two']);
+      expect(refusals(warnings)).toEqual([]);
+    });
+
+    it('one delegation is no multi-step work: nothing is refused and no list is asked for', async () => {
+      const { sessions, workItemsRun, warnings } = sessionsWith([del('d1', 'one'), answer('Done.')]);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(workItemsRun).toEqual(['one']);
+      expect(refusals(warnings)).toEqual([]);
+    });
+
+    it('REQ-ORCH-025: under a `single` override the entry role does not coordinate, and nothing is refused', async () => {
+      const { sessions, workItemsRun, warnings } = sessionsWith([del('d1', 'one'), del('d2', 'two'), answer('Done.')], 'single');
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(workItemsRun).toEqual(['one', 'two']);
+      expect(refusals(warnings)).toEqual([]);
+      expect(planner(sid)[0]).not.toHaveProperty('workItems');
+    });
+
+    it('an entry role whose resolved set holds no todo is never refused, and the run says so once, across its iterations', async () => {
+      const { sessions, workItemsRun, warnings } = sessionsWith([del('d1', 'one'), del('d2', 'two'), answer('A done.'), del('d3', 'three'), answer('B done.')], null, undefined, {}, 'auto', true);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'write the changelog' } } as never)).toMatchObject({ ok: true });
+      await sessions.running(sid)!;
+      expect(workItemsRun).toEqual(['one', 'two', 'three']);
+      expect(refusals(warnings)).toEqual([]);
+      expect(warnings.filter((w) => w.includes('holds no todo tool'))).toHaveLength(1);
+    });
+
+    it('REQ-ORCH-153: a plan cycle\'s delegations neither count nor are refused, and the list it writes is the planned task\'s', async () => {
+      const { sessions, workItemsRun, warnings } = sessionsWith([
+        del('c1', 'look'), del('c2', 'look again'), writePlan('p1', ['PENDING', 'PENDING']), answer('Step 1: one. Step 2: two.'),
+        del('d1', 'one'), del('d2', 'two'), writePlan('p2', ['COMPLETED', 'COMPLETED']), answer('Both done.'),
+      ], null, undefined, {}, 'plan');
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(planner(sid)[0]).toMatchObject({ listWritten: true });
+      expect(planner(sid)[0]).not.toHaveProperty('workItems');
+      expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(workItemsRun).toEqual(['look', 'look again', 'one', 'two']);
+      expect(refusals(warnings)).toEqual([]);
+    });
+
+    it('a plan cycle that writes no list leaves the task owing one after approval', async () => {
+      const { sessions, workItemsRun, warnings } = sessionsWith([
+        del('c1', 'look'), del('c2', 'look again'), answer('Step 1: one. Step 2: two.'),
+        del('d1', 'one'), del('d2', 'two'), writePlan('p2', ['COMPLETED', 'COMPLETED']), del('d3', 'two'), answer('Both done.'),
+      ], null, undefined, {}, 'plan');
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+      await sessions.running(sid)!;
+      expect(workItemsRun).toEqual(['look', 'look again', 'one', 'two']);
+      expect(refusals(warnings)).toHaveLength(1);
+    });
+
+    it('pause then continue: the work-item count is kept with the task, so the resumed iteration\'s next work item still waits for a list', async () => {
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => { release = resolve; });
+      let entered!: () => void;
+      const reached = new Promise<void>((resolve) => { entered = resolve; });
+      const { sessions, workItemsRun, warnings } = sessionsWith([
+        del('d1', 'one'),
+        del('d2', 'two'), writePlan('p1', ['COMPLETED', 'COMPLETED']), del('d3', 'two'), answer('Both done.'),
+      ], null, async (callId) => { if (callId === 'd1') { entered(); await held; } });
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      await reached;
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      expect(planner(sid)[0]).toMatchObject({ workItems: 1 });
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Without the stored count the resumed run started from none and let the second delegation through unplanned.
+      expect(workItemsRun).toEqual(['one', 'two']);
+      expect(refusals(warnings)).toHaveLength(1);
+    });
+
+    it('a later task whose earlier list is all done is refused until it writes its own', async () => {
+      const { sessions, workItemsRun, warnings } = sessionsWith([
+        writePlan('a1', ['COMPLETED', 'COMPLETED']), del('a2', 'a-one'), del('a3', 'a-two'), answer('A done.'),
+        del('b1', 'b-one'), del('b2', 'b-two'), writePlan('b3', ['COMPLETED', 'COMPLETED', 'COMPLETED']), del('b4', 'b-two'), answer('B done.'),
+      ]);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'write the changelog' } } as never)).toMatchObject({ ok: true });
+      await sessions.running(sid)!;
+      expect(outcomes(sid)).toEqual(['succeeded', 'succeeded']);
+      expect(workItemsRun).toEqual(['a-one', 'a-two', 'b-one', 'b-two']);
+      expect(refusals(warnings)).toHaveLength(1);
+      expect(refusals(warnings)[0]).toMatch(/^.*iteration 2:/);
+    });
+
+    it('a person\'s own edit of the plan is not the coordinator\'s list', async () => {
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => { release = resolve; });
+      let entered!: () => void;
+      const reached = new Promise<void>((resolve) => { entered = resolve; });
+      const { sessions, workItemsRun, warnings } = sessionsWith([
+        writePlan('a1', ['COMPLETED', 'COMPLETED']), answer('A done.'),
+        del('b1', 'b-one'), del('b2', 'b-two'), writePlan('b3', ['COMPLETED', 'COMPLETED', 'COMPLETED']), del('b4', 'b-two'), answer('B done.'),
+      ], null, async (callId) => { if (callId === 'b1') { entered(); await held; } });
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'write the changelog' } } as never)).toMatchObject({ ok: true });
+      await reached;
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', text: 'a step of my own', source: 'agent', phaseId: 'e002ab7d' } })).toMatchObject({ ok: true });
+      release();
+      await sessions.running(sid)!;
+      expect(workItemsRun).toEqual(['b-one', 'b-two']);
+      expect(refusals(warnings)).toHaveLength(1);
+    });
   });
 
   it('REQ-ORCH-025: under a `single` override the entry role is the worker, and REQ-ORCH-029 does not bind it', async () => {

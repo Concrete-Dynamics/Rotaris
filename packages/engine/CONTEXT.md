@@ -200,7 +200,17 @@ continue that states no new request appends none while the last request is still
 the repair of `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`, ~~which no directive
 governs~~ confirmed 2026-10-06 by R-071 and stated by `PD-ORCH-005` clause 25 (revision 6). — `REQ-ORCH-004`,
 `PD-ORCH-005` clauses 17 and 25, OQ-102
-_Avoid_: backlog (that is a delivery state on the requirements board), checklist
+_Avoid_: backlog (that is a delivery state on the requirements board), checklist. The specification also says "todo list"
+of an agent's own plan; that one is the **Agent plan**.
+
+**Agent plan**:
+An agent's own plan, which the `todo` tool writes: phases holding named tasks in REQ-TOOLS-144's states, distinct from the
+run's todo list, which the run writes and resolves itself. The coordinator's agent plan is the "todo list it keeps current"
+of REQ-ORCH-029: from a task's second work item on the run refuses the next until one is written for that task (OQ-213), its
+open items hold the task's completion (REQ-ORCH-075, OQ-203), and a background child's completion notification names them
+(REQ-ORCH-059). The Todo pane shows it as "Agent plan" (REQ-CHAT-088). — `REQ-TOOLS-144`, `REQ-TOOLS-147`, `REQ-ORCH-029`,
+`REQ-ORCH-075`, OQ-213
+_Avoid_: planner plan (the run's todo list), task ledger
 
 ### Finishing work
 

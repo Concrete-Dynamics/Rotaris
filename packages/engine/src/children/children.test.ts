@@ -505,6 +505,37 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   });
 
   /**
+   * REQ-ORCH-059's "Open-todo reminder lines are appended" (the repair of
+   * `docs/defects/fixed/the-completion-notification-carries-no-open-todo-reminder-lines.md`, found ruling OQ-213): the
+   * notification that tells the coordinator a background child finished names the items its own plan still holds open.
+   */
+  it('REQ-ORCH-059: the completion notification names the coordinator\'s open plan items', async () => {
+    const plan = (states: readonly string[]) => ({ schema_version: 1 as const, phases: [{ id: 'e002ab7d', name: 'Build', tasks: states.map((state, i) => ({ id: `0000000${i}`, name: ['Implement it', 'Check it'][i]!, description: '', state })) }] });
+    const tool: TestTool = (name, a, ctx) => {
+      if (name !== 'todo') return undefined;
+      const written = ctx.writeTodo?.(plan(a['states'] as string[]) as never) ?? false;
+      return Promise.resolve({ text: written ? 'Plan updated.' : 'not written', isError: !written, status: written ? 'ok' : 'failed', durationMs: 1, label: 'todo', args: a });
+    };
+    const { sessions, client } = sessionsWith((persona, turn) => {
+      if (persona === 'orchestrator') {
+        if (turn === 1) return toolCalls([{ callId: 't1', name: 'todo', args: { states: ['IN_PROGRESS', 'PENDING'] } }, { callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'implement', task: 'TASK: write it' } }], 'Planning, then delegating.');
+        if (turn === 2) return answer('The child is working on it.');
+        if (turn === 3) return toolCalls([{ callId: 't2', name: 'todo', args: { states: ['COMPLETED', 'COMPLETED'] } }], 'Done.');
+        return answer('All done: implemented and checked.');
+      }
+      if (persona === 'summariser') return answer('{"summary":"The child wrote the file.","key_findings":[],"tags":[]}');
+      return answer('I implemented it.');
+    }, { tool });
+    const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const userTexts = client.requests.flatMap((r) => r.messages.filter((m) => m.role === 'user').map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')));
+    const text = userTexts.find((t) => t.includes('[Background task completed]'))!;
+    expect(text).toBeDefined();
+    // Without the repair the notification ended at "All background tasks have completed." and named no item of the plan.
+    expect(text).toContain('All background tasks have completed.\nYour todo list still holds 2 open items:\n- Implement it\n- Check it');
+  });
+
+  /**
    * REQ-MCP-065 with REQ-TOOLS-006 (the repair of `a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`):
    * the child's row recorded its persona's DECLARED tools at spawn and its persona's MCP surface before any control, so a tool
    * `coordinator_only`, `read_only` or `tool_restrictions` removed was still recorded as granted. The row now records what

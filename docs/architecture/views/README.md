@@ -81,6 +81,14 @@ writes the count, `0` when none, where the line read `n/a`. The live run's reade
 `n/a` line. The **runtime view**'s `summary.md` paragraph says so. No package, edge, process, channel, command or store column
 changed.
 
+**The coordinator keeps its own todo list on multi-step work, held at dispatch (REQ-ORCH-029, REQ-ORCH-059; OQ-213, fin27).**
+The entry port's gate refuses the call that would start a task's second work item while the coordinating entry role has written
+no todo list of its own for it (`GateDeps.todoList`, `isWorkItem` in `packages/agent-tools/src/todo-list-gate.ts`;
+`Run.todoListOwed`, `workItemStarted`, `todoListUnavailable`; `Task.workItems`, `Task.listWritten` in the stored todo), and
+`completionNotification` appends REQ-ORCH-059's open-todo reminder lines. The **runtime view** (§2) and the **seams view**
+(§4, the gate's order) say so. One module joins `@rotaris/agent-tools`; no edge, process, channel, command or store column
+changed (the two task facts ride in the existing `sessions.todo` document).
+
 **A tool call's streamed arguments are model events (REQ-ORCH-089, REQ-ORCH-090, REQ-NOTIFY-112, REQ-CHAT-164; finacc3 F02).**
 `StreamPart` gains `tool-input`, which `AiSdkModelClient.stream` yields for the SDK's `tool-input-start` and `tool-input-delta`
 parts; the call still arrives once, whole, as `tool-call`. The stall watch counts it as output (`OUTPUT_EVENTS`), the first one

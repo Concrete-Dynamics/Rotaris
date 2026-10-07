@@ -63,7 +63,7 @@ function recordingSink() {
   return { sink, decisions, requested, issues, timeline, opens, settles, pending, warnings };
 }
 
-function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[]; writeClaimFor?: GateDeps['writeClaimFor']; root?: string; publicTool?: GateDeps['publicTool']; resolvePath?: GateDeps['resolvePath']; presence?: GateDeps['presence']; quitting?: () => boolean } = {}) {
+function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[]; writeClaimFor?: GateDeps['writeClaimFor']; root?: string; publicTool?: GateDeps['publicTool']; resolvePath?: GateDeps['resolvePath']; presence?: GateDeps['presence']; quitting?: () => boolean; todoList?: GateDeps['todoList'] } = {}) {
   const clock = new FakeClock();
   const rec = recordingSink();
   const approvals = new PendingApprovals(clock, opts.quitting ? { held: opts.quitting } : {});
@@ -86,6 +86,7 @@ function harness(opts: { preset?: string; attended?: boolean; presenter?: Presen
     ...(opts.writeClaimFor ? { writeClaimFor: opts.writeClaimFor } : {}),
     ...(opts.presence ? { presence: opts.presence } : {}),
     ...(opts.quitting ? { quitting: opts.quitting } : {}),
+    ...(opts.todoList ? { todoList: opts.todoList } : {}),
   });
   const call = (name: string, args: unknown): ToolCall => ({ callId: `c-${name}`, name, rawArgs: typeof args === 'string' ? args : (args as Record<string, unknown>), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' });
   return { gate, clock, rec, approvals, policy, executed, call };
@@ -729,6 +730,110 @@ describe('the plan gate at dispatch (REQ-ORCH-153, ADR-0062)', () => {
     const released = harness({ preset: 'autonomous', planGateHeld: false });
     const write = await released.gate.dispatch(released.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
     expect(write).toMatchObject({ status: 'ok', text: 'wrote a.txt' });
+  });
+});
+
+/**
+ * OQ-213 as ruled under the owner's delegation (R-072), building REQ-ORCH-029's todo clause: the call that would start a
+ * task's second work item while the coordinator keeps no todo list of its own is refused unrun. The run's half (whether a list
+ * is owed) is a stand-in here that owes one once a work item has started, so each clause is decided against the gate alone.
+ */
+describe('the todo list owed before a second work item (OQ-213, REQ-ORCH-029)', () => {
+  const OWED = 'This call was not run: a todo list is owed (REQ-ORCH-029).';
+  function owing(directWork: boolean) {
+    const log: string[] = [];
+    let started = 0;
+    let written = false;
+    const todoList = {
+      directWork,
+      owed: () => { log.push('owed'); return started >= 1 && !written ? OWED : null; },
+      started: () => { log.push('started'); started += 1; },
+    };
+    return { todoList, log, write: () => { written = true; }, started: () => started };
+  }
+  const delegate = () => simpleExecutor('delegate', 'd', z.object({ role: z.string(), task: z.string() }), async () => ({ text: 'delegated', isError: false }));
+
+  it('refuses the second delegate call as blocked, unrun, before the schema, the permission and the hooks; files no tool_error', async () => {
+    const o = owing(false);
+    const ran: string[] = [];
+    const hooks: ToolHooks = { preTool: async () => { ran.push('pre'); return { blocked: false, refusal: '' }; }, postTool: async () => ({ feedback: '' }) };
+    const d = simpleExecutor('delegate', 'd', z.object({ role: z.string(), task: z.string() }), async (a) => { ran.push(String(a.task)); return { text: 'delegated', isError: false }; });
+    const h = harness({ preset: 'autonomous', todoList: o.todoList, extraExecutors: [['delegate', d]], hooks });
+    const first = await h.gate.dispatch(h.call('delegate', { role: 'coding-agent', task: 'one' }), new AbortController().signal);
+    expect(first.status).toBe('ok');
+    const decisionsAfterFirst = h.rec.decisions.length;
+    // Malformed on purpose: the refusal answers before the schema would.
+    const second = await h.gate.dispatch(h.call('delegate', { role: 'coding-agent' }), new AbortController().signal);
+    expect(second).toMatchObject({ status: 'blocked', isError: true, text: OWED, blockedReason: OWED });
+    expect(ran).toEqual(['pre', 'one']);
+    expect(h.rec.decisions).toHaveLength(decisionsAfterFirst);
+    expect(h.rec.settles[1]).toMatchObject({ status: 'blocked', failure_kind: 'todo_list_owed' });
+    expect(h.rec.issues.filter((i) => i.kind === 'tool_error')).toEqual([]);
+    expect(o.started()).toBe(1);
+  });
+
+  it('lets the call through once the list is written, and counts it', async () => {
+    const o = owing(false);
+    const h = harness({ preset: 'autonomous', todoList: o.todoList, extraExecutors: [['delegate', delegate()]] });
+    await h.gate.dispatch(h.call('delegate', { role: 'a', task: 'one' }), new AbortController().signal);
+    expect((await h.gate.dispatch(h.call('delegate', { role: 'a', task: 'two' }), new AbortController().signal)).status).toBe('blocked');
+    o.write();
+    expect((await h.gate.dispatch(h.call('delegate', { role: 'a', task: 'two' }), new AbortController().signal)).status).toBe('ok');
+    expect(o.started()).toBe(2);
+  });
+
+  it('a call refused for another reason starts no work item: a denied delegate leaves the next one the first', async () => {
+    const o = owing(false);
+    const h = harness({ preset: 'autonomous', todoList: o.todoList, extraExecutors: [['delegate', delegate()]] });
+    const invalid = await h.gate.dispatch(h.call('delegate', { role: 'a' }), new AbortController().signal);
+    expect(invalid.status).toBe('failed');
+    expect(o.started()).toBe(0);
+    expect((await h.gate.dispatch(h.call('delegate', { role: 'a', task: 'one' }), new AbortController().signal)).status).toBe('ok');
+  });
+
+  it('reads, todo writes and the other coordination tools are no work items, and are never refused', async () => {
+    const o = owing(false);
+    const h = harness({ preset: 'autonomous', todoList: o.todoList, extraExecutors: [['delegate', delegate()], ['read_file', simpleExecutor('read_file', 'r', anySchema, async () => ({ text: 'read', isError: false }))]] });
+    await h.gate.dispatch(h.call('delegate', { role: 'a', task: 'one' }), new AbortController().signal);
+    expect((await h.gate.dispatch(h.call('read_file', { path: 'a.ts' }), new AbortController().signal)).status).toBe('ok');
+    expect((await h.gate.dispatch(h.call('todo', { operation: 'list' }), new AbortController().signal)).status).toBe('ok');
+    expect(o.log).toEqual(['owed', 'started']);
+  });
+
+  it('on a direct-work grant a write and a terminal call are work items: the second is refused', async () => {
+    const o = owing(true);
+    const h = harness({ preset: 'autonomous', todoList: o.todoList });
+    expect((await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal)).status).toBe('ok');
+    const run = await h.gate.dispatch(h.call('terminal', { command: 'npm test' }), new AbortController().signal);
+    expect(run).toMatchObject({ status: 'blocked', text: OWED });
+    expect(h.executed).toEqual([{ operation: 'create', path: 'a.txt' }]);
+  });
+
+  it('without a direct-work grant only delegate counts; an undeclared tool never does', async () => {
+    const o = owing(false);
+    const mcp = simpleExecutor('mcp__x__write', 'm', anySchema, async () => ({ text: 'mcp', isError: false }));
+    const h = harness({ preset: 'autonomous', todoList: o.todoList, extraExecutors: [['mcp__x__write', mcp]], publicTool: (name) => !name.startsWith('mcp__') });
+    await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    await h.gate.dispatch(h.call('mcp__x__write', { any: 1 }), new AbortController().signal);
+    expect(o.log).toEqual([]);
+    const direct = owing(true);
+    const d = harness({ preset: 'autonomous', todoList: direct.todoList, extraExecutors: [['mcp__x__write', mcp]], publicTool: (name) => !name.startsWith('mcp__') });
+    await d.gate.dispatch(d.call('mcp__x__write', { any: 1 }), new AbortController().signal);
+    expect(direct.log).toEqual([]);
+  });
+
+  it('a held plan gate answers first, in its own words', async () => {
+    const o = owing(true);
+    o.todoList.started();
+    const h = harness({ preset: 'autonomous', planGateHeld: true, todoList: o.todoList });
+    const r = await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    expect(r.text).toContain('held at the plan gate');
+    expect(h.rec.settles[0]).toMatchObject({ failure_kind: 'plan_gate_withheld' });
+  });
+
+  it('a port with no check refuses nothing', async () => {
+    const h = harness({ preset: 'autonomous', extraExecutors: [['delegate', delegate()]] });
+    for (const task of ['one', 'two', 'three']) expect((await h.gate.dispatch(h.call('delegate', { role: 'a', task }), new AbortController().signal)).status).toBe('ok');
   });
 });
 

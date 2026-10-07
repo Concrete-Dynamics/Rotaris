@@ -375,6 +375,15 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
    * the override is at least as restrictive as it — the same direction REQ-TOOLS-074 gives a live agent. The
    * selected name IS the effective one: there is no downgrade left to re-resolve.
    */
+  /*
+   * OQ-213 as ruled (R-072), REQ-ORCH-029's todo clause: the entry agent's gate refuses the call that would start its task's
+   * second work item while it keeps no todo list of its own — only where the one resolution left it `todo`, so the list can
+   * be written. Without the tool the check refuses nothing and the run says so once. The engine supplies the context's check
+   * at depth 0 alone; whether the run coordinates, and whether a list is owed, are the run's to answer, read live.
+   */
+  const todoList = isEntry && ctx.todoList !== undefined
+    ? (callable.has('todo') ? { directWork, owed: ctx.todoList.owed, started: ctx.todoList.started } : (ctx.todoList.unavailable(), undefined))
+    : undefined;
   const pin = persona.permissionMode ?? null;
   let mode: PermissionPreset = selectRequestedMode({ pin, override: ctx.modeOverride ?? null, runtime: ctx.requestedMode });
   const policy = new PolicyContext(buildPolicy({ preset: mode, workspaceRoot: root }));
@@ -400,6 +409,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     planGateWithheldNames: () => withheldAtPlanGate,
     // PD-TOOLS-006: the live write-scope claims, bound to this port's agent by the engine.
     ...(ctx.writeClaimFor ? { writeClaimFor: ctx.writeClaimFor } : {}),
+    // OQ-213: the entry agent's todo-list check (above).
+    ...(todoList ? { todoList } : {}),
     // PD-TOOLS-005: the run's away holder — the engine's one object per run, so a child's gate reads what the root's marked.
     ...(ctx.presence ? { presence: ctx.presence } : {}),
   });

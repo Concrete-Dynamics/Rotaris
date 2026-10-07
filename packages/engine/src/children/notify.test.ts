@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChildRow } from '@rotaris/store';
 import { cutOffReport } from './cut-off.js';
-import { childPayload, inheritedContextBlock, REPORT_BLOCK_CAP, reportBlock } from './notify.js';
+import { childPayload, completionNotification, inheritedContextBlock, openTodoReminderLines, REPORT_BLOCK_CAP, reportBlock } from './notify.js';
 
 describe('the child payload order — REQ-TOOLS-154, REQ-ORCH-035, PD-TOOLS-006, REQ-TOOLS-152', () => {
   const prior = '[Prior agent context — authoritative: rely on these findings rather than repeating the investigation]';
@@ -66,5 +66,23 @@ describe('the report block — REQ-ORCH-060, PD-ORCH-004', () => {
 
   it('a timed-out child that was not making progress gets exactly the block it had before', () => {
     expect(reportBlock(row(timeout))).toBe('### build (coding-agent) — failed\nworking on b');
+  });
+});
+
+describe('REQ-ORCH-059: the completion notification\'s open-todo reminder lines', () => {
+  const done = { task_id: 'bg_1', canonical_name: 'implement', given_name: 'implement', state: 'succeeded' } as unknown as ChildRow;
+
+  it('appends the parent\'s open plan items after the remaining-count lines, naming up to five', () => {
+    const text = completionNotification(done, 1, 2.5, ['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+    const lines = text.split('\n');
+    expect(lines.slice(-7)).toEqual(['Your todo list still holds 7 open items:', '- a', '- b', '- c', '- d', '- e', '(and 2 more)']);
+    expect(lines[5]).toMatch(/^1 background task still running/);
+  });
+
+  it('appends nothing when no item is open', () => {
+    expect(completionNotification(done, 0, 1, [])).toBe(completionNotification(done, 0, 1));
+    expect(completionNotification(done, 0, 1).split('\n').at(-1)).toBe('All background tasks have completed.');
+    expect(openTodoReminderLines([])).toEqual([]);
+    expect(openTodoReminderLines(['only'])).toEqual(['Your todo list still holds 1 open item:', '- only']);
   });
 });

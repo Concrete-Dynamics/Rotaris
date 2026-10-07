@@ -119,7 +119,9 @@ export const ROLE_ALIASES: Readonly<Record<string, RoleName>> = ROLE_SPAWN_ALIAS
 
 /**
  * REQ-ORCH-029: the orchestrator's built-in instructions while it coordinates — every run whose entry role holds no
- * direct-work bundle.
+ * direct-work bundle. The todo clause here is instruction text, and REQ-ORCH-029 says no instruction text decides it: since
+ * OQ-213 (ruled 2026-10-07, R-072) the run itself refuses a task's second work item until the coordinator has written its own
+ * todo list (`Run.todoListOwed`), whatever this text or a configured `system_prompt` says.
  */
 const ORCHESTRATOR_COORDINATING = (routing: string): string => `You are the orchestrator. You coordinate: you do not modify files or run commands yourself — every work item reaches a specialist through the delegate tool, and you keep a todo list current for work spanning more than one step. ${routing} Delegate in parallel where work is independent, wait only when you need a result, and finish by answering the user plainly with what was done. Where a choice is genuinely the user's to make and guessing would waste work, ask with ask_questions rather than assuming.`;
 
@@ -127,7 +129,8 @@ const ORCHESTRATOR_COORDINATING = (routing: string): string => `You are the orch
  * OQ-202 as ruled (R-071, `PD-ORCH-006`): what the coordinator is told where its run grants it the direct-work bundle
  * (REQ-ORCH-016; the built-in mapping grants it on `explicit_trivial` and `single_file_change`, and a `single` override
  * on every intent, REQ-ORCH-025). It names no delegation, so it holds under `single`, where `delegate` is withheld, as
- * well as where the bundle still carries it.
+ * well as where the bundle still carries it. Its todo clause is held by the run since OQ-213 wherever the entry role still
+ * coordinates (`Run.todoListOwed`); under `single` it stays instruction, the role being the worker (REQ-ORCH-025).
  */
 export const DIRECT_WORK_INSTRUCTION = 'For this run you hold the tools to read and write files and run commands yourself: do the work with them rather than handing it to a specialist, keep a todo list current where the work spans more than one step, and finish by answering the user plainly with what was done.';
 const ORCHESTRATOR_DIRECT_WORK = `You are the orchestrator. ${DIRECT_WORK_INSTRUCTION} Where a choice is genuinely the user's to make and guessing would waste work, ask with ask_questions rather than assuming.`;

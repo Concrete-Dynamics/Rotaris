@@ -13,7 +13,7 @@ Live-run finding K2 (the final default live runs of 2026-10-06 and 2026-10-07, p
 the 6 multi-step runs (edit, resume, frictions) the coordinator delegated more than once and wrote no plan; the task-plan
 strip read "Planner plan" with one row, the prompt itself, and the inspector read "todo not used". On the requirements and
 terminal runs it planned unasked and the strip read "Agent plan". Ruled under the owner's delegation on 2026-10-07 as
-[OQ-213](../architecture/open-questions.md) (R-072).
+[OQ-213](../../architecture/open-questions.md) (R-072).
 
 ## Specs
 
@@ -35,3 +35,29 @@ terminal runs it planned unasked and the strip read "Agent plan". Ruled under th
 - `packages/agent-tools/src/gate.ts` — the one dispatch gate, where REQ-ORCH-153's refusal already sits.
 - `apps/desktop/src/run-host/tools.ts` — the entry port that hands the gate the run's live checks.
 - `packages/engine/src/sessions.ts` — the two `toolsFor` closures that build each agent's tool context.
+
+## Repaired (2026-10-07, fin27)
+
+OQ-213's ruling decides it: the list is the coordinator's own plan, "more than one step" is the task's second work item, and
+the run refuses that work item at dispatch until the entry role has written its list for the task.
+
+- `packages/agent-tools/src/todo-list-gate.ts` — `isWorkItem`: a `delegate` call, or on a direct-work grant a call of a public
+  tool the registry declares as writing workspace files or running commands. `packages/agent-tools/src/gate.ts` refuses a
+  work item after the plan-gate check and before the schema parse when `GateDeps.todoList.owed()` answers: `blocked`,
+  `failure_kind: todo_list_owed`, no `tool_error` issue; a work item that reaches execution is counted (`started()`).
+- `packages/engine/src/run/todo.ts` — `Task.workItems`, `Task.listWritten`, kept in the stored todo beside `planExcused` and
+  removed when the task completes or is given up on. `packages/engine/src/run/run.ts` — `todoListOwed` (the refusal,
+  `TODO_LIST_OWED_TEXT`, and the warning citing REQ-ORCH-029), `workItemStarted`, `todoListUnavailable` (one warning per run
+  where the entry role holds no `todo`), and `replaceAgentTodo` setting `listWritten` for the current task, or in a plan cycle
+  for every task it plans. Nothing applies under `single`, in a plan cycle, or to a person's edit of the plan.
+- `packages/engine/src/sessions.ts` — the depth-0 context's `todoList` in both `toolsFor` closures;
+  `apps/desktop/src/run-host/tools.ts` hands it to the entry gate only where the resolved set holds `todo`.
+
+Pinned by `packages/engine/src/run/coordinator-plan.test.ts` (the OQ-213 block: twelve cases, six red with the check
+answering nothing), `packages/agent-tools/src/gate.test.ts` (eight cases, four red without the gate's check) and
+`apps/desktop/src/run-host/tools.test.ts` (three cases, a configured `system_prompt` among them, one red without the wiring).
+The live run's harness checks it over every session it keeps (`apps/desktop/scripts/lib/coordinator-todo.mjs`). What the
+orchestrator's next default live run should show: on the edit and resume runs a coordinator that delegates twice before
+planning has its second `delegate` refused once (a `blocked` row and a session-log warning citing REQ-ORCH-029), writes a
+plan and repeats the call; every multi-step coordinating session stores an agent plan and the task-plan strip reads "Agent
+plan"; requirements and terminal, which planned unasked, show no refusal.

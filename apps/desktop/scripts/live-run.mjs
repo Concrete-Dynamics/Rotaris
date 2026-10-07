@@ -135,6 +135,7 @@ import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
+import { agentPlanTaskCount, coordinatorTodoReading } from './lib/coordinator-todo.mjs';
 import { stallIssueCadence } from './lib/stall-issue-cadence.mjs';
 import { conclusive, pacedWindows, stallsWhileStreaming } from './lib/paced-arguments.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
@@ -930,6 +931,35 @@ function checkToolRecord() {
 }
 
 /**
+ * OQ-213 as ruled (R-072), REQ-ORCH-029's todo clause over every preserved session (`lib/coordinator-todo.mjs`): no root's
+ * second work item ran before an accepted root `todo` call, and a session whose root ran two or more stores an agent plan.
+ * Each call the gate refused for want of a list is reported as a NOTE: it is the mechanism working, and what it cost.
+ */
+function checkCoordinatorTodo() {
+  if (preservedSessions.length === 0) return;
+  let r;
+  try {
+    const Database = require('better-sqlite3');
+    const db = new Database(oneDatabase(), { readonly: true });
+    try {
+      r = coordinatorTodoReading(preservedSessions.map(({ scenario, sessionId }) => ({
+        scenario,
+        rootNames: db.prepare('SELECT DISTINCT root_persona FROM iterations WHERE session_id = ?').all(sessionId).map((row) => row.root_persona),
+        calls: readToolCalls(sessionId),
+        agentPlanTasks: agentPlanTaskCount(db.prepare('SELECT todo FROM sessions WHERE session_id = ?').get(sessionId)?.todo ?? null),
+      })));
+    } finally { db.close(); }
+  } catch (cause) {
+    check(false, 'the coordinator\'s tool calls and stored todo were read for every session the run kept', cause instanceof Error ? cause.message : String(cause));
+    return;
+  }
+  const at = (c) => `${c.scenario} #${c.ordinal} (${c.tool_name})`;
+  check(r.unlisted.length === 0, 'no coordinator\'s second work item ran before it wrote a todo list of its own (REQ-ORCH-029, OQ-213)', r.unlisted.length === 0 ? `${r.multiStep.length} multi-step session(s): ${r.multiStep.join(', ') || 'none'}` : r.unlisted.map(at).join(', '));
+  check(r.withoutPlan.length === 0, 'every multi-step coordinating session stores an agent plan (REQ-ORCH-029, REQ-TOOLS-147)', r.withoutPlan.length === 0 ? `${r.multiStep.length} multi-step session(s)` : `no agent plan stored: ${r.withoutPlan.join(', ')}`);
+  if (r.refused.length > 0) noted('the gate refused a coordinator\'s second work item until it wrote its todo list (OQ-213)', r.refused.map(at).join(', '));
+}
+
+/**
  * REQ-SESSION-140 for each session the run drove (`lib/summary-sections.mjs`): its `summary.md` carries the requirement's
  * sections in its order, the stop-reason line only where a stop reason is recorded, every Warnings kind, and a Tool errors
  * line that agrees with the file's own Issues line (REQ-SESSION-136). Until fin23 no live run read the file.
@@ -1051,6 +1081,7 @@ const results = {
 function finish(code) {
   // Every session's tool-call record, read while the sandbox still holds the store (`checkToolRecord`).
   checkToolRecord();
+  checkCoordinatorTodo();
   results.finishedAt = new Date().toISOString();
   results.checks = checks;
   // The store goes into the pack BEFORE `cleanup` takes the sandbox — on every exit path through `finish`,

@@ -194,6 +194,10 @@ Invariants:
   `Persona.canPublishArtifacts`, carried by `personaResolverFor` with the same stated-or-built-in rule as `coordinator_only`),
   and is otherwise removed as the prerequisite `artifact_publish_not_granted` (REQ-TOOLS-004); no built-in role declares it
   or carries the flag (OQ-212).
+- **The gate's refusals before the schema parse run in one order**: REQ-ORCH-153's plan gate, then OQ-213's todo list
+  owed before a task's second work item (`GateDeps.todoList`, the entry port's only, where its resolved set holds `todo`).
+  A tool whose `DECLARATIONS` entry writes workspace files or runs commands is a **work item** on a direct-work grant
+  (`isWorkItem`, `todo-list-gate.ts`), so a new tool of that kind is counted there with no edit; `delegate` always is.
 - The gate decides; the executor never asks. An approval travels `gate → presenter → main → dialog` — see
   [`06-sequences.md` §2](06-sequences.md#2-a-permission-approval-end-to-end).
 - A tool that reaches the filesystem states its read roots; a tool that reaches the network reads the egress

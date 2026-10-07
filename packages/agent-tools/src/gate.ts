@@ -8,6 +8,7 @@ import { canonicalToolName, isPublicToolName, META_TOOL_NAMES } from './registry
 import { planGateRefusal, withheldUnderPlanGate } from './planning-grants.js';
 import { checkFence } from './tools/fence.js';
 import { fencedByWriteScope, writeScopeRefusal, type WriteClaimHolder } from './write-scope.js';
+import { isWorkItem, type TodoListGate } from './todo-list-gate.js';
 import { INTERRUPTED_FAILURE_KIND, type Observation, type ToolExecutor } from './tools/types.js';
 
 /**
@@ -162,6 +163,12 @@ export interface GateDeps {
    * POSIX path. Read at each dispatch of `write_file` and `haet_edit`; absent means no claim can reach this agent.
    */
   readonly writeClaimFor?: ((rel: string) => WriteClaimHolder | null) | undefined;
+  /**
+   * OQ-213 (REQ-ORCH-029): the coordinating entry role's todo-list check, read LIVE at each dispatch of a work item
+   * (`isWorkItem`). Present on the entry agent's port alone, and only where its resolved tool set holds `todo`; absent means
+   * no call of this port is ever refused for want of a todo list.
+   */
+  readonly todoList?: TodoListGate | undefined;
   /** PD-TOOLS-005: the run's away state; absent means no run holds one, and every ask is brokered as before the directive. */
   readonly presence?: PresencePort | undefined;
   /**
@@ -354,6 +361,19 @@ export class Gate {
       }
     }
 
+    /*
+     * OQ-213 as ruled (R-072), building REQ-ORCH-029's todo clause: the call that would start the current task's second work
+     * item while the coordinating entry role keeps no todo list of its own for that task is refused unrun. It sits after the
+     * plan-gate check, so a held run's refusal stays REQ-ORCH-153's, and ahead of the schema parse and the permission, so a
+     * call refused here never costs the user an approval first. Like the plan gate's and a write scope's it settles `blocked`
+     * and files no `tool_error` issue: the remedy is one `todo` call away, and the call then runs as it was asked.
+     */
+    const workItem = !isMeta && deps.todoList !== undefined && executor !== undefined && isWorkItem(call.name, !undeclared, deps.todoList.directWork);
+    if (workItem) {
+      const owed = deps.todoList!.owed();
+      if (owed !== null) return finish({ text: owed, isError: true, status: 'blocked', decision: null, observation: null, blockedReason: owed }, { failure_kind: 'todo_list_owed', error: 'a todo list is owed before the second work item' });
+    }
+
     // REQ-TOOLS-032: a payload still unreadable or schema-invalid after repair is a recoverable error, not executed.
     /*
      * REQ-SESSION-136: each such refusal is a failure in the tool-call record (`failed`, `is_error`, `invalid_request`), so
@@ -442,6 +462,8 @@ export class Gate {
       const pre = await hooks.preTool(hookCall);
       if (pre.blocked) return finish({ text: pre.refusal, isError: true, status: 'blocked', decision, observation: null, blockedReason: pre.refusal }, { failure_kind: 'hook_blocked', error: 'stopped by a pre_tool hook' });
     }
+    // OQ-213: a work item is counted once it reaches execution, so a call refused above never starts one.
+    if (workItem) deps.todoList!.started();
     // (3) execution.
     let obs: Observation;
     try {

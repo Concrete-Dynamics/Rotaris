@@ -140,6 +140,14 @@ export function planCorrectionText(open: readonly string[]): string {
   return `You declared success with ${countNoun(open.length, 'item')} of your plan not complete, so the task is not complete:\n${planItemsBlock(open)}`;
 }
 
+/**
+ * OQ-213 as ruled under the owner's delegation (R-072), building REQ-ORCH-029's "work spanning more than one step is
+ * accompanied by a todo list it keeps current": what the coordinating entry role reads when the call that would start its
+ * task's second work item is refused because it keeps no todo list of its own for the task. The call was not run; the remedy
+ * is one `todo` call away, and the same call then runs as it was asked.
+ */
+export const TODO_LIST_OWED_TEXT = 'This call was not run: this task now spans more than one step and you keep no todo list for it (REQ-ORCH-029). Write one with the todo tool, one item per step with only the step you are on IN_PROGRESS, then make this call again.';
+
 /** The open items named (up to the first five, REQ-ORCH-075) and the instruction to continue from the plan. */
 function planItemsBlock(open: readonly string[]): string {
   const shown = open.slice(0, 5);

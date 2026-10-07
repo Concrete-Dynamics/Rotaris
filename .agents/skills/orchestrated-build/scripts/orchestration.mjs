@@ -125,8 +125,12 @@ export function deriveState(events, { mainBranch = 'main', maxFixRounds = DEFAUL
     const done = evs.filter((e) => e.result)
     const landing = done.filter(LANDED).pop()
     const report = done.filter((e) => e.stage === 'implement' || e.stage === 'fix').pop()?.result
+    // Every repair a reviewer made in place, across runs, for the completion result.
+    const repaired = done.filter((e) => e.stage === 'review').flatMap((e) => e.result.repaired || [])
     if (landing) {
-      seed[key] = { key, status: 'merged', mainCommit: landing.result.mainCommit, notesMoved: report?.notesMoved, notesRecorded: report?.notesRecorded, questionsRaised: report?.questionsRaised }
+      // A review that landed while still listing blocking findings: on main, flagged, its findings kept (SKILL.md §4).
+      const left = (landing.stage === 'review' && landing.result.blocking) || []
+      seed[key] = { key, status: 'merged', mainCommit: landing.result.mainCommit, notesMoved: report?.notesMoved, notesRecorded: report?.notesRecorded, questionsRaised: report?.questionsRaised, repaired, ...(left.length ? { landedWithBlocking: true, lastBlocking: left } : {}) }
       continue
     }
     const last = evs[evs.length - 1]
@@ -163,6 +167,7 @@ export function deriveState(events, { mainBranch = 'main', maxFixRounds = DEFAUL
     if (stubborn && r.stage === 'fix') r.efforts = { fix: 'max' }
     if (r.stage !== 'implement' && !r.impl) throw new Error('bundle ' + key + ' has no report to resume from')
     if (r.stage === 'fix' && !r.verdict) throw new Error('bundle ' + key + ' has no verdict to repair')
+    if (repaired.length && r.stage !== 'implement') r.repaired = repaired
     resume[key] = r
   }
   return { seed, resume, cache }
@@ -220,6 +225,20 @@ export function orderLanes(lanes, bundles, { seed = {}, resume = {}, pins = [] }
 // ------------------------------------------------------------------------------------------------ plan → arguments
 function slug(key) { return key.replace(/[^a-z0-9]/gi, '').slice(0, 12).toLowerCase() }
 
+/**
+ * A plan's per-stage efforts. Plans written before 2026-10-07 may name the old `verify` stage: it is read as `review`,
+ * which took over its checklist. `merge` never set the old merge stage's effort (always `high`) and is dropped.
+ */
+export function stageEfforts(efforts) {
+  if (!efforts || (efforts.verify === undefined && efforts.merge === undefined)) return efforts
+  const { verify, merge, ...rest } = efforts
+  return verify !== undefined && rest.review === undefined ? { ...rest, review: verify } : rest
+}
+/** The bundles whose plan entry names an old stage's effort, for render to say how it read them. */
+export function oldEfforts(plan) {
+  return (plan.bundles || []).filter((b) => b.efforts && (b.efforts.verify !== undefined || b.efforts.merge !== undefined)).map((b) => b.key)
+}
+
 /** The PATH export a shell needs for Node >= 24, or the no-op ':' when the default node already is. */
 export function node24Prefix() {
   const major = Number(process.versions.node.split('.')[0])
@@ -235,6 +254,8 @@ export function resolveProfile(profile, plan, repo) {
   const sub = (v) => (typeof v === 'string' ? v.replaceAll('{repo}', repo).replaceAll('{id}', plan.id || 'noid').replaceAll('{node24}', node24Prefix()).replaceAll('{node}', node24Bin())
     : Array.isArray(v) ? v.map(sub) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, sub(x)])) : v)
   const run = Object.fromEntries(Object.entries(profile.run).map(([k, v]) => [k, sub(v)]))
+  // The builder runs `quickGate` and `tests`; the reviewer runs `gate` on the head it lands.
+  for (const k of ['gate', 'quickGate', 'tests']) if (!run[k]) throw new UsageError('the profile names no `' + k + '` command (profiles/<repo>.json, run.' + k + ')')
   if (!plan.trailers) throw new UsageError('the plan names no commit trailers (copy them from this session\'s attribution instructions)')
   run.trailers = plan.trailers
   run.pushTargets = [run.mainBranch, ...(plan.extraPushTargets || [])]
@@ -272,7 +293,7 @@ export function buildArgs(plan, profile, state = { seed: {}, resume: {}, cache: 
     branches.add(branch)
     // A reopened bundle's scope travels in its notes, so every repairer and reviewer of it sees it.
     const notes = [b.notes, b.reopen ? 'Reopened by the orchestrator with this scope (it binds every stage): ' + b.reopen : ''].filter(Boolean).join('\n')
-    bundles[b.key] = { title: b.title || b.tasks.map((t) => t.title).join('; and '), branch, short, tasks: b.tasks, after: b.after || [], notes, effort: b.effort || 'high', efforts: b.efforts }
+    bundles[b.key] = { title: b.title || b.tasks.map((t) => t.title).join('; and '), branch, short, tasks: b.tasks, after: b.after || [], notes, effort: b.effort || 'high', efforts: stageEfforts(b.efforts) }
     ;(laneKeys[b.lane || 'A'] ??= []).push(b.key)
   }
   for (const [k, b] of Object.entries(bundles)) for (const d of b.after) if (!bundles[d]) throw new UsageError('bundle ' + k + ' waits on unknown bundle ' + d)
@@ -338,11 +359,11 @@ function compile(script) {
 /**
  * Runs a rendered script against stub agents. A bundle's first `failReview[key]` reviews hand back a blocking finding
  * they did not repair (beside one they did); its next `landRefuse[key]` find the gate red on the rebased head;
- * `landUnpushed` keys' pushes fail; `block` keys report blocked; `lose` labels (or every label, with `loseAll`) come
+ * `landUnpushed` keys' pushes fail; `landWithBlocking` keys land while listing a blocking finding; `block` keys report blocked; `lose` labels (or every label, with `loseAll`) come
  * back empty; `liveRefused` has the permission system refuse the live-runner's first launch (`'second'`: its second,
  * the first judged). Each agent's schema is kept beside its prompt.
  */
-export async function dryRun(script, { failReview = {}, landRefuse = {}, landUnpushed = [], findings = [], block = [], lose = [], loseAll = false, liveRefused = false, quiet = true } = {}) {
+export async function dryRun(script, { failReview = {}, landRefuse = {}, landUnpushed = [], landWithBlocking = [], findings = [], block = [], lose = [], loseAll = false, liveRefused = false, quiet = true } = {}) {
   const calls = [], prompts = {}, schemas = {}, logs = []
   let active = 0, peak = 0, activeLandings = 0, peakLandings = 0
   const counts = {}
@@ -362,6 +383,7 @@ export async function dryRun(script, { failReview = {}, landRefuse = {}, landUnp
       if (n <= (failReview[key] || 0)) return { ...reviewed, pass: false, blocking: [{ title: 'stub finding ' + n, detail: 'd' }], repaired: [{ finding: 'stub repair ' + n, commit: 'r' + n }], merged: false, pushed: false, checkOnMain: 'not run: a blocking finding remains' }
       if (n <= (failReview[key] || 0) + (landRefuse[key] || 0)) return { ...reviewed, pass: true, merged: false, pushed: false, checkOnMain: 'red', problem: 'rebased gate red' }
       if (landUnpushed.includes(key)) return { ...reviewed, pass: true, merged: true, pushed: false, checkOnMain: 'green', problem: 'push rejected' }
+      if (landWithBlocking.includes(key)) return { ...reviewed, pass: false, blocking: [{ title: 'UNREPAIRED', detail: 'd' }], merged: true, pushed: true, mainCommit: 'm-' + key, checkOnMain: 'green' }
       return { ...reviewed, pass: true, merged: true, pushed: true, mainCommit: 'm-' + key, checkOnMain: 'green' }
     }
     if (rest.startsWith('sweep')) return { head: 'h', gate: 'green', results: [{ proof: 'p', status: 'pass', summary: '', evidence: '' }] }
@@ -388,7 +410,7 @@ export function status(runIds, root) {
   const events = readEvents(runIds, root)
   const { seed, resume, cache } = deriveState(events)
   const rows = []
-  for (const [k, s] of Object.entries(seed)) rows.push([k, s.status, s.mainCommit || s.blockedReason || s.reason || ''])
+  for (const [k, s] of Object.entries(seed)) rows.push([k, s.status, (s.mainCommit || s.blockedReason || s.reason || '') + (s.landedWithBlocking ? ' LANDED WITH ' + s.lastBlocking.length + ' BLOCKING FINDING(S): record each one' : '')])
   for (const [k, r] of Object.entries(resume)) rows.push([k, 'next: ' + r.stage, r.verdict && !r.verdict.pass ? r.verdict.blocking.length + ' blocking' : ''])
   // A live launch the permission system refused is the orchestrator's to run (SKILL.md §5): a check-in sees it here.
   const handoff = events.filter((e) => e.label.startsWith('accept:live#') && e.result).flatMap((e) => (e.result.runs || []).filter((x) => x.refused).map((x) => e.label + ' (head ' + e.result.head + '): ' + (x.command || x.what)))
@@ -413,6 +435,7 @@ export async function selfTest({ quiet = false } = {}) {
     assert.equal(profile.run.live, undefined, 'no live run renders without the owner\'s quoted authorization')
     assert.equal(liveProfile.run.live.ownerWords, 'run it as much as you want')
     assert.throws(() => resolveProfile(rawProfile, {}, '/srv/repo'), /trailers/, 'a plan without trailers is refused')
+    for (const k of ['quickGate', 'tests']) assert.throws(() => resolveProfile({ ...rawProfile, run: { ...rawProfile.run, [k]: undefined } }, session, '/srv/repo'), new RegExp('no `' + k + '`'), 'a profile without `' + k + '` is refused: the builder runs it')
     assert.throws(() => resolveProfile(rawProfile, { ...session, live: { authorized: true, ownerWords: '<the owner\'s authorization, quoted>' } }, '/srv/repo'), /placeholder/, 'a placeholder never authorizes a live run')
     const task = (t, body = 'do ' + t) => ({ title: t, body })
     const plan = {
@@ -464,7 +487,11 @@ export async function selfTest({ quiet = false } = {}) {
     assert.ok(!run.calls.some((c) => /^(verify|merge):/.test(c)), 'no verify or merge stage drives a bundle: its reviewer lands it')
     assert.ok(run.calls.indexOf('implement:b2 [high]') > run.calls.indexOf('review:b1#1 [high]'), 'a dependent starts only after its dependency merged')
     assert.ok(run.calls.indexOf('implement:a3 [high]') > run.calls.indexOf('review:b2#1 [high]'), 'a cross-lane dependent waits too')
-    assert.equal(run.peakLandings, 1, 'landings are serialized: one reviewer at a time holds the landing lock')
+    const landOf = (k) => profile.run.integ + '-' + args.bundles[k].short
+    assert.ok(run.prompts['review:a1#1'].includes('own landing worktree `' + landOf('a1') + '`') && landOf('a1') !== profile.run.worktreePrefix + args.bundles.a1.short && !run.prompts['review:a1#1'].includes('own landing worktree `/wt/a1`'), 'each reviewer gates in its own landing tree, never the one the bundle was built in')
+    assert.ok(run.prompts['review:b1#1'].includes('own landing worktree `' + landOf('b1') + '`') && landOf('a1') !== landOf('b1'), 'two bundles land from two trees')
+    const twoLanes = await dryRun(render(buildArgs({ id: 'st', bundles: [{ key: 'l1', lane: 'A', tasks: [task('x')] }, { key: 'l2', lane: 'B', tasks: [task('x')] }], acceptance: { rounds: 0 } }, profile)), {})
+    assert.equal(twoLanes.peakLandings, 2, 'two lanes\' reviews may run at once: origin/main orders their pushes')
     assert.ok(run.calls.includes('fix:a1#2 [high]') && run.calls.includes('review:a1#3 [high]'), 'a bundle handed back is repaired and reviewed again')
     assert.match(run.prompts['review:a1#2'], /previous round's BLOCKING findings[\s\S]*stub finding 1/, 'a reviewer sees the findings the repair answered')
     for (const label of ['implement:a1', 'review:a1#1', 'fix:a1#1']) assert.match(run.prompts[label], /Co-Authored-By: A/, label + ' sees the trailers it writes and checks')
@@ -474,14 +501,17 @@ export async function selfTest({ quiet = false } = {}) {
     // The owner, 2026-10-04: "please always use rebase instead of a merge commit for main." A bundle lands as a rebase in
     // its own worktree, the gate on that exact head in the integration worktree, and a fast-forward push from there.
     const landing = run.prompts['review:a1#1']
-    assert.match(landing, /2\. Gate the exact rebased head in the integration worktree `\/srv\/repo-wt-integ-st`[^\n]*`git fetch origin main && git checkout -q --detach a1`, and `git merge-base --is-ancestor origin\/main HEAD` must succeed/, 'the gate runs on the exact rebased head, in a tree other than the one it was built in')
+    assert.match(landing, /2\. Gate the exact rebased head in this bundle's own landing worktree `\/srv\/repo-wt-integ-st-st-a1` \(detached HEAD; a tree other than the one the bundle was built in\)[^\n]*`git status --short` clean\. `git fetch origin main && git checkout -q --detach a1`, and `git merge-base --is-ancestor origin\/main HEAD` must succeed/, 'the gate runs on the exact rebased head, in a clean tree other than the one it was built in')
     assert.match(landing, /1\. [^\n]*in progress is aborted \(`git rebase --abort`, `git merge --abort`\)[^\n]*`git fetch origin main && git rebase origin\/main`: the branch's own merges/, 'the reviewer rebases the bundle onto origin/main')
-    assert.match(landing, /Push the head the gate passed on, from \/srv\/repo-wt-integ-st, as a fast-forward: `git push origin HEAD:main`/, 'the reviewer pushes the rebased head as a fast-forward')
+    assert.match(landing, /Push the head the gate passed on, from \/srv\/repo-wt-integ-st-st-a1, as a fast-forward: `git push origin HEAD:main`/, 'the reviewer pushes the rebased head as a fast-forward')
+    assert.match(landing, /4\. [^\n]*`git -C \/srv\/repo worktree remove \/srv\/repo-wt-integ-st-st-a1`/, 'the landing tree is removed with the bundle worktree after the landing')
     assert.match(landing, /rejected because origin\/main moved: step 1 again \(`git fetch origin main && git rebase origin\/main` in the bundle worktree\), step 2 again, then push again/, 'a rejected push is rebased again and gated again before it is pushed again')
     assert.ok(!/merge --no-ff|Merge branch '[^']*': </.test(landing), 'the reviewer makes no merge commit')
     assert.match(landing, /Never force or reset, and never rewrite a branch but this bundle's own, unlanded one, by its rebase onto origin\/main\./, 'the reviewer forces nothing, resets nothing, and rewrites only its own unlanded branch')
     assert.match(landing, /0\. [^\n]*merge-base --is-ancestor a1 origin\/main[^\n]*`git -C \/srv\/repo rev-parse a1`[^\n]*by its subject/, 'the landed test needs no merge commit: the rebased branch is part of main, or its commits are found by subject')
     assert.match(landing, /First do Part C's step 0/, 'a reviewer looks for an earlier landing before anything else')
+    assert.match(landing, /0\. [^\n]*already landed it[^\n]*report `merged: true, pushed: true, pass: true, blocking: \[\]`/, 'an earlier landing is reported with no blocking finding')
+    assert.match(landing, /2\. [^\n]*a test that fails without the repair, listed in `repaired`/, 'a repair made on the rebased head is listed too')
     assert.match(run.schemas['review:a1#1'].properties.pushed.description, /rebased head is on origin\/main, pushed as a fast-forward/, 'the review schema reports the rebased head')
     // The owner, 2026-10-07: one reviewer per bundle, which did not build it, reviews it, repairs in place what it can,
     // and lands it with the full gate run once, on the exact head it pushes; the builder runs the quick checks.
@@ -516,6 +546,19 @@ export async function selfTest({ quiet = false } = {}) {
     assert.match(pair.prompts['fix:solo#1'], /BLOCKING findings[\s\S]*stub finding 1[\s\S]*already repaired in place[\s\S]*stub repair 1/, 'the repairer sees what is blocking and what the reviewer already repaired')
     assert.match(pair.prompts['review:solo#2'], /previous round's BLOCKING findings[\s\S]*stub finding 1/, 'the fresh review checks the previous findings first')
     assert.deepEqual(pair.result.bundles[0].repaired, [{ finding: 'stub repair 1', commit: 'r1' }], 'the completion result lists what reviewers repaired in place')
+    assert.equal(pair.result.bundles[0].landedWithBlocking, false)
+    // A reviewer that lands a bundle while listing blocking findings: on main, but flagged, its findings kept and logged.
+    const sloppy = await dryRun(solo, { landWithBlocking: ['solo'] })
+    assert.equal(settledStatus(sloppy, 'solo'), 'merged')
+    assert.ok(sloppy.result.bundles[0].landedWithBlocking === true && sloppy.result.bundles[0].lastBlocking[0].title === 'UNREPAIRED', 'a bundle landed with a blocking finding keeps it, flagged for the orchestrator')
+    assert.ok(sloppy.logs.some((l) => /^WARNING solo: LANDED WITH 1 BLOCKING FINDING/.test(l)), 'and the run says so loudly')
+    // The review stage lands bundles: a plan never lowers its effort below high; an old plan's `verify` effort is read as `review`.
+    const effortOf = async (efforts) => (await dryRun(render(buildArgs({ id: 'st', bundles: [{ key: 'e', efforts, tasks: [task('x')] }], acceptance: { rounds: 0 } }, profile)), {})).calls.find((c) => c.startsWith('review:'))
+    assert.equal(await effortOf({ review: 'low' }), 'review:e#1 [high]', 'a plan never lowers the review stage below high')
+    assert.equal(await effortOf({ review: 'medium' }), 'review:e#1 [high]')
+    assert.equal(await effortOf({ review: 'max' }), 'review:e#1 [max]', 'a plan may raise it to max')
+    assert.equal(await effortOf({ verify: 'max', merge: 'high' }), 'review:e#1 [max]', 'an old plan\'s efforts.verify is read as efforts.review')
+    assert.deepEqual(oldEfforts({ bundles: [{ key: 'e', efforts: { verify: 'max' } }, { key: 'f', efforts: { fix: 'max' } }] }), ['e'], 'render names the bundles whose old efforts it read')
     assert.ok(!run.calls.some((c) => c.startsWith('accept:live')), 'no live-runner without authorization')
     assert.equal(run.result.acceptance.length, 2)
     assert.ok(run.calls.includes('implement:accept1-1 [high]') && run.calls.includes('implement:accept1-2 [high]') && !run.calls.includes('implement:accept1-3 [high]'), 'findings that share a directory pair; the rest stand alone')
@@ -636,7 +679,7 @@ export async function selfTest({ quiet = false } = {}) {
     journal('wf_seven', [
       ['accept:sweep-1#1', { head: 'old', gate: 'g', results: [] }],
       ['implement:a1', rep('a1')], ['review:a1#1', landed('m1')],
-      ['implement:b1', rep('b1')], ['review:b1#1', handedBack()], ['fix:b1#1'],
+      ['implement:b1', rep('b1')], ['review:b1#1', { ...handedBack(), repaired: [{ finding: 'earlier', commit: 'e1' }] }], ['fix:b1#1'],
       ['implement:a2', rep('a2')], ['review:a2#1'],
       ['implement:b3'],
       ['implement:p1', { ...rep('p1'), blocked: true, blockedReason: 'owner' }],
@@ -651,6 +694,7 @@ export async function selfTest({ quiet = false } = {}) {
     assert.equal(st7.seed.a1.status, 'merged', 'a review that landed settles its bundle')
     assert.equal(st7.seed.p1.status, 'blocked')
     assert.equal(st7.resume.b1.stage, 'fix'); assert.match(st7.resume.b1.note, /stopped by a restart/); assert.equal(st7.resume.b1.verdict.blocking[0].title, 't')
+    assert.deepEqual(st7.resume.b1.repaired, [{ finding: 'earlier', commit: 'e1' }], 'repairs a reviewer made before a restart travel in the resume state')
     assert.equal(st7.resume.a2.stage, 'review', 'a lost reviewer is retried'); assert.match(st7.resume.a2.note, /reverting a hunk[\s\S]*step 0 comes first[\s\S]*`git rebase --abort`/, 'the retried reviewer is told what a lost one may have left')
     assert.equal(st7.resume.b3.stage, 'implement')
     assert.equal(st7.resume.p2.stage, 'review'); assert.equal(st7.resume.p2.previous.blocking[0].title, 'first', 'a resumed reviewer sees what the repair answered')
@@ -666,6 +710,11 @@ export async function selfTest({ quiet = false } = {}) {
     assert.match(run.prompts['review:a2#1'], /Orchestrator's note for this review\n[^\n]*stopped by a restart/, 'the resume note reaches the retried reviewer')
     assert.match(run.prompts['review:p2#2'], /previous round's BLOCKING findings[\s\S]*first/)
     assert.equal(settledStatus(run, 'a4'), 'needs-owner')
+    assert.deepEqual(run.result.bundles.find((b) => b.key === 'b1').repaired, [{ finding: 'earlier', commit: 'e1' }], 'the completion result lists repairs journaled before a restart')
+    journal('wf_eight', [['implement:z', rep('z')], ['review:z#1', { ...landed('mz'), pass: false, blocking: [{ title: 'UNREPAIRED', detail: 'd' }] }]])
+    const eight = deriveState(readEvents(['wf_eight'], jroot))
+    assert.ok(eight.seed.z.status === 'merged' && eight.seed.z.landedWithBlocking === true && eight.seed.z.lastBlocking[0].title === 'UNREPAIRED', 'a journaled landing with blocking findings stays flagged after a restart')
+    assert.match(status(['wf_eight'], jroot).rows[0][2], /LANDED WITH 1 BLOCKING FINDING/, 'status shows it at a check-in')
     // A budget spent across a restart (one fix, then three) still earns the root-cause round at max effort.
     journal('wf_four', [
       ['implement:q', rep('q')], ['review:q#1', handedBack()], ['fix:q#1', rep('q')], ['review:q#2', handedBack()], ['fix:q#2', rep('q')], ['review:q#3', handedBack()],
@@ -772,6 +821,7 @@ async function main() {
     const repo = one(o, 'repo') || gitTop()
     if (!state) checkPlanIdFresh(repo, plan.id)
     const args = buildArgs(plan, profile, state)
+    for (const k of oldEfforts(plan)) console.log('bundle ' + k + ': `efforts.verify` is read as `efforts.review` and `efforts.merge` is dropped (the review stage replaced both on 2026-10-07)')
     checkSkillDir(args.run.skillDir)
     const script = render(args)
     const check = await dryRun(script, {})

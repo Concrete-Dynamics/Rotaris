@@ -345,6 +345,11 @@ timeout; "REQ-TOOLS-096 (live-run M1): a POSIX command too long for one PTY line
 and PowerShell's line; and `pnpm terminal-proof`'s `live.longCommandReachesTheShellWhole` and
 `live.longCommandGridShowsNoCarrier`, red on the one-line carrier with exit 124 and `>`.*
 
+*Shown live, 2026-10-06 and 2026-10-07: the staged carrier held against a real model, first in the terminal-only live run
+at `a74887d` (4,667 bytes, exit 0 in 90 ms) and then twice in the final default pack at `a68f121` (`#6` and `#32`, exit 0 in
+146 ms and 107 ms, printing `4648`). Nothing found against this passage; the account is in
+[`a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole`](../../defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md).*
+
 **A second defect, from the same first execution, in the CLEANING rather than the wrapper.** `cleanLines`
 found the start of the captured region by looking for a row that was **exactly** the marker. The marker's row
 can carry the shell's PROMPT in front of it: the line discipline echoes what we write as soon as it arrives,

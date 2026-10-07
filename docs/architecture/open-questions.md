@@ -10864,6 +10864,22 @@ root's are those its task answers for (`openRootPlan`), a child parent's its own
 scripted coordinator delegates more than once open with the scripted client's `plan` step; the live run's harness checks it
 over every session it keeps (`apps/desktop/scripts/lib/coordinator-todo.mjs`). The first-executions row waits on the orchestrator's next default live run.
 
+**First live execution, 2026-10-07 (the final default live run at `a68f121`, pack `2026-10-07T06-48-50-123Z`, the registered
+self-hosted endpoint):** the refusal held as built. It fired three times in the ten sessions: edit `#7` (a `delegate`, in the
+same step as a `todo` that REQ-TOOLS-145 refused in `PD-TOOLS-008`'s wording), resume `#2` (a `delegate`) and frictions `#2`
+(a background `terminal` call on a direct-work grant). Each settled `blocked` with `failure_kind: todo_list_owed`, filed no
+`tool_error` issue and logged one warning citing REQ-ORCH-029; each coordinator recovered with exactly one `todo` write and
+then the refused call, two model steps, about 19.5 s, 9.5 s and 6 s on the critical path, and none looped or re-planned
+twice. The requirements and terminal coordinators planned before their first delegation and were never refused. The five
+multi-step sessions stored an agent plan, and the task-plan strip read "Agent plan" (3/3, 4/4 and 3/3 done) with "todo used".
+No scenario check failed because of a refusal. **Not reached:** REQ-ORCH-059's open-todo reminder lines, since every
+coordinator waited in the foreground with `wait_for_tasks`, whose report block carries none. **Found**, as the pack's
+findings, not as defects of this ruling: P3, where REQ-TOOLS-145's single `IN_PROGRESS` refuses the plan of two parallel
+delegations and under this ruling that refusal leaves the same step's second `delegate` refused too (the model then
+split the write from the call, reading nothing in the refusal that says a same-step write counts); and P7, a harness
+finding, where the resume scenario's Pause now lands on one running child instead of two because the second delegation
+starts one refusal later. The row is in [`first-executions.md`](first-executions.md).
+
 **OQ-218 — Is REQ-MONITOR-286's per-agent timeout a control, and where does it stand?** *(REQ-MONITOR-286, the three
 "interface-level delegation controls", the per-agent timeout "presented in minutes" and initialised from its policy value;
 REQ-CONFIG-322, Delegation limits as "two numeric controls"; REQ-CONFIG-256, REQ-CONFIG-263 and REQ-CONFIG-417, the written

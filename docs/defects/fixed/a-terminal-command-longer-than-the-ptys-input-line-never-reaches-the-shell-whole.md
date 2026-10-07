@@ -103,3 +103,12 @@ byte count of the here-document the command carried; `terminal-shapes.test.ts` p
 0 in 90 ms, `outcome success`, printing `4648`, the here-document's own count. Every other check of the scenario passed,
 and `live-run PASSED`. The same day, at a load of 2.4 to 2.9 on four CPUs, `pnpm terminal-proof` passed 122 of 122 with
 `live.longCommand` at 4,796 bytes, exit 0 in 50 ms, `bytes=4700`.
+
+## Shown live in a default pack — 2026-10-07 (the final default live run at `a68f121`)
+
+Pack `2026-10-07T06-48-50-123Z` of the full default run (the registered self-hosted endpoint), session `5df89df3`
+(terminal): the 4,667-byte here-document reached the shell whole twice, `#6` in iteration 1 and `#32` in the iteration the
+plan hold re-queued (live-run finding P1), each `success`, exit 0, in 146 ms and 107 ms, printing `4648`. The autopsy called
+this the staged script's first live execution; it is its second, after the terminal-only run of 2026-10-06 above, and its
+first in a full default pack. Found nothing against the repair. The row is in
+[`../../architecture/first-executions.md`](../../architecture/first-executions.md).

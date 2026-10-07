@@ -165,3 +165,19 @@ succeeded` for the re-armed one. The no-children correction case fails when that
 (`partial, succeeded`). The helpers by
 `packages/engine/src/run/run-pure.test.ts`. The built app shows the repair in the next default live run's `terminal`
 scenario (the orchestrator's; an agent's live-run launch is refused).
+
+## Shown live — 2026-10-07 (the final default live run at `a68f121`)
+
+The hold's first live execution in its disagreeing case, the one the paragraph above said the next default live run's
+`terminal` scenario would show. Pack `2026-10-07T06-48-50-123Z` (the registered self-hosted endpoint), session `5df89df3`:
+the coordinator marked its first item `COMPLETED` (`#21`) and answered with the full per-command report (traffic #24,
+transcript row 48) while "Report one line per command" still read `PENDING`. The run did not record success beside it:
+`session.log` 07:07:05.136 warned "iteration 1: the coordinator answered with 1 item of its plan not done: Report one line
+per command; its task is returned to the pending queue (REQ-ORCH-029)", `iteration.end` closed `partial` (events 194–195),
+and the next fresh root was told the marker (traffic #25). Every one of the scenario's 30 terminal product checks passed,
+all read from iteration 1. **What it cost** is the "Cost" paragraph's case, met: with REQ-ORCH-078's default of 0 no
+correction was sent, the fresh root could not see the answer or reach the finished child, re-delegated the whole probe and
+told the person the report was never delivered (transcript row 54), and the scenario's wait ran out 104 s into the repeat,
+the pack's one FAIL. That is live-run finding P1, ruled as OQ-225 and repaired under `PD-ORCH-015` (above, "The cost met
+live"). The hold itself found nothing against its text. The row is in
+[`../../architecture/first-executions.md`](../../architecture/first-executions.md).

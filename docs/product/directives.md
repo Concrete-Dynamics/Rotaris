@@ -2485,6 +2485,18 @@ the final live runs' findings L4 and N3.*
 > after this lands counts briefs that ask a persona without a terminal to run commands (2 to 3 per run before; target 0),
 > `write_scope` refusals (2 per run; target 0), child rows spent on a missing tool and stray workaround files. The row is
 > in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **First live execution of revision 4, 2026-10-07 (the final default live run at `a68f121`, pack
+> `2026-10-07T06-48-50-123Z`; a default pack, not the duress run the paragraph above names):** the description reached the
+> model as built. All 71 coordinator requests carried the 2,342-character catalogue, each persona with its facets ("tester
+> (reads workspace files, writes workspace files, runs commands)", "verifier (reads workspace files, runs commands)") and
+> the rule to ask a persona only for work its tools allow; the 59 coordinating prompts carried both routing clauses, and
+> the 12 direct-work prompts no routing table (`PD-ORCH-006`). The terminal coordinator chose by facet (its traffic #1: "I'll
+> delegate to 'tester' (reads workspace, writes workspace, runs commands)"), and no brief asked a persona without a terminal
+> to run anything: the 8 children were 5 coding-agent, 2 tester and 1 verifier. **Found:** the catalogue also offers
+> `intent-classifier`, which the defaults call a persona outside the delegation vocabulary (the pack's finding P5; no
+> coordinator delegated to it). **Still owed:** the duress counts named above (briefs, `write_scope` refusals, rows spent on a
+> missing tool, stray files). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -3666,6 +3678,17 @@ second one in this case.
 > The note is repaired:
 > [`a-rejected-todo-replace-names-an-active-task-it-never-stored.md`](../defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First live execution, 2026-10-07 (the final default live run at `a68f121`, pack `2026-10-07T06-48-50-123Z`):** the case
+> met a real model for the first time, in the edit session: its coordinator's `todo replace` (`#5`) marked both parallel
+> children's items `IN_PROGRESS` and was refused in this directive's sentence ("…marks 2 tasks IN_PROGRESS ('Add
+> clearCompleted to src/todos.js', 'Add tests for clearCompleted'), so the replace was rejected and nothing was saved"),
+> naming no id. The wording held: the next accepted write (`#10`) re-listed the plan with one task in progress, and no later
+> call in the pack targeted an id a refusal never stored (`checkToolRecord`'s run-wide reading, PASS). **Found**, as the
+> pack's finding P3 and not against this directive's text: REQ-TOOLS-145's single `IN_PROGRESS` itself, which this directive
+> narrows only in its message, cannot record two parallel delegations as both in progress, so the plan recorded the running
+> tests child's item `PENDING` (`#14`, refused again). The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -5762,6 +5785,14 @@ logged as [R-072](requests.md#r-072).*
 > skip the directory, and its marker file named by path is served; and the parent-listing case beside it, red on `d12f1f2`. **What was not measured.** No live run: the next duress
 > run is the measurement (file-tool rows under the directory near zero, no marker files in the delivered overview, `git
 > status` still clean). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **First live execution, 2026-10-07 (the final default live run at `a68f121`, pack `2026-10-07T06-48-50-123Z`; a default
+> pack, not the duress run named above):** none of the pack's 165 tool records names the marker directory in its arguments
+> or its result, terminal included. The one whole-tree scan, the requirements session's `#1` `glob **/*` at the worktree's
+> root 5 s after the code-intelligence server started there, returned 17 paths and none under the directory; at `c2a9444`
+> the same scenario's first look at its worktree listed it. **Not shown:** that the directory existed at that instant (the
+> run's sandbox is gone), and the duress measurement above, which is still owed. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

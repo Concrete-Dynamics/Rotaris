@@ -2177,6 +2177,26 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(timeline(sid2)).not.toContain('llm_unresponsive');
   });
 
+  // docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md: a step that opens with a tool call
+  // whose arguments stream past llm_response_timeout has answered; its first argument piece is its first event.
+  it('REQ-ORCH-090: a step whose first part is a streamed tool-call piece is not given up as unresponsive however long the call streams', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const streaming: ScriptedCall = { parts: [{ part: { kind: 'tool-input', callId: 'c1' } }, { part: { kind: 'tool-input', callId: 'c1' } }, { hold, part: { kind: 'text', delta: 'done' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+    const s = sessionsWith((_p, turn) => (turn === 1 ? streaming : answer('never from the fallback')), { catalogue, fallbackModel: { model: F1, thinking: 'unset' }, llmResponseTimeoutMs: 30_000 });
+    const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    clock.advance(90_000);
+    await tick();
+    expect(s.client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+    release();
+    expect((await s.sessions.running(sid)!).status).toBe('completed');
+    expect(s.client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+    expect(timeline(sid)).not.toContain('llm_unresponsive');
+    expect(issues(sid)).not.toContain('llm_unresponsive');
+  });
+
   it('the threshold is armed only below the agent bound (REQ-ORCH-090) and the role fallback is never the agent\'s own model', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
     let release!: () => void;

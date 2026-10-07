@@ -534,7 +534,7 @@ marks the live row `stalledSince`, the next output clears it, and neither publis
 (REQ-CHAT-164's detection half; the drawing half is the renderer's). Output is a text, reasoning or usage part, and a tool
 call under way or complete: the adapter forwards the SDK's `tool-input-start` and `tool-input-delta` parts as `tool-input`
 stream parts, one per piece of a call's streamed arguments, beside the call itself, which still arrives once, whole, as
-`tool-call` (since 2026-10-06; until then they re-armed only the adapter's own idle bound, so a step streaming a long
+`tool-call` (since 2026-10-07; until then they re-armed only the adapter's own idle bound, so a step streaming a long
 `write_file` was silent above the adapter —
 [`a-child-streaming-a-long-tool-call-is-reported-stalled.md`](../../defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md)). After the step: the supervisor observes the
 message; each tool call is observed, written as a running `tool` row, dispatched through the **gate** (policy →
@@ -710,7 +710,7 @@ the record's `wait` published with every snapshot. The wait resolves by the time
 session-wide, the `model_override` timeline entry, the agent re-run at once; a key that cannot be applied → `model_override_rejected`
 and the header names why, the wait continues). **Unresponsive model:** while a role fallback is untried and `llm_response_timeout`
 (≥ 30 s) sits below the agent's bound (the child timeout; the model timeout for the root), a timer on the clock port aborts a call
-that produced no event of any kind and the step re-runs on the fallback (the `llm_unresponsive` timeline entry and issue — REQ-ORCH-139's word; `unresponsive_model_fallback` / `unresponsive_model` before A29's repair). A tool call's first streamed piece (`tool-input`) is such an event, so a step that opens with a long tool call is not given up on (since 2026-10-06). **Child timeout:**
+that produced no event of any kind and the step re-runs on the fallback (the `llm_unresponsive` timeline entry and issue — REQ-ORCH-139's word; `unresponsive_model_fallback` / `unresponsive_model` before A29's repair). A tool call's first streamed piece (`tool-input`) is such an event, so a step that opens with a long tool call is not given up on (since 2026-10-07). **Child timeout:**
 expiry does not cut the child off — it **asks the child to land** (REQ-ORCH-088), by raising the same per-child flag
 `runTurn` reads for REQ-MONITOR-123's pause, so the turn stops before its next model step with the step in flight
 finished and its text intact. A hard-abort **backstop** is armed `STOP_GRACE` (30 s, `run/grace.ts`, ADR-0014 rule 1's
@@ -1090,7 +1090,7 @@ warns. Recorded in
 threshold is the role's `stall_timeout`, else `runtime.child_stall_timeout`, 90 s by default, and it is the same window
 as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds and never cancels anything. It is fed:
 - every streamed part (`TurnSink.event`, then `TurnDeps.onModelEvent`), each piece of a tool call's streamed arguments
-  among them (`tool-input`, since 2026-10-06), which is output for `quietFor` as the text, the reasoning and the complete
+  among them (`tool-input`, since 2026-10-07), which is output for `quietFor` as the text, the reasoning and the complete
   call are (`OUTPUT_EVENTS`): before it a child streaming a long `write_file` was warned stalled and given a `stall` issue
   while the provider streamed at full speed (the duress live runs at `c2fdd6a` and `c2a9444`; the repair of
   [`a-child-streaming-a-long-tool-call-is-reported-stalled.md`](../../defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md));

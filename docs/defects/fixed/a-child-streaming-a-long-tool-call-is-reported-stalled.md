@@ -58,7 +58,9 @@ and the `children.test.ts` case published the child's live row with `stalledSinc
 
 - `StreamPart` (`packages/model/src/ports.ts`) gains `tool-input` (`callId`): a tool call under way, activity only.
   `AiSdkModelClient.stream` yields one for each `tool-input-start` and `tool-input-delta` part; the call itself still
-  arrives once, whole, as `tool-call`, so nothing is assembled twice. `DefaultAgentBackend.runTurn` sends it to
+  arrives once, whole, as `tool-call`, so nothing is assembled twice. `tool-input-end` is still not forwarded: the SDK
+  sends it immediately before the call's `tool-call` part, which is itself a model event, so it carries no activity the
+  watch would miss. `DefaultAgentBackend.runTurn` sends it to
   `TurnSink.started` when it is the first part and to `TurnSink.event` always, and assembles nothing from it.
 - `StallWatch`'s `OUTPUT_EVENTS` (`packages/engine/src/children/stall.ts`) counts `tool-input` as output, so
   REQ-NOTIFY-112's `quietFor` reads a child streaming arguments as producing output; every model event already reset the
@@ -70,9 +72,11 @@ and the `children.test.ts` case published the child's live row with `stalledSinc
 
 Pinned by `ai-sdk-client.test.ts`, "model — a tool call's streamed arguments are model events" (two cases, over an
 OpenAI-shaped stream of six argument pieces), `stall.test.ts`, "REQ-ORCH-089 / REQ-NOTIFY-112: a piece of a tool call's
-streamed arguments is a model event and output …", and `children.test.ts`, "REQ-ORCH-089 / REQ-NOTIFY-112 / REQ-CHAT-164: a
+streamed arguments is a model event and output …", `children.test.ts`, "REQ-ORCH-089 / REQ-NOTIFY-112 / REQ-CHAT-164: a
 child streaming a tool call's arguments for 95 s is not stalled, its row is not marked stalled, and a failure after it earns
-no corrective message". The runtime view's model-step, unresponsive-model and stall-watch paragraphs, and ADR-0027's
+no corrective message", and `ladder.test.ts`, "REQ-ORCH-090: a step whose first part is a streamed tool-call piece is not
+given up as unresponsive however long the call streams" (red, re-run on the fallback, when the backend drops the pieces).
+The runtime view's model-step, unresponsive-model and stall-watch paragraphs, and ADR-0027's
 thirteenth execution, say so.
 
 Shown in the built app against `katalyst` by `live-run.mjs --only=faults`'s new `faults-args` launch, which streams every

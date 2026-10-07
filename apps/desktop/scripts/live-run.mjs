@@ -1743,9 +1743,10 @@ if (wanted.includes('frictions')) {
  *                   streams for several stall thresholds: is any agent reported stalled while it streams? See its
  *                   own note below.
  *
- * NEVER EXECUTED AT THE TIME OF WRITING. The fault mechanism is unit-tested against a loopback upstream
- * (`lib/model-traffic.test.ts`); what these two checks claim about the PRODUCT is unverified until a live run
- * reports back, and the first execution owes its row in `docs/architecture/first-executions.md`.
+ * The fault mechanism is unit-tested against a loopback upstream (`lib/model-traffic.test.ts`); what these three
+ * launches claim about the PRODUCT is shown only by a live run. Each has executed against a real endpoint and reported
+ * back in `docs/architecture/first-executions.md`: the ladder and the stall first on 2026-09-22, `faults-args` on
+ * 2026-10-07 (red on the product before its repair, green after).
  */
 if (wanted.includes('faults')) {
   if (proxy === null) {

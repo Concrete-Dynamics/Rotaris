@@ -393,6 +393,19 @@ export interface BoardObservable {
   readonly realised: number;
   /** REQ-TRACE-239: the interface-thread cost of the last board put on screen, from the projection's arrival to the committed and laid-out DOM. */
   readonly paintMs: number | null;
+  /**
+   * REQ-TRACE-239: the instant (`performance.now()`) that figure began — the engine's answer. A long task that ended
+   * before it is not the work of putting the board on screen: the view's own first mount, which runs before the board
+   * is even asked for, is one (finacc3, 2026-10-07: a 423 ms mount task, 210 ms of it lazy compilation, against a
+   * 32 ms paint).
+   */
+  readonly paintFrom: number | null;
+  /**
+   * REQ-TRACE-424/426: each read of the review pane's payload, in order — `open` from the pane's opening, `reload` from
+   * the decision notice's one action — and when it was asked. A diagnosis for requirements-proof's L12 stage, whose
+   * one red showed a refusal payload under the notice of the user's own accept, which only a second read can draw.
+   */
+  readonly reviewReads: readonly { readonly via: 'open' | 'reload'; readonly at: number }[];
   /** REQ-TRACE-367: the same cost for the last post-debounce filter recomputation. */
   readonly filterMs: number | null;
   /** REQ-TRACE-363: a search pause is outstanding. */

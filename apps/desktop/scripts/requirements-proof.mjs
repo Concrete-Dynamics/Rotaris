@@ -99,6 +99,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { READ_LONGTASKS } from './lib/board-window.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -314,7 +315,10 @@ function generatedProfile(name) {
  * be explained by the replay.
  */
 const ARM_LONGTASKS = `(() => { window.__rotarisArmedAt = performance.now(); if (window.__rotarisObserver) return true; window.__rotarisLongTasks = []; try { window.__rotarisObserver = new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__rotarisLongTasks.push({ at: Math.round(e.startTime), ms: Math.round(e.duration) }); }); window.__rotarisObserver.observe({ type: 'longtask', buffered: true }); } catch (e) { return String(e); } return true; })()`;
-const READ_LONGTASKS = `(() => { const since = window.__rotarisArmedAt ?? 0; const tasks = (window.__rotarisLongTasks ?? []).filter((t) => t.at >= since).map((t) => t.ms); const b = window.__rotarisBoard; return { longest: Math.max(0, ...tasks), count: tasks.length, tasks, board: b ? { paintMs: b.paintMs, ready: b.ready, pending: b.pending, realised: b.realised, cards: b.cards, columns: b.columns } : null }; })()`;
+// The read back: since 2026-10-07 (finacc3) a task that ended before the engine answered — the view's own first mount,
+// which runs before the board is asked for — is reported apart (`beforeArrival`) and not counted (`lib/board-window.mjs`).
+// REQ-TRACE-239 bounds the thread "putting a board on screen once the engine has answered".
+
 const BUDGET_MS = 100;
 const stage2 = {};
 /**
@@ -365,7 +369,7 @@ expect(primary.length === 1 && Math.round(primary[0].rect.height) === 32, `REQ-T
 const others = header.matches.filter((m) => m.attrs['data-testid'] !== 'req-reevaluate' && m.attrs['data-testid'] !== 'req-move-control' && m.attrs['type'] !== 'checkbox');
 for (const m of others) expect(Math.round(m.rect.height) === 24, `REQ-TRACE-491: header control ${m.attrs['data-testid'] ?? m.attrs['aria-label'] ?? m.text} is ${m.rect.height} high, not 24`);
 for (const m of header.matches) expect(m.rect.x >= 0 && m.rect.x + m.rect.width <= header.viewport.width + 0.5, `REQ-TRACE-489: header control ${m.attrs['data-testid'] ?? m.attrs['aria-label'] ?? m.text} lies outside the window (${JSON.stringify(m.rect)} in ${header.viewport.width})`);
-stage2.board = { view: 'requirements', paintMs, longestTaskMs: longTasks.longest, longTasks: longTasks.count, total, columns, widgets: allCards.length, observable: longTasks.board, primaryHeight: primary[0].rect.height, otherControls: others.length, viewport: header.viewport };
+stage2.board = { view: 'requirements', paintMs, longestTaskMs: longTasks.longest, longTasks: longTasks.count, beforeArrivalTasks: longTasks.beforeArrival ?? [], total, columns, widgets: allCards.length, observable: longTasks.board, primaryHeight: primary[0].rect.height, otherControls: others.length, viewport: header.viewport };
 
 // ── minimum: REQ-SHELL-022's 1000 × 680 — column bounds and the horizontal scroll range ──────────
 // Part R2, after the gate: REQ-TRACE-376 binds the surface this Part built — "with EVERY surface installed, nothing in
@@ -614,7 +618,7 @@ const filterTasks = scale.evals['19000'];
 // Every long task is recorded, not only the longest: a budget missed by one task of its own reads differently from
 // a budget missed while the machine was doing something else, and REQ-TRACE-088's reference conditions are "timing
 // the work alone". A red that names the shape can be attributed; a red that names one number cannot.
-stage2.scale = { requirements: scaleProfile.requirements, paintMs: scalePaint, longestTaskMs: scaleTasks.longest, arrivalTasks: scaleTasks.tasks, observable: scaleTasks.board, backlog: { count: backlog.count, realised: backlog.realised }, sweep: scrolled.seen, endLast: scrolled.endLast, endRealised: scrolled.endRealised, realisedMax, epicColumns: epicAxis.matches.length, minColumnWidth: Math.min(...epicAxis.matches.map((m) => m.rect.width)), columnsScroll: scrolledColumns, columnsPresent: scrolledColumns.present, columnsBuilt: scrolledColumns.built, modelColumns: axisTasks.board?.columns ?? null, axisSwitchLongestTaskMs: axisTasks.longest, axisSwitchTasks: axisTasks.tasks, realisedOnEpicAxis, filterMs, filterTotal, filterLongestTaskMs: filterTasks?.longest ?? null };
+stage2.scale = { requirements: scaleProfile.requirements, paintMs: scalePaint, longestTaskMs: scaleTasks.longest, arrivalTasks: scaleTasks.tasks, beforeArrivalTasks: scaleTasks.beforeArrival ?? [], observable: scaleTasks.board, backlog: { count: backlog.count, realised: backlog.realised }, sweep: scrolled.seen, endLast: scrolled.endLast, endRealised: scrolled.endRealised, realisedMax, epicColumns: epicAxis.matches.length, minColumnWidth: Math.min(...epicAxis.matches.map((m) => m.rect.width)), columnsScroll: scrolledColumns, columnsPresent: scrolledColumns.present, columnsBuilt: scrolledColumns.built, modelColumns: axisTasks.board?.columns ?? null, axisSwitchLongestTaskMs: axisTasks.longest, axisSwitchTasks: axisTasks.tasks, realisedOnEpicAxis, filterMs, filterTotal, filterLongestTaskMs: filterTasks?.longest ?? null };
 
 // ══ Stage 3 (Part R2): REQ-TRACE-499 over the shipped composition, and REQ-TRACE-497 turned into assertions ══════
 //
@@ -639,7 +643,7 @@ const REVEAL_101 = `(() => { const b = window.__rotarisBoard; return b && typeof
  * notice, the actions it offers, the refusal line if one is drawn, the state tag of the payload on screen, and whether
  * the decisions are still offered.
  */
-const REVIEW_AT = `(() => { const p = document.querySelector('[data-testid="req-pane-review"]'); if (p === null) return null; const d = p.querySelector('[data-testid="req-pane-review-decided"]'); const r = p.querySelector('[data-testid="req-pane-review-refusal"]'); const tag = p.querySelector('.req-pane__state'); const said = d === null ? null : d.querySelector('span'); return { decided: said === null ? null : said.textContent.trim(), actions: d === null ? [] : [...d.querySelectorAll('button')].map((b) => b.textContent.trim()), refusal: r === null ? null : r.textContent.trim(), column: tag === null ? null : tag.textContent.trim(), decisions: p.querySelector('[data-testid="req-pane-review-decisions"]') !== null }; })()`;
+const REVIEW_AT = `(() => { const p = document.querySelector('[data-testid="req-pane-review"]'); if (p === null) return null; const d = p.querySelector('[data-testid="req-pane-review-decided"]'); const r = p.querySelector('[data-testid="req-pane-review-refusal"]'); const tag = p.querySelector('.req-pane__state'); const said = d === null ? null : d.querySelector('span'); return { decided: said === null ? null : said.textContent.trim(), actions: d === null ? [] : [...d.querySelectorAll('button')].map((b) => b.textContent.trim()), refusal: r === null ? null : r.textContent.trim(), column: tag === null ? null : tag.textContent.trim(), decisions: p.querySelector('[data-testid="req-pane-review-decisions"]') !== null, reads: window.__rotarisBoard?.reviewReads ?? null }; })()`;
 const HISTORY_AT = `(() => { const p = document.querySelector('[data-testid="req-history-state"]'); const d = document.querySelector('[data-testid="req-detail"]'); return { state: p === null ? null : p.getAttribute('data-state'), entries: p === null ? [] : [...p.querySelectorAll('li')].map((l) => l.textContent.trim()), detailHealth: d === null ? null : (d.querySelector('[data-section="requirement"] dd .mono') || {}).textContent, runs: d === null ? [] : [...d.querySelectorAll('.req-detail__run')].map((r) => r.textContent.trim()) }; })()`;
 
 const e2e = profile('end-to-end');

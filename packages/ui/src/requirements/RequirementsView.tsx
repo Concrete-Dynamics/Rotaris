@@ -187,6 +187,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   /** REQ-TRACE-360/361 (defect AK2-3): the best card height this board has actually measured, so a column built later starts from it instead of the built-in estimate. */
   const [cardEstimate, setCardEstimate] = useState(CARD_HEIGHT_ESTIMATE);
   const [paintMs, setPaintMs] = useState<number | null>(null);
+  const [paintFrom, setPaintFrom] = useState<number | null>(null);
   /**
    * Defect AK2-3: the columns the area's own viewport exposes, as a contiguous band of indices into `columnKeys`.
    * Every other column is a sized placeholder (REQ-TRACE-237/239/300 — see `visibleColumnBand`). Before anything is
@@ -251,7 +252,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     measure.current = null;
     void columnsRef.current?.scrollWidth; // force layout so the figure includes it
     const elapsed = performance.now() - m.at;
-    if (m.kind === 'paint') { if (board !== null) { setPaintMs(elapsed); setReady(true); } }
+    if (m.kind === 'paint') { if (board !== null) { setPaintMs(elapsed); setPaintFrom(m.at); setReady(true); } }
     else setFilterMs(elapsed);
   }, [board, filter]);
 
@@ -598,7 +599,9 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const [confirmWrites, setConfirmWrites] = useState(false);
 
   /** REQ-TRACE-425: the surface states that it is reading, keeps responding, and REFUSES a second read rather than starting one. */
-  const loadReview = useCallback((id: ReqId) => {
+  const reviewReads = useRef<{ readonly via: 'open' | 'reload'; readonly at: number }[]>([]);
+  const loadReview = useCallback((id: ReqId, via: 'open' | 'reload') => {
+    reviewReads.current = [...reviewReads.current, { via, at: Math.round(performance.now()) }];
     if (reviewReading.current) { setReviewBusy(true); return; }
     reviewReading.current = true;
     setReviewBusy(false); setReview('reading'); setReviewError(undefined);
@@ -614,7 +617,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     setPaneBuilds((n) => n + 1);
     setPane(key);
     setPaneTarget(id);
-    if (key === 'review' && id !== null) loadReview(id);
+    if (key === 'review' && id !== null) loadReview(id, 'open');
     if (key === 'blockers' && id !== null) { setBlockerPayload(null); void host.readBlocker(id).then((r) => { if (r.ok) setBlockerPayload(r.value); }); }
     // REQ-TRACE-436: whether a source write is confirmed first is the workspace's own configuration, and the service
     // reports it with the location preview; the editor asks before it can need the answer.
@@ -740,13 +743,14 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   // ---- REQ-TRACE-366: the observable state a caller or the proof waits on (Part AK2; Part R2 adds the panes and the graph) ----
   useEffect(() => {
     window.__rotarisBoard = {
-      generation, ready, pending: Math.max(0, filtered.length - realisedTotal), realised: realisedTotal, paintMs, filterMs, populating,
+      generation, ready, pending: Math.max(0, filtered.length - realisedTotal), realised: realisedTotal, paintMs, paintFrom, filterMs, populating,
       cards: filtered.length, columns: columnKeys.length, reveal: revealCard,
       panes: panes.keys.map((key) => ({ key, installed: panes.installed(key), openedAt: panes.peek(key)?.openedAt ?? null })),
       openPane: pane,
       graph: graphModel === null ? null : { centre: graphModel.centre, depth: graphModel.depth, nodes: graphModel.nodes.length, edges: graphModel.edges.length, unexpanded: graphModel.unexpanded.length },
+      get reviewReads() { return reviewReads.current; },
     };
-  }, [generation, ready, filtered.length, realisedTotal, paintMs, filterMs, populating, columnKeys.length, revealCard, panes, paneBuilds, pane, graphModel]);
+  }, [generation, ready, filtered.length, realisedTotal, paintMs, paintFrom, filterMs, populating, columnKeys.length, revealCard, panes, paneBuilds, pane, graphModel]);
 
   const renderCard = useCallback((card: BoardCard): ReactNode => {
     const epic = epicIds.has(card.id) ? epics.find((e) => e.id === card.id) : undefined;
@@ -941,7 +945,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
                 id={paneTarget ?? ''} payload={review} error={reviewError} busy={reviewBusy}
                 consequenceOf={(action) => consequenceForDecision(action, paneTarget ?? '')}
                 onDecision={decide}
-                onReload={() => { if (paneTarget !== null) loadReview(paneTarget); }}
+                onReload={() => { if (paneTarget !== null) loadReview(paneTarget, 'reload'); }}
                 onNavigate={(link) => {
                   // REQ-TRACE-417/475: the session and the version-control view are the application's to open; a
                   // difference view is neither this board's nor offered here, so it is stated rather than left inert.

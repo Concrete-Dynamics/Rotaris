@@ -25,7 +25,7 @@ Live-run findings: L4 (`c2fdd6a` duress autopsy), N3 and N2 (`c2a9444` duress au
 
 None contradicted: REQ-ORCH-028 asks for a routing table from need to role and states no persona's tools, and
 REQ-TOOLS-152 fixes `delegate`'s fields, not its description. The question is raised and ruled as
-[OQ-216](../architecture/open-questions.md) under the owner's delegation (R-072), built as `PD-TOOLS-006` revision 4.
+[OQ-216](../../architecture/open-questions.md) under the owner's delegation (R-072), built as `PD-TOOLS-006` revision 4.
 
 ## Relevant files
 
@@ -35,3 +35,17 @@ REQ-TOOLS-152 fixes `delegate`'s fields, not its description. The question is ra
   delegated child's grant is resolved.
 - `packages/engine/src/children/personas.ts` — `ROUTING`, the built coordinator's routing table.
 - `packages/engine/src/children/write-scope.ts` — `writesFiles` / `fileWriters`, revision 3's after-the-fact refusal.
+
+## Repaired — 2026-10-07, under OQ-216's ruling (PD-TOOLS-006 revision 4, R-072)
+
+`delegate`'s description is built per calling agent. `createToolPort` (`apps/desktop/src/run-host/tools.ts`) hands
+`delegateTool` the agent's catalogue, which `delegateCatalogue` resolves with `resolveAgentGrant`, the declared-to-granted
+function a child's own port applies; `renderDelegateCatalogue` (`packages/agent-tools/src/tools/delegation.ts`) states each
+persona's REQ-TOOLS-001 facets ("docs-writer (reads workspace files, writes workspace files)", "tester (reads workspace files,
+writes workspace files, runs commands)", "verifier (reads workspace files, runs commands)", "codebase-analyst (reads workspace
+files)"), the aliases, that tool-server and plugin tools are not described, and tells the caller to ask a persona only for
+work its tools allow and to hand command output on through `depends_on` or `inherited_context`. The write-scope refusal is
+unchanged. Pinned by the "delegate — what each persona can do" cases in `delegation.test.ts` (sixteen red on the fixed
+description) and by the "PD-TOOLS-006 revision 4" cases in `apps/desktop/src/run-host/tools.test.ts`, which hold the facets told
+equal to each child port's grant. The statement is advice: whether the impossible briefs stop is the next duress live run's
+to show.

@@ -10812,7 +10812,7 @@ REQ-TOOLS-006, the controls that narrow a grant; REQ-TOOLS-152, `delegate`'s fie
 `system_prompt` replacing the built-in one; `PD-TOOLS-006` revision 3, which refuses a `write_scope` for a persona that holds
 no file-writing tool and names the ones that do. Raised 2026-10-07 from the final live runs' findings L4 (the `c2fdd6a`
 duress autopsy) and N3 with N2 (the `c2a9444` duress autopsy), recorded in
-[`the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md`](../defects/the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md),
+[`the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md`](../defects/fixed/the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md),
 and ruled the same day under the owner's delegation; the consortium's question L4.)*
 
 In both duress runs of 2026-10-06 the orchestrator briefed `docs-writer` children, which hold no `terminal`, to "Run
@@ -10851,3 +10851,14 @@ Both advocates rejected a refusal for this case: the request to run a command si
 infers a facet from prose. Both rejected the system prompt as the vehicle: REQ-CONFIG-100 replaces it whenever configuration
 supplies one, and it cannot apply each caller's `tool_restrictions` (OQ-145). The statement is advice and enforces nothing;
 whether it removes the impossible briefs is measured at the next duress live run.
+
+*Built 2026-10-07 (fin27, `fin27-delegate-and-summariser`).* The routing table carries REQ-ORCH-028's two clauses (`ROUTING`,
+`packages/engine/src/children/personas.ts`). `delegate`'s description is the caller's catalogue: `delegateCatalogue` and
+`resolveAgentGrant` in `apps/desktop/src/run-host/tools.ts`, rendered by `renderDelegateCatalogue` in
+`packages/agent-tools/src/tools/delegation.ts`. The first execution found nothing against the ruling and stated three readings
+in `PD-TOOLS-006`'s report: the facets include what REQ-TOOLS-004's prerequisites remove (a run with no terminal backend
+tells the caller no persona runs commands); `git_commit`, having no executor, never reads as a writer; the catalogue names
+`orchestrator`, which the ledger accepts. Pinned by `delegation.test.ts`, `run-host/tools.test.ts` (each known role's facets
+told equal to its child port's grant) and `personas.test.ts`. **Not yet measured:** the duress live run that counts briefs
+asking a persona without a terminal to run commands (2 to 3 per run before; target 0) and `write_scope` refusals (2 per run;
+target 0).

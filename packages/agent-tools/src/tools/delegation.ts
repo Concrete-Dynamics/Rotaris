@@ -1,5 +1,6 @@
 import { countNoun } from '@rotaris/kernel';
 import { z } from 'zod';
+import { grantsOn, type Facet } from '../registry.js';
 import { errorObservation, INTERRUPTED_FAILURE_KIND, observation, type ToolExecutor } from './types.js';
 
 /**
@@ -41,11 +42,54 @@ export function renderDelegateObservation(canonical: string, status: string, mes
   return `Task '${canonical}': ${status} — ${message}${taskId ? `\ntask_id: ${taskId}` : ''}`;
 }
 
-export function delegateTool(port: DelegationPort, parentId: string): ToolExecutor<z.infer<typeof delegateSchema>> {
+/**
+ * PD-TOOLS-006 revision 4 (OQ-216, ruled 2026-10-07 under R-072): the personas one calling agent can delegate to, each with
+ * the native tools a child of that agent would be granted after REQ-TOOLS-006's controls — the run host resolves them with
+ * the very function the child's own port applies — and each alias whose target exists, with that target.
+ */
+export interface DelegateCatalogue {
+  readonly personas: readonly { readonly name: string; readonly tools: readonly string[] }[];
+  readonly aliases: readonly { readonly alias: string; readonly target: string }[];
+}
+
+const FACET_WORDS: readonly (readonly [Facet, string])[] = [
+  ['readsWorkspaceFiles', 'reads workspace files'],
+  ['writesWorkspaceFiles', 'writes workspace files'],
+  ['runsCommands', 'runs commands'],
+];
+
+/**
+ * PD-TOOLS-006 revision 4: what a grant lets its holder do, as the REQ-TOOLS-001 facets its tools declare (`grantsOn`: a
+ * name outside the registry declares nothing, so only the product's own tools are counted).
+ */
+export function grantFacets(tools: readonly string[]): readonly string[] {
+  return FACET_WORDS.filter(([facet]) => tools.some((t) => grantsOn(t, facet))).map(([, words]) => words);
+}
+
+/**
+ * PD-TOOLS-006 revision 4: the catalogue as `delegate`'s description states it — every persona with its facets, a persona
+ * declaring none said to, the aliases, and the instruction to ask a persona only for work its tools allow.
+ *
+ * The reason the description carries it, kept beside the repair: until 2026-10-07 it named the built-in personas only, the
+ * same list for every caller, and in both duress live runs of 2026-10-06 the coordinator briefed `docs-writer` children,
+ * which hold no `terminal`, to run the tests themselves (findings L4 and N3).
+ */
+export function renderDelegateCatalogue(catalogue: DelegateCatalogue): string {
+  const personas = catalogue.personas.map((p) => {
+    const facets = grantFacets(p.tools);
+    return `${p.name} (${facets.length > 0 ? facets.join(', ') : 'none of these: it neither reads nor writes workspace files nor runs commands'})`;
+  });
+  const aliases = catalogue.aliases.length > 0 ? ` Aliases: ${catalogue.aliases.map((a) => `${a.alias} (${a.target})`).join(', ')}.` : '';
+  return `The personas you can delegate to, each with what the product's own tools a child of yours would be granted let it do (tool-server and plugin tools are not described): ${personas.join('; ')}.${aliases} Ask a persona only for work its tools allow: a persona that does not run commands cannot run tests, builds or scripts, and one that does not write workspace files cannot change a file. Where a persona that runs no commands needs command output, delegate the command to a persona that runs commands and hand its result on with depends_on or inherited_context.`;
+}
+
+export function delegateTool(port: DelegationPort, parentId: string, catalogue: DelegateCatalogue): ToolExecutor<z.infer<typeof delegateSchema>> {
   return {
     name: 'delegate',
     // OQ-114 as ruled (R-071, PD-ORCH-004 revision 5): `continuation_of`'s sentence says a continuation starts with no memory.
-    description: 'Delegate a task to a specialist persona (requirements-engineer, codebase-analyst, librarian, architect, planner, coding-agent, tester, docs-writer, refactorer, verifier, ui-verifier, gatekeeper; aliases coder, playwright). Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false. When the child will write files, give write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit. When a child\'s report makes a continuation offer, give continuation_of: that child\'s task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains. To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead.',
+    // PD-TOOLS-006 revision 4 (OQ-216): the persona list is the caller's catalogue with each persona's facets; the sentences
+    // after it are unchanged.
+    description: `Delegate a task to a specialist persona. ${renderDelegateCatalogue(catalogue)} Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false. When the child will write files, give write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit. When a child's report makes a continuation offer, give continuation_of: that child\'s task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains. To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead.`,
     schema: delegateSchema,
     label: (a) => `delegate ${a.persona}: ${a.task_name}`,
     execute: async (a) => {

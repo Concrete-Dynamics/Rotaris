@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset } from '@rotaris/contracts';
 import { CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, loadConfiguration, renderMcpSection, type LoadedConfiguration, type PersonaMcpSurface } from '@rotaris/config';
-import { anySchema, gitReadTool, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type ToolExecutor } from '@rotaris/agent-tools';
+import { anySchema, gitReadTool, grantFacets, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type ToolExecutor } from '@rotaris/agent-tools';
 import { SessionWriter, UserPresence, type ArtifactOps, type ToolPortContext } from '@rotaris/engine';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { personaResolverFor, runtimeFromConfiguration, type ConfiguredRun } from './configuration.js';
@@ -852,6 +852,146 @@ ${orchestrator}runtime:
     const e = entryPort('    tools: [read_file, grep, todo, delegate]\n', { parentId: 'bg_0a1b2c3d', depth: 1 });
     for (const task of ['one', 'two']) expect((await e.del(`d-${task}`, task)).status).toBe('ok');
     expect(e.log).toEqual([]);
+  });
+});
+
+/**
+ * PD-TOOLS-006 revision 4 (OQ-216, ruled 2026-10-07 under R-072): `delegate`'s description states, for each calling agent,
+ * what a child of that agent would be granted as each persona — and it is resolved by the function the child's own port
+ * applies, so for every persona the description's facets are the facets of the grant that child's port receives.
+ */
+describe('PD-TOOLS-006 revision 4: delegate tells its caller what each persona\'s child would be granted', () => {
+  let dir: string;
+  let dal: StoreDal;
+  let writer: SessionWriter;
+  const warnings: string[] = [];
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-port-catalogue-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+    const created = SessionWriter.create(
+      { dal, sessionId: asSessionId('S1'), wall: new FakeClock(), retentionCap: 0, warn: (m) => warnings.push(m), onCommitted: () => undefined },
+      { workspaceRoot: dir, pid: 1, host: mintMachineId('0000000000000000000000000000000a') },
+    );
+    if (!created.ok) throw new Error('writer');
+    writer = created.value;
+    warnings.length = 0;
+  });
+  afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  /** A stand-in terminal backend: the executor is registered (REQ-TOOLS-004's prerequisite met), and nothing here runs a command. */
+  const terminal = { setBackgroundLimits: () => undefined } as unknown as NonNullable<ToolPortDeps['terminal']>;
+  const delegation = {} as NonNullable<ToolPortContext['delegation']>;
+
+  function setup(personas: string) {
+    mkdirSync(join(dir, '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), `default_persona: orchestrator
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+${personas === '' ? '' : `personas:\n${personas}`}runtime:
+  permission_mode: ask
+`);
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
+    if (!loaded.ok) throw new Error('configuration');
+    const cfg = loaded.value;
+    const resolver = personaResolverFor(cfg, true, (m) => warnings.push(m));
+    const deps: ToolPortDeps = {
+      clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver,
+      presenter: { present: async () => ({ ok: true }), close: () => undefined }, nextSequence: () => 1, fileStates: new Map(), terminal, egress: () => permissivePolicyRead,
+    };
+    const portOf = (persona: string, extra: Partial<ToolPortContext>) => createToolPort({
+      sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona, agentName: persona, delegation, artifacts: undefined,
+      requestedMode: 'ask', modeOverride: null, attended: () => true, warn: (m) => warnings.push(m), info: () => undefined, abortRun: () => undefined, ...extra,
+    }, deps);
+    return { resolver, portOf };
+  }
+
+  /** The catalogue as the description states it: persona name → its facets in the description's words. */
+  function catalogueOf(description: string): Map<string, string> {
+    const m = /not described\): (.*?)\.(?: Aliases: | Ask a persona)/.exec(description);
+    if (!m) throw new Error(`no catalogue in: ${description}`);
+    return new Map(m[1]!.split('; ').map((entry) => { const i = entry.indexOf(' ('); return [entry.slice(0, i), entry.slice(i + 2, -1)] as const; }));
+  }
+  const descriptionOf = (p: ReturnType<ReturnType<typeof setup>['portOf']>): string => p.specs().find((s) => s.name === 'delegate')!.description;
+  const facetsOf = (tools: readonly string[]): string => grantFacets(tools).join(', ') || 'none of these: it neither reads nor writes workspace files nor runs commands';
+
+  async function expectCatalogueMatchesChildGrants(personas: string, caller: string): Promise<Map<string, string>> {
+    const { resolver, portOf } = setup(personas);
+    const callerPort = portOf(caller, { parentId: 'root:1', depth: 0 });
+    const catalogue = catalogueOf(descriptionOf(callerPort));
+    expect([...catalogue.keys()]).toEqual(resolver!.knownRoles());
+    for (const role of resolver!.knownRoles()) {
+      const child = portOf(role, { parentPersona: caller, parentId: 'bg_0a1b2c3d', depth: 1 });
+      await child.ready?.();
+      expect({ role, facets: catalogue.get(role) }).toEqual({ role, facets: facetsOf(child.grant?.()?.tools ?? []) });
+    }
+    return catalogue;
+  }
+
+  it('the built-in table: for every known role, the facets the orchestrator is told are the facets of the grant that role\'s child port receives', async () => {
+    const catalogue = await expectCatalogueMatchesChildGrants('', 'orchestrator');
+    expect(catalogue.get('docs-writer')).toBe('reads workspace files, writes workspace files');
+    expect(catalogue.get('tester')).toBe('reads workspace files, writes workspace files, runs commands');
+    expect(catalogue.get('verifier')).toBe('reads workspace files, runs commands');
+    expect(catalogue.get('codebase-analyst')).toBe('reads workspace files');
+    // A child orchestrator is coordinator-only: it reads, and writes and runs nothing itself.
+    expect(catalogue.get('orchestrator')).toBe('reads workspace files');
+    const text = descriptionOf(setup('').portOf('orchestrator', { parentId: 'root:1', depth: 0 }));
+    expect(text).toContain('Aliases: coder (coding-agent), playwright (ui-verifier).');
+  });
+
+  it('a configured tools: override changes that persona\'s line', async () => {
+    const catalogue = await expectCatalogueMatchesChildGrants(`  docs-writer:
+    name: docs-writer
+    model: selected
+    tools: [read_file, grep, write_file, terminal]
+`, 'orchestrator');
+    expect(catalogue.get('docs-writer')).toBe('reads workspace files, writes workspace files, runs commands');
+  });
+
+  it('the caller\'s tool_restrictions entry removes a facet from that persona\'s line — for that caller alone', async () => {
+    const personas = `  orchestrator:
+    name: orchestrator
+    model: selected
+    tool_restrictions:
+      tester: [read_file, grep, write_file]
+  planner:
+    name: planner
+    model: selected
+    tools: [read_file, grep, delegate]
+`;
+    const catalogue = await expectCatalogueMatchesChildGrants(personas, 'orchestrator');
+    expect(catalogue.get('tester')).toBe('reads workspace files, writes workspace files');
+    // Another caller's map does not name tester: a child of a planner (configured here to delegate) would still run commands.
+    const fromPlanner = await expectCatalogueMatchesChildGrants(personas, 'planner');
+    expect(fromPlanner.get('tester')).toBe('reads workspace files, writes workspace files, runs commands');
+  });
+
+  it('a read_only persona reads only, and a persona the configuration adds is named with its grant', async () => {
+    const catalogue = await expectCatalogueMatchesChildGrants(`  refactorer:
+    name: refactorer
+    model: selected
+    read_only: true
+  release-manager:
+    name: release-manager
+    model: selected
+    tools: [git_read, write_file, todo]
+  scribe:
+    name: scribe
+    model: selected
+    tools: [todo, fetch]
+`, 'orchestrator');
+    expect(catalogue.get('refactorer')).toBe('reads workspace files');
+    expect(catalogue.get('release-manager')).toBe('reads workspace files, writes workspace files');
+    expect(catalogue.get('scribe')).toBe('none of these: it neither reads nor writes workspace files nor runs commands');
   });
 });
 

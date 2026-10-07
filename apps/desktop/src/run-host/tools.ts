@@ -4,9 +4,9 @@ import { toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { presetRank, resolvePreset, restrictionsAllow, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, directWorkBundle, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
-  resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
+  resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type DelegateCatalogue, type GateSink, type PolicyRead, type Prerequisites, type PresenterPort, type ResolvedToolSet, type ToolExecutor,
 } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, EMPTY_MCP_EVIDENCE, toolRestrictionsFor, type AgentGrant, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, EMPTY_MCP_EVIDENCE, ROLE_ALIASES, toolRestrictionsFor, type AgentGrant, type ModeChange, type Persona, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
 import { configurationForExecutionRoot, grantEvidence, type McpHost } from './mcp.js';
@@ -241,6 +241,44 @@ export function isEntryPort(ctx: Pick<ToolPortContext, 'parentId' | 'depth'>): b
   return ctx.parentId === undefined || /^root(:\d+)?$/.test(ctx.parentId);
 }
 
+const DELEGATION_TOOLS: readonly string[] = ['delegate', 'background_output', 'wait_for_tasks'];
+
+/**
+ * REQ-TOOLS-006 / REQ-TOOLS-004: an agent's declared tools to its granted native set — `coordinator_only` (where the agent
+ * coordinates), `read_only`, the `tool_restrictions` lists its own persona's map and the delegating persona's map give its
+ * name (OQ-145), and the prerequisites this run meets. ONE function, which an agent's own port applies to itself and the
+ * delegation catalogue applies to every persona a child could be (PD-TOOLS-006 revision 4, OQ-216), so the description
+ * `delegate` carries cannot drift from the grant a child receives. `declared` is the planning-narrowed or direct-work set
+ * where the port has one, else the persona's own tools.
+ */
+export function resolveAgentGrant(persona: Persona, opts: { name?: string; declared?: readonly string[]; parentPersona: Persona | null; coordinating: boolean; prerequisites: Prerequisites; isEntry: boolean }): ResolvedToolSet {
+  // OQ-212 (R-072): `can_publish_artifacts` is the persona's own (REQ-CONFIG-106), so the catalogue applies each persona's flag
+  // and not the caller's; the store's presence stays the caller's run's.
+  const prerequisites: Prerequisites = { ...opts.prerequisites, canPublishArtifacts: opts.prerequisites.artifactStore && persona.canPublishArtifacts };
+  return resolveToolSet({ name: opts.name ?? persona.name, tools: opts.declared ?? persona.tools, coordinatorOnly: persona.coordinatorOnly && opts.coordinating, readOnly: persona.readOnly, toolRestrictions: toolRestrictionsFor(persona, opts.parentPersona) }, {}, prerequisites, opts.isEntry);
+}
+
+/**
+ * PD-TOOLS-006 revision 4 (OQ-216): the catalogue `delegate`'s description states for one calling agent — every persona of
+ * the catalogue (the configured resolver's known roles, or the built-in table where none resolved), each with the native
+ * tools a child of `caller` would be granted (`resolveAgentGrant`, a child's terms: not the entry, coordinating, under the
+ * caller's map), and each alias whose target exists, with that target. The plan gate is not applied: the description states
+ * the grant that holds once execution is released, and REQ-ORCH-153's refusal covers a held run.
+ */
+export function delegateCatalogue(resolver: PersonaResolver | null, caller: Persona, prerequisites: Prerequisites): DelegateCatalogue {
+  const names = resolver ? resolver.knownRoles() : Object.keys(BUILT_IN_PERSONAS);
+  const personaOf = (name: string): Persona | null => (resolver ? resolver.resolve(name)?.persona ?? null : BUILT_IN_PERSONAS[name as RoleName] ?? null);
+  const personas: { name: string; tools: readonly string[] }[] = [];
+  for (const name of names) {
+    const p = personaOf(name);
+    if (p) personas.push({ name, tools: resolveAgentGrant(p, { parentPersona: caller, coordinating: true, prerequisites, isEntry: false }).tools });
+  }
+  const aliases = Object.entries(ROLE_ALIASES)
+    .filter(([alias]) => (resolver ? resolver.resolve(alias) !== null : true))
+    .map(([alias, target]) => ({ alias, target: (resolver ? resolver.resolve(alias)?.persona.name : undefined) ?? target }));
+  return { personas, aliases };
+}
+
 export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPort {
   // REQ-GIT-019/022: the fence, the policy's root and the terminal's cwd are the EFFECTIVE root (the worktree of an
   // isolated run); the runtime and the personas are the BASE workspace's configuration.
@@ -300,12 +338,6 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
    */
   const withheldAtPlanGate = new Set<string>(planGateHeld() ? granted.filter((t) => withheldUnderPlanGate(t)) : []);
   const delegationAvailable = ctx.delegation !== undefined && !single;
-  if (delegationAvailable && ctx.delegation) {
-    const parentId = ctx.parentId ?? 'root';
-    executors.set('delegate', delegateTool(ctx.delegation, parentId) as ToolExecutor);
-    executors.set('background_output', backgroundOutputTool(ctx.delegation, parentId) as ToolExecutor);
-    executors.set('wait_for_tasks', waitForTasksTool(ctx.delegation, parentId) as ToolExecutor);
-  }
   // Part Y (REQ-LIBRARY-099/100/101): the three artifact executors over the engine's port, bound to THIS agent.
   const artifacts = ctx.artifacts;
   if (artifacts) {
@@ -344,12 +376,24 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // separately, and no requirement in this part names such a grant — a persona that must not publish declares no
   // `artifact_write` (REQ-TOOLS-002). Recorded as a decision taken."~~
   // (docs/defects/fixed/can-publish-artifacts-is-read-and-never-gates-artifact-write.md)
-  const resolved = resolveToolSet({ name: ctx.persona, tools: declared, coordinatorOnly: persona.coordinatorOnly && delegationAvailable && !directWork, readOnly: persona.readOnly, toolRestrictions: restrictions }, {}, {
+  const prerequisites: Prerequisites = {
     // Part AC: `userPromptChannel` is attendedness (REQ-TOOLS-053/069) — an unattended run has no surface to put a
     // prompt in front of, so the registry removes `ask_questions` with `user_prompt_channel_absent`. It stood at a
     // literal `false` until this part, because there was no executor for it to be true of.
-    delegationRuntime: delegationAvailable, userPromptChannel: ctx.attended(), artifactStore: artifacts !== undefined, canPublishArtifacts: artifacts !== undefined && persona.canPublishArtifacts, terminalBackend: executors.has('terminal'), executors: new Set(executors.keys()),
-  }, isEntry);
+    delegationRuntime: delegationAvailable, userPromptChannel: ctx.attended(), artifactStore: artifacts !== undefined, canPublishArtifacts: artifacts !== undefined && persona.canPublishArtifacts, terminalBackend: executors.has('terminal'),
+    executors: new Set([...executors.keys(), ...(delegationAvailable ? DELEGATION_TOOLS : [])]),
+  };
+  if (delegationAvailable && ctx.delegation) {
+    const parentId = ctx.parentId ?? 'root';
+    // PD-TOOLS-006 revision 4 (OQ-216): `delegate`'s description names what each persona's child of THIS agent would be
+    // granted, resolved by `resolveAgentGrant` as that child's own port resolves it. A delegated child always holds a
+    // delegation runtime, and a port never runs `single` where delegation is available, so `coordinating` is true.
+    const catalogue = delegateCatalogue(resolver, persona, { ...prerequisites, delegationRuntime: true });
+    executors.set('delegate', delegateTool(ctx.delegation, parentId, catalogue) as ToolExecutor);
+    executors.set('background_output', backgroundOutputTool(ctx.delegation, parentId) as ToolExecutor);
+    executors.set('wait_for_tasks', waitForTasksTool(ctx.delegation, parentId) as ToolExecutor);
+  }
+  const resolved = resolveAgentGrant(persona, { name: ctx.persona, declared, parentPersona: parentAgentPersona, coordinating: delegationAvailable && !directWork, prerequisites, isEntry });
   /*
    * REQ-TOOLS-006: "every removal is logged together with the persona and the control that removed it", at no level the
    * requirement names. A narrowing control's removal (the run's allow-list, `coordinator_only`, `read_only`,

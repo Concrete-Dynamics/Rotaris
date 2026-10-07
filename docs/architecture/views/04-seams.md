@@ -198,6 +198,12 @@ Invariants:
   owed before a task's second work item (`GateDeps.todoList`, the entry port's only, where its resolved set holds `todo`).
   A tool whose `DECLARATIONS` entry writes workspace files or runs commands is a **work item** on a direct-work grant
   (`isWorkItem`, `todo-list-gate.ts`), so a new tool of that kind is counted there with no edit; `delegate` always is.
+- **The resolution is one function, and `delegate`'s description reads it too** (PD-TOOLS-006 revision 4, OQ-216).
+  `resolveAgentGrant` (`run-host/tools.ts`) takes a persona's declared tools through `coordinator_only`, `read_only`, the
+  `tool_restrictions` lists and the prerequisites (the persona's own `can_publish_artifacts` among them, OQ-212); an agent's port applies it to itself, and `delegateCatalogue` applies it,
+  on a child's terms, to every persona the agent can delegate to, so the facets the description states
+  (`renderDelegateCatalogue`, from `DECLARATIONS`) are the grant a child receives. A new tool's facets therefore reach
+  every coordinator's description with no edit beyond step 2.
 - The gate decides; the executor never asks. An approval travels `gate → presenter → main → dialog` — see
   [`06-sequences.md` §2](06-sequences.md#2-a-permission-approval-end-to-end).
 - A tool that reaches the filesystem states its read roots; a tool that reaches the network reads the egress

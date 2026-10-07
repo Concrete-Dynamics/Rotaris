@@ -1207,6 +1207,16 @@ cost. Since PD-TOOLS-006 revision 2 the declared patterns are also stored with t
 (`children.write_scope`, v23, written at spawn), so a child resumed under PD-ORCH-005 can claim them again; the claim
 itself stays in memory and belongs to one run.
 
+**What `delegate` tells its caller (PD-TOOLS-006 revision 4, OQ-216; `run-host/tools.ts`).** The `delegate` executor is
+built per agent in `createToolPort`, and its description carries that agent's catalogue: every persona the resolver knows
+(the built-in table where none resolved), each with the REQ-TOOLS-001 facets of the native tools a child of this agent
+would be granted — computed by `resolveAgentGrant`, the function the child's own port applies (not the entry, coordinating,
+under this agent's `tool_restrictions` map, with this run's prerequisites; the plan gate not applied) — and the aliases
+whose targets exist, then the instruction to ask a persona only for work its tools allow and to hand command output on
+through `depends_on` or `inherited_context` (`renderDelegateCatalogue`, `agent-tools`). It is computed once, at port
+creation. The coordinator's routing table (`ROUTING`, `children/personas.ts`) carries REQ-ORCH-028's two capability clauses
+for `codebase-analyst` and `librarian`; a configured `system_prompt` replaces it, and not the description.
+
 **Continuations (PD-ORCH-004; `children/cut-off.ts`).** The pure half: `ProgressLog` (fed by the turn's
 `onToolCompleted`, one per child execution), `cutOffReport` and `cutOffLines`, and `continuationRefusal`. A `delegate`
 call may carry `continuation_of`, a task id. `IterationChildren.delegate` admits it before the spawn, beside the

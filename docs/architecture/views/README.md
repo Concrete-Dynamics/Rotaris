@@ -89,6 +89,13 @@ no todo list of its own for it (`GateDeps.todoList`, `isWorkItem` in `packages/a
 (§4, the gate's order) say so. One module joins `@rotaris/agent-tools`; no edge, process, channel, command or store column
 changed (the two task facts ride in the existing `sessions.todo` document).
 
+**`delegate`'s description names what each persona's child would be granted (PD-TOOLS-006 revision 4, OQ-216, R-072).**
+`createToolPort` builds each agent's `delegate` with a catalogue `delegateCatalogue` resolves through `resolveAgentGrant`, the
+one declared-to-granted function the agent's own port now applies, and `renderDelegateCatalogue` (`agent-tools`) states each
+persona's REQ-TOOLS-001 facets in place of the fixed list of built-in names. The coordinator's routing table regains
+REQ-ORCH-028's two capability clauses. The **runtime view**'s write-scopes section and the **seams view**'s tool seam say so.
+No package, edge, process, channel, command or store column changed.
+
 **A tool call's streamed arguments are model events (REQ-ORCH-089, REQ-ORCH-090, REQ-NOTIFY-112, REQ-CHAT-164; finacc3 F02).**
 `StreamPart` gains `tool-input`, which `AiSdkModelClient.stream` yields for the SDK's `tool-input-start` and `tool-input-delta`
 parts; the call still arrives once, whole, as `tool-call`. The stall watch counts it as output (`OUTPUT_EVENTS`), the first one

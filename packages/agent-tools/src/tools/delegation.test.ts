@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { delegateTool, type DelegationPort } from './delegation.js';
+import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, ROLE_SPAWN_ALIASES } from '@rotaris/contracts';
+import { expandDeclared } from '../registry.js';
+import { delegateTool, grantFacets, renderDelegateCatalogue, type DelegateCatalogue, type DelegationPort } from './delegation.js';
 import type { ToolContext } from './types.js';
+
+/**
+ * The built-in table's declarations as the catalogue would carry them for a child of an unrestricted caller: every role but
+ * the coordinator-only orchestrator is granted what it declares (the run host's `resolveAgentGrant` is what decides it in
+ * the product; `tools.test.ts` holds the two equal).
+ */
+const BUILT_IN_CATALOGUE: DelegateCatalogue = {
+  personas: BUILT_IN_ROLE_NAMES.filter((n) => n !== 'orchestrator').map((name) => ({ name, tools: expandDeclared(BUILT_IN_ROLE_TOOLS[name]) })),
+  aliases: Object.entries(ROLE_SPAWN_ALIASES).map(([alias, target]) => ({ alias, target })),
+};
 
 /** PD-ORCH-004: `delegate`'s `continuation_of` names the child continued, and reaches the engine's port unchanged. */
 describe('delegate — continuation_of (PD-ORCH-004)', () => {
@@ -11,7 +23,7 @@ describe('delegate — continuation_of (PD-ORCH-004)', () => {
       backgroundOutput: () => ({ status: 'not_found', state: '', text: '' }),
       waitForTasks: async () => ({ immediate: true, requested: 0, text: '' }),
     };
-    return { seen, tool: delegateTool(port, 'root:1') };
+    return { seen, tool: delegateTool(port, 'root:1', BUILT_IN_CATALOGUE) };
   }
   const ctx = {} as ToolContext;
 
@@ -41,7 +53,7 @@ describe('delegate — suppress_auto_context (REQ-TOOLS-152)', () => {
       backgroundOutput: () => ({ status: 'not_found', state: '', text: '' }),
       waitForTasks: async () => ({ immediate: true, requested: 0, text: '' }),
     };
-    return { seen, tool: delegateTool(port, 'root:1') };
+    return { seen, tool: delegateTool(port, 'root:1', BUILT_IN_CATALOGUE) };
   }
   const ctx = {} as ToolContext;
 
@@ -68,7 +80,7 @@ describe('delegate — session_id (REQ-TOOLS-152, PD-ORCH-005 clause 22)', () =>
       backgroundOutput: () => ({ status: 'not_found', state: '', text: '' }),
       waitForTasks: async () => ({ immediate: true, requested: 0, text: '' }),
     };
-    return { seen, tool: delegateTool(port, 'root:1') };
+    return { seen, tool: delegateTool(port, 'root:1', BUILT_IN_CATALOGUE) };
   }
   const ctx = {} as ToolContext;
 
@@ -84,5 +96,72 @@ describe('delegate — session_id (REQ-TOOLS-152, PD-ORCH-005 clause 22)', () =>
 
   it('tells the model what the argument does', () => {
     expect(capture().tool.description).toMatch(/session_id/);
+  });
+});
+
+/*
+ * PD-TOOLS-006 revision 4 (OQ-216, ruled 2026-10-07 under R-072): `delegate`'s description states, for the caller, what each
+ * persona's tools let it do. It named the built-in personas only, and in both duress live runs of 2026-10-06 the coordinator
+ * briefed `docs-writer` children, which hold no terminal, to run the tests themselves
+ * (docs/defects/fixed/the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md).
+ */
+describe('delegate — what each persona can do (PD-TOOLS-006 revision 4)', () => {
+  const port: DelegationPort = {
+    delegate: async (_parent, req) => ({ status: 'queued', canonicalName: req.taskName, taskId: 'bg_00000002', message: 'Accepted.' }),
+    backgroundOutput: () => ({ status: 'not_found', state: '', text: '' }),
+    waitForTasks: async () => ({ immediate: true, requested: 0, text: '' }),
+  };
+  const description = (catalogue: DelegateCatalogue = BUILT_IN_CATALOGUE): string => delegateTool(port, 'root:1', catalogue).description;
+
+  it.each<[string, string]>([
+    ['docs-writer', 'docs-writer (reads workspace files, writes workspace files)'],
+    ['tester', 'tester (reads workspace files, writes workspace files, runs commands)'],
+    ['coding-agent', 'coding-agent (reads workspace files, writes workspace files, runs commands)'],
+    ['refactorer', 'refactorer (reads workspace files, writes workspace files, runs commands)'],
+    ['verifier', 'verifier (reads workspace files, runs commands)'],
+    ['ui-verifier', 'ui-verifier (reads workspace files, runs commands)'],
+    ['codebase-analyst', 'codebase-analyst (reads workspace files)'],
+    ['librarian', 'librarian (reads workspace files)'],
+    ['architect', 'architect (reads workspace files)'],
+    ['planner', 'planner (reads workspace files)'],
+    ['requirements-engineer', 'requirements-engineer (reads workspace files)'],
+    ['gatekeeper', 'gatekeeper (reads workspace files)'],
+  ])('the built-in table: %s', (_name, line) => {
+    expect(description()).toContain(line);
+  });
+
+  it('names each alias with its target', () => {
+    expect(description()).toContain('Aliases: coder (coding-agent), playwright (ui-verifier).');
+  });
+
+  it('says so of a persona whose tools declare none of the three facets, and counts no tool outside the registry', () => {
+    expect(grantFacets(['todo', 'fetch', 'artifact_read', 'lookup', 'mcp__srv__edit'])).toEqual([]);
+    const text = renderDelegateCatalogue({ personas: [{ name: 'scribe', tools: ['todo', 'lookup'] }], aliases: [] });
+    expect(text).toContain('scribe (none of these: it neither reads nor writes workspace files nor runs commands)');
+    expect(text).not.toContain('Aliases:');
+  });
+
+  it('follows the catalogue it is given — a configured persona, and a persona whose grant the controls narrowed', () => {
+    const text = description({ personas: [{ name: 'docs-writer', tools: ['read_file', 'grep'] }, { name: 'release-manager', tools: ['git_read', 'git_commit', 'terminal'] }], aliases: [] });
+    expect(text).toContain('docs-writer (reads workspace files);');
+    expect(text).toContain('release-manager (reads workspace files, writes workspace files, runs commands).');
+    // The static list it replaced is gone: a persona the catalogue does not hold is not named.
+    expect(text).not.toContain('codebase-analyst');
+    expect(text).not.toContain('aliases coder, playwright');
+  });
+
+  it('closes the catalogue with the instruction to ask a persona only for work its tools allow, and how to hand command output on', () => {
+    const text = description();
+    expect(text).toContain("(tool-server and plugin tools are not described)");
+    expect(text).toContain('Ask a persona only for work its tools allow: a persona that does not run commands cannot run tests, builds or scripts, and one that does not write workspace files cannot change a file.');
+    expect(text).toContain('Where a persona that runs no commands needs command output, delegate the command to a persona that runs commands and hand its result on with depends_on or inherited_context.');
+  });
+
+  it('keeps the sentences after the persona list word for word', () => {
+    const text = description();
+    expect(text).toContain('Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false.');
+    expect(text).toContain('When the child will write files, give write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit.');
+    expect(text).toContain("When a child's report makes a continuation offer, give continuation_of: that child's task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains.");
+    expect(text).toContain('To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead.');
   });
 });

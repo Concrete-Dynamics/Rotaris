@@ -2208,6 +2208,11 @@ are not recorded, and cannot be recovered afterwards.
 
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
+*Revision 4 (2026-10-07, [R-072](requests.md#r-072)) — **what `delegate` tells its caller about each persona**, a section
+added after revision 3's; the ruling of [OQ-216](../architecture/open-questions.md) under the owner's delegation. Nothing is
+replaced. It lands here for the reason revision 3 did: this directive already extends REQ-ORCH-028 and narrows
+REQ-TOOLS-152, and the symbol generator admits one directive per requirement for each relation.*
+
 *Revision 3 (2026-09-29, [R-067](requests.md#r-067)) — **what else `delegate` refuses, and what `session_id` names**,
 a section added after "The disclosure"; the owner's rulings on OQ-112 and on OQ-66's open part. Nothing is replaced. This
 directive is the one that narrows REQ-TOOLS-152, and the symbol generator admits one narrowing directive per requirement,
@@ -2258,6 +2263,16 @@ follow-up resumes that child from its record with the call's `task` as its next 
 states. A child its `child_timeout` cut off keeps PD-ORCH-004's `continuation_of`, and a `session_id` naming one is
 refused with a reason that names that field.
 
+**What `delegate` tells its caller about each persona (revision 4).** The description of `delegate`, as each agent holding
+it is offered it, SHALL name every persona that agent can delegate to: the catalogue's known roles, and each alias whose
+target exists, with that target. For each persona it SHALL state which of REQ-TOOLS-001's three facets (reads workspace
+files, writes workspace files, runs commands) the native tools of a child of that agent would declare, after REQ-TOOLS-006's
+controls, and SHALL say so where a persona declares none. It SHALL say that only the product's own tools are counted, and
+that tool-server and plugin tools are not described. It SHALL tell the caller to ask a persona only for work its tools allow,
+and to hand command output to a persona that runs no commands through `depends_on` or `inherited_context`. The description
+states the grant that holds once execution is released; while a plan gate holds the run, REQ-ORCH-153's refusal stands.
+Revision 3's write-scope refusal stays as it is.
+
 **What is unchanged.** A child delegated without a `write_scope` claims nothing and is refused only where a
 live sibling's claim reaches. A `write_scope` never limits the child that declared it: that child may write
 outside its own patterns wherever no other claim reaches. A claim belongs to one run and lapses with its child, so a
@@ -2297,11 +2312,29 @@ so a caller that set it was told nothing and got a fresh child. What it costs:
   files; a scope could not have fenced those writes either ("The file tools only", above);
 - a follow-up re-sends the child's whole conversation, where a fresh child sends only its payload.
 
+**Why revision 4, and what it costs.** In both duress live runs of 2026-10-06 the orchestrator briefed `docs-writer`
+children, which hold no `terminal`, to "Run `node --test` yourself in the terminal". At `c2a9444` (finding N3) the two failed
+children, 2,443.5 s of the critical path, spent 22 of 57 and 23 of 35 rows reasoning about the missing shell, one wrote
+`.tmp-run-tests.sh` as a workaround (N2), and the answer to the user said the continuation "ran the suite". At `c2fdd6a`
+(finding L4) the brief appeared twice, a child called a `run_command` tool that does not exist, and the answer blamed the
+timeouts on the missing shell. Each run also spent 34 to 37 s on two of revision 3's refusals. Nothing the coordinator read
+stated a persona's tools: the description listed the built-in names, the same for every caller. A refusal cannot reach a
+request to run a command, which sits in free text, and REQ-TOOLS-001 never infers a facet from prose; the system prompt
+cannot carry it either, since a configured `system_prompt` replaces the built-in one (REQ-CONFIG-100) and it cannot apply
+each caller's `tool_restrictions`. What it costs:
+- the statement is advice and enforces nothing; whether the impossible briefs stop is measured at a duress live run;
+- about 250 tokens join every delegating agent's tool listing;
+- a persona whose only writer is an MCP tool reads as writing no files, the blind spot revision 3 accepts;
+- a persona whose only writing tool is `git_commit` would read as writing files and still be refused a `write_scope`
+  (revision 3: the file tools only);
+- the coordinator may commission more children, a command runner beside a writer.
+
 > **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154
 > **Extends:** REQ-ORCH-028
 
 *Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049). Revision 2 logged as [R-059](requests.md#r-059),
-revision 3 as [R-067](requests.md#r-067).*
+revision 3 as [R-067](requests.md#r-067). Revision 4 ruled under the owner's delegation, [R-072](requests.md#r-072), from
+the final live runs' findings L4 and N3.*
 
 > **First execution, 2026-09-23, the day it was ruled:** the mechanism was built as written, and one clause of
 > the disclosure proved false for one reader. The block lists "the `write_scope` of every other child of the run
@@ -2378,6 +2411,35 @@ revision 3 as [R-067](requests.md#r-067).*
 > **What was measured.** Scripted end-to-end cases in `children.test.ts`, each red on the code before the repair, where
 > the id was dropped and a fresh child spawned. **What was not measured.** No built-app or live run set `session_id`. The
 > row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 4, 2026-10-07, ruled under [R-072](requests.md#r-072) ([OQ-216](../architecture/open-questions.md)):**
+> built as written, and the text met the code in three places.
+>
+> - **Where the facets are computed.** The engine and `agent-tools` do not import each other, so the run host builds the
+>   catalogue (`delegateCatalogue`, `apps/desktop/src/run-host/tools.ts`) with the function an agent's own port now applies
+>   to itself (`resolveAgentGrant`): the persona's tools, `coordinator_only`, `read_only`, the `tool_restrictions` lists of
+>   the persona's own map and the caller's (OQ-145), and REQ-TOOLS-004's prerequisites as this run meets them. `agent-tools`
+>   renders it from the registry's facets (`renderDelegateCatalogue`, `grantsOn`). The prerequisites are not REQ-TOOLS-006's
+>   controls, but a tool they remove is not granted, so the description states the grant the child receives; a run with no
+>   terminal backend tells the caller that no persona runs commands.
+> - **`git_commit`.** The cost named above does not arise in this build: `git_commit` has no executor
+>   (`TOOL_IMPLEMENTATIONS`, `packages/contracts/src/tools.ts`), so REQ-TOOLS-004 removes it and a persona declaring it is
+>   not told it writes files on its account.
+> - **The orchestrator.** The catalogue's known roles include `orchestrator`, which the ledger accepts as a child; a child
+>   orchestrator is coordinator-only and is described as reading workspace files. The fixed list this replaced left it out.
+>
+> The routing table's two capability clauses, which the same ruling restores as covered work, landed beside it.
+>
+> **What was measured.** `packages/agent-tools/src/tools/delegation.test.ts` pins the built-in table's lines (docs-writer
+> reads and writes; tester and the two implementers all three; verifier and ui-verifier read and run commands; the six
+> research and decision roles read), the aliases, a persona declaring none, the closing instruction and the unchanged
+> sentences, sixteen of them red on the fixed description. `apps/desktop/src/run-host/tools.test.ts` holds, for every known
+> role, the facets the caller is told equal to the facets of the grant that role's child port receives: the built-in table,
+> a configured `tools:` override, a caller's `tool_restrictions` entry (for that caller alone), a `read_only` persona and a
+> persona the configuration adds. **What was not measured.** No live run has yet carried the description; the duress run
+> after this lands counts briefs that ask a persona without a terminal to run commands (2 to 3 per run before; target 0),
+> `write_scope` refusals (2 per run; target 0), child rows spent on a missing tool and stray workaround files. The row is
+> in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

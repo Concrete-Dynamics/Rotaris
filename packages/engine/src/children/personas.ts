@@ -205,7 +205,13 @@ export function runOverrideLayer(override: 'single' | 'swarm' | null, grant: Int
   return planHeld ? `${SWARM_INSTRUCTION}\n\n${SWARM_PLAN_HELD_NOTE}` : SWARM_INSTRUCTION;
 }
 
-const ROUTING = 'Route work to specialists: an ambiguous or under-specified request → requirements-engineer; a question about the repository as it stands → codebase-analyst; a question answerable only from outside the repository → librarian; design → architect; an ordered plan → planner; implementation → coding-agent; testing → tester; documentation → docs-writer; behaviour-preserving restructuring → refactorer; final acceptance → verifier.';
+/*
+ * REQ-ORCH-028's default routing, with the two capability clauses it states for `codebase-analyst` and `librarian`. The reason
+ * they were missing, kept beside the repair: the first table kept the routes and dropped both clauses, and in both duress live
+ * runs of 2026-10-06 the coordinator gave `codebase-analyst` a write task (OQ-216, covered work). What every persona's tools
+ * let it do is stated in `delegate`'s description, built per caller (PD-TOOLS-006 revision 4).
+ */
+const ROUTING = 'Route work to specialists: an ambiguous or under-specified request → requirements-engineer; a question about the repository as it stands → codebase-analyst, which reads the workspace but does not modify it; a question answerable only from outside the repository → librarian, which likewise does not modify the workspace; design → architect; an ordered plan → planner; implementation → coding-agent; testing → tester; documentation → docs-writer; behaviour-preserving restructuring → refactorer; final acceptance → verifier.';
 
 export const BUILT_IN_PERSONAS: Readonly<Record<RoleName, Persona>> = Object.freeze({
   orchestrator: persona('orchestrator', BUILT_IN_ROLE_TOOLS['orchestrator'], ORCHESTRATOR_COORDINATING(ROUTING), { coordinatorOnly: true }),

@@ -10833,7 +10833,7 @@ extends REQ-ORCH-028 and narrows REQ-TOOLS-152: the symbol generator admits one 
 relation, so a new directive extending REQ-ORCH-028 could not be built. Separately, the built routing table carries the two
 capability clauses REQ-ORCH-028 states for `codebase-analyst` and `librarian`; that repair is covered by REQ-ORCH-028 and
 needs no directive
-([`the-built-routing-table-drops-req-orch-028s-capability-clauses.md`](../defects/the-built-routing-table-drops-req-orch-028s-capability-clauses.md)).
+([`the-built-routing-table-drops-req-orch-028s-capability-clauses.md`](../defects/fixed/the-built-routing-table-drops-req-orch-028s-capability-clauses.md)).
 
 The two recommendations weighed, and the ruling followed **both**:
 - **Advocate A (the user's lens)** recommended building `delegate`'s description per caller from the resolved catalogue,

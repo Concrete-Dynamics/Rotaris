@@ -81,3 +81,16 @@ describe('engine/personas — no built-in persona publishes (OQ-212; REQ-CONFIG-
     for (const [role, p] of Object.entries(BUILT_IN_PERSONAS)) expect({ role, flag: p.canPublishArtifacts }).toEqual({ role, flag: false });
   });
 });
+
+describe('engine/personas — the coordinator\'s routing table (REQ-ORCH-028)', () => {
+  /*
+   * REQ-ORCH-028's default routing carries two capability clauses the built table dropped, and in both duress live runs of
+   * 2026-10-06 the coordinator gave `codebase-analyst` a write task
+   * (docs/defects/fixed/the-built-routing-table-drops-req-orch-028s-capability-clauses.md; OQ-216).
+   */
+  it('names codebase-analyst as reading the workspace without modifying it, and librarian as likewise not modifying it', () => {
+    const prompt = BUILT_IN_PERSONAS.orchestrator.systemPrompt;
+    expect(prompt).toContain('a question about the repository as it stands → codebase-analyst, which reads the workspace but does not modify it;');
+    expect(prompt).toContain('→ librarian, which likewise does not modify the workspace;');
+  });
+});

@@ -242,6 +242,9 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 ### Skill Catalog Injection and Load Policies
 
 - **REQ-WORKSPACE-060** — At agent construction a compact skill catalog SHALL be injected as its own always-active context unit, distinct from the persona prompt, the workspace context unit, and persona memory. Ordering of injected context units SHALL be: workspace context → skill catalog → force-loaded skill bodies → persona memory.
+  > **Extended by [`PD-TOOLS-012`](../product/directives.md#pd-tools-012) revision 2, 2026-10-07.** The four units above
+  > keep their order; every agent also receives one product statement, naming the product's own workspace directories, as a
+  > fifth always-active unit after them, whatever its persona's prompt and whether or not context files are injected.
 
 - **REQ-WORKSPACE-061** — The catalog block SHALL contain a preamble followed by exactly one entry per catalogued skill and nothing else. The preamble SHALL convey three facts, in wording of the implementation's choosing: that every entry below names a `SKILL.md` file that exists on disk; that such a file is to be opened only when the task in hand calls for it; and that none of those files' contents have already been supplied. Each entry SHALL be a single line carrying, in this order, the skill's normalized name, its description, and the absolute path of its `SKILL.md`, in the shape given under Data & Formats. Entries SHALL appear in ascending normalized-name order. No skill's body text SHALL appear anywhere in the block.
 

@@ -8444,6 +8444,11 @@ live-run autopsy at 71ad8e8 finding a71-1,
 ~~Open.~~ Ruled 2026-10-06. Raised as OQ-160 on its branch and renumbered OQ-161 before it reached `main`, where OQ-160 had been taken
 meanwhile.)*
 
+**Instructions clause revised 2026-10-07 by OQ-230 (below) ([R-072](../product/requests.md#r-072)):** "the agents are not
+told that the product wrote the exclude line" no longer holds: every agent receives a product statement naming both of the
+product's directories and the lines that keep them out of version control ([`PD-TOOLS-012`](../product/directives.md#pd-tools-012)
+revision 2). The 2026-10-06 text is kept as it was ruled.
+
 **Listing clause revised 2026-10-07 by OQ-215 (below) ([R-072](../product/requests.md#r-072)):** the marker's directory is now a
 hard-coded ignore component ([`PD-TOOLS-012`](../product/directives.md#pd-tools-012)), so the file tools no longer list it. The
 rest of the ruling below stands as built. The 2026-10-06 text is kept as it was ruled.
@@ -11237,6 +11242,14 @@ so it now reads the same set. Pinned by the case "the code-intelligence marker d
 hard-coded ignore component, named by the manifest" in `packages/agent-tools/src/tools/tools.test.ts`, red on `d12f1f2`.
 Findings L3, N6 and H3 close with it; the next duress live run is the measurement.
 
+**Measured 2026-10-07, the first live execution (the duress run at `a68f121`, pack `2026-10-07T07-09-30-708Z`, session
+`e6747bd0`, finding D4):** the file tools held as ruled — the six whole-tree `glob **/*` calls (#1, #24, #29, #73, #126, #135)
+and `**/.*` (#65) listed neither directory, and 0 file-tool calls named one — and the terminal remainder cost: 21 calls and
+32 rows named the directories (against 28 / 96 at `c2a9444`), and they reached the delivered report, the answer and a project
+memory. So the remainder clause fired, and it is raised as OQ-230. **Instructions clause revised 2026-10-07 by OQ-230 (below)
+([R-072](../product/requests.md#r-072)):** "the agents' instructions are unchanged" no longer holds: every agent receives a
+product statement as its last context unit (`PD-TOOLS-012` revision 2). The text above is kept as it was ruled.
+
 **OQ-219 — Beneath an explicit `grep` path or `glob` base inside an ignored directory, what does a scan return?**
 *(REQ-TOOLS-139, the scan filters: "paths containing a hard-coded ignore component are skipped", the workspace's
 `.gitignore` honoured with "directories pruned during traversal", and the explicit-naming exemption given to `read_file`
@@ -11684,6 +11697,58 @@ level-3 misses replayed through the built tool each name their lines and apply w
 Every one of the six carried the same extra space in its `new_string` too, so `write_file`'s unshifted level-3 apply is raised
 as OQ-233. The next default and duress live runs are the measurement (`live-run.mjs`'s near-miss NOTE). Finding D5 closes
 with it.
+
+**OQ-230 — Are the agents told what the product's own directories in the workspace are?** *(PD-TOOLS-012, the marker
+directory among REQ-TOOLS-140's hard-coded ignore components; OQ-161's ruling (R-071), "the agents are not told that the
+product wrote the exclude line"; OQ-215's ruling, "the agents' instructions are unchanged", and its remainder clause, "if that
+remainder still has a measurable cost, it is raised as its own question"; REQ-TOOLS-140; REQ-MCP-099 and REQ-MCP-102, memories
+that persist across runs; REQ-WORKSPACE-060, the always-active context units and their order; REQ-CONFIG-100, a configured
+persona's prompt; REQ-CONFIG-013, the `.rotaris/` line in `.gitignore`. Raised 2026-10-07 from finding D4 of the final duress
+live run at `a68f121` (pack `2026-10-07T07-09-30-708Z` of the live worktree, session `e6747bd0`, the self-hosted endpoint), and
+ruled the same day.)*
+
+The file tools are clean since PD-TOOLS-012: the six whole-tree `glob **/*` calls (#1, #24, #29, #73, #126, #135) and `**/.*`
+(#65) list neither directory, and 0 file-tool calls name one. The remainder OQ-215 foresaw came through the terminal: b's
+`ls -a` (#47), wave3's `ls -la`, `find . -type f` and four `git check-ignore` probes (#249, #250, #281, #283, #285, #286),
+wave3b's `ls -a` of both (#354) — 21 calls and 32 rows, against 28 / 96 at `c2a9444` and 41 / 112 at `c2fdd6a`. It reached all
+three things the user keeps: line 224 of the delivered `docs/verification.md` discusses the marker directory's files; the
+answer's "Remains" (row 766) relays that `docs/overview.md` claims everything gitignored is absent while both are present; and
+wave3's `edit_memory` #311 wrote into the project memory `todo-app/docs-pair` that both are present and "absence must be
+checked with `ls`". The false absence claim was written by docs-writer c, which holds no terminal: the file tools hid the
+directories, so it inferred absence. Recorded as
+[`the-product-directories-reach-the-users-report-answer-and-memory-through-the-terminal.md`](../defects/the-product-directories-reach-the-users-report-answer-and-memory-through-the-terminal.md).
+
+**What the build proceeds under.** OQ-161's and OQ-215's rulings as built: the directories hidden from the file tools, shown
+by a terminal, and no agent told what they are.
+
+**What a ruling decides.** Whether every agent is told (a context unit), only the agents that can see them (the terminal's
+description), whether the runtime's data moves out of the tree or its memories are filtered, or whether the remainder is
+accepted.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** every agent built for a session
+receives one fixed product statement as its last always-active context unit, after REQ-WORKSPACE-060's four, whatever prompt
+its persona carries. The statement names the workspace scope directory and the code-intelligence marker directory from their
+single sources. It says four things: where present, they hold the application's own state; the application keeps them out of
+version control with lines it writes itself (the marker's line only at a repository's top level); the file tools hide them and
+a terminal shows them; and unless the task concerns them, they stay out of documents, reports, answers and project memories
+and are not counted as changes. This is recorded as [`PD-TOOLS-012`](../product/directives.md#pd-tools-012) revision 2, which
+extends REQ-WORKSPACE-060 and revises the instructions clauses of OQ-161 (R-071) and OQ-215. The directory, the exclude line,
+the tool descriptions and existing memories stay as built.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)*: tell every agent — one fixed product statement as the
+last injected context unit, so a configured persona keeps it too, carrying the four points, named from the constants;
+PD-TOOLS-012 revision 2. *Advocate B (the system's lens)*: tell the agents that can see them — one fixed sentence in the
+terminal tool's description, "where present", built from the same two constants; PD-TOOLS-012 revision 2 extending
+REQ-TOOLS-095; and revision 1's first execution owes this pack's result. **The ruling followed A**: the false absence claim
+came from a docs-writer, which holds no terminal, so B's sentence would reach only the checker, whose task concerned the
+directories; A's unit reaches the writer and the checker alike. B's objection that REQ-CONFIG-100 drops a prompt line does not
+hold for context units, which `run.ts` and `orchestration.ts` append after whatever prompt the persona carries. From B it took
+the "where present" wording and the report-back of revision 1's first execution. **Rejected:** moving the runtime's data out
+of the tree or filtering memories (each reaches one sink and contradicts REQ-MCP-034, REQ-MCP-099 and REQ-MCP-102); accepting
+the remainder (a memory that compounds from run to run). **Costs kept on record:** about 80 tokens per request; a fifth unit
+for black-box conformance; possible priming; an agent possibly holding back a relevant fact; a poorer fit for a user who tracks
+the marker directory; no change to memories already written. **Reopening:** if a delivered document, the answer or a memory
+still carries either directory when the task does not concern them, the question reopens for a write-side measure.
 
 **OQ-233 — When `write_file`'s edit matches at REQ-TOOLS-136 level 3, is `new_string` shifted by the same prefix?**
 *(REQ-TOOLS-136, the four match levels and "a window match replaces whole lines", silent on whether the replacement takes

@@ -333,6 +333,17 @@ export class AiSdkModelClient implements ModelClient {
             }
             break;
           }
+          case 'tool-input-start':
+          case 'tool-input-delta':
+            /*
+             * A tool call's start and each piece of its arguments: activity, forwarded as such. Until 2026-10-06 they
+             * re-armed the idle bound above and went no further, so a step streaming a 29 kB `write_file` for 97 s was
+             * silent to the stall watch, REQ-ORCH-090's watchdog and REQ-CHAT-164's indicator until the call completed
+             * (docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md). The arguments themselves still
+             * travel once, whole, on the `tool-call` part.
+             */
+            yield ok<StreamPart>({ kind: 'tool-input', callId: part.id });
+            break;
           case 'tool-call':
             yield ok<StreamPart>({ kind: 'tool-call', callId: part.toolCallId, name: part.toolName, argsDelta: JSON.stringify(part.input ?? {}) });
             break;

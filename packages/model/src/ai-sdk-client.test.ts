@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { millis, type MonotonicClock, type Timers } from '@rotaris/kernel';
 import { AiSdkModelClient, outputDowngrade, redactHeaders, type FetchLike } from './ai-sdk-client.js';
+import { DefaultAgentBackend } from './default-backend.js';
 import type { DispatchRetry, ModelRequest, StreamPart } from './ports.js';
 
 /**
@@ -317,5 +318,56 @@ describe('model — a replayed tool call always carries a mapping (REQ-TOOLS-032
   }
   it('an unreadable text is replayed as a mapping holding the text, as before', async () => {
     expect(await replayed('{"persona":')).toEqual({ _raw: '{"persona":' });
+  });
+});
+
+describe('model — a tool call\'s streamed arguments are model events (REQ-ORCH-089, REQ-ORCH-090; docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md)', () => {
+  /*
+   * An OpenAI-shaped endpoint streams a tool call's arguments in pieces, one `delta.tool_calls` chunk each. The SDK reads
+   * them as `tool-input-start` and `tool-input-delta` parts and only then gives the complete `tool-call`. The adapter
+   * dropped the pieces, so a step writing a long file was silent to every layer above it until its last piece arrived:
+   * the duress live runs' child streamed 3,011 of them for about 97 s and was warned stalled at 94 s.
+   */
+  const toolChunk = (call: { id?: string; name?: string; args: string }) => JSON.stringify({
+    id: 'c1', object: 'chat.completion.chunk', created: 0, model: 'm',
+    choices: [{ index: 0, delta: { tool_calls: [{ index: 0, ...(call.id === undefined ? {} : { id: call.id, type: 'function' }), function: { ...(call.name === undefined ? {} : { name: call.name }), arguments: call.args } }] }, finish_reason: null }],
+  });
+  const pieces = ['{"path":"docs/', 'verification.md",', '"operation":"create",', '"content":"line 1\\n', 'line 2\\n', 'line 3\\n"}'];
+  const streamed = (): Response => sse([
+    toolChunk({ id: 'call_1', name: 'write_file', args: '' }),
+    ...pieces.map((args) => toolChunk({ args })),
+    chatChunk(null, 'tool_calls', { prompt_tokens: 9, completion_tokens: 40 }),
+    '[DONE]',
+  ]);
+
+  it('the adapter yields a `tool-input` part for each piece of the arguments, before the complete call, which carries them whole once', async () => {
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: async () => streamed() });
+    const { parts, error } = await collect(client.stream(request('chat', { tools: [{ name: 'write_file', description: 'write', parameters: { type: 'object' } }] })));
+    expect(error).toBeNull();
+    const kinds = parts.map((p) => p.kind);
+    const firstCall = kinds.indexOf('tool-call');
+    // The first part of the step is the call's start, not its end.
+    expect(kinds[0]).toBe('tool-input');
+    expect(kinds.slice(0, firstCall).every((k) => k === 'tool-input')).toBe(true);
+    // One for the call's start and one per piece of its arguments.
+    expect(kinds.filter((k) => k === 'tool-input').length).toBeGreaterThanOrEqual(pieces.length);
+    expect(parts.filter((p) => p.kind === 'tool-input').every((p) => p.kind === 'tool-input' && p.callId === 'call_1')).toBe(true);
+    expect(parts.filter((p) => p.kind === 'tool-call')).toEqual([{ kind: 'tool-call', callId: 'call_1', name: 'write_file', argsDelta: JSON.stringify(JSON.parse(pieces.join(''))) }]);
+  });
+
+  it('through the default backend: the watchdog\'s `started` fires on the first piece, every piece is a model event, and the call is assembled once', async () => {
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: async () => streamed() });
+    const seen: string[] = [];
+    const report = await new DefaultAgentBackend(client).runTurn(
+      { persona: 'p', systemPrompt: 's', messages: [{ role: 'user', content: [{ kind: 'text', text: 'hi' }] }], tools: [{ name: 'write_file', description: 'write', parameters: { type: 'object' } }], model: { providerId: 'acme', modelId: 'acme-1', dialect: 'chat' }, thinking: 'unset', timeoutMs: 5_000, retries: 0, resolveCredential: async () => 'k' },
+      { delta: () => undefined, reasoning: () => undefined, usage: () => undefined, started: () => seen.push('started'), event: (k) => seen.push(k) },
+      new AbortController().signal,
+    );
+    // REQ-ORCH-090: the step's first model event is the call's first piece; before the repair it was the finished call.
+    expect(seen.slice(0, 2)).toEqual(['started', 'tool-input']);
+    expect(seen.filter((k) => k === 'tool-input').length).toBeGreaterThanOrEqual(pieces.length);
+    expect(seen.indexOf('tool-call')).toBeGreaterThan(seen.lastIndexOf('tool-input'));
+    expect(report.status).toBe('succeeded');
+    expect(report.toolCalls).toEqual([{ callId: 'call_1', name: 'write_file', args: JSON.stringify(JSON.parse(pieces.join(''))) }]);
   });
 });

@@ -39,8 +39,13 @@ export function stallRepeat(thresholdMs: number): Millis {
   return millis(Math.max(thresholdMs, 30_000));
 }
 
-/** The model events that are output: a token of the answer, of the reasoning, or of a tool call (REQ-NOTIFY-112, OQ-127). */
-const OUTPUT_EVENTS: ReadonlySet<string> = new Set(['text', 'reasoning', 'tool-call']);
+/**
+ * The model events that are output: a token of the answer, of the reasoning, or of a tool call — a piece of its streamed
+ * arguments (`tool-input`) as much as the call complete (REQ-NOTIFY-112, OQ-127). `tool-input` since 2026-10-06
+ * (docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md): before it, a child that streamed a long
+ * `write_file` and then failed read as having produced nothing for the whole stream.
+ */
+const OUTPUT_EVENTS: ReadonlySet<string> = new Set(['text', 'reasoning', 'tool-input', 'tool-call']);
 
 /**
  * OQ-173: a wait the run imposes on an agent between its model steps — a transient or validation retry's backoff

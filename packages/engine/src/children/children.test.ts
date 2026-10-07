@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, millis, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
-import { CHILD_STATES, CHILD_TRANSITIONS, FOLLOW_UP_STATE, isLegalChildMove, isLegalFollowUp, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset, type SessionRecord } from '@rotaris/contracts';
+import { CHILD_STATES, CHILD_TRANSITIONS, FOLLOW_UP_STATE, isLegalChildMove, isLegalFollowUp, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset, type SessionRecord, type TranscriptIncrement } from '@rotaris/contracts';
 import { BUILT_IN_PERSONAS, canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type RoleName, type ToolPort, type ToolPortContext } from '../index.js';
 import type { AgentGrant, PersonaResolver } from './personas.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -1556,6 +1556,46 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(child(sid).state).toBe('succeeded');
       // OQ-127's ruling: the recovery is a `stall_recovered` timeline entry beside its line.
       expect(dal.timelineOf(sid).filter((t) => t.name === 'stall_recovered').map((t) => [t.actor, t.message, JSON.parse(t.metadata)])).toEqual([['quiet', recoveredLine, { task_id: child(sid).task_id }]]);
+    });
+
+    /*
+     * The duress live runs' child (L2 at c2fdd6a, N1 at c2a9444): its last text token, then a `write_file` whose arguments
+     * streamed for about 97 s. Each piece now reaches the run as a `tool-input` model event
+     * (docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md).
+     */
+    it('REQ-ORCH-089 / REQ-NOTIFY-112 / REQ-CHAT-164: a child streaming a tool call\'s arguments for 95 s is not stalled, its row is not marked stalled, and a failure after it earns no corrective message', async () => {
+      const increments: TranscriptIncrement[] = [];
+      const gates: (() => void)[] = [];
+      const childAsked: string[] = [];
+      const PIECES = 19;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'writer', task: 'TASK: write the report' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        childAsked.push(userText(req));
+        const gate = (): Promise<void> => new Promise<void>((r) => { gates.push(r); });
+        const pieces = Array.from({ length: PIECES }, () => [{ hold: gate() }, { part: { kind: 'tool-input' as const, callId: 'w1' } }]).flat();
+        return { parts: [{ part: { kind: 'text', delta: 'Writing the report now.' } }, ...pieces, { hold: gate() }, { error: failed }] };
+      }, { publisher: { increment: (p) => increments.push(p), snapshot: () => undefined } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === PIECES + 1);
+      await new Promise((r) => setTimeout(r, 20));
+      // A piece every 5 s: 95 s of arguments, past the 90 s threshold and nine times REQ-CHAT-164's ten seconds.
+      for (let i = 0; i < PIECES; i += 1) {
+        clock.advance(5_000);
+        gates[i]!();
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      expect(child(sid).state).toBe('running');
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall')).toEqual([]);
+      expect(warnings.filter((m) => m.startsWith('child appears stalled'))).toEqual([]);
+      // REQ-CHAT-164: the child's live row was never marked as a provider producing no output.
+      expect(increments.flatMap((p) => p.rows).filter((r) => r.stalledSince !== undefined)).toEqual([]);
+      gates[PIECES]!();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // REQ-NOTIFY-112: the child produced output until it failed, so it is not owed the corrective message.
+      expect(childAsked).toHaveLength(1);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'corrective_message')).toEqual([]);
+      expect(child(sid).state).toBe('failed');
     });
 
     it('at most one corrective message per child: a second silent failure ends it failed', async () => {

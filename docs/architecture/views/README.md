@@ -43,7 +43,13 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-10-06**
+## Last reconciled with the code: **2026-10-07**
+
+**A tool call's streamed arguments are model events (REQ-ORCH-089, REQ-ORCH-090, REQ-NOTIFY-112, REQ-CHAT-164; finacc3 F02).**
+`StreamPart` gains `tool-input`, which `AiSdkModelClient.stream` yields for the SDK's `tool-input-start` and `tool-input-delta`
+parts; the call still arrives once, whole, as `tool-call`. The stall watch counts it as output (`OUTPUT_EVENTS`), the first one
+disarms REQ-ORCH-090's watchdog, and `step`'s sink clears REQ-CHAT-164's row mark on it. The **runtime view**'s model-step,
+unresponsive-model and stall-watch paragraphs say so. No package, edge, process, channel, command or store column changed.
 
 **`summary.md`'s counts over a capped ring read as a lower bound past the cap (REQ-SESSION-133, REQ-SESSION-140; finacc3 F10).**
 `warningLines` and `metricsLines` (`run/summary.ts`) print Permission denials, Tool errors, Permission decisions and Issues as

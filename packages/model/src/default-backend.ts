@@ -44,6 +44,9 @@ export class DefaultAgentBackend implements AgentBackend {
         case 'finish':
           finish = part.value.reason;
           break;
+        case 'tool-input':
+          // A call under way: a model event (above) and nothing to assemble; its arguments arrive whole as `tool-call`.
+          break;
         case 'tool-call': {
           const cur = calls.get(part.value.callId);
           if (cur) cur.args += part.value.argsDelta;

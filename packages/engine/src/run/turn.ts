@@ -601,7 +601,14 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
       }
     },
     usage: () => { outputArrived(); },
-    event: (kind: string) => { deps.onModelEvent?.(kind); },
+    event: (kind: string) => {
+      deps.onModelEvent?.(kind);
+      // REQ-CHAT-164: a tool call under way, or complete, is output of the call too, so it clears the live row's stalled
+      // mark and re-arms its ten seconds; text and reasoning do so in their own callbacks. Until 2026-10-06 a step that
+      // wrote a line and then streamed a long `write_file` marked its row "not producing output" ten seconds into the
+      // arguments (docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md).
+      if ((kind === 'tool-input' || kind === 'tool-call') && !detached()) outputArrived();
+    },
     // OQ-110: a retry the dispatch layer absorbed is written where a person diagnosing the run reads (REQ-SESSION-142).
     retried: (r: DispatchRetry) => { deps.warn(dispatchRetryLine(deps.agentName, providerIdentity(deps.resilience?.catalogue ?? [], choice.model), choice.model.modelId, r)); },
   };

@@ -48,3 +48,29 @@ wait on the agent's own children.
 - `packages/engine/src/children/stall.ts` — `StallWatch.modelEvent` and `OUTPUT_EVENTS`.
 - `packages/engine/src/run/turn.ts` — `step`: the REQ-ORCH-090 timer, REQ-CHAT-164's `armStall` / `outputArrived`, and
   the sink's `event`.
+
+## Outcome
+
+**Repaired 2026-10-07** (finacc3, task F02). Confirmed on the branch before the change by four failing cases: the two in
+`ai-sdk-client.test.ts` read the step's first part as the finished `tool-call` (`expected 'tool-call' to be 'tool-input'`;
+the backend's `started` then `tool-call`), the `stall.test.ts` case read `quietFor` as 97,000 ms after 97 s of argument pieces,
+and the `children.test.ts` case published the child's live row with `stalledSince` ten seconds into the arguments.
+
+- `StreamPart` (`packages/model/src/ports.ts`) gains `tool-input` (`callId`): a tool call under way, activity only.
+  `AiSdkModelClient.stream` yields one for each `tool-input-start` and `tool-input-delta` part; the call itself still
+  arrives once, whole, as `tool-call`, so nothing is assembled twice. `DefaultAgentBackend.runTurn` sends it to
+  `TurnSink.started` when it is the first part and to `TurnSink.event` always, and assembles nothing from it.
+- `StallWatch`'s `OUTPUT_EVENTS` (`packages/engine/src/children/stall.ts`) counts `tool-input` as output, so
+  REQ-NOTIFY-112's `quietFor` reads a child streaming arguments as producing output; every model event already reset the
+  silence the warning reads, so the false warning and `stall` issue go with the client's change.
+- `step`'s sink (`packages/engine/src/run/turn.ts`) clears and re-arms REQ-CHAT-164's ten seconds on a `tool-input` or
+  `tool-call` event, as it does on text, reasoning and usage.
+- REQ-ORCH-090's watchdog needed no change of its own: it disarms on the first part the backend sees, which is now the
+  call's first piece.
+
+Pinned by `ai-sdk-client.test.ts`, "model — a tool call's streamed arguments are model events" (two cases, over an
+OpenAI-shaped stream of six argument pieces), `stall.test.ts`, "REQ-ORCH-089 / REQ-NOTIFY-112: a piece of a tool call's
+streamed arguments is a model event and output …", and `children.test.ts`, "REQ-ORCH-089 / REQ-NOTIFY-112 / REQ-CHAT-164: a
+child streaming a tool call's arguments for 95 s is not stalled, its row is not marked stalled, and a failure after it earns
+no corrective message". The runtime view's model-step, unresponsive-model and stall-watch paragraphs, and ADR-0027's
+thirteenth execution, say so.

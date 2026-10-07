@@ -54,11 +54,25 @@ export function resolveUserDirs(e: DirEnv = { platform: process.platform, env: p
         data: join(e.home, 'Library', 'Application Support', name, 'data'),
       };
     default: {
-      const config = e.env['XDG_CONFIG_HOME'] ?? join(e.home, '.config');
-      const data = e.env['XDG_DATA_HOME'] ?? join(e.home, '.local', 'share');
+      const config = xdgBaseDirectory(e.env['XDG_CONFIG_HOME'], join(e.home, '.config'));
+      const data = xdgBaseDirectory(e.env['XDG_DATA_HOME'], join(e.home, '.local', 'share'));
       return { config: join(config, name), data: join(data, name) };
     }
   }
+}
+
+/**
+ * An XDG base-directory variable's value, or its default where the XDG Base Directory Specification says a variable
+ * "either not set or empty" takes it. The one reading of the configuration home, so `resolveUserDirs` and
+ * `resolvePreferenceRoot` never part over it. Until finacc3 the first read the variables with `??` and the second with
+ * `||`, so `XDG_CONFIG_HOME=` put the configuration directory at the relative path `rotaris` while the preference store
+ * fell back to `~/.config`
+ * (`docs/defects/fixed/an-empty-xdg-config-home-puts-the-configuration-directory-at-a-relative-path.md`). A relative
+ * value, which the same specification calls invalid, is still used as it stands
+ * (`docs/defects/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
+ */
+export function xdgBaseDirectory(value: string | undefined, fallback: string): string {
+  return value === undefined || value === '' ? fallback : value;
 }
 
 /** Fixed sub-locations inside the data directory. Fixed-length by construction where a path budget matters (ADR-0058 c.13). */

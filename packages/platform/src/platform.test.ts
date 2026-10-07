@@ -39,6 +39,26 @@ describe('platform — per-user directories (REQ-STARTUP-145)', () => {
     expect(d.config).toBe('/x/cfg/rotaris');
     expect(d.data).toBe('/x/data/rotaris');
   });
+  it('on Linux an empty XDG variable takes its default, as the XDG Base Directory Specification says (REQ-CONFIG-001, REQ-STARTUP-145)', () => {
+    // Until finacc3 the variables were read with `??`, so `XDG_CONFIG_HOME=` answered `join('', 'rotaris')`: the relative
+    // path `rotaris`, resolved against whatever the working directory was, while the preference root (`||`) fell back to
+    // `~/.config`, so the two parted (docs/defects/fixed/an-empty-xdg-config-home-puts-the-configuration-directory-at-a-relative-path.md).
+    const home = '/home/me';
+    const d = resolveUserDirs({ platform: 'linux', env: { XDG_CONFIG_HOME: '', XDG_DATA_HOME: '' }, home });
+    expect(d.config).toBe('/home/me/.config/rotaris');
+    expect(d.data).toBe('/home/me/.local/share/rotaris');
+    expect(resolvePreferenceRoot({ platform: 'linux', env: { XDG_CONFIG_HOME: '' }, home })).toBe('/home/me/.config/Rotaris/Rotaris');
+    // Each variable is judged on its own: an empty one does not take the other's value with it.
+    const mixed = resolveUserDirs({ platform: 'linux', env: { XDG_CONFIG_HOME: '', XDG_DATA_HOME: '/x/data' }, home });
+    expect(mixed).toEqual({ config: '/home/me/.config/rotaris', data: '/x/data/rotaris' });
+    // The preference store and the configuration directory never part over the variable's value.
+    for (const value of [undefined, '', '/x/cfg']) {
+      const env = { XDG_CONFIG_HOME: value };
+      const dirs = resolveUserDirs({ platform: 'linux', env, home });
+      const prefs = resolvePreferenceRoot({ platform: 'linux', env, home });
+      expect(prefs.slice(0, prefs.length - '/Rotaris/Rotaris'.length)).toBe(dirs.config.slice(0, dirs.config.length - '/rotaris'.length));
+    }
+  });
   it('the sub-locations are spelled by the platform asked about, not the host asking (R3 separator residue)', () => {
     // The defect this pins: a bare host-bound `join` spelled the Windows answer with POSIX separators
     // whenever the question was asked off Windows. Production always agrees with its host, so this is

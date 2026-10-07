@@ -66,6 +66,13 @@ the terminal pair or ran the hooks advisory, or while a rest was forwarded or it
 `cancelling` over the run's end or rest. The **runtime view**'s control table says so. No package,
 edge, process, channel, command or store column changed.
 
+**An empty XDG variable takes its default (REQ-CONFIG-001, REQ-STARTUP-145; finacc3 F06).** `xdgBaseDirectory`
+(`platform/dirs.ts`) is the one reading of `XDG_CONFIG_HOME` and `XDG_DATA_HOME`: unset or empty answers the default, as
+the XDG Base Directory Specification says (a relative value is still used as it stands, an open note). `resolveUserDirs` and `resolvePreferenceRoot` both read through it,
+where the first read `??` and the second `||` and an empty `XDG_CONFIG_HOME` parted them. The **process view**'s files row and
+the **state-ownership view**'s `preferences.json` row say so. No package, edge, process, channel, command or store column
+changed.
+
 **Undoing a `write_file` create removes only the file it made (REQ-TOOLS-132, REQ-TOOLS-135; fin26).** A create's `UndoEntry`
 keeps the SHA-256 of what it wrote, and its undo removes the file only while the file's bytes still have that digest; a file
 another writer rewrote since is left in place and the undo refused, its entry kept. The **runtime view**'s file-tools

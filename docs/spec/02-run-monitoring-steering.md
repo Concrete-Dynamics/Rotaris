@@ -125,6 +125,8 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-039** — A tree surface that is not visible must defer its refresh until it is shown, and must then catch up to current state.
 
 **REQ-MONITOR-040** — Each tree row shows: the branch prefix in a monospaced face; a state-colored status dot that pulses while the agent is live; the persona display name (brighter while live); the agent's task name beneath it; and, where meta is enabled, a meta label showing elapsed time if known, otherwise the state value.
+  > **Extended by [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 3, 2026-10-07.** A row whose agent's stored report carries REQ-ORCH-088's
+  > timeout error carries a "timed out" tag after its meta label.
 
 **REQ-MONITOR-041** — A tree row's tooltip carries the first of these that exists: the agent's full delegation task, its current activity text, its name. Row content never changes the panel's width: a name that does not fit is elided with a visible truncation marker and remains readable in full through the tooltip.
 
@@ -133,6 +135,9 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-043** — Rows for task agents put the persona first, with the task title on the line below. The run's synthetic root is neither rendered as a task agent nor selectable in the tree; run-level control lives in a dedicated run header instead.
 
 **REQ-MONITOR-044** — Each agent as presented to views carries: id, name, persona, presentation state (running / waiting / queued / done / failed / cancelled), parent id, dependencies, activity text, model, reasoning level (default "medium"), context tokens used, context limit (the configured default context capacity of REQ-MONITOR-080 where the model's own capacity is unknown, per REQ-MONITOR-049), tool-call count, elapsed string, granted tools, granted MCP tools per server, previously called tool names, currently active tool names, artifacts (name, producer, ready flag), produced and received artifact ids, category, background flag, delegation task, delegation session id, and inherited context.
+  > **Extended by [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 3, 2026-10-07.** An agent as presented also carries whether its stored report
+  > carries REQ-ORCH-088's timeout error: the limit it ran under and whether it was cut off while making progress
+  > (PD-ORCH-004's statement), or nothing.
 
 **REQ-MONITOR-045** — Context percentage is the used-tokens fraction of the limit, rounded to a whole percent, and is 0 when the limit is zero or negative. An agent is "live" exactly when its presentation state is running.
 
@@ -156,6 +161,9 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-051** — Below a viewport width of 1180 px, choosing an agent opens the inspector as an overlay drawer that is mutually exclusive with the agents/todos drawer. The workspace must remain usable down to 1000×680.
 
 **REQ-MONITOR-052** — The inspector for an agent shows: a state-colored status dot that pulses while live; the agent name; a meta line of the form `{state} · {elapsed or em-dash} · {N} tool calls`; a context ring showing used against limit with the compression threshold marked; a caption naming it the context window and stating the compression threshold percentage; a model selector; a reasoning selector offering low / medium / high; a scope note; tool chips; artifact links; a cascade note; and Steer, Cancel, and Pop out actions.
+  > **Extended by [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 3, 2026-10-07.** Directly under the meta line, unchanged in form, the
+  > inspector of an agent cut off at its per-agent timeout shows one line giving the limit and naming
+  > Settings › Runtime › Per-agent timeout.
 
 **REQ-MONITOR-053** — Given no agent is selected, the inspector must follow whichever known agent authored the latest transcript row, scanning backwards past user rows, intent rows, system rows, verifier rows, and rows with unknown authorship.
 
@@ -199,6 +207,8 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-068** — A pop-out window exists per persona, titled with the product name and the persona, sized 820×620 by default, with a header summarizing the number of instances, one tab per agent instance of that persona (tab tooltip `{state} · {activity}`), and a persona-wide artifacts card listing artifacts from all instances with an explicit empty state.
 
 **REQ-MONITOR-069** — Each instance tab shows: status dot, agent name in the persona color, and state; an agent-scoped transcript card with an explicit empty state; a context card with a ring and a line of the form `{N} tool calls · {elapsed or hyphen}`; an instance-controls card with read-only model and reasoning values; a current-activity card rendering the activity text as Markdown with an explicit empty state; a tools-and-artifacts card listing available tools (the same resolved set the inspector shows), one line per MCP server, the currently active tools, and artifact links; and a steer card.
+  > **Extended by [`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 3, 2026-10-07.** Directly under the state, the instance tab of an agent cut
+  > off at its per-agent timeout shows the inspector's line, worded once.
 
 **REQ-MONITOR-070** — The steer card offers a multi-line plain-text box whose placeholder invites the user to add context or redirect the agent, a primary send action, and a cancel action marked as destructive; both act on the agent shown in that tab. Sending while the box is empty or holds only whitespace issues no request and changes nothing. A send that is accepted clears the box; a send that is refused leaves the typed text in place so the user can retry it.
 

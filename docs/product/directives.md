@@ -3916,6 +3916,10 @@ and the clause marked "— revision 2" below is added; revision 1's text stands 
 was: "PD-CONFIG-003 — the Runtime category offers the per-agent timeout as a third delegation limit, in minutes", and its
 disposition: "Narrows: REQ-CONFIG-322, REQ-CONFIG-256, REQ-CONFIG-417 / Extends: REQ-CONFIG-263".*
 
+*Revision 3 (2026-10-07, R-072, the ruling of OQ-234) — a delegated agent cut off at its per-agent timeout names this control
+where its failure shows. The clause marked "— revision 3" below is added; the heading stays as revision 2 left it, and the
+text of revisions 1 and 2 stands unchanged beside it.*
+
 Settings › Runtime › **Delegation limits** SHALL show a third numeric control, "Per-agent timeout", after the depth cap and
 the fan-out limit: whole minutes with a "minutes" suffix (REQ-CONFIG-325's pattern), clamped at the widget to **1–240**. It
 is REQ-MONITOR-286's per-agent timeout, initialised from the effective `runtime.child_timeout` (REQ-CONFIG-113, in seconds)
@@ -3942,6 +3946,23 @@ zero-proposal notice's detail, giving the limit in seconds and naming this contr
 action stay as they are (REQ-NOTIFY-100, REQ-LIBRARY-023). The desktop save's runtime keys SHALL be a closed list —
 REQ-CONFIG-256's eight, `child_timeout`, `improvement_collector_timeout` and the six confinement and egress fields — that the
 screen's runtime keys equal, and a save naming any other runtime key is refused.
+
+**Where a cut-off agent shows — revision 3.** A delegated agent whose stored report carries REQ-ORCH-088's `timeout` error
+("Child timed out after <N>s") SHALL show:
+
+- **On the rows.** On its delegation-tree row (REQ-MONITOR-040) and its Mission-table row, a "timed out" tag after its state.
+- **The line.** In the inspector, directly under the meta line (REQ-MONITOR-052), and in its persona-window instance tab,
+  directly under its state (REQ-MONITOR-069), one line: "Cut off at its per-agent timeout of <limit>[ while making progress].
+  Settings › Runtime › Per-agent timeout sets this limit for runs started from now."
+- **`<limit>`.** N, the limit the agent ran under, written "1 minute" or "<m> minutes" when N is a whole number of minutes,
+  and "<N> seconds" otherwise.
+- **"while making progress".** It appears exactly when the report carries PD-ORCH-004's cut-off statement.
+- **One wording.** The line is worded once, and its path segments are the labels the Settings screen renders.
+
+The agent as presented carries the fact (REQ-MONITOR-044). Unchanged: the meta line's form and REQ-MONITOR-041's row tooltip;
+REQ-ORCH-088's error and issue; PD-ORCH-004's statement and offer; OQ-217's Outcome line, the timeline, the report artifact and
+the parent's tool results; no notice is raised; the default, the hard bound, the 30 s landing and the continuation rule
+(PD-ORCH-004, R-048, R-071, OQ-214).
 
 **As built.** `child_timeout` in `RuntimeViewSchema` (`packages/contracts/src/config.ts`) and the snapshot
 (`packages/config/src/snapshot.ts`), `TIER_B_RUNTIME_KEYS` (`packages/config/src/tiers.ts`), `DesktopSave.runtime`
@@ -3970,8 +3991,19 @@ and 600 are chosen figures (600 is ten times the default, about 4.5 times the sl
 and REQ-NOTIFY-100's other five bounds stay file-only; and the runtime policy card carries one field beyond REQ-CONFIG-323's
 four toggles, which black-box conformance may note. R-071's 60 s default is not revised.
 
+*Revision 3's why, and what it costs.* OQ-234, ruled 2026-10-07 under the owner's delegation (R-072, both advocates followed).
+Finding D2 of the duress live run at `a68f121` (session `e6747bd0`): two testers, `bg_dcecf655` and its continuation
+`bg_98fa54d7`, were cut off at 1200 s while making progress, and each row read `failed` with nothing else — the error went to
+the parent, the issue record and the timeline, which no screen shows, and nothing named the control the ceiling rulings
+(OQ-218, OQ-214) count on. Revision 2 set the rule for the other timeout a user can set: the surface reporting the timed-out
+operation states the limit and names its control. What it costs: one field on the presented agent across the process boundary
+(read from the stored report, so a resumed session shows it too), one tag and one line. A person may raise the limit for a
+child that was looping; the line names the control without urging that, and says "while making progress" only where the
+child was. The limit is read back from REQ-ORCH-088's error text, so one formatter writes it and one parser reads it, pinned
+by a round trip. Black-box conformance will see a tag and a line the reference lacks.
+
 > **Narrows:** REQ-CONFIG-322, REQ-CONFIG-256, REQ-CONFIG-417, REQ-CONFIG-325
-> **Extends:** REQ-CONFIG-263, REQ-CONFIG-323, REQ-LIBRARY-041
+> **Extends:** REQ-CONFIG-263, REQ-CONFIG-323, REQ-LIBRARY-041, REQ-MONITOR-040, REQ-MONITOR-044, REQ-MONITOR-052, REQ-MONITOR-069
 
 *Raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the ruling of
 [OQ-218](../architecture/open-questions.md) (T1). Cites, without changing them: REQ-MONITOR-286, REQ-CONFIG-113,
@@ -3983,6 +4015,11 @@ building).*
 *Revision 2 raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the
 ruling of [OQ-223](../architecture/open-questions.md) (IT1). Cites, without changing them: REQ-CONFIG-118, REQ-LIBRARY-039,
 REQ-LIBRARY-023, REQ-LIBRARY-124, REQ-NOTIFY-100, REQ-CONFIG-446, REQ-CONFIG-419 and OQ-114's kept 60 s.*
+
+*Revision 3 raised by the consortium under the owner's delegation, 2026-10-07; logged as [R-072](requests.md#r-072), the
+ruling of [OQ-234](../architecture/open-questions.md) (CN1), the question the D2 ruling raised. Cites, without changing them:
+REQ-ORCH-088, PD-ORCH-004 revisions 1 to 5, REQ-CONFIG-113, REQ-MONITOR-041, REQ-MONITOR-285, REQ-MONITOR-286, REQ-NOTIFY-092,
+REQ-NOTIFY-100, REQ-NOTIFY-261, OQ-217 and revision 2's notice detail.*
 
 > **First execution, 2026-10-07, built under [R-072](requests.md#r-072):** the directive held as written. **What was
 > measured.** `settings/child-timeout.test.ts` (the minutes and seconds both ways, the stored-value line, a stored 1250 s and

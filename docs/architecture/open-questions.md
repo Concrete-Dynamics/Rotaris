@@ -11793,3 +11793,47 @@ file's depth. The specification fixes neither reading.
 
 **What a ruling decides.** Whether a level-3 `write_file` edit shifts `new_string` by the window's prefix, writes it as given
 (the build), or is refused with OQ-231's near-miss facts, as `haet_edit`'s now is.
+
+**OQ-234 — Does a child cut off at its per-agent timeout name, where the person sees the failure, the Settings control that
+sets the limit?** *(REQ-ORCH-088, the expiry path and its fixed error "Child timed out after <N>s"; REQ-CONFIG-113,
+`runtime.child_timeout`; [`PD-CONFIG-003`](../product/directives.md#pd-config-003), the Per-agent timeout control, and its
+revision 2's notice detail for the other timeout a user can set; [`PD-ORCH-004`](../product/directives.md#pd-orch-004)
+revisions 1 to 5, the cut-off statement and offer; REQ-MONITOR-040, -044, -052 and -069, what a tree row, a presented agent, the
+inspector and an instance tab carry; REQ-MONITOR-041, -285 and -286; REQ-NOTIFY-092, -100 and -261; OQ-217's Outcome line;
+OQ-218 and OQ-214, the rulings that kept the 1200 s default because a user can raise it. Raised 2026-10-07 from the final live
+runs, by the ruling of finding D2 of the duress live run at `a68f121` (session `e6747bd0`), and recorded as the R-072
+consortium's question CN1; ruled the same day.)*
+
+In that run the testers `wave3-verify-all` (`bg_dcecf655`) and its continuation `wave3b-finish-verification` (`bg_98fa54d7`)
+were each cut off at 1200 s while making progress (issues 14 and 19; the parent's calls `#248` and `#336` carry their
+reports). Each row read `failed` and nothing else. "Child timed out after 1200s" reaches the parent model, the issue record and
+the timeline, and no screen shows any of them; `AgentRecord` carries no end cause; the report artifact copies only the status
+and the summary, so the one cause a person could read was the summariser's text (finding D9). The control that moves the limit
+lives in Settings › Runtime, in minutes. Recorded as
+[`a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md`](../defects/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
+What the specification does not settle is whether a surface that shows the agent ends with the limit and a pointer to its
+control, and which surfaces those are.
+
+**Ruled 2026-10-07 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a delegated agent whose stored
+report carries REQ-ORCH-088's timeout error shows that error wherever its failure appears. Its delegation-tree row and its
+Mission-table row carry a "timed out" tag after the state. The inspector (directly under its meta line) and the agent's
+persona-window instance tab (directly under its state) carry one line, worded once: "Cut off at its per-agent timeout of
+<limit>[ while making progress]. Settings › Runtime › Per-agent timeout sets this limit for runs started from now." The limit,
+its default, the 30 s landing, the single continuation, REQ-ORCH-088's error, PD-ORCH-004's statement and offer, OQ-217's
+Outcome line, the issues, the timeline, the Library document and the notices all stay as built. This is
+[`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 3, which extends REQ-MONITOR-040, REQ-MONITOR-044,
+REQ-MONITOR-052 and REQ-MONITOR-069.
+
+**The two recommendations weighed.** *Advocate A (the user's lens)* recommended that every surface showing the agent — the
+Mission table row, the tree row, the inspector and the persona window — carry one sentence giving the limit in minutes, whether
+the agent was still working, and the path Settings › Runtime › Delegation limits › Per-agent timeout, with an inspector button
+that opens Settings › Runtime, recorded as PD-CONFIG-003's next revision. *Advocate B (the system's lens)* recommended one
+code-written line in two places only — under the inspector's meta line and in the persona window's instance tab — naming the
+control and its current value, with the rows, the engine's records, the timeline and the notices left as built. Both kept the
+runner's texts unchanged, since REQ-ORCH-088 fixes the error's form, PD-ORCH-004 is the owner's ruling and models cannot open
+Settings. **The ruling followed both**: from A the row tag, where `failed` is first seen (a terminal agent never shows the
+stalled tag, so the timeout tag takes its slot), and the making-progress distinction read from the cut-off statement, so a
+looping child's line does not suggest a longer limit would have helped; from B the line's two placements and no new action, so
+REQ-MONITOR-052's actions stay as listed. It departs from both in writing the path in the shape revision 2 built
+("Settings › Runtime › <control>"), so the two timeouts follow one rule, and in stating no current value, which Settings shows
+one step away.

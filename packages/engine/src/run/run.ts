@@ -6,7 +6,7 @@ import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { Committed, SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
-import { classifyStop, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planNotDoneSummary, statusForResult, stopCondition, summarise, TODO_LIST_OWED_TEXT, type StopReason, type TerminalResult } from './stop-conditions.js';
+import { classifyStop, HELD_ANSWER_LIMIT, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planHeldRowText, planNotDoneSummary, statusForResult, stopCondition, summarise, TODO_LIST_OWED_TEXT, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { mintTodoId, taskLine, Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
@@ -605,6 +605,8 @@ export class Run {
    * a resumed root, which carries on from its record.
    */
   private planCarry: readonly string[] = [];
+  /** `PD-ORCH-015`: the answer that iteration wrote, carried beside the marker (`Task.heldAnswer`); none for a resumed root. */
+  private planCarryAnswer: string | null = null;
   private appliedEntryModel: ModelRef | null = null;
   /**
    * REQ-MONITOR-142 (OQ-177): the user's entry switch not yet applied to the root's cell, which `rootResilience` applies
@@ -1216,6 +1218,7 @@ export class Run {
     // iteration closed with open reach this iteration's fresh root, and no other task's. Both are kept with the task.
     this.takeUp(task, resume !== null);
     this.planCarry = resume ? [] : storedIds(task.planLeftOpen);
+    this.planCarryAnswer = resume ? null : storedText(task.heldAnswer);
     if (resume) {
       writer.recordIterationInterruption(iteration, null);
       writer.appendTimeline('iteration_resumed', 'rotaris', `Iteration ${iteration}, left open by ${interruptionPhrase(resume.interruption ?? '')}, resumed.`, { iteration, interruption: resume.interruption, root_task_id: resume.root_task_id });
@@ -1266,8 +1269,14 @@ export class Run {
         this.todo.releaseHeld(iteration, false);
         summary = planNotDoneSummary(open);
         task.planLeftOpen = open;
+        // PD-ORCH-015 (extending REQ-ORCH-075): the answer the person was shown goes with the task to its next fresh root.
+        const held = report.text.trim().slice(0, HELD_ANSWER_LIMIT);
+        if (held === '') delete task.heldAnswer;
+        else task.heldAnswer = held;
         leftPlanOpen = true;
         this.deps.warn(`iteration ${iteration}: ${summary}; its task is ${outcome === 'abandoned' ? 'given up on at the retry limit' : 'returned to the pending queue'} (REQ-ORCH-029)`);
+        // PD-ORCH-015, building REQ-ORCH-067's iteration-end visibility: the person is told, under the answer, why it is held.
+        writer.appendRow('system', planHeldRowText(iteration, open, outcome === 'abandoned'), true);
         if (outcome === 'abandoned') { this.lastFailure = summary; this.failedModel = null; }
         if (this.rootRecord) this.rootRecord.state = outcome === 'abandoned' ? 'failed' : 'succeeded';
       } else if (report.status === 'succeeded') {
@@ -1309,8 +1318,8 @@ export class Run {
     // REQ-ORCH-075: a task completed or given up on carries nothing further, to its own iterations or any other task's; an
     // iteration that closed for another reason than its plan left open leaves nothing to tell the next (a cancelled one
     // did not finish, and the items the one before it left open still stand).
-    if (task.state === 'complete' || task.state === 'abandoned') { delete task.planLeftOpen; delete task.planExcused; delete task.workItems; delete task.listWritten; }
-    else if (outcome !== 'cancelled' && !leftPlanOpen) delete task.planLeftOpen;
+    if (task.state === 'complete' || task.state === 'abandoned') { delete task.planLeftOpen; delete task.heldAnswer; delete task.planExcused; delete task.workItems; delete task.listWritten; }
+    else if (outcome !== 'cancelled' && !leftPlanOpen) { delete task.planLeftOpen; delete task.heldAnswer; }
     // PD-ORCH-005 clause 1: `iteration.end` and the iteration's record closing with its outcome, in one transaction — with
     // the todo its task and held messages were just closed in, so no death before the save below strands them in progress.
     writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome, this.todoJson());
@@ -1362,7 +1371,7 @@ export class Run {
     // lane review). With no launch content the base is already the selected task's own text (`iterate()`'s `modelTask`).
     const takenUp: ContentPart[] = !execution || launch === undefined || this.takenUp === null ? [] : [{ kind: 'text', text: takenUpText(this.takenUp) }];
     // REQ-ORCH-068 with REQ-ORCH-029: the items of its plan the previous iteration left open, after the task.
-    const carry: ContentPart[] = !execution || this.planCarry.length === 0 ? [] : [{ kind: 'text', text: planCarryText(this.planCarry) }];
+    const carry: ContentPart[] = !execution || this.planCarry.length === 0 ? [] : [{ kind: 'text', text: planCarryText(this.planCarry, this.planCarryAnswer) }];
     const offers = execution && this.deps.dal ? offersForFirstMessage(this.deps.dal, this.sessionId, base, this.deps.handoffOffers) : null;
     if (offers === null && takenUp.length === 0 && carry.length === 0) return launch;
     return [...base, ...takenUp, ...carry, ...(offers === null ? [] : [offers])];
@@ -1927,14 +1936,24 @@ export class Run {
       // its turns from the start, and no silence is counted against it while it waits (found by the verifier's review).
       if (start.kind === 'resumed' && start.waiting) rootWatch.betweenTurns();
       /*
-       * REQ-ORCH-078: a root that answers succeeded with items of its plan open is sent a correction into its own
-       * conversation, up to the validation-retry setting's count (default 0: none), before `iterate` re-queues its task
+       * REQ-ORCH-078 under PD-ORCH-015 (OQ-225, narrowing it): a root that answers succeeded with items of its plan open is
+       * sent a correction into its own conversation at least once — up to the larger of 1 and the validation-retry setting,
+       * whose own default stays 0 for validation-class model failures (REQ-ORCH-092) — before `iterate` re-queues its task
        * (REQ-ORCH-075, "after correction retries are exhausted"). It is the next message of the conversation the answer left,
        * and a delegation it leads to is waited for as any turn's is. Never for a plan cycle, a turn that stopped where it
        * stood, or once the run is stopping, pausing or coming to rest. Asked where the root would otherwise be left idle
-       * (`runWithChildren`'s `followUp`), so a root with nothing to correct ends in the same step it always has.
+       * (`runWithChildren`'s `followUp`), so a root with nothing to correct ends in the same step it always has. Before the
+       * directive the default sent none, and the open item went past the root holding the evidence to a fresh root that
+       * redid the task (live-run finding P1).
        */
+      const correctionLimit = Math.max(1, config.validationRetries);
       let corrections = 0;
+      /**
+       * PD-ORCH-015 / PD-ORCH-009 revision 2: the answer this execution of the root wrote — the first non-empty text a turn
+       * left, replaced by a later turn's only when that is longer. A correction's own turn ("Recorded.", or a `todo` write and
+       * no text) does not take its place: it stays the iteration's answer, its summary and the answer a re-queue holds.
+       */
+      let answer = '';
       /*
        * OQ-199 as ruled (R-071, PD-ORCH-009): a root that ends its turn with neither text nor a tool call — its last step
        * wrote nothing, and a step with a tool call never ends a turn — is asked once more, in its own conversation, as a
@@ -1946,22 +1965,25 @@ export class Run {
       let awaitingAnswer = false;
       let silentWhenAsked = false;
       const correction = (result: TurnOutcome): string | null => {
+        const said = result.report.text.trim();
+        if (said !== '' && said.length > answer.length) answer = said;
         // The first follow-up after the re-prompt reads the turn it led to: an answer written there is an answer, even if a
         // later turn of REQ-ORCH-078's plan correction ends without text.
-        if (awaitingAnswer) { awaitingAnswer = false; silentWhenAsked = result.report.text.trim() === '' && this.correctionDue(result, iterationOverride === undefined); }
-        if (!answerAsked && result.report.text.trim() === '' && this.correctionDue(result, iterationOverride === undefined)) {
+        if (awaitingAnswer) { awaitingAnswer = false; silentWhenAsked = said === '' && this.correctionDue(result, iterationOverride === undefined); }
+        // PD-ORCH-009 revision 2: never asked for an answer an earlier turn of this execution already wrote.
+        if (!answerAsked && answer === '' && this.correctionDue(result, iterationOverride === undefined)) {
           answerAsked = true;
           awaitingAnswer = true;
           this.deps.warn(`iteration ${iteration}: ${rootName} ended its turn without writing an answer; it is asked once more (PD-ORCH-009, OQ-199)`);
           return ANSWER_REPROMPT;
         }
         const planTask = this.iterationTaskRecord();
-        if (corrections >= config.validationRetries || planTask === null || !this.correctionDue(result, iterationOverride === undefined)) return null;
+        if (corrections >= correctionLimit || planTask === null || !this.correctionDue(result, iterationOverride === undefined)) return null;
         const open = this.openRootPlan(planTask);
         if (open.length === 0) return null;
         corrections += 1;
-        this.deps.warn(`iteration ${iteration}: ${planNotDoneSummary(open)}; a correction is sent into its conversation (${corrections} of ${config.validationRetries}, REQ-ORCH-078)`);
-        return planCorrectionText(open);
+        this.deps.warn(`iteration ${iteration}: ${planNotDoneSummary(open)}; a correction is sent into its conversation (${corrections} of ${correctionLimit}, REQ-ORCH-078, PD-ORCH-015)`);
+        return planCorrectionText(open, answer !== '');
       };
       const running = children
         ? children.runWithChildren(this.rootId, turnFn, start, this.abort.signal, correction)
@@ -1985,7 +2007,8 @@ export class Run {
         // Named as its rows and calls name it (`rootName`): a root resumed as the entry role keeps its own persona (OQ-97).
         this.deps.warn(`iteration ${iteration}: the root ${rootName} did not return within the stop's 30 s grace and was given up on (REQ-SESSION-092)`);
       } else {
-        outcome = settled;
+        // PD-ORCH-015: a final turn that wrote less than the execution's answer (a correction's "Recorded.") reports the answer.
+        outcome = settled.report.status === 'succeeded' && answer.length > settled.report.text.trim().length ? { ...settled, report: { ...settled.report, text: answer } } : settled;
         // REQ-MONITOR-102: the root's count on its iteration moves with the total, in one transaction. Its completed calls
         // were counted as they completed (OQ-116 as ruled); its turn's end adds the rest, and releases a plan cycle's root.
         const rest = Math.max(0, outcome.toolCallCount - rootLive);
@@ -3307,4 +3330,9 @@ function describe(e: ModelError): string {
  */
 function storedIds(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+}
+
+/** `PD-ORCH-015`: a task's held answer as the stored todo holds it — a non-empty string, or none. */
+function storedText(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value : null;
 }

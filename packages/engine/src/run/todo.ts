@@ -61,6 +61,12 @@ export interface Task {
    */
   planLeftOpen?: string[];
   /**
+   * `PD-ORCH-015` (OQ-225, extending REQ-ORCH-075): the answer this task's last iteration wrote when it closed with its plan
+   * left open — the person was shown it — cut to 6,000 characters and carried beside the marker to the task's next fresh
+   * root alone. Kept and removed on the terms of `planLeftOpen`; absent where that iteration wrote no answer.
+   */
+  heldAnswer?: string;
+  /**
    * OQ-213 as ruled (R-072), REQ-ORCH-029's todo clause: the work items of this task's execution iterations that reached
    * execution — `delegate` calls, and on a direct-work grant calls of tools the registry declares as writing workspace files
    * or running commands. From the second on the coordinator keeps a todo list of its own for the task (`listWritten`). Kept

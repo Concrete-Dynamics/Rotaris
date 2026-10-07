@@ -24,7 +24,7 @@ if (!process.argv.includes('--skip-build')) {
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
-function scratchAgentsYaml(workspace) {
+function scratchAgentsYaml(workspace, strategy = 'single') {
   // The stopgaps `ROTARIS_PERMISSION_MODE` and `ROTARIS_RUN_OVERRIDE` are gone: the run reads its files (ADR-0036).
   mkdirSync(join(workspace, '.rotaris'), { recursive: true });
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
@@ -36,8 +36,7 @@ function scratchAgentsYaml(workspace) {
     'large_model: scripted',
     'runtime:',
     '  permission_mode: autonomous',
-    'rotaris:',
-    '  delegation_strategy: single',
+    ...(strategy === null ? [] : ['rotaris:', `  delegation_strategy: ${strategy}`]),
     // Part T's shipped `code_intelligence` entry is enabled by default and its discovery costs every run start
     // about 4.5 s. This proof's capture windows were sized before that and stopped fitting: the loop scenario
     // reached two supervisor activations of the three it needs, leaving the session `running` with no stop
@@ -148,7 +147,44 @@ const ordinals = timeline.map((entry) => entry.ordinal);
 if (ordinals.some((ordinal, index) => index > 0 && ordinal <= ordinals[index - 1])) throw new Error(`the continued run broke the ordinal series: ${ordinals.join(',')}`);
 if (timeline.filter((entry) => entry.name === 'run_start').length !== 2) throw new Error('expected two run_start entries in one ordinal series');
 
+/*
+ * PD-ORCH-015 (OQ-225, live-run finding P1): a coordinating root that answers while its plan's report item is still PENDING
+ * is corrected in its own conversation at the default configuration (`runtime.auto_retries_validation` unset, 0), records
+ * the item done there, and its iteration closes `succeeded` — one iteration, no re-queue, no "returned to the queue" row.
+ * Before the directive the default sent no correction: the iteration closed `partial` and a second, fresh root took the task.
+ * No `delegation_strategy`, so the entry role coordinates and REQ-ORCH-029 binds it.
+ */
+const correctionRoot = join(output, 'plan-correction');
+const correctionWorkspace = join(correctionRoot, 'workspace');
+const correctionLocal = join(correctionRoot, 'local');
+mkdirSync(correctionWorkspace, { recursive: true });
+mkdirSync(correctionLocal, { recursive: true });
+writeFileSync(join(correctionWorkspace, 'README.md'), '# plan correction proof\n');
+scratchAgentsYaml(correctionWorkspace, null);
+await launch('plan-correction', correctionWorkspace, correctionLocal, join(correctionRoot, 'preferences'), {
+  ROTARIS_SCRIPT: 'planopen,report,plandone',
+  ROTARIS_CAPTURE_PROMPT: 'do the scripted work and report it',
+  // Two streamed answers of about 5 s each after the two `todo` steps; under a loaded host the second outran a 12 s window.
+  ROTARIS_CAPTURE_AFTER_MS: '24000',
+});
+const correctionDb = new Database(oneDatabase(correctionLocal), { readonly: true });
+const correctionSession = correctionDb.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed, todo FROM sessions').get();
+const correctionIterations = correctionDb.prepare('SELECT iteration, outcome FROM iterations ORDER BY iteration').all();
+const heldRows = correctionDb.prepare("SELECT row_index, body FROM transcript_rows WHERE kind = 'system' AND body LIKE 'Iteration %' ORDER BY row_index").all();
+const todoCalls = correctionDb.prepare("SELECT ordinal, status FROM tool_calls WHERE tool_name = 'todo' ORDER BY ordinal").all();
+correctionDb.close();
+const agentPlan = JSON.parse(correctionSession?.todo ?? '{}').agent ?? null;
+const agentStates = agentPlan === null ? [] : agentPlan.phases.flatMap((phase) => phase.tasks.map((task) => task.state));
+const { todo: _todo, ...correctionSessionShown } = correctionSession ?? {};
+writeFileSync(join(output, 'plan-correction-observed.json'), `${JSON.stringify({ session: correctionSessionShown, iterations: correctionIterations, heldRows, todoCalls, agentStates }, null, 2)}\n`);
+if (correctionSession?.execution_status !== 'completed' || correctionSession?.stop_reason !== 'tasks_complete') throw new Error(`plan-correction session ended ${correctionSession?.execution_status ?? 'absent'} / ${correctionSession?.stop_reason ?? 'absent'}`);
+if (correctionIterations.map((row) => row.outcome).join(',') !== 'succeeded') throw new Error(`plan-correction iterations: ${JSON.stringify(correctionIterations)} (expected one, succeeded: the correction answered in the root's own conversation)`);
+if (heldRows.length !== 0) throw new Error(`plan-correction wrote a held-answer row: ${JSON.stringify(heldRows)}`);
+if (todoCalls.length !== 2 || todoCalls.some((call) => call.status === 'failed' || call.status === 'blocked')) throw new Error(`plan-correction todo calls: ${JSON.stringify(todoCalls)}`);
+if (agentStates.length < 2 || agentStates.some((state) => state !== 'COMPLETED')) throw new Error(`plan-correction agent plan: ${JSON.stringify(agentStates)}`);
+
 const result = {
+  planCorrection: { session: correctionSessionShown, iterations: correctionIterations, heldRows: heldRows.length, todoCalls: todoCalls.length, agentStates, screenshot: 'plan-correction.png' },
   loop: { session: loopSession, activations: loopActivations.length, issues: loopIssues, toolCalls: loopCalls.length, screenshot: 'loop-supervisor.png' },
   resume: { before, after, userRows, continuationRows: continuationRows.length, staleChild, locks: locks.length, ordinals, screenshots: ['resume-before.png', 'resume-after.png'] },
 };

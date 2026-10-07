@@ -8,6 +8,7 @@ import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type Model
 import { ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type RuntimePosture, type ToolPort, type ToolPortContext } from '../index.js';
 import { decodeStoredTodo, projectSessionTodos, type AgentTodoDocument } from '../todo-view.js';
 import { TODO_LIST_OWED_TEXT } from './stop-conditions.js';
+import { ANSWER_REPROMPT } from './run.js';
 
 /**
  * The repair of `the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` (live-run finding G5):
@@ -17,8 +18,9 @@ import { TODO_LIST_OWED_TEXT } from './stop-conditions.js';
  * were left open. Under a `single` override the entry role is the worker (REQ-ORCH-025) and the constraint does not bind.
  * REQ-ORCH-075's re-queue is of the same task, and a task answers only for items not already open at its first take-up
  * (OQ-203), a record kept with the task in the stored todo: an item a given-up task or an earlier run left open passes to no
- * later task, and one the task's own iteration left open holds it after a pause, a continue or a later run. REQ-ORCH-078: with
- * a positive validation-retry setting a correction goes into the root's own conversation first.
+ * later task, and one the task's own iteration left open holds it after a pause, a continue or a later run. REQ-ORCH-078 under
+ * PD-ORCH-015 (OQ-225): a correction goes into the root's own conversation first, at least once, so the cases that pin the
+ * re-queue script a root that ignores it ("Still done."); the directive's own cases are in their block below.
  */
 const HOST = mintMachineId('0000000000000000000000000000000f') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -87,7 +89,8 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
 
   it('a coordinator that answers with an item of its plan pending does not end the run successful; the next iteration is told the item, finishes it, and the run completes', async () => {
     const { sessions, client } = sessionsWith([
-      writePlan('c1', ['COMPLETED', 'PENDING']), answer('Here is each command\'s outcome.'),
+      // The root ignores its correction (PD-ORCH-015), so the task is re-queued.
+      writePlan('c1', ['COMPLETED', 'PENDING']), answer('Here is each command\'s outcome.'), answer('Still done.'),
       writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
     ]);
     const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
@@ -101,7 +104,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     expect(shown.source).toBe('agent');
     expect(shown.phases.flatMap((p) => p.tasks.map((t) => t.state))).toEqual(['done', 'done']);
     // The second iteration's fresh root is told which items of its plan were left open (REQ-ORCH-068's continuation payload).
-    const second = firstUser(client.requests[2]!);
+    const second = firstUser(client.requests[3]!);
     expect(second).toContain('run the sequence');
     expect(second).toContain('Report each command\'s outcome in one line');
     expect(firstUser(client.requests[0]!)).not.toContain('Report each command');
@@ -111,7 +114,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
 
   it('a coordinator that never finishes its plan does not end the run successful: the task is given up at the retry limit and the session reads failed', async () => {
     const calls: ScriptedCall[] = [];
-    for (let i = 0; i < 3; i++) calls.push(writePlan(`c${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'));
+    for (let i = 0; i < 3; i++) calls.push(writePlan(`c${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'), answer('All done.'));
     const { sessions } = sessionsWith(calls);
     const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
     await sessions.running(sid)!;
@@ -124,9 +127,9 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
   it('REQ-ORCH-075 / REQ-ORCH-067 (OQ-203): an item a given-up task left open is not carried to, nor held against, the next task — which still answers for an item it opens itself', async () => {
     const calls: ScriptedCall[] = [];
     // Task A: the coordinator leaves its second item in progress three times, and A is given up at the retry limit.
-    for (let i = 0; i < 3; i++) calls.push(writePlan(`a${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'));
+    for (let i = 0; i < 3; i++) calls.push(writePlan(`a${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'), answer('All done.'));
     // Task B, a queued prompt (REQ-CHAT-040): it opens an item of its own and leaves it pending, then finishes it.
-    calls.push(writePlan('b0', ['COMPLETED', 'IN_PROGRESS', 'PENDING']), answer('B done.'));
+    calls.push(writePlan('b0', ['COMPLETED', 'IN_PROGRESS', 'PENDING']), answer('B done.'), answer('B done.'));
     calls.push(writePlan('b1', ['COMPLETED', 'IN_PROGRESS', 'COMPLETED']), answer('B done; its item is complete.'));
     const { sessions, client } = sessionsWith(calls);
     const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
@@ -138,11 +141,11 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     // B answers only for the item it opened, never for the one A left open.
     expect(ends[3]).toMatchObject({ iteration: 4, outcome: 'partial', summary: 'the coordinator answered with 1 item of its plan not done: A third item' });
     // B's first root is told nothing of A's plan: the continuation reaches the same task's next iteration alone.
-    const bFirst = firstUser(client.requests[6]!);
+    const bFirst = firstUser(client.requests[9]!);
     expect(bFirst).toContain('write the changelog');
     expect(bFirst).not.toContain('Report each command');
     expect(bFirst).not.toContain('The previous iteration on this task');
-    const bSecond = firstUser(client.requests[8]!);
+    const bSecond = firstUser(client.requests[12]!);
     expect(bSecond).toContain('A third item');
     expect(bSecond).not.toContain('Report each command');
     // The item A left open stays open in the plan the Todo pane counts: the record does not call it done.
@@ -151,7 +154,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
 
   it('REQ-ORCH-075 (OQ-203): an item an earlier run left open is not held against a later run\'s task', async () => {
     const calls: ScriptedCall[] = [];
-    for (let i = 0; i < 3; i++) calls.push(writePlan(`a${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'));
+    for (let i = 0; i < 3; i++) calls.push(writePlan(`a${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'), answer('All done.'));
     calls.push(answer('Changelog written.'));
     const { sessions, client } = sessionsWith(calls);
     const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
@@ -160,7 +163,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     expect(sessions.prompt(sid, 'write the changelog').ok).toBe(true);
     await sessions.running(sid)!;
     expect(outcomes(sid)).toEqual(['partial', 'partial', 'abandoned', 'succeeded']);
-    const next = firstUser(client.requests[6]!);
+    const next = firstUser(client.requests[9]!);
     expect(next).not.toContain('The previous iteration on this task');
   });
 
@@ -170,7 +173,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     let entered!: () => void;
     const reached = new Promise<void>((resolve) => { entered = resolve; });
     const { sessions } = sessionsWith([
-      writePlan('c1', ['COMPLETED', 'PENDING']), answer('Here is each command\'s outcome.'),
+      writePlan('c1', ['COMPLETED', 'PENDING']), answer('Here is each command\'s outcome.'), answer('Still done.'),
       writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
     ], null, async (callId) => { if (callId === 'c1') { entered(); await held; } });
     const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
@@ -191,7 +194,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     let entered!: () => void;
     const reached = new Promise<void>((resolve) => { entered = resolve; });
     const calls: ScriptedCall[] = [];
-    for (let i = 0; i < 3; i++) calls.push(writePlan(`a${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'));
+    for (let i = 0; i < 3; i++) calls.push(writePlan(`a${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'), answer('All done.'));
     // Task B, a queued prompt: it opens its own item, finishes it, and is paused in that very call.
     calls.push(writePlan('b0', ['COMPLETED', 'IN_PROGRESS', 'COMPLETED']), answer('B done; its item is complete.'));
     const { sessions } = sessionsWith(calls, null, async (callId) => { if (callId === 'b0') { entered(); await held; } });
@@ -212,8 +215,8 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
 
   it('REQ-ORCH-029 / REQ-ORCH-075 (OQ-203): a task re-queued with its own item open, taken up again by a later run, still answers for that item', async () => {
     const { sessions, client } = sessionsWith([
-      writePlan('c1', ['COMPLETED', 'PENDING']), answer('Here is each command\'s outcome.'),
-      answer('All done.'),
+      writePlan('c1', ['COMPLETED', 'PENDING']), answer('Here is each command\'s outcome.'), answer('Still done.'),
+      answer('All done.'), answer('All done.'),
     ], null, undefined, { iterationLimit: 1 });
     const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
     await sessions.running(sid)!;
@@ -228,7 +231,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     expect(planner.find((t) => t.text === 'run the sequence')!.state).not.toBe('complete');
     expect(agentStates(sid)).toEqual(['COMPLETED', 'PENDING']);
     // The later run's fresh root of the same task is told the item its last iteration left open (REQ-ORCH-075's marker).
-    expect(firstUser(client.requests[2]!)).toContain('Report each command\'s outcome in one line');
+    expect(firstUser(client.requests[3]!)).toContain('Report each command\'s outcome in one line');
   });
 
   it('REQ-ORCH-078: with a validation-retry setting of 1, a correction is sent into the same conversation before the task is re-queued', async () => {
@@ -281,8 +284,8 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     const { sessions, client } = sessionsWith([
       // The plan cycle: the coordinator writes its plan as its todo list (REQ-ORCH-153 keeps the todo state writable).
       writePlan('p1', ['PENDING', 'PENDING']), answer('Step 1: run the sequence. Step 2: report each outcome.'),
-      // After approval: the first root answers without touching the plan; the next finishes it.
-      answer('All done.'),
+      // After approval: the first root answers without touching the plan, and ignores its correction; the next finishes it.
+      answer('All done.'), answer('All done.'),
       writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
     ], null, undefined, {}, 'plan');
     const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
@@ -297,7 +300,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     expect(dal.getSession(sid)).toMatchObject({ execution_status: 'completed', stop_reason: 'tasks_complete' });
     expect(agentStates(sid)).toEqual(['COMPLETED', 'COMPLETED']);
     // The second fresh root is told both items its plan cycle wrote and the first root left open.
-    const second = firstUser(client.requests[3]!);
+    const second = firstUser(client.requests[4]!);
     expect(second).toContain('Run the sequence');
     expect(second).toContain('Report each command\'s outcome in one line');
   });
@@ -307,7 +310,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
       writePlan('p1', ['PENDING', 'PENDING']), answer('Step 1: run the sequence. Step 2: report.'),
       // The revise cycle answers with the revised text and leaves the todo list as the first cycle wrote it.
       answer('Revised: Step 1, run the sequence quietly. Step 2: report.'),
-      answer('All done.'),
+      answer('All done.'), answer('All done.'),
       writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
     ], null, undefined, {}, 'plan');
     const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
@@ -326,10 +329,10 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     const calls: ScriptedCall[] = [];
     // Run 1, in plan mode: the cycle leaves the plan alone; after approval task A leaves its second item in progress three times.
     calls.push(answer('Step 1: run the sequence.'));
-    for (let i = 0; i < 3; i++) calls.push(writePlan(`a${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'));
+    for (let i = 0; i < 3; i++) calls.push(writePlan(`a${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'), answer('All done.'));
     // Run 2, re-armed: its plan cycle adds an item of its own; after approval the root answers without finishing it, then does.
     calls.push(writePlan('p2', ['COMPLETED', 'IN_PROGRESS', 'PENDING']), answer('Step 1: write the changelog.'));
-    calls.push(answer('Changelog written.'));
+    calls.push(answer('Changelog written.'), answer('Changelog written.'));
     calls.push(writePlan('b1', ['COMPLETED', 'IN_PROGRESS', 'COMPLETED']), answer('Changelog written; its item is complete.'));
     const { sessions } = sessionsWith(calls, null, undefined, {}, 'plan');
     const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
@@ -570,6 +573,147 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
       await sessions.running(sid)!;
       expect(workItemsRun).toEqual(['b-one', 'b-two']);
       expect(refusals(warnings)).toHaveLength(1);
+    });
+  });
+
+  /**
+   * OQ-225 as ruled under the owner's delegation (R-072), `PD-ORCH-015` (narrowing REQ-ORCH-078, extending REQ-ORCH-075) and
+   * `PD-ORCH-009` revision 2: a root that answers with its plan open is corrected in its own conversation at least once, the
+   * count the larger of 1 and the validation-retry setting; a turn after an answer is never re-prompted for one; a task still
+   * re-queued or given up on is announced in a `system` row, and its next fresh root is handed the held answer. The repair of
+   * `a-re-queued-tasks-fresh-root-cannot-see-the-answer-its-iteration-was-held-back-for.md` (live-run finding P1).
+   */
+  describe('a root that answers with its plan open is corrected in its own conversation; a held answer is carried and announced (PD-ORCH-015, OQ-225)', () => {
+    const REPORT = 'Here is each command\'s outcome: 1. echo printed hi (exit 0). 2. false exited 1. 3. sleep 1 ended (exit 0).';
+    const silent: ScriptedCall = { parts: [{ part: { kind: 'reasoning', delta: 'recorded' } }, { part: { kind: 'usage', usage: { input: 1, output: 1 } } }, { part: { kind: 'finish', reason: 'stop' } }] };
+    const lastUser = (r: ModelRequest): string => r.messages.filter((m) => m.role === 'user').at(-1)!.content.map((c) => (c.kind === 'text' ? c.text : '')).join('');
+    const corrections = (warnings: readonly string[]) => warnings.filter((w) => w.includes('a correction is sent into its conversation'));
+    const systemRows = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'system' && r.body.startsWith('Iteration '));
+    const ends = (sid: SessionId) => dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; outcome: string; summary: string });
+    const planner = (sid: SessionId) => decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases.flatMap((p) => p.tasks) as unknown as Record<string, unknown>[];
+
+    it('at the default configuration a root that answers with an item pending is corrected once, records it, and the iteration closes succeeded with no re-prompt', async () => {
+      const { sessions, client, warnings } = sessionsWith([
+        writePlan('c1', ['COMPLETED', 'PENDING']), answer(REPORT),
+        // The correction: the root records the item it already did, and ends its turn with no text.
+        writePlan('c2', ['COMPLETED', 'COMPLETED']), silent,
+      ]);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Without the directive (REQ-ORCH-078's default of 0) the task was re-queued: ['partial', ...] and a fresh root redid it.
+      expect(outcomes(sid)).toEqual(['succeeded']);
+      expect(dal.getSession(sid)).toMatchObject({ execution_status: 'completed', stop_reason: 'tasks_complete' });
+      expect(client.requests).toHaveLength(4);
+      const corrected = lastUser(client.requests[2]!);
+      expect(corrected.startsWith('Your answer has been shown to the person.')).toBe(true);
+      expect(corrected).toContain('Report each command\'s outcome in one line');
+      expect(corrected).toContain('Record each item\'s true state with the todo tool: COMPLETED where the work is done, ABANDONED where you will not do it.');
+      expect(corrections(warnings)).toEqual(['iteration 1: the coordinator answered with 1 item of its plan not done: Report each command\'s outcome in one line; a correction is sent into its conversation (1 of 1, REQ-ORCH-078, PD-ORCH-015)']);
+      // PD-ORCH-009 revision 2: the correction's silent turn follows an answer, so it is not asked for one.
+      expect(client.requests.some((r) => lastUser(r) === ANSWER_REPROMPT)).toBe(false);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'incomplete_execution')).toEqual([]);
+      // The iteration's summary is the answer the correction followed, not the correction turn's silence.
+      expect(ends(sid)[0]).toMatchObject({ iteration: 1, outcome: 'succeeded', summary: REPORT.slice(0, 200) });
+      expect(systemRows(sid)).toEqual([]);
+    });
+
+    it('a correction answered with a short line keeps the answer as the iteration\'s summary', async () => {
+      const { sessions } = sessionsWith([writePlan('c1', ['COMPLETED', 'PENDING']), answer(REPORT), writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Recorded.')]);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(ends(sid)[0]).toMatchObject({ outcome: 'succeeded', summary: REPORT.slice(0, 200) });
+    });
+
+    it('a root asked once more and still silent is corrected without being told an answer was shown', async () => {
+      const { sessions, client } = sessionsWith([writePlan('c1', ['COMPLETED', 'PENDING']), silent, silent, writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done.')]);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(lastUser(client.requests[2]!)).toBe(ANSWER_REPROMPT);
+      const corrected = lastUser(client.requests[3]!);
+      expect(corrected.startsWith('You declared success with 1 item')).toBe(true);
+      expect(corrected).not.toContain('has been shown');
+      expect(outcomes(sid)).toEqual(['succeeded']);
+    });
+
+    it('with a validation-retry setting of 2, two corrections are sent before the re-queue', async () => {
+      const { sessions, warnings } = sessionsWith([
+        writePlan('c1', ['COMPLETED', 'PENDING']), answer(REPORT), answer('Still done.'), answer('Still done.'),
+        writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
+      ], null, undefined, { validationRetries: 2 });
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(corrections(warnings).map((w) => /\((\d) of (\d)/.exec(w)!.slice(1).join('/'))).toEqual(['1/2', '2/2']);
+      expect(outcomes(sid)).toEqual(['partial', 'succeeded']);
+    });
+
+    it('a correction left unanswered re-queues the task: one system row says so, and the next fresh root is handed the held answer beside the marker', async () => {
+      const { sessions, client } = sessionsWith([
+        writePlan('c1', ['COMPLETED', 'PENDING']), answer(REPORT), answer('Still done.'),
+        writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
+      ]);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(outcomes(sid)).toEqual(['partial', 'succeeded']);
+      // Without the directive nothing in the transcript said the answer was held back.
+      expect(systemRows(sid).map((r) => r.body)).toEqual(['Iteration 1: the coordinator answered with 1 item of its plan not done: Report each command\'s outcome in one line. The task was not marked complete and was returned to the queue.']);
+      const second = firstUser(client.requests[3]!);
+      expect(second).toContain('The previous iteration on this task declared success with 1 item of your plan not complete');
+      expect(second).toContain(`Your previous iteration answered as follows, and the person was shown it:\n${REPORT}`);
+      expect(second).toContain('Where it shows an item done, record that item COMPLETED with the todo tool rather than doing the work again.');
+      expect(firstUser(client.requests[0]!)).not.toContain('Your previous iteration answered');
+      // A task completed carries the answer no further.
+      expect(planner(sid)[0]).not.toHaveProperty('heldAnswer');
+    });
+
+    it('the held answer is kept with the task, so a later run\'s fresh root of it is handed the answer; it reaches no other task', async () => {
+      const { sessions, client } = sessionsWith([
+        writePlan('c1', ['COMPLETED', 'PENDING']), answer(REPORT), answer('Still done.'),
+        // The later run takes the re-queued task up again, and finishes it.
+        writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
+        answer('Changelog written.'),
+      ], null, undefined, { iterationLimit: 1 });
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(outcomes(sid)).toEqual(['partial']);
+      expect(planner(sid)[0]!['heldAnswer']).toBe(REPORT);
+      expect(sessions.prompt(sid, 'continue').ok).toBe(true);
+      await sessions.running(sid)!;
+      expect(outcomes(sid)).toEqual(['partial', 'succeeded']);
+      expect(firstUser(client.requests[3]!)).toContain(REPORT);
+      expect(planner(sid)[0]).not.toHaveProperty('heldAnswer');
+      // The next run takes up the other task, the prompt that continued the session: it is handed nothing of the held answer.
+      expect(sessions.prompt(sid, 'write the changelog').ok).toBe(true);
+      await sessions.running(sid)!;
+      expect(client.requests).toHaveLength(6);
+      expect(firstUser(client.requests[5]!)).not.toContain('Your previous iteration answered');
+    });
+
+    it('the held answer is cut to 6,000 characters', async () => {
+      const long = `${'x'.repeat(5_990)}TAIL-BEYOND-THE-CUT`;
+      const { sessions, client } = sessionsWith([
+        writePlan('c1', ['COMPLETED', 'PENDING']), answer(long), answer('Still done.'),
+        writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done.'),
+      ]);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      const second = firstUser(client.requests[3]!);
+      expect(second).toContain(long.slice(0, 6_000));
+      expect(second).not.toContain('TAIL-BEYOND-THE-CUT');
+    });
+
+    it('a root that never finishes is corrected once in each iteration, given up on at the retry limit, and the give-up is announced', async () => {
+      const calls: ScriptedCall[] = [];
+      for (let i = 0; i < 3; i++) calls.push(writePlan(`c${i}`, ['COMPLETED', 'IN_PROGRESS']), answer('All done.'), answer('All done.'));
+      const { sessions, warnings } = sessionsWith(calls);
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(outcomes(sid)).toEqual(['partial', 'partial', 'abandoned']);
+      expect(dal.getSession(sid)).toMatchObject({ execution_status: 'failed', summary_status: 'failed' });
+      expect(corrections(warnings)).toHaveLength(3);
+      const rows = systemRows(sid).map((r) => r.body);
+      expect(rows).toHaveLength(3);
+      expect(rows[2]).toBe('Iteration 3: the coordinator answered with 1 item of its plan not done: Report each command\'s outcome in one line. The task was given up on at the retry limit.');
+      expect(planner(sid)[0]).not.toHaveProperty('heldAnswer');
     });
   });
 

@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-07**
 
+**A root that answers with its plan open is corrected in its own conversation; a held answer is carried and announced
+(PD-ORCH-015, PD-ORCH-009 revision 2, REQ-ORCH-075, REQ-ORCH-078; OQ-225 ruled under R-072, fin31).** `Run.turn`'s correction
+closure counts to `max(1, RunConfig.validationRetries)`, keeps the execution's `answer` (the re-prompt now fires only while it
+is empty) and reports it when the correction's turn writes less; `planCorrectionText(open, answered)` asks for each item's
+true state. `Run.iterate`'s plan-open branch stores `Task.heldAnswer` (6,000 characters) beside `planLeftOpen`, writes a
+`system` row (`planHeldRowText`) and hands the answer to the task's next fresh root (`planCarryText(open, heldAnswer)`). The
+**runtime view**'s loop diagram and its two paragraphs say so. No package, edge, process, channel, command or store column
+changed (the planner todo's JSON gains one optional task field inside the existing column).
+
 **An empty or relative per-user variable takes its default (REQ-STARTUP-145, REQ-CONFIG-001; finacc3 A2-06, A2-07; fin30).**
 `xdgBaseDirectory` (`platform/dirs.ts`) now also ignores a relative `XDG_CONFIG_HOME` or `XDG_DATA_HOME`, as the XDG Base
 Directory Specification says, and `localAppDataDirectory` beside it is the one reading of `LOCALAPPDATA`: unset, empty or

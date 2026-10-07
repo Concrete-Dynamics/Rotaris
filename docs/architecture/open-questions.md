@@ -11273,7 +11273,8 @@ PD-ORCH-009, the re-prompt of an answerless root. Raised 2026-10-07 from finding
 row 48) while its plan's "Report one line per command" read `PENDING`; with no correction the task was re-queued, the fresh
 root (traffic #25: the task and the marker only; tool call `#25`, `background_output`, refused "not found among your
 children") re-delegated the whole probe, and transcript row 54 told the person the report "never delivered". Recorded as
-[`a-re-queued-tasks-fresh-root-cannot-see-the-answer-its-iteration-was-held-back-for.md`](../defects/a-re-queued-tasks-fresh-root-cannot-see-the-answer-its-iteration-was-held-back-for.md).
+[`a-re-queued-tasks-fresh-root-cannot-see-the-answer-its-iteration-was-held-back-for.md`](../defects/fixed/a-re-queued-tasks-fresh-root-cannot-see-the-answer-its-iteration-was-held-back-for.md),
+repaired by fin31.
 Ruled the same day.)*
 
 The hold behaves as the specification states, and the G5 repair's note priced its cost ("the fresh root, which has none of
@@ -11306,3 +11307,14 @@ ignores its correction reproduces P1 one step later. It dropped A's item ids and
 letting the run tick a "report" item from the answer's wording (it would make the run's guess the plan's record), and so
 does the ruling. Related and repaired separately, as a defect: finding P4, the follow-up payload's "Recent iterations" reading
 timeline entries nothing writes.
+
+**Built 2026-10-07 (fin31).** `Run.turn`'s correction closure counts to `max(1, validationRetries)`, keeps the execution's
+answer (the re-prompt fires only while it is empty; the answer stays the report's text when the correction's turn writes
+less), and `planCorrectionText(open, answered)` carries the ruling's two sentences; `Run.iterate` stores `Task.heldAnswer`
+beside `planLeftOpen`, writes the `system` row (`planHeldRowText`) for a re-queue and a give-up, and `planCarryText(open,
+heldAnswer)` hands the answer to the same task's next fresh root. The ruling's step 2 said both "the last non-empty text a turn
+wrote" and "a correction turn's text replaces it only when it is longer"; the build keeps the first answer and replaces it only
+with a longer one, which is what the ruling's own test ("Recorded." keeps the answer) asks. Pinned by eight cases in
+`packages/engine/src/run/coordinator-plan.test.ts` (seven red on `a68f121`) and `run-pure.test.ts`; shown by `pnpm
+part-h-proof`'s `plan-correction` launch. First execution reported in [`PD-ORCH-015`](../product/directives.md#pd-orch-015)
+and in [`first-executions.md`](first-executions.md); the live terminal scenario waits on the orchestrator's next default run.

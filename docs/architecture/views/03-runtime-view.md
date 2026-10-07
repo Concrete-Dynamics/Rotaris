@@ -243,9 +243,9 @@ flowchart TB
   I --> TR["turnWithRetry(task) — every retry now happens at the model STEP (Part Q's ladder, §3)"]
   TR --> TURN["turn(): IterationChildren for this iteration,<br/>the root's tool port, runTurn(...)"]
   TURN --> OUT{"outcome"}
-  TURN -. "succeeded with no text: ANSWER_REPROMPT once (PD-ORCH-009);<br/>with an item of its plan open:<br/>a correction into the root's own conversation,<br/>up to validationRetries times (REQ-ORCH-078; followUp)" .-> TURN
+  TURN -. "succeeded with no answer yet: ANSWER_REPROMPT once (PD-ORCH-009 rev 2);<br/>with an item of its plan open:<br/>a correction into the root's own conversation,<br/>up to max(1, validationRetries) times (REQ-ORCH-078, PD-ORCH-015; followUp)" .-> TURN
   OUT -- "succeeded, the root's own plan all terminal" --> C["todo.complete"]
-  OUT -- "partial, or succeeded with an item of the coordinator's<br/>own plan open that the task answers for<br/>(REQ-ORCH-029/075; Task.planLeftOpen → the same task's next root)" --> RQ["todo.requeue (abandon at the consecutive-retry limit)"]
+  OUT -- "partial, or succeeded with an item of the coordinator's<br/>own plan open that the task answers for<br/>(REQ-ORCH-029/075; Task.planLeftOpen + Task.heldAnswer → the same task's next root;<br/>a system row says so, PD-ORCH-015)" --> RQ["todo.requeue (abandon at the consecutive-retry limit)"]
   OUT -- failed --> AB["todo.abandon; escalate → the run ends agent_session_aborted"]
   OUT -- "a rest (pause, stop, quit) with an agent unfinished" --> OPEN["leaveIterationOpen(): interruption on the row,<br/>iteration_paused, the task still held — no iteration.end,<br/>checkpoint, hook or count (PD-ORCH-005)"]
   OPEN --> L0
@@ -261,7 +261,9 @@ flowchart TB
 **An entry role that wrote no answer is asked once more (PD-ORCH-009, OQ-199 as ruled; since 2026-10-06).** The same
 `followUp` first asks whether the root's turn returned `succeeded` with empty text — its last step wrote nothing, and a
 step with a tool call never ends a turn — while the run is not stopping, pausing or coming to rest (`correctionDue`); if so
-it sends `ANSWER_REPROMPT` once per execution of the root, before any plan correction. When the turn the re-prompt led to
+it sends `ANSWER_REPROMPT` once per execution of the root, before any plan correction — and since PD-ORCH-009 revision 2
+(OQ-225, 2026-10-07) only while no turn of that execution has written an answer (the closure's `answer`), so a correction's
+silent turn after an answer is never asked for a second copy. When the turn the re-prompt led to
 is still silent, and the root's turn returns so, the iteration closes as it would have and the run keeps it as
 `Run.unanswered`; `tellUnanswered` then writes a `system` row and an `incomplete_execution` warning issue where what follows
 is known — "Iteration <n> ended without an answer: …" before the loop takes up another iteration, parks at the plan gate or
@@ -272,20 +274,27 @@ around `firstTurn`.
 **The coordinator's own plan and the task's completion (REQ-ORCH-029, REQ-ORCH-075, REQ-ORCH-078; since 2026-10-06,
 live-run finding G5).** A root that answers `succeeded` while its own plan (`Run.agentTodo`, REQ-TOOLS-144's states) holds an
 item that is neither `COMPLETED` nor `ABANDONED` (`openPlanItems` in `stop-conditions.ts`) is first sent a correction into its
-own conversation (`planCorrectionText`), up to `RunConfig.validationRetries` times (REQ-ORCH-078; default 0, none): `turn()`
-hands `IterationChildren.runWithChildren` a `followUp`, asked where the root would otherwise be left idle, so a delegation the
-correction leads to is waited for as any turn's is. Once the corrections are spent it does not complete its planner task:
+own conversation (`planCorrectionText`), up to `max(1, RunConfig.validationRetries)` times (REQ-ORCH-078 narrowed by
+PD-ORCH-015, OQ-225, since 2026-10-07; before it the default of 0 sent none, and live-run finding P1's fresh root redid a task
+already answered): `turn()` hands `IterationChildren.runWithChildren` a `followUp`, asked where the root would otherwise be
+left idle, so a delegation the correction leads to is waited for as any turn's is. The correction says the answer has been
+shown where a turn of the execution wrote one, and asks for each item's true state (`COMPLETED` or `ABANDONED`); the
+execution's answer (the longest text a turn of it wrote) stays its report's text when the correction's own turn writes less,
+so the iteration's summary and a held answer are the answer the person saw. Once the corrections are spent it does not
+complete its planner task:
 REQ-ORCH-069 and REQ-ORCH-082 read success off the planner's tasks, so the task is returned to the pending queue
 (`todo.requeue`, abandoned at the consecutive-retry limit, when `lastFailure` names the open items and the session reads
-failed), `iteration.end` carries `planNotDoneSummary`, and the same task's next fresh root is told REQ-ORCH-075's marker after
-its task (`Task.planLeftOpen` → `planCarry` → `planCarryText` in `firstMessage`). The plan is the session's, so a task answers
+failed), `iteration.end` carries `planNotDoneSummary`, a `system` row says the task was returned to the queue or given up on
+(`planHeldRowText`, PD-ORCH-015), and the same task's next fresh root is told REQ-ORCH-075's marker after its task, with the
+held answer cut to 6,000 characters beside it (`Task.planLeftOpen` and `Task.heldAnswer` → `planCarry` and `planCarryAnswer`
+→ `planCarryText` in `firstMessage`). The plan is the session's, so a task answers
 only for the items that were not already open when it was first taken up (`Task.planExcused`, OQ-203). The first take-up is
 the plan cycle that planned the task (`Run.planCycleTakeUp`, before the cycle's turn, for each pending task with no record
 yet), else the iteration that takes it up with no record and no row naming it (`Run.takeUp`); a revise cycle keeps the record
 the first cycle wrote. An item a given-up task or an earlier run left open is neither carried to nor held against a later
 task, and one the task's plan cycle wrote or its own iteration left open always holds it. Both records live on the planner task
 in the stored todo, so the iteration a continue resumes, and a fresh iteration of a re-queued task in a later run, read them
-back; both are removed when the task completes or is given up on. Under a `single` override (`RuntimePosture.runOverride`,
+back; both are removed when the task completes or is given up on, as is `heldAnswer`. Under a `single` override (`RuntimePosture.runOverride`,
 `RunDeps.coordinating: false`) the entry role is the worker and nothing of this applies (REQ-ORCH-025).
 
 **The coordinator's todo list on multi-step work (REQ-ORCH-029, REQ-ORCH-059; OQ-213, ruled 2026-10-07 under R-072,

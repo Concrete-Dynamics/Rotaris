@@ -65,6 +65,28 @@ describe('scriptedClient — the step a call takes', () => {
   });
 
   /*
+   * PD-ORCH-015 (OQ-225): `part-h-proof`'s plan-correction launch scripts a coordinator that answers beside a plan whose
+   * report item is PENDING (`planopen`) and records it done when corrected (`plandone`).
+   */
+  it('`planopen` leaves the report item pending and `plandone` records it complete', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'planopen,plandone');
+    const client = scriptedClient(clock, () => {});
+    const states: string[][] = [];
+    for (let step = 0; step < 2; step++) {
+      const parts = client.stream({ ...request([text('system', ORCHESTRATOR_SYSTEM), text('user', 'do the work and report it')]), tools: [...TOOLS, { name: 'todo', description: 'todo', parameters: {} }] })[Symbol.asyncIterator]();
+      for (let r = await parts.next(); r.done !== true; r = await parts.next()) {
+        if (r.value.ok && r.value.value.kind === 'tool-call') {
+          expect(r.value.value.name).toBe('todo');
+          const args = JSON.parse(r.value.value.argsDelta) as { operation: string; phases: { tasks: { state: string }[] }[] };
+          expect(args.operation).toBe('replace');
+          states.push(args.phases.flatMap((p) => p.tasks.map((t) => t.state)));
+        }
+      }
+    }
+    expect(states).toEqual([['COMPLETED', 'PENDING'], ['COMPLETED', 'COMPLETED']]);
+  });
+
+  /*
    * The repair of fixed/the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md: every child
    * shares ROTARIS_CHILD_SCRIPT, so a completed wait may not remove anything from it. Three children started together,
    * each scripted `wait:1000,read,glob`, each read after the wait and then glob — where the shared list's splices handed

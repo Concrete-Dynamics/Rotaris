@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Aggregates } from './aggregates.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
-import { classifyStop, EXECUTION_STATUSES, isBusy, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planNotDoneSummary, presentationStatus, resultFromStatus, statusForResult, stopCondition, STOP_REASONS, summarise, TERMINAL_RESULTS } from './stop-conditions.js';
+import { classifyStop, EXECUTION_STATUSES, HELD_ANSWER_LIMIT, isBusy, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planHeldRowText, planNotDoneSummary, presentationStatus, resultFromStatus, statusForResult, stopCondition, STOP_REASONS, summarise, TERMINAL_RESULTS } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { Todo } from './todo.js';
 
@@ -105,9 +105,22 @@ describe('engine/run — the coordinator\'s own plan and the run\'s completion (
     expect(seven).toContain('- i5\n(and 2 more)');
     expect(seven).not.toContain('- i6');
   });
-  it('REQ-ORCH-078\'s correction names the same items, said of the answer the root just gave', () => {
-    expect(planCorrectionText(['Report each command\'s outcome in one line'])).toBe('You declared success with 1 item of your plan not complete, so the task is not complete:\n- Report each command\'s outcome in one line\nContinue from your plan, and do not end your turn until every remaining item is complete or recorded in its true state.');
+  it('REQ-ORCH-078\'s correction names the same items, said of the answer the root just gave, and asks for each item\'s true state (PD-ORCH-015)', () => {
+    const asked = 'Record each item\'s true state with the todo tool: COMPLETED where the work is done, ABANDONED where you will not do it. Do not redo work that is done, and do not repeat your answer.';
+    expect(planCorrectionText(['Report each command\'s outcome in one line'])).toBe(`You declared success with 1 item of your plan not complete, so the task is not complete:\n- Report each command\'s outcome in one line\nContinue from your plan, and do not end your turn until every remaining item is complete or recorded in its true state.\n${asked}`);
+    expect(planCorrectionText(['Report each command\'s outcome in one line'], true)).toBe(`Your answer has been shown to the person. You declared success with 1 item of your plan not complete, so the task is not complete:\n- Report each command\'s outcome in one line\nContinue from your plan, and do not end your turn until every remaining item is complete or recorded in its true state.\n${asked}`);
     expect(planCorrectionText(['i1', 'i2', 'i3', 'i4', 'i5', 'i6'])).toContain('- i5\n(and 1 more)');
+  });
+  it('PD-ORCH-015: the marker carries a held answer, labelled, after the items; with none it is the marker alone', () => {
+    const marker = planCarryText(['Report each command\'s outcome in one line']);
+    expect(planCarryText(['Report each command\'s outcome in one line'], null)).toBe(marker);
+    expect(planCarryText(['Report each command\'s outcome in one line'], '  ')).toBe(marker);
+    expect(planCarryText(['Report each command\'s outcome in one line'], '1. echo hi: exit 0')).toBe(`${marker}\n\nYour previous iteration answered as follows, and the person was shown it:\n1. echo hi: exit 0\n\nWhere it shows an item done, record that item COMPLETED with the todo tool rather than doing the work again.`);
+    expect(HELD_ANSWER_LIMIT).toBe(6_000);
+  });
+  it('PD-ORCH-015: the held row names the iteration and the items, and says whether the task was re-queued or given up on', () => {
+    expect(planHeldRowText(1, ['Report one line per command'], false)).toBe('Iteration 1: the coordinator answered with 1 item of its plan not done: Report one line per command. The task was not marked complete and was returned to the queue.');
+    expect(planHeldRowText(3, ['x', 'y'], true)).toBe('Iteration 3: the coordinator answered with 2 items of its plan not done: x; y. The task was given up on at the retry limit.');
   });
   it('the iteration summary counts and names the open items', () => {
     expect(planNotDoneSummary(['Report each command\'s outcome in one line'])).toBe('the coordinator answered with 1 item of its plan not done: Report each command\'s outcome in one line');

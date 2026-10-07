@@ -126,18 +126,38 @@ export function planNotDoneSummary(open: readonly string[]): string {
  * not end its turn until every remaining item is complete or recorded in its true state (REQ-ORCH-029). It is a part of
  * that iteration's first message alone, never appended to the task's text, so markers do not pile up across re-queues
  * (REQ-ORCH-076). No background child is enumerated: an iteration's children are settled when it closes (REQ-ORCH-052).
+ *
+ * `PD-ORCH-015` (OQ-225, extending REQ-ORCH-075): `heldAnswer`, the answer that iteration wrote and the person was shown
+ * (`Task.heldAnswer`, already cut to `HELD_ANSWER_LIMIT`), follows the marker labelled as such, so a root whose work is
+ * done records it rather than redoing it (live-run finding P1).
  */
-export function planCarryText(open: readonly string[]): string {
-  return `The previous iteration on this task declared success with ${countNoun(open.length, 'item')} of your plan not complete, so the task is not complete:\n${planItemsBlock(open)}`;
+export function planCarryText(open: readonly string[], heldAnswer: string | null = null): string {
+  const marker = `The previous iteration on this task declared success with ${countNoun(open.length, 'item')} of your plan not complete, so the task is not complete:\n${planItemsBlock(open)}`;
+  if (heldAnswer === null || heldAnswer.trim() === '') return marker;
+  return `${marker}\n\nYour previous iteration answered as follows, and the person was shown it:\n${heldAnswer}\n\nWhere it shows an item done, record that item COMPLETED with the todo tool rather than doing the work again.`;
 }
 
+/** `PD-ORCH-015`: how much of a held iteration's answer is kept with its task and carried to the task's next fresh root. */
+export const HELD_ANSWER_LIMIT = 6_000;
+
 /**
- * REQ-ORCH-078: the correction sent into the root's own conversation, up to the validation-retry setting's count, when it
- * answers succeeded with items of its plan open — before REQ-ORCH-075's re-queue, which follows once they are spent. The
- * same items and instruction as the continuation marker, said of the answer the root just gave.
+ * REQ-ORCH-078 under `PD-ORCH-015` (OQ-225): the correction sent into the root's own conversation — at least once, up to
+ * the larger of 1 and the validation-retry setting — when it answers succeeded with items of its plan open, before
+ * REQ-ORCH-075's re-queue, which follows once they are spent. The same items and instruction as the continuation marker,
+ * said of the answer the root just gave; `answered`, whether a turn of this execution wrote an answer, adds that the person
+ * has been shown it. Every correction asks for each item's true state, ABANDONED among them, and neither the work nor the
+ * answer again (live-run finding P1).
  */
-export function planCorrectionText(open: readonly string[]): string {
-  return `You declared success with ${countNoun(open.length, 'item')} of your plan not complete, so the task is not complete:\n${planItemsBlock(open)}`;
+export function planCorrectionText(open: readonly string[], answered = false): string {
+  return `${answered ? 'Your answer has been shown to the person. ' : ''}You declared success with ${countNoun(open.length, 'item')} of your plan not complete, so the task is not complete:\n${planItemsBlock(open)}\n${PLAN_TRUE_STATE}`;
+}
+
+/** `PD-ORCH-015`: what a correction asks of the root, in its own conversation, about the items it left open. */
+const PLAN_TRUE_STATE = 'Record each item\'s true state with the todo tool: COMPLETED where the work is done, ABANDONED where you will not do it. Do not redo work that is done, and do not repeat your answer.';
+
+/** `PD-ORCH-015`: the `system` row that says a task was not marked complete for its open plan — re-queued or given up on. */
+export function planHeldRowText(iteration: number, open: readonly string[], givenUp: boolean): string {
+  return `Iteration ${iteration}: ${planNotDoneSummary(open)}. ${givenUp ? 'The task was given up on at the retry limit.' : 'The task was not marked complete and was returned to the queue.'}`;
 }
 
 /**

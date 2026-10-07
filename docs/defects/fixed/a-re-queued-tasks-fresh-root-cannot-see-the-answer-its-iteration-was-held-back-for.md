@@ -28,8 +28,8 @@ run reached its result inside the wait").
 - `REQ-SESSION-115`: the follow-up payload already carries agent rows, the precedent for carrying an answer.
 
 No requirement is contradicted by the code: the gap is in what the specification gives the re-queued root. Raised as
-[OQ-225](../architecture/open-questions.md) and ruled the same day under the owner's delegation (R-072), recorded as
-[`PD-ORCH-015`](../product/directives.md#pd-orch-015) and `PD-ORCH-009` revision 2.
+[OQ-225](../../architecture/open-questions.md) and ruled the same day under the owner's delegation (R-072), recorded as
+[`PD-ORCH-015`](../../product/directives.md#pd-orch-015) and `PD-ORCH-009` revision 2.
 
 ## Evidence
 
@@ -58,3 +58,23 @@ endpoint), session `5df89df3` (terminal):
 - `packages/engine/src/children/orchestration.ts` — `runWithChildren`'s `followUp`, where the correction is asked.
 - `docs/defects/fixed/the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` — the G5 repair,
   whose "Cost" paragraph foresaw this repeat.
+
+## Repaired (2026-10-07, fin31)
+
+Under [`PD-ORCH-015`](../../product/directives.md#pd-orch-015) and `PD-ORCH-009` revision 2 (OQ-225, ruled under R-072):
+
+- `Run.turn`'s correction closure (`packages/engine/src/run/run.ts`) sends the root that answers with its plan open
+  `max(1, validationRetries)` corrections in its own conversation, so at the default configuration one. The correction
+  (`planCorrectionText(open, answered)`, `stop-conditions.ts`) says the answer has been shown where a turn wrote one and asks
+  for each item's true state, `COMPLETED` or `ABANDONED`. The closure keeps the execution's answer: the re-prompt
+  (`ANSWER_REPROMPT`) fires only while it is empty, and the answer stays the iteration's report text when the correction's
+  turn writes less.
+- `Run.iterate`'s plan-open branch, once the corrections are spent, stores the answer as `Task.heldAnswer` (6,000
+  characters, `todo.ts`) beside `planLeftOpen`, writes one `system` row (`planHeldRowText`: returned to the queue, or given up
+  on at the retry limit), and the task's next fresh root reads the answer after the marker (`planCarryText(open, heldAnswer)`).
+  The answer is dropped when the task completes or is given up on, and reaches no other task.
+
+Pinned by the block "a root that answers with its plan open is corrected in its own conversation; a held answer is carried and
+announced" in `packages/engine/src/run/coordinator-plan.test.ts` (seven of its eight cases red on `a68f121`) and the text
+cases in `run-pure.test.ts`; shown in the built app by `pnpm part-h-proof`'s `plan-correction` launch (one `succeeded`
+iteration; `partial`, `succeeded` with the floor removed). The live terminal scenario is the orchestrator's next default run.

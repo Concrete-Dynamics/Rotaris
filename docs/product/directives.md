@@ -4444,6 +4444,13 @@ that fails; a root that wrote nothing on purpose is asked anyway.
 > silent root: `slice-proof`'s question against the live endpoint is where one was seen, and it is the orchestrator's to
 > run. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First execution of revision 2, 2026-10-07 (fin31):** built with [`PD-ORCH-015`](#pd-orch-015), whose first execution
+> records it: the re-prompt now fires only while the execution's answer is empty. Pinned by the case "at the default
+> configuration a root that answers with an item pending is corrected once, records it, and the iteration closes succeeded
+> with no re-prompt" in `packages/engine/src/run/coordinator-plan.test.ts` (red on `a68f121`, where no correction was sent);
+> `answerless.test.ts`'s five cases and the case "PD-ORCH-009 beside REQ-ORCH-078" stay green. Found nothing against the
+> text.
+
 ---
 
 <a id="pd-hooks-001"></a>
@@ -5871,6 +5878,35 @@ root's first message, carrying a wrong answer as it stands.
 
 *Raised under the owner's delegation, 2026-10-07, ruling OQ-225 (the consortium's ruling P1 of the final default live run);
 logged as [R-072](requests.md#r-072).*
+
+> **First execution, 2026-10-07, built under [R-072](requests.md#r-072) (fin31):** the directive was built as written, at the
+> correction site the G5 repair had already pinned for a positive setting. **(1) The count** is `max(1,
+> RunConfig.validationRetries)` in `Run.turn`'s correction closure (`packages/engine/src/run/run.ts`); `ladder.ts` and
+> `RUN_CONFIG_DEFAULTS` are untouched, so validation-class model failures still retry 0 times by default. **(2) The answer**
+> is the closure's `answer`: the first non-empty text a turn of the execution wrote, replaced only by a longer one, so a
+> correction answered "Recorded." (or a `todo` write and no text) keeps the answer the person saw as the iteration's report,
+> summary and held answer. The ruling's text said both "the last non-empty text" and "replaces it only when it is longer";
+> the build reads the second, which is what its own step 5 tests ("Recorded." keeps the answer). **(3) PD-ORCH-009 revision
+> 2** is the re-prompt's condition `answer === ''`. **(4) The fallback**: `Task.heldAnswer` (`todo.ts`), cut to
+> `HELD_ANSWER_LIMIT` (6,000), stored beside `planLeftOpen` and deleted wherever it is; `planCarryText(open, heldAnswer)`
+> labels it; `planHeldRowText` writes the `system` row for a re-queue and for a give-up. **Found:** nothing against the text.
+> **What was measured.** `packages/engine/src/run/coordinator-plan.test.ts`'s block "a root that answers with its plan open is
+> corrected in its own conversation; a held answer is carried and announced", eight cases, seven red on `a68f121` (the eighth,
+> a setting of 2 sending two corrections, guards the count): the default-configuration case closes `['succeeded']` in four
+> model requests with no `ANSWER_REPROMPT` and no `incomplete_execution` issue; a correction answered "Recorded." keeps the
+> answer as the summary; a root asked once more and still silent is corrected without "has been shown"; an ignored
+> correction gives `partial, succeeded`, one `system` row and a fresh root handed the held answer; the answer survives a later
+> run and reaches no other task; it is cut at 6,000; a root that never finishes is corrected once per iteration, given up on,
+> and the give-up announced. The existing G5 cases were re-scripted with a root that ignores its correction, and still pin
+> the re-queue. `run-pure.test.ts` pins the three texts. In the built app, `pnpm part-h-proof`'s new `plan-correction` launch
+> (scripted `planopen,report,plandone`, no `delegation_strategy`) closed one iteration `succeeded`, `completed` /
+> `tasks_complete`, with the warning "a correction is sent into its conversation (1 of 1, REQ-ORCH-078, PD-ORCH-015)" in its
+> log and no held-answer row; with the floor removed it read `partial`, `succeeded` (load average 12–17 on 4 CPUs, beside
+> sibling plans). **What was not measured.** The live terminal scenario: the next default live run (the orchestrator's) should
+> show iteration 1 closing `succeeded` after at most one correction step (one `todo` write, about 5–15 s), one "a correction
+> is sent" warning, no second iteration, no re-delegation and no `background_output` refusal, and the session ending
+> `completed` / `tasks_complete` inside the 420 s wait. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

@@ -37,63 +37,99 @@ counted them, the share is 42.8 %.
 - `scripts/workflow.template.js`. A bundle goes implement → review, and only when a review hands back blocking
   findings it did not repair, fix → review again, within the same budget (`maxFixRounds`; `unverified` after it, the
   needs-owner cap after two). `meta` names the phases Implement, Review, Fix, Accept, Repair.
-  - `reviewPrompt` (label `review:<key>#<n>`, phase Review) replaces `verifyPrompt` and `mergePrompt`. It runs under the
-    landing lock (`withMergeLock`) for its whole round, so landings stay serialized within a run and the integration
-    worktree has one user at a time; its effort is `high`, or `max` when a plan asks, never lower. It does the
-    landing's step 0 first. **Part A, Review** is the verifier's checklist: steps 1 to 3, 5 to 7, the ownerBlocked
-    rule and the previous round's findings first, word for word; step 4 keeps the proofs against the claims and leaves
-    the gate to Part C, which carries the verifier's "re-run a timing red once alone first"; "Pass ONLY with zero
-    blocking findings across all tasks" now holds once Part B is done. **Part B, Repair in place**: each blocking
-    finding it can repair within the tasks, at its root, in its own commits with the trailers, each with a test that
-    fails without it, the record obligations in the same commits, listed in `repaired`; one that needs a task rebuilt,
-    a decision the record does not make, an owner ruling or more than a contained repair goes in `blocking`, unlanded.
-    **Part C, Land, only with zero blocking findings remaining** is the merge stage's steps 0 to 4, unchanged but for
-    this: step 0 names an earlier reviewer too; an unresolvable conflict (step 1) and a red it cannot repair (step 2)
-    are reported in `blocking`; and step 2 also repairs a red that is a defect of the bundle's tasks, with a test.
+  - `reviewPrompt` (label `review:<key>#<n>`, phase Review) replaces `verifyPrompt` and `mergePrompt`. Reviews of
+    different bundles run at once: each gates and pushes from its bundle's own landing worktree (the profile's
+    `integ`, a dash, the bundle's short name), made when missing and removed with the bundle worktree after the
+    landing, and origin/main orders their pushes (a push rejected because main moved is rebased, gated and pushed
+    again, as the merge stage's step 3 already said). The old in-run landing lock and the plan's one integration
+    worktree are gone. Its effort is `high`, or `max` when a plan asks, never lower. It does the landing's step 0
+    first. **Part A, Review** is the verifier's checklist: steps 1 to 3, 5 to 7, the ownerBlocked rule and the
+    previous round's findings first, word for word; step 4 keeps the proofs against the claims and leaves the gate to
+    Part C, which carries the verifier's "re-run a timing red once alone first"; "Pass ONLY with zero blocking findings
+    across all tasks" now holds once Part B is done. **Part B, Repair in place**: each blocking finding it can repair
+    within the tasks, at its root, in its own commits with the trailers, each with a test that fails without it, the
+    record obligations in the same commits, listed in `repaired`; one that needs a task rebuilt, a decision the record
+    does not make, an owner ruling or more than a contained repair goes in `blocking`, unlanded. **Part C, Land, only
+    with zero blocking findings remaining** is the merge stage's steps 0 to 4, unchanged but for this: step 0 names an
+    earlier reviewer too and reports an earlier landing with `pass: true, blocking: []`; an unresolvable conflict
+    (step 1) and a red it cannot repair (step 2) are reported in `blocking`; step 2 gates in the bundle's landing
+    worktree (still a clean, detached tree other than the one the bundle was built in, with the
+    `merge-base --is-ancestor` check) and also repairs a red that is a defect of the bundle's tasks, with a test,
+    listed in `repaired`; steps 3 and 4 push from and remove that worktree.
   - `REVIEW_SCHEMA` replaces `VERDICT_SCHEMA` and `MERGE_SCHEMA`: `pass` (zero blocking findings remain after the
     repairs), `blocking` (the unrepaired ones), `repaired`, `optional`, `evidence`, `merged`, `pushed`, `mainCommit`,
     `checkOnMain`, `conflicts`, `problem`. `pushed` keeps its description; `merged`'s adds "a blocking finding remains".
   - A review that lands ends `merged`; landed but unpushed, `merge-failed`; otherwise its `blocking` (or, if it lists
-    none, "The gate is red on the bundle rebased onto origin/main" with its `problem`) goes to `fix:<key>#<n>`.
-    `reviewer-lost` replaces `verifier-lost` and `merger-lost`. The completion result lists `repaired` per bundle.
+    none, "The gate is red on the bundle rebased onto origin/main" with its `problem`) goes to `fix:<key>#<n>`. A review
+    that lands while its `blocking` is not empty broke its rule; the bundle is on main, so it ends `merged`, but with
+    `landedWithBlocking` and its findings in `lastBlocking`, and the run logs "WARNING <key>: LANDED WITH n BLOCKING
+    FINDING(S)". `reviewer-lost` replaces `verifier-lost` and `merger-lost`. The completion result lists `repaired` per
+    bundle, repairs made before a restart included.
   - Builder rule 5, which the repairer shares: the narrowest tests while working, then the profile's `quickGate`, the
     tests beside every unit changed (the profile's `tests`), and after the build every proof (and, if authorised, live
     scenario) the tasks name; the full gate runs once, on the rebased head, when the reviewer lands the bundle. It read
     "Gate before you finish: `pnpm check` fully green in your worktree". The repairer's prompt names the reviewer, shows
     what it already repaired, and ends "Run rule 5's checks again" where it read "Re-run the gate".
 - `profiles/rotaris-crw.json`: `quickGate` (`pnpm symbols && pnpm typecheck && pnpm lint`) and `tests`
-  (`pnpm vitest run <paths>`); `gate` stays `pnpm check`.
+  (`pnpm vitest run <paths>`); `gate` stays `pnpm check`. `render` refuses a profile without `gate`, `quickGate` or
+  `tests`.
 - `scripts/orchestration.mjs`. `deriveState` reads `review:` journals, and journals of the old stages resume in the
   new ones: a passed verification, an interrupted verifier or merge agent, or a landing whose push failed at `review`;
   a failed verification or a refused merge at `fix`. One `findingsOf` gives a repairer the findings of a review that
   did not land, of an old failed verification or of an old refused merge, as `drive` does; an old refused merge now
-  meets the needs-owner cap like any handed-back finding. `REVIEWER_INTERRUPTED` replaces `VERIFIER_INTERRUPTED` (it
-  adds step 0 first, a rebase left in progress, and an interrupted reviewer's repair commits) and `PUSH_FAILED` tells a
-  review that retries a failed push. The dry run stubs `review:` (`failReview`, `landRefuse`, `landUnpushed`;
-  `dry-run --fail-review key=N`); `status` prints the new stages.
+  meets the needs-owner cap like any handed-back finding. A journaled landing with blocking findings is seeded
+  `merged` with `landedWithBlocking` and `lastBlocking`, and `status` prints "LANDED WITH n BLOCKING FINDING(S): record
+  each one" beside it. The repairs every review of a bundle journaled travel in its resume state.
+  `REVIEWER_INTERRUPTED` replaces `VERIFIER_INTERRUPTED` (it adds step 0 first, a rebase left in progress, and an
+  interrupted reviewer's repair commits). A failed push now costs a full review round: `PUSH_FAILED` tells that review
+  why it runs, and it reviews the bundle again before step 3 retries the push, where the old flow retried only the
+  merge stage. That is the conservative choice: the review stage has no landing-only mode, and one would be an
+  unreviewed way onto main. A plan's old `efforts.verify` is read as `efforts.review` and `efforts.merge` is dropped
+  (it never set the merge stage's effort), and `render` names each bundle it read so. The dry run stubs `review:`
+  (`failReview`, `landRefuse`, `landUnpushed`, `landWithBlocking`; `dry-run --fail-review key=N`); `status` prints the
+  new stages.
 - SKILL.md: the description (and the router's in `.claude/skills/orchestrated-build/SKILL.md`, which the self-test
-  pins to it), the opening, the file table, §2's ownerBlocked judge, §3's integration worktree, the `merge-failed`
-  row, §4's reopening, refused live scenario and "Reviewers' optional findings". Two protected invariants, in the shape
-  the owner approved: "the verifier never built what it verifies, reads the full diff and the requirement texts
-  itself, and runs the gate itself; no step of its checklist or of the builder's rules is removed or loosened; a bundle
-  passes only with zero blocking findings and lands only after it passes" now reads "the reviewer never built what it
-  reviews, reads the full diff and the requirement texts itself, may repair blocking findings in place in its own
-  commits, and lands only with zero blocking findings remaining and the gate green on the exact head it pushes; the
-  builder runs the quick checks, and the full gate runs once per landing, on the pushed head (the owner, 2026-10-07:
-  "Maybe one implementer, one fix, and then merge." and "Uh, yes, go ahead and make the change. I approve it."); no
-  step of its checklist or of the builder's rules is removed or loosened"; and "the verify and merge stages' model and
-  effort" reads "the review stage's model and effort". Every other invariant is word for word.
-- `references/workflow-tool.md`: the labels, how old journals resume, the landing lock held by the review stage, and
-  the observed durations dated as the old stages'. `references/repository.md`: a reviewed bundle lands; `pnpm check`
-  on the rebased head before every push, once per landing, after the builder's quick checks; "Boundaries the reviewer
-  checks". `references/environment.md`: a reviewer lost mid-landing (a merge agent before this change), the facts
-  kept; a backup branch reaches main reviewed and landed.
+  pins to it), the opening, the file table, §2's ownerBlocked judge, §3's landing worktrees, the `merged` row (with
+  `landedWithBlocking`: record each finding in `lastBlocking` and report it) and the `merge-failed` row, §4's
+  reopening, refused live scenario and "Reviewers' optional findings", and §6's cleanup. Two protected invariants, in
+  the shape the owner approved: "the verifier never built what it verifies, reads the full diff and the requirement
+  texts itself, and runs the gate itself; no step of its checklist or of the builder's rules is removed or loosened; a
+  bundle passes only with zero blocking findings and lands only after it passes" now reads "the reviewer never built
+  what it reviews, reads the full diff and the requirement texts itself, may repair blocking findings in place in its
+  own commits, and lands only with zero blocking findings remaining and the gate, which it runs itself, green on the
+  exact head it pushes; the builder runs the quick checks, and the full gate runs once per landing, on the pushed head
+  (the owner, 2026-10-07: "Maybe one implementer, one fix, and then merge." and "Uh, yes, go ahead and make the change.
+  I approve it."); no step of its checklist or of the builder's rules is removed or loosened"; and "the verify and
+  merge stages' model and effort" reads "the review stage's model and effort". Every other invariant is word for word.
+- `references/workflow-tool.md`: the labels and how old journals resume; reviews land concurrently from their own
+  landing worktrees, ordered by origin/main, where a lock serialized landings through one integration worktree per
+  plan; the observed durations dated as the old stages'. `references/repository.md`: a reviewed bundle lands, gated in
+  its own landing worktree; `pnpm check` on the rebased head before every push, once per landing, after the builder's
+  quick checks; "Boundaries the reviewer checks". `references/environment.md`: a reviewer lost mid-landing (a merge
+  agent before this change), the facts kept; a backup branch reaches main reviewed and landed.
+- `docs/clean-room/agent-workflow.md`: "an orchestrated build's integration worktree is one" reads "landing worktree";
+  nothing else in it names a stage of the workflow.
+- `CLAUDE.md` and `AGENTS.md`, on the owner's words. CLAUDE.md annotated `pnpm check` "all four green before a commit"
+  and AGENTS.md called it "the gate every commit passes": no commit reaches main without `pnpm check` green on the
+  exact head pushed, as before; what changes, as the owner approved, is that a builder hands over after the quick
+  checks and the tests beside what it changed (a builder's intermediate commits were never each gated, before or
+  after). The orchestrator amended CLAUDE.md's line in `056482d`, as it amended CLAUDE.md for the rebase rule on
+  2026-10-04; it now ends "(an orchestrated build: on each head it lands)". AGENTS.md's sentence, amended there and
+  made one statement at the review, reads "`pnpm check` (symbols, typecheck, lint, tests) is the gate every change
+  passes before it lands on main: an agent working alone runs it before each commit; in an orchestrated build it runs
+  on the exact head each landing pushes, its builders committing on the quick checks (the owner, 2026-10-07; the
+  skill's CHANGELOG)." Its summary of this skill read "independent verification per bundle, repair rounds, serialized
+  merges"; with concurrent landings that last was false, and it reads "per bundle an independent reviewer that repairs
+  in place and lands it, repair rounds".
 
 **Self-test assertions rewritten**, each keeping its intent:
 - a dependent waits until its dependency merged, in its lane and across lanes: now after `review:<dep>#1`, the agent
   that lands it (was `merge:<dep>`);
-- "merges are serialized" (`peakMerges`): "landings are serialized: one reviewer at a time holds the landing lock"
-  (`peakLandings`, the stub counting `review:` agents);
+- "merges are serialized" (`peakMerges`) existed so that no two landings shared the integration worktree. Each
+  landing now has its own tree, and origin/main orders the pushes: "each reviewer gates in its own landing tree, never
+  the one the bundle was built in", "two bundles land from two trees", and "a rejected push is rebased again and gated
+  again before it is pushed again" (kept below) take its place, and "two lanes' reviews may run at once" (`peakLandings`,
+  the stub counting `review:` agents) pins the concurrency;
 - a failing bundle is repaired and re-verified (`fix:a1#2`, `verify:a1#3`): handed back, repaired and reviewed again
   (`fix:a1#2`, `review:a1#3`); the next verifier sees the findings the repair answered: the next reviewer does;
 - the trailers: the verifier saw those it checks and the merge agent those it writes; now the builder, the reviewer and
@@ -102,10 +138,12 @@ counted them, the share is 42.8 %.
   a red rebased head the reviewer could not repair goes to `fix:b3#1` and then `review:b3#2`, the repairer is told what
   was red, and the reviewer's step 2 says to repair a red it can and report any other in `blocking` with
   `merged: false`;
-- the landing's eight assertions (the gate on the exact rebased head in the integration worktree, the rebase, the
-  fast-forward push, a rejected push rebased and gated again, no merge commit, nothing forced, the landed test by
-  ancestry or subject, the schema's `pushed`) now read the reviewer's prompt and `REVIEW_SCHEMA`; their patterns are
-  unchanged;
+- the landing's eight assertions now read the reviewer's prompt and `REVIEW_SCHEMA`. Six keep their patterns (the
+  rebase, a rejected push rebased and gated again, no merge commit, nothing forced, the landed test by ancestry or
+  subject, the schema's `pushed`). Two name the landing worktree: the gate on the exact rebased head now matches
+  "in this bundle's own landing worktree `/srv/repo-wt-integ-st-st-a1` (detached HEAD; a tree other than the one the
+  bundle was built in)" and `git status --short` clean before the checkout and the `merge-base --is-ancestor` check,
+  where it matched "in the integration worktree `/srv/repo-wt-integ-st`"; the fast-forward push is from that tree;
 - `merge-failed` when only the push failed, never sent to repair: through the review stub (`landUnpushed`);
 - the polling-loop and Monitor rules read the reviewer's prompt; the stash rule is checked in the builder's, the
   reviewer's and the repairer's;
@@ -124,37 +162,56 @@ counted them, the share is 42.8 %.
 `fix:solo#1` then `review:solo#2`, which shows the previous findings, while the repairer sees what the reviewer already
 repaired and the completion result lists it; the reviewer never built the bundle, keeps each step of the verifier's
 checklist, repairs in place in its own tested commits and hands the rest back unlanded, lands only with zero blocking
-findings remaining, does step 0 first, runs the profile's `gate` on the rebased head, and leaves it out of Part A; the
-builder's and the repairer's rule 5 name `quickGate` and `tests` and no longer require the full gate; `REVIEW_SCHEMA`
-requires `pass`, `blocking`, `repaired`, `merged` and `pushed`; and in the `review:` journal `wf_seven` a landing
-settles, a lost reviewer resumes at `review` with its note in the prompt, a handed-back review and a red rebased head
-resume at `fix`, a failed push resumes at `review` with its note, the budget and the needs-owner cap hold, an
-acceptance result older than a later landing is not replayed, `status` prints `next: review` and `next: fix`, and the
-old-label journal `wf_old` resumes a passed verification at `review`.
+findings remaining, does step 0 first and reports an earlier landing with `blocking: []`, runs the profile's `gate` on
+the rebased head and leaves it out of Part A, lists a repair made on the rebased head in `repaired`, and removes the
+landing worktree after the landing; the builder's and the repairer's rule 5 name `quickGate` and `tests` and no longer
+require the full gate; `REVIEW_SCHEMA` requires `pass`, `blocking`, `repaired`, `merged` and `pushed`; a review that
+lands with a blocking finding leaves the bundle `merged` with `landedWithBlocking`, the finding in `lastBlocking` and a
+WARNING in the log, and a journal of one seeds the same and `status` shows it; a plan's `efforts.review` of `low` or
+`medium` runs the review at `high`, `max` at `max`, and an old `efforts.verify: 'max'` at `max`; a profile without
+`quickGate` or `tests` is refused; and in the `review:` journal `wf_seven` a landing settles, a lost reviewer resumes at
+`review` with its note in the prompt, a handed-back review and a red rebased head resume at `fix`, a failed push resumes
+at `review` with its note, the budget and the needs-owner cap hold, an acceptance result older than a later landing is
+not replayed, a repair journaled before the restart reaches the resume state and the completion result, `status` prints
+`next: review` and `next: fix`, and the old-label journal `wf_old` resumes a passed verification at `review`.
+
+**Review answered.** The independent review of `056482d` came back CHANGES-NEEDED. B1, the owner's confirmation of the
+invariant's wording, is the orchestrator's to settle with the owner. B2: the invariant keeps "the gate, which it runs
+itself" (`990cd41`). B3: a landing with blocking findings is flagged and kept, as above (`670c441`, `a4ee099`). B4: the
+review effort's floor is asserted (`670c441`). O1, which the orchestrator asked the owner to confirm, gives each bundle
+its own landing worktree and drops the in-run landing lock: on the measured means a review takes about 25 minutes while
+two lanes deliver a build about every 20, so serialized reviews would have eaten the gain (`670c441`, `a4ee099`). O2,
+O3, O4 and O6 as above (`670c441`, and `9da5632` for O2's lint); O5 is AGENTS.md's sentence above (`4dde48d`); O7
+is the failed-push note above.
 
 **Not changed.** The acceptance stages and their prompts, `grounding()`, the builder's rules but rule 5, the profile's
-`gate`, the budget, and the needs-owner cap. `docs/clean-room/agent-workflow.md` names no stage of the workflow (its
-"an orchestrated build's integration worktree is one" still holds), and `AGENTS.md`'s summary ("independent
-verification per bundle, repair rounds, serialized merges") still holds of the review stage; neither changes. CLAUDE.md
-annotated `pnpm check` "all four green before a commit" and AGENTS.md called it "the gate every commit passes": no
-commit reaches main without `pnpm check` green on the exact head pushed, as before; what changes, as the owner
-approved, is that a builder hands over after the quick checks and the tests beside what it changed (a builder's
-intermediate commits were never each gated, before or after). The orchestrator therefore amended both lines on the
-owner's words, as it amended CLAUDE.md for the rebase rule on 2026-10-04: CLAUDE.md's now ends "(an orchestrated
-build: on each head it lands)", and AGENTS.md's adds "in an orchestrated build it runs on the exact head each landing
-pushes, its builders committing on the quick checks (the owner, 2026-10-07; the skill's CHANGELOG)".
+`gate`, the budget, and the needs-owner cap.
 
 **Verified** under Node 24. `node scripts/orchestration.mjs self-test`: "self-test: all checks passed". `pnpm check`
-from 05:12 to 05:19 UTC on 2026-10-07, every code change of this entry in the tree: "Test Files 360 passed | 5 skipped
-(365)", "Tests 5207 passed | 33 skipped (5240)", exit 0, at a load of 4.71 at the start and 8.59 at the end (other
-workflows were running), no timing red. Reverting in scratch copies of the skill, with the assertions added or
-rewritten above run one by one in a scratch harness: with `scripts/workflow.template.js` at origin/main (`17075a7`),
-each of the 21 that read the template fails; with `deriveState` and its notes at origin/main, the self-test fails at
-"an old lost merge resumes at review (its landing's step 0 finds an earlier landing)", and the resume checks for
-`review:` journals, old passed verifications, old interrupted merges and `status` fail. A sample plan (three bundles,
-one waiting on another, one acceptance round) rendered from this copy with `render`, whose dry run settles every bundle
-in 9 agent calls (three `implement`, three `review`, three acceptance); `dry-run --fail-review gamma=1` gives
-`review:gamma#1`, `fix:gamma#1`, `review:gamma#2`, every bundle `merged`, status `complete`.
+from 05:12 to 05:19 UTC on 2026-10-07, every code change before the review in the tree: "Test Files 360 passed | 5
+skipped (365)", "Tests 5207 passed | 33 skipped (5240)", exit 0, at a load of 4.71 at the start and 8.59 at the end
+(other workflows were running), no timing red; again on `1df9ee5`, 05:20 to 05:26, the same counts, exit 0, load 7.50
+and 6.92. After the review's answers: `pnpm check` from 05:51 to 05:57 UTC on `9da5632`, with only this entry's text
+uncommitted beside it, the same counts, exit 0, load 8.48 at the start and 6.28 at the end; a first run at 05:48 was
+red on one lint error, the dropped old `merge` effort bound to an unused name in `stageEfforts`, repaired in
+`9da5632`. Reverting in scratch copies of the skill, with the assertions added or rewritten above run one by one in a
+scratch harness: with `scripts/workflow.template.js` at origin/main (`17075a7`), each of the 21 that read the template
+fails; with `deriveState` and its notes at origin/main, the self-test fails at "an old lost merge resumes at review
+(its landing's step 0 finds an earlier landing)", and the resume checks for `review:` journals, old passed
+verifications, old interrupted merges and `status` fail. Each answer to the review, reverted alone, turns the
+self-test red at the assertion named: the effort floor (B4), "a plan never lowers the review stage below high"; the
+flag in `drive` (B3), "a bundle landed with a blocking finding keeps it, flagged for the orchestrator"; the flag in
+`deriveState`, "a journaled landing with blocking findings stays flagged after a restart"; a lock put back around the
+review (O1), "two lanes' reviews may run at once: origin/main orders their pushes"; one landing tree for all bundles,
+"each reviewer gates in its own landing tree, never the one the bundle was built in"; the repairs carried in `drive`
+(O6), "the completion result lists repairs journaled before a restart", and in `deriveState`, "repairs a reviewer made
+before a restart travel in the resume state"; the `verify` mapping (O2), "an old plan's efforts.verify is read as
+efforts.review"; the profile check (O4), "a profile without `quickGate` is refused". A sample plan (three bundles, one
+waiting on another, one acceptance round) rendered from this copy with `render`, whose dry run settles every bundle in
+9 agent calls (three `implement`, three `review`, three acceptance); with `efforts: { verify: 'max' }` on one bundle,
+`render` prints "bundle gamma: `efforts.verify` is read as `efforts.review` and `efforts.merge` is dropped" and
+`dry-run --fail-review gamma=1` gives `review:gamma#1 [max]`, `fix:gamma#1`, `review:gamma#2 [max]`, every bundle
+`merged`, status `complete`.
 
 ## 2026-10-04 — main's history is linear: a bundle lands as a rebase and a fast-forward push
 

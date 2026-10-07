@@ -86,6 +86,26 @@ describe('scriptedClient — the step a call takes', () => {
   });
 
   /*
+   * Finding D8 of the final duress run at a68f121: the renderer threw React error #185 while two children streamed minutes of
+   * reasoning. `think:<deltas>:<ms>` is the scripted producer of that stream — that many reasoning deltas, one every <ms> on
+   * the clock port, then the answer — so a drive can put two long deliberations on screen at once.
+   */
+  it('`think:<deltas>:<ms>` streams that many reasoning deltas on the clock, then answers', async () => {
+    vi.stubEnv('ROTARIS_CHILD_SCRIPT', 'think:3:500');
+    const client = scriptedClient(clock, () => {});
+    const parts = client.stream(request([text('system', CHILD_SYSTEM), text('user', 'TASK: think long')]))[Symbol.asyncIterator]();
+    const kinds: string[] = [];
+    for (;;) {
+      const next = parts.next();
+      let r = await Promise.race([next, settled()]);
+      while (r === undefined) { clock.advance(500); r = await Promise.race([next, settled()]); }
+      if (r.done === true) break;
+      if (r.value.ok) kinds.push(r.value.value.kind);
+    }
+    expect(kinds).toEqual(['reasoning', 'reasoning', 'reasoning', 'text', 'usage', 'finish']);
+  });
+
+  /*
    * PD-ORCH-015 (OQ-225): `part-h-proof`'s plan-correction launch scripts a coordinator that answers beside a plan whose
    * report item is PENDING (`planopen`) and records it done when corrected (`plandone`).
    */

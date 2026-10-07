@@ -23,7 +23,7 @@ renders from below it. A frontmatter this product wrote itself must be one its o
 
 Repaired 2026-10-07 by fin30, on both sides. `FRONTMATTER_LINE` (`packages/contracts/src/artifacts.ts`) takes a value as
 `[^\n]*`, so only `\n` ends a line and a block an older build wrote with a raw separator is read as a block. `yamlScalar`
-(`packages/engine/src/artifacts/sidecar.ts`) writes U+2028 and U+2029 as their escapes ` ` and ` `, which a YAML
+(`packages/engine/src/artifacts/sidecar.ts`) writes U+2028 and U+2029 as their escapes `\u2028` and `\u2029`, which a YAML
 double-quoted scalar reads back as the character, so no reader that takes either for a line break splits a frontmatter line
 this product writes. Pinned by "a value holding U+2028 or U+2029 is still a `key: value` line" in
 `packages/contracts/src/artifacts.test.ts` (red before: no block) and "a title holding U+2028 or U+2029 writes a frontmatter

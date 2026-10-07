@@ -270,7 +270,7 @@ export function buildArgs(plan, profile, state = { seed: {}, resume: {}, cache: 
     const branch = b.branch || plan.id + '-' + b.key
     if (branches.has(branch)) throw new UsageError('two bundles share branch ' + branch)
     branches.add(branch)
-    // A reopened bundle's scope travels in its notes, so every repairer and verifier of it sees it.
+    // A reopened bundle's scope travels in its notes, so every repairer and reviewer of it sees it.
     const notes = [b.notes, b.reopen ? 'Reopened by the orchestrator with this scope (it binds every stage): ' + b.reopen : ''].filter(Boolean).join('\n')
     bundles[b.key] = { title: b.title || b.tasks.map((t) => t.title).join('; and '), branch, short, tasks: b.tasks, after: b.after || [], notes, effort: b.effort || 'high', efforts: b.efforts }
     ;(laneKeys[b.lane || 'A'] ??= []).push(b.key)

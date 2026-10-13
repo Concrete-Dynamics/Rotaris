@@ -11524,6 +11524,10 @@ and
 [`the-symbol-generator-drops-an-identifier-written-on-a-new-line.md`](../defects/fixed/the-symbol-generator-drops-an-identifier-written-on-a-new-line.md).
 No product behaviour changed, so a live run shows nothing new.
 
+*Added 2026-10-13:* the follow-up this ruling left to a note of its own is ruled as [OQ-236](#oq-236) (R-072):
+`PD-LIBRARY-002` revision 2 Narrows REQ-LIBRARY-011, -020, -109, -124, -125, -130 and REQ-NOTIFY-250 and Extends
+REQ-LIBRARY-126 and -128; the user-global question is [OQ-235](#oq-235).
+
 **OQ-226 — How is a foreground terminal call its run cancels recorded?** *(REQ-TOOLS-097, the hard bound whose observation
 is returned "on reaching" it; REQ-TOOLS-099, the hard-timeout contract and its detail; REQ-TOOLS-179, 124 reserved for a
 hard timeout; REQ-TOOLS-103, a failure before completion; REQ-TOOLS-100 and REQ-TOOLS-112, the closed `failure_kind` and
@@ -11904,3 +11908,49 @@ history. From A it kept the form: a directive revision rather than an italic not
 `SkillHost.retrospectiveInstructionFiles` keeps the `workspace:` entries of the enabled set and logs "retrospective: N of
 M enabled instruction file(s) at the workspace root (ids)"; `dispatch`'s `retrospective.capture` passes it. Pinned by
 four cases in `apps/desktop/src/run-host/skills.test.ts`, red before the change.
+
+<a id="oq-236"></a>
+
+**OQ-236 — Which further requirements does `PD-LIBRARY-002` reach, under which verb, and what does its start gesture do
+while an analysis runs?** *(`PD-LIBRARY-002`'s disposition block; REQ-LIBRARY-011, REQ-LIBRARY-020, REQ-LIBRARY-109,
+REQ-LIBRARY-124, REQ-LIBRARY-125, REQ-LIBRARY-126, REQ-LIBRARY-128, REQ-LIBRARY-130, REQ-NOTIFY-250; REQ-LIBRARY-123's FIFO;
+ADR-0065 consequence 2 and decision 7; `docs/product/README.md`'s three verbs. Raised 2026-10-13 from
+[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../defects/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
+the note OQ-222's ruling left for these reaches, as the R-072 consortium's question LR1, and ruled the same day.)*
+
+OQ-222 entered the four reaches the back-pointers already marked into `PD-LIBRARY-002`'s Extends line and left the rest:
+the artifact container's non-null `source_session_id`, the parser's backfill of the current session, the indicators' fixed
+label and description, REQ-NOTIFY-250's "only while that [post-run] analysis is in flight", the card the gesture joins,
+the Overview hint the build had already rewritten, the Library's two fixed texts, and the post-run notices' fixed titles.
+Each carried neither a note nor a disposition. Both advocates also found the retrospective's two buttons disabled while
+any analysis runs, against REQ-LIBRARY-125's "no control … may be disabled while analysis runs", while the palette entry
+queued the same command.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):**
+[`PD-LIBRARY-002`](../product/directives.md#pd-library-002) gains a revision 2. It Narrows REQ-LIBRARY-011,
+REQ-LIBRARY-020, REQ-LIBRARY-109, REQ-LIBRARY-124, REQ-LIBRARY-125, REQ-LIBRARY-130 and REQ-NOTIFY-250, and adds
+REQ-LIBRARY-126 and REQ-LIBRARY-128 to its Extends line. The palette entry, REQ-LIBRARY-127 and REQ-LIBRARY-174 take no
+disposition. The build changes in two places. The Library's two REQ-LIBRARY-109 texts name the retrospective as a second
+source. The retrospective's start gesture stays available while a post-run analysis is queued or running, queues behind
+it, and is refused on all three surfaces only while a retrospective is already queued or running in that workspace, with
+the reason "A retrospective is already queued or running." The cases are the directive's clauses (a) to (g), each stated
+exhaustively.
+
+The two recommendations weighed, and the ruling followed **both**, each on the points below:
+- **Advocate A (the user's lens)** recommended Narrows for REQ-LIBRARY-011, -020, -109, -124, -125 and -130 and Extends for
+  REQ-LIBRARY-126, -128 and REQ-NOTIFY-250, the built hint ratified, the Library's two texts naming both sources, and the
+  gesture disabled only while a retrospective is queued or running in the workspace, refused there with one info notice so
+  the palette agrees.
+- **Advocate B (the system's lens)** recommended one test for every verb — Narrows where a fixed text departs, Extends where
+  the retrospective sits beside a requirement — giving Narrows for REQ-LIBRARY-020, -125 and REQ-NOTIFY-250 and Extends for
+  REQ-LIBRARY-011, -109, -126 and -128, REQ-LIBRARY-130's hint restored word for word, and the two buttons never disabled.
+
+The ruling applied B's test to every requirement. On REQ-LIBRARY-011 it followed A: that requirement marks
+`collector_model` and `notes` nullable and leaves `source_session_id` non-null, and the same container stores
+retrospective artifacts, so a null there departs. On REQ-NOTIFY-250 it followed B: its "only while that analysis is in
+flight" is broken, so the verb is Narrows. B left REQ-LIBRARY-124 undisposed although the built notices depart from its
+fixed titles; A covered it, and the notices are clear and honest, so they are ratified. On REQ-LIBRARY-130 it followed A
+and ratified the built hint, which has the same shape as the two REQ-LIBRARY-109 texts A rightly found false of the
+retrospective rows beneath them. On the gesture it followed A's narrower refusal: a second retrospective over an unchanged
+workspace reads the same evidence and duplicate suppression discards its proposals, so B's "always enabled" spends the
+owner's tokens for nothing. Revision 2 rests on the R-072 precedents B cited.

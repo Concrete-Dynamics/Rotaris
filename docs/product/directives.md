@@ -1208,9 +1208,12 @@ for a shell that never died.
 
 ### PD-LIBRARY-002 — a retrospective pass reads the workspace's own session history and proposes what a user would otherwise have to teach the product by hand
 
-*Revision 2 (2026-10-13, [R-072](requests.md#r-072), ruling [OQ-235](../architecture/open-questions.md#oq-235)) —
-**which instruction files the retrospective reads**: the rule paragraph's instruction-file clause is replaced, and
-revision 1's is quoted beneath it. The reach clause is unchanged word for word.*
+*Revision 2 (2026-10-13, [R-072](requests.md#r-072), rulings [OQ-235](../architecture/open-questions.md#oq-235) and
+[OQ-236](../architecture/open-questions.md#oq-236)) — **which instruction files the retrospective reads** (OQ-235): the
+rule paragraph's instruction-file clause is replaced, and revision 1's is quoted beneath it; the reach clause is unchanged
+word for word. **Where the retrospective departs from the requirements it sits beside, and its start gesture** (OQ-236):
+one paragraph added after "Reach, and the boundary it holds"; revision 1 said nothing on these points, so nothing is
+replaced.*
 
 **The rule.** Beside the per-run analyst of section 3, the improvement domain SHALL carry a second
 kind of analysis pass, the **retrospective**. A retrospective SHALL read only material this product
@@ -1250,6 +1253,44 @@ analysis this domain runs — nothing on the network. Its output lands in the sa
 on the same two surfaces, and is applied only through the same separately started improvement run.
 The retrospective has no authority REQ-LIBRARY-001 does not already give the per-run analyst, and
 no proposal of it is ever applied by anything but a human approval of that exact proposal.
+
+**Where the retrospective departs from the requirements it sits beside — revision 2 (OQ-236).** Those requirements govern
+the per-run pass unchanged. For a retrospective, and only for one, each of these cases holds instead:
+
+- (a) **The artifact (REQ-LIBRARY-011).** Every artifact carries `source_kind`, either `post_run` or `retrospective`. A
+  retrospective artifact stores `source_session_id` null and names the sessions it read in `considered_session_ids`.
+- (b) **The parser (REQ-LIBRARY-020).** For a retrospective, the parser keeps an evidence entry's `source_session_id` only
+  when the entry names a session in the job's `considered_session_ids`, and otherwise stores null. It never backfills one.
+- (c) **The notices (REQ-LIBRARY-124).** A retrospective with proposals posts a persistent success notice titled
+  "<N> retrospective proposal ready" or "<N> retrospective proposals ready", with "Review proposals" opening the Library on
+  the proposals tab. With zero proposals it posts the info notice "The retrospective found nothing to propose", with no
+  action. A failure posts the warning "The retrospective could not be completed", conveying that the workspace's own
+  history was not reviewed and the reason; it names no run and offers no action.
+- (d) **The indicators (REQ-LIBRARY-125, REQ-NOTIFY-250).** While a retrospective runs, both indicators carry the label
+  "Reviewing workspace history for improvements…". The title-bar indicator keeps the accessible name "Improvement analysis
+  status" and has the description "Reviewing this workspace's own history for improvements in the background. You can
+  continue working." The run-header indicator conveys the same three facts about the workspace's history. REQ-NOTIFY-250's
+  indicator is also shown while a retrospective is in flight.
+- (e) **The start gesture (REQ-LIBRARY-125's no-control-disabled clause).** The retrospective's start gesture stays
+  available while a post-run analysis is queued or running, and a press queues behind it in REQ-LIBRARY-123's FIFO. While a
+  retrospective is queued or running in the workspace, the gesture on the Library tab and the Overview card is unavailable,
+  with the tooltip "A retrospective is already queued or running.". The palette entry stays listed; activating it in that
+  state posts one info notice with that reason and queues nothing. Every other control stays enabled.
+- (f) **The Overview card's hint (REQ-LIBRARY-130).** The empty hint reads "Run improvement analysis, or a retrospective
+  over this workspace's history, to produce reviewable suggestions."
+- (g) **The Library's proposals card (REQ-LIBRARY-109).** The card note reads "Evidence-backed suggestions from the
+  improvement collector after each run, and from retrospectives over this workspace's history." The empty label reads "No
+  proposals yet. They appear here after a run's improvement collector finds signals, or after a retrospective over this
+  workspace's history."
+
+The retrospective also shows the indicators of REQ-LIBRARY-126 when no session's analysis is in progress, and its gesture
+sits in the header of REQ-LIBRARY-128's card beside the tag and "Open in Library →"; both requirements are untouched. The
+palette entry, REQ-LIBRARY-127 and REQ-LIBRARY-174 take no disposition: the first follows REQ-SHELL-048's terms, and the
+other two already read without a pass. *Why:* a fixed label, field or text that would be false of a retrospective is a
+departure the directive states rather than one a reader infers; the texts of (f) and (g) sit above retrospective rows; and
+a gesture greyed out behind a post-run review contradicted REQ-LIBRARY-125 and ADR-0065 consequence 2 while the palette
+already queued, but a second retrospective over an unchanged workspace reads the same evidence and duplicate suppression
+discards its proposals after the owner has paid for them, so that one press is refused.
 
 **The trigger.** A retrospective SHALL be started by the user's explicit gesture on a desktop
 surface, and from nowhere else. It MUST NOT be scheduled, chained from a run's completion, or
@@ -1312,7 +1353,8 @@ record with evidence, review, undo, history, export and an executor behind it.
   REQ-LIBRARY-037's shape and it is kept. The cost is one more empty-slot refusal a user can meet;
   it is paid once per gesture, names the exact field to set, and stops there.
 
-> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015, REQ-LIBRARY-017, REQ-MONITOR-173, REQ-NOTIFY-251, REQ-WORKSPACE-041
+> **Narrows:** REQ-LIBRARY-011, REQ-LIBRARY-020, REQ-LIBRARY-109, REQ-LIBRARY-124, REQ-LIBRARY-125, REQ-LIBRARY-130, REQ-NOTIFY-250
+> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015, REQ-LIBRARY-017, REQ-LIBRARY-126, REQ-LIBRARY-128, REQ-MONITOR-173, REQ-NOTIFY-251, REQ-WORKSPACE-041
 
 *Until 2026-10-07 this block read `> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015` and beneath it
 `> **New:** no live requirement covers a cross-session analysis pass; REQ-LIBRARY-017 forbids the per-run analyst exactly
@@ -1324,9 +1366,15 @@ Extends because its clauses bind an analysis that a run triggered, and the rule 
 analyst. No rule text changed ([OQ-222](../architecture/open-questions.md), ruled under [R-072](requests.md#r-072);
 [`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement`](../defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)).*
 
+*Revision 2, 2026-10-13 ([OQ-236](../architecture/open-questions.md#oq-236), ruled under [R-072](requests.md#r-072)): the
+Narrows line is added and REQ-LIBRARY-126 and REQ-LIBRARY-128 join the Extends line, each requirement with its back-pointer;
+the cases are the revision-2 paragraph's (a) to (g)
+([`pd-library-002-reaches-further-requirements-its-disposition-does-not-name`](../defects/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md)).*
+
 *Raised by the owner, 2026-09-17; logged as [R-033](requests.md#r-033).*
-Revision 2 logged as [R-072](requests.md#r-072) (OQ-235), ruled by the consortium under the owner's delegation, the
-system-lens advocate's recommendation followed in substance and a revision taken in place of an italic note.
+Revision 2 logged as [R-072](requests.md#r-072) (OQ-235 and OQ-236), ruled by the consortium under the owner's
+delegation: on OQ-235 the system-lens advocate's recommendation followed in substance and a revision taken in place of an
+italic note; on OQ-236 both advocates' recommendations followed in part.
 
 > **First execution of revision 2, 2026-10-13, ruled by [R-072](requests.md#r-072) (OQ-235) and built in plan fin34:** the
 > clause held as written. The run host's `SkillHost.retrospectiveInstructionFiles` keeps the `workspace:` entries of the

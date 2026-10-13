@@ -21,6 +21,7 @@ import { CreatePane, EditorPane, type CreateDraft } from './panes/EditorPane.js'
 import { LaunchDisclosure } from './panes/LaunchDisclosure.js';
 import { QueuePane } from './panes/QueuePane.js';
 import { ReviewPane } from './panes/ReviewPane.js';
+import { reviewReads as createReviewReads } from './panes/review-reads.js';
 import { createPaneRegistry } from './panes/registry.js';
 import { disclosureFor, rereadWhenTaken, type DecisionResult } from './panes/presentation.js';
 // Defect R2-3: `PANE_TITLE` belongs in this list. It was dropped from it while the pane host's own chrome did not yet
@@ -595,21 +596,28 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const panes = paneSet.registry;
   const [paneBuilds, setPaneBuilds] = useState(0);
   const paneOpener = useRef<HTMLElement | null>(null);
-  const reviewReading = useRef(false);
+  /** REQ-TRACE-425/426: which read of the review is outstanding and which one the pane shows (`panes/review-reads.ts`). */
+  const [reviewLedger] = useState(createReviewReads);
+  const [reviewSeq, setReviewSeq] = useState(0);
+  const paneTargetNow = useRef<ReqId | null>(null);
   const [confirmWrites, setConfirmWrites] = useState(false);
 
   /** REQ-TRACE-425: the surface states that it is reading, keeps responding, and REFUSES a second read rather than starting one. */
   const reviewReads = useRef<{ readonly via: 'open' | 'reload'; readonly at: number }[]>([]);
   const loadReview = useCallback((id: ReqId, via: 'open' | 'reload') => {
     reviewReads.current = [...reviewReads.current, { via, at: Math.round(performance.now()) }];
-    if (reviewReading.current) { setReviewBusy(true); return; }
-    reviewReading.current = true;
+    const asked = reviewLedger.ask(id);
+    if ('busy' in asked) { setReviewBusy(true); return; }
+    // The read's own number: the pane's decision notice belongs to the payload of one read and no later one (L12).
+    setReviewSeq(asked.start);
     setReviewBusy(false); setReview('reading'); setReviewError(undefined);
     void host.readReview(id).then((r) => {
-      reviewReading.current = false;
+      // A read the pane no longer shows the requirement of — closed, or opened on another while this one was outstanding
+      // and the other's read refused (REQ-TRACE-425) — is never drawn under another identifier.
+      if (reviewLedger.land(asked.start, paneTargetNow.current) === 'discard') { setReviewBusy(false); setReview(null); return; }
       if (r.ok) { setReview(r.value); setReviewError(undefined); } else { setReview(null); setReviewError(r.reason); }
     });
-  }, [host]);
+  }, [host, reviewLedger]);
 
   const openPane = useCallback((key: PaneKey, id: ReqId | null) => {
     paneOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -617,6 +625,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     setPaneBuilds((n) => n + 1);
     setPane(key);
     setPaneTarget(id);
+    paneTargetNow.current = id;
     if (key === 'review' && id !== null) loadReview(id, 'open');
     if (key === 'blockers' && id !== null) { setBlockerPayload(null); void host.readBlocker(id).then((r) => { if (r.ok) setBlockerPayload(r.value); }); }
     // REQ-TRACE-436: whether a source write is confirmed first is the workspace's own configuration, and the service
@@ -624,7 +633,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     if (key === 'editor' || key === 'create') void host.previewLocation(undefined).then((r) => { if (r.ok && r.value.ok) setConfirmWrites(r.value.value.confirmSourceWrites); });
   }, [panes, host, loadReview]);
   const closePane = useCallback(() => {
-    setPane(null); setPaneTarget(null);
+    setPane(null); setPaneTarget(null); paneTargetNow.current = null;
     const el = paneOpener.current; paneOpener.current = null;
     requestAnimationFrame(() => el?.focus());
   }, []);
@@ -942,7 +951,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
             </div>
             {pane === 'review' && (
               <ReviewPane
-                id={paneTarget ?? ''} payload={review} error={reviewError} busy={reviewBusy}
+                id={paneTarget ?? ''} payload={review} readSeq={reviewSeq} error={reviewError} busy={reviewBusy}
                 consequenceOf={(action) => consequenceForDecision(action, paneTarget ?? '')}
                 onDecision={decide}
                 onReload={() => { if (paneTarget !== null) loadReview(paneTarget, 'reload'); }}

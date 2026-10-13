@@ -3,6 +3,7 @@ import type { BoardAction, ReviewPayload } from '@rotaris/contracts';
 import { ConfirmDialog } from '../../ConfirmDialog.js';
 import { CLAIM_ATTRIBUTION, CLAIM_HEADING, MEASUREMENT_ATTRIBUTION, MEASUREMENT_HEADING, RELOAD_REVIEW, REVIEW_BUSY, REVIEW_READING, WORK_HEADING, decidedNotice, followDecision, reviewDecisions, type DecisionResult, reviewElementDescription, reviewElements, type ReviewElement, type ReviewLink } from './presentation.js';
 import { Button as DesignButton, Tag as DesignTag, TextArea as DesignTextArea } from '../../design-system/index.js';
+import { decidedNoticeShown, type DecidedNotice } from './review-reads.js';
 
 /**
  * Part AP — the review pane (spec 08 §Review Surface, REQ-TRACE-417..426). Structure from the specification: the
@@ -17,6 +18,11 @@ export interface ReviewPaneProps {
   readonly id: string;
   /** `reading` while the read is outstanding (REQ-TRACE-425); a payload with `refusal` names why there is nothing to review (REQ-TRACE-424). */
   readonly payload: ReviewPayload | 'reading' | null;
+  /**
+   * The number of the read `payload` came from (`panes/review-reads.ts`). A decision's notice belongs to the payload of the
+   * read it was made against and is not shown over a later one (REQ-TRACE-426; live-run finding L12). Absent: 0.
+   */
+  readonly readSeq?: number | undefined;
   readonly error?: string | undefined;
   /** REQ-TRACE-422: the decision's consequence for the branch and the worktree, stated before it is taken; the engine's sentence. */
   readonly consequenceOf: (action: BoardAction) => string;
@@ -37,13 +43,17 @@ export function ReviewPane(p: ReviewPaneProps) {
   const [pending, setPending] = useState<BoardAction | null>(null);
   const [instructions, setInstructions] = useState('');
   const [refusal, setRefusal] = useState<string | null>(null);
-  const [decided, setDecided] = useState<string | null>(null);
+  const [decidedOn, setDecidedOn] = useState<DecidedNotice | null>(null);
+  const readSeq = p.readSeq ?? 0;
+  const decided = decidedNoticeShown(decidedOn, readSeq);
   /** REQ-TRACE-472: the decision is waiting on the launch's disclosure — nothing has been recorded yet, and nothing was refused. */
   const [waiting, setWaiting] = useState<string | null>(null);
   const [inFlight, setInFlight] = useState(false);
   const payload = p.payload === 'reading' || p.payload === null ? null : p.payload;
   const elements = payload === null || payload.refusal !== undefined ? [] : reviewElements(payload);
   const decide = async (action: BoardAction) => {
+    // The read the decision is made against: the one on screen when it is taken.
+    const against = readSeq;
     setInFlight(true);
     const first = await p.onDecision(action, action === 'send-back' ? { instructions } : undefined);
     setPending(null);
@@ -55,7 +65,7 @@ export function ReviewPane(p: ReviewPaneProps) {
     if (!r.ok) { setRefusal(r.reason); return; }
     setRefusal(null);
     // REQ-TRACE-426: any decision relocates the requirement; the payload is out of date, and the one action offered is the reload.
-    setDecided(decidedNotice(labelOf(action), p.id));
+    setDecidedOn({ text: decidedNotice(labelOf(action), p.id), readSeq: against });
   };
   const side = (name: string, heading: string, attribution: string | null) => {
     const own = elements.filter((e) => e.side === name);
@@ -94,7 +104,7 @@ export function ReviewPane(p: ReviewPaneProps) {
       {decided !== null ? (
         <div className="req-pane__notice" role="status" data-testid="req-pane-review-decided">
           <span>{decided}</span>
-          <DesignButton type="button" className="btn btn-primary" onClick={() => { setDecided(null); p.onReload(); }}>{RELOAD_REVIEW}</DesignButton>
+          <DesignButton type="button" className="btn btn-primary" onClick={() => { setDecidedOn(null); p.onReload(); }}>{RELOAD_REVIEW}</DesignButton>
         </div>
       ) : payload !== null && payload.refusal === undefined && (
         <footer className="req-pane__decisions" data-testid="req-pane-review-decisions">

@@ -18,3 +18,14 @@ the first read's answer stand in for the second.
 
 - `packages/ui/src/requirements/RequirementsView.tsx` — `loadReview`, `openPane`, `closePane`, `decide`.
 - `packages/ui/src/requirements/panes/ReviewPane.tsx` — the identifier from the pane's target, the payload from the read.
+
+## Outcome
+
+Repaired by fin34 (2026-10-13). The pane's reads are kept by `reviewReads` (`packages/ui/src/requirements/panes/review-reads.ts`):
+`ask` still refuses a second read while one is outstanding, whichever requirement it is for (REQ-TRACE-425), and `land` shows
+a read's answer only when it is the outstanding read and the pane still targets the requirement it was asked for. A read that
+lands for a pane closed or retargeted is discarded: the pane draws no payload and the busy statement is withdrawn, so the
+person asks again for the requirement now shown. `openPane` and `closePane` keep the pane's target in a ref the landing reads.
+Pinned by `packages/ui/src/requirements/panes/review-reads.test.ts` (a read landing after the pane was opened on another
+requirement is discarded; a pane closed before its read landed shows nothing). Not driven in the built app: it needs a read
+slower than closing one pane and opening another, which no proof can time.

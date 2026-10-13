@@ -31,3 +31,29 @@ once, which neither requirement allows together.
   observable.
 - `packages/ui/src/requirements/panes/ReviewPane.tsx` — `decided`, local state that a fresh payload does not clear.
 - `apps/desktop/scripts/requirements-proof.mjs` — the end-to-end stage's `REVIEW_AT` reads at 36800 and 39800.
+
+## Outcome
+
+Repaired by fin34 (2026-10-13), from the code; the red itself was still not reproduced. **Every path by which the pane can
+draw a payload, read for this note:** the pane's payload changes only in `loadReview`, and `loadReview` is reached only from
+`openPane` (the detail's Review control) and the notice's Reload; nothing re-reads on a board change (`adoptBoard`, the
+`onChanged` subscription and `refreshDetail` touch the board and the detail, never the review), no effect calls `openPane`,
+and the decision path (`decide` → `perform`) writes no review state. A read cannot be outstanding while the decisions are
+offered, since every read sets the pane to `reading` first and the decisions are drawn only over a payload. So the refusal at
+36800 was a read asked after the accept, by the detail's Review control: nothing else asks one.
+
+**What made the red's shape possible was the product's.** The decision's notice was `ReviewPane`'s local state, and the pane
+stays mounted while its target is unchanged, so a fresh read — the review opened again — replaced the payload and left the
+notice standing: REQ-TRACE-424's refusal for the card the accept had moved, under a notice saying the payload on screen was
+the one the decision was made against. That is exactly the red. The notice now belongs to the read it was made against:
+each read is numbered (`reviewReads`, `packages/ui/src/requirements/panes/review-reads.ts`), the pane is given the number of
+the read its payload came from, the notice records the number it was decided against, and it is drawn only while those agree
+(`decidedNoticeShown`). The review opened again after a decision now shows the fresh payload alone; the Reload behaves as
+before. Reading this path also found a second one, recorded and repaired with it: a read outstanding for one requirement drawn
+in the pane retargeted to another
+([note](a-review-read-for-one-requirement-lands-in-the-pane-retargeted-to-another.md)).
+
+Pinned by `packages/ui/src/requirements/panes/review-reads.test.ts` (the notice is not shown over a later read; red before:
+the notice had no read to belong to). **Not settled:** what pressed the detail's Review control in run 3 at `a68f121` — the
+script presses it only at 32000, before the accept. A recurrence now reads as a missing notice at 36800, with
+`reviewReads` naming the second `open`, rather than as a refusal under the notice.

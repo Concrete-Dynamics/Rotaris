@@ -11205,7 +11205,8 @@ live run, the harness change's first execution — its `app.log` should read `ch
 finishing in one life or cut off at 2,700 s plus at most 30 s and handled as PD-ORCH-004 says; its autopsy reports each child's
 lifetime, any compression inside a child, any parent resume, and whether a cut-off child spent more than half its requests on
 its own task (condition a′). The question of whether a child cut off at its per-agent timeout names the Settings control where
-the person sees the failure is raised and ruled on its own, not here.
+the person sees the failure is raised and ruled on its own, not here: [OQ-234](#oq-234), ruled as
+[`PD-CONFIG-003`](../product/directives.md#pd-config-003) revision 3.
 
 **OQ-215 — Do the built-in search and listing tools skip the code-intelligence runtime's marker directory, and do its
 memories leave the workspace?** *(REQ-TOOLS-140, the hard-coded ignore components, a closed list holding `.rotaris` and not
@@ -11793,6 +11794,8 @@ file's depth. The specification fixes neither reading.
 
 **What a ruling decides.** Whether a level-3 `write_file` edit shifts `new_string` by the window's prefix, writes it as given
 (the build), or is refused with OQ-231's near-miss facts, as `haet_edit`'s now is.
+
+<a id="oq-234"></a>
 
 **OQ-234 — Does a child cut off at its per-agent timeout name, where the person sees the failure, the Settings control that
 sets the limit?** *(REQ-ORCH-088, the expiry path and its fixed error "Child timed out after <N>s"; REQ-CONFIG-113,

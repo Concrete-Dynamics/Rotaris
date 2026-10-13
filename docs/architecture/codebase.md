@@ -581,7 +581,7 @@ in `configuration.ts`'s header.)
 14. **the loop supervisor and `continue` (2026-09-05):** one hidden observer per agent conversation, fed by the turn
    after every assistant message and tool call and asked before every model step; triggers in `REQ-ORCH-101`'s
    order over actions (whole-argument sameness), a small-model classifier on the intent ladder bounded by
-   `runtime.loop_classification_timeout`, `REQ-ORCH-104`'s fallbacks, escalation at the third consecutive
+   `runtime.loop_classification_timeout` (capped at `REQ-NOTIFY-106`'s 2 s budget since fin35, `REQ-CONFIG-467`), `REQ-ORCH-104`'s fallbacks, escalation at the third consecutive
    activation — the child failed with `circuit_breaker_escalation`, the root's run ended `agent_session_aborted`;
    `circuit_breaker:` in `agents.yaml`; "● CB armed" in the status strip. A stored session is listed and opened
    from the title bar's "Sessions" browser (`REQ-SHELL-126`), its lock re-claimed with one local reap, its

@@ -104,6 +104,10 @@ if (loopIssues.length !== 1) throw new Error(`expected one circuit_breaker_escal
 const rawCases = [
   { name: 'raw-count-varied', script: 'reads4:varied,answer', activations: 0 },
   { name: 'raw-count-same', script: 'reads4:same,answer', activations: 1 },
+  // REQ-CONFIG-467 / REQ-NOTIFY-106 (fin35): the key raised to 30 s is an upper bound only, so the held classification is still
+  // cut at the 2 s activation budget and the activation lands inside the 12 s capture window. Uncapped, the timer ran 30 s
+  // and the window closed with no activation (`docs/defects/fixed/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`).
+  { name: 'raw-count-long-bound', script: 'reads4:same,answer', activations: 1, runtime: ['  loop_classification_timeout: 30'] },
 ];
 const rawObserved = {};
 for (const c of rawCases) {
@@ -114,7 +118,8 @@ for (const c of rawCases) {
   mkdirSync(local, { recursive: true });
   for (const f of ['README.md', 'NOTES.md', 'docs/a.md', 'docs/b.md']) writeFileSync(join(ws, f), `# ${f}\n`);
   scratchAgentsYaml(ws);
-  writeFileSync(join(ws, '.rotaris', 'agents.yaml'), `${readFileSync(join(ws, '.rotaris', 'agents.yaml'), 'utf8')}circuit_breaker:\n  tool_call_threshold: 4\n  repetition_threshold: 99\n  cycle_threshold: 99\n`);
+  const base = readFileSync(join(ws, '.rotaris', 'agents.yaml'), 'utf8').replace('  permission_mode: autonomous\n', ['  permission_mode: autonomous', ...(c.runtime ?? []), ''].join('\n'));
+  writeFileSync(join(ws, '.rotaris', 'agents.yaml'), `${base}circuit_breaker:\n  tool_call_threshold: 4\n  repetition_threshold: 99\n  cycle_threshold: 99\n`);
   await launch(c.name, ws, local, join(root, 'preferences'), {
     ROTARIS_SCRIPT: c.script,
     ROTARIS_LOOP_SCRIPT: 'timeout',

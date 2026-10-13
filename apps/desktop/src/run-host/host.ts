@@ -2,7 +2,7 @@ import { CONTRACT_SCHEMA_VERSION, type ProcessMessage, type ProcessReply, type S
 import { millis, toIsoUtc, type Millis } from '@rotaris/kernel';
 import { dataLayout, environmentWithout, installedProductVersion, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import type { PromptLists, StoreDal, StoreHandle } from '@rotaris/store';
-import { meteredBackend, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
+import { meteredBackend, RefusalLease, LOOP_ACTIVATION_BUDGET_MS, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
 import { ConfinementService, PresenterRegistry, renderUnavailability, spawnTrial, type AvailabilityVerdict, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, implementationRole, RunHostPresenter, terminalManagerFromHost } from './tools.js';
@@ -458,7 +458,9 @@ export function createRunHost() {
       if (!run) return null;
       const cb = run.cfg.circuitBreaker;
       if (!cb.enabled || process.env['ROTARIS_CIRCUIT_BREAKER'] === 'off') return null;
-      const timeoutMs = Math.round(run.runtime.loopClassificationTimeoutS * 1_000);
+      // REQ-CONFIG-467: the configured value is an upper bound only, never more than REQ-NOTIFY-106's activation budget — the
+      // supervisor's timer caps the call there, and the model request's own timeout is given the same figure.
+      const timeoutMs = Math.min(Math.round(run.runtime.loopClassificationTimeoutS * 1_000), LOOP_ACTIVATION_BUDGET_MS);
       const classifier = createLoopClassifier({
         // REQ-EVENTS-053: each classification is a request of the run, counted against it.
         backend: meteredBackend(run.model.backend, countUsage), runModel: run.model.config.model, thinking: run.model.config.thinking, credentialFor: run.model.config.credentialFor,

@@ -160,3 +160,16 @@ classifications of the run were cut at 2.0 s (9 of 9 across the three duress pac
 last four tool events by `fingerprint` — the comparison REQ-ORCH-101's triggers already use — where it compared
 `event.name` (fin32). Pinned by `supervisor.test.ts`'s REQ-ORCH-104 block and `pnpm part-h-proof`'s
 `raw-count-varied` and `raw-count-same` launches. **Not measured:** a live run since the change.
+
+## 2026-10-13 — decision 4's bound capped at the activation budget (fin35)
+
+Decision 4 bounded the classification by `runtime.loop_classification_timeout` as configured, so a workspace that set
+the key to 30 let one classification hold the agent for 30 s, where REQ-CONFIG-467 makes the key an upper bound only and
+REQ-NOTIFY-106 allows the call no more than what remains of the 2 s activation budget
+([`the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`](../../defects/fixed/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md),
+noticed beside OQ-232's ruling). The bound is now the smaller of the key and `LOOP_ACTIVATION_BUDGET_MS` (2,000 ms), in the
+supervisor's timer and in the classifier's model request alike. The budget is read from the activation `check()` takes at
+the step boundary, as consequence 1 already reads the pause; the call is dispatched in the same synchronous stretch, so the
+whole budget remains at dispatch. Pinned by `supervisor.test.ts` and `pnpm part-h-proof`'s `raw-count-long-bound` launch
+(red on the build before, green after). **Not measured:** a live run; with the default 2.0 s nothing a live run shows
+changes, and one with the key raised should show every classification cut at about 2 s.

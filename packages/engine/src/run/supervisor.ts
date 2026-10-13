@@ -32,6 +32,13 @@ export const SUPERVISOR_DEFAULTS: SupervisorConfig = {
   classificationTimeoutMs: 2_000,
 };
 
+/**
+ * REQ-NOTIFY-106's activation budget: at most 2 seconds from an activation to its corrective message, binding every step
+ * inside it, the classification call included. REQ-CONFIG-467 and REQ-NOTIFY-100: `runtime.loop_classification_timeout` is an
+ * upper bound only, and a call is allowed no more than what remains of this budget when it is dispatched.
+ */
+export const LOOP_ACTIVATION_BUDGET_MS = 2_000;
+
 export type SupervisorEvent =
   | { readonly kind: 'tool'; readonly name: string; readonly args: string }
   | { readonly kind: 'message'; readonly text: string };
@@ -216,7 +223,15 @@ export class LoopSupervisor {
     this.pending = null;
   }
 
+  /**
+   * REQ-CONFIG-467: the configured bound, capped at what remains of REQ-NOTIFY-106's budget at dispatch. The activation is
+   * taken in `check()` at the turn's step boundary (ADR-0059 decision 4 and consequence 1: a tool already running when the
+   * trigger fired is not interrupted), and the call is dispatched in the same synchronous stretch, so what remains at
+   * dispatch is the whole budget and the bound is the smaller of the two. Before this cap a key set to 30 held the agent for
+   * 30 s on one classification (`docs/defects/fixed/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`).
+   */
   private classifyWithinBound(activation: LoopActivation): Promise<LoopClassification | null> {
+    const bound = Math.min(this.config.classificationTimeoutMs, LOOP_ACTIVATION_BUDGET_MS);
     const controller = new AbortController();
     return new Promise((resolve) => {
       let settled = false;
@@ -226,7 +241,7 @@ export class LoopSupervisor {
         timer.cancel();
         resolve(value);
       };
-      const timer = this.timers.after(millis(this.config.classificationTimeoutMs), () => {
+      const timer = this.timers.after(millis(bound), () => {
         controller.abort();
         finish(null);
       });

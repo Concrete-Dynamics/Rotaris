@@ -182,6 +182,40 @@ describe('loop supervisor (REQ-ORCH-099..107)', () => {
     if (decision.kind === 'inject') expect(decision.message).toContain('read_file around src/stuck.ts');
   });
 
+  // REQ-CONFIG-467 / REQ-NOTIFY-106 / REQ-NOTIFY-100: the configured bound is an upper bound only — a call is allowed no more
+  // than what remains of the 2-second activation budget when it is dispatched, so a key set to 30 s still cuts it at 2 s.
+  it('caps the classification at what remains of the activation budget, whatever the configured bound', async () => {
+    const clock = new FakeClock();
+    const aborted = vi.fn();
+    const s = new LoopSupervisor(sessionId, config({ classificationTimeoutMs: 30_000 }), classifier(async (_a, signal) => {
+      signal.addEventListener('abort', aborted, { once: true });
+      return await new Promise<LoopClassification>(() => undefined);
+    }), clock);
+    for (let i = 0; i < 4; i += 1) tool(s, 'read_file', '{"path":"src/stuck.ts"}');
+    let decision: unknown = 'still waiting';
+    void s.check().then((d) => { decision = d; });
+    clock.advance(2_000);
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    expect(aborted).toHaveBeenCalledOnce();
+    expect(decision).toMatchObject({ kind: 'inject' });
+  });
+
+  it('keeps a configured bound below the budget as the bound', async () => {
+    const clock = new FakeClock();
+    const aborted = vi.fn();
+    const s = new LoopSupervisor(sessionId, config({ classificationTimeoutMs: 500 }), classifier(async (_a, signal) => {
+      signal.addEventListener('abort', aborted, { once: true });
+      return await new Promise<LoopClassification>(() => undefined);
+    }), clock);
+    for (let i = 0; i < 4; i += 1) tool(s, 'read_file', '{"path":"src/stuck.ts"}');
+    const pending = s.check();
+    clock.advance(499);
+    expect(aborted).not.toHaveBeenCalled();
+    clock.advance(1);
+    expect(await pending).toMatchObject({ kind: 'inject' });
+    expect(aborted).toHaveBeenCalledOnce();
+  });
+
   it('keeps separate state for separate supervisor instances', async () => {
     const a = new LoopSupervisor(sessionId, config(), classifier(), new FakeClock());
     const b = new LoopSupervisor(asSessionId('01JOTHERSUPERVISOR0000000000'), config(), classifier(), new FakeClock());

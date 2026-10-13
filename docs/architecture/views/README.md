@@ -83,6 +83,11 @@ branch applies the result or refuses through `nearMissMessage`, which now takes 
 replies are unchanged). The **runtime view**'s file-tools paragraph says so. No package, edge, process, channel, command or
 store column changed.
 
+**The loop-classification call is capped at the activation budget (REQ-CONFIG-467, REQ-NOTIFY-100, REQ-NOTIFY-106; fin35).**
+`LoopSupervisor.classifyWithinBound` arms its timer at the smaller of `runtime.loop_classification_timeout` and
+`LOOP_ACTIVATION_BUDGET_MS` (2,000 ms), and the run host hands the classifier's model request the same figure; the runtime
+view's §3 says so. Pinned by `supervisor.test.ts` and `pnpm part-h-proof`'s `raw-count-long-bound` launch.
+
 **A delegated agent cut off at its per-agent timeout says so where its failure shows, and names the control (PD-CONFIG-003
 revision 3, REQ-MONITOR-040, REQ-MONITOR-044, REQ-MONITOR-052, REQ-MONITOR-069; OQ-234 ruled under R-072, fin33).**
 `AgentRecord` gains `timedOut` (`{ limitSeconds, makingProgress } | null`), which `toAgentRecord` derives from the stored

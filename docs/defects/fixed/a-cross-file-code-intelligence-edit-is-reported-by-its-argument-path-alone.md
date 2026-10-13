@@ -83,3 +83,11 @@ project, both files changed on disk, and `docs/across-b.md` and `src/across-a.ts
 `edited_files` and its child-report artifact's (61.6 s at a load of about 3 on four CPUs; red before, `[]`). Not shown: a
 rename through the built app, which needs the TypeScript language server provisioned (IC-7); a live run. PD-ORCH-004's
 report-back keeps fin32's literal reading beside its replacement; the row is in `docs/architecture/first-executions.md`.
+
+**Since, 2026-10-13 (fin42, N59):** the rename through the built app is shown by `pnpm code-intel-proof`'s tenth launch
+(`child-rename`, both files in the report and the artifact); the "Not shown" sentence above is kept as written, and its reason,
+"needs the TypeScript language server provisioned (IC-7)", did not hold — IC-7 was discharged on 2026-09-27 and the runtime
+provisions the server on first use (launch 4). The eleventh launch found the rename itself reaching the declaring file alone when
+nothing came before it in the server session, a separate defect:
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+([OQ-272](../../architecture/open-questions.md#oq-272)). A live run is still not shown.

@@ -30,6 +30,21 @@
  *                   replacement across the whole project (no path argument) → both files it changed on disk in the child's
  *                   stored report's `edited_files` and its child-report artifact's, observed by the run host around the
  *                   call; until the ruling such a call was listed by its argument path, here none. No language server.
+ *  10. child rename — (fin42, N59, OQ-245, PD-ORCH-004, REQ-ORCH-109, REQ-MCP-015) a delegated refactorer searches for the
+ *                   references of a TypeScript function declared in one file and called from another, then renames it through
+ *                   the EDIT tier's symbol rename (`rename_symbol`, reach `project`) → the call `ok`, both files renamed on
+ *                   disk, and exactly those two files in the child's stored report's `edited_files` and its child-report
+ *                   artifact's: launch 9's reach observation met through the TypeScript language server, which the runtime
+ *                   provisions on first use (launch 4).
+ *  11. child rename, cold — (fin42, N59, OQ-272) the same rename as the child's only call. The report must list exactly the files
+ *                   that changed on disk (OQ-245), and the rename must reach the calling file: RED until
+ *                   docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md
+ *                   is repaired — the pinned runtime renames the declaring file alone when the rename is its first cross-file request.
+ *  12. renamed tool — (fin42, N59; REQ-MCP-005, REQ-ORCH-109) the global configuration's own `tool_name_map` on the
+ *                   code-intelligence entry offers the cross-file replacement as `replace_across_project`; a delegated tester
+ *                   calls it by that name → both files changed on disk in the child's stored report and its child-report artifact.
+ *                   The shipped entry renames nothing, so only a doctored entry reaches fin38's repair
+ *                   (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
  *
  * Evidence under `.proof/code-intel-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
  */
@@ -56,7 +71,7 @@ if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === 
 const TOKEN = 'builtin:code-intelligence';
 // `--steps=1,2` runs a subset (the launches are long); `--keep` leaves the previous evidence and merges results.json.
 const stepsArg = process.argv.find((a) => a.startsWith('--steps='));
-const wanted = new Set((stepsArg ? stepsArg.slice('--steps='.length) : '1,2,3,4,5,6,7,8,9').split(',').map((s) => s.trim()));
+const wanted = new Set((stepsArg ? stepsArg.slice('--steps='.length) : '1,2,3,4,5,6,7,8,9,10,11,12').split(',').map((s) => s.trim()));
 const want = (n) => wanted.has(String(n));
 const keepOutput = process.argv.includes('--keep');
 
@@ -536,6 +551,125 @@ if (want(9)) {
   if (artifactFiles.length !== 1 || !want2.every((p) => artifactFiles[0].includes(p))) throw new Error(`child-across: the child-report artifact does not list both files: ${JSON.stringify(artifactFiles)} (REQ-LIBRARY-088)`);
   results.childAcross = { call: calls[0].status, child: children[0].canonical_name, persona: children[0].persona, state: children[0].state, reportEditedFiles: listed, artifactEditedFiles: artifactFiles[0], elapsedMs: r.elapsedMs };
   console.log(`[code-intel-proof] 9 child across: ${children[0].persona} ${children[0].state}, report edited_files ${JSON.stringify(listed)}, artifact ${JSON.stringify(artifactFiles[0])} (${r.elapsedMs} ms)`);
+}
+
+// ---- 10 and 11. a child's symbol rename lists every file it changed ------------------------------------------------
+// fin42 (N59; OQ-245, XE1; PD-ORCH-004, REQ-ORCH-109): launch 9 measured the reach observation for the cross-file replacement,
+// which needs no language server; the symbol rename (`renameSymbol`, reach `project`) is the other reach-scoped EDIT tool and
+// had never run in the built app. Its result names a count of changes and no file, so the files it changed can be known only by
+// the run host's look before and after. A delegated refactorer renames a function declared in one TypeScript file and imported
+// and called by another; then the call row, both files on disk, and the child's stored report and child-report artifact, which
+// must list exactly the files that changed. The TypeScript language server is the runtime's, provisioned on first use (launch 4;
+// IC-7 discharged 2026-09-27), so these launches wait for the run's result rather than for a clock: a cold provisioning takes
+// minutes.
+//
+// Launch 10 searches for the symbol's references first, as a model looking before it renames does; launch 11 renames with nothing
+// before it. The first launch of this pair as built was launch 11's shape, and its rename changed the declaring file alone while
+// saying "Successfully renamed … (1 changes applied)": the pinned runtime waits for the language server's project loading before
+// a references request and not before a rename
+// (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-272). Launch 11
+// keeps the assertion the product should meet and is red until that note is repaired; it records what it read before it fails.
+async function childRename({ name, symbol, renamed, files, childScript }) {
+  const [declaringRel, callingRel] = files;
+  const declaring = join(workspace, declaringRel);
+  const calling = join(workspace, callingRel);
+  const module = `./${declaringRel.replace(/^src\//, '').replace(/\.ts$/, '')}`;
+  writeFileSync(join(workspace, 'tsconfig.json'), `${JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'ES2022', moduleResolution: 'bundler', strict: true, noEmit: true }, include: ['src/**/*.ts'] }, null, 2)}\n`);
+  writeFileSync(declaring, `export function ${symbol}(items: readonly string[]): number {\n  return items.length;\n}\n\nexport const none = ${symbol}([]);\n`);
+  writeFileSync(calling, `import { ${symbol} } from '${module}';\n\nexport function report(items: readonly string[]): string {\n  return \`\${${symbol}(items)} item(s)\`;\n}\n`);
+  const srcFiles = () => readdirSync(join(workspace, 'src')).filter((f) => !f.startsWith('.'));
+  const before = Object.fromEntries(srcFiles().map((f) => [f, readFileSync(join(workspace, 'src', f), 'utf8')]));
+  const delegating = WORKSPACE.replace('rotaris:\n  delegation_strategy: single\n', '');
+  if (delegating === WORKSPACE) throw new Error(`${name}: the workspace configuration could not be made delegating`);
+  const r = await launch(name, {
+    ROTARIS_CAPTURE_PROMPT: `delegate one refactorer that renames ${symbol} to ${renamed}`, ROTARIS_INTENT_SCRIPT: 'moderate_feature',
+    ROTARIS_SCRIPT: 'delegate:refactorer:rename-a-symbol-across-files,wait:20000,answer',
+    ROTARIS_CHILD_SCRIPT: childScript,
+    ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ find_referencing_symbols: { name_path: symbol, relative_path: declaringRel }, rename_symbol: { name_path: symbol, relative_path: declaringRel, new_name: renamed } }),
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '360000', ROTARIS_CAPTURE_AFTER_MS: '3000',
+  }, { workspaceConfig: delegating, timeout: 480_000 });
+  const { db, session: s } = sessionFrom(r);
+  const calls = toolRows(db, s.session_id, 'rename_symbol');
+  const searches = toolRows(db, s.session_id, 'find_referencing_symbols');
+  const children = db.prepare('SELECT canonical_name, persona, state, report FROM children WHERE session_id = ?').all(s.session_id);
+  const artifacts = db.prepare("SELECT edited_files FROM artifacts WHERE session_id = ? AND kind = 'child_report'").all(s.session_id);
+  db.close();
+  const resultText = String(calls[0]?.entry?.result ?? calls[0]?.entry?.error ?? '');
+  if (calls.length !== 1 || calls[0].status !== 'ok') throw new Error(`${name}: the rename did not succeed: ${JSON.stringify(calls).slice(0, 800)}\n${lines(r.log, /code_intelligence|scripted:|npm|language server|Language server/i).slice(-12).join('\n')}`);
+  if (children.length !== 1) throw new Error(`${name}: expected one child, found ${children.length}: ${JSON.stringify(children)}`);
+  // What changed on disk under src/, read against the bytes written above: the files the run host could have observed.
+  const changedOnDisk = srcFiles().filter((f) => before[f] !== readFileSync(join(workspace, 'src', f), 'utf8')).map((f) => `src/${f}`).sort();
+  const report = JSON.parse(children[0].report ?? 'null');
+  const listed = Array.isArray(report?.edited_files) ? [...report.edited_files].sort() : [];
+  const artifactFiles = artifacts.map((a) => JSON.parse(a.edited_files ?? '[]').map((f) => (typeof f === 'string' ? f : f?.path)).sort());
+  const fetched = lines(r.log, /Running command 'npm install|Installing\.\.\./).map((l) => l.replace(/^.*? - /, '').slice(0, 200));
+  const reading = { call: calls[0].status, result: resultText.slice(0, 300), searchedFirst: searches.length > 0 && searches[0].ordinal < calls[0].ordinal, child: children[0].canonical_name, persona: children[0].persona, state: children[0].state, changedOnDisk, reportEditedFiles: listed, artifactEditedFiles: artifactFiles[0] ?? null, elapsedMs: r.elapsedMs, languageServerProvisioned: fetched };
+  console.log(`[code-intel-proof] ${name}: ${children[0].persona} ${children[0].state}, ${reading.searchedFirst ? 'references searched first' : 'nothing before the rename'}, the call said ${JSON.stringify(resultText.slice(0, 80))}, changed on disk ${JSON.stringify(changedOnDisk)}, report edited_files ${JSON.stringify(listed)}, artifact ${JSON.stringify(artifactFiles[0])} (${r.elapsedMs} ms; ${fetched.length} provisioning line(s))`);
+  // OQ-245: the report and the artifact list exactly what the call changed on disk, and only files — whatever it changed.
+  if (JSON.stringify(listed) !== JSON.stringify(changedOnDisk)) throw new Error(`${name}: the child's report lists ${JSON.stringify(listed)}, not exactly the files the rename changed on disk ${JSON.stringify(changedOnDisk)} (OQ-245, PD-ORCH-004, REQ-ORCH-109, REQ-ORCH-108)`);
+  if (artifactFiles.length !== 1 || JSON.stringify(artifactFiles[0]) !== JSON.stringify(changedOnDisk)) throw new Error(`${name}: the child-report artifact lists ${JSON.stringify(artifactFiles)}, not exactly ${JSON.stringify(changedOnDisk)} (REQ-LIBRARY-088)`);
+  // REQ-MCP-015: a rename of the symbol reaches the file that imports and calls it, and leaves the old name nowhere.
+  const declared = readFileSync(declaring, 'utf8');
+  const called = readFileSync(calling, 'utf8');
+  const both = [declaringRel, callingRel].sort();
+  const reached = new RegExp(`function ${renamed}\\(`).test(declared) && !declared.includes(symbol) && new RegExp(`import \\{ ${renamed} \\}`).test(called) && !called.includes(symbol);
+  return { reading: { ...reading, reachedBoth: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) }, failure: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) ? null : `${name}: the rename of ${symbol} changed ${JSON.stringify(changedOnDisk)}, not both ${JSON.stringify(both)} — ${callingRel} still reads ${JSON.stringify(called)} (the call said ${JSON.stringify(resultText.slice(0, 200))}; REQ-MCP-015; docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-272)` };
+}
+if (want(10)) {
+  const { reading, failure } = await childRename({ name: 'child-rename', symbol: 'countItems', renamed: 'tallyItems', files: ['src/rename-a.ts', 'src/rename-b.ts'], childScript: 'mcp:code_intelligence.find_referencing_symbols,mcp:code_intelligence.rename_symbol,answer' });
+  results.childRename = reading;
+  if (!reading.searchedFirst) throw new Error(`child-rename: the child's referencing-symbol search did not run before its rename: ${JSON.stringify(reading)}`);
+  if (failure !== null) throw new Error(failure);
+}
+if (want(11)) {
+  const { reading, failure } = await childRename({ name: 'child-rename-cold', symbol: 'sumItems', renamed: 'totalItems', files: ['src/cold-a.ts', 'src/cold-b.ts'], childScript: 'mcp:code_intelligence.rename_symbol,answer' });
+  results.childRenameCold = reading;
+  if (failure !== null) {
+    writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
+    throw new Error(failure);
+  }
+}
+
+// ---- 12. an EDIT tool renamed by the entry's tool_name_map is still read as a write --------------------------------
+// fin42 (N59; REQ-MCP-005, REQ-ORCH-109): fin38 carried a granted callable's reported name to the engine, so a code-intelligence
+// EDIT tool a `tool_name_map` renames is read as the write it is; it was pinned by unit tests alone, since the shipped entry renames
+// nothing and no live run can reach it (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
+// Here the global configuration renames the cross-file replacement, a delegated tester calls it by the new name across the whole
+// project, and its stored report and child-report artifact must list both files it changed. No language server.
+if (want(12)) {
+  const RENAMED = 'replace_across_project';
+  const first = join(workspace, 'src', 'mapped-c.ts');
+  const second = join(workspace, 'docs', 'mapped-d.md');
+  mkdirSync(join(workspace, 'docs'), { recursive: true });
+  writeFileSync(first, "export const label = 'mappedToken';\n");
+  writeFileSync(second, '# mappedToken\n');
+  const delegating = WORKSPACE.replace('rotaris:\n  delegation_strategy: single\n', '');
+  if (delegating === WORKSPACE) throw new Error('child-renamed-tool: the workspace configuration could not be made delegating');
+  const mapped = `${GLOBAL}mcp_servers:\n  code_intelligence:\n    tool_name_map: { replace_in_files: ${RENAMED} }\n`;
+  const r = await launch('child-renamed-tool', {
+    ROTARIS_CAPTURE_PROMPT: 'delegate one tester that replaces a token across the project through a renamed tool', ROTARIS_INTENT_SCRIPT: 'moderate_feature',
+    ROTARIS_SCRIPT: 'delegate:tester:replace-through-a-renamed-tool,wait:20000,answer',
+    ROTARIS_CHILD_SCRIPT: `mcp:code_intelligence.${RENAMED},answer`,
+    ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ [RENAMED]: { needle: 'mappedToken', repl: 'remappedToken', mode: 'literal' } }),
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '240000', ROTARIS_CAPTURE_AFTER_MS: '3000',
+  }, { global: mapped, workspaceConfig: delegating, timeout: 330_000 });
+  const { db, session: s } = sessionFrom(r);
+  const calls = [...toolRows(db, s.session_id, RENAMED), ...toolRows(db, s.session_id, 'replace_in_files')];
+  const children = db.prepare('SELECT canonical_name, persona, state, report, granted_mcp FROM children WHERE session_id = ?').all(s.session_id);
+  const artifacts = db.prepare("SELECT edited_files FROM artifacts WHERE session_id = ? AND kind = 'child_report'").all(s.session_id);
+  db.close();
+  if (calls.length !== 1 || calls[0].status !== 'ok') throw new Error(`child-renamed-tool: the renamed replacement did not succeed: ${JSON.stringify(calls).slice(0, 800)}\n${lines(r.log, /code_intelligence|scripted:|tool_name_map/).slice(-10).join('\n')}`);
+  for (const f of [first, second]) if (!readFileSync(f, 'utf8').includes('remappedToken')) throw new Error(`child-renamed-tool: ${f} was not changed on disk`);
+  if (children.length !== 1) throw new Error(`child-renamed-tool: expected one child, found ${children.length}: ${JSON.stringify(children.map((c) => c.canonical_name))}`);
+  const granted = JSON.parse(children[0].granted_mcp ?? 'null');
+  const report = JSON.parse(children[0].report ?? 'null');
+  const want12 = ['docs/mapped-d.md', 'src/mapped-c.ts'];
+  const listed = Array.isArray(report?.edited_files) ? [...report.edited_files].sort() : [];
+  if (JSON.stringify(listed) !== JSON.stringify(want12)) throw new Error(`child-renamed-tool: the child's report lists ${JSON.stringify(listed)}, not exactly the two files the renamed tool changed ${JSON.stringify(want12)} (REQ-MCP-005, REQ-ORCH-109); evidence ${JSON.stringify(granted?.renamed ?? null)}`);
+  const artifactFiles = artifacts.map((a) => JSON.parse(a.edited_files ?? '[]').map((f) => (typeof f === 'string' ? f : f?.path)).sort());
+  if (artifactFiles.length !== 1 || JSON.stringify(artifactFiles[0]) !== JSON.stringify(want12)) throw new Error(`child-renamed-tool: the child-report artifact lists ${JSON.stringify(artifactFiles)}, not exactly ${JSON.stringify(want12)} (REQ-LIBRARY-088)`);
+  results.childRenamedTool = { callable: RENAMED, rowName: calls[0].entry?.tool_name ?? null, call: calls[0].status, child: children[0].canonical_name, persona: children[0].persona, state: children[0].state, renamedEvidence: granted?.renamed ?? null, reportEditedFiles: listed, artifactEditedFiles: artifactFiles[0], elapsedMs: r.elapsedMs };
+  console.log(`[code-intel-proof] 12 renamed tool: ${children[0].persona} ${children[0].state} called ${RENAMED}, evidence ${JSON.stringify(granted?.renamed ?? null)}, report edited_files ${JSON.stringify(listed)}, artifact ${JSON.stringify(artifactFiles[0])} (${r.elapsedMs} ms)`);
 }
 
 // ---- 7. self-containment (packaged only) ---------------------------------------------------------------------------

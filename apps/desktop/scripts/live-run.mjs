@@ -121,6 +121,15 @@
  *                 asked to delegate a child, hand its report artifact to a second through `attach_artifacts`, and follow the
  *                 first up by `session_id`; that session reopened, its latest artifact edited and saved in the Library's
  *                 inspector, and continued, whose handoff must carry the edit; and a `rotaris.delegation_strategy: swarm` run.
+ *   8g. rename   — OPT-IN (`--only=rename`), a few minutes: one coding-agent child delegated to rename the fixture's `remaining`
+ *                 to `countRemaining` with the code-intelligence EDIT tier's symbol rename (`rename_symbol`), then run `node --test`.
+ *                 Asserted from the store and the files (`lib/rename-reading.mjs`): the rename row `ok`; `src/todos.js`,
+ *                 `src/App.jsx` and `src/todos.test.js` no longer call or import `remaining`; the renaming child's stored report
+ *                 and its child-report artifact list every one of the three that changed (OQ-245's reach observation,
+ *                 PD-ORCH-004, REQ-ORCH-109); `node --test` green. No rename call is a NOTE, "not reached" — a live model may
+ *                 choose another tool. Whether the child searched for references first, and whether a cold rename left the
+ *                 importing files behind or had them mended by hand, is named beside OQ-272
+ *                 (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -198,6 +207,7 @@ import { runCutScenario } from './lib/cut-scenario.mjs';
 import { runCrlfScenario } from './lib/crlf-scenario.mjs';
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
 import { passOutcome, postRunVerdict, retrospectiveInstructionFiles, settledAfterMs, settledWait } from './lib/analysis-reading.mjs';
+import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/rename-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
 import { ARTIFACTS_TAB } from './lib/library-refresh.mjs';
 import { attachReading, delegatesToReading, followUpReading, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
@@ -314,7 +324,7 @@ const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions',
  * that trebles its wall clock does not belong in it by default, and a scenario nobody can leave out is a
  * scenario people stop running. Naming it is the consent.
  */
-const OPT_IN = ['duress', 'cutoff'];
+const OPT_IN = ['duress', 'cutoff', 'rename'];
 const SCENARIOS = [...OPTIONAL, ...OPT_IN];
 const only = value('only', null);
 const wanted = only === null ? OPTIONAL : only.split(',').map((s) => s.trim()).filter((s) => s !== '');
@@ -2923,6 +2933,87 @@ if (wanted.includes('delegation')) {
   if (swarm.kind === 'coordinating') noted('what the swarm coordinator delegated', `${swarmChildren} admitted delegation(s); how widely it divided the work is the model's, and is recorded rather than asserted`);
   results.scenarios['delegation-swarm'] = { status: swarmRead?.session.execution_status, kind: swarm.kind, offered: swarm.offered, delegations: swarmChildren };
   if (swarmRead) preserveRun('delegation-swarm', swarmRead.session.session_id);
+  await budgetGate();
+}
+
+// ── 8g. A symbol rename through the code-intelligence EDIT tier ─────────────────────────────────────────────
+/**
+ * OPT-IN (`--only=rename`), a few minutes (fin42, N59): the first live run of a cross-file code-intelligence EDIT call that
+ * needs a language server. OQ-245's ruling — the run host observes a reach-scoped EDIT call before and after it, so a child's
+ * report lists every file the call changed — was measured in the built app for the cross-file replacement (`code-intel-proof`
+ * launch 9) and the rename (launches 10 and 11), never live; the default and duress runs at 552d346 made no EDIT-tier call at all.
+ *
+ * The fixture's `remaining` is declared in `src/todos.js` and imported and called by `src/App.jsx` and `src/todos.test.js`. One
+ * coding-agent child is asked to rename it with `rename_symbol` and then run the suite. Asserted from the store and the files
+ * (`lib/rename-reading.mjs`), never from the model's prose: the first rename row `ok`; none of the three files still calls or
+ * imports `remaining`; the renaming child's stored report and its child-report artifact list every one of the three that now
+ * carries `countRemaining`; `node --test` green, run here. `summary.md` (REQ-SESSION-140) has no edited-files section, so whether
+ * the session's summary names the files is a NOTE. A run with no `rename_symbol` call is a NOTE, "not reached": a live model may
+ * choose another tool, and the questions above are then unasked. Whether the child searched for the symbol's references before its
+ * first rename is recorded beside the reading: a rename with nothing before it renames the declaring file alone in the pinned
+ * runtime (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-272),
+ * so a cold rename whose importing files were left behind, or mended by another tool afterwards, is named as that defect.
+ *
+ * It renames a symbol every later scenario's prompts may read, so it runs after the default set and the workspace's three files
+ * are restored afterwards.
+ */
+if (wanted.includes('rename')) {
+  const before = Object.fromEntries(RENAME_FILES.map((f) => [f, readFileSync(join(workspace, f), 'utf8')]));
+  let renameRecord = { notReached: true };
+  try {
+    const log = await launch('rename', {
+      ROTARIS_CAPTURE_PROMPT: [
+        `Rename the function \`${RENAME_FROM}\` declared in src/todos.js to \`${RENAME_TO}\`, everywhere it is used. Delegate exactly one`,
+        'coding-agent child for it and do no work yourself. Tell the child to make the rename with ONE call of the code_intelligence',
+        `server's rename_symbol tool (name_path "${RENAME_FROM}", relative_path "src/todos.js", new_name "${RENAME_TO}"), then to run`,
+        '`node --test` in the terminal and report whether it passed and which files it changed. Delegate nothing else, and answer with',
+        'one sentence as soon as the child has reported.',
+      ].join('\n'),
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
+    }, RUN_WAIT_MS + 90_000);
+    check(!/capture: wait for result timed out/.test(log), 'rename: the run reached its result inside the wait');
+    const read = readSession();
+    checkPricing('rename', read?.session);
+    if (read === null) check(false, 'rename: the run left a session row', 'no session was recorded');
+    else {
+      const sessionId = read.session.session_id;
+      preserveRun('rename', sessionId);
+      const Database = require('better-sqlite3');
+      const db = new Database(oneDatabase(), { readonly: true });
+      let children; let artifacts;
+      try {
+        children = db.prepare('SELECT canonical_name, persona, state, report FROM children WHERE session_id = ? ORDER BY spawned_at').all(sessionId);
+        artifacts = db.prepare("SELECT edited_files FROM artifacts WHERE session_id = ? AND kind = 'child_report'").all(sessionId);
+      } finally { db.close(); }
+      const files = Object.fromEntries(RENAME_FILES.map((f) => [f, existsSync(join(workspace, f)) ? readFileSync(join(workspace, f), 'utf8') : null]));
+      mkdirSync(join(scenarioDir('rename'), 'changed'), { recursive: true });
+      for (const f of RENAME_FILES) if (files[f] !== null) writeFileSync(join(scenarioDir('rename'), 'changed', basename(f)), files[f]);
+      writeFileSync(join(scenarioDir('rename'), 'diff.txt'), `${git('diff', '--', ...RENAME_FILES)}\n`);
+      const calls = readToolCalls(sessionId);
+      const r = renameReading({ calls, files, children, artifacts });
+      const suiteRun = spawnSync(process.execPath, ['--test'], { cwd: workspace, encoding: 'utf8', timeout: 120_000 });
+      writeFileSync(join(scenarioDir('rename'), 'node-test.log'), `${suiteRun.stdout ?? ''}\n${suiteRun.stderr ?? ''}`);
+      renameRecord = { sessionId, status: read.session.execution_status, children: children.map((c) => `${c.canonical_name} (${c.persona}) ${c.state}`), ...r, suiteExit: suiteRun.status };
+      if (!r.reached) {
+        noted('rename: no agent called rename_symbol, so the rename was NOT REACHED', `tools used: ${[...new Set(calls.map((c) => c.tool_name))].join(', ') || 'none'}; files still naming ${RENAME_FROM}: ${r.leftBehind.join(', ') || 'none'} — OQ-245's rename and OQ-272 are unasked in this run`);
+      } else {
+        check(r.first.status === 'ok', 'rename: the first rename_symbol call is ok', `${r.agent}: ${r.first.status} — ${JSON.stringify(r.first.result)}`);
+        noted(`rename: ${r.agent} ${r.searchedFirst ? 'searched for the symbol\'s references before its first rename' : 'renamed with no reference search before it (a cold rename, OQ-272)'}`, `${r.renames} rename call(s); the first said ${JSON.stringify(r.first.result)}`);
+        if (r.oq272) noted('rename: the cold rename did not reach the importing files on its own (OQ-272)', `left behind: ${r.leftBehind.join(', ') || 'none'}; written by another tool after it: ${r.mendedAfter.join(', ') || 'none'} — docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md`);
+        check(r.leftBehind.length === 0 && r.carrying.length === RENAME_FILES.length, `rename: ${RENAME_FILES.join(', ')} call and import ${RENAME_TO} and no longer ${RENAME_FROM} (REQ-MCP-015)`, `carrying ${r.carrying.join(', ') || 'none'}; still naming ${RENAME_FROM}: ${r.leftBehind.join(', ') || 'none'}${r.cold ? ' (cold rename, OQ-272)' : ''}`);
+        check(r.reportFiles !== null && r.reportMissing.length === 0, 'rename: the renaming child\'s stored report lists every file the rename changed (OQ-245, PD-ORCH-004, REQ-ORCH-109)', `edited_files ${JSON.stringify(r.reportFiles)}; missing ${JSON.stringify(r.reportMissing)}`);
+        check(r.artifactMissing.length === 0, 'rename: the child-report artifact lists every file the rename changed (REQ-LIBRARY-088)', `${JSON.stringify(r.artifactFiles)}; missing ${JSON.stringify(r.artifactMissing)}`);
+        check(suiteRun.status === 0, 'rename: node --test is green in the workspace afterwards', `exit ${suiteRun.status ?? suiteRun.signal}`);
+        const summaryFile = join(scenarioDir('rename'), 'summary.md');
+        const summary = existsSync(summaryFile) ? readFileSync(summaryFile, 'utf8') : '';
+        const unnamed = r.carrying.filter((f) => !summary.includes(f));
+        noted('rename: whether the session\'s summary.md names the files (REQ-SESSION-140 has no edited-files section, so this is the model\'s prose)', unnamed.length === 0 ? `all of ${r.carrying.join(', ')}` : `not named: ${unnamed.join(', ')}`);
+      }
+    }
+  } finally {
+    for (const [f, text] of Object.entries(before)) writeFileSync(join(workspace, f), text);
+  }
+  results.scenarios.rename = renameRecord;
   await budgetGate();
 }
 

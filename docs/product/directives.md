@@ -4843,6 +4843,15 @@ Revision 2 logged as [R-072](requests.md#r-072) (OQ-227), ruled by the consortiu
 advocates' recommendation followed: the system-lens advocate's wording, with "small", and glossary step; the user-lens
 advocate's first execution against the registered self-hosted endpoint.
 
+> **First execution of revision 2, 2026-10-13, built in plan fin34:** the clause is in the classifier's system prompt and
+> reaches all three rungs. **What was measured.** `intent.test.ts`'s OQ-227 case drives the ladder down json_schema,
+> json_object and text with the flag-and-test prompt and finds the sentence in every rung's system prompt, red before the
+> change; the rest of the classifier's cases and `live-answers.test.ts` stay green. **What was not measured.** Whether the
+> live model now answers a build category for that prompt: the first live `pnpm slice-proof` against the registered
+> self-hosted default (R-068) is the orchestrator's to run — an agent's live-run launch is refused — and should show intents-3
+> in the build groups and intents-2 in the micro group, with the one retry still absorbing a single sampled miss. Recorded in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-orch-012"></a>

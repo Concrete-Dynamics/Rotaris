@@ -11629,6 +11629,13 @@ B's glossary step. On the first execution it followed A: R-068's standing author
 default. The cost both name stays: a small change requested with its test now runs delegated and slower, and same-file test
 languages depend on the request saying so.
 
+*Built 2026-10-13 (fin34, `fin34-library-and-intent`); its first execution is reported in PD-ORCH-011's entry.* One sentence
+in `CLASSIFIER_SYSTEM_PROMPT`, pinned on all three rungs by `intent.test.ts` (red before); `live-answers.mjs`'s `why` and
+`intentOutcome` comment cite the revision; `packages/engine/CONTEXT.md`'s micro group names the meaning. Note moved:
+[`the-intent-classifiers-rungs-give-single-file-change-different-meanings.md`](../defects/fixed/the-intent-classifiers-rungs-give-single-file-change-different-meanings.md).
+**Not yet measured:** the live first execution (`pnpm slice-proof` against the registered self-hosted default), which the
+orchestrator runs under R-068; it should show the flag prompt (3b) in the build groups and the README append in the micro group.
+
 <a id="oq-232"></a>
 
 **OQ-232 — When the loop classifier is cut on a raw-count trigger, are four consecutive calls of one tool evidence of a loop

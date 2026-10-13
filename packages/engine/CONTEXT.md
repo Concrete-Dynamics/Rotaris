@@ -174,7 +174,10 @@ _Avoid_: mode, task type
 
 **Intent group**:
 A named set intents resolve through when no concrete row matches — answer, clarify, micro, fix,
-small-build, medium-build, large-build. — `REQ-ORCH-021`
+small-build, medium-build, large-build. The **micro** group holds the two smallest edits: `explicit_trivial`, an explicitly
+stated trivial edit, and `single_file_change`, a small edit confined to one file, as the request states or implies — a
+change requested with a test of it, or one naming several files, is outside it unless the request places all of it in one
+file. — `REQ-ORCH-021`, `PD-ORCH-011`
 
 **Playbook**:
 The per-intent behaviour matrix whose row is chosen by role, intent and model tier. The **cell**

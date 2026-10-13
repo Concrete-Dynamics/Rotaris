@@ -44,7 +44,9 @@ export const INTENTS = [
     why: 'a feature and its test: REQ-ORCH-021\'s small-, medium- and large-build groups, the size being the model\'s call since '
       + 'it sees no repository (REQ-ORCH-008); among them the tie-break prefers `moderate_feature`. Out of reach: '
       + '`architectural` and `whole_project` (one flag is neither the architecture nor the whole project), the micro group '
-      + '(a flag and its test are more than one file\'s edit), the answer and fix groups, and the clarify group.',
+      + '(PD-ORCH-011 revision 2: `single_file_change` is a small edit confined to one file, and a change requested with a '
+      + 'test of it is outside it unless the request places all of it in one file), the answer and fix groups, and the '
+      + 'clarify group.',
   },
 ];
 
@@ -78,8 +80,11 @@ export function intentVerdict(log, intent) {
  * finacc3 A2-03 (`docs/defects/fixed/slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md`): r1 classified the
  * flag prompt `single_file_change (0.82)` and the lone re-run within the set at 0.95. One answer outside the set is the
  * sampled model's call, as one answerless run is (PD-ORCH-009): the prompt is asked once more, and a second answer outside
- * the set is the red, naming both. REQ-ORCH-006 gives `single_file_change` no meaning the classifier could be held to
- * (OQ-227 asks whether it should). A fallback (REQ-ORCH-007) and a missing intent line are the product's and stay reds at once.
+ * the set is the red, naming both. Since PD-ORCH-011 revision 2 (OQ-227, ruled 2026-10-13 under R-072) the classifier is
+ * told on every rung that `single_file_change` is a small edit confined to one file and that a change requested with its
+ * test is outside it; a model may still miss, and the one retry still absorbs a single sampled miss. Until then
+ * REQ-ORCH-006 gave the category no meaning the classifier could be held to. A fallback (REQ-ORCH-007) and a missing intent
+ * line are the product's and stay reds at once.
  */
 export function intentOutcome(verdicts, intent) {
   const last = verdicts[verdicts.length - 1];

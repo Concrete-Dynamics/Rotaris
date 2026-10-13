@@ -95,6 +95,18 @@ describe('REQ-ORCH-005..013 the classifier', () => {
     expect(new RungMemory({ small: 'json_object' }).ladder('small')).toEqual(['json_object', 'text']);
     expect(isRungRejection(modelError({ code: 'http', status: 500, headline: 'schema' }))).toBe(false);
   });
+  it('PD-ORCH-011 revision 2 (OQ-227): every rung is told what `single_file_change` means, not only the json_object rung\'s example', async () => {
+    // finacc3 A2-03: "Add a --json flag … with a unit test for it." classified single_file_change (0.82) on the json_schema
+    // rung, which carried no meaning for the category; only rung 2's example ("one file, one edit") hinted at one.
+    const MEANING = 'single_file_change means a small edit confined to one file, as the request states or implies; a change requested together with a test of it, or one naming several files to change, is outside it unless the request places all of it in one file.';
+    const { b, inputs } = backend((input) => (input.output?.kind === 'json_schema' ? fail(400, 'response_format json_schema is not supported') : input.output?.kind === 'json_object' ? fail(400, 'json mode not supported') : ok('small_feature\na flag and its test')));
+    const r = await classifyIntent({ prompt: 'Add a --json flag to the CLI that prints the effective configuration as JSON, with a unit test for it.', metadata: {} }, SLOTS, deps(b, new FakeClock(), new RungMemory()), new AbortController().signal);
+    expect(r.category).toBe('small_feature');
+    expect(inputs.map((i) => i.output?.kind ?? 'text')).toEqual(['json_schema', 'json_object', 'text']);
+    for (const input of inputs) expect(input.systemPrompt, input.output?.kind ?? 'text').toContain(MEANING);
+    // Revision 1's sentence stands beside it: the two smallest edits, and the tie-break among the plausible.
+    expect(inputs[0]!.systemPrompt).toContain('explicit_trivial and single_file_change are the two smallest edits');
+  });
   it('REQ-ORCH-010: a rung the adapter could not send descends exactly like a provider refusal', async () => {
     // What OpenRouter produced on 2026-09-16 (session 6696f6ed): no refusal came back, because the SDK
     // had replaced the schema with bare json_object before the request left. The adapter now reports it.

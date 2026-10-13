@@ -22,3 +22,14 @@ Recorded 2026-10-13 from the R-072 consortium's ruling on OQ-227, whose two advo
 
 - `packages/engine/src/intent/classifier.ts` — `CLASSIFIER_SYSTEM_PROMPT` and the rung instructions.
 - `apps/desktop/scripts/lib/live-answers.mjs` — `INTENTS[2].why` and `intentOutcome`'s comment.
+
+## Outcome
+
+Repaired 2026-10-13 (plan fin34) under `PD-ORCH-011` revision 2, the ruling of
+[OQ-227](../../architecture/open-questions.md) under [R-072](../../product/requests.md#r-072): `CLASSIFIER_SYSTEM_PROMPT`,
+which every rung sends, carries "single_file_change means a small edit confined to one file, as the request states or
+implies; a change requested together with a test of it, or one naming several files to change, is outside it unless the
+request places all of it in one file." The json_object rung's example agrees and is kept. `live-answers.mjs` cites the
+revision for the micro group's exclusion; its accepted sets and single retry are unchanged. Pinned by
+`packages/engine/src/intent/intent.test.ts`'s OQ-227 case, which asserts the sentence on the json_schema, json_object and
+text rungs and was red before. Not measured: a live `pnpm slice-proof`, the orchestrator's to run.

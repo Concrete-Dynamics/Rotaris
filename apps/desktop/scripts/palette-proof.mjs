@@ -337,7 +337,8 @@ const s5 = scenario('minimum');
 //    REQ-SHELL-049: Ctrl+F switches to Workspace and opens the transcript search panel, with the caret in its field —
 //    pressed here on Mission, where the pane is not mounted and its old private listener could not hear it.
 //    REQ-CHAT-167: the palette's "Toggle reasoning bodies" writes `display/showReasoning` to the preference store and
-//    reports the new state; activating it a second time turns it back off and says so.
+//    reports the new state. One activation is driven here (off to on); the way back (on to off, "Reasoning bodies
+//    hidden") is pinned by `packages/ui/src/commands/search-and-reasoning.test.ts`, not by this stage.
 const s6 = scenario('search-and-reasoning');
 {
   const r = await launch('search-and-reasoning', s6, {

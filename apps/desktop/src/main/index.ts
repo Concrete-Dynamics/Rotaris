@@ -1696,6 +1696,7 @@ async function main(): Promise<void> {
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
     enqueueImprovement: (job) => improvementCoordinator.enqueue(job),
     retrospectivePending: (workspaceId) => improvementCoordinator.retrospectivePending(workspaceId),
+    improvementActivity: () => improvementCoordinator.current(),
     chooseSave, chooseExportPath, chooseDirectory, chooseSkillFile,
     openHookReview, restoreFlow, checkpointOp, quitting, authFallback,
     withdrawnByClose: (sessionId) => quit.withdrawnByClose(sessionId),

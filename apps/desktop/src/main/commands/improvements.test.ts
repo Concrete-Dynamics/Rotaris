@@ -75,3 +75,37 @@ describe('improvements.retrospective — refused only while a retrospective is p
     expect(r.notices).toEqual([{ severity: 'info', title: RETROSPECTIVE_PENDING_REASON }]);
   });
 });
+
+/**
+ * PD-LIBRARY-002 revision 2, clause (e) (OQ-236), fin38's review: a main window reads the activity as it mounts, after it has
+ * subscribed. The push main sends a window that has just opened a workspace can reach a renderer that has not subscribed yet
+ * (the window has loaded, but its root subscribes only after its boot's own reads and first render), and is then lost
+ * (docs/defects/fixed/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
+ */
+describe('improvements.activity — the activity as it stands, for the asking window\'s own workspace (PD-LIBRARY-002 revision 2 (e))', () => {
+  const activity = { workspace_id: 'ws-2', active: true, queued: 1, source_session_id: null, pass: 'retrospective' as const, retrospective_pending: false };
+  const facetFor = (pending: (workspaceId: string) => boolean) => improvementsCommands({
+    retrospectivePending: pending,
+    improvementActivity: () => activity,
+  } as unknown as Parameters<typeof improvementsCommands>[0]);
+
+  it('answers once the window\'s workspace is open, its retrospective_pending that workspace\'s, not the activity\'s', async () => {
+    const facet = facetFor((workspaceId) => workspaceId === 'ws-1');
+    const state = { workspaceId: undefined as string | undefined, workspace: '/work/project' };
+    let open!: () => void;
+    const opened = new Promise<void>((resolve) => { open = () => { state.workspaceId = 'ws-1'; resolve(); }; });
+    const at: CommandAt = { w: state as unknown as MainWindowState, senderId: 1, awaitWorkspace: () => opened };
+    const out = facet['improvements.activity']({ kind: 'improvements.activity' }, at);
+    open();
+    expect(await out).toEqual({ ok: true, value: { ...activity, retrospective_pending: true } });
+    // Another workspace's window is told none is pending, whatever the activity's own workspace holds.
+    const other: CommandAt = { w: { workspaceId: 'ws-9', workspace: '/work/other' } as MainWindowState, senderId: 2, awaitWorkspace: async () => undefined };
+    expect(await facet['improvements.activity']({ kind: 'improvements.activity' }, other)).toEqual({ ok: true, value: { ...activity, retrospective_pending: false } });
+  });
+
+  it('tells a window holding no workspace that none is pending', async () => {
+    const facet = facetFor(() => true);
+    const at: CommandAt = { w: { workspaceId: undefined, workspace: '(no workspace)' } as unknown as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
+    expect(await facet['improvements.activity']({ kind: 'improvements.activity' }, at)).toEqual({ ok: true, value: { ...activity, retrospective_pending: false } });
+  });
+});

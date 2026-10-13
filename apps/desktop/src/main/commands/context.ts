@@ -6,6 +6,7 @@ import type {
   CommandOutcome,
   CommandRequest,
   HooksSummary,
+  ImprovementActivity,
   ImprovementAnalysisJob,
   NoticeAction,
   NoticeSeverity,
@@ -165,6 +166,11 @@ export interface CommandContext {
    * the one state in which a further retrospective gesture is refused rather than queued.
    */
   readonly retrospectivePending: (workspaceId: string) => boolean;
+  /**
+   * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): the improvement coordinator's activity as it stands
+   * (`ImprovementCoordinator.current()`), with which `improvements.activity` answers a mounting window.
+   */
+  readonly improvementActivity: () => ImprovementActivity;
 
   // The native choosers, each of which a capture script may answer instead (verification only).
   readonly chooseSave: (parent: BrowserWindow, opts: Electron.SaveDialogOptions) => Promise<string | null>;

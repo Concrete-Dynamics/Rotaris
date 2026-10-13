@@ -53,7 +53,9 @@ view**'s timed-out-tag passage says so. Nothing else moved.
 `MainWindows.open` calls a new `workspaceOpened` dependency once the window's workspace id is set, and main sends that window
 `ImprovementCoordinator.current()` with its own workspace's `retrospective_pending` (`sendImprovementActivity`,
 `main/index.ts`), the publication's per-window rule. The **process view**'s improvement paragraph says so. No package, edge,
-process, channel, command or store column changed: the snapshot rides the existing `improvement:activity` channel.
+process, channel or store column changed: the snapshot rides the existing `improvement:activity` channel. **One command was
+added by fin38's review**: `improvements.activity`, which the main window sends once as it mounts, after subscribing, because
+the push alone could reach a renderer that had not subscribed yet; this entry said "no command" until then.
 
 **A cross-file EDIT call's tree walk no longer blocks the run host (OQ-245; fin38).** `snapshotTree`
 (`agent-tools/src/tools/observe.ts`) reads the tree through `node:fs/promises` and is awaited by `observeReach`, so other

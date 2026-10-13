@@ -1212,11 +1212,19 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
    * without owning the other. The last publication a shutdown makes carries `active: false`, which is what
    * REQ-LIBRARY-127's "the indicators MUST end hidden" comes to here.
    */
-  useEffect(() => bridge.onImprovementActivity((p) => {
+  useEffect(() => {
     // PD-LIBRARY-002 revision 2 (e): `retrospective_pending` is this window's own workspace's, which main sends per window.
-    const payload = p as { active?: boolean; pass?: AnalysisPass; retrospective_pending?: boolean };
-    useShellState.getState().setImprovementAnalysis({ active: payload.active === true, pass: payload.pass ?? 'post_run', retrospectivePending: payload.retrospective_pending === true });
-  }), []);
+    const apply = (p: unknown): void => {
+      const payload = p as { active?: boolean; pass?: AnalysisPass; retrospective_pending?: boolean };
+      useShellState.getState().setImprovementAnalysis({ active: payload.active === true, pass: payload.pass ?? 'post_run', retrospectivePending: payload.retrospective_pending === true });
+    };
+    const unsubscribe = bridge.onImprovementActivity(apply);
+    // Read once, after subscribing, as the initialization state and the re-authentication prompts are: a publication main sent
+    // before this window subscribed never reached it, so a window opened while its workspace's retrospective is pending would
+    // draw the gesture available until the next one. A later publication arrives after this answer on the same pipe.
+    queueMicrotask(() => { void bridge.command({ kind: 'improvements.activity' }).then((r) => { if (r.ok) apply(r.value); }); });
+    return unsubscribe;
+  }, []);
 
   /*
    * PD-CHAT-002 (superseding REQ-CHAT-098/099): question prompts auto-open docked at the bottom of the transcript.

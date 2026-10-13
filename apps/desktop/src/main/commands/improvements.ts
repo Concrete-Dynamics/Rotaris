@@ -14,9 +14,9 @@ export const RETROSPECTIVE_PENDING_REASON = 'A retrospective is already queued o
  * decision be taken back before the artifact is closed.
  */
 export function improvementsCommands(
-  ctx: Pick<CommandContext, 'chooseExportPath' | 'clocks' | 'enqueueImprovement' | 'improvementRuns' | 'improvementUndo' | 'libraryRevision' | 'log' | 'notices' | 'raiseNotice' | 'retrospectivePending' | 'runHost' | 'services'>,
-): Pick<CommandHandlers, 'improvements.start' | 'improvements.retrospective' | 'improvements.rollbackPreview' | 'improvements.rollback' | 'improvements' | 'improvements.undoReview' | 'improvements.export'> {
-  const { chooseExportPath, clocks, enqueueImprovement, improvementRuns, improvementUndo, libraryRevision, log, notices, raiseNotice, retrospectivePending, runHost, services } = ctx;
+  ctx: Pick<CommandContext, 'chooseExportPath' | 'clocks' | 'enqueueImprovement' | 'improvementActivity' | 'improvementRuns' | 'improvementUndo' | 'libraryRevision' | 'log' | 'notices' | 'raiseNotice' | 'retrospectivePending' | 'runHost' | 'services'>,
+): Pick<CommandHandlers, 'improvements.start' | 'improvements.retrospective' | 'improvements.activity' | 'improvements.rollbackPreview' | 'improvements.rollback' | 'improvements' | 'improvements.undoReview' | 'improvements.export'> {
+  const { chooseExportPath, clocks, enqueueImprovement, improvementActivity, improvementRuns, improvementUndo, libraryRevision, log, notices, raiseNotice, retrospectivePending, runHost, services } = ctx;
   /** PD-LIBRARY-002 revision 2 (e): the workspaces whose retrospective is being captured, before the FIFO holds it. */
   const capturing = new Set<string>();
   return {
@@ -68,6 +68,19 @@ export function improvementsCommands(
       enqueueImprovement(captured.job);
       log(`retrospective ${captured.job.artifact_id} queued over ${captured.job.considered_session_ids.length} session(s)`);
       return { ok: true, value: { artifactId: captured.job.artifact_id, sessions: captured.job.considered_session_ids.length } };
+    },
+    /*
+     * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): the activity as it stands, read by a main window as it mounts, after it
+     * has subscribed to `improvement:activity`. Answered once the window's workspace is open, its `retrospective_pending` that
+     * workspace's alone, by the per-window rule a publication follows; a window holding no workspace is told none is pending.
+     * The push main sends a window that has just opened a workspace (`workspaceOpened`) can reach a renderer that has not
+     * subscribed yet, and is then lost; this read is what a new window draws its first state from
+     * (docs/defects/fixed/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
+     */
+    'improvements.activity': async (_req, { w, awaitWorkspace }) => {
+      await awaitWorkspace();
+      const pending = w.workspaceId !== undefined && w.workspaceId !== '' && retrospectivePending(w.workspaceId);
+      return { ok: true, value: { ...improvementActivity(), retrospective_pending: pending } };
     },
     // ---- Part X: the saved prompts (REQ-LIBRARY-137/138). Relayed to the run host, which owns the store, exactly
     // as `timeline.append` is; main adds the library revision (REQ-LIBRARY-105) and REQ-LIBRARY-138's failure notice. ----

@@ -33,3 +33,19 @@ workspace is a replacement window, which opens through the same `open`. Pinned b
 a window has opened a workspace…") and `improvements.test.ts` ("its current activity is the publication as it stands…"), each
 red without the change. `retrospective-proof` drives the pending gesture in one window; no proof opens a second window while a
 retrospective is pending.
+
+## Correction (fin38's review, 2026-10-13) — the push alone could be lost; the window reads the activity as it mounts
+
+The outcome above said each path "has loaded the window first, so its renderer has subscribed". That reason was false, and
+is kept here beside its replacement: a window's load resolves at its page's load, while the main window's root subscribes to
+`improvement:activity` only in an effect after its boot's own reads (`theme.get`, the preferences, `shell.hello`) and its first
+render (`apps/desktop/src/renderer/main.tsx`), and the preload buffers nothing (`subscribe`, `apps/desktop/src/preload/index.ts`).
+So the `workspaceOpened` push could reach a renderer that had not subscribed yet and be dropped, which would leave the drawn
+state exactly as the note found it, and no unit case or proof could tell. The window now also **reads** the activity once,
+after subscribing, as it reads the initialization state and the re-authentication prompts: `improvements.activity`
+(`packages/contracts/src/commands.ts`, answered in `apps/desktop/src/main/commands/improvements.ts` once the window's workspace
+is open, with `ImprovementCoordinator.current()` and that workspace's own `retrospective_pending`). A publication main sends
+after computing the answer reaches the window after it, on the same pipe. The `workspaceOpened` push stays: it reaches a window
+that has already subscribed, and the read covers one that had not. Pinned by `commands/improvements.test.ts`
+("improvements.activity — the activity as it stands…"), red without the handler; the renderer's read has no unit test (its
+root has none), and no proof opens a second window while a retrospective is pending.

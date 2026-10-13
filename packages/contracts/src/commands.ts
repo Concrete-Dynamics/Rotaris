@@ -114,6 +114,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('improvements.start'), artifactId: z.string().min(1) }),
   /** PD-LIBRARY-002: the user's explicit gesture, and the only way a retrospective ever starts. */
   z.object({ kind: z.literal('improvements.retrospective') }),
+  /**
+   * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): the improvement activity as it stands, its `retrospective_pending` that
+   * of the asking window's own workspace — read by a main window as it mounts, after it has subscribed to
+   * `improvement:activity`, so a window opened while a retrospective is pending draws the gesture at rest at once.
+   */
+  z.object({ kind: z.literal('improvements.activity') }),
   z.object({ kind: z.literal('improvements.rollbackPreview'), artifactId: z.string().min(1) }),
   z.object({ kind: z.literal('improvements.rollback'), artifactId: z.string().min(1), force: z.boolean() }),
   /** REQ-MONITOR-168 / REQ-GIT-102: the repository card's reads, relayed to the workspace service (ADR-0038). */

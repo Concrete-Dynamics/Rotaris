@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, ROLE_SPAWN_ALIASES } from '@rotaris/contracts';
 import { expandDeclared } from '../registry.js';
-import { attachmentWarnings, delegateTool, grantFacets, renderDelegateCatalogue, TODO_ITEM_SENTENCE, type AttachmentReport, type DelegateCatalogue, type DelegationPort } from './delegation.js';
+import { attachmentWarnings, delegateTool, grantFacets, renderDelegateCatalogue, TODO_ITEM_MARK_SENTENCE, TODO_ITEM_SENTENCE, type AttachmentReport, type DelegateCatalogue, type DelegationPort } from './delegation.js';
 import type { ToolContext } from './types.js';
 
 /**
@@ -235,7 +235,54 @@ describe('delegate — todo_item (PD-TOOLS-006 revision 6)', () => {
 
   it('the description says what todo_item names, when it is required, and to write the list in one step and delegate in the next', () => {
     const { tool } = capture();
-    expect(tool.description.endsWith(TODO_ITEM_SENTENCE)).toBe(true);
+    expect(tool.description).toContain(` ${TODO_ITEM_SENTENCE} `);
     expect(TODO_ITEM_SENTENCE).toBe("Give todo_item: the id of the item of your todo list this delegation serves, as the todo tool's last result shows it. Once you keep a todo list, every delegation to a persona that writes workspace files names an open item, and no two such delegations hold one item at once. Write the list in one step and delegate in the next: an item's id exists only once the todo call has returned.");
+  });
+});
+
+/**
+ * PD-TOOLS-006 revision 7 (OQ-240, ruled 2026-10-07 under R-072): an admitted delegation marks its PENDING item IN_PROGRESS in the
+ * caller's plan, before any foreground wait, and the observation says so and carries the Todo state.
+ */
+describe('delegate — the admitted item is marked (PD-TOOLS-006 revision 7)', () => {
+  const ctx = {} as ToolContext;
+  function capture(result: Awaited<ReturnType<DelegationPort['delegate']>>, order: string[] = []) {
+    const port: DelegationPort = {
+      delegate: async () => result,
+      backgroundOutput: () => ({ status: 'not_found', state: '', text: '' }),
+      waitForTasks: async () => { order.push('wait'); return { immediate: true, requested: 1, text: 'done' }; },
+    };
+    const marks: string[] = [];
+    const tool = delegateTool(port, 'root:1', BUILT_IN_CATALOGUE, { markItem: (item) => { marks.push(item); order.push('mark'); return { sentence: `Todo item tests (${item}) is now IN_PROGRESS.`, state: 'Todo state:\nPhase main (p)' }; } });
+    return { tool, marks };
+  }
+
+  it('an admitted delegation carrying its item has it marked, and the observation states it after the message and appends the Todo state', async () => {
+    const { tool, marks } = capture({ status: 'queued', canonicalName: 'tests', taskId: 'bg_00000002', message: 'Accepted.', todoItem: '0a1b2c3d' });
+    const r = await tool.execute(tool.schema.parse({ persona: 'tester', task_name: 'tests', task: 'TASK: t', todo_item: '0a1b2c3d' }), ctx);
+    expect(marks).toEqual(['0a1b2c3d']);
+    expect(r.text).toBe("Task 'tests': queued — Accepted. Todo item tests (0a1b2c3d) is now IN_PROGRESS.\ntask_id: bg_00000002\n\nTodo state:\nPhase main (p)");
+  });
+
+  it('a rejected delegation, and an admitted one with no item, mark nothing', async () => {
+    const rejected = capture({ status: 'rejected', canonicalName: 'tests', message: 'no' });
+    await rejected.tool.execute(rejected.tool.schema.parse({ persona: 'tester', task_name: 'tests', task: 'TASK: t', todo_item: '0a1b2c3d' }), ctx);
+    expect(rejected.marks).toEqual([]);
+    const unnamed = capture({ status: 'queued', canonicalName: 'tests', taskId: 'bg_00000002', message: 'Accepted.' });
+    const r = await unnamed.tool.execute(unnamed.tool.schema.parse({ persona: 'tester', task_name: 'tests', task: 'TASK: t' }), ctx);
+    expect(unnamed.marks).toEqual([]);
+    expect(r.text).not.toContain('Todo state');
+  });
+
+  it('a foreground delegation marks its item before it waits for the child', async () => {
+    const order: string[] = [];
+    const { tool } = capture({ status: 'queued', canonicalName: 'tests', taskId: 'bg_00000002', message: 'Accepted.', todoItem: '0a1b2c3d' }, order);
+    await tool.execute(tool.schema.parse({ persona: 'tester', task_name: 'tests', task: 'TASK: t', todo_item: '0a1b2c3d', run_in_background: false }), ctx);
+    expect(order).toEqual(['mark', 'wait']);
+  });
+
+  it('the description ends with the marking sentence', () => {
+    const { tool } = capture({ status: 'rejected', canonicalName: 'x', message: 'x' });
+    expect(tool.description.endsWith(` ${TODO_ITEM_MARK_SENTENCE}`)).toBe(true);
   });
 });

@@ -139,7 +139,7 @@ import { KNOWN_RESTATEMENTS, restatedFacts } from './lib/restated-facts.mjs';
 import { starterMissing } from './lib/starter-config.mjs';
 import { preserveSummary, summaryReading } from './lib/summary-sections.mjs';
 import { fenceRootOf, runWideReadings } from './lib/tool-frictions.mjs';
-import { agentPlanTaskCount, coordinatorTodoReading, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading } from './lib/coordinator-todo.mjs';
+import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading } from './lib/coordinator-todo.mjs';
 import { PAUSE, pauseEvalSteps, pauseReading } from './lib/resume-pause.mjs';
 import { typingAllowanceMs } from './lib/prompt-typing.mjs';
 import { nearMissReading } from './lib/near-miss-edits.mjs';
@@ -969,6 +969,7 @@ function checkCoordinatorTodo() {
   if (preservedSessions.length === 0) return;
   let r;
   let items;
+  let held;
   try {
     const Database = require('better-sqlite3');
     const db = new Database(oneDatabase(), { readonly: true });
@@ -986,6 +987,7 @@ function checkCoordinatorTodo() {
       });
       r = coordinatorTodoReading(read);
       items = todoItemReading(read);
+      held = heldItemReading(read);
     } finally { db.close(); }
   } catch (cause) {
     check(false, 'the coordinator\'s tool calls and stored todo were read for every session the run kept', cause instanceof Error ? cause.message : String(cause));
@@ -1003,6 +1005,12 @@ function checkCoordinatorTodo() {
   check(items.stale.length === 0, 'every todo item a child served is one its plan still holds (PD-TOOLS-006 revision 6)', items.stale.length === 0 ? `${items.named.length} named item(s)` : items.stale.map((c) => `${child(c)} on ${c.item}`).join(', '));
   const itemRefusals = preservedSessions.flatMap(({ scenario, sessionId }) => readToolCalls(sessionId).filter((c) => c.tool_name === 'delegate' && /todo item|todo_item '/.test(c.result) && /rejected/.test(c.result)).map((c) => ({ scenario, ordinal: c.ordinal, tool_name: c.tool_name })));
   if (itemRefusals.length > 0) noted('delegations refused for their todo item: unnamed, unknown, finished or held (PD-TOOLS-006 revision 6; target at most one per run, each followed by a named delegation)', itemRefusals.map(at).join(', '));
+  // PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-240): a running child's item reads IN_PROGRESS in its coordinator's
+  // plan, and no item is closed while an implementation child still holds it; single-active refusals are a NOTE (target 0).
+  const heldAt = (h) => `${h.scenario} #${h.ordinal}: ${h.child} on ${h.item}`;
+  check(held.heldPending.length === 0, 'no coordinator\'s plan recorded a running child\'s todo item PENDING (PD-TOOLS-008 revision 2, PD-TOOLS-006 revision 7, OQ-240)', held.heldPending.length === 0 ? `${held.coordinating.length} coordinating session(s): ${held.coordinating.join(', ') || 'none'}` : held.heldPending.map(heldAt).join(', '));
+  check(held.closedWhileHeld.length === 0, 'no coordinator marked a todo item COMPLETED while an implementation child still held it (REQ-ORCH-029, OQ-240)', held.closedWhileHeld.length === 0 ? `${held.coordinating.length} coordinating session(s)` : held.closedWhileHeld.map(heldAt).join(', '));
+  if (held.singleActive.length > 0) noted('todo calls refused under REQ-TOOLS-145 or PD-TOOLS-008 in coordinating sessions (OQ-240; target 0)', held.singleActive.map((h) => `${h.scenario} #${h.ordinal}`).join(', '));
 }
 
 /**

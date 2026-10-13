@@ -898,6 +898,91 @@ describe('todo (REQ-TOOLS-144..147)', () => {
     expect(again.isError).toBe(false);
   });
 
+  /*
+   * PD-TOOLS-008 revision 2 (OQ-240, ruled 2026-10-07 under R-072): a task a non-terminal child of the list's owner holds as
+   * its `todo_item` is outside REQ-TOOLS-145's count, and the bound is checked only on a write that marks a task IN_PROGRESS.
+   * The default live run at a68f121 (edit, #14) was refused a mark of its second running child's item, and the plan recorded
+   * running work PENDING (docs/defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).
+   */
+  describe('a task a running delegation holds (PD-TOOLS-008 revision 2)', () => {
+    const plan = async (held: Set<string>, delegates = false) => {
+      const list = new TodoList();
+      const t = todoTool(list, { held: () => held, delegates });
+      const r = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ name: 'impl', state: 'PENDING' }, { name: 'tests', state: 'PENDING' }, { name: 'docs', state: 'PENDING' }, { name: 'review', state: 'PENDING' }] }] }, ctx());
+      expect(r.isError).toBe(false);
+      const [impl, tests, docs, review] = list.phases[0]!.tasks.map((x) => x.id) as [string, string, string, string];
+      return { list, t, impl, tests, docs, review };
+    };
+
+    it('update: two held tasks are marked, and the agent\'s own item still takes the one unheld slot', async () => {
+      const held = new Set<string>();
+      const { t, list, impl, tests, docs } = await plan(held);
+      held.add(impl);
+      expect((await t.execute({ operation: 'update', task_id: impl, state: 'IN_PROGRESS' }, ctx())).isError).toBe(false);
+      held.add(tests);
+      expect((await t.execute({ operation: 'update', task_id: tests, state: 'IN_PROGRESS' }, ctx())).isError).toBe(false);
+      expect((await t.execute({ operation: 'update', task_id: docs, state: 'IN_PROGRESS' }, ctx())).isError).toBe(false);
+      expect(list.phases[0]!.tasks.filter((x) => x.state === 'IN_PROGRESS').map((x) => x.name)).toEqual(['impl', 'tests', 'docs']);
+    });
+
+    it('a second unheld mark is refused in REQ-TOOLS-145\'s sentence, naming the unheld task and not the held ones', async () => {
+      const held = new Set<string>();
+      const { t, list, impl, tests, docs, review } = await plan(held);
+      held.add(impl);
+      await t.execute({ operation: 'update', task_id: impl, state: 'IN_PROGRESS' }, ctx());
+      await t.execute({ operation: 'update', task_id: docs, state: 'IN_PROGRESS' }, ctx());
+      const r = await t.execute({ operation: 'update', task_id: review, state: 'IN_PROGRESS' }, ctx());
+      expect(r.text).toBe(`Only one task can be IN_PROGRESS at a time. Active task: ${docs} (docs). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`);
+      const phaseId = list.phases[0]!.id;
+      const add = await t.execute({ operation: 'add_task', phase_id: phaseId, name: 'extra', state: 'IN_PROGRESS' }, ctx());
+      expect(add.text).toBe(`Only one task can be IN_PROGRESS at a time. Active task: ${docs} (docs). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`);
+      // a held task is still marked beside both
+      held.add(tests);
+      expect((await t.execute({ operation: 'update', task_id: tests, state: 'IN_PROGRESS' }, ctx())).isError).toBe(false);
+      expect(list.phases[0]!.tasks.filter((x) => x.state === 'IN_PROGRESS').map((x) => x.name)).toEqual(['impl', 'tests', 'docs']);
+    });
+
+    it('replace: held tasks are exempt, and a replace that marks nothing new is accepted while ended children\'s items stay IN_PROGRESS', async () => {
+      const held = new Set<string>();
+      const { t, list, impl, tests, docs } = await plan(held);
+      held.add(impl); held.add(tests);
+      await t.execute({ operation: 'update', task_id: impl, state: 'IN_PROGRESS' }, ctx());
+      await t.execute({ operation: 'update', task_id: tests, state: 'IN_PROGRESS' }, ctx());
+      // a replace marking one new unheld task beside two held ones is accepted
+      const one = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl' }, { id: tests, name: 'tests' }, { id: docs, name: 'docs', state: 'IN_PROGRESS' }] }] }, ctx());
+      expect(one.isError).toBe(false);
+      // both holders end: three IN_PROGRESS tasks, none held — a replace that marks nothing is still accepted
+      held.clear();
+      const none = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: impl, name: 'impl' }, { id: tests, name: 'tests' }, { id: docs, name: 'docs' }, { name: 'later' }] }] }, ctx());
+      expect(none.isError).toBe(false);
+      expect(list.phases[0]!.tasks.filter((x) => x.state === 'IN_PROGRESS')).toHaveLength(3);
+      // marking a fourth task now meets REQ-TOOLS-146's case, naming the first unheld active task: an ended holder's item
+      const later = list.phases[0]!.tasks.find((x) => x.name === 'later')!.id;
+      const r = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: later, name: 'later', state: 'IN_PROGRESS' }] }] }, ctx());
+      expect(r.text).toBe(`Only one task can be IN_PROGRESS at a time. Active task: ${impl} (impl). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`);
+      const u = await t.execute({ operation: 'update', task_id: later, state: 'IN_PROGRESS' }, ctx());
+      expect(u.text).toMatch(new RegExp(`Active task: ${impl} \\(impl\\)`));
+    });
+
+    it('PD-TOOLS-008\'s sentence counts only unheld tasks, and carries the delegation hint only for a caller holding delegate', async () => {
+      const held = new Set<string>(['aaaaaaaa']);
+      const t = todoTool(new TodoList(), { held: () => held, delegates: true });
+      // a held id the list carries as IN_PROGRESS beside one unheld is not two
+      const ok = await t.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: 'aaaaaaaa', name: 'held', state: 'IN_PROGRESS' }, { name: 'own', state: 'IN_PROGRESS' }] }] }, ctx());
+      expect(ok.isError).toBe(false);
+      const d = todoTool(new TodoList(), { held: () => held, delegates: true });
+      const two = await d.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ id: 'aaaaaaaa', name: 'held', state: 'IN_PROGRESS' }, { name: 'a', state: 'IN_PROGRESS' }, { name: 'b', state: 'IN_PROGRESS' }] }] }, ctx());
+      expect(two.text).toBe("Only one task can be IN_PROGRESS at a time. The submitted list marks 2 tasks IN_PROGRESS ('a', 'b'), so the replace was rejected and nothing was saved. Send it again with at most one task IN_PROGRESS. Leave the items you will delegate PENDING: a delegate call that names one in todo_item marks it IN_PROGRESS.");
+      const plain = todoTool(new TodoList(), { held: () => held });
+      const noHint = await plain.execute({ operation: 'replace', phases: [{ name: 'main', tasks: [{ name: 'a', state: 'IN_PROGRESS' }, { name: 'b', state: 'IN_PROGRESS' }] }] }, ctx());
+      expect(noHint.text).toBe("Only one task can be IN_PROGRESS at a time. The submitted list marks 2 tasks IN_PROGRESS ('a', 'b'), so the replace was rejected and nothing was saved. Send it again with at most one task IN_PROGRESS.");
+    });
+
+    it('the description states the bound for the agent\'s own tasks and the marking a delegate call makes', () => {
+      expect(todoTool(new TodoList()).description).toMatch(/At most one task IN_PROGRESS of your own; a task a running delegated agent holds through todo_item is not counted, and a delegate call naming a PENDING task marks it IN_PROGRESS\.$/);
+    });
+  });
+
   /**
    * Observed live 2026-09-16 (run `a26918e8`): a run sent five phases to `add_phase` — a call the advertised
    * schema accepts, since `phases` is one of its fields — and read back the six words `add_phase requires a

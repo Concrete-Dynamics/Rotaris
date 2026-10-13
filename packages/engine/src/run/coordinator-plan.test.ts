@@ -432,6 +432,18 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
       expect(planner(sid)[0]).not.toHaveProperty('listWritten');
     });
 
+    /*
+     * PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-240): the refusal tells the coordinator to plan pieces of work,
+     * keep only its own item IN_PROGRESS and leave the items it will delegate PENDING, which the delegation then marks. It said
+     * "one item per step with only the step you are on IN_PROGRESS", and the live runs at a68f121 planned two parallel children
+     * IN_PROGRESS and were refused (edit #5, duress #19).
+     */
+    it('the refusal teaches the plan PD-TOOLS-008 revision 2 bounds: delegated items PENDING, marked by the delegation', () => {
+      expect(TODO_LIST_OWED_TEXT).toContain('one item per piece of work, with only an item you work on yourself IN_PROGRESS and the items you will delegate PENDING');
+      expect(TODO_LIST_OWED_TEXT).toContain('on a delegate call give todo_item: the id of the item it serves, which the call marks IN_PROGRESS.');
+      expect(TODO_LIST_OWED_TEXT).not.toContain('only the step you are on');
+    });
+
     it('a coordinator that plans first is never refused', async () => {
       const { sessions, workItemsRun, warnings } = sessionsWith([
         writePlan('p1', ['IN_PROGRESS', 'PENDING']), del('d1', 'one'), del('d2', 'two'),

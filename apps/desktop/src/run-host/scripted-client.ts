@@ -623,13 +623,23 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         return;
       }
       // plan:<n> — PD-TOOLS-006 revision 6 (OQ-220): a todo list of n open items, which the delegations after it name in turn;
-      // `done` writes the latest list back with every item COMPLETED, so REQ-ORCH-075 holds the task by none of them.
+      // `done` completes every open item of the latest list, so REQ-ORCH-075 holds the task by none of them. Since PD-TOOLS-006
+      // revision 7 (OQ-240) an admitted delegation marks its item IN_PROGRESS, and REQ-TOOLS-146 restores an IN_PROGRESS task
+      // over a `replace`, so `done` sends one `update` per open item, as a model must. It was one `replace` writing every
+      // item COMPLETED until then.
       const planSteps = /^plan:(\d+)$/.exec(step);
       const latest = step === 'done' ? latestScriptedPlan(req.messages) : null;
+      const open = latest ? latest.phases.flatMap((p) => p.tasks).filter((t) => t.state !== 'COMPLETED' && t.state !== 'ABANDONED') : [];
+      if (latest && open.length > 0 && (req.tools ?? []).some((t) => t.name === 'todo')) {
+        yield ok<StreamPart>({ kind: 'text', delta: 'Calling todo. ' });
+        for (const [i, t] of open.entries()) yield ok<StreamPart>({ kind: 'tool-call', callId: open.length === 1 ? callId : `${callId}-${i}`, name: 'todo', argsDelta: JSON.stringify({ operation: 'update', task_id: t.id, state: 'COMPLETED' }) });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
+        yield finished('other');
+        return;
+      }
       const dynamic = planSteps
         ? { name: 'todo', args: { operation: 'replace', phases: [{ name: 'Scripted plan', tasks: Array.from({ length: Number(planSteps[1]) }, (_, i) => ({ name: `Scripted item ${i + 1}`, description: 'Delegated by the scripted coordinator.', state: 'PENDING' })) }] } }
-        : latest ? { name: 'todo', args: { operation: 'replace', phases: latest.phases.map((p) => ({ id: p.id, name: p.name, tasks: p.tasks.map((t) => ({ id: t.id, name: t.name, description: 'Delegated by the scripted coordinator.', state: 'COMPLETED' })) })) } }
-          : null;
+        : null;
       // fetch:<url> — everything after the first `fetch:` is the URL (the fetch proof's step).
       const tool = dynamic ?? (step.startsWith('fetch:') ? { name: 'fetch', args: { url: step.slice('fetch:'.length) } } : TOOL_STEPS[step]);
       if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {

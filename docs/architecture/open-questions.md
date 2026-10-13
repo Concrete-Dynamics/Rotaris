@@ -10909,6 +10909,12 @@ over every session it keeps (`apps/desktop/scripts/lib/coordinator-todo.mjs`). T
 "…; its result gives each item's id. Then make this call again, and on a delegate call to a persona that writes workspace files
 give todo_item: the id of the item it serves." It read, until then: "…, one item per step with only the step you are on
 IN_PROGRESS, then make this call again."
+*Amended again by OQ-240's ruling (`PD-TOOLS-008` revision 2, `PD-TOOLS-006` revision 7, fin33):* it now reads "Write one with
+the todo tool, one item per piece of work, with only an item you work on yourself IN_PROGRESS and the items you will delegate
+PENDING; its result gives each item's id. Then make this call again, and on a delegate call give todo_item: the id of the item it
+serves, which the call marks IN_PROGRESS." It read, until then: "Write one with the todo tool, one item per step with only the
+step you are on IN_PROGRESS; its result gives each item's id. Then make this call again, and on a delegate call to a persona that
+writes workspace files give todo_item: the id of the item it serves."
 
 **First live execution, 2026-10-07 (the final default live run at `a68f121`, pack `2026-10-07T06-48-50-123Z`, the registered
 self-hosted endpoint):** the refusal held as built. It fired three times in the ten sessions: edit `#7` (a `delegate`, in the
@@ -12453,7 +12459,7 @@ task may be `IN_PROGRESS` at a time"; REQ-TOOLS-146, `replace`'s protection of t
 run's primary progress display; REQ-ORCH-029, a list the coordinator "keeps current"; REQ-ORCH-028 with `PD-TOOLS-006`
 revision 6's `todo_item`; REQ-CHAT-086, IN_PROGRESS drawn active and PENDING open. Raised 2026-10-07 from the final live runs:
 finding P3 of the default autopsy at `a68f121` and its recurrence D7 in the duress autopsy, recorded in
-[`a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md`](../defects/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md);
+[`a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md`](../defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md);
 the consortium's question P3. The round assigned it OQ-227, which fin30 took on main for `single_file_change` (PD-ORCH-011
 revision 2) before this landed, and OQ-235 to OQ-239 were taken meanwhile, so it takes OQ-240, the next free number.
 **Ruled 2026-10-07.**)*
@@ -12507,3 +12513,13 @@ while held (target 0), items marked COMPLETED while held (target 0) and single-a
 0, each counted as a NOTE). A plan written with two IN_PROGRESS items before any delegation is still refused once, in
 `PD-TOOLS-008`'s sentence with its new hint; a model that re-marks an item the run already marked meets REQ-TOOLS-147's no-op
 error, one cheap row.
+
+*Built 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`); its first executions are reported in `PD-TOOLS-008` revision 2
+and `PD-TOOLS-006` revision 7.* `todoTool`'s `TodoToolOptions` (`held`, `delegates`) and `TodoList.active(held)`
+(`packages/agent-tools/src/tools/todo.ts`); `delegateTool`'s `markItem` and `TODO_ITEM_MARK_SENTENCE`
+(`packages/agent-tools/src/tools/delegation.ts`); `markDelegatedItem` and the lazily read `delegates` in `createToolPort`
+(`apps/desktop/src/run-host/tools.ts`); `DelegateOutcome.todoItem`, `IterationChildren.heldTodoItems`, `Run.heldTodoItems` and
+`ToolPortContext.heldTodoItems` (`packages/engine`); `TODO_LIST_OWED_TEXT` (OQ-213's entry quotes the text it replaced); the
+scripted `done` step closing each item with `update`; the live run's `heldItemReading`
+(`apps/desktop/scripts/lib/coordinator-todo.mjs`). Shown in the built app by `pnpm mission-proof` item 1e. The note is repaired:
+[`a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md`](../defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).

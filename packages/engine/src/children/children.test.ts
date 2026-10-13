@@ -401,6 +401,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: (a['inherited_context'] as string[] | undefined) ?? [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}), ...(typeof a['session_id'] === 'string' ? { sessionId: a['session_id'] } : {}), ...(a['suppress_auto_context'] === true ? { suppressAutoContext: true } : {}), ...(Array.isArray(a['attach_artifacts']) ? { attachArtifacts: a['attach_artifacts'] as string[] } : {}), ...(typeof a['todo_item'] === 'string' ? { todoItem: a['todo_item'] } : {}) });
         if (r.status === 'rejected') return { ...ok(`Task '${r.canonicalName}': rejected — ${r.message}`), isError: true, status: 'failed' };
         let text = `Task '${r.canonicalName}': ${r.status} — ${r.message}\ntask_id: ${r.taskId}`;
+        // PD-TOOLS-006 revision 7 (OQ-240): the item the admitted delegation serves, which the run host's port marks IN_PROGRESS.
+        if (r.todoItem !== undefined) text += `\nserves todo item ${r.todoItem}`;
         if (a['run_in_background'] === false) { const w = await ops.waitForTasks(parentId, [r.taskId]); text += `\n\n${'refused' in w ? w.refused : 'interrupted' in w ? w.interrupted : w.text}`; }
         return ok(text);
       }
@@ -2369,6 +2371,63 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(itemOf(rows, 'lead')).toBe('0000000a');
       expect(itemOf(rows, 'sub-own')).toBe('000000c1');
       expect(observed.find((o) => o.startsWith("Task 'sub-root'"))).toMatch(/^Task 'sub-root': rejected — todo_item '0000000b' names no item of your todo list\. .*Implement it \(000000c1\)/);
+    });
+
+    /**
+     * PD-TOOLS-006 revision 7 and PD-TOOLS-008 revision 2 (OQ-240, ruled 2026-10-07 under R-072): an admitted delegation hands
+     * back the item it serves, so the caller's port marks it IN_PROGRESS, and the items the caller's non-terminal children hold
+     * are the set REQ-TOOLS-145's count leaves out — read live, so an item whose child has ended counts again.
+     */
+    it('revision 7: an admitted delegation hands back its item, a rejected one none, and the held set is the live children\'s items', async () => {
+      const observed: string[] = [];
+      const heldAt: string[][] = [];
+      const hold = gate();
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([todoCall('t1', ['PENDING', 'PENDING', 'PENDING'])]);
+          if (turn === 2) return toolCalls([del('d1', 'coding-agent', 'impl', { todo_item: '0000000a', task: 'TASK: HOLD impl' }), del('d2', 'tester', 'tests', { todo_item: '0000000b', task: 'TASK: HOLD tests' }), del('d3', 'codebase-analyst', 'survey', { todo_item: '0000000c', task: 'TASK: HOLD survey' }), del('d4', 'coding-agent', 'rival', { todo_item: '0000000a' })]);
+          if (turn === 3) return toolCalls([todoCall('t2', ['IN_PROGRESS', 'IN_PROGRESS', 'IN_PROGRESS'])]);
+          if (turn === 4) { hold.open(); return toolCalls([{ callId: 'w1', name: 'wait_for_tasks', args: { task_ids: [] } }]); }
+          if (turn === 5) return toolCalls([todoCall('done', ['COMPLETED', 'COMPLETED', 'COMPLETED'])]);
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return childAnswer(req, hold.p);
+      }, { tool: (name, a, ctx, builtIn) => {
+        if (name === 'todo') heldAt.push([...(ctx.heldTodoItems?.() ?? [])].sort());
+        return tools(observed)(name, a, ctx, builtIn);
+      } });
+      const sid = (sessions.start(dal, 'C:/ws', 'build it') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(observed[0]).toMatch(/^Task 'impl': queued — .*\ntask_id: bg_[0-9a-f]{8}\nserves todo item 0000000a$/);
+      expect(observed[1]).toMatch(/\nserves todo item 0000000b$/);
+      // a read-only child's item is held too: the count is the plan owner's, whatever the child's persona
+      expect(observed[2]).toMatch(/\nserves todo item 0000000c$/);
+      expect(observed[3]).toMatch(/^Task 'rival': rejected/);
+      expect(observed[3]).not.toContain('serves todo item');
+      // before any child, nothing is held; while the three run, all three items; once they ended, none
+      expect(heldAt).toEqual([[], ['0000000a', '0000000b', '0000000c'], []]);
+    });
+
+    it('revision 7: a follow-up hands back the item it keeps', async () => {
+      let firstId = '';
+      const observed: string[] = [];
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([todoCall('t1', ['PENDING', 'PENDING', 'PENDING'])]);
+          if (turn === 2) return toolCalls([del('d1', 'coding-agent', 'build', { todo_item: '0000000a', run_in_background: false })]);
+          if (turn === 3) return toolCalls([del('d2', 'coding-agent', 'build-again', { session_id: firstId, run_in_background: false })]);
+          if (turn === 4) return toolCalls([todoCall('done', ['COMPLETED', 'COMPLETED', 'COMPLETED'])]);
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return answer('Built it.');
+      }, { tool: (name, a, ctx, builtIn) => { if (name === 'delegate' && firstId === '') { return builtIn().then((r) => { firstId = /task_id: (bg_[0-9a-f]{8})/.exec(r.text)?.[1] ?? ''; observed.push(r.text); return r; }); } return tools(observed)(name, a, ctx, builtIn); } });
+      const sid = (sessions.start(dal, 'C:/ws', 'build it') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(observed[0]).toContain('\nserves todo item 0000000a');
+      expect(observed[1]).toMatch(/^Task 'build': queued — Following up build/);
+      expect(observed[1]).toContain('\nserves todo item 0000000a');
     });
   });
 

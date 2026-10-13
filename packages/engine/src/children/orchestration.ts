@@ -390,15 +390,17 @@ export class IterationChildren implements DelegationOps {
     // may start the child and assemble its payload before this call returns.
     this.acceptScope(row, scope.patterns);
     const alias = aliasResolved ? ` Alias '${aliasResolved}' resolved to '${row.persona}'.` : '';
+    // PD-TOOLS-006 revision 7 (OQ-240): the admitted item travels back, so the caller's port marks it IN_PROGRESS when PENDING.
+    const item = admitted.item !== null ? { todoItem: admitted.item } : {};
     // REQ-ORCH-056/058: a state change triggers a pass; the delegate observation returns at once.
     this.scheduler.pass();
     const now = this.ledger.get(row.task_id) ?? row;
     if (held || now.state === 'waiting_on_model_slot') {
       const cap = this.deps.modelCap(row.model_key) ?? 0;
-      return { status: 'waiting_on_model_slot', canonicalName: row.canonical_name, taskId: row.task_id, message: `Queued behind model '${row.model_key}''s slot cap: ${this.ledger.slotsInUse(row.model_key)} of ${cap} slots in use; the task starts by itself once a slot opens.${alias}`, attachments };
+      return { status: 'waiting_on_model_slot', canonicalName: row.canonical_name, taskId: row.task_id, message: `Queued behind model '${row.model_key}''s slot cap: ${this.ledger.slotsInUse(row.model_key)} of ${cap} slots in use; the task starts by itself once a slot opens.${alias}`, attachments, ...item };
     }
-    if (now.state === 'waiting_on_dependencies') return { status: 'waiting_on_dependencies', canonicalName: row.canonical_name, taskId: row.task_id, message: `Waiting on ${req.dependsOn.join(', ')}.${alias}`, attachments };
-    return { status: 'queued', canonicalName: row.canonical_name, taskId: row.task_id, message: `Accepted; the child runs in the ${req.runInBackground ? 'background' : 'foreground'}.${alias}`, attachments };
+    if (now.state === 'waiting_on_dependencies') return { status: 'waiting_on_dependencies', canonicalName: row.canonical_name, taskId: row.task_id, message: `Waiting on ${req.dependsOn.join(', ')}.${alias}`, attachments, ...item };
+    return { status: 'queued', canonicalName: row.canonical_name, taskId: row.task_id, message: `Accepted; the child runs in the ${req.runInBackground ? 'background' : 'foreground'}.${alias}`, attachments, ...item };
   }
 
   /**
@@ -451,11 +453,13 @@ export class IterationChildren implements DelegationOps {
     this.scheduler.pass();
     const now = this.ledger.get(taskId) ?? r.row;
     const said = `Following up ${now.canonical_name} (${now.persona}): it resumes from its record under its own task id, with this task as its next message, and reports again when it ends.`;
+    // PD-TOOLS-006 revision 7 (OQ-240): a follow-up keeps its stored item, which the caller's port marks IN_PROGRESS when PENDING.
+    const item = row.todo_item !== null ? { todoItem: row.todo_item } : {};
     if (now.state === 'waiting_on_model_slot') {
       const cap = this.deps.modelCap(now.model_key) ?? 0;
-      return { status: 'waiting_on_model_slot', canonicalName: now.canonical_name, taskId, message: `${said} Queued behind model '${now.model_key}''s slot cap: ${this.ledger.slotsInUse(now.model_key)} of ${cap} slots in use; it starts by itself once a slot opens.` };
+      return { status: 'waiting_on_model_slot', canonicalName: now.canonical_name, taskId, message: `${said} Queued behind model '${now.model_key}''s slot cap: ${this.ledger.slotsInUse(now.model_key)} of ${cap} slots in use; it starts by itself once a slot opens.`, ...item };
     }
-    return { status: 'queued', canonicalName: now.canonical_name, taskId, message: said };
+    return { status: 'queued', canonicalName: now.canonical_name, taskId, message: said, ...item };
   }
 
   /**
@@ -584,6 +588,18 @@ export class IterationChildren implements DelegationOps {
       seen.add(id);
     }
     return false;
+  }
+
+  /**
+   * PD-TOOLS-008 revision 2 (OQ-240, ruled 2026-10-07 under R-072): the items of `callerId`'s own plan its non-terminal
+   * children hold as their `todo_item` — its direct children, every root's counting as one plan as `owns` reads them; queued,
+   * waiting, running, summarising and paused children all hold (`PD-TOOLS-006` revision 6's set). Read at each `todo` call,
+   * so an item whose child has ended counts against the next write that marks a task.
+   */
+  heldTodoItems(callerId: string): ReadonlySet<string> {
+    const held = new Set<string>();
+    for (const c of this.ledger.all()) if (c.todo_item !== null && !isTerminalChildState(c.state) && this.owns(callerId, c)) held.add(c.todo_item);
+    return held;
   }
 
   /**

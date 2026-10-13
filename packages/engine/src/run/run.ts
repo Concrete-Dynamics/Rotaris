@@ -44,6 +44,9 @@ import { StallWatch, stallRecords } from '../children/stall.js';
 import { CHILD_STALL_TIMEOUT_MS } from '../children/cut-off.js';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
+/** PD-TOOLS-008 revision 2: the held set of an agent with no iteration's children to read. */
+const NO_HELD_ITEMS: ReadonlySet<string> = new Set();
+
 /**
  * The run loop, in its first conformant slice: one root agent, one model
  * call per iteration, no tools, and every way a run can end handled
@@ -807,6 +810,13 @@ export class Run {
    */
   writeClaimFor(callerId: string, rel: string): ClaimHit | null {
     return this.children?.writeClaimFor(callerId, rel) ?? null;
+  }
+  /**
+   * PD-TOOLS-008 revision 2 (OQ-240): the items of the agent `callerId`'s plan its non-terminal children hold, outside
+   * REQ-TOOLS-145's count; read through the iteration's children at every `todo` call.
+   */
+  heldTodoItems(callerId: string): ReadonlySet<string> {
+    return this.children?.heldTodoItems(callerId) ?? NO_HELD_ITEMS;
   }
   /** REQ-CHAT-006 / REQ-SESSION-026: the session-wide overrides in force, by model key, for the record (`overridesInForce`). */
   get modelOverridesInForce(): { from: string; to: string }[] {

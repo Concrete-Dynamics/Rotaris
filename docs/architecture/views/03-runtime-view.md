@@ -1377,6 +1377,17 @@ child (`children.todo_item`, **v34**); a continuation naming none inherits its p
 `followUp` keeps the stored item and refuses only while another implementation child holds it. Each refusal is a warning
 citing REQ-ORCH-028 or REQ-ORCH-029.
 
+**A running delegation's item is held, and marked at admission (`PD-TOOLS-008` revision 2, `PD-TOOLS-006` revision 7; OQ-240
+ruled 2026-10-07 under R-072; fin33).** An accepted `DelegateOutcome` (and a follow-up's) carries `todoItem`, the item the
+admission resolved — named, inherited or kept. The run host's `delegateTool` is built with `markItem` (`createToolPort`'s
+`markDelegatedItem`): it sets that item IN_PROGRESS on the port's own `TodoList` when it is PENDING, persists it through
+`ctx.writeTodo`, and the observation gains "Todo item <name> (<id>) is now IN_PROGRESS." and the Todo state — before a
+`run_in_background: false` wait. The `todo` tool reads `ctx.heldTodoItems` at each call (`TodoToolOptions.held`), which both
+`toolsFor` closures fill from `Run.heldTodoItems` → `IterationChildren.heldTodoItems`: the `todo_item` of every non-terminal
+child the caller owns, of any persona. REQ-TOOLS-145's bound and REQ-TOOLS-146's protection count only tasks outside that
+set, and are checked only on a write that marks a task IN_PROGRESS; an item whose child has ended counts again at the next such
+write. `PD-TOOLS-008`'s sentence gains a hint for an agent whose resolved set holds `delegate`.
+
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest
 model step) and `contextLimit` — **from Part AH the model's own `max_input_tokens`** where the configuration states one

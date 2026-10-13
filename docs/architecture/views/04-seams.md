@@ -206,6 +206,11 @@ Invariants:
   every coordinator's description with no edit beyond step 2. The same resolution answers which delegations are
   implementation delegations (`implementationRole`, injected as `SessionsDeps.implementationRole`), so the todo-item
   refusals of `PD-TOOLS-006` revision 6 (OQ-220) and the description never disagree about a persona.
+- **What the run does to the caller's own plan at admission** (`PD-TOOLS-006` revision 7, OQ-240) is the run host's, not the
+  engine's: the accepted `DelegateOutcome` hands back the resolved `todoItem`, and `createToolPort` passes `delegateTool` a
+  `markItem` over the port's own `TodoList`, the instance the `todo` tool holds, so the plan the agent reads and the one stored
+  agree within a turn. What the `todo` tool needs of the run (the held set, `PD-TOOLS-008` revision 2) is a live read on the
+  port context (`ToolPortContext.heldTodoItems`), filled in both `toolsFor` closures in `sessions.ts`.
 - **A `delegate` field the run must admit** lands in three places, as `todo_item` did (revision 6): the tool's schema and the
   `DelegationPort` request (`agent-tools/tools/delegation.ts`), `DelegateRequest` (`engine/children/delegation.ts`), and
   `IterationChildren.delegate`'s admission, before `ChildLedger.spawn`, with a refusal `rejected` and no record. A field the

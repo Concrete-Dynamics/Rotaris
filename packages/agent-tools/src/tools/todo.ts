@@ -30,8 +30,12 @@ export class TodoList {
   findPhase(id: string): TodoPhase | undefined {
     return this.phases.find((p) => p.id === id);
   }
-  active(): TodoTask | undefined {
-    for (const p of this.phases) for (const t of p.tasks) if (t.state === 'IN_PROGRESS') return t;
+  /**
+   * REQ-TOOLS-145 as `PD-TOOLS-008` revision 2 bounds it: the first IN_PROGRESS task outside `held`, the tasks a non-terminal
+   * child of the list's owner holds as its `todo_item`. With no `held`, the first IN_PROGRESS task.
+   */
+  active(held?: ReadonlySet<string>): TodoTask | undefined {
+    for (const p of this.phases) for (const t of p.tasks) if (t.state === 'IN_PROGRESS' && !(held?.has(t.id) ?? false)) return t;
     return undefined;
   }
   /** REQ-TOOLS-147: the rendered summary every observation appends. */
@@ -62,8 +66,24 @@ const singleActive = (id: string, name: string) => `Only one task can be IN_PROG
  * docs/defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md). This sentence says what the list did
  * and that nothing was saved, and names the tasks by the names the agent sent, since no id of theirs was ever stored.
  */
-const listMarksSeveralActive = (names: readonly string[]) =>
-  `Only one task can be IN_PROGRESS at a time. The submitted list marks ${names.length} tasks IN_PROGRESS (${names.map((n) => `'${n}'`).join(', ')}), so the replace was rejected and nothing was saved. Send it again with at most one task IN_PROGRESS.`;
+const listMarksSeveralActive = (names: readonly string[], delegates: boolean) =>
+  `Only one task can be IN_PROGRESS at a time. The submitted list marks ${names.length} tasks IN_PROGRESS (${names.map((n) => `'${n}'`).join(', ')}), so the replace was rejected and nothing was saved. Send it again with at most one task IN_PROGRESS.${delegates ? ` ${DELEGATE_HINT}` : ''}`;
+
+/** PD-TOOLS-008 revision 2: the hint its sentence carries for a caller whose resolved set holds `delegate`. */
+export const DELEGATE_HINT = 'Leave the items you will delegate PENDING: a delegate call that names one in todo_item marks it IN_PROGRESS.';
+
+/**
+ * PD-TOOLS-008 revision 2 (OQ-240, ruled 2026-10-07 under the owner's delegation, R-072): what the run tells the tool about
+ * its owner. `held` is the set of task ids a non-terminal child of the list's owner holds as its `todo_item`
+ * (`PD-TOOLS-006` revision 6), read at each call; those tasks are outside REQ-TOOLS-145's count. `delegates` is whether the
+ * owner's resolved tool set holds `delegate`, which adds the hint to this directive's sentence. With neither, the tool
+ * behaves exactly as before the revision.
+ */
+export interface TodoToolOptions {
+  readonly held?: (() => ReadonlySet<string>) | undefined;
+  readonly delegates?: boolean | (() => boolean) | undefined;
+}
+const NONE_HELD: ReadonlySet<string> = new Set();
 
 const taskInput = z.object({
   id: z.string().optional(),
@@ -115,7 +135,8 @@ const fieldsFor = (op: string): string => ({
   remove_task: 'remove_task reads `task_id`.',
 }[op] ?? `The operations are ${OPERATIONS.join(', ')}.`);
 
-export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema>> {
+export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecutor<z.infer<typeof todoSchema>> {
+  const heldNow = (): ReadonlySet<string> => opts.held?.() ?? NONE_HELD;
   const hint = () => {
     const phases = list.phases.map((p) => `${p.name} (${p.id})`).join(', ') || '(none)';
     const tasks = list.phases.flatMap((p) => p.tasks.map((t) => `${t.name} (${t.id})`)).join(', ') || '(none)';
@@ -133,7 +154,10 @@ export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema
       'add_task {phase_id, name, description, state} — ONE task in an existing phase.',
       'update {task_id, name, description, state} — one task; a change that changes nothing is an error.',
       'remove_task {task_id}.',
-      'Phases and tasks carry stable 8-hex ids; target by id, never by name. At most one task IN_PROGRESS.',
+      // PD-TOOLS-008 revision 2 (OQ-240): the bound is the agent's own tasks. It said, until 2026-10-07, "At most one task
+      // IN_PROGRESS." — true of a list no delegation holds, and the reason a coordinator's second running child's item stayed
+      // PENDING (the default live run at a68f121, edit #14).
+      'Phases and tasks carry stable 8-hex ids; target by id, never by name. At most one task IN_PROGRESS of your own; a task a running delegated agent holds through todo_item is not counted, and a delegate call naming a PENDING task marks it IN_PROGRESS.',
     ].join(' '),
     schema: todoSchema,
     label: (a) => `todo ${a.operation}`,
@@ -141,10 +165,19 @@ export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema
       switch (a.operation) {
         case 'replace': {
           const incoming = a.phases ?? [];
+          const held = heldNow();
           const protectedTasks = list.phases.flatMap((p) => p.tasks.filter((t) => PROTECTED.has(t.state)).map((t) => ({ phaseIndex: list.phases.indexOf(p), taskIndex: p.tasks.indexOf(t), task: { ...t } })));
-          const activeProtected = protectedTasks.find((x) => x.task.state === 'IN_PROGRESS');
-          // REQ-TOOLS-146: a replace that marks some OTHER task IN_PROGRESS while a protected active task exists is rejected.
-          if (activeProtected && incoming.some((p) => p.tasks.some((t) => t.state === 'IN_PROGRESS' && t.id !== activeProtected.task.id))) {
+          const protectedActive = new Set(protectedTasks.filter((x) => x.task.state === 'IN_PROGRESS').map((x) => x.task.id));
+          /*
+           * PD-TOOLS-008 revision 2: what this replace newly marks IN_PROGRESS — an incoming task marked so that is not already a
+           * protected IN_PROGRESS task (a protected task the replace restores never counts against it) and that no running
+           * delegation holds. Revision 1 counted every incoming IN_PROGRESS task beside the one active task, so a coordinator's
+           * list could carry only one running delegation's item (OQ-240).
+           */
+          const newlyMarked = incoming.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS' && !(t.id !== undefined && (protectedActive.has(t.id) || held.has(t.id)))));
+          const activeProtected = protectedTasks.find((x) => x.task.state === 'IN_PROGRESS' && !held.has(x.task.id));
+          // REQ-TOOLS-146: a replace that marks some OTHER task IN_PROGRESS while an unheld protected active task exists is rejected.
+          if (activeProtected && newlyMarked.length > 0) {
             return errorObservation(singleActive(activeProtected.task.id, activeProtected.task.name));
           }
           const next: TodoPhase[] = incoming.map((p) => ({
@@ -161,10 +194,11 @@ export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema
             const phase = next[Math.min(prot.phaseIndex, Math.max(0, next.length - 1))] ?? (next.push({ id: hexId(), name: 'main', tasks: [] }), next[0]!);
             phase.tasks.splice(Math.min(prot.taskIndex, phase.tasks.length), 0, { ...prot.task });
           }
-          // No task is active here (the REQ-TOOLS-146 rejection above answers a list that marks another beside one), so the
-          // second IN_PROGRESS can only come from the submitted list itself: PD-TOOLS-008's sentence, not REQ-TOOLS-145's.
-          const actives = next.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS'));
-          if (actives.length > 1) return errorObservation(listMarksSeveralActive(actives.map((t) => t.name)));
+          // No unheld task is active here (the REQ-TOOLS-146 rejection above answers a list that marks another beside one), so
+          // the second IN_PROGRESS can only come from the submitted list itself: PD-TOOLS-008's sentence, not REQ-TOOLS-145's. It
+          // counts the unheld tasks the list newly marks (revision 2); a held task and a restored protected one are not counted.
+          const actives = next.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS' && !protectedActive.has(t.id) && !held.has(t.id)));
+          if (actives.length > 1) return errorObservation(listMarksSeveralActive(actives.map((t) => t.name), typeof opts.delegates === 'function' ? opts.delegates() : opts.delegates === true));
           list.phases.splice(0, list.phases.length, ...next);
           return done(`Replaced the todo list: ${countNoun(next.length, 'phase')}, ${countNoun(next.reduce((n, p) => n + p.tasks.length, 0), 'task')}.`);
         }
@@ -183,7 +217,8 @@ export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema
           const phase = list.findPhase(a.phase_id);
           if (!phase) return errorObservation(`Unknown phase id '${a.phase_id}'. ${hint()}`);
           const state = flat.state ?? 'PENDING';
-          const active = list.active();
+          // PD-TOOLS-008 revision 2: a new task is never held, so it counts; the active task named is the first unheld one.
+          const active = list.active(heldNow());
           if (state === 'IN_PROGRESS' && active) return errorObservation(singleActive(active.id, active.name));
           const task: TodoTask = { id: hexId(), name, description: flat.description ?? '', state };
           phase.tasks.push(task);
@@ -199,8 +234,11 @@ export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema
           if (name !== undefined && name !== task.name) { task.name = name; changes.push('name'); }
           if (a.description !== undefined && a.description !== task.description) { task.description = a.description; changes.push('description'); }
           if (a.state !== undefined && a.state !== task.state) {
-            const active = list.active();
-            if (a.state === 'IN_PROGRESS' && active && active.id !== task.id) return errorObservation(singleActive(active.id, active.name));
+            // PD-TOOLS-008 revision 2: marking a task a running delegation holds is never counted; marking any other is refused
+            // while another unheld task is active, naming it.
+            const held = heldNow();
+            const active = list.active(held);
+            if (a.state === 'IN_PROGRESS' && !held.has(task.id) && active && active.id !== task.id) return errorObservation(singleActive(active.id, active.name));
             task.state = a.state;
             changes.push('state');
           }

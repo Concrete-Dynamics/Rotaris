@@ -307,7 +307,13 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const root = realPathOf(ctx.effectiveRoot ?? ctx.workspaceRoot);
   const runtime = deps.runtime(ctx.workspaceRoot);
   const todo = new TodoList(ctx.readTodo?.());
-  const rawTodo = todoTool(todo) as ToolExecutor;
+  /*
+   * PD-TOOLS-008 revision 2 (OQ-240): the items this agent's non-terminal children hold are outside REQ-TOOLS-145's count, read
+   * through the run at each call; the hint to leave delegated items PENDING is given to an agent whose resolved set holds
+   * `delegate`, known once the one resolution below has run (`callable`).
+   */
+  let holdsDelegate = false;
+  const rawTodo = todoTool(todo, { held: () => ctx.heldTodoItems?.() ?? new Set<string>(), delegates: () => holdsDelegate }) as ToolExecutor;
   const watchedTodo: ToolExecutor = {
     ...rawTodo,
     execute: async (args, toolContext) => {
@@ -316,6 +322,20 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       if (JSON.stringify(todo.toDocument()) !== before) ctx.writeTodo?.(todo.toDocument());
       return result;
     },
+  };
+  /*
+   * PD-TOOLS-006 revision 7 (OQ-240, ruled 2026-10-07 under R-072): an admitted delegation's item — named, inherited or kept on a
+   * follow-up — is marked IN_PROGRESS in THIS port's own plan when it is PENDING, on the same `TodoList` the `todo` tool holds, so
+   * a later `todo` call in the turn keeps the mark, and the plan is persisted as any `todo` write is. The child is non-terminal
+   * from its admission, so the item is held and outside REQ-TOOLS-145's count (PD-TOOLS-008 revision 2). A COMPLETED, ABANDONED
+   * or IN_PROGRESS item, and an id this plan does not hold, are left as they are.
+   */
+  const markDelegatedItem = (item: string): { sentence: string; state: string } | null => {
+    const found = todo.findTask(item);
+    if (found === undefined || found.task.state !== 'PENDING') return null;
+    found.task.state = 'IN_PROGRESS';
+    ctx.writeTodo?.(todo.toDocument());
+    return { sentence: `Todo item ${found.task.name} (${found.task.id}) is now IN_PROGRESS.`, state: todo.render() };
   };
   // Part AL — REQ-TOOLS-108 / REQ-CONFIG-116: the registered `runtime.shell_max_background_sessions` and
   // `runtime.shell_background_timeout` reach the terminal manager from the run's loaded configuration, per port
@@ -411,7 +431,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // granted, resolved by `resolveAgentGrant` as that child's own port resolves it. A delegated child always holds a
     // delegation runtime, and a port never runs `single` where delegation is available, so `coordinating` is true.
     const catalogue = delegateCatalogue(resolver, persona, { ...prerequisites, delegationRuntime: true });
-    executors.set('delegate', delegateTool(ctx.delegation, parentId, catalogue) as ToolExecutor);
+    executors.set('delegate', delegateTool(ctx.delegation, parentId, catalogue, { markItem: markDelegatedItem }) as ToolExecutor);
     executors.set('background_output', backgroundOutputTool(ctx.delegation, parentId) as ToolExecutor);
     executors.set('wait_for_tasks', waitForTasksTool(ctx.delegation, parentId) as ToolExecutor);
   }
@@ -429,6 +449,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   for (const r of resolved.removals) (r.control === 'prerequisite' ? ctx.warn : logInfo)(`tool '${r.tool}' removed from ${ctx.persona} by ${r.control}${r.reason ? ` (${r.reason})` : ''} (REQ-TOOLS-004/006)`);
   const callable = new Map<string, ToolExecutor>();
   for (const n of resolved.tools) { const e = executors.get(n); if (e) callable.set(n, e); }
+  holdsDelegate = callable.has('delegate');
   const specs = [...callable.values()].map(toolSpec);
   // REQ-MONITOR-060/061 (live-run finding K1): the native tools the one resolution kept AND that hold an executor — the
   // names the agent can call, before the MCP surface joins the callable map on `ready()` (those are shown per server).

@@ -154,7 +154,7 @@ describe('scriptedClient — the step a call takes', () => {
    * PD-TOOLS-006 revision 6 (OQ-220): a coordinator that keeps a list names the item each implementation delegation serves. The
    * scripted coordinator writes `plan:<n>` open items, names the next open one at each delegation, and `done` completes them.
    */
-  it('`plan:<n>` writes n open items; each delegation after it names the next one; `done` writes them COMPLETED with their ids', async () => {
+  it('`plan:<n>` writes n open items; each delegation after it names the next one; `done` completes each with an update', async () => {
     vi.stubEnv('ROTARIS_SCRIPT', 'plan:2,delegate:coding-agent:one,delegate:coding-agent:two,delegate:codebase-analyst:three,done');
     vi.stubEnv('ROTARIS_SCRIPT_DELEGATE_ARGS', JSON.stringify({ three: { todo_item: '@1' } }));
     const client = scriptedClient(clock, () => {});
@@ -184,8 +184,12 @@ describe('scriptedClient — the step a call takes', () => {
     const three = await callOf(messages);
     expect(three.args['todo_item']).toBe('0000000a');
     messages = [...messages, ...answered('c4', 'delegate', three.args, "Task 'three': queued — Accepted.\ntask_id: bg_00000003")];
-    const done = await callOf(messages);
-    expect(done).toEqual({ name: 'todo', args: { operation: 'replace', phases: [{ id: '0000aaaa', name: 'Scripted plan', tasks: [['0000000a', 1], ['0000000b', 2]].map(([id, i]) => ({ id, name: `Scripted item ${i}`, description: 'Delegated by the scripted coordinator.', state: 'COMPLETED' })) }] } });
+    // PD-TOOLS-006 revision 7 (OQ-240): the delegations marked their items IN_PROGRESS, which a replace would restore
+    // (REQ-TOOLS-146), so `done` completes each open item with its own update, in one step.
+    const parts = client.stream({ ...request(messages), tools })[Symbol.asyncIterator]();
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    for (let r = await parts.next(); r.done !== true; r = await parts.next()) if (r.value.ok && r.value.value.kind === 'tool-call') calls.push({ name: r.value.value.name, args: JSON.parse(r.value.value.argsDelta) as Record<string, unknown> });
+    expect(calls).toEqual(['0000000a', '0000000b'].map((id) => ({ name: 'todo', args: { operation: 'update', task_id: id, state: 'COMPLETED' } })));
     // An entry's null names no item, and no plan names none.
     expect(scriptedTodoItem(latestScriptedPlan(messages), null)).toBeUndefined();
     expect(scriptedTodoItem(null, undefined)).toBeUndefined();

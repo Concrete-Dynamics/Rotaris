@@ -45,7 +45,7 @@ export function attachmentWarnings(a: AttachmentReport): readonly string[] {
 
 export interface DelegationPort {
   delegate(parentId: string, req: { persona: string; taskName: string; task: string; dependsOn: readonly string[]; inheritedContext: readonly string[]; category: string; runInBackground: boolean; attachArtifacts: readonly string[]; writeScope: readonly string[]; continuationOf?: string | undefined; suppressAutoContext?: boolean | undefined; sessionId?: string | undefined; todoItem?: string | undefined }): Promise<
-    | { status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; canonicalName: string; taskId: string; message: string; attachments?: AttachmentReport | undefined }
+    | { status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; canonicalName: string; taskId: string; message: string; attachments?: AttachmentReport | undefined; todoItem?: string | undefined }
     | { status: 'rejected'; canonicalName: string; message: string }
   >;
   backgroundOutput(parentId: string, taskId: string, detail: 'summary' | 'verbatim'): { status: 'ok' | 'still_running' | 'not_found'; state: string; text: string };
@@ -125,13 +125,30 @@ export function renderDelegateCatalogue(catalogue: DelegateCatalogue): string {
  */
 export const TODO_ITEM_SENTENCE = 'Give todo_item: the id of the item of your todo list this delegation serves, as the todo tool\'s last result shows it. Once you keep a todo list, every delegation to a persona that writes workspace files names an open item, and no two such delegations hold one item at once. Write the list in one step and delegate in the next: an item\'s id exists only once the todo call has returned.';
 
-export function delegateTool(port: DelegationPort, parentId: string, catalogue: DelegateCatalogue): ToolExecutor<z.infer<typeof delegateSchema>> {
+/**
+ * PD-TOOLS-006 revision 7 (OQ-240, ruled 2026-10-07 under R-072): the sentence that tells the caller an admitted delegation marks
+ * the PENDING item it serves IN_PROGRESS, so the items it will delegate are left PENDING in its list.
+ */
+export const TODO_ITEM_MARK_SENTENCE = 'A delegation the run admits marks the PENDING item it serves IN_PROGRESS in your list, so leave the items you will delegate PENDING and keep IN_PROGRESS for the item you work on yourself.';
+
+/**
+ * PD-TOOLS-006 revision 7: what the caller's tool port does with an admitted delegation's item (`DelegationPort`'s accepted
+ * `todoItem`: named, inherited through `continuation_of`, or kept on a `session_id` follow-up). `markItem` marks it in the
+ * port's own plan when it is PENDING and returns the observation's addition — the sentence and the Todo state — or null when
+ * it marked nothing. It runs once the call is admitted and before a `run_in_background: false` wait, so the plan reads the
+ * item active while the child runs.
+ */
+export interface DelegateToolOptions {
+  readonly markItem?: ((item: string) => { readonly sentence: string; readonly state: string } | null) | undefined;
+}
+
+export function delegateTool(port: DelegationPort, parentId: string, catalogue: DelegateCatalogue, opts: DelegateToolOptions = {}): ToolExecutor<z.infer<typeof delegateSchema>> {
   return {
     name: 'delegate',
     // OQ-114 as ruled (R-071, PD-ORCH-004 revision 5): `continuation_of`'s sentence says a continuation starts with no memory.
     // PD-TOOLS-006 revision 4 (OQ-216): the persona list is the caller's catalogue with each persona's facets; the sentences
     // after it are unchanged.
-    description: `Delegate a task to a specialist persona. ${renderDelegateCatalogue(catalogue)} Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false. When the child will write files, give write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit. When a child's report makes a continuation offer, give continuation_of: that child\'s task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains. To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead. ${TODO_ITEM_SENTENCE}`,
+    description: `Delegate a task to a specialist persona. ${renderDelegateCatalogue(catalogue)} Write the task with the sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Returns at once with a task_id; the child runs in the background unless run_in_background is false. When the child will write files, give write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit. When a child's report makes a continuation offer, give continuation_of: that child\'s task_id, to delegate the remaining work as its continuation. A continuation starts with no memory of the child it continues: write its task as a complete brief of what was asked, what that child did and found, and what remains. To ask a child of yours that has ended something more, give session_id: its task_id — it resumes its own conversation with task as its next message and reports again; a child cut off by its time limit is continued with continuation_of instead. ${TODO_ITEM_SENTENCE} ${TODO_ITEM_MARK_SENTENCE}`,
     schema: delegateSchema,
     label: (a) => `delegate ${a.persona}: ${a.task_name}`,
     execute: async (a) => {
@@ -143,7 +160,10 @@ export function delegateTool(port: DelegationPort, parentId: string, catalogue: 
       // placeholder this replaced said "the artifact store is not built yet"; it is, and the falsified line is gone from
       // the code with its reason kept in this comment.
       const warnings = r.attachments ? attachmentWarnings(r.attachments) : [];
-      let text = renderDelegateObservation(r.canonicalName, r.status, [r.message, ...warnings].join(' '), r.taskId);
+      // PD-TOOLS-006 revision 7: the admitted delegation's PENDING item is marked IN_PROGRESS now, before any wait below.
+      const marked = r.todoItem !== undefined && opts.markItem ? opts.markItem(r.todoItem) : null;
+      let text = renderDelegateObservation(r.canonicalName, r.status, [r.message, ...warnings, ...(marked ? [marked.sentence] : [])].join(' '), r.taskId);
+      if (marked) text += `\n\n${marked.state}`;
       if (!a.run_in_background) {
         // REQ-TOOLS-153: the same mechanism as wait_for_tasks, over exactly this one task.
         const w = await port.waitForTasks(parentId, [r.taskId]);

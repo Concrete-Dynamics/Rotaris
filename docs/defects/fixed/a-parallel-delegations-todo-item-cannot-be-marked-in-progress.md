@@ -17,7 +17,7 @@ runs, and the Agent plan strip (REQ-TOOLS-147's primary progress display, REQ-CH
 - **REQ-TOOLS-145's sentence gives harmful advice here.** `#14`'s refusal told the coordinator to mark the running
   implementer's item COMPLETED or ABANDONED, which is the record OQ-220's terminal-item refusal exists to prevent.
 
-Ruled as [OQ-240](../architecture/open-questions.md) under the owner's delegation (R-072): `PD-TOOLS-008` revision 2 and
+Ruled as [OQ-240](../../architecture/open-questions.md) under the owner's delegation (R-072): `PD-TOOLS-008` revision 2 and
 `PD-TOOLS-006` revision 7.
 
 ## Specs
@@ -38,3 +38,21 @@ Ruled as [OQ-240](../architecture/open-questions.md) under the owner's delegatio
   you are on IN_PROGRESS".
 - `packages/engine/src/children/orchestration.ts` and `packages/engine/src/sessions.ts` — the admitted item and the
   caller's non-terminal children, which the run reads.
+
+## Outcome
+
+Repaired 2026-10-13 (fin33, `fin33-delegation-targets-and-plan`) under `PD-TOOLS-008` revision 2 and `PD-TOOLS-006` revision 7
+([OQ-240](../../architecture/open-questions.md)). A task a non-terminal child of the list's owner holds as its `todo_item` is
+outside REQ-TOOLS-145's count, and the bound is checked only on a write that marks a task IN_PROGRESS (`todoTool`'s
+`TodoToolOptions.held`, read through `ToolPortContext.heldTodoItems` from `IterationChildren.heldTodoItems`). An admitted
+delegation hands its item back (`DelegateOutcome.todoItem`) and the caller's port marks it IN_PROGRESS when PENDING, persists
+it and says so in the observation with the Todo state (`markDelegatedItem` in `apps/desktop/src/run-host/tools.ts`), before any
+foreground wait. `TODO_LIST_OWED_TEXT` and the `todo` and `delegate` descriptions teach the coordinator to keep only its own
+item IN_PROGRESS and leave delegated ones PENDING; `PD-TOOLS-008`'s sentence carries that hint for a `delegate` holder.
+
+Pinned by `packages/agent-tools/src/tools/tools.test.ts` ("a task a running delegation holds"),
+`packages/agent-tools/src/tools/delegation.test.ts` ("the admitted item is marked"), `apps/desktop/src/run-host/tools.test.ts`
+("PD-TOOLS-006 revision 7"), `packages/engine/src/children/children.test.ts` ("revision 7" cases) and
+`packages/engine/src/run/coordinator-plan.test.ts` (the refusal's text), each red on the code before where it pins a behaviour;
+shown in the built app by `pnpm mission-proof` item 1e; read from the live run by `heldItemReading`
+(`apps/desktop/scripts/lib/coordinator-todo.mjs`).

@@ -865,6 +865,121 @@ ${orchestrator}runtime:
 });
 
 /**
+ * PD-TOOLS-006 revision 7 with PD-TOOLS-008 revision 2 (OQ-240, ruled 2026-10-07 under R-072): an admitted delegation marks its
+ * PENDING item IN_PROGRESS in the caller's own plan and persists it, and the items the caller's non-terminal children hold are
+ * outside REQ-TOOLS-145's count. The default live run at a68f121 (edit, #14) could not mark its second running child's item
+ * (docs/defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).
+ */
+describe('PD-TOOLS-006 revision 7: an admitted delegation marks its PENDING item IN_PROGRESS', () => {
+  let dir: string;
+  let dal: StoreDal;
+  let writer: SessionWriter;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-port-mark-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+    const created = SessionWriter.create(
+      { dal, sessionId: asSessionId('S1'), wall: new FakeClock(), retentionCap: 0, warn: () => undefined, onCommitted: () => undefined },
+      { workspaceRoot: dir, pid: 1, host: mintMachineId('0000000000000000000000000000000a') },
+    );
+    if (!created.ok) throw new Error('writer');
+    writer = created.value;
+  });
+  afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  const PLAN = { schema_version: 1 as const, phases: [{ id: 'p0000001', name: 'main', tasks: [
+    { id: 'aaaaaaa1', name: 'impl', description: '', state: 'PENDING' as const },
+    { id: 'aaaaaaa2', name: 'tests', description: '', state: 'PENDING' as const },
+    { id: 'aaaaaaa3', name: 'review', description: '', state: 'PENDING' as const },
+    { id: 'aaaaaaa4', name: 'done', description: '', state: 'COMPLETED' as const },
+    { id: 'aaaaaaa5', name: 'dropped', description: '', state: 'ABANDONED' as const },
+  ] }] };
+
+  /**
+   * The entry orchestrator's port over the built-in table, its plan `PLAN`; the port answers each delegation with `answer`
+   * (the item the engine resolved travels back as `todoItem`) and the run's held set is `held`.
+   */
+  function port(answer: (req: { todoItem?: string; continuationOf?: string; taskName: string }) => Record<string, unknown>, held: Set<string> = new Set()) {
+    const written: { phases: { tasks: { id: string; state: string }[] }[] }[] = [];
+    const delegation = {
+      delegate: async (_parent: string, req: { todoItem?: string; continuationOf?: string; taskName: string }) => answer(req),
+      waitForTasks: async () => ({ immediate: true, requested: 1, text: 'done' }),
+    } as unknown as NonNullable<ToolPortContext['delegation']>;
+    mkdirSync(join(dir, '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), 'default_persona: orchestrator\nmodels:\n  selected:\n    provider: openai\n    model_id: first\n    api_key: k\nlarge_model: selected\nmedium_model: selected\nsmall_model: selected\nruntime:\n  permission_mode: autonomous\n');
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
+    if (!loaded.ok) throw new Error('configuration');
+    const cfg = loaded.value;
+    const resolver = personaResolverFor(cfg, true, () => undefined);
+    const p = createToolPort({
+      sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona: 'orchestrator', agentName: 'orchestrator', parentId: 'root:1', depth: 0, delegation,
+      requestedMode: 'autonomous', modeOverride: null, attended: () => true, warn: () => undefined, abortRun: () => undefined,
+      readTodo: () => structuredClone(PLAN), writeTodo: (d) => { written.push(structuredClone(d) as never); return true; }, heldTodoItems: () => held,
+    }, { clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver, presenter: { present: async () => ({ ok: true }), close: () => undefined }, nextSequence: () => 1, fileStates: new Map(), terminal: null, egress: () => permissivePolicyRead });
+    const call = (callId: string, name: string, args: Record<string, unknown>) => p.dispatch({ callId, name, rawArgs: JSON.stringify(args), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' }, new AbortController().signal);
+    const stateOf = (doc: (typeof written)[number] | undefined, id: string) => doc?.phases.flatMap((ph) => ph.tasks).find((t) => t.id === id)?.state;
+    return { call, written, stateOf, last: () => written[written.length - 1] };
+  }
+  const accepted = (req: { todoItem?: string; taskName: string }, item: string | undefined = req.todoItem) => ({ status: 'queued', canonicalName: req.taskName, taskId: 'bg_00000001', message: 'Accepted.', ...(item ? { todoItem: item } : {}) });
+
+  it('a named PENDING item is marked and persisted, the observation says so, and a todo call later in the turn keeps the mark', async () => {
+    const e = port((req) => accepted(req));
+    const r = await e.call('d1', 'delegate', { persona: 'tester', task_name: 'tests', task: 'TASK: t', todo_item: 'aaaaaaa2' });
+    expect(r.status).toBe('ok');
+    expect(r.text).toMatch(/^Task 'tests': queued — Accepted\. Todo item tests \(aaaaaaa2\) is now IN_PROGRESS\.\ntask_id: bg_00000001\n\nTodo state:\n/);
+    expect(r.text).toContain('[IN_PROGRESS] tests (aaaaaaa2)');
+    expect(e.stateOf(e.last(), 'aaaaaaa2')).toBe('IN_PROGRESS');
+    // a later replace that sends the item PENDING restores it IN_PROGRESS (REQ-TOOLS-146), on the port's same list
+    const t = await e.call('t1', 'todo', { operation: 'replace', phases: [{ name: 'main', tasks: [{ id: 'aaaaaaa1', name: 'impl' }, { id: 'aaaaaaa2', name: 'tests', state: 'PENDING' }, { id: 'aaaaaaa3', name: 'review' }] }] });
+    expect(t.status).toBe('ok');
+    expect(e.stateOf(e.last(), 'aaaaaaa2')).toBe('IN_PROGRESS');
+  });
+
+  it('IN_PROGRESS, COMPLETED and ABANDONED items are left as they are, and nothing is written for them', async () => {
+    const e = port((req) => accepted(req));
+    for (const [i, item] of ['aaaaaaa4', 'aaaaaaa5'].entries()) {
+      const r = await e.call(`d${i}`, 'delegate', { persona: 'codebase-analyst', task_name: `r${i}`, task: 'TASK: r', todo_item: item });
+      expect(r.text).not.toContain('is now IN_PROGRESS');
+    }
+    expect(e.written).toEqual([]);
+    await e.call('d2', 'delegate', { persona: 'tester', task_name: 'tests', task: 'TASK: t', todo_item: 'aaaaaaa2' });
+    expect(e.written).toHaveLength(1);
+    const again = await e.call('d3', 'delegate', { persona: 'tester', task_name: 'tests2', task: 'TASK: t', todo_item: 'aaaaaaa2' });
+    expect(again.text).not.toContain('is now IN_PROGRESS');
+    expect(e.written).toHaveLength(1);
+  });
+
+  it('a rejected delegation marks nothing', async () => {
+    const e = port((req) => ({ status: 'rejected', canonicalName: req.taskName, message: 'no' }));
+    const r = await e.call('d1', 'delegate', { persona: 'tester', task_name: 'tests', task: 'TASK: t', todo_item: 'aaaaaaa2' });
+    expect(r.isError).toBe(true);
+    expect(e.written).toEqual([]);
+  });
+
+  it('a continuation marks the item it inherited, though the call named none', async () => {
+    const e = port((req) => accepted(req, req.continuationOf ? 'aaaaaaa1' : undefined));
+    const r = await e.call('d1', 'delegate', { persona: 'coding-agent', task_name: 'impl2', task: 'TASK: more', continuation_of: 'bg_00000009' });
+    expect(r.text).toContain('Todo item impl (aaaaaaa1) is now IN_PROGRESS.');
+    expect(e.stateOf(e.last(), 'aaaaaaa1')).toBe('IN_PROGRESS');
+  });
+
+  it('two parallel delegations hold their items IN_PROGRESS, and the coordinator still marks its own item (PD-TOOLS-008 revision 2)', async () => {
+    const held = new Set<string>();
+    const e = port((req) => { if (req.todoItem) held.add(req.todoItem); return accepted(req); }, held);
+    await e.call('d1', 'delegate', { persona: 'coding-agent', task_name: 'impl', task: 'TASK: i', todo_item: 'aaaaaaa1' });
+    await e.call('d2', 'delegate', { persona: 'tester', task_name: 'tests', task: 'TASK: t', todo_item: 'aaaaaaa2' });
+    const own = await e.call('t1', 'todo', { operation: 'update', task_id: 'aaaaaaa3', state: 'IN_PROGRESS' });
+    expect(own.status).toBe('ok');
+    expect(['aaaaaaa1', 'aaaaaaa2', 'aaaaaaa3'].map((id) => e.stateOf(e.last(), id))).toEqual(['IN_PROGRESS', 'IN_PROGRESS', 'IN_PROGRESS']);
+    // with no held set, the coordinator's own mark beside a running child's item is refused, naming it (REQ-TOOLS-145)
+    held.clear();
+    const refused = await e.call('t2', 'todo', { operation: 'add_task', phase_id: 'p0000001', name: 'extra', state: 'IN_PROGRESS' });
+    expect(refused.text).toMatch(/Active task: aaaaaaa1 \(impl\)/);
+  });
+});
+
+/**
  * PD-TOOLS-006 revision 4 (OQ-216, ruled 2026-10-07 under R-072): `delegate`'s description states, for each calling agent,
  * what a child of that agent would be granted as each persona — and it is resolved by the function the child's own port
  * applies, so for every persona the description's facets are the facets of the grant that child's port receives.

@@ -2859,6 +2859,31 @@ from OQ-240 (the consortium's question P3).*
 > item, and the refusals counted (target at most one per run, each followed by a named delegation). The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First execution of revision 7, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-240](../architecture/open-questions.md)),
+> built by fin33 (`fin33-delegation-targets-and-plan`):** built as written, and the text met the code in two places.
+>
+> - **The mark is the run host's, made before a foreground wait.** The engine hands the admitted item back on the accepted
+>   `DelegateOutcome` (`todoItem`: named, inherited, or a follow-up's stored item); `delegateTool` takes a `markItem` that
+>   `createToolPort` builds over the port's own `TodoList` (`apps/desktop/src/run-host/tools.ts`), and calls it once the call is
+>   admitted and before a `run_in_background: false` wait, so the plan reads the item active while the child runs. The ruling's
+>   "wrap the delegate executor" would have marked only after that wait.
+> - **`replace` cannot complete an active item.** REQ-TOOLS-146 restores an IN_PROGRESS task over a `replace`, so an item the
+>   run marked is closed with `update`. The scripted coordinator's `done` step (`apps/desktop/src/run-host/scripted-client.ts`)
+>   wrote one `replace` with every item COMPLETED; it now sends one `update` per open item, as a model must.
+>
+> **What was measured.** `run-host/tools.test.ts` ("PD-TOOLS-006 revision 7", four of its five cases red on the code before):
+> a named PENDING item marked, persisted and kept by a later `replace` in the turn; IN_PROGRESS, COMPLETED and ABANDONED items
+> untouched with nothing written; a rejected delegation marking nothing; a continuation marking its inherited item; two
+> parallel delegations held with the coordinator's own item marked beside them. `tools/delegation.test.ts` pins the
+> observation, the mark before the wait and the description's sentence; `children/children.test.ts` the item handed back
+> (named, follow-up) and the live held set (both red before). In the built app, `pnpm mission-proof` item 1e (2026-10-13, load
+> 3.3 to 4.2 on 4 CPUs): alpha's and delta's observations read "Todo item Scripted item 1 (…) is now IN_PROGRESS." and
+> "…Scripted item 2 (…)…", delta's Todo state shows both items active while alpha still ran, the coordinator's three `todo`
+> calls (the plan and two updates) were all `ok`, and the stored plan ends COMPLETED. **What was not measured.** No live run:
+> the next default run's edit session should show each `delegate` observation reading "Todo item … is now IN_PROGRESS" and the
+> Agent plan strip drawing both rows active while both children run; the duress run, a parallel child's item active while it
+> runs (`#305` not recurring). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-startup-001"></a>
@@ -4085,6 +4110,31 @@ D7).*
 > narrows only in its message, cannot record two parallel delegations as both in progress, so the plan recorded the running
 > tests child's item `PENDING` (`#14`, refused again). The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 2, 2026-10-13, ruled under [R-072](requests.md#r-072) ([OQ-240](../architecture/open-questions.md)),
+> built by fin33 (`fin33-delegation-targets-and-plan`):** built as written, and the text met the code in two places.
+>
+> - **The held set is read at each call, through the run.** `todoTool` takes `TodoToolOptions.held`
+>   (`packages/agent-tools/src/tools/todo.ts`), which the run host fills from `ToolPortContext.heldTodoItems`, and both
+>   `toolsFor` closures in `packages/engine/src/sessions.ts` answer it from `IterationChildren.heldTodoItems`: the `todo_item`
+>   of every non-terminal child the caller owns, of any persona, every root's children one plan as `owns` reads them. A
+>   read-only child naming an item holds it here, where revision 6's held-item refusal counts implementation children only:
+>   the bound is about the plan's owner, not the child's tools.
+> - **The hint needs the caller's resolved set, known only after the port's one resolution.** `delegates` is read lazily, so
+>   the sentence carries the hint exactly when the agent's callable set holds `delegate`.
+>
+> With no held set the tool behaves exactly as before (the pre-revision cases in `tools.test.ts` pass unchanged). The
+> falsified single-active reason is kept beside its replacement in the tool's description comment.
+>
+> **What was measured.** Five cases in `packages/agent-tools/src/tools/tools.test.ts` ("a task a running delegation holds"),
+> each red on the code before the build: two held tasks marked beside the agent's own; a second unheld mark refused in
+> REQ-TOOLS-145's sentence naming the unheld task; a `replace` that marks nothing accepted while ended holders' items stay
+> IN_PROGRESS, and a fourth mark then refused naming the first unheld one; this directive's sentence counting unheld tasks only,
+> with the hint for a `delegate` holder alone; the description. `apps/desktop/src/run-host/tools.test.ts` drives the port with
+> two parallel delegations and the coordinator's own mark beside them. **What was not measured.** No live run: the next default
+> run's edit session should show no refused `update` like `#14` and both parallel items active, and the harness's
+> `heldItemReading` (`apps/desktop/scripts/lib/coordinator-todo.mjs`) counts items read PENDING while held and single-active
+> refusals (target 0). The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

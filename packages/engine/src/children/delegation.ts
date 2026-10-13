@@ -68,7 +68,12 @@ export interface AttachmentOutcome {
 }
 
 export type DelegateOutcome =
-  | { readonly status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; readonly canonicalName: string; readonly taskId: string; readonly message: string; readonly attachments?: AttachmentOutcome | undefined }
+  /**
+   * `todoItem` (PD-TOOLS-006 revision 7, OQ-240): the item of the caller's plan the admitted delegation serves — named,
+   * inherited through `continuation_of`, or kept on a `session_id` follow-up — which the caller's port marks IN_PROGRESS
+   * when it is PENDING. Absent when the delegation serves none.
+   */
+  | { readonly status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; readonly canonicalName: string; readonly taskId: string; readonly message: string; readonly attachments?: AttachmentOutcome | undefined; readonly todoItem?: string | undefined }
   | { readonly status: 'rejected'; readonly canonicalName: string; readonly message: string };
 
 export interface BackgroundOutput {

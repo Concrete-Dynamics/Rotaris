@@ -167,9 +167,13 @@ export function planHeldRowText(iteration: number, open: readonly string[], give
  * is one `todo` call away, and the same call then runs as it was asked. PD-TOOLS-006 revision 6 (OQ-220) adds what the list
  * is for at a delegation: once it is written, a delegation to a persona that writes workspace files names the item it serves,
  * by the id the `todo` result gives. It said, until 2026-10-07: "… one item per step with only the step you are on
- * IN_PROGRESS, then make this call again."
+ * IN_PROGRESS, then make this call again." `PD-TOOLS-008` revision 2 and `PD-TOOLS-006` revision 7 (OQ-240) count only the
+ * items the agent works on itself and mark a delegated item at admission, so the list is one item per piece of work, the
+ * delegated ones PENDING. It said, until OQ-240's build: "Write one with the todo tool, one item per step with only the step you
+ * are on IN_PROGRESS; its result gives each item's id. Then make this call again, and on a delegate call to a persona that
+ * writes workspace files give todo_item: the id of the item it serves."
  */
-export const TODO_LIST_OWED_TEXT = 'This call was not run: this task now spans more than one step and you keep no todo list for it (REQ-ORCH-029). Write one with the todo tool, one item per step with only the step you are on IN_PROGRESS; its result gives each item\'s id. Then make this call again, and on a delegate call to a persona that writes workspace files give todo_item: the id of the item it serves.';
+export const TODO_LIST_OWED_TEXT = 'This call was not run: this task now spans more than one step and you keep no todo list for it (REQ-ORCH-029). Write one with the todo tool, one item per piece of work, with only an item you work on yourself IN_PROGRESS and the items you will delegate PENDING; its result gives each item\'s id. Then make this call again, and on a delegate call give todo_item: the id of the item it serves, which the call marks IN_PROGRESS.';
 
 /** The open items named (up to the first five, REQ-ORCH-075) and the instruction to continue from the plan. */
 function planItemsBlock(open: readonly string[]): string {

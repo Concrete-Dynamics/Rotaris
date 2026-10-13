@@ -214,8 +214,10 @@ An agent's own plan, which the `todo` tool writes: phases holding named tasks in
 run's todo list, which the run writes and resolves itself. The coordinator's agent plan is the "todo list it keeps current"
 of REQ-ORCH-029: from a task's second work item on the run refuses the next until one is written for that task (OQ-213), its
 open items hold the task's completion (REQ-ORCH-075, OQ-203), and a background child's completion notification names them
-(REQ-ORCH-059). The Todo pane shows it as "Agent plan" (REQ-CHAT-088). — `REQ-TOOLS-144`, `REQ-TOOLS-147`, `REQ-ORCH-029`,
-`REQ-ORCH-075`, OQ-213
+(REQ-ORCH-059). The Todo pane shows it as "Agent plan" (REQ-CHAT-088). At most one of its tasks is IN_PROGRESS that the agent
+works on itself; a task one of its running delegated children holds as `todo_item` is outside that count, and an admitted
+delegation marks its PENDING item IN_PROGRESS (`PD-TOOLS-008` revision 2, `PD-TOOLS-006` revision 7, OQ-240). — `REQ-TOOLS-144`,
+`REQ-TOOLS-145`, `REQ-TOOLS-147`, `REQ-ORCH-029`, `REQ-ORCH-075`, OQ-213, OQ-240
 _Avoid_: planner plan (the run's todo list), task ledger
 
 ### Finishing work

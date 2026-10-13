@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
-import { agentPlanTaskCount, coordinatorTodoReading, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading, WRITER_ROLES } from './coordinator-todo.mjs';
+import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, launchRunOverride, planItemIds, rootAgentPlan, todoItemReading, todoStates, WRITER_ROLES } from './coordinator-todo.mjs';
 import { BUILT_IN_ROLE_TOOLS } from '@rotaris/contracts';
 
 const call = (ordinal: number, tool_name: string, agent_name = 'orchestrator', status = 'ok', failureKind: string | null = null) => ({ ordinal, tool_name, agent_name, status, failureKind });
@@ -114,5 +114,58 @@ describe('todoItemReading (PD-TOOLS-006 revision 6, OQ-220)', () => {
     expect(planItemIds(root)).toEqual(['0000000a', '0000000b']);
     expect(rootAgentPlan('{')).toBeNull();
     expect(planItemIds(null)).toBeNull();
+  });
+});
+
+/**
+ * PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-240): what the coordinator's plan recorded of the items its running
+ * children held, pinned against the default live run's edit session at a68f121 (#14 refused, the tests item PENDING while its
+ * child ran) and the shape the build records (each delegate result carries the Todo state with its item IN_PROGRESS).
+ */
+describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-240)', () => {
+  const state = (rows: [string, string, string][]) => `Todo state:\nPhase main (e002ab7d)\n${rows.map(([st, name, id]) => `  [${st}] ${name} (${id})`).join('\n')}`;
+  const at = (iso: string) => Date.parse(iso);
+  const kids = [
+    { canonical_name: 'impl', persona: 'coding-agent', depth: 1, todo_item: '0000000a', spawned_at: '2026-10-07T07:00:10Z', completed_at: '2026-10-07T07:02:00Z' },
+    { canonical_name: 'tests', persona: 'tester', depth: 1, todo_item: '0000000b', spawned_at: '2026-10-07T07:00:11Z', completed_at: '2026-10-07T07:03:00Z' },
+  ];
+  const c = (ordinal: number, tool_name: string, status: string, result: string, endedAt: string) => ({ ordinal, tool_name, agent_name: 'orchestrator', status, result, endedAt: at(endedAt) });
+
+  it('todoStates reads a rendered Todo state, and nothing where there is none', () => {
+    expect([...todoStates(`Task 'x': queued — ok\ntask_id: bg_00000001\n\n${state([['IN_PROGRESS', 'Implement it', '0000000a']])}`)!]).toEqual([['0000000a', 'IN_PROGRESS']]);
+    expect(todoStates('Task done.')).toBeNull();
+  });
+
+  it('the edit session as recorded before the repair: the tests item read PENDING while its child ran, and #14 refused', () => {
+    const r = heldItemReading([{ scenario: 'edit', rootNames: ['orchestrator'], children: kids, calls: [
+      c(10, 'todo', 'ok', state([['IN_PROGRESS', 'Implement it', '0000000a'], ['PENDING', 'Test it', '0000000b']]), '2026-10-07T07:00:05Z'),
+      c(12, 'delegate', 'ok', "Task 'impl': queued — Accepted.\ntask_id: bg_00000001", '2026-10-07T07:00:10Z'),
+      c(13, 'delegate', 'ok', "Task 'tests': queued — Accepted.\ntask_id: bg_00000002", '2026-10-07T07:00:11Z'),
+      c(14, 'todo', 'failed', 'Only one task can be IN_PROGRESS at a time. Active task: 0000000a (Implement it). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.', '2026-10-07T07:00:20Z'),
+      c(15, 'todo', 'ok', state([['IN_PROGRESS', 'Implement it', '0000000a'], ['PENDING', 'Test it', '0000000b']]), '2026-10-07T07:00:30Z'),
+    ] }]);
+    expect(r.singleActive).toEqual([{ scenario: 'edit', ordinal: 14 }]);
+    expect(r.heldPending).toEqual([{ scenario: 'edit', ordinal: 15, child: 'tests', item: '0000000b' }]);
+    expect(r.closedWhileHeld).toEqual([]);
+  });
+
+  it('as built: each delegation marks its item, both read active while their children run, and they close after the children end', () => {
+    const r = heldItemReading([{ scenario: 'edit', rootNames: ['orchestrator'], children: kids, calls: [
+      c(10, 'todo', 'ok', state([['PENDING', 'Implement it', '0000000a'], ['PENDING', 'Test it', '0000000b']]), '2026-10-07T07:00:05Z'),
+      c(12, 'delegate', 'ok', `Task 'impl': queued — Accepted. Todo item Implement it (0000000a) is now IN_PROGRESS.\ntask_id: bg_00000001\n\n${state([['IN_PROGRESS', 'Implement it', '0000000a'], ['PENDING', 'Test it', '0000000b']])}`, '2026-10-07T07:00:10Z'),
+      c(13, 'delegate', 'ok', `Task 'tests': queued — Accepted.\ntask_id: bg_00000002\n\n${state([['IN_PROGRESS', 'Implement it', '0000000a'], ['IN_PROGRESS', 'Test it', '0000000b']])}`, '2026-10-07T07:00:11Z'),
+      c(20, 'todo', 'ok', state([['COMPLETED', 'Implement it', '0000000a'], ['COMPLETED', 'Test it', '0000000b']]), '2026-10-07T07:03:05Z'),
+    ] }]);
+    expect(r).toMatchObject({ coordinating: ['edit'], heldPending: [], closedWhileHeld: [], singleActive: [] });
+  });
+
+  it('an item closed while its implementation child still runs is reported; a session that never delegated is not read', () => {
+    const r = heldItemReading([
+      { scenario: 'duress', rootNames: ['orchestrator'], children: kids, calls: [c(12, 'delegate', 'ok', "Task 'impl': queued", '2026-10-07T07:00:10Z'), c(30, 'todo', 'ok', state([['COMPLETED', 'Implement it', '0000000a'], ['IN_PROGRESS', 'Test it', '0000000b']]), '2026-10-07T07:01:00Z')] },
+      { scenario: 'shell', rootNames: ['orchestrator'], children: [], calls: [c(1, 'todo', 'failed', 'Only one task can be IN_PROGRESS at a time. The submitted list marks 2 tasks', '2026-10-07T07:00:00Z')] },
+    ]);
+    expect(r.closedWhileHeld).toEqual([{ scenario: 'duress', ordinal: 30, child: 'impl', item: '0000000a' }]);
+    expect(r.coordinating).toEqual(['duress']);
+    expect(r.singleActive).toEqual([]);
   });
 });

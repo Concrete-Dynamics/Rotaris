@@ -55,8 +55,10 @@ than against the active window. Adding a window where none holds the workspace i
 [OQ-267](../../architecture/open-questions.md#oq-267) for the consortium. The provider-named sign-in branch is unchanged
 (dormant: nothing names a provider).
 
-Pinned by `apps/desktop/src/main/main-windows.test.ts` ("reaches a named workspace …", and the refusal with no main window)
-and by `pnpm notice-proof`'s section 6b, `review-other`: a window on a workspace with no hooks activates a notice naming
+Pinned by `apps/desktop/src/main/main-windows.test.ts` ("reaches a named workspace …", and the refusal with no main window),
+by `apps/desktop/src/main/commands/hooks.test.ts` (added at review: `hooks.review` hands the action's workspace and the asking
+window to the review flow, and `hooks.reviewDecide` stores the decision against the dialog's workspace id while the command
+resolves to a window holding another; both red on the base `hooks.ts`), and by `pnpm notice-proof`'s section 6b, `review-other`: a window on a workspace with no hooks activates a notice naming
 another workspace that declares one; main adds window 2 for it, opens its review (1 hook), and records the scripted
 refusal for that workspace. Run against the base build (the repair's source reverted, the proof kept) the same section
 failed with the renderer's "… which is not the open workspace" and no review; with the repair the whole proof passed.

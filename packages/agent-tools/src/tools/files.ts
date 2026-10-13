@@ -319,7 +319,7 @@ export interface EditMatch {
   /**
    * Level 3 only, one per start: the leading prefix that tells the window from `old_string`, and whether the file's lines
    * carry it in addition to `old_string`'s (`deeper`) or `old_string`'s carry it and the file's do not. Read by
-   * `PD-TOOLS-014`'s near-miss reply; `write_file` ignores it.
+   * `PD-TOOLS-014`'s near-miss reply, and by `write_file`'s level-3 apply, which carries it into `new_string` (`PD-TOOLS-015`).
    */
   shifts?: { prefix: string; deeper: boolean }[];
 }
@@ -458,14 +458,14 @@ const NEAR_MISS_QUOTE_CAP = 30_000;
  * 2,000-character error record (REQ-SESSION-136) keeps them. Sent only after the hash matched: the text is what the
  * caller's hash already names, and the stale-hash refusal, which never quotes, is not reached here.
  */
-function nearMissMessage(rel: string, lines: readonly string[], m: EditMatch, oldText: string): string {
+function nearMissMessage(rel: string, lines: readonly string[], m: EditMatch, oldText: string, voice: NearMissVoice = haetVoice(rel)): string {
   const k = oldText.split('\n').length;
-  const head = `old_string was not found exactly in ${rel}.`;
+  const { head, reader } = voice;
   const kind = m.level === 2 ? 'match level 2 (trailing whitespace)' : 'match level 3 (indentation shift)';
   const range = (start: number) => (k === 1 ? `line ${start + 1}` : `lines ${start + 1}-${start + k}`);
   if (m.starts.length > 1) {
     const reads = m.starts.map((s) => `offset ${s + 1} limit ${k}`).join('; ');
-    return `${head} It matches at ${kind} in ${m.starts.length} places, starting at lines ${m.starts.map((s) => s + 1).join(', ')}; nothing was written. Read the one you mean with haet_read (${reads}) and send its exact text as old_string.`;
+    return `${head} It matches at ${kind} in ${m.starts.length} places, starting at lines ${m.starts.map((s) => s + 1).join(', ')}; nothing was written. Read the one you mean with ${reader} (${reads}) and send its exact text as old_string.`;
   }
   const start = m.starts[0] as number;
   const window = lines.slice(start, start + k);
@@ -483,13 +483,87 @@ function nearMissMessage(rel: string, lines: readonly string[], m: EditMatch, ol
       ? `Every line of the file carries the leading prefix ${what} in addition to old_string's indentation.`
       : `Every line of old_string carries the leading prefix ${what} that the file's lines do not.`;
   }
-  const facts = `${head} It matches ${range(start)} at ${kind}. ${differs} Your content_hash is still current and nothing was written. Give new_string the file's indentation and line endings.`;
-  const fallback = 'If these are not the lines you meant, read the file again with haet_read.';
+  const facts = `${head} It matches ${range(start)} at ${kind}. ${differs}${voice.current} ${voice.ask}`;
+  const fallback = `If these are not the lines you meant, read the file again with ${reader}.`;
   const quote = JSON.stringify(window.join('\n'));
   if (quote.length > NEAR_MISS_QUOTE_CAP) {
-    return `${facts} The window is too long to quote here (${quote.length} characters as JSON); read it with haet_read (offset ${start + 1} limit ${k}) and send its exact text as old_string with the same content_hash. ${fallback}`;
+    return `${facts} The window is too long to quote here (${quote.length} characters as JSON); read it with ${reader} (offset ${start + 1} limit ${k}) and send its exact text as old_string${voice.sameHash}. ${fallback}`;
   }
-  return `${facts} Sent back as old_string with the same content_hash, the file's text over ${range(start)} matches exactly, as this JSON string: ${quote} ${fallback}`;
+  return `${facts} Sent back as old_string${voice.sameHash}, the file's text over ${range(start)} matches exactly, as this JSON string: ${quote} ${fallback}`;
+}
+
+/**
+ * The wording `nearMissMessage` speaks in, per tool. `haet_edit`'s (`PD-TOOLS-014`) names the hash the caller holds and
+ * `haet_read`; `write_file`'s (`PD-TOOLS-015`) has no hash, opens with the level-3 refusal's own sentence, asks for both
+ * strings at the file's indentation and names `read_file`.
+ */
+interface NearMissVoice {
+  /** The opening sentence. */
+  head: string;
+  /** The hash sentence after what differs, with its leading space, or empty. */
+  current: string;
+  /** Clause 4: what the caller is asked to send. */
+  ask: string;
+  /** The tool every pointer names. */
+  reader: 'haet_read' | 'read_file';
+  /** What a retry with the quote must carry besides it, with its leading space, or empty. */
+  sameHash: string;
+}
+
+function haetVoice(rel: string): NearMissVoice {
+  return {
+    head: `old_string was not found exactly in ${rel}.`,
+    current: ' Your content_hash is still current and nothing was written.',
+    ask: "Give new_string the file's indentation and line endings.",
+    reader: 'haet_read',
+    sameHash: ' with the same content_hash',
+  };
+}
+
+/**
+ * `PD-TOOLS-015`: what a `write_file` edit that matched one window only at REQ-TOOLS-136 level 3 writes as its replacement.
+ * The indentation of `new_string`'s first visible line decides. Equal to `old_string`'s first visible line's (O), the caller
+ * wrote both strings from the same belief about the file's depth, so `new_string` takes the window's shift; equal to the
+ * window's corresponding line's (W), it already sits at the file's depth and is written as given; with no visible
+ * character it is a deletion, written as given. Level 3 requires O and W to differ, so the cases are disjoint. Anything else
+ * — a third depth, or a shallower shift a visible line of `new_string` cannot take — leaves the tool unable to tell what the
+ * caller meant, and is refused.
+ *
+ * Until OQ-233's ruling `write_file` wrote every level-3 `new_string` unshifted. The six level-3 misses of the final duress
+ * pack at `a68f121` carried the same extra space in both strings (`PD-TOOLS-014`'s first execution), so each would have
+ * landed one space off beside a success; shifting always would break the opposite case, a `new_string` at the file's depth.
+ *
+ * Lines with no visible character are never padded nor stripped: a blank line stays blank, a whitespace-only one as given.
+ */
+export type NewStringShift =
+  | { kind: 'blank' | 'as-given'; text: string }
+  | { kind: 'shifted'; text: string }
+  | { kind: 'refuse'; line?: number };
+
+export function shiftNewString(newText: string, oldText: string, window: readonly string[], shift: { prefix: string; deeper: boolean }): NewStringShift {
+  const visible = (x: string) => /\S/.test(x);
+  const indent = (x: string) => /^\s*/.exec(x)?.[0] ?? '';
+  const newLines = newText.split('\n');
+  const j = newLines.findIndex(visible);
+  if (j === -1) return { kind: 'blank', text: newText };
+  const oldLines = oldText.split('\n');
+  const i = oldLines.findIndex(visible);
+  const o = indent(oldLines[i] ?? '');
+  const w = indent(window[i] ?? '');
+  const n = indent(newLines[j] as string);
+  if (n === o) {
+    const { prefix, deeper } = shift;
+    const out: string[] = [];
+    for (const [at, line] of newLines.entries()) {
+      if (!visible(line)) out.push(line);
+      else if (deeper) out.push(`${prefix}${line}`);
+      else if (line.startsWith(prefix)) out.push(line.slice(prefix.length));
+      else return { kind: 'refuse', line: at + 1 };
+    }
+    return { kind: 'shifted', text: out.join('\n') };
+  }
+  if (n === w) return { kind: 'as-given', text: newText };
+  return { kind: 'refuse' };
 }
 
 /** Apply the single match: a level-1 match replaces the exact span; a window match replaces whole lines. */
@@ -539,7 +613,7 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
      * docs/defects/fixed/write-files-first-use-refusal-recurred-under-duress.md). The duress run after it still had 1 of 4
      * children omit the field; reading the selector from the call is the fourth repair PD-TOOLS-007 allows (`inferArguments`).
      */
-    description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path} (undoing a create removes the file it made). Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it.',
+    description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path} (undoing a create removes the file it made). Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it. An edit whose old_string matches only once its indentation is shifted moves new_string by the same shift when new_string shares old_string\'s indentation, writes it as given when it already has the file\'s, and otherwise is refused with the file\'s lines quoted.',
     schema: writeSchema,
     /**
      * REQ-TOOLS-032's recoverable refusal, with the expected shape named: the run's first uses omitted
@@ -652,8 +726,26 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
           if (!m) return errorObservation(`old_string was not found in ${rel} at any of the four match levels (exact, trailing-whitespace, indentation shift, fuzzy ≥ 0.85); the file has ${countNoun(lineCount(before ?? ''), 'line')}. Read the file again or use 'overwrite'.`);
           if (m.starts.length > 1) return errorObservation(`Found ${m.starts.length} occurrences of old_str at lines ${m.starts.map((s) => s + 1).join(', ')}. Add surrounding context to make the match unique, or set replace_all.`);
           const start = m.starts[0] as number;
-          const after = applyMatch(before ?? '', lines, m, a.old_string, a.new_string);
-          const note = m.level > 1 ? ` Match level: ${m.level}${m.level === 4 ? ` (similarity: ${m.similarity!.toFixed(2)}). Verify the result.` : '.'}` : '';
+          // PD-TOOLS-015: one level-3 window carries its shift into new_string, writes it as given, or is refused.
+          let replacement = a.new_string;
+          let said = '';
+          if (m.level === 3 && /\S/.test(a.old_string)) {
+            const shift = m.shifts?.[0] as { prefix: string; deeper: boolean };
+            const k = a.old_string.split('\n').length;
+            const decided = shiftNewString(a.new_string, a.old_string, lines.slice(start, start + k), shift);
+            if (decided.kind === 'refuse') {
+              const what = `${JSON.stringify(shift.prefix)} (${countNoun(shift.prefix.length, 'character')})`;
+              const head = decided.line === undefined
+                ? `old_string matches ${rel} only at match level 3 (indentation shift), and new_string's indentation matches neither old_string's nor the file's, so nothing was written.`
+                : `old_string matches ${rel} only at match level 3 (indentation shift), and line ${decided.line} of new_string does not begin with the leading prefix ${what} that is removed from old_string's lines, so new_string cannot take the same shift and nothing was written.`;
+              return errorObservation(nearMissMessage(rel, lines, m, a.old_string, { head, current: '', ask: "Give old_string and new_string the file's indentation.", reader: 'read_file', sameHash: '' }));
+            }
+            replacement = decided.text;
+            if (decided.kind === 'shifted') said = ` new_string was shifted by the same leading prefix ${JSON.stringify(shift.prefix)} (${countNoun(shift.prefix.length, 'character')} ${shift.deeper ? 'added' : 'removed'}) to the file's indentation.`;
+            if (decided.kind === 'as-given') said = " new_string already carries the file's indentation and was written as given.";
+          }
+          const after = applyMatch(before ?? '', lines, m, a.old_string, replacement);
+          const note = m.level > 1 ? ` Match level: ${m.level}${m.level === 4 ? ` (similarity: ${m.similarity!.toFixed(2)}). Verify the result.` : '.'}${said}` : '';
           return commit(after, `${replacementMessage(rel, before ?? '', after, a.old_string, start)}${note}`);
         }
         case 'undo': {

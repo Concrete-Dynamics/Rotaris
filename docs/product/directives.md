@@ -6780,6 +6780,32 @@ twice, which takes a coincidence.
 Narrows REQ-TOOLS-136 (a level-3 match the case names is refused rather than applied, and one is applied with a shifted
 `new_string`); extends REQ-TOOLS-135 (one sentence added to the edit's success).*
 
+> **First execution, 2026-10-13, built under [R-072](requests.md#r-072) (fin35):** the rule held as written. `shiftNewString`
+> (`packages/agent-tools/src/tools/files.ts`) returns the replacement — `shifted`, `as-given`, `blank` — or `refuse` with the
+> line of `new_string` lacking the prefix; `writeFileTool`'s edit branch calls it for one level-3 window of an `old_string`
+> with a visible character, applies the result with the clause's sentence after "Match level: 3.", or refuses through
+> `nearMissMessage`, which now takes the tool's wording (`NearMissVoice`: opening sentence, hash sentence or none, the request,
+> `haet_read` or `read_file`) so that `haet_edit`'s replies stay byte-identical; `EditMatch.shifts`'s comment no longer says
+> `write_file` ignores it, and `write_file`'s description gains one sentence. **What was measured.** Nine cases under
+> "PD-TOOLS-015" in `packages/agent-tools/src/tools/tools.test.ts` and one added expectation on the existing "level 3" case,
+> red on the code before with seven of the nine (one space too deep in both strings, shifted; a tab too shallow, shifted; blank and
+> whitespace-only lines of `new_string` left as given in both directions; the pinned case's "already carries the file's
+> indentation"; a third depth refused with the file's bytes and undo stack unchanged and the quote applying when sent back; a
+> shallower shift a line cannot take, refused naming line 2; a window over 30,000 characters not quoted, `read_file`'s offset
+> and limit given), and two guards green before and after (a deletion's reply unchanged; levels 2 and 4, two level-3 windows,
+> `replace_all` and `haet_edit`'s level-3 near miss word for word). **The pack replayed.** `docs/verification.md` rebuilt from the
+> `a68f121` duress pack's store (`write_file` #289's create, then every `haet_edit` and `replace_content` that succeeded, in
+> order; the hash of every `haet_edit` checked against the rebuilt bytes: every applied one, and 7 of the 8 that failed, #326 stale in the run too), and the
+> six level-3 misses sent through the built `write_file`: #292, #297, #304, #315, #321 and #382 each applied with `new_string
+> was shifted by the same leading prefix " " (1 character removed)`, the replacement's first line at the window's own
+> depth (6 of 6); #290 still applies at level 4. **What was not measured.** No live run: `haet_edit` is preferred, so the next
+> default and duress runs may not send a `write_file` edit that matches only at level 3; no proof script drives `write_file`
+> in the built app, and the executor runs unchanged inside the run host. **Found:** the level-2 apply beside it writes
+> `new_string`'s LF lines into a CRLF file, which this directive does not decide (raised as
+> [OQ-246](../architecture/open-questions.md#oq-246),
+> [`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../defects/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md)).
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <!--

@@ -166,6 +166,8 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
     expect(e2.text).toContain('Match level: 2.');
     const e3 = await w.execute({ operation: 'edit', path: 'src/a.ts', old_string: '  export { a, b };', new_string: 'export { a, b, c };', replace_all: false }, ctx());
     expect(e3.text).toContain('Match level: 3.');
+    // PD-TOOLS-015: new_string already sits at the file's depth, so it is written as given and the reply says so.
+    expect(e3.text).toContain("Match level: 3. new_string already carries the file's indentation and was written as given.");
     const e4 = await w.execute({ operation: 'edit', path: 'src/a.ts', old_string: 'export { a, b, d };', new_string: 'export { a };', replace_all: false }, ctx());
     expect(e4.text).toMatch(/Match level: 4 \(similarity: 0\.\d\d\)\. Verify the result\./);
     expect(await w.execute({ operation: 'edit', path: 'src/a.ts', old_string: 'nothing here at all', new_string: 'x', replace_all: false }, ctx())).toMatchObject({ isError: true });
@@ -487,6 +489,121 @@ describe('PD-TOOLS-014: a haet_edit miss that matches but for whitespace names t
     expect(stale.text).not.toContain('const alpha');
     expect(stale.text).not.toMatch(/match level|[0-9a-f]{64}/);
     await noHistory('k.ts');
+  });
+});
+
+describe('PD-TOOLS-015: a level-3 write_file edit shifts new_string when it shares old_string\'s indentation, writes it as given when it has the file\'s, and refuses otherwise', () => {
+  // OQ-233 (R-072, 2026-10-13). The six level-3 misses of the a68f121 duress pack carried the same extra space in new_string as
+  // in old_string; written unshifted, each would have landed one space off beside a success.
+  const quoteOf = (text: string): string => JSON.parse(/as this JSON string: ("(?:[^"\\]|\\.)*") If these are not/.exec(text)![1]!) as string;
+  const prepare = async (rel: string, text: string) => {
+    writeFileSync(join(root, rel), text);
+    await readFileTool(state, fence).execute({ path: rel, offset: 1, limit: 2000, grep_context: 3 }, ctx());
+  };
+  const edit = (path: string, old_string: string, new_string: string, replace_all = false) =>
+    writeFileTool(state, fence).execute({ operation: 'edit', path, old_string, new_string, replace_all }, ctx());
+  const noHistory = async (path: string) =>
+    expect(await writeFileTool(state, fence).execute({ operation: 'undo', path, replace_all: false }, ctx())).toMatchObject({ isError: true, text: `No edit history for ${path}.` });
+
+  it('both strings one space too deep (#304\'s shape): new_string loses the prefix too, and the block lands at the file\'s depth', async () => {
+    await prepare('s.md', '8. **x**\n   y\nz\n');
+    const r = await edit('s.md', ' 8. **x**\n    y', ' 8. **X**\n    Y');
+    expect(r.isError).toBe(false);
+    expect(readFileSync(join(root, 's.md'), 'utf8')).toBe('8. **X**\n   Y\nz\n');
+    expect(r.text).toMatch(/ Match level: 3\. new_string was shifted by the same leading prefix " " \(1 character removed\) to the file's indentation\. \(sha256 [0-9a-f]{64}\)$/);
+  });
+
+  it('both strings too shallow by a tab: new_string gains the prefix', async () => {
+    await prepare('t.go', 'func f() {\n\treturn 1\n\t// done\n}\n');
+    const r = await edit('t.go', 'return 1\n// done', 'return 2\n// done');
+    expect(r.isError).toBe(false);
+    expect(readFileSync(join(root, 't.go'), 'utf8')).toBe('func f() {\n\treturn 2\n\t// done\n}\n');
+    expect(r.text).toContain('Match level: 3. new_string was shifted by the same leading prefix "\\t" (1 character added) to the file\'s indentation.');
+  });
+
+  it('a line of new_string with no visible character is written as given, in either direction', async () => {
+    await prepare('c.yaml', 'a:\n  b: 1\n  c: 2\n');
+    const shallower = await edit('c.yaml', '   b: 1\n   c: 2', '   b: 1\n\n  \n   c: 3');
+    expect(shallower.isError).toBe(false);
+    expect(readFileSync(join(root, 'c.yaml'), 'utf8')).toBe('a:\n  b: 1\n\n  \n  c: 3\n');
+    await prepare('d.py', 'def f():\n    x = 1\n    return x\n');
+    const deeper = await edit('d.py', '  x = 1\n  return x', '  x = 2\n\n  return x');
+    expect(deeper.isError).toBe(false);
+    expect(readFileSync(join(root, 'd.py'), 'utf8')).toBe('def f():\n    x = 2\n\n    return x\n');
+    expect(deeper.text).toContain('new_string was shifted by the same leading prefix "  " (2 characters added)');
+  });
+
+  it('new_string already at the file\'s depth is written as given, and the reply says so', async () => {
+    await prepare('e.ts', 'const a = 1;\nexport { a, b };\n');
+    const r = await edit('e.ts', '  export { a, b };', 'export { a, b, c };');
+    expect(r.isError).toBe(false);
+    expect(readFileSync(join(root, 'e.ts'), 'utf8')).toBe('const a = 1;\nexport { a, b, c };\n');
+    expect(r.text).toContain(' Match level: 3. new_string already carries the file\'s indentation and was written as given.');
+  });
+
+  it('a new_string with no visible character is a deletion, written as given with the reply unchanged', async () => {
+    await prepare('del.txt', 'a\n  b\n  c\nd\n');
+    const r = await edit('del.txt', ' b\n c', '');
+    expect(r.isError).toBe(false);
+    expect(readFileSync(join(root, 'del.txt'), 'utf8')).toBe('a\n\nd\n');
+    expect(r.text).toMatch(/ Match level: 3\. \(sha256 [0-9a-f]{64}\)$/);
+  });
+
+  it('new_string at a third depth is refused: nothing written, no undo entry, the facts and the window quoted; the quote sent back applies', async () => {
+    const before = 'x\n  if (a) {\n    b();\n  }\n';
+    await prepare('f.ts', before);
+    const r = await edit('f.ts', ' if (a) {\n   b();\n }', '   if (a) {\n     c();\n   }');
+    expect(r.isError).toBe(true);
+    expect(r.text.startsWith('old_string matches f.ts only at match level 3 (indentation shift), and new_string\'s indentation matches neither old_string\'s nor the file\'s, so nothing was written. It matches lines 2-4 at match level 3 (indentation shift). Every line of the file carries the leading prefix " " (1 character) in addition to old_string\'s indentation. Give old_string and new_string the file\'s indentation.')).toBe(true);
+    expect(r.text).not.toContain('content_hash');
+    expect(r.text.endsWith('If these are not the lines you meant, read the file again with read_file.')).toBe(true);
+    expect(r.text.indexOf('It matches lines')).toBeLessThan(r.text.indexOf('JSON string'));
+    expect(quoteOf(r.text)).toBe('  if (a) {\n    b();\n  }');
+    expect(readFileSync(join(root, 'f.ts'), 'utf8')).toBe(before);
+    await noHistory('f.ts');
+    const retry = await edit('f.ts', quoteOf(r.text), '  if (a) {\n    c();\n  }');
+    expect(retry.isError).toBe(false);
+    expect(retry.text).not.toMatch(/Match level/);
+    expect(readFileSync(join(root, 'f.ts'), 'utf8')).toBe('x\n  if (a) {\n    c();\n  }\n');
+  });
+
+  it('a shallower shift a visible line of new_string cannot take is refused, naming the line', async () => {
+    const before = '8. **x**\n   y\n';
+    await prepare('g.md', before);
+    const r = await edit('g.md', ' 8. **x**\n    y', ' 8. **X**\nz\n    y');
+    expect(r.isError).toBe(true);
+    expect(r.text.startsWith('old_string matches g.md only at match level 3 (indentation shift), and line 2 of new_string does not begin with the leading prefix " " (1 character) that is removed from old_string\'s lines, so new_string cannot take the same shift and nothing was written. It matches lines 1-2 at match level 3 (indentation shift).')).toBe(true);
+    expect(quoteOf(r.text)).toBe('8. **x**\n   y');
+    expect(readFileSync(join(root, 'g.md'), 'utf8')).toBe(before);
+    await noHistory('g.md');
+  });
+
+  it('a window over 30,000 characters is not quoted; the refusal directs read_file with its offset and limit', async () => {
+    const long = 'a'.repeat(30_001);
+    await prepare('long.txt', `head\n  ${long}\n`);
+    const r = await edit('long.txt', `   ${long}`, `    ${long}b`);
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain('The window is too long to quote here (30005 characters as JSON); read it with read_file (offset 2 limit 1) and send its exact text as old_string. If these are not the lines you meant, read the file again with read_file.');
+    expect(r.text).not.toContain(long);
+    expect(r.text.length).toBeLessThan(1_000);
+  });
+
+  it('levels 2 and 4, several level-3 windows and replace_all keep their replies; haet_edit keeps PD-TOOLS-014\'s', async () => {
+    await prepare('k.ts', 'const alpha = 1;\nconst beta = 2;\n');
+    const l2 = await edit('k.ts', 'const beta = 2;  ', 'const beta = 3;');
+    expect(l2.text).toMatch(/ Match level: 2\. \(sha256 [0-9a-f]{64}\)$/);
+    const l4 = await edit('k.ts', 'const alpha = 7;', 'const alpha = 8;');
+    expect(l4.text).toMatch(/ Match level: 4 \(similarity: 0\.\d\d\)\. Verify the result\. \(sha256 [0-9a-f]{64}\)$/);
+    await prepare('w.txt', '  q\n  r\n  q\n  r\n');
+    expect(matchEdit(['  q', '  r', '  q', '  r', ''], ' q\n r')?.level).toBe(3);
+    expect(await edit('w.txt', ' q\n r', ' Q\n r')).toMatchObject({ isError: true, text: 'Found 2 occurrences of old_str at lines 1, 3. Add surrounding context to make the match unique, or set replace_all.' });
+    expect(await edit('w.txt', ' q\n r', ' Q\n r', true)).toMatchObject({ isError: true, text: 'old_string was not found in w.txt (4 lines). Read the file again or use \'overwrite\'.' });
+    expect(writeFileTool(state, fence).description).toContain("moves new_string by the same shift when new_string shares old_string's indentation, writes it as given when it already has the file's, and otherwise is refused");
+    // haet_edit's level-3 near miss is PD-TOOLS-014's, word for word.
+    writeFileSync(join(root, 'h.ts'), 'x\n  y\n  w\n');
+    const hash = sha256(readFileSync(join(root, 'h.ts')));
+    const haet = await haetEditTool(state, fence).execute({ path: 'h.ts', content_hash: hash, old_string: ' y\n w', new_string: '   z\n   w', replace_all: false }, ctx());
+    expect(haet.text).toBe('old_string was not found exactly in h.ts. It matches lines 2-3 at match level 3 (indentation shift). Every line of the file carries the leading prefix " " (1 character) in addition to old_string\'s indentation. Your content_hash is still current and nothing was written. Give new_string the file\'s indentation and line endings. Sent back as old_string with the same content_hash, the file\'s text over lines 2-3 matches exactly, as this JSON string: "  y\\n  w" If these are not the lines you meant, read the file again with haet_read.');
   });
 });
 

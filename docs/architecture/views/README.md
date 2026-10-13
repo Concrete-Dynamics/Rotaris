@@ -64,6 +64,13 @@ computation decides, and `dispatch`'s `retrospective.capture` passes it where it
 **process view**'s retrospective paragraph and the **runtime view**'s context-unit paragraph say so. No package, edge,
 process, channel, command or store column changed.
 
+**A level-3 `write_file` edit carries the window's shift into `new_string`, writes it as given, or refuses (PD-TOOLS-015;
+OQ-233 ruled under R-072; fin35).** `shiftNewString` (`agent-tools/src/tools/files.ts`) decides a single level-3 window's
+replacement from the indentation of `new_string`'s first visible line, reading `EditMatch.shifts`; `writeFileTool`'s edit
+branch applies the result or refuses through `nearMissMessage`, which now takes the tool's wording (`NearMissVoice`; `haet_edit`'s
+replies are unchanged). The **runtime view**'s file-tools paragraph says so. No package, edge, process, channel, command or
+store column changed.
+
 **A delegated agent cut off at its per-agent timeout says so where its failure shows, and names the control (PD-CONFIG-003
 revision 3, REQ-MONITOR-040, REQ-MONITOR-044, REQ-MONITOR-052, REQ-MONITOR-069; OQ-234 ruled under R-072, fin33).**
 `AgentRecord` gains `timedOut` (`{ limitSeconds, makingProgress } | null`), which `toAgentRecord` derives from the stored

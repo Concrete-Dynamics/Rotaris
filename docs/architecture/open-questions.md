@@ -11928,6 +11928,11 @@ edit; `write_file` and `haet_edit` differ at level 3; an implementation built fr
 rare double shift when a caller deliberately indents by exactly the prefix. **Set aside, raised as its own question:** both
 advocates read from the code that a CRLF file meets `write_file`'s level-2 apply with mixed line endings; this ruling does not
 decide it ([OQ-246](#oq-246)).
+**Built 2026-10-13 (fin35):** `shiftNewString` and `writeFileTool`'s level-3 branch (`packages/agent-tools/src/tools/files.ts`),
+the refusal through `nearMissMessage` in `write_file`'s wording; pinned by nine cases under "PD-TOOLS-015" in
+`packages/agent-tools/src/tools/tools.test.ts`, seven red on the code before; the `a68f121` pack's six level-3 misses replayed
+through the built `write_file` over the rebuilt `docs/verification.md` each shifted to the file's depth (6 of 6). The first
+execution is in place under the directive.
 
 <a id="oq-234"></a>
 

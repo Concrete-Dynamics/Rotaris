@@ -13580,6 +13580,35 @@ looking for a transcript display preference looks, and it keeps REQ-CONFIG-403's
 by a directive), or whether the switch belongs in another category (Interface holds the other desktop-preference
 toggles), or whether it stands as built.
 
+<a id="oq-265"></a>
+
+**OQ-265 — May the restore delete its own staging copy, without OQ-48's surface?** *(REQ-SESSION-201, whose "a restore
+that fails for any reason MUST leave the store exactly as it was" speaks of the store and not of what is beside it;
+ADR-0058 consequences 5 and 18, D5; OQ-48, deferred by the owner on 2026-10-06 under
+[R-071](../product/requests.md#r-071), "after the first release". Raised 2026-10-13 by fin41 while repairing D8 and D11,
+task N10, as OQ-264; renumbered OQ-265 at landing, because origin/main had given OQ-264 to REQ-CHAT-167's question.)*
+
+**What is open.** D5 is that nothing deletes `<identifier>.restoring-<n>` (the staging copy, the size of a store) or
+`<identifier>.obstruction-<stamp>[.n]` (what the reversal moved off the target name), and nothing knows they exist. The
+record names one remedy, OQ-48's inspect-and-delete surface, and that surface is deferred, so D5 is deferred with it. A
+narrower remedy exists that needs no surface and the record does not offer: **the restore deleting its own staging copy**
+where it can no longer be installed — after a reversal that put the previous store back, after a staging store that
+failed `quick_check` or did not open (step 6), and after a displacement that failed (step 8). The staging copy holds
+nothing that is not in the artifact the user chose, which still exists, so deleting it loses nothing the user has not
+got; a successful restore leaves none already (the rename consumes it). The obstruction aside is different: it is
+whatever occupied the target name, and the product cannot know what that was, so deleting it is not the same question.
+Measured on every reversal (IC-1, the 2026-09-03 verification run, and `store.test.ts`'s E2 on this build): `.restoring-1`
+and one `.obstruction-` left beside the target.
+
+**What the build proceeds under.** As built: neither is deleted. `restoreStore` reports both in `leftovers`, which the
+workspace service hands back in `RestoreReportPayload.leftovers` and which no surface shows.
+
+**What a ruling decides.** Whether the restore deletes its own staging copy on the failure paths above (and, if so,
+whether a failure to delete it is reported or only logged), or D5 waits whole for OQ-48's surface. The obstruction aside
+is outside it either way.
+
+**What a live run then shows.** Nothing: no live scenario restores a store.
+
 <a id="oq-272"></a>
 
 **OQ-272 — Is a person's edit inside an artifact document's frontmatter kept, or rewritten away at the next re-render?**

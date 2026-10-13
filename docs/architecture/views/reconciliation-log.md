@@ -15,6 +15,13 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 
 Last reconciled with the code: **2026-10-13**
 
+**A run's analysis is captured beside a retrospective's artifact (REQ-LIBRARY-025/034, PD-LIBRARY-002; fin42).**
+`captureImprovementJob` (`engine/src/improvements/capture.ts`) names in `considered_session_ids` the source session of each prior
+artifact that has one, so a retrospective's artifact, which has none, stays in a later run's history and names no session; until
+then its null made the job's parse throw and no later run's analysis was captured. The **process view**'s post-run analyst
+paragraph says so (OQ-271 asks whether such an artifact belongs there). No package, edge, process, channel, command or store
+column changed.
+
 **A scripted root can take up a continuation offer (PD-ORCH-004 revisions 3 and 4; fin42).** The scripted client gains the
 step `continue:<persona>:<name>`, a `delegate` whose `continuation_of` names the newest offer its conversation was told
 (`offeredTaskId`, `run-host/scripted-client.ts`, reading with the engine's `offersToldIn`), which `continuation-proof` drives

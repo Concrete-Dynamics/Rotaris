@@ -35,6 +35,7 @@ function harness(options: {
   readonly runsIn?: (workspaceId: string) => number;
 } = {}) {
   const actions: string[] = [];
+  const workspacesOpened: string[] = [];
   const notices: { windowId: number; title: string; action?: string }[] = [];
   const folders: (string | null)[] = [];
   const timers: PendingTimer[] = [];
@@ -120,12 +121,13 @@ function harness(options: {
     log: (message) => actions.push(`log:${message}`),
     unshownApprovals: (approvals) => { actions.push(`unshown:${approvals.join(',')}`); },
     workspaceClosed: (workspace) => { actions.push(`workspace-closed:${workspace}`); },
+    workspaceOpened: (window) => { workspacesOpened.push(`${window.workspace}:${window.workspaceId ?? 'none'}:after-${actions.length}`); },
     ...(options.postShowActivation === undefined ? {} : { postShowActivation: (window) => { actions.push(`activate:${window.workspace}`); options.postShowActivation!(window.wcId); } }),
   };
 
   const mainWindows = new MainWindows<MemoryWindow, string, string, string, string>(dependencies);
   return {
-    mainWindows, actions, notices, folders, windows, openFailures,
+    mainWindows, actions, workspacesOpened, notices, folders, windows, openFailures,
     deferOpens: () => { deferOpens = true; },
     resolveOpen: (workspace: string, opened = true) => openResolvers.get(workspace)?.(opened ? { workspaceId: `id:${workspace}`, storeFile: `${workspace}/store.db` } : undefined),
     advanceTimers: () => { for (const timer of timers.splice(0)) if (!timer.cancelled) timer.callback(); },
@@ -154,6 +156,29 @@ describe('MainWindows', () => {
     expect(activated).toHaveLength(2);
     expect(activated[1]).not.toBe(first.wcId);
     expect(h.actions.indexOf('show:C:/b')).toBeLessThan(h.actions.indexOf('activate:C:/b'));
+  });
+
+  // PD-LIBRARY-002 revision 2 (e): a window that opens a workspace is handed to main once its workspace id is set, after it
+  // has loaded, on every path — so main can send it the improvement activity it would otherwise learn only at the next
+  // publication (docs/defects/fixed/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
+  it('tells main each time a window has opened a workspace, after its load and with its workspace id, and never on a failed open', async () => {
+    const h = harness();
+    const first = await h.mainWindows.launch('C:/a');
+    const opened = () => h.workspacesOpened.map((o) => o.replace(/:after-\d+$/, ''));
+    expect(opened()).toEqual(['C:/a:id:C:/a']);
+    // Told after the window's load and its workspace's open, both of which come before it in the actions.
+    const at = Number(h.workspacesOpened[0]!.split(':after-')[1]);
+    expect(h.actions.indexOf(`load:${first.wcId}`)).toBeLessThan(at);
+    expect(h.actions.indexOf('open:C:/a')).toBeLessThan(at);
+    h.folders.push('C:/b');
+    await h.mainWindows.choose(first.wcId, { newWindow: true });
+    h.folders.push('C:/c');
+    await h.mainWindows.choose(first.wcId, { newWindow: false });
+    expect(opened()).toEqual(['C:/a:id:C:/a', 'C:/b:id:C:/b', 'C:/c:id:C:/c']);
+    h.openFailures.add('C:/d');
+    h.folders.push('C:/d');
+    await h.mainWindows.choose(h.mainWindows.ordered()[0]!.wcId, { newWindow: true });
+    expect(opened()).toHaveLength(3);
   });
 
   it('tracks focus order, removes closed windows, and attributes senders', async () => {

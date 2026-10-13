@@ -89,6 +89,13 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
    * replacement, or one of several windows. Main cancels that workspace's initialization run here; nothing else did.
    */
   readonly workspaceClosed?: (workspace: string) => void;
+  /**
+   * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): a main window now holds a workspace it opened — a launch's, an added
+   * window's, a replacement's, a hand-over's, or a reopen of the same one. Called after the window has loaded (every path
+   * builds and loads it first) and its workspace id is set, so main can send it the state it would otherwise learn only at
+   * the next publication — the improvement activity, its own workspace's pending retrospective among it.
+   */
+  readonly workspaceOpened?: (window: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>) => void;
 }
 
 interface WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TDialog> {
@@ -355,6 +362,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     if (opened) {
       record.workspace = workspace;
       record.workspaceId = opened.workspaceId;
+      if (!this.dependencies.adapter.isDestroyed(record.win)) this.dependencies.workspaceOpened?.(this.#view(record));
     }
     return opened;
   }

@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-13**
 
+**A window that opens a workspace is told the improvement activity at once (PD-LIBRARY-002 revision 2 (e), OQ-236; fin38).**
+`MainWindows.open` calls a new `workspaceOpened` dependency once the window's workspace id is set, and main sends that window
+`ImprovementCoordinator.current()` with its own workspace's `retrospective_pending` (`sendImprovementActivity`,
+`main/index.ts`), the publication's per-window rule. The **process view**'s improvement paragraph says so. No package, edge,
+process, channel, command or store column changed: the snapshot rides the existing `improvement:activity` channel.
+
 **A cross-file EDIT call's tree walk no longer blocks the run host (OQ-245; fin38).** `snapshotTree`
 (`agent-tools/src/tools/observe.ts`) reads the tree through `node:fs/promises` and is awaited by `observeReach`, so other
 agents' streams and results move while a project-wide call is observed. The **runtime view**'s cut-off passage says so. No

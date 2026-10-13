@@ -24,7 +24,7 @@ import { join } from 'node:path';
 import { mkdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { countNoun, millis, toIsoUtc } from '@rotaris/kernel';
-import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
+import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ImprovementActivity, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
 import { claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
 import { createUpdater, updateCloseBox } from './updater/updater.js';
@@ -973,6 +973,12 @@ async function main(): Promise<void> {
     }
   };
 
+  /** One window's copy of the improvement activity, its `retrospective_pending` that of the window's own workspace (none for an auxiliary window). */
+  const sendImprovementActivity = (window: BrowserWindow, workspaceId: string | undefined, activity: ImprovementActivity): void => {
+    if (window.isDestroyed()) return;
+    const pending = workspaceId === undefined ? false : improvementCoordinator.retrospectivePending(workspaceId);
+    window.webContents.send(CHANNEL.improvementActivity, { v: CONTRACT_SCHEMA_VERSION, ...activity, retrospective_pending: pending });
+  };
   const improvementCoordinator = createImprovementCoordinator({
     analyze: (request, bound) => runHost.request(request, bound),
     cancel: (artifactId) => { void runHost.request({ kind: 'improvement.cancel', artifactId }, millis(1_000)).catch(() => undefined); },
@@ -984,12 +990,7 @@ async function main(): Promise<void> {
        * window (a persona or terminal window) has no gesture to rest and is told none is pending.
        */
       const mains = new Map(orderedMainWindows().map((main) => [main.win, main] as const));
-      for (const window of BrowserWindow.getAllWindows()) {
-        if (window.isDestroyed()) continue;
-        const workspaceId = mains.get(window)?.workspaceId;
-        const pending = workspaceId === undefined ? false : improvementCoordinator.retrospectivePending(workspaceId);
-        window.webContents.send(CHANNEL.improvementActivity, { v: CONTRACT_SCHEMA_VERSION, ...activity, retrospective_pending: pending });
-      }
+      for (const window of BrowserWindow.getAllWindows()) sendImprovementActivity(window, mains.get(window)?.workspaceId, activity);
     },
     stored: (record) => {
       libraryRevision.bump('improvement-artifacts');
@@ -1407,6 +1408,9 @@ async function main(): Promise<void> {
     postShowActivation: (window) => { void updater.activate({ windowId: window.wcId }); },
     // REQ-WORKSPACE-013: a workspace no window holds any more has its initialization run cancelled, and nothing recorded.
     workspaceClosed: (workspace) => { initialization.close(canonicalPath(workspace)); },
+    // PD-LIBRARY-002 revision 2 (e): a window that opens a workspace is told the activity as it stands, its own pending
+    // retrospective among it, rather than waiting for the next publication.
+    workspaceOpened: (window) => { sendImprovementActivity(window.win, window.workspaceId, improvementCoordinator.current()); },
   });
   /**
    * REQ-SHELL-109: "when a stream changes while the window is closed, the preference is on, and that stream is running,

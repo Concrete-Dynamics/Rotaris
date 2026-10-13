@@ -19,3 +19,17 @@ Found by fin34's review (`review:library-and-intent#1`); recorded by fin36, not 
 - `apps/desktop/src/main/index.ts` — the coordinator's `activity` callback, the only sender of `improvement:activity`.
 - `apps/desktop/src/main/improvements.ts` — `publish` and `retrospectivePending`.
 - `packages/ui/src/shell-state.ts` — the renderer's copy of the activity.
+
+## Outcome (fin38, 2026-10-13) — repaired
+
+The initial snapshot the note asked for. The coordinator answers its activity as it stands (`current()`,
+`apps/desktop/src/main/improvements.ts`: what a publication with no job would carry), and `MainWindows.open`
+(`apps/desktop/src/main/main-windows.ts`) calls a new `workspaceOpened` dependency once a window's workspace id is set — on
+every path that gives a window a workspace (a launch, an added window, a replacement, a hand-over, a reopen after a restore),
+each of which has loaded the window first, so its renderer has subscribed. Main's handler (`apps/desktop/src/main/index.ts`)
+sends that window the snapshot through the same per-window rule as a publication (`sendImprovementActivity`: its own
+workspace's `retrospective_pending`), on the existing `improvement:activity` channel. One window hook, not two: a switch of
+workspace is a replacement window, which opens through the same `open`. Pinned by `main-windows.test.ts` ("tells main each time
+a window has opened a workspace…") and `improvements.test.ts` ("its current activity is the publication as it stands…"), each
+red without the change. `retrospective-proof` drives the pending gesture in one window; no proof opens a second window while a
+retrospective is pending.

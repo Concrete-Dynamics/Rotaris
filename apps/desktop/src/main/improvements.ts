@@ -39,6 +39,13 @@ export interface ImprovementCoordinator {
    * A post-run job never counts: the retrospective's gesture queues behind one rather than resting while it runs.
    */
   retrospectivePending(workspaceId: string): boolean;
+  /**
+   * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): the activity as it stands, what the next publication with no job would
+   * carry — sent to a main window when it opens a workspace, so a window opened while a retrospective of its workspace is
+   * pending draws the gesture unavailable at once rather than at the next publication
+   * (docs/defects/fixed/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
+   */
+  current(): ImprovementActivity;
 }
 
 /** REQ-LIBRARY-024/035/125/127: one application-wide FIFO, detached from every run. */
@@ -90,9 +97,9 @@ export function createImprovementCoordinator(
         queued.pass === "retrospective" && queued.workspace_id === workspaceId,
     );
 
-  const publish = (job: ImprovementAnalysisJob | null): void => {
+  const activityOf = (job: ImprovementAnalysisJob | null): ImprovementActivity => {
     const workspaceId = job?.workspace_id ?? active?.job.workspace_id ?? "";
-    deps.activity({
+    return {
       workspace_id: workspaceId,
       active: active !== null,
       queued: queue.length,
@@ -103,7 +110,10 @@ export function createImprovementCoordinator(
       // PD-LIBRARY-002 revision 2 (e), for the workspace this publication names; main re-reads it per window
       // through `retrospectivePending`, since a window of another workspace is told about its own.
       retrospective_pending: workspaceId !== "" && retrospectivePending(workspaceId),
-    });
+    };
+  };
+  const publish = (job: ImprovementAnalysisJob | null): void => {
+    deps.activity(activityOf(job));
   };
 
   const drain = async (): Promise<void> => {
@@ -235,5 +245,6 @@ export function createImprovementCoordinator(
     },
     pending: () => queue.length + (active === null ? 0 : 1),
     retrospectivePending,
+    current: () => activityOf(null),
   } satisfies ImprovementCoordinator);
 }

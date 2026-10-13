@@ -350,6 +350,19 @@ describe("PD-LIBRARY-002 revision 2 (e): a pending retrospective, per workspace"
     expect(published.at(-1)).toMatchObject({ active: false, retrospective_pending: false });
   });
 
+  // A window opening a workspace is sent this, so it does not wait for the next publication to learn a retrospective of its
+  // workspace is pending (docs/defects/fixed/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
+  it("its current activity is the publication as it stands, with no job named", async () => {
+    const { coordinator, waiting } = harness();
+    expect(coordinator.current()).toMatchObject({ workspace_id: "", active: false, queued: 0, retrospective_pending: false });
+    coordinator.enqueue({ ...job("impart_00000001", "session-1"), workspace_id: "ws-a" });
+    coordinator.enqueue(retrospective("impart_00000002", "ws-a"));
+    expect(coordinator.current()).toMatchObject({ workspace_id: "ws-a", active: true, queued: 1, pass: "post_run", retrospective_pending: true });
+    waiting.shift()!.resolve({ kind: "refused", code: "x", headline: "nothing" });
+    await vi.waitFor(() => expect(waiting.map((w) => w.id)).toEqual(["impart_00000002"]));
+    expect(coordinator.current()).toMatchObject({ active: true, queued: 0, pass: "retrospective", retrospective_pending: true });
+  });
+
   it("is cleared by a completion, by the workspace closing and by shutdown", async () => {
     const done = harness();
     done.coordinator.enqueue(retrospective("impart_00000001", "ws-a"));

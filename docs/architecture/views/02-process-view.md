@@ -369,7 +369,10 @@ what it read in `considered_session_ids` and attributing each evidence entry to 
 `improvement:activity` gains `pass`, which is what lets the two indicators (REQ-LIBRARY-125/126, built in this part and
 not before) say WHICH analysis is running, and — since `PD-LIBRARY-002` revision 2 (OQ-236) — `retrospective_pending`,
 which main computes **per main window** from the coordinator's `retrospectivePending(workspaceId)`, because the rest of
-the publication is application-wide and this one fact is a workspace's. It is the only thing that rests the gesture's two
+the publication is application-wide and this one fact is a workspace's. Since fin38 a main window that opens a workspace
+(a launch, an added or replacement window, a hand-over, a reopen) is also sent the activity as it stands
+(`ImprovementCoordinator.current()`, through `MainWindows`' `workspaceOpened` hook, after the window has loaded), so a window
+opened while its workspace's retrospective is pending draws the gesture at rest at once rather than at the next publication. It is the only thing that rests the gesture's two
 buttons; a post-run analysis never does. `improvements.retrospective` itself refuses while that workspace's retrospective
 is queued, running or still being captured, with one info notice ("A retrospective is already queued or running.") and no
 `retrospective.capture`, which is the palette's refusal. `improvement.cancel`, the queue's ordering and shutdown's discard are

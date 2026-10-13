@@ -13151,6 +13151,14 @@ then an `update` for that item. The harness reads 0 served-and-ended items resto
 `restoredOverClose` and `namedRestores` (`apps/desktop/scripts/lib/coordinator-todo.mjs`). Pinned by `tools/tools.test.ts`,
 `run-host/tools.test.ts` and `children/children.test.ts`, each red on the code before. The note is repaired.
 
+*Asked by the live run since 2026-10-13 (fin41, item N65):* no live prompt had asked a coordinator to close with a `replace`, and
+at `0bc3eee` every close was an `update`, so the harness's "0 restored" read PASS with nothing measured
+([`../defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md`](../defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md)).
+The `edit` scenario's prompt now asks its coordinator to close the plan with ONE `replace` sending both tasks COMPLETED once both
+children have reported; `heldItemReading` counts the closes it asked (`closes`), and a run with none prints a NOTE that the close
+is unasked instead of the PASS. The next default run's `edit` session is the measure: the check names each close and the state
+stored, which should be COMPLETED for both items, with no PD-ORCH-015 correction in its log.
+
 <a id="oq-256"></a>
 
 **OQ-256 — Does a sibling's answer handed on through `inherited_context` or `depends_on` reach the next child whole?**

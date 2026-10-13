@@ -190,5 +190,30 @@ describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
     ] }]);
     expect(built.restoredOverClose).toEqual([]);
     expect(built.namedRestores).toEqual([{ scenario: 'edit', ordinal: 20 }]);
+    // Both are the case revision 3 decides, asked: the closes carry what was sent and what the plan then stored.
+    expect(before.closes).toEqual([
+      { scenario: 'edit', ordinal: 20, item: '0000000a', sent: 'COMPLETED', stored: 'IN_PROGRESS' },
+      { scenario: 'edit', ordinal: 20, item: '0000000b', sent: 'COMPLETED', stored: 'IN_PROGRESS' },
+    ]);
+    expect(built.closes).toEqual([
+      { scenario: 'edit', ordinal: 20, item: '0000000a', sent: 'COMPLETED', stored: 'COMPLETED' },
+      { scenario: 'edit', ordinal: 21, item: '0000000a', sent: 'COMPLETED', stored: 'COMPLETED' },
+      { scenario: 'edit', ordinal: 21, item: '0000000b', sent: 'COMPLETED', stored: 'COMPLETED' },
+    ]);
+  });
+
+  // docs/defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md (item N65): the 0bc3eee edit
+  // session's shape — the root's only `replace` the opening write, every close an `update` — asks nothing of revision 3.
+  it('a session that opens with a replace and closes with updates leaves revision 3 unasked: no closes, and nothing restored', () => {
+    const open = { operation: 'replace', phases: [{ name: 'main', tasks: [{ id: '0000000a', name: 'Implement it', state: 'PENDING' }, { id: '0000000b', name: 'Test it', state: 'PENDING' }] }] };
+    const r = heldItemReading([{ scenario: 'edit', rootNames: ['orchestrator'], children: kids, calls: [
+      { ...c(8, 'todo', 'ok', `Replaced the todo list: 1 phase, 2 tasks.\n${state([['PENDING', 'Implement it', '0000000a'], ['PENDING', 'Test it', '0000000b']])}`, '2026-10-07T07:00:05Z'), args: open },
+      c(12, 'delegate', 'ok', "Task 'impl': queued", '2026-10-07T07:00:10Z'),
+      { ...c(52, 'todo', 'ok', state([['COMPLETED', 'Implement it', '0000000a'], ['IN_PROGRESS', 'Test it', '0000000b']]), '2026-10-07T07:02:30Z'), args: { operation: 'update', task_id: '0000000a', state: 'COMPLETED' } },
+      { ...c(55, 'todo', 'ok', state([['COMPLETED', 'Implement it', '0000000a'], ['COMPLETED', 'Test it', '0000000b']]), '2026-10-07T07:03:05Z'), args: { operation: 'update', task_id: '0000000b', state: 'COMPLETED' } },
+    ] }]);
+    expect(r.coordinating).toEqual(['edit']);
+    expect(r.restoredOverClose).toEqual([]);
+    expect(r.closes).toEqual([]);
   });
 });

@@ -177,6 +177,9 @@ export function todoStates(text) {
  * - `restoredOverClose` — PD-TOOLS-008 revision 3 (OQ-255): each item a root `replace` sent COMPLETED or ABANDONED that its
  *   result still reads IN_PROGRESS although a root child had served it and none still held it (the close revision 3 makes
  *   possible; target 0). The calls carry `args`, the arguments the record stores;
+ * - `closes` — every such close a root `replace` sent, whatever its result stored (`sent`, `stored`): the case revision 3
+ *   decides, asked. Empty, `restoredOverClose` measured nothing, and the live run says so in a NOTE rather than a PASS (at
+ *   `0bc3eee` every coordinator closed with `update`: docs/defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md);
  * - `namedRestores` — each accepted root `replace` whose observation names a task it kept over a different state (a NOTE).
  */
 export function heldItemReading(sessions) {
@@ -184,6 +187,7 @@ export function heldItemReading(sessions) {
   const closedWhileHeld = [];
   const singleActive = [];
   const restoredOverClose = [];
+  const closes = [];
   const namedRestores = [];
   const coordinating = [];
   for (const s of sessions) {
@@ -217,14 +221,16 @@ export function heldItemReading(sessions) {
       const states = todoStates(c.result);
       if (states === null) continue;
       for (const t of (Array.isArray(args.phases) ? args.phases : []).flatMap((p) => (Array.isArray(p?.tasks) ? p.tasks : []))) {
-        if (typeof t?.id !== 'string' || (t.state !== 'COMPLETED' && t.state !== 'ABANDONED') || states.get(t.id) !== 'IN_PROGRESS') continue;
+        if (typeof t?.id !== 'string' || (t.state !== 'COMPLETED' && t.state !== 'ABANDONED')) continue;
         const servers = kids.filter((k) => k.todo_item === t.id && Date.parse(k.spawned_at) <= c.endedAt);
         if (servers.length === 0 || servers.some((k) => !k.completed_at || Date.parse(k.completed_at) > c.endedAt)) continue;
-        restoredOverClose.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id });
+        // The case revision 3 decides, asked: a `replace` closing an item every child serving it has ended.
+        closes.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id, sent: t.state, stored: states.get(t.id) ?? null });
+        if (states.get(t.id) === 'IN_PROGRESS') restoredOverClose.push({ scenario: s.scenario, ordinal: c.ordinal, item: t.id });
       }
     }
   }
-  return { coordinating, heldPending, closedWhileHeld, singleActive, restoredOverClose, namedRestores };
+  return { coordinating, heldPending, closedWhileHeld, singleActive, restoredOverClose, closes, namedRestores };
 }
 
 /** A recorded call's arguments as an object: the record keeps an object, or the cut string of one a refusal stored. */

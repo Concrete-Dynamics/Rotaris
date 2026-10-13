@@ -1120,7 +1120,11 @@ function checkCoordinatorTodo() {
   if (held.singleActive.length > 0) noted('todo calls refused under REQ-TOOLS-145 or PD-TOOLS-008 in coordinating sessions (OQ-249; target 0)', held.singleActive.map((h) => `${h.scenario} #${h.ordinal}`).join(', '));
   // PD-TOOLS-008 revision 3 (OQ-255): a `replace` closing an item whose children have all ended closes it; a task a `replace` kept
   // over a different state is named in its observation, a NOTE (the next call should be an `update` for it).
-  check(held.restoredOverClose.length === 0, 'no closing todo replace left an item IN_PROGRESS once every child serving it had ended (PD-TOOLS-008 revision 3, OQ-255)', held.restoredOverClose.length === 0 ? `${held.coordinating.length} coordinating session(s)` : held.restoredOverClose.map((h) => `${h.scenario} #${h.ordinal} on ${h.item}`).join(', '));
+  // A run in which no coordinator closed a served-and-ended item with a `replace` asked nothing of revision 3: a NOTE, never a
+  // PASS (docs/defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md; at 0bc3eee every close was an
+  // `update`). The edit scenario's prompt asks for one closing `replace` so a default run can ask it.
+  if (held.closes.length === 0) noted('no coordinator closed a delegated item with a todo replace once its children had ended: PD-TOOLS-008 revision 3\'s close is unasked (OQ-255)', `${held.coordinating.length} coordinating session(s): ${held.coordinating.join(', ') || 'none'}; every close was an update, or none came`);
+  else check(held.restoredOverClose.length === 0, 'no closing todo replace left an item IN_PROGRESS once every child serving it had ended (PD-TOOLS-008 revision 3, OQ-255)', held.restoredOverClose.length === 0 ? `${held.closes.length} close(s) by replace, each stored as sent: ${held.closes.map((h) => `${h.scenario} #${h.ordinal} ${h.item} ${h.stored}`).join(', ')}` : held.restoredOverClose.map((h) => `${h.scenario} #${h.ordinal} on ${h.item}`).join(', '));
   if (held.namedRestores.length > 0) noted('todo replaces that named a task kept over a different state (PD-TOOLS-008 revision 3, OQ-255)', held.namedRestores.map((h) => `${h.scenario} #${h.ordinal}`).join(', '));
 }
 
@@ -1597,7 +1601,10 @@ if (wanted.includes('edit')) {
     // OQ-213 (REQ-ORCH-029): the coordinator's second delegation is refused until it has written a todo list of its own,
     // so the prompt asks for the list first, which keeps the two delegations in one turn; a coordinator that skips it
     // meets one refusal, writes the list and delegates again, and the checks below read only the delegations that ran.
-    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js and export it, and add tests for it to src/todos.test.js. First write your todo list with the todo tool, one task for the implementation and one for the tests. Then do the two in parallel: in ONE turn, delegate two coding-agent children in the background, one for the implementation with write_scope ["src/todos.js"] and one for the tests with write_scope ["src/todos.test.js"], then wait for both with wait_for_tasks. You hold no terminal, so tell each child to run `node --test` in the terminal before it reports, and tell me whether the suite passed. Delegate nothing else, and answer as soon as both have reported.',
+    // PD-TOOLS-008 revision 3 (OQ-255, item N65): the prompt asks the coordinator to close its plan with ONE `replace` once both
+    // children have reported, the case revision 3 decides; until fin41 every coordinator closed with `update`, and the run-wide
+    // check passed having asked nothing. `heldItemReading`'s `closes` says whether it was asked.
+    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js and export it, and add tests for it to src/todos.test.js. First write your todo list with the todo tool, one task for the implementation and one for the tests. Then do the two in parallel: in ONE turn, delegate two coding-agent children in the background, one for the implementation with write_scope ["src/todos.js"] and one for the tests with write_scope ["src/todos.test.js"], then wait for both with wait_for_tasks. You hold no terminal, so tell each child to run `node --test` in the terminal before it reports, and tell me whether the suite passed. Delegate nothing else. When both have reported, close your plan with ONE todo replace that sends both tasks COMPLETED, then answer at once.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000', ROTARIS_CAPTURE_PROBE: DURATION_PROBES.join(';;'),
   }, EDIT_WAIT_MS + 90_000);
   check(!/capture: wait for result timed out/.test(log), 'the run reached its result inside the wait');

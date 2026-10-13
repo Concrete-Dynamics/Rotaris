@@ -4688,6 +4688,10 @@ question RC1, from revision 7's first execution).*
 > - **Revision 3: NOT REACHED at `0bc3eee`.** Its 5 `replace` calls were again opening writes and every close an `update`;
 >   `restoredOverClose` read 0 and `namedRestores` named none, neither discriminating. The next default run whose coordinator
 >   closes with a `replace` after its children end is still the measure.
+> - *Since fin41 (item N65) the default run asks for it:* the `edit` scenario's prompt tells its coordinator to close the plan with
+>   ONE `replace` sending both tasks COMPLETED once both children have reported, `heldItemReading` counts the closes asked
+>   (`closes`), and a run with none prints a NOTE that revision 3 was unasked instead of the PASS `0bc3eee` printed over nothing
+>   ([`the-live-runs-closing-replace-check-passes-with-no-closing-replace.md`](../defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md)).
 >
 > Evidence:
 > [`live-552d346-default-autopsy.md`](../architecture/live-runs/live-552d346-default-autopsy.md),

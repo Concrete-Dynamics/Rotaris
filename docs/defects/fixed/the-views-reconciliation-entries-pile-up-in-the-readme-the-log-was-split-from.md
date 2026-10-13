@@ -31,3 +31,10 @@ same (CHANGELOG entry of 2026-10-13). `CLAUDE.md` already names only the README'
 
 Checked by comparing the diff: every line removed from the README is added to the log but the two the move rewrote
 (the maintenance rule's last line and the closing pointer); `node tools/check-record-links.mjs` resolves every link.
+
+## Completed at review — 2026-10-13 (fin41's reviewer)
+
+Rewriting the maintenance rule's last line had dropped its sentence "A view that disagrees with the code is a defect of
+the change that made it so.", which `CLAUDE.md` states too; it is restored in item 2. `tools/views-readme.test.ts` holds
+both halves of this repair: no bold-led reconciliation entry under the README's "Last reconciled" heading (red on the
+README as it stood at `6de2a67`), and the maintenance rule with that sentence (red on the branch before the restore).

@@ -41,6 +41,7 @@ change to the code (stated in `CLAUDE.md`):
    path or the ownership of a fact, update the view **in the same commit**, and the "last reconciled" line
    below with it. What the change did to the views is written at the top of
    [`reconciliation-log.md`](reconciliation-log.md), newest first, in the same commit; here only the date moves.
+   A view that disagrees with the code is a defect of the change that made it so.
    *(Added 2026-10-13: from 2026-09-16 every change had written its entry here instead, about 350 of them, until
    this file was 2,658 lines; they moved to the log verbatim.)*
 

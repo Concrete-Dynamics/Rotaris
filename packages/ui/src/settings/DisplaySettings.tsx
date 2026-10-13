@@ -4,12 +4,15 @@ import { Toggle, type ConfigSettingsProps } from './ConfigSettings.js';
 import { Select as DesignSelect } from '../design-system/index.js';
 
 /**
- * The Display category (REQ-CONFIG-403, REQ-CONFIG-472). Six controls over two commit policies, and the
- * category says which is which in words because a user cannot otherwise tell why Save applies to half of them:
+ * The Display category (REQ-CONFIG-403, REQ-CONFIG-472, REQ-CHAT-167). Seven controls over two commit policies, and
+ * the category says which is which in words because a user cannot otherwise tell why Save applies to some of them:
  *
- * - **Two desktop preferences** (REQ-CONFIG-403), written the moment the control moves and not undone by
- *   Discard: auto-collapse older tool outputs, and group consecutive tool calls. Both are read at startup by
- *   the renderer root, which re-renders the transcript when either changes.
+ * - **Three desktop preferences**, written the moment the control moves and not undone by Discard: REQ-CONFIG-403's
+ *   two, in its order — auto-collapse older tool outputs, and group consecutive tool calls — and then REQ-CHAT-167's
+ *   show reasoning bodies (`display/showReasoning`, default off; N71, 2026-10-13). All three are read at startup by
+ *   the renderer root, which re-renders the transcript when any changes. REQ-CHAT-167 requires the reasoning switch to
+ *   be reachable from the settings surface; REQ-CONFIG-403 says the category "holds two transcript toggles". The switch
+ *   is placed here, after those two, as the reading taken: OQ-264 asks whether that stands.
  * - **Four workspace-configuration fields** (REQ-CONFIG-472, REQ-CHAT-166): whether tool results and inputs
  *   are shown and a rendered-line cap for each. These are destination 1, committed by Save (REQ-CONFIG-417),
  *   written to the `display:` section of the workspace `agents.yaml` (REQ-CONFIG-256) — and they nevertheless
@@ -27,8 +30,11 @@ export interface DisplaySettingsProps {
   readonly autoCollapseTools: boolean;
   /** REQ-CHAT-067 (`display/groupTools`), default **on**. */
   readonly groupTools: boolean;
+  /** REQ-CHAT-167 (`display/showReasoning`), default off. */
+  readonly showReasoning: boolean;
   readonly onAutoCollapseTools: (value: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>;
   readonly onGroupTools: (value: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  readonly onShowReasoning: (value: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>;
 }
 
 const capLabel = (cap: number | null): string => (cap === null ? 'Unlimited' : `${cap} ${cap === 1 ? 'line' : 'lines'}`);
@@ -62,7 +68,7 @@ function CapSelect({ id, label, description, value, disabled, onChange }: {
   );
 }
 
-export function DisplaySettings({ config, autoCollapseTools, groupTools, onAutoCollapseTools, onGroupTools }: DisplaySettingsProps) {
+export function DisplaySettings({ config, autoCollapseTools, groupTools, showReasoning, onAutoCollapseTools, onGroupTools, onShowReasoning }: DisplaySettingsProps) {
   const [message, setMessage] = useState<string | null>(null);
   const pending: DisplayView | null = config?.pending?.display ?? null;
   const noService = pending === null;
@@ -84,7 +90,7 @@ export function DisplaySettings({ config, autoCollapseTools, groupTools, onAutoC
       <h1 className="display">Display</h1>
 
       <h2 className="settings__heading">Transcript</h2>
-      <p className="text-secondary">These two are yours, not this workspace's: they are kept with your desktop preferences, take effect as you change them, and Discard does not undo them.</p>
+      <p className="text-secondary">These three are yours, not this workspace's: they are kept with your desktop preferences, take effect as you change them, and Discard does not undo them.</p>
       <Toggle
         id="auto-collapse-tools"
         testId="auto-collapse-tools"
@@ -100,6 +106,14 @@ export function DisplaySettings({ config, autoCollapseTools, groupTools, onAutoC
         hint="A run of same-kind calls becomes one counting row naming the call in flight, which expands to the individual calls."
         on={groupTools}
         onChange={(v) => { void write(() => onGroupTools(v)); }}
+      />
+      <Toggle
+        id="show-reasoning"
+        testId="show-reasoning"
+        label="Show reasoning bodies"
+        hint="Reasoning rows open to show their text. Off, each shows only its summary line until you open it. A row you opened or closed yourself keeps your choice."
+        on={showReasoning}
+        onChange={(v) => { void write(() => onShowReasoning(v)); }}
       />
 
       <h2 className="settings__heading">Tool rows</h2>

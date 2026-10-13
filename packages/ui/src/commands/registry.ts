@@ -2,6 +2,7 @@ import { PRIMARY_VIEWS, type ViewId } from '@rotaris/contracts';
 import { openTerminalWindow } from '../terminal/host.js'; // Part AL2
 import { compressFromPalette } from '../slash/host.js'; // Part AO
 import { openProjectFolderInNewWindow, startRetrospective } from '../workspace-host.js'; // Stage C — PD-SHELL-001; Part AT — PD-LIBRARY-002
+import { toggleReasoningBodies } from '../display-host.js'; // REQ-CHAT-167
 
 /**
  * REQ-SHELL-048 — the window's ONE vocabulary of named actions, presented three ways: the command palette
@@ -27,6 +28,11 @@ export interface CommandContext {
   focusComposer(): void;
   /** REQ-SHELL-049 / REQ-SHELL-050: the window-wide fallback submit — only while the send control is enabled. */
   submitRun(): void;
+  /**
+   * REQ-SHELL-049 / REQ-CHAT-074: after the switch to Workspace, open the transcript pane's search panel once the pane
+   * is mounted (the pane registers its opener in `shell-state`), or put the caret back in it where it is already open.
+   */
+  openTranscriptSearch(): void;
 }
 
 export interface Command {
@@ -73,6 +79,10 @@ export const COMMANDS: readonly Command[] = [
   { id: 'palette.open', label: 'Open command palette', shortcut: 'Ctrl+K', keywords: ['commands', 'actions', 'search', 'find'], available: always, run: (ctx) => ctx.openPalette() },
   // REQ-SHELL-049: Ctrl+, "Open Settings" — the same label as Ctrl+7's entry and a second row; both are the spec's.
   { id: 'settings.open', label: 'Open Settings', shortcut: 'Ctrl+,', keywords: VIEW_KEYWORDS.settings, available: always, run: (ctx) => ctx.switchView('settings') },
+  // REQ-SHELL-049 / REQ-CHAT-074: Ctrl+F "Search transcript" — switches to Workspace, then opens the pane's search panel.
+  // This entry is the ONE binding of Ctrl+F: the pane's own window listener is gone and `/search` runs this command, so
+  // the chord works from every view, is listed by the palette and keyboard help, and is never handled twice.
+  { id: 'transcript.search', label: 'Search transcript', shortcut: 'Ctrl+F', keywords: ['find', 'search', 'transcript', 'look up', 'match', 'text'], available: always, run: (ctx) => { ctx.switchView('workspace'); ctx.openTranscriptSearch(); } },
   // REQ-SHELL-049 / REQ-CHAT-002: Ctrl+L "Focus run prompt" — switches to Workspace, then the caret goes to the composer.
   { id: 'composer.focus', label: 'Focus run prompt', shortcut: 'Ctrl+L', keywords: ['prompt', 'composer', 'chat', 'type', 'message', 'input'], available: always, run: (ctx) => { ctx.switchView('workspace'); ctx.focusComposer(); } },
   // REQ-SHELL-049 / REQ-SHELL-050: Ctrl+Return "Start or continue run" — switches to Workspace, submits only while the send control is enabled.
@@ -108,13 +118,19 @@ export const COMMANDS: readonly Command[] = [
   // by construction: REQ-SHELL-048 makes this table the window's one action vocabulary. In a window with no opener
   // bound — an auxiliary window — it does nothing, on the same terms as `Open terminal` above.
   { id: 'workspace.chooseNewWindow', label: 'Open project folder in a new window', keywords: ['project', 'folder', 'workspace', 'window', 'open', 'second', 'another'], available: always, run: () => { openProjectFolderInNewWindow(); } },
+  // REQ-CHAT-167: the reasoning-visibility preference from the palette, and through REQ-CHAT-028's mirror from slash as
+  // `/toggle-reasoning-bodies`. Shortcut-less (REQ-SHELL-049 gives it no chord). It flips `display/showReasoning` and
+  // reports the new state through the renderer's binding (`display-host.ts`); a window with nothing bound does nothing,
+  // on the terms `Open terminal` above states. Settings → Display is the third surface and writes the same key.
+  { id: 'display.toggleReasoning', label: 'Toggle reasoning bodies', keywords: ['reasoning', 'thinking', 'thoughts', 'show', 'hide', 'display', 'preference'], available: always, run: () => { void toggleReasoningBodies(); } },
 ];
 
 /** REQ-SHELL-048's last sentence applied to REQ-SHELL-049's table: what is not offered, and why. Owed, not dropped. */
+// 2026-10-13 (fin41, N71): "Search transcript" (Ctrl+F) and "Toggle reasoning bodies" left this list. Their reasons —
+// no search panel, an unregistered `display/showReasoning` — had been false since Parts Z and AA, and the entries stayed
+// withheld until the defect note `docs/defects/fixed/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md` was repaired.
 export const OMITTED_COMMANDS: readonly OmittedCommand[] = [
-  { label: 'Search transcript', shortcut: 'Ctrl+F', reason: 'no transcript search panel exists yet (REQ-CHAT domain); the entry returns with the panel' },
   { label: 'Open demo window', shortcut: null, reason: 'no demo mode exists yet (REQ-SHELL-162, REQ-SHELL-005); the entry returns with the mode' },
-  { label: 'Toggle reasoning bodies', shortcut: null, reason: 'the display/showReasoning preference of REQ-CHAT-167 is not registered in the preference store yet; the entry returns with the key' },
 ];
 
 export function commandById(id: string): Command | undefined {

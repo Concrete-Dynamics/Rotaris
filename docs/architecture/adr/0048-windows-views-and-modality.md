@@ -261,11 +261,19 @@ is right for the switch and wrong for the common case.
 **Not built, said so.** Three entries of `REQ-SHELL-049` are absent from all three surfaces, each recorded in
 `OMITTED_COMMANDS` with its reason rather than dropped: "Search transcript" (Ctrl+F — no transcript search panel),
 "Open terminal" (Ctrl+Shift+T — no terminal window, owed with ADR-0021) and "Open demo window" (`REQ-SHELL-162` — no
-demo mode), plus `REQ-CHAT-167`'s reasoning toggle, whose preference key is not registered. `REQ-SHELL-048`'s third
+demo mode), plus `REQ-CHAT-167`'s reasoning toggle, whose preference key is not registered. *Corrected 2026-10-13
+(fin41, N71):* "Open terminal" returned with the terminal window on 2026-09-10 (Part AL′). The other two reasons were
+falsified a day later and the entries stayed withheld for five weeks: the search panel was built on 2026-09-07 (Part Z,
+`REQ-CHAT-074`) and `display/showReasoning` was registered the same day (Part AA). Both entries are in the registry
+since 2026-10-13 (the section at the end of this record); only "Open demo window" is still omitted, and its reason is
+still true. `REQ-SHELL-048`'s third
 surface, the composer's slash catalogue, is the CHAT domain's and is not built; `slashName` and `slashDescription` are
 this registry's normal form so that catalogue consumes this table rather than restating it. Window-level Escape
 (`REQ-SHELL-055`) resolves in the specified order over the slots that exist: the compact drawers register a closer, and
-the slash popup and the search panel register nothing because neither is built. The palette and the help are drawn in
+the slash popup and the search panel register nothing because neither is built. *Corrected 2026-10-13:* the slash popup's slot was filled
+on 2026-09-09 (the next section); the search panel was built on 2026-09-07 and its slot is still empty — recorded as
+[`window-level-escape-does-not-close-the-transcript-search-panel`](../../defects/window-level-escape-does-not-close-the-transcript-search-panel.md),
+not repaired. The palette and the help are drawn in
 the main window only; an auxiliary window offers neither. `REQ-SHELL-165`'s determinable case — presenting an action
 with no chord where the product knows the host consumed it — is not built, because no host publishes its reservations;
 the chord is shown and nothing is raised, which is that requirement's ordinary branch.
@@ -421,3 +429,34 @@ part B, on `fin6-auth-recovery-1`, unmerged).~~ *Corrected at the merge, 2026-10
 merged beside this dialog. The automatic fallback goes ahead of the dialog, which keeps REQ-NOTIFY-072's two cases, and the
 dialog's opening closes every prompt open (REQ-NOTIFY-079) — so at most one of the two authentication surfaces is drawn for
 a failure, the modal one taking the place of the non-modal one.
+
+## Two omitted entries return — reported back 2026-10-13 (fin41, N71)
+
+*The defect note is [`search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true`](../../defects/fixed/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md);
+the proof is `pnpm palette-proof`'s stage 6 and `pnpm settings-proof`'s Display launches.*
+
+**The falsified reasons, kept beside their replacements.** `OMITTED_COMMANDS` withheld "Search transcript" because "no
+transcript search panel exists yet" and "Toggle reasoning bodies" because "the display/showReasoning preference … is not
+registered". Both were true on 2026-09-06 and false from 2026-09-07. Nothing re-read the list when the panel and the key
+landed, so the vocabulary stayed short by two entries while each surface that could have offered them existed.
+
+**What one vocabulary required, measured.** Ctrl+F had been bound privately by the transcript pane's own window listener,
+the shape this record's first execution replaced for every other chord: it fired only while the Workspace view was
+mounted, so from the other six views the chord did nothing, and keyboard help, which lists the registry, did not list it.
+It is now the registry's `transcript.search`, the one binding: the command switches to Workspace and calls the opener the
+pane registers in `shell-state` (`transcriptSearch`), through `nowOrAfterMount` like `Ctrl+L`. The pane binds no chord,
+and `/search` runs the same command instead of dispatching a synthetic Ctrl+F at the window. Built from Mission, the
+proof read the view switch to Workspace and the caret in the search field 600 ms after the chord.
+
+`display.toggleReasoning` flips `display/showReasoning` through the renderer's binding (`display-host.ts`, the shape
+`workspace-host.ts` took for the same reason: the context carries no command channel), so the palette, the slash mirror
+`/toggle-reasoning-bodies` and Settings → Display's new switch write one key through one function, and the palette and
+slash routes acknowledge the state the key now holds (`REQ-CHAT-167`). The proof read "Reasoning bodies shown" and
+`display/showReasoning: true` in the preference file; `settings-proof` read the switch on after a relaunch. Placing the
+switch in Display, which `REQ-CONFIG-403` says "holds two transcript toggles", is a reading taken and raised as
+[OQ-264](../open-questions.md#oq-264).
+
+**Still not built.** "Open demo window" (`REQ-SHELL-162`, no demo mode). The search panel's Escape slot (the note linked
+above), and `REQ-CHAT-074`'s toolbar control for search
+([`the-transcript-has-no-toolbar-control-for-search`](../../defects/the-transcript-has-no-toolbar-control-for-search.md)),
+both noticed by this change and recorded, not repaired.

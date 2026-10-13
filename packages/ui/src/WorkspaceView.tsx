@@ -12,6 +12,7 @@ import { RunHeader } from './RunHeader.js';
 import { annotatedModelOptions } from './model-options.js';
 import { NoticeBanner } from './Notice.js';
 import { useCommandContext } from './AppShell.js';
+import { commandById } from './commands/registry.js';
 import { ClearTranscriptControl } from './slash/controls.js'; // Part AO
 import { buildCatalogue, type Reachable } from './slash/catalogue.js';
 import { slashRoleColours, slashTokenSplit, slashTokenState } from './slash/highlight.js';
@@ -861,7 +862,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     'start-session': slash?.newSession !== undefined,
     sessions: slash?.openSessions !== undefined,
     worktree: slash?.openWorktree !== undefined,
-    // REQ-CHAT-074's panel is the pane's and opens on Ctrl+F at the window; `/search` presses that key (`openSearch`).
+    // REQ-CHAT-074's panel is the pane's; `/search` runs the registry's "Search transcript", as Ctrl+F does (`openSearch`).
     search: true,
     theme: slash?.setTheme !== undefined,
     logout: slash?.logout !== undefined,
@@ -879,8 +880,11 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     runPalette: (command) => command.run(commandContext),
     paletteAvailable: (command) => command.available(commandContext),
   }), [stashCount, reachable, commandContext]);
-  /** REQ-CHAT-074: the search panel is the transcript pane's and opens on Ctrl+F at the window; the composer presses that key. */
-  const openSearch = () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true, cancelable: true })); };
+  /**
+   * REQ-CHAT-030 / REQ-CHAT-074: `/search` opens the pane's panel by running the registry's "Search transcript" — the
+   * command Ctrl+F and the palette run — rather than pressing Ctrl+F at the window as it did until N71 (2026-10-13).
+   */
+  const openSearch = () => { commandById('transcript.search')?.run(commandContext); };
   const okOr = (r: { ok: true } | { ok: false; reason: string }): void => { if (!r.ok) throw new Error(r.reason); };
   const slashContext: SlashContext = {
     runState, rowCount: rows.length, hasGit: slash?.hasGit ?? false,

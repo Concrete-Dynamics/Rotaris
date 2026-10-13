@@ -15,6 +15,7 @@ import { isOwnScroll } from './scroll.js';
 import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
 import { Row, TranscriptSurfaceProvider, isReasoningRow, rowMenuEntries, type RowMenuRequest, type TranscriptSurface } from './Row.js';
 import { RowContextMenu, copyRowEntry, moveCurrentRow, type Acknowledger } from '../TranscriptSurface.js';
+import { useShellState } from '../shell-state.js';
 import { useTerminalHost } from '../terminal/host.js'; // Part AL2 — the renderer's terminal host, read for the two terminal fields of the surface
 import type { DisplayRow, RowRenderProps, TrailerRow } from './types.js';
 import { Button as DesignButton, EmptyState as DesignEmptyState, Input as DesignInput } from '../design-system/index.js';
@@ -526,14 +527,19 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     return () => clearInterval(handle);
   }, [anyLive]);
 
-  /** REQ-CHAT-002 / REQ-CHAT-074: Ctrl+F opens the panel — this closes Part W's Ctrl+F owe. */
+  /**
+   * REQ-SHELL-049 / REQ-CHAT-074: the way in to the panel. Ctrl+F is the registry's "Search transcript" (N71,
+   * 2026-10-13), which switches to Workspace and then calls the opener this pane registers while it is mounted — the
+   * palette, keyboard help and `/search` reach the same opener. Until then the pane bound Ctrl+F itself with a window
+   * listener, so the chord did nothing from the other six views and no surface listed it. An open panel is not
+   * reopened: the caret goes back into its field, so pressing the chord again always lands in the search input.
+   */
+  const searchInput = useRef<HTMLInputElement | null>(null);
+  const registerTranscriptSearch = useShellState((st) => st.registerTranscriptSearch);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); setSearchOpen(true); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+    registerTranscriptSearch(() => { setSearchOpen(true); searchInput.current?.focus(); });
+    return () => registerTranscriptSearch(null);
+  }, [registerTranscriptSearch]);
 
   /** REQ-CHAT-074: showing a match disables tail-follow, selects the row and scrolls it to centre. */
   const matchAt = activeMatch?.at ?? null;
@@ -600,6 +606,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
       {searchOpen && (
         <div className="transcript__search" role="search" aria-label="Search transcript">
           <DesignInput
+            ref={searchInput}
             className="input transcript__search-input" autoFocus placeholder="Search transcript…" aria-label="Search transcript"
             data-testid="transcript-search-input" value={query}
             onChange={(e) => { setQuery(e.currentTarget.value); showMatch(0); }}

@@ -66,6 +66,14 @@ export interface ShellState {
   readonly composer: ComposerRegistration | null;
   registerComposer(registration: ComposerRegistration | null): void;
   /**
+   * REQ-SHELL-049's Ctrl+F (N71, 2026-10-13): the transcript pane registers the opener of its search panel (REQ-CHAT-074)
+   * while it is mounted; null while unmounted. The panel's open state stays the pane's — this is the way in, the same
+   * shape `composer` takes — so the registry's "Search transcript" reaches it after the switch to Workspace and the pane
+   * no longer binds the chord itself.
+   */
+  readonly transcriptSearch: (() => void) | null;
+  registerTranscriptSearch(open: (() => void) | null): void;
+  /**
    * REQ-SHELL-055's window-level Escape on the Workspace view, in its fixed order: the slash suggestion popup
    * (REQ-CHAT-002/026), then the transcript search panel, then both compact overlay drawers. Each surface registers a
    * closer that returns whether it closed anything; an unregistered slot is skipped. (Until 2026-10-13 this said an
@@ -216,6 +224,10 @@ export const useShellState = create<ShellState>((set, get) => ({
   composer: null,
   registerComposer(registration) {
     set({ composer: registration });
+  },
+  transcriptSearch: null,
+  registerTranscriptSearch(open) {
+    set({ transcriptSearch: open });
   },
   overlays: { slashPopup: null, searchPanel: null, drawers: null },
   registerOverlay(kind, close) {

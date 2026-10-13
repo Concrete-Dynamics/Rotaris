@@ -22,6 +22,7 @@ function context(): CommandContext & { readonly calls: string[] } {
     openKeyboardHelp: () => { calls.push('openKeyboardHelp'); },
     focusComposer: () => { calls.push('focusComposer'); },
     submitRun: () => { calls.push('submitRun'); },
+    openTranscriptSearch: () => { calls.push('openTranscriptSearch'); },
   };
 }
 
@@ -34,6 +35,8 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
     expect(rows.slice(7)).toEqual([
       ['palette.open', 'Open command palette', 'Ctrl+K'],
       ['settings.open', 'Open Settings', 'Ctrl+,'],
+      // N71 (2026-10-13): REQ-SHELL-049's Ctrl+F row, in the table's own place — back from the omitted list.
+      ['transcript.search', 'Search transcript', 'Ctrl+F'],
       ['composer.focus', 'Focus run prompt', 'Ctrl+L'],
       ['run.submit', 'Start or continue run', 'Ctrl+Return'],
       ['help.keyboard', 'Show keyboard help', 'F1'],
@@ -50,6 +53,8 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
       // labelled as the directive words it; the pin is what makes a silent relabelling of a directive's own
       // gesture fail a test rather than pass review.
       ['workspace.chooseNewWindow', 'Open project folder in a new window', null],
+      // N71 (2026-10-13): REQ-CHAT-167's palette entry, shortcut-less, back from the omitted list.
+      ['display.toggleReasoning', 'Toggle reasoning bodies', null],
     ]);
   });
 
@@ -69,7 +74,9 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
   it('offers no Escape entry, and records every omitted entry of REQ-SHELL-049 with its reason (REQ-SHELL-048)', () => {
     expect(COMMANDS.some((c) => /escape|close current overlay/i.test(c.label))).toBe(false);
     // Part AL2: "Open terminal" (Ctrl+Shift+T) left the omitted list — the window exists (REQ-SHELL-080/108).
-    expect(OMITTED_COMMANDS.map((o) => o.label)).toEqual(['Search transcript', 'Open demo window', 'Toggle reasoning bodies']);
+    // N71 (2026-10-13): "Search transcript" and "Toggle reasoning bodies" left it too — the panel and the key exist.
+    // "Open demo window" stays: demo mode does not exist (REQ-SHELL-162).
+    expect(OMITTED_COMMANDS.map((o) => o.label)).toEqual(['Open demo window']);
     expect(COMMANDS.find((c) => c.id === 'terminal.open')).toMatchObject({ label: 'Open terminal', shortcut: 'Ctrl+Shift+T' });
     for (const o of OMITTED_COMMANDS) expect(o.reason.length, o.label).toBeGreaterThan(20);
     // What is omitted is not also offered: the two vocabularies are disjoint.
@@ -82,6 +89,7 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
     expect(ctx.calls).toEqual([
       ...PRIMARY_VIEWS.map((v) => `switchView:${v.id}`),
       'openPalette', 'switchView:settings',
+      'switchView:workspace', 'openTranscriptSearch', // N71 — REQ-SHELL-049: Ctrl+F switches to Workspace, then opens the panel.
       'switchView:workspace', 'focusComposer',
       'switchView:workspace', 'submitRun',
       'openKeyboardHelp', 'openSettings:about', 'openLibrary:proposals',
@@ -179,10 +187,13 @@ describe('chords — REQ-SHELL-057, REQ-SHELL-058, REQ-SHELL-165', () => {
     expect(commandForEvent(chord('k', { ctrlKey: true }))?.id).toBe('palette.open');
     expect(commandForEvent(chord('3', { ctrlKey: true }))?.id).toBe(`view.${PRIMARY_VIEWS[2]!.id}`);
     expect(commandForEvent(chord(',', { ctrlKey: true }))?.id).toBe('settings.open');
-    // Part AL2: Ctrl+Shift+T is bound now (REQ-SHELL-080); Ctrl+T alone and Ctrl+F stay unbound.
+    // Part AL2: Ctrl+Shift+T is bound now (REQ-SHELL-080); Ctrl+T alone stays unbound.
     expect(commandForEvent(chord('T', { ctrlKey: true, shiftKey: true }))?.id).toBe('terminal.open');
     expect(commandForEvent(chord('t', { ctrlKey: true }))).toBeNull();
-    expect(commandForEvent(chord('f', { ctrlKey: true }))).toBeNull();
+    // N71: Ctrl+F is the registry's now (REQ-SHELL-049), the command key on macOS; Ctrl+Shift+F is not it.
+    expect(commandForEvent(chord('f', { ctrlKey: true }))?.id).toBe('transcript.search');
+    expect(commandForEvent(chord('f', { metaKey: true }), 'mac')?.id).toBe('transcript.search');
+    expect(commandForEvent(chord('F', { ctrlKey: true, shiftKey: true }))).toBeNull();
   });
 });
 

@@ -36,3 +36,25 @@ Recorded 2026-10-13 by fin41 (item N71 of the whats-next survey at main `6de2a67
 - `apps/desktop/src/renderer/shell.ts` — `writeDisplayPref` accepts two of the three display keys.
 - `docs/architecture/adr/0048-windows-views-and-modality.md`, `docs/architecture/codebase.md` — describe the omission
   with the old reasons.
+
+## Outcome — repaired 2026-10-13 (fin41, `fin41-palette-and-hooks`)
+
+- **"Search transcript" (Ctrl+F)** is the registry's `transcript.search`, in REQ-SHELL-049's place after Ctrl+,. It
+  switches to Workspace and calls `openTranscriptSearch`, which reaches the opener the transcript pane registers in
+  `shell-state` (`registerTranscriptSearch`) once it is mounted; an open panel takes the caret back. The pane's private
+  window listener is gone and `/search` runs the same command, so Ctrl+F has one binding. Keyboard help lists it, the
+  palette offers it and REQ-CHAT-028 mirrors it as `/search-transcript (Ctrl+F)`; the built-in `/search` keeps its
+  own description and gating.
+- **"Toggle reasoning bodies"** is `display.toggleReasoning`, shortcut-less. It flips `display/showReasoning` through
+  `display-host.ts`, which the renderer binds to `writeDisplayPref` (now accepting the key), and acknowledges "Reasoning
+  bodies shown" or "Reasoning bodies hidden"; a refused write is reported with main's reason. Its slash mirror is
+  `/toggle-reasoning-bodies`. Settings → Display has a third Transcript switch, "Show reasoning bodies", on the same
+  write — placed there as a reading taken, raised as
+  [OQ-264](../../architecture/open-questions.md#oq-264).
+- `OMITTED_COMMANDS` holds "Open demo window" alone.
+
+**Pinned by** `packages/ui/src/commands/search-and-reasoning.test.ts` (fourteen cases red on the code before, with
+`commands.test.ts`'s updated table, run order and Ctrl+F resolution), **shown by** `pnpm palette-proof` stage 6 (from
+Mission, Ctrl+F lands on Workspace with the caret in the search field; the palette's toggle stores
+`display/showReasoning: true` and acknowledges it; the palette lists 21 entries and keyboard help 15 rows) and
+`pnpm settings-proof` (the Display switch writes the key and reads on after a relaunch). ADR-0048 reports back in place.

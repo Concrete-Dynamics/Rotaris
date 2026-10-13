@@ -110,7 +110,7 @@ const PROBES = [
   '[data-testid="inventory-row"]', '[data-testid="inventory-empty"]', '[data-testid="instruction-toggle"]',
   '[data-testid="tool-result-lines"]', '[data-testid="tool-input-lines"]',
   '[data-testid="show-tool-results"]', '[data-testid="show-tool-inputs"]',
-  '[data-testid="auto-collapse-tools"]', '[data-testid="group-tools"]',
+  '[data-testid="auto-collapse-tools"]', '[data-testid="group-tools"]', '[data-testid="show-reasoning"]',
   '.settings__body', '[data-testid="run-start-hint"]',
   '#about-network-heading', '[data-testid="network-disclosure-statement"]',
 ];
@@ -351,13 +351,14 @@ const instructionsYaml = readFileSync(configFile, 'utf8');
 if (!/workspace:AGENTS\.md: off/.test(instructionsYaml)) throw new Error(`the per-file policy was not written:\n${instructionsYaml}`);
 results.instructionToggle = { off: 'workspace:AGENTS.md', file: true };
 
-// ── 3. The Display category: move all six, save, and read the file ──────────────────────────────────────────
+// ── 3. The Display category: move all seven, save, and read the file ──────────────────────────────────────────
 const display = await launch('display', workspace, local, preferences, {
   ...openCategory('Display'),
   // The two preferences first (immediate), then the four configuration fields (deferred to Save).
   ROTARIS_CAPTURE_CLICKS: [
     '[data-testid="auto-collapse-tools"]@1600',
     '[data-testid="group-tools"]@1900',
+    '[data-testid="show-reasoning"]@2050', // N71 (2026-10-13) — REQ-CHAT-167's switch, a third desktop preference
     '[data-testid="show-tool-results"]@2200',
     '.save-bar .btn-primary>>Save@4200',
   ].join(';;'),
@@ -367,7 +368,7 @@ const display = await launch('display', workspace, local, preferences, {
 });
 // REQ-CONFIG-270: the bar is on screen in the Display category, and it went dirty when a control moved.
 const dirtyLine = display.log.split('\n').find((l) => l.includes('probe-at 3600 .save-bar__status'));
-if (!dirtyLine || !dirtyLine.includes('Unsaved changes')) throw new Error(`the save bar did not report unsaved changes after the six controls moved: ${dirtyLine ?? 'no probe'}`);
+if (!dirtyLine || !dirtyLine.includes('Unsaved changes')) throw new Error(`the save bar did not report unsaved changes after the seven controls moved: ${dirtyLine ?? 'no probe'}`);
 if ((text(display.probes, '.save-bar__status')[0] ?? '') !== 'All changes saved') throw new Error(`after Save the bar read "${text(display.probes, '.save-bar__status')[0]}"`);
 const savedYaml = readFileSync(configFile, 'utf8');
 // REQ-CONFIG-172: the requirement's key names, unlimited as 0, and the foreign key untouched (REQ-CONFIG-256).
@@ -380,7 +381,9 @@ if (/tool_result_lines:/.test(savedYaml)) throw new Error(`Part Z's falsified ke
 const prefs = JSON.parse(readFileSync(join(preferences, 'preferences.json'), 'utf8'));
 if (prefs['display/autoCollapseTools'] !== true) throw new Error(`the auto-collapse preference is ${JSON.stringify(prefs['display/autoCollapseTools'])}`);
 if (prefs['display/groupTools'] !== false) throw new Error(`the grouping preference is ${JSON.stringify(prefs['display/groupTools'])}`);
-results.display = { dirtyThenSaved: true, file: { tool_result_max_lines: 20, tool_input_max_lines: 0, show_tool_results: false, foreignKeyKept: true }, preferences: { autoCollapseTools: true, groupTools: false } };
+// REQ-CHAT-167 (N71): the reasoning switch writes `display/showReasoning`, which nothing wrote before 2026-10-13.
+if (prefs['display/showReasoning'] !== true) throw new Error(`the reasoning preference is ${JSON.stringify(prefs['display/showReasoning'])}`);
+results.display = { dirtyThenSaved: true, file: { tool_result_max_lines: 20, tool_input_max_lines: 0, show_tool_results: false, foreignKeyKept: true }, preferences: { autoCollapseTools: true, groupTools: false, showReasoning: true } };
 
 // ── 4. Reopen: the saved values come back, and the form is clean ─────────────────────────────────────────────
 const reopen = await launch('reopen', workspace, local, preferences, { ...openCategory('Display'), ROTARIS_CAPTURE_AFTER_MS: '3000' });
@@ -392,6 +395,7 @@ if (inputCap !== 'unlimited') throw new Error(`the input cap came back as ${inpu
 if (first(reopen.probes, '[data-testid="show-tool-results"]')?.data['data-on'] !== 'false') throw new Error('the results toggle did not come back off');
 if (first(reopen.probes, '[data-testid="auto-collapse-tools"]')?.data['data-on'] !== 'true') throw new Error('the auto-collapse preference did not survive the relaunch');
 if (first(reopen.probes, '[data-testid="group-tools"]')?.data['data-on'] !== 'false') throw new Error('the grouping preference did not survive the relaunch');
+if (first(reopen.probes, '[data-testid="show-reasoning"]')?.data['data-on'] !== 'true') throw new Error('the reasoning preference did not survive the relaunch (REQ-CHAT-167)');
 // REQ-CONFIG-419/425: a read repopulates and the form starts clean.
 if ((text(reopen.probes, '.save-bar__status')[0] ?? '') !== 'All changes saved') throw new Error(`the reopened form was not clean: "${text(reopen.probes, '.save-bar__status')[0]}"`);
 results.reopen = { tool_result_lines: resultCap, tool_input_lines: inputCap, clean: true, preferencesKept: true };

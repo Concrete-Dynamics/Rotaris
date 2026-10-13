@@ -263,11 +263,22 @@ export const pendingDisplay = createStore<{ caps: DisplayView | null }>(() => ({
  * flag. The settings screen publishes it as its pending state changes and takes it down when it goes.
  */
 export const settingsUnsaved = createStore<{ dirty: boolean }>(() => ({ dirty: false }));
-/** REQ-CONFIG-403: written the moment the control moves, and the transcript re-renders from the same store. */
-export async function writeDisplayPref(key: 'display/autoCollapseTools' | 'display/groupTools', value: boolean): Promise<{ ok: true } | { ok: false; reason: string }> {
+/**
+ * REQ-CONFIG-403 and REQ-CHAT-167: written the moment the control moves, and the transcript re-renders from the same
+ * store. `display/showReasoning` joined on 2026-10-13 (N71): until then nothing wrote it, so the preference could not
+ * be changed from anywhere. Settings → Display and the palette's "Toggle reasoning bodies" (through `display-host.ts`)
+ * both write through here, so the store is updated only after main has stored the value.
+ */
+export type DisplayPrefKey = 'display/autoCollapseTools' | 'display/groupTools' | 'display/showReasoning';
+const DISPLAY_FIELD: Record<DisplayPrefKey, 'autoCollapseTools' | 'groupTools' | 'showReasoning'> = {
+  'display/autoCollapseTools': 'autoCollapseTools',
+  'display/groupTools': 'groupTools',
+  'display/showReasoning': 'showReasoning',
+};
+export async function writeDisplayPref(key: DisplayPrefKey, value: boolean): Promise<{ ok: true } | { ok: false; reason: string }> {
   const r = await bridge.command({ kind: 'prefs.set', key, value });
   if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-  displayPrefs.setState(key === 'display/groupTools' ? { groupTools: value } : { autoCollapseTools: value });
+  displayPrefs.setState({ [DISPLAY_FIELD[key]]: value });
   return { ok: true };
 }
 /**

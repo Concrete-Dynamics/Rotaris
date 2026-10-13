@@ -145,7 +145,9 @@ const s1 = scenario('palette');
   // (`docs/defects/fixed/the-palette-proof-counts-a-registry-that-moved-on.md`); Part AT's own
   // `improvements.retrospective` (PD-LIBRARY-002) takes it to 19. The count is asserted rather than derived on
   // purpose: a command that appears without anyone deciding to add it is what this line is here to catch.
-  expect(all.length === 19, `an empty query listed ${all.length} commands, not the registry's 19 (REQ-SHELL-052)`);
+  // N71 (2026-10-13) returned two entries from `OMITTED_COMMANDS` — "Search transcript" (Ctrl+F, REQ-SHELL-049) and
+  // "Toggle reasoning bodies" (REQ-CHAT-167) — taking it to 21.
+  expect(all.length === 21, `an empty query listed ${all.length} commands, not the registry's 21 (REQ-SHELL-052)`);
   expect(all[0].attrs['aria-selected'] === 'true' && all.slice(1).every((m) => m.attrs['aria-selected'] === 'false'), 'the first row was not the auto-selected one (REQ-SHELL-052)');
   const filtered = inspectAt(r.log, 4800, '.cmdk-item')?.matches ?? [];
   const filteredIds = filtered.map((m) => m.attrs['data-command']);
@@ -191,7 +193,9 @@ const s2 = scenario('help');
   // Twelve became fourteen because wave 2 added two SHORTCUT-BEARING commands, `requirements.move` on Ctrl+M (AK')
   // and `terminal.open` on Ctrl+Shift+T (AL'). The third command it added, `run.compress` (AO), carries no chord and
   // so adds no row. The count of rows beyond the registry's own is unchanged at seven, which is why the delta is two.
-  expect(rows.length === 14, `the help lists ${rows.length} rows; the registry has 14 shortcut-bearing rows (REQ-SHELL-054)`);
+  // N71 (2026-10-13): fifteen, with Ctrl+F's "Search transcript" (REQ-SHELL-049); "Toggle reasoning bodies" carries no chord.
+  expect(rows.length === 15, `the help lists ${rows.length} rows; the registry has 15 shortcut-bearing rows (REQ-SHELL-054)`);
+  expect(chords.includes('Ctrl+F') && rows.some((m) => /Search transcript/.test(m.text ?? '')), `keyboard help does not list Ctrl+F "Search transcript": ${JSON.stringify(chords)} (REQ-SHELL-054, N71)`);
   expect(!chords.some((c) => /escape/i.test(c ?? '')), `an Escape row is present: ${JSON.stringify(chords)} (REQ-SHELL-048/054)`);
   expect(!rows.some((m) => /close current overlay/i.test(m.text ?? '')), 'the Escape entry is offered as a command (REQ-SHELL-048)');
   const prose = inspectAt(r.log, 3600, '[data-testid="keyboard-help-escape"]')?.matches[0]?.text ?? '';
@@ -322,9 +326,54 @@ const s5 = scenario('minimum');
   const box = dialog.matches[0].rect;
   expect(box.x >= 0 && box.y >= 0 && box.x + box.width <= 1000 && box.y + box.height <= 680, `the palette lies outside a 1000×680 content area: ${JSON.stringify(box)} (REQ-SHELL-022)`);
   const rows = inspectAt(r.log, 4000, '.cmdk-item')?.matches ?? [];
-  // The same list as the empty-query assertion above, at the minimum window size: 19 since Part AT.
-  expect(rows.length === 19, `only ${rows.length} rows at the minimum size`);
+  // The same list as the empty-query assertion above, at the minimum window size: 19 since Part AT, 21 since N71.
+  expect(rows.length === 21, `only ${rows.length} rows at the minimum size`);
   results.minimum = { rect: { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) }, rows: rows.length, png: join(output, 'palette-minimum.png'), elapsedMs: r.elapsedMs };
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. N71 (2026-10-13): Ctrl+F from another view, and the reasoning toggle from the palette.
+//    REQ-SHELL-049: Ctrl+F switches to Workspace and opens the transcript search panel, with the caret in its field —
+//    pressed here on Mission, where the pane is not mounted and its old private listener could not hear it.
+//    REQ-CHAT-167: the palette's "Toggle reasoning bodies" writes `display/showReasoning` to the preference store and
+//    reports the new state; activating it a second time turns it back off and says so.
+const s6 = scenario('search-and-reasoning');
+{
+  const r = await launch('search-and-reasoning', s6, {
+    ROTARIS_CAPTURE_CHORDS: 'Ctrl+3@3000;;Ctrl+F@3800;;Escape@4800;;Ctrl+K@5400;;Return@6600',
+    ROTARIS_CAPTURE_TYPE_AT: 'reasoning bodies@6000',
+    ROTARIS_CAPTURE_INSPECT_AT: [
+      '.app-shell@3400',
+      '.app-shell@4400',
+      '[data-testid="transcript-search-input"]@4400',
+      '[data-testid="transcript-search-input"]@5200',
+      '.cmdk-item@6400',
+      '[data-testid="acknowledgement-title"]@7200',
+    ].join(';;'),
+    ROTARIS_CAPTURE_AFTER_MS: '7800',
+  });
+  const view = (at) => inspectAt(r.log, at, '.app-shell')?.matches[0]?.attrs['data-view'];
+  expect(view(3400) === 'mission', `Ctrl+3 landed on ${view(3400)} — the Ctrl+F leg must start away from Workspace`);
+  expect(view(4400) === 'workspace', `Ctrl+F on Mission did not switch to Workspace: ${view(4400)} (REQ-SHELL-049)`);
+  const field = inspectAt(r.log, 4400, '[data-testid="transcript-search-input"]');
+  expect(field && field.matches.length === 1, `Ctrl+F did not open the search panel: ${JSON.stringify(field)} (REQ-SHELL-049, REQ-CHAT-074)`);
+  expect(field.matches[0].attrs['placeholder'] === 'Search transcript…', `the search field reads ${JSON.stringify(field.matches[0].attrs['placeholder'])} (REQ-CHAT-074)`);
+  expect(field.active?.testId === 'transcript-search-input', `the caret is not in the search field: ${JSON.stringify(field.active)}`);
+  const closed = inspectAt(r.log, 5200, '[data-testid="transcript-search-input"]');
+  expect(closed && closed.matches.length === 0, 'Escape in the search field did not close the panel (REQ-CHAT-074)');
+  const offered = (inspectAt(r.log, 6400, '.cmdk-item')?.matches ?? []).map((m) => m.attrs['data-command']);
+  expect(offered[0] === 'display.toggleReasoning', `"reasoning bodies" offered ${JSON.stringify(offered)} first (REQ-CHAT-167, REQ-SHELL-052)`);
+  const ack = (inspectAt(r.log, 7200, '[data-testid="acknowledgement-title"]')?.matches ?? []).map((m) => m.text);
+  expect(ack.includes('Reasoning bodies shown'), `the toggle reported ${JSON.stringify(ack)}, not the new state (REQ-CHAT-167)`);
+  const prefsFile = join(s6.preferences, 'preferences.json');
+  const prefs = existsSync(prefsFile) ? JSON.parse(readFileSync(prefsFile, 'utf8')) : {};
+  expect(prefs['display/showReasoning'] === true, `display/showReasoning is ${JSON.stringify(prefs['display/showReasoning'])} after the toggle (REQ-CHAT-167)`);
+  results.searchAndReasoning = {
+    ctrlF: { from: view(3400), to: view(4400), panel: true, caret: field.active?.testId, escapeClosed: true },
+    reasoning: { offeredFirst: offered[0], acknowledged: ack, stored: prefs['display/showReasoning'] },
+    png: r.png, elapsedMs: r.elapsedMs,
+  };
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
 }
 

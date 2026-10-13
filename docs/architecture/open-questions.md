@@ -13538,3 +13538,27 @@ load, and a session tree is placed at `.rotaris/requirements/<sid>` or `.rotaris
 too, on REQ-GIT-071's terms, with the same report (key, value, the namespace it collided with), or loads as built.
 
 **What a live run then shows.** Nothing: the live-run workspaces keep the default `worktrees`.
+
+<a id="oq-264"></a>
+**OQ-264 — Where in Settings does REQ-CHAT-167's reasoning-visibility switch live, when REQ-CONFIG-403 says the
+Display category "holds two transcript toggles"?** *(REQ-CHAT-167 with REQ-CONFIG-403 and REQ-CONFIG-472. Raised
+2026-10-13 by fin41, building the repair the note
+[`search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true`](../defects/fixed/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md)
+records, as OQ-263; renumbered OQ-264 at landing, because origin/main had given OQ-263 to
+REQ-GIT-138's question. Open.)*
+
+REQ-CHAT-167 requires `display/showReasoning` to be "reachable both from the settings surface and from the command
+palette". It names no category. REQ-CONFIG-403 says "The Display category holds two transcript toggles", names them —
+auto-collapse older tool outputs and group consecutive tool calls — and fixes their order; REQ-CONFIG-472 says the
+category "additionally holds" REQ-CHAT-166's four tool-row controls. No settings requirement names the reasoning switch,
+so read together the two documents either count the Display category short by one or leave the switch with no
+category at all.
+
+**What the build proceeds under.** The switch, "Show reasoning bodies", is the third control under Display's
+Transcript heading, after REQ-CONFIG-403's two in their order, with the same commit policy (a desktop preference written
+the moment it moves, not undone by Discard). The heading's sentence now says "These three". That is where a reader
+looking for a transcript display preference looks, and it keeps REQ-CONFIG-403's two in their stated order.
+
+**What a ruling decides.** Whether REQ-CONFIG-403's "two" is an enumeration a third preference may join (extending it
+by a directive), or whether the switch belongs in another category (Interface holds the other desktop-preference
+toggles), or whether it stands as built.

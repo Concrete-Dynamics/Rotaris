@@ -2,6 +2,7 @@ export * from './AppShell.js';
 export * from './WindowControls.js';
 export * from './WorkspaceChip.js';
 export * from './workspace-host.js';
+export * from './display-host.js';
 export * from './workspace-label.js';
 export * from './Notice.js';
 export * from './Acknowledgements.js';

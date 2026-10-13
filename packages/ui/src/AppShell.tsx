@@ -110,9 +110,10 @@ function composerInput(): HTMLTextAreaElement | null {
 }
 
 /**
- * The command context over the shell state — the registry's commands run against this. `focusComposer` and
- * `submitRun` wait for the Workspace view to mount (the views are mounted by name); `submitRun` submits only while
- * the composer's registration says its send control is enabled (REQ-SHELL-049), otherwise it does nothing.
+ * The command context over the shell state — the registry's commands run against this. `focusComposer`, `submitRun`
+ * and `openTranscriptSearch` wait for the Workspace view to mount (the views are mounted by name); `submitRun` submits
+ * only while the composer's registration says its send control is enabled (REQ-SHELL-049), otherwise it does nothing;
+ * `openTranscriptSearch` calls the opener the transcript pane registered (REQ-CHAT-074).
  */
 export function useCommandContext(): CommandContext {
   const activeView = useShellState((s) => s.activeView);
@@ -125,6 +126,7 @@ export function useCommandContext(): CommandContext {
     openKeyboardHelp: () => useShellState.getState().openKeyboardHelp(),
     focusComposer: () => nowOrAfterMount(() => { const input = composerInput(); if (!input) return false; input.focus(); return true; }),
     submitRun: () => nowOrAfterMount(() => { const composer = useShellState.getState().composer; if (!composer) return false; if (composer.enabled) composer.submit(); return true; }),
+    openTranscriptSearch: () => nowOrAfterMount(() => { const open = useShellState.getState().transcriptSearch; if (!open) return false; open(); return true; }),
   }), [activeView]);
 }
 

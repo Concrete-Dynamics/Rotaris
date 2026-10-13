@@ -51,6 +51,13 @@ package, edge, process, channel, command or store column changed.
 so, and names the grip drag `capture/seams.ts` gained the same day (`ROTARIS_CAPTURE_GRIP_DRAG`, a real pointer drag of a
 resize grip, read by `plan-gate-proof`). No package, edge, process, channel, command or store column changed.
 
+**Ctrl+F and the reasoning toggle join the one action vocabulary (REQ-SHELL-049, REQ-CHAT-167; fin41, N71).** The
+**state-ownership view**'s shell-state row names the transcript search panel's opener the pane now registers, which the
+registry's "Search transcript" calls after the switch to Workspace; the pane binds no chord of its own. The **process
+view**'s `prefs.set` paragraph names the first writers of `display/showReasoning`: the palette entry, its slash mirror and
+Settings → Display, through the renderer's `writeDisplayPref`. No package, edge, process, channel, command or store column
+changed (`prefs.set` already accepted the key).
+
 **The artifact inspector's Preview links open (ADR-0051 decision 4; fin41).** Both `<ArtifactInspector>` mounts
 (`renderer/main.tsx`'s Library, `renderer/windows.tsx`'s persona window) pass the window's `openLink`, so a Preview link asks
 for `shell.openExternal` as a transcript link does. The **process view**'s `shell.openExternal` paragraph names every surface

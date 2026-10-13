@@ -2997,7 +2997,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     w.value.release(1, HOST);
     // The next run on that session id is refused by design (a new session is minted per prompt today), so the sweep is exercised directly.
     const { ArtifactStore } = await import('../artifacts/store.js');
-    const artifacts = new ArtifactStore({ dal, sessionId: sid0, directory: () => join(tmpdir(), 'rotaris-phantom-artifacts'), wall: clock, warn: () => undefined });
+    const artifacts = new ArtifactStore({ dal, sessionId: sid0, directory: () => join(dir, 'phantom-artifacts'), wall: clock, warn: () => undefined });
     const settled = (await import('./orchestration.js')).settleStaleChildren(dal, w.value, sid0, () => undefined, artifacts);
     expect(settled).toBe(1);
     expect(dal.getChild(sid0, 'bg_0000dead')).toMatchObject({ state: 'cancelled', report_stored: 1 });

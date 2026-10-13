@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, posix, win32 } from 'node:path';
 import { loadConfiguration } from '../load.js';
@@ -17,6 +17,18 @@ import { CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, CODE_INTELLI
 import { CODE_INTELLIGENCE_TOKEN } from './commands.js';
 import type { DiscoveredServers } from './discovery-files.js';
 import { launchedProjectOf, mcpConfigurationForExecutionRoot, resolveMcpConfiguration } from './index.js';
+
+/**
+ * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
+ * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ */
+const scratchDirs: string[] = [];
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+afterEach(() => { for (const dir of scratchDirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 3 }); });
 
 const entry = (over: Partial<McpServerEntry> = {}): McpServerEntry => ({ ...MCP_ENTRY_DEFAULTS, command: 'node', ...over });
 const tool = (name: string, description = '') => ({ name, description, inputSchema: { type: 'object' } });
@@ -90,7 +102,7 @@ describe('REQ-MCP-017..024, 027 — the discovery files', () => {
     // These three read REAL files off the host's own filesystem, so the platform they name is the HOST's: the
     // discovery layer spells its paths by the platform it is given, and naming a foreign one here would send it
     // looking for `ws\\.mcp.json` on a machine that has just written `ws/.mcp.json` (found on Linux, 2026-09-16).
-    const root = mkdtempSync(join(tmpdir(), 'rotaris-mcp-disc-'));
+    const root = scratchDir('rotaris-mcp-disc-');
     const ws = join(root, 'ws');
     mkdirSync(join(ws, '.rotaris'), { recursive: true });
     const globalDir = join(root, 'global');
@@ -122,7 +134,7 @@ describe('REQ-MCP-017..024, 027 — the discovery files', () => {
     expect(mcp.servers['alpha']!.entry.enabled).toBe(true);
   });
   it('a YAML defect refuses the load naming file, server and field; the same defect in the discovery file drops the entry (REQ-MCP-002/023)', () => {
-    const root = mkdtempSync(join(tmpdir(), 'rotaris-mcp-fatal-'));
+    const root = scratchDir('rotaris-mcp-fatal-');
     const ws = join(root, 'ws');
     mkdirSync(join(ws, '.rotaris'), { recursive: true });
     const globalDir = join(root, 'global');

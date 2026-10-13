@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
@@ -11,8 +11,20 @@ import {
   SETUP_FOLLOW_BOUND_MS, SETUP_OVERDUE_DETAIL, SETUP_RUN_HOST_EXITED_DETAIL, SETUP_START_UNANSWERED_DETAIL,
 } from './initialization.js';
 
+/**
+ * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
+ * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ */
+const scratchDirs: string[] = [];
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+afterEach(() => { for (const dir of scratchDirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 3 }); });
+
 function workspace(): { root: string; agents: string } {
-  const root = mkdtempSync(join(tmpdir(), 'rotaris-coord-'));
+  const root = scratchDir('rotaris-coord-');
   mkdirSync(join(root, '.rotaris'));
   return { root, agents: join(root, '.rotaris', 'agents.yaml') };
 }

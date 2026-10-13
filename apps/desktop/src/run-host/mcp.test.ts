@@ -11,6 +11,18 @@ import type { SessionRow } from '@rotaris/store';
 import { configurationForExecutionRoot, grantEvidence, McpHost } from './mcp.js';
 
 /**
+ * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
+ * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ */
+const scratchDirs: string[] = [];
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+afterEach(() => { for (const dir of scratchDirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 3 }); });
+
+/**
  * Live-run finding D7 (R-067): the spawn evidence resolved a persona's MCP surface with no reserved names and the tool
  * port resolved it again with the persona's native names reserved, so the first spawn of every persona wrote its
  * surface line and REQ-MCP-059's grant count twice. A resolution that says nothing new is logged once; one the reserved
@@ -105,7 +117,7 @@ describe('a persona\'s MCP lines on its first spawn (REQ-MCP-059, REQ-MCP-065, R
  */
 describe('the setup at the run host\'s shutdown (REQ-WORKSPACE-092, REQ-WORKSPACE-109)', () => {
   it.skipIf(process.platform === 'win32')('ends the step under way and what it started, force-killing them after the shutdown\'s grace, and answers once they have gone', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'rotaris-setup-end-'));
+    const dir = scratchDir('rotaris-setup-end-');
     const standIn = join(dir, 'stand-in.cjs');
     writeFileSync(standIn, [
       "const cp = require('node:child_process');",
@@ -181,7 +193,7 @@ describe('the setup step facts on the run host\'s status (REQ-WORKSPACE-091, REQ
     } as unknown as LoadedConfiguration;
   };
   const project = (files: Record<string, string>): string => {
-    const root = join(mkdtempSync(join(tmpdir(), 'rotaris-setup-facts-')), 'project');
+    const root = join(scratchDir('rotaris-setup-facts-'), 'project');
     mkdirSync(join(root, '.rotaris'), { recursive: true });
     for (const [path, text] of Object.entries(files)) {
       mkdirSync(join(root, path, '..'), { recursive: true });
@@ -210,7 +222,7 @@ describe('the setup step facts on the run host\'s status (REQ-WORKSPACE-091, REQ
   });
 
   it.skipIf(process.platform === 'win32')('carries a step\'s output with no prefix, and leaves a step not attempted without facts', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'rotaris-setup-facts-'));
+    const dir = scratchDir('rotaris-setup-facts-');
     const standIn = join(dir, 'stand-in.cjs');
     writeFileSync(standIn, [
       'const [group, verb] = process.argv.slice(2);',

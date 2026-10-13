@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,18 @@ import { millis } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
 import { forgetNegotiatedEras, listTools, openClient } from './client.js';
 import type { McpLog, StdioDescription } from './types.js';
+
+/**
+ * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
+ * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ */
+const scratchDirs: string[] = [];
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+afterEach(() => { for (const dir of scratchDirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 3 }); });
 
 /**
  * ADR-0033 consequence 2 / spike-list item 3 — protocol negotiation over OUR transport, taken as the first
@@ -49,7 +61,7 @@ async function connectOnce(era: string, mode: string, dir: string): Promise<Cell
 describe('the era a server already told us (ADR-0033, first execution against a real third-party server)', () => {
   it('a server that answered the probe with an error is asked once, not once per connection', async () => {
     forgetNegotiatedEras();
-    const dir = mkdtempSync(join(tmpdir(), 'rotaris-mcp-era-'));
+    const dir = scratchDir('rotaris-mcp-era-');
     const requests = join(dir, 'requests.log');
     writeFileSync(requests, '');
     const description: StdioDescription = { transport: 'stdio', command: process.execPath, args: [FIXTURE, '--era', '2025', '--request-file', requests], env: { ...process.env as Record<string, string> }, cwd: dir };
@@ -72,7 +84,7 @@ describe('the era a server already told us (ADR-0033, first execution against a 
 
 describe('spike 3 — negotiation over OwnedStdioTransport (ADR-0033 c.2, ESC-12)', () => {
   it('measures three eras under three modes and decides the mode', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'rotaris-mcp-negotiation-'));
+    const dir = scratchDir('rotaris-mcp-negotiation-');
     const cells: Cell[] = [];
     for (const era of ERAS) for (const mode of Object.keys(MODES)) cells.push(await connectOnce(era, mode, dir));
     const out = process.env['MCP_SPIKE_OUT'];

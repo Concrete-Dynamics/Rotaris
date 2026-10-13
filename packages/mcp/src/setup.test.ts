@@ -1,9 +1,21 @@
-import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { millis, type Clocks, type Timers } from '@rotaris/kernel';
 import { runSetupSteps, SETUP_SHUTDOWN_GRACE_MS, SETUP_TERMINATE_GRACE_MS, type SetupStepReport, type SetupStepSpec } from './setup.js';
+
+/**
+ * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
+ * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ */
+const scratchDirs: string[] = [];
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+afterEach(() => { for (const dir of scratchDirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 3 }); });
 
 /**
  * REQ-MCP-099's runner against node itself as the "runtime": the invocation is `node -e <script>` where the script reads
@@ -144,7 +156,7 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
   };
 
   it.skipIf(process.platform === 'win32')('cancels: what the step started is ended with it, a descendant that ignores the ask included (REQ-WORKSPACE-092)', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'rotaris-setup-family-'));
+    const root = scratchDir('rotaris-setup-family-');
     const abort = new AbortController();
     let pids: number[] = [];
     const r = await runSetupSteps({ invocation: familyInvocation, workspaceRoot: root, steps: [step('create', 'holds')], creationStepId: 'create', markerPresent: false, containsCode: true, env: process.env as Record<string, string>, clocks: realClocks(), log, signal: abort.signal, onStep: (s) => { if (s.id === 'create' && s.status === 'running') whenPids(root, (found) => { pids = found; abort.abort(); }); }, pollMs: millis(50), graceMs: millis(400) });
@@ -165,7 +177,7 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
   });
 
   it.skipIf(process.platform === 'win32')('cancels a step that ignores the ask with the force-kill 2 s after the cancellation, by default (PD-MCP-003, REQ-WORKSPACE-092)', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'rotaris-setup-cancel-grace-'));
+    const root = scratchDir('rotaris-setup-cancel-grace-');
     const abort = new AbortController();
     let pids: number[] = [];
     let cancelledAt = 0;
@@ -182,7 +194,7 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
   }, 20_000);
 
   it.skipIf(process.platform === 'win32')('ends a step past its budget that ignores the ask with the force-kill 2 s after the budget, by default (PD-MCP-003, REQ-WORKSPACE-092)', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'rotaris-setup-budget-grace-'));
+    const root = scratchDir('rotaris-setup-budget-grace-');
     const started = performance.now();
     const r = await runSetupSteps({
       invocation: familyInvocation, workspaceRoot: root, steps: [step('create', 'stubborn', { budgetMs: 600 })], creationStepId: 'create', markerPresent: false, containsCode: true,
@@ -196,7 +208,7 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
   }, 20_000);
 
   it.skipIf(process.platform === 'win32')('at its host\'s shutdown, force-kills a step that ignores the ask after the shutdown\'s grace, shortening a cancellation\'s grace already under way (REQ-WORKSPACE-092, REQ-WORKSPACE-109)', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'rotaris-setup-shutdown-'));
+    const root = scratchDir('rotaris-setup-shutdown-');
     const abort = new AbortController();
     const shutdown = new AbortController();
     let pids: number[] = [];

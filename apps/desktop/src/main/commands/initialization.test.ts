@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
@@ -10,13 +10,25 @@ import { initializationCommands } from './initialization.js';
 import type { CommandAt, MainWindowState } from './context.js';
 
 /**
+ * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
+ * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ */
+const scratchDirs: string[] = [];
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+afterEach(() => { for (const dir of scratchDirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 3 }); });
+
+/**
  * PD-SHELL-001 / REQ-WORKSPACE-013/105: every `initialization.*` command is answered for the workspace of the window that
  * sent it. Before, the coordinator answered with the workspace opened last, whichever window asked
  * (`docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`); the first case
  * here failed on that code with the second window's `lastRun` (null) in place of the first's.
  */
 function workspace(): { root: string; agents: string } {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'rotaris-initcmd-')));
+  const root = realpathSync(scratchDir('rotaris-initcmd-'));
   mkdirSync(join(root, '.rotaris'));
   return { root, agents: join(root, '.rotaris', 'agents.yaml') };
 }

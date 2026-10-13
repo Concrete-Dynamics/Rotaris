@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EMPTY_RUN_REPORT, type InitRunReport } from '@rotaris/contracts';
@@ -11,8 +11,20 @@ import { DUPLICATE_TASK, isApplicable, labelFor, TaskRegistry, type Initializati
 import { deriveSets, promptOwed, sameView, viewOf } from './sets.js';
 import { executeTasks, recordSkip, stampOnly } from './execute.js';
 
+/**
+ * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
+ * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ */
+const scratchDirs: string[] = [];
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+afterEach(() => { for (const dir of scratchDirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 3 }); });
+
 function tree(): string {
-  return mkdtempSync(join(tmpdir(), 'rotaris-init-'));
+  return scratchDir('rotaris-init-');
 }
 
 function ignores(text: string, path: string, isDir = false): boolean {

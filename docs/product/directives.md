@@ -2940,6 +2940,12 @@ from OQ-249 (the consortium's question P3), revision 8 from OQ-250 (the consorti
 > - **`replace` cannot complete an active item.** REQ-TOOLS-146 restores an IN_PROGRESS task over a `replace`, so an item the
 >   run marked is closed with `update`. The scripted coordinator's `done` step (`apps/desktop/src/run-host/scripted-client.ts`)
 >   wrote one `replace` with every item COMPLETED; it now sends one `update` per open item, as a model must.
+>   *Falsified as a rule for a served-and-ended item, 2026-10-13, by [OQ-254](../architecture/open-questions.md#oq-254)'s ruling
+>   (`PD-TOOLS-008` revision 3, under [R-072](requests.md#r-072)):* the reason held of the code as built, but no live model is
+>   told it, and the restore it describes is the defect
+>   [`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../defects/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
+>   Since revision 3 a `replace` closes an item whose child has ended; an item a running child holds, and the agent's own
+>   active item, are still closed with `update`, and the `replace` that kept them says so.
 >
 > **What was measured.** `run-host/tools.test.ts` ("PD-TOOLS-006 revision 7", four of its five cases red on the code before):
 > a named PENDING item marked, persisted and kept by a later `replace` in the turn; IN_PROGRESS, COMPLETED and ABANDONED items
@@ -4093,6 +4099,11 @@ wrong, rather than telling it so first. The result says what was read, so the mo
 
 ### PD-TOOLS-008 — a todo list that itself marks two tasks in progress is refused without naming an active task
 
+*Revision 3 (2026-10-13, [R-072](requests.md#r-072)) — **a `replace` closes a delegated item once its child has ended, and
+names every task it restores**, a section added after revision 2's; the ruling of
+[OQ-254](../architecture/open-questions.md#oq-254) under the owner's delegation. It replaces revision 2's "REQ-TOOLS-146's
+protection is otherwise unchanged", quoted below; the Narrows line is unchanged.*
+
 *Revision 2 (2026-10-07, [R-072](requests.md#r-072)) — **a task a running delegation holds is outside the single-active
 count**, a section added after revision 1's text; the ruling of [OQ-249](../architecture/open-questions.md) under the owner's
 delegation. It replaces revision 1's "at most one task is `IN_PROGRESS`", quoted below, and adds REQ-TOOLS-146 to the Narrows
@@ -4125,7 +4136,25 @@ holds:
 - **This directive's sentence** counts the unheld tasks the submitted list marks. For a caller whose resolved tool set holds
   `delegate`, it adds: `Leave the items you will delegate PENDING: a delegate call that names one in todo_item marks it
   IN_PROGRESS.`
-- **REQ-TOOLS-146's protection** is otherwise unchanged: a protected task is restored by id with its state intact.
+- **REQ-TOOLS-146's protection** is otherwise as revision 3 below states it.
+
+> Revision 2 said, and no longer governs since revision 3: "**REQ-TOOLS-146's protection** is otherwise unchanged: a protected
+> task is restored by id with its state intact."
+
+**A `replace` closes a delegated item once its child has ended, and names every task it restores (revision 3).** A task is
+**served** when a child of the list's owner, terminal or not, records it as its `todo_item` (`PD-TOOLS-006` revision 6).
+- **Served and ended.** A served IN_PROGRESS task that no non-terminal child holds takes the state a `replace` sends for its id
+  when that state is COMPLETED or ABANDONED.
+- **The count.** Such a task, closed by the `replace`, is not the active task against which REQ-TOOLS-146 rejects a list that
+  marks another task IN_PROGRESS: the bound is evaluated on the tasks the resulting list leaves unheld and active.
+- **Protections that stay.** COMPLETED and ABANDONED tasks are restored. A held task is restored over any state. A
+  served-and-ended or own IN_PROGRESS task is restored when the list sends it PENDING. The agent's own unserved IN_PROGRESS task
+  is restored over any state. An omitted protected task is kept in place.
+- **The observation.** When a `replace` restores a task whose incoming state differed from the one kept, the success
+  observation names each such task by name and id, with the state kept and one of these reasons: `a running delegated agent
+  holds it`, `finished work is never reopened`, `your active task is closed with update`, `an active task is never set back to
+  PENDING`. It then ends `Change a task's state with update.` This comes before the `Todo state:` summary; REQ-TOOLS-147's
+  summary is unchanged. A task sent with no state, and an omitted task, differ from nothing and are not named.
 
 > Revision 1 said, and no longer governs: "Everything else REQ-TOOLS-145 fixes still governs: at most one task is
 > `IN_PROGRESS`, enforced when marking a task and on wholesale state changes".
@@ -4148,11 +4177,23 @@ makes that plan the run's primary progress display. OQ-163's case, which revisio
   marks a task;
 - the `todo` tool now depends on the run's child records, read through a port at each call.
 
+**Why revision 3, and what it costs.** Revision 7 of `PD-TOOLS-006` sets a delegated item IN_PROGRESS without the coordinator
+writing it, and once the child has ended the item fails every part of REQ-TOOLS-146's stated reason: the agent is not working on
+it, nobody holds it, and closing it adds no second active task. As built it was restored over a closing `replace` that still
+answered success. Revision 7's first execution met this on the scripted coordinator ("`replace` cannot complete an active
+item"), and on a live run the open plan sends PD-ORCH-015's correction, whose text names only "the todo tool", and then
+REQ-ORCH-075's re-queue of a met request. What it costs:
+- a second read through the run, the items served by any child of the owner, terminal children included;
+- four classes of protected task (finished, held, the agent's own active task, served-and-ended sent PENDING);
+- a longer observation on a `replace` that restores something;
+- the agent's own IN_PROGRESS task is still closed only by `update`, one step the observation now names.
+
 > **Narrows:** REQ-TOOLS-145, REQ-TOOLS-146
 
 *Raised by the owner, 2026-10-06, ruling OQ-163 as recommended; logged as [R-071](requests.md#r-071). Revision 2 ruled under the
 owner's delegation, [R-072](requests.md#r-072), from OQ-249 (the consortium's question P3, the final live runs' findings P3 and
-D7).*
+D7). Revision 3 ruled under the same delegation from [OQ-254](../architecture/open-questions.md#oq-254) (the consortium's
+question RC1, from revision 7's first execution).*
 
 > **First execution, 2026-10-06, built under [R-071](requests.md#r-071) (fin21):** the rule held as written. The case it
 > names is exactly the second of `todo`'s two `replace` checks (`packages/agent-tools/src/tools/todo.ts`): the first

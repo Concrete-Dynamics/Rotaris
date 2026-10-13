@@ -12936,3 +12936,55 @@ and pinned as built by "PD-TOOLS-016 … level 1, replace_all and haet_edit are 
 **What a ruling decides.** Whether an exact match carries the file's line endings into `new_string`'s added lines (narrowing
 REQ-TOOLS-136 and REQ-TOOLS-189 for both tools, `PD-TOOLS-016`'s rule extended to level 1 and `replace_all`), or stands as built
 (the caller's bytes written exactly, `PD-TOOLS-016`'s cost "an exact level-1 `old_string` still does either" kept).
+
+<a id="oq-254"></a>
+
+**OQ-254 — May a `replace` close a delegated item once its child has ended, and does its success say what it kept?**
+*(REQ-TOOLS-146, `replace`'s protection of finished and active work, "a replace can neither silently retire the task the agent is
+working on nor introduce a second IN_PROGRESS task"; REQ-TOOLS-145 as `PD-TOOLS-008` revision 2 bounds it, "REQ-TOOLS-146's
+protection is otherwise unchanged"; `PD-TOOLS-006` revision 7, an admitted delegation marks its PENDING item IN_PROGRESS;
+REQ-TOOLS-147; REQ-ORCH-029, REQ-ORCH-075 and PD-ORCH-015, the correction and re-queue an open plan meets; OQ-249 and OQ-163.
+Raised 2026-10-13 from revision 7's first execution in [`directives.md`](../product/directives.md#pd-tools-006) ("`replace`
+cannot complete an active item") and the `todo` tool's `replace` branch (`packages/agent-tools/src/tools/todo.ts`), recorded in
+[`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../defects/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md);
+the consortium's question RC1. **Ruled 2026-10-13.**)*
+
+Since revision 7 the run sets a delegated item IN_PROGRESS at admission (`markDelegatedItem`,
+`apps/desktop/src/run-host/tools.ts`) without the coordinator writing it. Once the child has ended, the item is held by no one,
+and REQ-TOOLS-146 still restores it over whatever a `replace` sends: a coordinator that closes its plan with one `replace`
+setting every item COMPLETED leaves the delegated items IN_PROGRESS, and the tool answers `Replaced the todo list: 1 phase, N
+tasks.` with no word of the restore. The coordinator then answers with its plan open; PD-ORCH-015's correction asks only for
+"each item's true state with the todo tool", so the same `replace` meets the same restore, and REQ-ORCH-075 re-queues a met
+request to a fresh root under a `system` row saying the coordinator "answered with items of its plan not done". Revision 7's own
+first execution met this on the scripted coordinator and changed the coordinator, which hides the case from the proofs while a
+live model still meets it. No live run since revision 7 has measured how a model closes a delegated plan.
+
+**Ruled 2026-10-13 under the owner's delegation ([R-072](../product/requests.md#r-072)):** a `replace` stores COMPLETED or
+ABANDONED for an IN_PROGRESS task that a child of the list's owner records as its `todo_item` once no non-terminal child holds
+it, and a task closed this way does not count as the active task against a mark in the same list. Every other protection stays:
+finished work, held tasks and the agent's own active task are still restored. Every task a `replace` restores over a different
+incoming state is named in its success observation, with the state kept, the reason, and `update` as the way to change it.
+Recorded as [`PD-TOOLS-008`](../product/directives.md#pd-tools-008) **revision 3** (it narrows REQ-TOOLS-146 again and, for the
+count, REQ-TOOLS-145 as revision 2 bounds it). Revision 7's first-execution reason "`replace` cannot complete an active item" is
+kept beside this ruling as falsified for a served-and-ended item.
+
+The two recommendations weighed, and the ruling followed **both**:
+- **Advocate A (the user's lens)** recommended `PD-TOOLS-008` revision 3 letting a `replace` close any IN_PROGRESS task no
+  non-terminal child holds, the agent's own included, with every task a `replace` keeps over a different state named in the
+  success observation and why. The ruling took A's named-restore observation, since a success that hides an override is a false
+  observation, and A's reading that the bound is checked on the resulting list, so a list that closes one task and starts
+  another is a valid handoff. It did not take A's wider scope: releasing the agent's own unserved active task reopens ground
+  OQ-163 and revision 1 settled, and no live evidence asks for it.
+- **Advocate B (the system's lens)** recommended the same revision scoped to a task some child of the owner serves as its
+  `todo_item` once no non-terminal child holds it (a second read through the run, the items served by terminal children
+  included), with every restore named, its state, its reason and `update` as the remedy. The ruling followed B's scope: such a
+  task fails every part of REQ-TOOLS-146's stated reason, and exists only because revision 7 added a state the agent never sets.
+  It added what B left implicit: as built, an unheld served item is the protected active task, which would reject a list that
+  closes it and marks another, so that same list is allowed to close it. Omitted tasks are named only when their state changed,
+  which a kept omitted task never does.
+
+**What a live run then shows.** When a coordinator closes its plan with one `replace` after its delegated children ended, the
+delegated items are stored COMPLETED, the root reaches `succeeded` with no PD-ORCH-015 correction, and no "items not done"
+`system` row appears. A `replace` that sends COMPLETED for an item a running child holds, or for the coordinator's own active
+item, has its observation name that item, the state kept and the reason, and tell it to use `update`; the next `todo` call is
+then an `update` for that item. The harness reads 0 served-and-ended items restored over a close.

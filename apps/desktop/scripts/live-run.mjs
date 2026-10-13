@@ -130,7 +130,7 @@
  *                 choose another tool. Whether the child searched for references first, and whether a cold rename left the
  *                 importing files behind or had them mended by hand, is named beside OQ-273
  *                 (docs/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
- *   8g. plan-open — OPT-IN (`--only=plan-open`), a few minutes (fin42, N56): `PD-ORCH-015` against a real model, two launches
+ *   8h. plan-open — OPT-IN (`--only=plan-open`), a few minutes (fin42, N56): `PD-ORCH-015` against a real model, two launches
  *                 whose prompt has the coordinator write a three-item plan and answer with the last item left PENDING:
  *                 `plan-open`, where it is free to record the item when corrected (one "a correction is sent" warning, the
  *                 correction in the root's own conversation saying the answer was shown, iteration 1 `succeeded`, the session
@@ -138,7 +138,7 @@
  *                 ignore a correction (the held `system` row, the next fresh root's first request carrying the marker and the
  *                 answer the person was shown, and the outcome). A root that closed its plan before answering is a NOTE, "not
  *                 reached" (`lib/plan-open-reading.mjs`).
- *   8h. empty-answer — OPT-IN (`--only=empty-answer`), a few minutes (fin42, N56): `PD-ORCH-009` revision 2 through the proxy's
+ *   8i. empty-answer — OPT-IN (`--only=empty-answer`), a few minutes (fin42, N56): `PD-ORCH-009` revision 2 through the proxy's
  *                 `empty` rule, which answers the coordinating root's completions with no content and no tool call, `stop`:
  *                 `empty-answer` (both of the root's calls empty) — exactly one re-prompt sent and logged, then "The run ended
  *                 without an answer: …" and one warning `incomplete_execution` issue; `empty-once` (the first call only) — one
@@ -3031,7 +3031,7 @@ if (wanted.includes('rename')) {
   await budgetGate();
 }
 
-// ── 8g. A plan left open at the answer (PD-ORCH-015) ─────────────────────────────────────────────────────────
+// ── 8h. A plan left open at the answer (PD-ORCH-015) ─────────────────────────────────────────────────────────
 /**
  * OPT-IN (`--only=plan-open`), a few minutes (fin42, the survey's N56). `PD-ORCH-015` had been measured only by
  * `coordinator-plan.test.ts` and `part-h-proof`'s scripted `plan-correction` and `plan-held` launches: the default and duress
@@ -3118,7 +3118,7 @@ if (wanted.includes('plan-open')) {
   await budgetGate();
 }
 
-// ── 8h. A root that answers with nothing (PD-ORCH-009 revision 2) ──────────────────────────────────────────────
+// ── 8i. A root that answers with nothing (PD-ORCH-009 revision 2) ──────────────────────────────────────────────
 /**
  * OPT-IN (`--only=empty-answer`), a few minutes (fin42, the survey's N56). No live run had met a silent root: at 552d346 every
  * root's last request ended `stop` with text. The recording proxy's `empty` rule (`lib/model-traffic.mjs`) answers the

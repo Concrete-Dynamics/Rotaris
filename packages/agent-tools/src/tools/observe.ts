@@ -103,8 +103,8 @@ export function snapshotChanges(before: TreeSnapshot, after: TreeSnapshot): stri
  * agent wrote while it looked (OQ-245). Siblings share the workspace: a sibling's `write_file` landing while a rename runs
  * would otherwise be listed under the renaming child. A sibling's terminal write cannot be left out this way — the terminal
  * is outside every count (PD-TOOLS-006) — and is the bound the ruling states: a report may overstate, never conceal
- * (REQ-ORCH-109). The same bound covers a sibling's own code-intelligence EDIT call (a single-file `replace_content`, or
- * another cross-file one) landing inside the window: only the native tools are journaled, so its file is listed under the
+ * (REQ-ORCH-109). The same bound covers a sibling's own code-intelligence EDIT call (a single-file content replacement,
+ * or another cross-file one) landing inside the window: only the native tools are journaled, so its file is listed under the
  * observing child too (fin35's review; written down by fin36). One journal per run host; entries are absolute paths, and a
  * mark is a position in it.
  */
